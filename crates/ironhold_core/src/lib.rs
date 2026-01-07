@@ -25,12 +25,90 @@ pub struct GameLevel {
     pub models: Vec<ModelInfo>,
     #[serde(default)]
     pub ui: Vec<UiElement>,
+    #[serde(default)]
+    pub player: Option<PlayerConfig>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ModelInfo {
     pub path: String,
     pub position: (f32, f32, f32),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct PlayerConfig {
+    pub model_path: String,
+    pub initial_position: (f32, f32, f32),
+    pub camera: CameraConfig,
+    pub inputs: InputMap,
+    pub animations: AnimationMap,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct CameraConfig {
+    pub offset: (f32, f32, f32),
+    pub look_at_offset: (f32, f32, f32),
+    pub zoom_speed: f32,
+    pub orbit_speed: f32,
+    pub min_radius: f32,
+    pub max_radius: f32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct InputMap {
+    pub forward: String,
+    pub backward: String,
+    pub left: String,
+    pub right: String,
+    pub strafe_left: String,
+    pub strafe_right: String,
+    pub jump: String,
+}
+
+impl InputMap {
+    fn key(&self, name: &str) -> Option<KeyCode> {
+        let s = match name {
+            "forward" => &self.forward,
+            "backward" => &self.backward,
+            "left" => &self.left,
+            "right" => &self.right,
+            "strafe_left" => &self.strafe_left,
+            "strafe_right" => &self.strafe_right,
+            "jump" => &self.jump,
+            _ => return None,
+        };
+        Self::parse_key(s)
+    }
+    
+    fn parse_key(s: &str) -> Option<KeyCode> {
+        match s {
+            "KeyW" | "W" => Some(KeyCode::KeyW),
+            "KeyA" | "A" => Some(KeyCode::KeyA),
+            "KeyS" | "S" => Some(KeyCode::KeyS),
+            "KeyD" | "D" => Some(KeyCode::KeyD),
+            "KeyQ" | "Q" => Some(KeyCode::KeyQ),
+            "KeyE" | "E" => Some(KeyCode::KeyE),
+            "Space" => Some(KeyCode::Space),
+            "ShiftLeft" => Some(KeyCode::ShiftLeft),
+            "ShiftRight" => Some(KeyCode::ShiftRight),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct AnimationMap {
+    pub idle: String,
+    pub walk: String,
+    pub run: String,
+    pub jump_enter: String,
+    pub jump_loop: String,
+    pub jump_exit: String,
+    pub death: String,
+    pub dance: String,
+    pub crouch_idle: String,
+    pub crouch_forward: String,
+    pub roll: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -49,6 +127,33 @@ pub enum UiAction {
 #[derive(Component)]
 struct LevelEntity;
 
+#[derive(Component)]
+pub struct CharacterController {
+    pub speed: f32,
+    pub rot_speed: f32,
+    pub inputs: InputMap,
+}
+
+#[derive(Component)]
+pub struct OrbitCamera {
+    pub target: Entity,
+    pub radius: f32,
+    pub offset: Vec3,
+    pub zoom_speed: f32,
+    pub orbit_speed: f32,
+    pub min_radius: f32,
+    pub max_radius: f32,
+    pub pitch: f32,
+    pub yaw: f32,
+    pub look_at_offset: Vec3,
+}
+
+#[derive(Component)]
+pub struct AnimationController {
+    pub animations: AnimationMap,
+    pub current: String,
+}
+
 #[derive(Resource)]
 struct LevelHandle(Handle<GameLevel>);
 
@@ -61,17 +166,12 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
-            .add_systems(Update, (spawn_level, button_system));
+            .add_systems(Update, (spawn_level, button_system, player_movement_system, camera_orbit_system));
     }
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut next_state: ResMut<NextState<AppState>>) {
-    // 3D Camera and Lights (Persistent)
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
-
+    // Directional Light (Persistent)
     commands.spawn((
         DirectionalLight::default(),
         Transform::from_xyz(3.0, 10.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -133,9 +233,8 @@ fn spawn_level(
         if let Some(level) = levels.get(&level_handle.0) {
             
             // Only spawn if we are NOT already InGame to avoid duplication loops 
-            // (unless we add logic to force reload, but state check is safer for now)
             if *state.get() == AppState::InGame {
-               // return; 
+                return; 
             }
             
             println!("Level Loaded! Spawning {} models and {} ui elements", level.models.len(), level.ui.len());
@@ -197,6 +296,54 @@ fn spawn_level(
                 });
             }
             
+            // Spawn Player
+            if let Some(player_config) = &level.player {
+                println!("Spawning Player...");
+                let player_entity = commands.spawn((
+                    SceneRoot(asset_server.load(player_config.model_path.clone())),
+                    Transform::from_translation(Vec3::from(player_config.initial_position)),
+                    LevelEntity,
+                    CharacterController {
+                        speed: 5.0,
+                        rot_speed: 3.0,
+                        inputs: player_config.inputs.clone(),
+                    },
+                    AnimationController {
+                        animations: player_config.animations.clone(),
+                        current: player_config.animations.idle.clone(),
+                    }
+                )).id();
+
+                // Spawn Orbit Camera matching config
+                let start_pos = Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
+                
+                commands.spawn((
+                    Camera3d::default(),
+                    Transform::from_translation(start_pos).looking_at(Vec3::from(player_config.initial_position), Vec3::Y),
+                    LevelEntity,
+                    OrbitCamera {
+                        target: player_entity,
+                        radius: Vec3::from(player_config.camera.offset).length(),
+                        offset: Vec3::from(player_config.camera.offset),
+                        zoom_speed: player_config.camera.zoom_speed,
+                        orbit_speed: player_config.camera.orbit_speed,
+                        min_radius: player_config.camera.min_radius,
+                        max_radius: player_config.camera.max_radius,
+                        pitch: 0.5, // Approx starting pitch
+                        yaw: 0.0,
+                        look_at_offset: Vec3::from(player_config.camera.look_at_offset),
+                    }
+                ));
+            } else {
+                // No player - spawn a default camera for UI/static scenes
+                println!("No player in scene, spawning default camera...");
+                commands.spawn((
+                    Camera3d::default(),
+                    Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+                    LevelEntity,
+                ));
+            }
+            
             next_state.set(AppState::InGame);
         }
     }
@@ -220,20 +367,8 @@ fn button_system(
                         println!("Button Pressed! Loading scene: {}", path);
                         let handle = asset_server.load(path.clone());
                         commands.insert_resource(LevelHandle(handle));
-                        // We stay in InGame or transition to LoadingScene?
-                        // Let's transition to a loading state to allow spawn_level to re-trigger if needed, 
-                        // though spawn_level listens to asset events, so just changing the handle might be enough 
-                        // IF the asset is new. But if it's already loaded, we need to force re-spawn?
-                        // For simplicity, we just rely on AssetEvent::Modified or Loaded. 
-                        // But since we are changing the resource, we might need to manually trigger logic.
-                        // Ideally:
-                        // 1. Unload current level (handled in spawn_level via cleanup)
-                        // 2. Start loading new one.
-                        // But deserializing a new handle won't trigger 'Loaded' event if it was already loaded.
-                        // For this demo, let's assume it works or we might need "force reload" logic.
-                        // Actually, if we change the handle in LevelHandle, spawn_level won't know unless it listens to Changed<Res<LevelHandle>>?
-                        // The current spawn_level listens to AssetEvent. If asset is already loaded, no event fires.
-                        // We need to fix spawn_level to also check if we just switched handle.
+                        // Transition to LoadingScene to allow spawn_level to run
+                        next_state.set(AppState::LoadingScene);
                     }
                 }
             }
@@ -265,6 +400,115 @@ pub fn start_app() {
         }))
         .add_plugins(GamePlugin)
         .run();
+}
+
+fn player_movement_system(
+    time: Res<Time>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&mut Transform, &CharacterController)>,
+) {
+    for (mut transform, controller) in &mut query {
+        let mut velocity = Vec3::ZERO;
+        let mut rotation = 0.0;
+        
+        let forward = transform.forward();
+        let right = transform.right();
+
+        if let Some(key) = controller.inputs.key("forward") {
+            if keyboard_input.pressed(key) { velocity += *forward; }
+        }
+        if let Some(key) = controller.inputs.key("backward") {
+            if keyboard_input.pressed(key) { velocity -= *forward; }
+        }
+        if let Some(key) = controller.inputs.key("strafe_right") {
+            if keyboard_input.pressed(key) { velocity += *right; }
+        }
+        if let Some(key) = controller.inputs.key("strafe_left") {
+            if keyboard_input.pressed(key) { velocity -= *right; }
+        }
+        
+        // Turning
+        if let Some(key) = controller.inputs.key("left") {
+            if keyboard_input.pressed(key) { rotation += 1.0; }
+        }
+        if let Some(key) = controller.inputs.key("right") {
+            if keyboard_input.pressed(key) { rotation -= 1.0; }
+        }
+
+        // Apply Rotation
+        if rotation != 0.0 {
+            transform.rotate_y(rotation * controller.rot_speed * time.delta_secs());
+        }
+
+        // Apply Movement
+        if velocity.length_squared() > 0.0 {
+            velocity = velocity.normalize();
+            transform.translation += velocity * controller.speed * time.delta_secs();
+        }
+    }
+}
+
+fn camera_orbit_system(
+    time: Res<Time>,
+    mut mouse_motion_events: EventReader<bevy::input::mouse::MouseMotion>,
+    mut mouse_wheel_events: EventReader<bevy::input::mouse::MouseWheel>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut camera_query: Query<(&mut Transform, &mut OrbitCamera), Without<CharacterController>>,
+    mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCamera>)>,
+) {
+    // Collect mouse motion
+    let mut mouse_delta = Vec2::ZERO;
+    for event in mouse_motion_events.read() {
+        mouse_delta += event.delta;
+    }
+
+    let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
+
+    for (mut cam_transform, mut orbit) in &mut camera_query {
+        // Zoom
+        if zoom_delta != 0.0 {
+            orbit.radius -= zoom_delta * orbit.zoom_speed * time.delta_secs();
+            orbit.radius = orbit.radius.clamp(orbit.min_radius, orbit.max_radius);
+        }
+
+        // Orbit Logic
+        let lmb_pressed = mouse_button_input.pressed(MouseButton::Left);
+        let rmb_pressed = mouse_button_input.pressed(MouseButton::Right);
+
+        if lmb_pressed || rmb_pressed {
+            // Yaw (Left/Right)
+            orbit.yaw -= mouse_delta.x * orbit.orbit_speed * time.delta_secs();
+            
+            // Pitch (Up/Down)
+            orbit.pitch -= mouse_delta.y * orbit.orbit_speed * time.delta_secs();
+            // Clamp pitch to avoid flipping
+            orbit.pitch = orbit.pitch.clamp(0.1, 1.5); 
+        }
+        
+        // If RMB pressed, also rotate character if possible
+        if rmb_pressed {
+             if let Ok(mut char_transform) = character_query.get_mut(orbit.target) {
+                 // We rotate character Y to match camera Yaw (inverse or direct depends on orbit logic)
+                 // Usually character faces where camera looks.
+                 // orbit.yaw is angle around target.
+                 // Let's set character rotation? Or just add delta?
+                 // Simple approach: apply mouse delta x to character rotation.
+                 char_transform.rotate_y(-mouse_delta.x * orbit.orbit_speed * time.delta_secs());
+             }
+        }
+
+        // Update Camera Position
+        if let Ok(char_transform) = character_query.get(orbit.target) {
+            let target_pos = char_transform.translation + orbit.look_at_offset;
+            
+            // Calculate offset based on yaw/pitch
+            let rot = Quat::from_axis_angle(Vec3::Y, orbit.yaw) * Quat::from_axis_angle(Vec3::X, -orbit.pitch);
+            let offset = rot * Vec3::Z * orbit.radius;
+            
+            cam_transform.translation = target_pos + offset;
+            cam_transform.look_at(target_pos, Vec3::Y);
+        }
+    }
 }
 
 fn find_assets_folder() -> PathBuf {
