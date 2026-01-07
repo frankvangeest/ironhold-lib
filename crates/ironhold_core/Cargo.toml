@@ -1,0 +1,10 @@
+[package]
+name = "ironhold_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { workspace = true }
+serde = { workspace = true }
+ron = { workspace = true }
+bevy_common_assets = { workspace = true, features = ["ron"] }

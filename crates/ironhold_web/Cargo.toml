@@ -1,0 +1,12 @@
+[package]
+name = "ironhold_web"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ironhold_core = { path = "../ironhold_core" }
+bevy = { workspace = true }
+wasm-bindgen = { workspace = true }

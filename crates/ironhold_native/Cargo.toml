@@ -1,0 +1,8 @@
+[package]
+name = "ironhold_native"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ironhold_core = { path = "../ironhold_core" }
+bevy = { workspace = true }
