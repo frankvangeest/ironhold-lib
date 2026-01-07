@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ironhold Lib</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: black; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        // This assumes wasm-pack build --target web --out-dir pkg
+        import init from './pkg/ironhold_web.js';
+        
+        async function run() {
+            await init();
+        }
+        
+        run();
+    </script>
+</body>
+</html>
