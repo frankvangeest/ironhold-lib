@@ -54,7 +54,7 @@ wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 - Modify `assets/scenes/main.ron` to change the scene composition.
 - Modify `assets/scenes/start-menu.ron` to change the start button.
 - Create new scenes and link them via buttons in the `ui` list of a `GameLevel`.
-- Modify `crates/ironhold_core/src/lib.rs` to add more systems or components.
+- **Configure Player**: Add a `player` block to your scene RON file to define model, camera settings, and inputs.
 
 > [!NOTE]
 > The project uses `bevy_common_assets` (git) for Bevy 0.17 compatibility.
