@@ -1,8 +1,8 @@
 (
     models: [
         (
-            path: "models/anvil.glb#Scene0",
-            position: (0.0, 0.0, 0.0),
+            path: "models/treasure-chest-01.glb#Scene0",
+            position: (4.0, 0.0, 0.0),
         ),
     ]
 )
