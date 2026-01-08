@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use bevy::gltf::Gltf;
 use bevy_common_assets::ron::RonAssetPlugin;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum AppState {
@@ -63,6 +65,12 @@ pub struct InputMap {
     pub strafe_left: String,
     pub strafe_right: String,
     pub jump: String,
+    #[serde(default = "default_run_key")]
+    pub run: String,
+}
+
+fn default_run_key() -> String {
+    "ShiftLeft".to_string()
 }
 
 impl InputMap {
@@ -75,6 +83,7 @@ impl InputMap {
             "strafe_left" => &self.strafe_left,
             "strafe_right" => &self.strafe_right,
             "jump" => &self.jump,
+            "run" => &self.run,
             _ => return None,
         };
         Self::parse_key(s)
@@ -129,9 +138,11 @@ struct LevelEntity;
 
 #[derive(Component)]
 pub struct CharacterController {
-    pub speed: f32,
+    pub walk_speed: f32,
+    pub run_speed: f32,
     pub rot_speed: f32,
     pub inputs: InputMap,
+    pub is_running: bool,
 }
 
 #[derive(Component)]
@@ -152,6 +163,11 @@ pub struct OrbitCamera {
 pub struct AnimationController {
     pub animations: AnimationMap,
     pub current: String,
+    pub last_played: String,
+    pub gltf_path: String,
+    pub gltf_handle: Handle<Gltf>,
+    pub node_indices: HashMap<String, AnimationNodeIndex>,
+    pub graph_initialized: bool,
 }
 
 #[derive(Resource)]
@@ -166,7 +182,7 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
-            .add_systems(Update, (spawn_level, button_system, player_movement_system, camera_orbit_system));
+            .add_systems(Update, (spawn_level, button_system, player_movement_system, camera_orbit_system, animation_playback_system));
     }
 }
 
@@ -298,19 +314,28 @@ fn spawn_level(
             
             // Spawn Player
             if let Some(player_config) = &level.player {
-                println!("Spawning Player...");
+                let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
+                let gltf_handle = asset_server.load(gltf_path.clone());
+
                 let player_entity = commands.spawn((
                     SceneRoot(asset_server.load(player_config.model_path.clone())),
                     Transform::from_translation(Vec3::from(player_config.initial_position)),
                     LevelEntity,
                     CharacterController {
-                        speed: 5.0,
+                        walk_speed: 3.0,
+                        run_speed: 6.0,
                         rot_speed: 3.0,
                         inputs: player_config.inputs.clone(),
+                        is_running: false,
                     },
                     AnimationController {
                         animations: player_config.animations.clone(),
                         current: player_config.animations.idle.clone(),
+                        last_played: String::new(),
+                        gltf_path,
+                        gltf_handle,
+                        node_indices: HashMap::new(),
+                        graph_initialized: false,
                     }
                 )).id();
 
@@ -405,14 +430,21 @@ pub fn start_app() {
 fn player_movement_system(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &CharacterController)>,
+    mut query: Query<(&mut Transform, &mut CharacterController, &mut AnimationController)>,
 ) {
-    for (mut transform, controller) in &mut query {
+    for (mut transform, mut controller, mut anim_ctrl) in &mut query {
         let mut velocity = Vec3::ZERO;
         let mut rotation = 0.0;
         
         let forward = transform.forward();
         let right = transform.right();
+
+        // Toggle run with shift
+        if let Some(key) = controller.inputs.key("run") {
+            if keyboard_input.just_pressed(key) {
+                controller.is_running = !controller.is_running;
+            }
+        }
 
         if let Some(key) = controller.inputs.key("forward") {
             if keyboard_input.pressed(key) { velocity += *forward; }
@@ -440,13 +472,112 @@ fn player_movement_system(
             transform.rotate_y(rotation * controller.rot_speed * time.delta_secs());
         }
 
-        // Apply Movement
+        // Apply Movement and set animation
         if velocity.length_squared() > 0.0 {
             velocity = velocity.normalize();
-            transform.translation += velocity * controller.speed * time.delta_secs();
+            let speed = if controller.is_running { controller.run_speed } else { controller.walk_speed };
+            transform.translation += velocity * speed * time.delta_secs();
+            
+            // Set animation based on running state
+            let target_anim = if controller.is_running {
+                anim_ctrl.animations.run.clone()
+            } else {
+                anim_ctrl.animations.walk.clone()
+            };
+            if anim_ctrl.current != target_anim {
+                anim_ctrl.current = target_anim;
+            }
+        } else {
+            // Idle animation
+            if anim_ctrl.current != anim_ctrl.animations.idle {
+                anim_ctrl.current = anim_ctrl.animations.idle.clone();
+            }
         }
     }
 }
+
+fn animation_playback_system(
+    mut commands: Commands,
+    gltfs: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut controller_query: Query<(Entity, &mut AnimationController)>,
+    mut player_query: Query<&mut AnimationPlayer>,
+    children_query: Query<&Children>,
+) {
+    for (entity, mut controller) in &mut controller_query {
+        // 1. Initialize Graph if not done and GLTF is ready
+        if !controller.graph_initialized {
+            if let Some(gltf) = gltfs.get(&controller.gltf_handle) {
+                let mut graph = AnimationGraph::new();
+                let mut indices = HashMap::new();
+                
+                // Collect all animations from the map
+                let anim_names = vec![
+                    controller.animations.idle.clone(),
+                    controller.animations.walk.clone(),
+                    controller.animations.run.clone(),
+                    controller.animations.jump_enter.clone(),
+                    controller.animations.jump_loop.clone(),
+                    controller.animations.jump_exit.clone(),
+                    controller.animations.death.clone(),
+                    controller.animations.dance.clone(),
+                    controller.animations.crouch_idle.clone(),
+                    controller.animations.crouch_forward.clone(),
+                    controller.animations.roll.clone(),
+                ];
+                
+                for name in anim_names {
+                    if let Some(clip) = gltf.named_animations.get(&*name) {
+                        let index = graph.add_clip(clip.clone(), 1.0, graph.root);
+                        indices.insert(name, index);
+                    }
+                }
+                
+                let graph_handle = graphs.add(graph);
+                
+                // Find entity with AnimationPlayer to insert Graph handle
+                if let Some(player_ent) = find_player_entity_recursive(entity, &player_query, &children_query) {
+                    commands.entity(player_ent).insert(AnimationGraphHandle(graph_handle));
+                    controller.node_indices = indices;
+                    controller.graph_initialized = true;
+                    println!("Animation Graph Initialized!");
+                }
+            }
+        }
+        
+        // 2. Handle Playback
+        if controller.graph_initialized && controller.current != controller.last_played {
+            if let Some(player_ent) = find_player_entity_recursive(entity, &player_query, &children_query) {
+                if let Ok(mut player) = player_query.get_mut(player_ent) {
+                    if let Some(&index) = controller.node_indices.get(&controller.current) {
+                        player.play(index).repeat();
+                        controller.last_played = controller.current.clone();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn find_player_entity_recursive(
+    entity: Entity,
+    player_query: &Query<&mut AnimationPlayer>,
+    children_query: &Query<&Children>,
+) -> Option<Entity> {
+    if player_query.contains(entity) {
+        return Some(entity);
+    }
+    
+    if let Ok(children) = children_query.get(entity) {
+        for child in children.iter() {
+            if let Some(found) = find_player_entity_recursive(child, player_query, children_query) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 
 fn camera_orbit_system(
     time: Res<Time>,
