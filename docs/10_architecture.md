@@ -5,6 +5,13 @@
 - `ironhold_core`: core Bevy plugin(s), RON asset types, scene spawning, player controller, orbit camera, animation mapping, UI button -> scene load.
 - `ironhold_native`: desktop runner calling `ironhold_core::start_app()`.
 - `ironhold_web`: WASM runner exposing `start()` via wasm-bindgen.
+ 
+## Internal Structure
+The `ironhold_core` crate is organized into modular sub-modules to maintain separation of concerns:
+- **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameLevel`).
+- **`runtime/`**: Core engine logic, including the Message/Action interpreter and the `SceneManager`.
+- **`capabilities/`**: Reusable gameplay systems (e.g., `CharacterController`, `OrbitCamera`).
+- **`utils.rs`**: Shared utility functions like asset folder discovery.
 
 Assets:
 - `assets/project.ron`: selects initial scene.
