@@ -3,5 +3,5 @@ use ironhold_core::start_app;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    start_app();
+    start_app(None);
 }
