@@ -241,10 +241,10 @@ Before bumping a beta version:
 - [x] Update `README.md` links
 
 ### Refactor
-- [ ] Split `ironhold_core/src/lib.rs` into modules
-- [ ] Add `Action` enum + `ActionQueue`
-- [ ] Change UI button system to emit `UiMessage`
-- [ ] Add `SceneManager` to convert messages → `Action::LoadScene`
+- [x] Split `ironhold_core/src/lib.rs` into modules
+- [x] Add `Action` enum + `ActionQueue`
+- [x] Change UI button system to emit `UiMessage`
+- [x] Add `SceneManager` to convert messages → `Action::LoadScene`
 
 ### Tests
 - [ ] Add integration test: start-menu button triggers LoadScene
