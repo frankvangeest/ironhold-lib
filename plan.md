@@ -1,97 +1,260 @@
-# Ironhold-lib Project Plan
+# plan.md — Ironhold-lib Roadmap, Architecture Decisions, and TODO
 
-## Overview
-**Ironhold-lib** is a data-driven game development framework built on **Bevy 0.17.3**. It is designed to be write-once, run-everywhere, supporting both Native (Windows/Linux) and Web (WASM) platforms with a unified codebase.
+> This document is the **implementation plan** for Ironhold-lib. It is intentionally practical: what we build, in what order, and why.
+> 
+> For deeper design docs (as they get added), see `docs/`.
 
-## Architectural Design
+---
 
-The project will use a **Cargo Workspace** to separate the core logic from the platform-specific runners. This ensures the "main" logic remains identical across platforms.
+## 0) Goals (what we are building)
 
-### Workspace Structure
-```
-ironhold-lib/
-├── Cargo.toml              # Workspace definitions
-├── assets/                 # Shared game assets
-│   ├── scenes/             # RON files (e.g., scene.ron)
-│   └── models/             # GLB files (e.g., model.glb)
-└── crates/
-    ├── ironhold_core/      # (Lib) The primary game engine logic & unified API
-    ├── ironhold_native/    # (Bin) Native desktop runner
-    └── ironhold_web/       # (Lib/Bin) Web assembly entry point
-```
+Ironhold-lib is a **cross-platform** (Native + Web/WASM) Bevy 0.17 runtime where games are defined by:
+- `assets/project.ron` (project-level config)
+- `assets/scenes/*.ron` (scene-level config)
+- assets (models, textures, audio)
 
-## detailed Component Breakdown
+**Game creators should not recompile the engine** to create new projects/scenes.
 
-### 1. `ironhold_core` (Library)
-This is the heart of the project. It exports the `App` configuration and systems.
-- **Dependencies**: `bevy`, `serde`, `ron`, `bevy_common_assets`.
-- **Responsibilities**:
-    - Define `GameConfig` and `SceneData` structs (deserializable from RON).
-    - Implement the `GamePlugin` struct.
-    - Expose a public entry point `pub fn start_app()`.
-    - Handle Asset Loading (loading `scene.ron` triggers spawning of `model.glb`).
+The engine provides **capability building blocks** (controller, camera, animation, UI, etc.).
+How they are used is **data-defined**.
 
-### 2. `ironhold_native` (Binary)
-A thin wrapper for desktop platforms.
-- **Dependencies**: `ironhold_core`, `bevy` (default features).
-- **Main Entry**:
-  ```rust
-  fn main() {
-      // Platform-specific setup (e.g. window icon, resolution overrides) can go here
-      ironhold_core::start_app();
-  }
-  ```
+Future requirement: **networked multiplayer**.
 
-### 3. `ironhold_web` (WASM Library)
-A thin wrapper for the web.
-- **Dependencies**: `ironhold_core`, `bevy`.
-- **Main Entry**:
-  ```rust
-  use wasm_bindgen::prelude::*;
+---
 
-  #[wasm_bindgen(start)]
-  pub fn start() {
-      // Web-specific setup (e.g. canvas selector)
-      ironhold_core::start_app();
-  }
-  ```
+## 1) Current State (baseline)
 
-## Asset Management Strategy
-The engine will be data-driven.
-- **Formats**:
-    - **Models**: `.glb` (glTF Binary).
-    - **Scenes/Config**: `.ron` (Rusty Object Notation).
-- **Loading Flow**:
-    1. App starts.
-    2. specific startup system loads `assets/scenes/main.ron`.
-    3. `main.ron` contains paths to models and positioning data.
-    4. Bevy spawns entities based on the loaded data.
+What exists today (baseline functionality):
+- Project config loads from `assets/project.ron` and points to `initial_scene`.
+- Scene config loads from `assets/scenes/*.ron` and spawns:
+  - models from `.glb`
+  - UI (Button -> LoadScene)
+  - optional player with configurable input mapping
+  - orbit camera
+  - animation mapping and playback from GLTF clips
+- Cross-platform runners:
+  - `ironhold_native` calls `ironhold_core::start_app()`
+  - `ironhold_web` exposes a WASM entrypoint via wasm-bindgen
 
-## Javascript Interop
-To meet the requirement of JS loading code looking similar to native:
-- Use `wasm-bindgen` to expose the start function.
-- The `index.html` will simply invoke the WASM init.
-- If dynamic asset paths are needed from JS:
-    - `ironhold_core::start_app_with_config(config: String)` can be exposed.
-    - JS passes the JSON/RON string or path to the init function.
+This is **Beta 0.1 material** once documented and stabilized.
 
-## Implementation Steps
+---
 
-### Phase 1: Workspace Setup
-1. Initialize cargo workspace.
-2. Create crates: `core`, `native`, `web`.
-3. Configure `Cargo.toml` with Bevy `0.17.3`.
+## 2) Direction: Target Architecture
 
-### Phase 2: Core Implementation
-1. Define `Scene` struct in `core`.
-2. Implement RON loading using `bevy_asset_loader` or `bevy_common_assets`.
-3. Create a basic 3D setup system (Camera, Light).
+We are evolving from “systems directly doing things” to a stable runtime model:
 
-### Phase 3: Platform Runners
-1. Implement Native `main.rs`.
-2. Implement Web `lib.rs` / `main.rs` and `index.html`.
-3. Configure `wasm-server-runner` or `trunk` for web testing.
+**Messages (events) → Interpreter (data logic) → Actions → Executors**
 
-### Phase 4: Verification
-1. `cargo run -p ironhold_native` -> Opens window, loads scene.
-2. `trunk serve` (or `wasm-pack`) -> Opens browser, loads scene.
+### Why this structure?
+- Keeps the engine generic and reusable.
+- Makes behavior data-driven (RON), so creators don’t recompile.
+- Avoids tight coupling (e.g., UI shouldn’t directly manage scene loading).
+- Prepares the engine for deterministic simulation and multiplayer.
+
+### Layering
+
+**A) App-level flow (global lifecycle)**
+- Use Bevy `States` for: Boot / Loading / InGame / Paused / Error.
+
+**B) Data-driven logic layer**
+- Global logic: project-level state machine(s) (menus, flow, quests).
+- Entity logic: per-entity machines (interactables, NPCs).
+
+**C) Capability modules**
+- Systems that emit messages (input, UI, triggers, collisions).
+- Systems that execute actions (move, play animation, load scene, open UI).
+
+---
+
+## 3) Determinism Strategy (for multiplayer readiness)
+
+We do **not** require the entire engine to be deterministic from day 1.
+
+Instead we split:
+
+- **Deterministic gameplay core** (“truth”)
+  - fixed tick
+  - stable update order
+  - deterministic RNG
+  - input stream model
+  - snapshot/restore hooks (for replay/rollback)
+
+- **Non-deterministic presentation**
+  - camera smoothing
+  - particles/VFX
+  - animation blending (as long as it’s driven from deterministic state)
+
+This keeps rollback and deterministic networking options open without freezing feature development too early.
+
+---
+
+## 4) Implementation Order (recommended)
+
+### Phase A — Documentation + Refactor (no behavior changes)
+**Goal:** lock down the baseline and create the runtime backbone.
+
+1. Add `docs/` structure (overview, architecture, formats, roadmap).
+2. Update `README.md` to point to docs.
+3. Refactor `ironhold_core/src/lib.rs` into modules:
+   - `schema/` (project/scene types)
+   - `runtime/` (messages/actions/interpreter)
+   - `capabilities/` (player/camera/animation/ui)
+4. Introduce an **Action model**:
+   - `Action` enum + `ActionQueue` resource
+   - start with `Action::LoadScene(String)`
+5. Convert UI button handling:
+   - UI system emits `UiMessage`
+   - Scene manager interprets to `Action::LoadScene`
+   - Scene manager executes the action
+
+**Why first?** This prevents “feature spaghetti” and makes new features easier to add safely.
+
+---
+
+### Phase B — Event/Action Bus Stabilization
+**Goal:** decouple subsystems; enforce stable internal contracts.
+
+6. Standardize message types:
+   - `UiMessage`
+   - `SceneRequestMessage`, `SceneLoadedMessage`, `SceneReadyMessage`
+   - `InputActionMessage`
+7. Add validation:
+   - missing assets paths
+   - invalid key names
+   - unknown actions
+
+---
+
+### Phase C — Global Logic (FSM v1)
+**Goal:** project-level logic in data.
+
+8. Add `GlobalLogic` asset format (RON):
+   - FSM with transitions on events
+   - guards + actions
+9. Add a global interpreter system:
+   - consumes messages
+   - updates global machine state
+   - emits actions
+10. Move menu flow into global FSM:
+   - start-menu button triggers UiMessage
+   - FSM decides to LoadScene
+
+---
+
+### Phase D — Entity Logic (FSM v1)
+**Goal:** per-entity behaviors in data.
+
+11. Add `BehaviorMachine` component that references an FSM asset.
+12. Add Trigger capability:
+   - trigger volumes emit `TriggerEntered/Exited` messages
+13. Example behaviors:
+   - door open/close
+   - pickup
+
+---
+
+### Phase E — Deterministic Tick + Replay
+**Goal:** multiplayer foundations.
+
+14. Move authoritative gameplay updates to fixed tick schedule.
+15. Add deterministic RNG resource.
+16. Add input capture + replay:
+   - record InputAction stream
+   - replay on demand
+17. Add minimal snapshot/restore for core state (replay first).
+
+---
+
+### Phase F — Networking Prototype
+**Goal:** prove architecture supports multiplayer.
+
+18. Server-authoritative prototype (recommended first):
+   - client sends inputs
+   - server simulates authoritative core
+   - server sends state snapshots/deltas
+19. Add network testing harness (latency/jitter).
+
+---
+
+## 5) Beta Milestones (stability gates)
+
+We want stable beta releases before adding lots of new capabilities.
+
+### Beta 0.1 — Baseline Runtime
+- Native + Web parity
+- Project + scene loading
+- UI button loads a scene
+- Player controller + orbit camera + animation mapping
+- Docs added
+
+### Beta 0.2 — Event/Action Bus
+- UI emits UiMessage (no direct scene load)
+- Scene manager consumes messages and executes actions
+- Actions documented as “engine ABI”
+- No functional behavior changes from 0.1 (refactor-only)
+
+### Beta 0.3 — Global Logic (FSM v1)
+- Global logic FSM asset + interpreter
+- Start menu logic driven by FSM
+- Minimal conditions + variables
+
+### Beta 0.4 — Entity Logic (FSM v1)
+- Per-entity behavior component
+- Trigger messages
+- Example interactable (door/pickup)
+
+### Beta 0.5 — Deterministic Tick + Replay
+- Fixed tick authoritative core
+- Deterministic RNG
+- Input capture + replay
+- Snapshot/restore hooks
+
+### Beta 0.6 — Networking Prototype
+- Server-authoritative minimal multiplayer
+- Basic connect/disconnect
+- Snapshot/delta sync
+
+---
+
+## 6) Release Gates (must-pass checklist)
+
+Before bumping a beta version:
+- Docs updated (architecture, formats, roadmap)
+- Example project updated
+- CI builds for native + web
+- Schema changes include versioning and migration notes
+- Clear error messages for invalid RON
+
+---
+
+## 7) Short-Term TODO (next 2–3 weeks)
+
+### Documentation
+- [x] Add `docs/00_overview.md`
+- [x] Add `docs/10_architecture.md`
+- [x] Add `docs/20_data_formats.md`
+- [x] Add `docs/30_runtime_events_and_logic.md`
+- [x] Add `docs/40_determinism_and_networking.md`
+- [x] Add `docs/50_roadmap_and_milestones.md`
+- [x] Add `docs/60_contributing.md`
+- [x] Update `README.md` links
+
+### Refactor
+- [ ] Split `ironhold_core/src/lib.rs` into modules
+- [ ] Add `Action` enum + `ActionQueue`
+- [ ] Change UI button system to emit `UiMessage`
+- [ ] Add `SceneManager` to convert messages → `Action::LoadScene`
+
+### Tests
+- [ ] Add integration test: start-menu button triggers LoadScene
+- [ ] Add RON validation tests (missing fields, invalid key names)
+
+---
+
+## 8) Notes / Open Decisions
+
+- **Networking model choice:** start with server-authoritative; keep rollback possible.
+- **Physics strategy:** keep character controller deterministic; evaluate full physics determinism later.
+- **Schema versioning:** add `schema_version` to `ProjectConfig` and `GameLevel` as soon as possible.
+
