@@ -11,6 +11,9 @@ use crate::runtime::*;
 use crate::capabilities::*;
 use crate::utils::find_assets_folder;
 
+#[derive(Resource)]
+struct ProjectConfigPath(String);
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -38,7 +41,12 @@ impl Plugin for GamePlugin {
     }
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut next_state: ResMut<NextState<AppState>>) {
+fn setup(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>, 
+    mut next_state: ResMut<NextState<AppState>>,
+    config_path: Res<ProjectConfigPath>,
+) {
     // Directional Light (Persistent)
     commands.spawn((
         DirectionalLight::default(),
@@ -46,8 +54,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut next_state:
     ));
     
     // Load Project Config
-    println!("Loading Project Config...");
-    let handle = asset_server.load("project.ron");
+    println!("Loading Project Config from {}...", config_path.0);
+    let handle = asset_server.load(config_path.0.clone());
     commands.insert_resource(ProjectConfigHandle(handle));
     
     next_state.set(AppState::LoadingProject);
@@ -82,20 +90,24 @@ fn button_system(
     }
 }
 
-pub fn start_app() {
+pub fn start_app(project_path: Option<String>) {
     let asset_path = if cfg!(target_arch = "wasm32") {
         "assets".to_string()
     } else {
         find_assets_folder().to_string_lossy().to_string()
     };
     
+    let config_path = project_path.unwrap_or_else(|| "project.ron".to_string());
+    
     println!("Runtime Asset Path: {}", asset_path);
+    println!("Project Config Path: {}", config_path);
 
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             file_path: asset_path,
             ..default()
         }))
+        .insert_resource(ProjectConfigPath(config_path))
         .add_plugins(GamePlugin)
         .run();
 }
