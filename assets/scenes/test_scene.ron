@@ -1,0 +1,10 @@
+(
+    models: [
+    ],
+    ui: [
+        Button(
+            text: "Start Game",
+            action: LoadScene("scenes/main.ron"),
+        )
+    ]
+)

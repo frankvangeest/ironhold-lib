@@ -7,6 +7,11 @@ All data formats must include a schema version:
 This allows backward-compatible evolution and safe validation.
 
 ## assets/project.ron (ProjectConfig)
+ 
+> [!NOTE]
+> You can override the project file path on the command line:
+> `cargo run -p ironhold_native -- assets/alternative_project.ron`
+ 
 Purpose:
 - Defines the initial scene.
 - Defines project-level settings (future: global logic machines, input profiles, networking mode).

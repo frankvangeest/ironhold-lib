@@ -231,24 +231,15 @@ Before bumping a beta version:
 ## 7) Short-Term TODO (next 2–3 weeks)
 
 ### Documentation
-- [x] Add `docs/00_overview.md`
-- [x] Add `docs/10_architecture.md`
-- [x] Add `docs/20_data_formats.md`
-- [x] Add `docs/30_runtime_events_and_logic.md`
-- [x] Add `docs/40_determinism_and_networking.md`
-- [x] Add `docs/50_roadmap_and_milestones.md`
-- [x] Add `docs/60_contributing.md`
-- [x] Update `README.md` links
+- [ ] Maintain consistent documentation in `docs/` as new features are added.
 
-### Refactor
-- [x] Split `ironhold_core/src/lib.rs` into modules
-- [x] Add `Action` enum + `ActionQueue`
-- [x] Change UI button system to emit `UiMessage`
-- [x] Add `SceneManager` to convert messages → `Action::LoadScene`
+### Refactor & Stabilization
+- [ ] Monitor modular architecture for potential circular dependencies.
+- [ ] Expand the Action bus to include player movement and animation commands.
 
 ### Tests
-- [ ] Add integration test: start-menu button triggers LoadScene
-- [ ] Add RON validation tests (missing fields, invalid key names)
+- [ ] Add more comprehensive integration tests for player-scene interaction.
+- [ ] Add performance benchmarks for scene spawning.
 
 ---
 

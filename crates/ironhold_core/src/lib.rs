@@ -12,7 +12,7 @@ use crate::capabilities::*;
 use crate::utils::find_assets_folder;
 
 #[derive(Resource)]
-struct ProjectConfigPath(String);
+pub struct ProjectConfigPath(pub String);
 
 pub struct GamePlugin;
 

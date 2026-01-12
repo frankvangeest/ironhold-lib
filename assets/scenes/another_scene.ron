@@ -1,0 +1,42 @@
+(
+    models: [
+        (
+            path: "models/treasure-chest-01.glb#Scene0",
+            position: (4.0, 0.0, 0.0),
+        ),
+    ],
+    player: Some((
+        model_path: "models/character-01.glb#Scene0",
+        initial_position: (0.0, 0.0, 0.0),
+        camera: (
+            offset: (0.0, 5.0, 10.0),
+            look_at_offset: (0.0, 2.0, 0.0),
+            zoom_speed: 10.0,
+            orbit_speed: 0.5,
+            min_radius: 2.0,
+            max_radius: 20.0,
+        ),
+        inputs: (
+            forward: "KeyW",
+            backward: "KeyS",
+            left: "KeyA",
+            right: "KeyD",
+            strafe_left: "KeyQ",
+            strafe_right: "KeyE",
+            jump: "Space",
+        ),
+        animations: (
+            idle: "Idle_Loop",
+            walk: "Walk_Loop",
+            run: "Sprint_Loop",
+            jump_enter: "Jump_Start",
+            jump_loop: "Jump_Loop",
+            jump_exit: "Jump_Land",
+            death: "Death01",
+            dance: "Dance_Loop",
+            crouch_idle: "Crouch_Idle_Loop",
+            crouch_forward: "Crouch_Fwd_Loop",
+            roll: "Roll",
+        ),
+    )),
+)

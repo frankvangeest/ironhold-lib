@@ -54,6 +54,13 @@ This runs the Bevy app using the shared runtime in `ironhold_core` and loads:
 - `assets/project.ron`
 - the configured initial scene (e.g. `assets/scenes/start-menu.ron`)
 
+#### Custom Project Config
+You can specify a custom project file as a command-line argument:
+
+```bash
+cargo run -p ironhold_native -- assets/test_project.ron
+```
+
 ---
 
 ### 2) Web / WASM
@@ -139,6 +146,31 @@ Example (conceptual shape; see your current `assets/scenes/*.ron` for real field
     ),
   )),
 )
+```
+
+---
+
+## 🧪 Testing
+
+We have integration tests to verify the UI flow and RON validation tests for configuration files.
+
+### Running all tests
+```bash
+cargo test -p ironhold_core
+```
+
+> [!TIP]
+> To see clean execution logs for the interaction tests, run with a single thread:
+> `cargo test -p ironhold_core -- --test-threads=1`
+
+### Running Integration Tests
+```bash
+cargo test -p ironhold_core --test integration_tests
+```
+
+### Running RON Validation Tests
+```bash
+cargo test -p ironhold_core --test ron_validation
 ```
 
 ---
