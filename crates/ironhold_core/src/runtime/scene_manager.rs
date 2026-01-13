@@ -15,8 +15,14 @@ pub fn check_project_loaded(
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     if let Some(config) = configs.get(&config_handle.0) {
-        println!("Project Config Loaded. Initial Scene: {}", config.initial_scene);
+        println!("Project Config Loaded. Initial Scene: {} (schema v{})", config.initial_scene, config.schema_version);
         
+        if config.schema_version == 0 {
+            warn!("ProjectConfig schema_version is 0 (missing). Please update to v1.");
+        } else if config.schema_version > 1 {
+            error!("ProjectConfig schema_version {} is newer than supported v1!", config.schema_version);
+        }
+
         // Load the initial scene
         let scene_handle = asset_server.load(config.initial_scene.clone());
         commands.insert_resource(LevelHandle(scene_handle));
@@ -59,8 +65,14 @@ pub fn spawn_level(
                 return; 
             }
             
-            println!("Level Loaded! Spawning {} models and {} ui elements", level.models.len(), level.ui.len());
+            println!("Level Loaded! schema v{}, Spawning {} models and {} ui elements", level.schema_version, level.models.len(), level.ui.len());
             
+            if level.schema_version == 0 {
+                warn!("GameLevel schema_version is 0 (missing). Please update to v1.");
+            } else if level.schema_version > 1 {
+                error!("GameLevel schema_version {} is newer than supported v1!", level.schema_version);
+            }
+
             for entity in current_entities.iter() {
                 commands.entity(entity).despawn();
             }

@@ -6,6 +6,8 @@ use crate::schema::ui::UiElement;
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct GameLevel {
     #[serde(default)]
+    pub schema_version: u32,
+    #[serde(default)]
     pub models: Vec<ModelInfo>,
     #[serde(default)]
     pub ui: Vec<UiElement>,
