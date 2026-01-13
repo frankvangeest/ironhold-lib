@@ -17,8 +17,10 @@ Assets:
 - `assets/project.ron`: selects initial scene.
 - `assets/scenes/*.ron`: describe the scene contents (models, player config, UI).
 
-## Target architecture (direction)
-We evolve from "systems directly do things" to a stable, scalable runtime:
+## Target architecture (planned) 🧭
+- 🧭 Deterministic simulation core (fixed tick)
+- 🧭 Event bus with stable message schema
+- 🧪 Action executor (exists, limited set of actions)
 
 **Messages (events) → Interpreter (data logic) → Actions → Executors**
 
