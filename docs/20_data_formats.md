@@ -1,6 +1,9 @@
 
 # Data Formats
 
+## Status
+🧭 Spec Draft (not fully implemented)
+
 ## Versioning
 All data formats must include a schema version:
 - `schema_version: 1` (integer)
