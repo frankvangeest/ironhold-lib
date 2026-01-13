@@ -12,6 +12,8 @@ pub enum AppState {
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct ProjectConfig {
+    #[serde(default)]
+    pub schema_version: u32,
     pub initial_scene: String,
 }
 

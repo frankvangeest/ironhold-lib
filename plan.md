@@ -247,5 +247,5 @@ Before bumping a beta version:
 
 - **Networking model choice:** start with server-authoritative; keep rollback possible.
 - **Physics strategy:** keep character controller deterministic; evaluate full physics determinism later.
-- **Schema versioning:** add `schema_version` to `ProjectConfig` and `GameLevel` as soon as possible.
+- **Schema versioning:** implemented `schema_version` (v1) in `ProjectConfig` and `GameLevel`.
 

@@ -5,11 +5,24 @@ use ron::de::from_str;
 fn test_project_config_deserialization() {
     let ron_str = r#"
         (
+            schema_version: 1,
             initial_scene: "scenes/main.ron"
         )
     "#;
     let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize ProjectConfig");
+    assert_eq!(config.schema_version, 1);
     assert_eq!(config.initial_scene, "scenes/main.ron");
+}
+
+#[test]
+fn test_project_config_default_version() {
+    let ron_str = r#"
+        (
+            initial_scene: "scenes/main.ron"
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize ProjectConfig");
+    assert_eq!(config.schema_version, 0);
 }
 
 #[test]
@@ -27,12 +40,14 @@ fn test_invalid_project_config() {
 fn test_game_level_minimal() {
     let ron_str = r#"
         (
+            schema_version: 1,
             models: [],
             ui: [],
             player: None
         )
     "#;
     let level: GameLevel = from_str(ron_str).expect("Failed to deserialize minimal GameLevel");
+    assert_eq!(level.schema_version, 1);
     assert_eq!(level.models.len(), 0);
     assert!(level.player.is_none());
 }
