@@ -58,8 +58,10 @@ This runs the Bevy app using the shared runtime in `ironhold_core` and loads:
 You can specify a custom project file as a command-line argument:
 
 ```bash
-cargo run -p ironhold_native -- assets/test_project.ron
+cargo run -p ironhold_native -- test_project.ron
 ```
+
+> `test_project.ron` should be in the `assets` directory.
 
 ---
 
