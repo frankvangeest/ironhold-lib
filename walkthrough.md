@@ -57,4 +57,4 @@ wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 - **Configure Player**: Add a `player` block to your scene RON file to define model, camera settings, and inputs.
 
 > [!NOTE]
-> The project uses `bevy_common_assets` (git) for Bevy 0.17 compatibility.
+> The project uses `bevy_common_assets` (git) for Bevy 0.18 compatibility.

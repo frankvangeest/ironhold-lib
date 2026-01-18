@@ -1,6 +1,6 @@
-# Ironhold-lib (Bevy 0.17) — Data‑Driven, Cross‑Platform Game Runtime (Native + Web/WASM)
+# Ironhold-lib (Bevy 0.18) — Data‑Driven, Cross‑Platform Game Runtime (Native + Web/WASM)
 
-**Ironhold-lib** is a **cross-platform** (Windows/Linux + WebAssembly) game runtime built on **Bevy 0.17**.  
+**Ironhold-lib** is a **cross-platform** (Windows/Linux + WebAssembly) game runtime built on **Bevy 0.18**.  
 Games are defined by **data files** (`.ron`) and assets (models, textures, audio). Game creators can build new projects and scenes **without recompiling** the engine.
 
 > **Core idea:** the engine ships “capability building blocks” (controller, camera, animation, UI, etc.) and the **project + scene data** decides what gets used.

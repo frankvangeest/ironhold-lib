@@ -8,7 +8,7 @@
 
 ## 0) Goals (what we are building)
 
-Ironhold-lib is a **cross-platform** (Native + Web/WASM) Bevy 0.17 runtime where games are defined by:
+Ironhold-lib is a **cross-platform** (Native + Web/WASM) Bevy 0.18 runtime where games are defined by:
 - `assets/project.ron` (project-level config)
 - `assets/scenes/*.ron` (scene-level config)
 - assets (models, textures, audio)
