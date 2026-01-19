@@ -34,9 +34,11 @@
 
 - ✅ **Top-level schema versioning**: `schema_version` is required for top-level project + scene files.
 - ✅ **Strict deserialization**: unknown fields are rejected for top-level formats.
-- 🧪 **RON validation tests**: basic validation exists via tests.
+- ✅ **RON validation tests**: enforce required `schema_version`, reject unknown fields, and validate supported schema versions for `ProjectConfig` and `GameLevel`.
+- ✅ **Asset regression test**: scans `assets/*.ron` and `assets/scenes/**/*.ron` to ensure every file parses and validates (prevents future regressions).
 - 🧭 **Schema migrations**
 - 🧭 **Strict validation + diagnostics** for content authors.
+
 
 ## Determinism & Networking
 
@@ -59,3 +61,6 @@
   - you change any schema structs that affect user-authored RON
   - you complete a milestone item in the roadmap
 
+
+
+==== SUMMARY: 45 files, 238158 bytes raw ====
