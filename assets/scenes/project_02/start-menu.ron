@@ -1,0 +1,14 @@
+(
+    schema_version: 1,
+    models: [],
+    ui: [
+        Button(
+            text: "Start Game",
+            action: LoadScene("scenes/project_02/main.ron"),
+        ),
+        // Button(
+        //     text: "Quit",
+        //     action: Quit,
+        // )
+    ]
+)

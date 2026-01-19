@@ -26,7 +26,7 @@ fn test_ui_button_to_load_scene_action() {
     app.update();
     
     // 2. Simulate Button Press Message
-    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("test_scene.ron".to_string()));
+    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("tests/test_scene.ron".to_string()));
     
     // 3. Run systems (Interpreter + Executor will run)
     app.update();
@@ -74,7 +74,7 @@ fn test_action_to_state_transition() {
     }
     
     // 3. Manually push an action
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("another_scene.ron".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("tests/another_scene.ron".to_string()));
     
     // 4. Run executor
     app.update(); // Executor sets NextState

@@ -1,0 +1,4 @@
+(
+    schema_version: 1,
+    initial_scene: "scenes/project_02/start-menu.ron"
+)
