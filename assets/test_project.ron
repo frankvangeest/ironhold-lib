@@ -1,3 +1,4 @@
 (
+    schema_version: 1,
     initial_scene: "scenes/tests/test_scene.ron"
 )
