@@ -8,7 +8,7 @@
 > - 🧭 **Planned** — intended design; not implemented yet
 
 ## Status
-🧭 Planned (with a small ✅ implemented subset)
+🧭 Planned (with a growing ✅ implemented subset)
 
 ## Goal
 Provide a single, cross-platform logic model that is **driven by data** and does not require recompilation for most gameplay iteration. The runtime should be consistent between native and web/WASM.
@@ -19,13 +19,13 @@ Ironhold’s runtime model is built around three layers:
 1. **Messages (events)** 🧭  
    Standardized, engine-level messages representing “something happened” (input, UI, triggers, scene lifecycle, animation markers).
 2. **Actions** 🧭  
-   Discrete, explicit commands representing “do something” (load scene, play animation, spawn entity, set variable, etc.).
+   Discrete, explicit commands representing “do something” (load scene, quit, play animation, spawn entity, set variable, etc.).
 3. **Execution** 🧭  
    A controlled executor that applies actions in a predictable order, enabling testing, determinism strategies, and clear debugging.
 
 ### Why separate messages and actions?
 - Messages are **observations** (facts): a button was pressed, an input action fired, a trigger entered.
-- Actions are **commands** (intent): load a scene, play a sound, set a state variable.
+- Actions are **commands** (intent): load a scene, quit the game, play a sound, set a state variable.
 
 This separation helps:
 - keep data-defined logic declarative and testable 🧭
@@ -35,9 +35,12 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A minimal action layer exists: `Action::LoadScene(String)` plus `ActionQueue`.
-- ✅ A UI message type exists (`UiMessage`) and is emitted by UI button interaction.
-- ✅ The app wires message interpretation and action execution systems.
+- ✅ A minimal action layer exists: `ActionQueue` plus actions such as `LoadScene(String)` and `Quit`.
+- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction.
+- ✅ A message interpreter maps UI messages to actions.
+- ✅ An action executor applies actions; notably:
+  - `LoadScene(path)` loads a level asset and transitions to the loading state.
+  - `Quit` requests app exit (writes `AppExit::Success`).
 
 > Note: the broader event catalog and data-defined logic rules described below are not implemented yet.
 
@@ -57,6 +60,7 @@ Abstract input actions (not raw keys/buttons):
 #### 2) UiEvent 🧭
 UI interactions and higher-level UI events:
 - `ui.button_pressed` (id)
+- `ui.quit_requested`
 - `ui.menu_opened` (name)
 
 **Why:** keep UI wiring declarative; bind UI events to gameplay actions.
@@ -97,6 +101,9 @@ Actions represent explicit operations the runtime can execute.
 - `LoadScene(path)`
 - `UnloadScene(name)`
 
+#### App/system actions 🧭
+- `Quit`
+
 #### Entity actions 🧭
 - `Spawn(template_id)`
 - `Despawn(entity)`
@@ -135,6 +142,10 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
       on: "ui.start_game",
       do: [ (LoadScene: "scenes/main.ron") ],
     ),
+    (
+      on: "ui.quit",
+      do: [ Quit ],
+    ),
   ],
 )
 ```
@@ -158,12 +169,11 @@ Applies actions to the world. Key design points:
 (See `docs/40_determinism_and_networking.md` for design notes.)
 
 ## Milestone mapping (suggested)
-This section ties design pieces to incremental implementation.
 
-- **MVP (partially implemented today)** 🧪
-  - ✅ UiEvent subset: button press → message
-  - ✅ Action subset: `LoadScene`
-  - 🧪 Interpreter/executor exist but support limited actions
+- **MVP (implemented today)** ✅
+  - ✅ UiEvent subset: button press and quit request → `UiMessage`
+  - ✅ Action subset: `LoadScene`, `Quit`
+  - ✅ Executor applies `LoadScene` and `Quit`
 
 - **Milestone: Event schema v1** 🧭
   - InputAction abstraction
@@ -186,6 +196,11 @@ This section ties design pieces to incremental implementation.
 This list is intentionally short and should be updated when code expands.
 
 - ✅ `Action::LoadScene(String)`
+- ✅ `Action::Quit`
 - ✅ `ActionQueue` (push/pop)
-- ✅ UI button interaction emits `UiMessage::ButtonPressed(path)` which can request a scene load.
+- ✅ `UiMessage::ButtonPressed(path)` → interpreter pushes `Action::LoadScene(path)`
+- ✅ `UiMessage::Quit` → interpreter pushes `Action::Quit`
+- ✅ Executor:
+  - `LoadScene` loads a `GameLevel` asset and transitions to `LoadingScene`
+  - `Quit` writes `AppExit::Success`
 

@@ -12,8 +12,9 @@
 ## Runtime (Messages → Actions → Execution)
 
 - ✅ **Scene load flow via UI**: UI button interaction emits a UI message and can drive a scene load request.
-- ✅ **Action infrastructure**: `ActionQueue` exists with a minimal `LoadScene` action.
-- 🧪 **Interpreter/executor pipeline**: systems are wired, but only a small subset of actions/messages exist.
+- ✅ **Quit flow via UI**: UI button interaction can emit a quit message and request application exit.
+- ✅ **Action infrastructure**: `ActionQueue` exists with actions including `LoadScene` and `Quit`.
+- ✅ **Interpreter/executor pipeline**: UI messages are interpreted into actions and executed.
 - 🧭 **Unified event schema**: InputAction, SceneEvent, Trigger/Collision, AnimationMarker, etc.
 - 🧭 **Data-defined rules**: declarative Event→Action bindings authored in RON.
 
@@ -31,10 +32,10 @@
 
 ## Data formats & Validation
 
-- ✅ **Current schema structs**: minimal `ProjectConfig` (initial scene) and level/scene schema types exist.
+- ✅ **Top-level schema versioning**: `schema_version` is required for top-level project + scene files.
+- ✅ **Strict deserialization**: unknown fields are rejected for top-level formats.
 - 🧪 **RON validation tests**: basic validation exists via tests.
-- ✅ **schema_version** everywhere
-- 🧭 **schema migrations**
+- 🧭 **Schema migrations**
 - 🧭 **Strict validation + diagnostics** for content authors.
 
 ## Determinism & Networking

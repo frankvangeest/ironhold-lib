@@ -3,13 +3,17 @@
     models: [
         (
             path: "models/anvil.glb#Scene0",
-            position: (2.0, 0.0, 0.0),
+            position: (4.0, 0.0, 0.0),
         ),
     ],
     ui: [
         Button(
             text: "Start Game",
             action: LoadScene("scenes/main.ron"),
+        ),
+        Button(
+            text: "Quit",
+            action: Quit,
         )
     ]
 )

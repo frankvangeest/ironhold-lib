@@ -1,21 +1,21 @@
-
 # Data Formats
 
 ## Status
 🧭 Spec Draft (not fully implemented)
 
 ## Versioning
-All top-level data formats must include a schema version:
+All **top-level** data formats must include a schema version:
 - `schema_version: 1` (integer)
+
 This allows backward-compatible evolution and safe validation.
 
 ## assets/project.ron (ProjectConfig)
- 
+
 > [!NOTE]
 > You can override the project file path on the command line:
 > `cargo run -p ironhold_native -- project_02.ron`
 > `project_02.ron` should be in the `assets` directory.
- 
+
 Purpose:
 - Defines the initial scene.
 - Defines project-level settings (future: global logic machines, input profiles, networking mode).
@@ -30,6 +30,7 @@ Future additions (planned):
 - `networking: { mode: "offline|client|server", tick_rate: 60 }`
 
 ## assets/scenes/*.ron (GameLevel)
+
 Purpose:
 - Declaratively defines entities to spawn: models, UI, player, camera config.
 
@@ -45,9 +46,26 @@ Future additions (planned):
 - `triggers: [...]`
 
 ## UI
-Current:
-- Buttons with action `LoadScene("scenes/main.ron")`
 
-Planned:
-- UI emits `UiMessage` with stable IDs.
-- Global logic decides what actions happen as response.
+### Current (implemented)
+- Buttons with action `LoadScene("scenes/main.ron")`
+- Buttons with action `Quit`
+
+Example:
+```ron
+ui: [
+  Button(
+    text: "Start Game",
+    action: LoadScene("scenes/main.ron"),
+  ),
+  Button(
+    text: "Quit",
+    action: Quit,
+  )
+]
+```
+
+### Planned
+- UI emits richer `UiMessage` events with stable IDs.
+- Global logic decides what actions happen in response.
+
