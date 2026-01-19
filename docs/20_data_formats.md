@@ -13,7 +13,8 @@ This allows backward-compatible evolution and safe validation.
  
 > [!NOTE]
 > You can override the project file path on the command line:
-> `cargo run -p ironhold_native -- assets/alternative_project.ron`
+> `cargo run -p ironhold_native -- alternative_project.ron`
+> `alternative_project.ron` should be in the `assets` directory.
  
 Purpose:
 - Defines the initial scene.

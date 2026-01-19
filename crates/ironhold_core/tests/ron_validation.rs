@@ -1,6 +1,7 @@
 use ironhold_core::schema::{ProjectConfig, GameLevel};
 use ron::de::from_str;
 
+// ProjectConfig tests
 #[test]
 fn test_project_config_deserialization() {
     let ron_str = r#"
@@ -15,14 +16,14 @@ fn test_project_config_deserialization() {
 }
 
 #[test]
-fn test_project_config_default_version() {
+fn test_project_config_missing_schema_version_is_error() {
     let ron_str = r#"
         (
             initial_scene: "scenes/main.ron"
         )
     "#;
-    let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize ProjectConfig");
-    assert_eq!(config.schema_version, 0);
+    let result: Result<ProjectConfig, _> = ron::de::from_str(ron_str);
+    assert!(result.is_err(), "schema_version must be present");
 }
 
 #[test]
@@ -36,6 +37,19 @@ fn test_invalid_project_config() {
     assert!(result.is_err(), "Should have failed due to missing initial_scene");
 }
 
+#[test]
+fn test_project_config_wrong_schema_version_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 999,
+            initial_scene: "scenes/main.ron"
+        )
+    "#;
+    let config: ProjectConfig = ron::de::from_str(ron_str).unwrap();
+    assert!(config.validate().is_err());
+}
+
+// GameLevel tests
 #[test]
 fn test_game_level_minimal() {
     let ron_str = r#"
@@ -56,6 +70,7 @@ fn test_game_level_minimal() {
 fn test_game_level_full() {
     let ron_str = r#"
         (
+            schema_version: 1,
             models: [
                 (
                     path: "models/cube.glb",
@@ -107,4 +122,31 @@ fn test_game_level_full() {
     let level: GameLevel = from_str(ron_str).expect("Failed to deserialize full GameLevel");
     assert_eq!(level.models.len(), 1);
     assert!(level.player.is_some());
+}
+
+#[test]
+fn test_game_level_missing_schema_version_is_error() {
+    let ron_str = r#"
+        (
+            models: [],
+            ui: [],
+            player: None
+        )
+    "#;
+    let result: Result<GameLevel, _> = ron::de::from_str(ron_str);
+    assert!(result.is_err(), "schema_version must be present");
+}
+
+#[test]
+fn test_game_level_wrong_schema_version_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 999,
+            models: [],
+            ui: [],
+            player: None
+        )
+    "#;
+    let level: GameLevel = ron::de::from_str(ron_str).unwrap();
+    assert!(level.validate().is_err());
 }

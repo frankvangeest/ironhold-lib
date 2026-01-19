@@ -33,7 +33,8 @@
 
 - ✅ **Current schema structs**: minimal `ProjectConfig` (initial scene) and level/scene schema types exist.
 - 🧪 **RON validation tests**: basic validation exists via tests.
-- ✅ **schema_version** everywhere + migrations.
+- ✅ **schema_version** everywhere
+- 🧭 **schema migrations**
 - 🧭 **Strict validation + diagnostics** for content authors.
 
 ## Determinism & Networking

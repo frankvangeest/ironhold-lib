@@ -118,8 +118,9 @@ Example (conceptual shape; see your current `assets/scenes/*.ron` for real field
 
 ```ron
 (
+  schema_version: 1,
   models: [
-    (path: "models/anvil.glb", position: (0.0, 0.0, 0.0)),
+    (path: "models/anvil.glb", position: (2.0, 0.0, 0.0)),
   ],
   ui: [
     (Button: (text: "Start Game", action: (LoadScene: "scenes/main.ron"))),
