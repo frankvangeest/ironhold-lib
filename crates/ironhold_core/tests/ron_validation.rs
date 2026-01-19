@@ -49,6 +49,19 @@ fn test_project_config_wrong_schema_version_is_invalid() {
     assert!(config.validate().is_err());
 }
 
+#[test]
+fn test_project_config_unknown_field_is_error() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_scene: "scenes/main.ron",
+            typo_field: 123
+        )
+    "#;
+    let result: Result<ProjectConfig, _> = ron::de::from_str(ron_str);
+    assert!(result.is_err(), "unknown fields should be rejected");
+}
+
 // GameLevel tests
 #[test]
 fn test_game_level_minimal() {
@@ -149,4 +162,19 @@ fn test_game_level_wrong_schema_version_is_invalid() {
     "#;
     let level: GameLevel = ron::de::from_str(ron_str).unwrap();
     assert!(level.validate().is_err());
+}
+
+#[test]
+fn test_game_level_unknown_field_is_error() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            models: [],
+            ui: [],
+            player: None,
+            typo_field: 123
+        )
+    "#;
+    let result: Result<GameLevel, _> = ron::de::from_str(ron_str);
+    assert!(result.is_err(), "unknown fields should be rejected");
 }
