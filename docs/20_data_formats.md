@@ -5,7 +5,7 @@
 🧭 Spec Draft (not fully implemented)
 
 ## Versioning
-All data formats must include a schema version:
+All top-level data formats must include a schema version:
 - `schema_version: 1` (integer)
 This allows backward-compatible evolution and safe validation.
 
@@ -21,6 +21,7 @@ Purpose:
 - Defines project-level settings (future: global logic machines, input profiles, networking mode).
 
 Minimum:
+- `schema_version: 1`
 - `initial_scene: "scenes/start-menu.ron"`
 
 Future additions (planned):
@@ -33,6 +34,7 @@ Purpose:
 - Declaratively defines entities to spawn: models, UI, player, camera config.
 
 Recommended stable subset:
+- `schema_version: 1`
 - `models: [{ path, position, rotation?, scale? }]`
 - `ui: [UiElement]`
 - `player: PlayerConfig?`

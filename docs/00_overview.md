@@ -83,7 +83,8 @@ This section is intentionally brief and factual.
 
 - 🧭 Expand and formalize the runtime **event schema** (input abstraction, scene lifecycle events, triggers/collisions, animation markers).
 - 🧭 Move from ad-hoc wiring to **data-defined bindings** (strings → events/actions) with validation.
-- 🧭 Add **schema_version** to all data formats + migration notes.
+- ✅ Add **schema_version** to all data formats.
+- 🧭 Add **schema_version migration notes**.
 - 🧭 Introduce a **fixed-tick simulation loop** suitable for deterministic gameplay where needed.
 
 ## Where to read next
