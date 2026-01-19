@@ -12,4 +12,5 @@ pub enum UiElement {
 #[derive(Deserialize, Debug, Clone, Component)]
 pub enum UiAction {
     LoadScene(String),
+    Quit,
 }

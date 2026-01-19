@@ -3,6 +3,7 @@ use bevy::prelude::*;
 #[derive(Debug, Clone)]
 pub enum Action {
     LoadScene(String),
+    Quit,
 }
 
 #[derive(Resource, Default)]

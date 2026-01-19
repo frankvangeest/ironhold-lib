@@ -201,6 +201,9 @@ pub fn message_interpreter_system(
             UiMessage::ButtonPressed(path) => {
                 action_queue.push(Action::LoadScene(path.clone()));
             }
+            UiMessage::Quit => {
+                action_queue.push(Action::Quit);
+            }
         }
     }
 }
@@ -210,6 +213,7 @@ pub fn action_executor_system(
     mut action_queue: ResMut<ActionQueue>,
     asset_server: Res<AssetServer>,
     mut next_state: ResMut<NextState<AppState>>,
+    mut exit: MessageWriter<AppExit>,
 ) {
     while let Some(action) = action_queue.pop() {
         match action {
@@ -218,6 +222,10 @@ pub fn action_executor_system(
                 let handle = asset_server.load(path);
                 commands.insert_resource(LevelHandle(handle));
                 next_state.set(AppState::LoadingScene);
+            }
+            Action::Quit => {
+                println!("Executing Action::Quit");
+                exit.write(AppExit::Success);
             }
         }
     }

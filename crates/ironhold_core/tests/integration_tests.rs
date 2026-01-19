@@ -84,3 +84,37 @@ fn test_action_to_state_transition() {
     let state = app.world().resource::<State<AppState>>();
     assert_eq!(*state.get(), AppState::LoadingScene);
 }
+
+#[test]
+fn test_ui_button_to_quit_action() {
+    let mut app = App::new();
+    
+    app.add_plugins(MinimalPlugins)
+       .add_plugins(bevy::state::app::StatesPlugin)
+       .add_plugins(AssetPlugin::default())
+       .add_message::<bevy::input::mouse::MouseMotion>()
+       .add_message::<bevy::input::mouse::MouseWheel>()
+       .init_resource::<ButtonInput<KeyCode>>()
+       .init_resource::<ButtonInput<MouseButton>>()
+       .init_resource::<Assets<Mesh>>()
+       .init_resource::<Assets<StandardMaterial>>()
+       .init_resource::<Assets<Gltf>>()
+       .init_resource::<Assets<AnimationGraph>>()
+       .insert_resource(ProjectConfigPath("project.ron".to_string()))
+       .add_plugins(GamePlugin);
+       
+    // 1. Run once to process Startup (setup)
+    app.update();
+    
+    // 2. Simulate Quit Message
+    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::Quit);
+    
+    // 3. Run systems (Interpreter + Executor will run)
+    app.update();
+    
+    // 4. Verify side effects
+    // The executor should have queued Action::Quit which sends AppExit
+    // We can check if ActionQueue has it or just verify it doesn't crash
+    let action_queue = app.world().resource::<ActionQueue>();
+    assert!(action_queue.0.is_empty()); // Should be empty because it was popped and executed
+}

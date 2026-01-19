@@ -21,6 +21,7 @@ impl Plugin for GamePlugin {
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()
             .add_message::<UiMessage>()
+            .add_message::<AppExit>()
             .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_systems(Startup, setup)
@@ -77,6 +78,10 @@ fn button_system(
                     UiAction::LoadScene(path) => {
                         println!("Button Pressed! Emitting UiMessage for scene: {}", path);
                         ui_events.write(UiMessage::ButtonPressed(path.clone()));
+                    }
+                    UiAction::Quit => {
+                        println!("Quit Button Pressed! Emitting UiMessage::Quit");
+                        ui_events.write(UiMessage::Quit);
                     }
                 }
             }
