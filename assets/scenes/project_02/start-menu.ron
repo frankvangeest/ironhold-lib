@@ -4,11 +4,11 @@
     ui: [
         Button(
             text: "Start Game",
-            action: LoadScene("scenes/project_02/main.ron"),
+            action: Trigger("start_game"),
         ),
         Button(
             text: "Quit",
-            action: Quit,
+            action: Trigger("quit"),
         )
     ]
 )

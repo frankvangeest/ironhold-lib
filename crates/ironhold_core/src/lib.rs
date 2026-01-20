@@ -78,13 +78,9 @@ fn button_system(
             Interaction::Pressed => {
                 *color = BackgroundColor(Color::srgb(0.35, 0.75, 0.35));
                 match action {
-                    UiAction::LoadScene(path) => {
-                        println!("Button Pressed! Emitting UiMessage for scene: {}", path);
-                        ui_events.write(UiMessage::ButtonPressed(path.clone()));
-                    }
-                    UiAction::Quit => {
-                        println!("Quit Button Pressed! Emitting UiMessage::Quit");
-                        ui_events.write(UiMessage::Quit);
+                    UiAction::Trigger(trigger) => {
+                        println!("Button Pressed! Emitting UiMessage: {}", trigger);
+                        ui_events.write(UiMessage::ButtonPressed(trigger.clone()));
                     }
                 }
             }

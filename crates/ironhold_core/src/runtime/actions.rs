@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Debug, Clone)]
-pub enum Action {
-    LoadScene(String),
-    Quit,
-}
+use crate::schema::Action;
 
 #[derive(Resource, Default)]
 pub struct ActionQueue(pub Vec<Action>);

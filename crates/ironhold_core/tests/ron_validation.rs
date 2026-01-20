@@ -7,7 +7,8 @@ fn test_project_config_deserialization() {
     let ron_str = r#"
         (
             schema_version: 1,
-            initial_scene: "scenes/main.ron"
+            initial_scene: "scenes/main.ron",
+            rules: []
         )
     "#;
     let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize ProjectConfig");
@@ -19,7 +20,8 @@ fn test_project_config_deserialization() {
 fn test_project_config_missing_schema_version_is_error() {
     let ron_str = r#"
         (
-            initial_scene: "scenes/main.ron"
+            initial_scene: "scenes/main.ron",
+            rules: []
         )
     "#;
     let result: Result<ProjectConfig, _> = ron::de::from_str(ron_str);
@@ -42,7 +44,8 @@ fn test_project_config_wrong_schema_version_is_invalid() {
     let ron_str = r#"
         (
             schema_version: 999,
-            initial_scene: "scenes/main.ron"
+            initial_scene: "scenes/main.ron",
+            rules: []
         )
     "#;
     let config: ProjectConfig = ron::de::from_str(ron_str).unwrap();
@@ -55,6 +58,7 @@ fn test_project_config_unknown_field_is_error() {
         (
             schema_version: 1,
             initial_scene: "scenes/main.ron",
+            rules: [],
             typo_field: 123
         )
     "#;
@@ -93,7 +97,7 @@ fn test_game_level_full() {
             ui: [
                 Button(
                     text: "Play",
-                    action: LoadScene("scenes/game.ron")
+                    action: Trigger("play")
                 )
             ],
             player: Some((

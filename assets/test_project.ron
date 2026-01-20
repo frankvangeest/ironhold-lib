@@ -1,4 +1,14 @@
 (
     schema_version: 1,
-    initial_scene: "scenes/tests/test_scene.ron"
+    initial_scene: "scenes/tests/test_scene.ron",
+    rules: [
+        (
+            on: "ui.button_pressed:start_game",
+            do_actions: [ LoadScene("scenes/main.ron") ],
+        ),
+        (
+            on: "ui.button_pressed:quit",
+            do_actions: [ Quit ],
+        ),
+    ]
 )

@@ -9,11 +9,11 @@
     ui: [
         Button(
             text: "Start Game",
-            action: LoadScene("scenes/main.ron"),
+            action: Trigger("start_game"),
         ),
         Button(
             text: "Quit",
-            action: Quit,
+            action: Trigger("quit"),
         )
     ]
 )

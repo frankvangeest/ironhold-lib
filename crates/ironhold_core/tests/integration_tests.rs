@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use ironhold_core::{GamePlugin, ProjectConfigPath};
-use ironhold_core::runtime::{UiMessage, Action, ActionQueue, SceneEvent, InputAction, InputActionMessage};
-use ironhold_core::schema::AppState;
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationMap};
@@ -28,8 +28,24 @@ fn test_ui_button_to_load_scene_action() {
     // 1. Run once to process Startup (setup)
     app.update();
     
+    // Override ProjectConfig with test-specific rules
+    {
+        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
+        let config_handle = configs.add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/tests/test_scene.ron".to_string(),
+            rules: vec![
+                LogicRule {
+                    on: "ui.button_pressed:test_load".to_string(),
+                    do_actions: vec![Action::LoadScene("scenes/tests/test_scene.ron".to_string())],
+                }
+            ],
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    }
+    
     // 2. Simulate Button Press Message
-    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("scenes/tests/test_scene.ron".to_string()));
+    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("test_load".to_string()));
     
     // 3. Run systems (Interpreter + Executor will run)
     app.update();
@@ -222,8 +238,24 @@ fn test_ui_button_to_quit_action() {
     // 1. Run once to process Startup (setup)
     app.update();
     
+    // Override ProjectConfig with test-specific rules
+    {
+        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
+        let config_handle = configs.add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/tests/test_scene.ron".to_string(),
+            rules: vec![
+                LogicRule {
+                    on: "ui.button_pressed:test_quit".to_string(),
+                    do_actions: vec![Action::Quit],
+                }
+            ],
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    }
+    
     // 2. Simulate Quit Message
-    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::Quit);
+    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("test_quit".to_string()));
     
     // 3. Run systems (Interpreter + Executor will run)
     app.update();

@@ -201,14 +201,22 @@ pub fn spawn_level(
 pub fn message_interpreter_system(
     mut ui_events: MessageReader<UiMessage>,
     mut action_queue: ResMut<ActionQueue>,
+    config_handle: Res<ProjectConfigHandle>,
+    configs: Res<Assets<ProjectConfig>>,
 ) {
+    let Some(config) = configs.get(&config_handle.0) else { return; };
+
     for event in ui_events.read() {
-        match event {
-            UiMessage::ButtonPressed(path) => {
-                action_queue.push(Action::LoadScene(path.clone()));
-            }
-            UiMessage::Quit => {
-                action_queue.push(Action::Quit);
+        let event_name = match event {
+            UiMessage::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
+        };
+
+        for rule in &config.rules {
+            if rule.on == event_name {
+                for action in &rule.do_actions {
+                    println!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
+                    action_queue.push(action.clone());
+                }
             }
         }
     }

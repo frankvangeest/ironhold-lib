@@ -3,6 +3,8 @@ use serde::Deserialize;
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 
+use crate::schema::actions::Action;
+
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum AppState {
     #[default]
@@ -17,6 +19,13 @@ pub enum AppState {
 pub struct ProjectConfig {
     pub schema_version: u32,
     pub initial_scene: String,
+    pub rules: Vec<LogicRule>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LogicRule {
+    pub on: String,
+    pub do_actions: Vec<Action>,
 }
 
 #[derive(Resource)]
