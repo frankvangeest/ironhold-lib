@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use crate::schema::player::InputMap;
 use crate::capabilities::animation::AnimationController;
+use crate::runtime::messages::*;
+use std::collections::HashMap;
 
 #[derive(Component)]
 pub struct CharacterController {
@@ -13,42 +15,36 @@ pub struct CharacterController {
 
 pub fn player_movement_system(
     time: Res<Time>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut CharacterController, &mut AnimationController)>,
+    mut input_events: MessageReader<InputActionMessage>,
+    mut query: Query<(Entity, &mut Transform, &mut CharacterController, &mut AnimationController)>,
 ) {
-    for (mut transform, mut controller, mut anim_ctrl) in &mut query {
+    let mut actions = HashMap::new();
+    for event in input_events.read() {
+        actions.entry(event.entity).or_insert_with(Vec::new).push(event.action.clone());
+    }
+
+    for (entity, mut transform, mut controller, mut anim_ctrl) in &mut query {
         let mut velocity = Vec3::ZERO;
         let mut rotation = 0.0;
         
-        let forward = transform.forward();
-        let right = transform.right();
-
-        // Toggle run with shift
-        if let Some(key) = controller.inputs.key("run") {
-            if keyboard_input.just_pressed(key) {
-                controller.is_running = !controller.is_running;
+        if let Some(entity_actions) = actions.get(&entity) {
+            for action in entity_actions {
+                match action {
+                    InputAction::Move(dir) => {
+                        let forward = transform.forward();
+                        let right = transform.right();
+                        velocity += *forward * dir.y;
+                        velocity += *right * dir.x;
+                    }
+                    InputAction::Turn(val) => {
+                        rotation += val;
+                    }
+                    InputAction::Run(true) => {
+                        controller.is_running = !controller.is_running;
+                    }
+                    _ => {}
+                }
             }
-        }
-
-        if let Some(key) = controller.inputs.key("forward") {
-            if keyboard_input.pressed(key) { velocity += *forward; }
-        }
-        if let Some(key) = controller.inputs.key("backward") {
-            if keyboard_input.pressed(key) { velocity -= *forward; }
-        }
-        if let Some(key) = controller.inputs.key("strafe_right") {
-            if keyboard_input.pressed(key) { velocity += *right; }
-        }
-        if let Some(key) = controller.inputs.key("strafe_left") {
-            if keyboard_input.pressed(key) { velocity -= *right; }
-        }
-        
-        // Turning
-        if let Some(key) = controller.inputs.key("left") {
-            if keyboard_input.pressed(key) { rotation += 1.0; }
-        }
-        if let Some(key) = controller.inputs.key("right") {
-            if keyboard_input.pressed(key) { rotation -= 1.0; }
         }
 
         // Apply Rotation

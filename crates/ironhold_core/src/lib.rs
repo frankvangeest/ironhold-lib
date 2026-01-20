@@ -21,6 +21,8 @@ impl Plugin for GamePlugin {
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()
             .add_message::<UiMessage>()
+            .add_message::<SceneEvent>()
+            .add_message::<InputActionMessage>()
             .add_message::<AppExit>()
             .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
@@ -29,6 +31,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 spawn_level,
                 button_system,
+                input_translator_system,
             ))
             .add_systems(Update, (
                 message_interpreter_system,

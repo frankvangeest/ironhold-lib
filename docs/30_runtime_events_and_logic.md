@@ -37,6 +37,8 @@ This section is factual and reflects what exists right now.
 
 - ✅ A minimal action layer exists: `ActionQueue` plus actions such as `LoadScene(String)` and `Quit`.
 - ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction.
+- ✅ **[NEW]** Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
+- ✅ **[NEW]** Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
 - ✅ A message interpreter maps UI messages to actions.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a level asset and transitions to the loading state.
@@ -49,7 +51,7 @@ We standardize runtime messages so content can bind to them consistently.
 
 ### Core message categories
 
-#### 1) InputAction 🧭
+#### 1) InputAction ✅
 Abstract input actions (not raw keys/buttons):
 - `input.move` (vector2)
 - `input.look` (vector2)
@@ -65,7 +67,7 @@ UI interactions and higher-level UI events:
 
 **Why:** keep UI wiring declarative; bind UI events to gameplay actions.
 
-#### 3) SceneEvent 🧭
+#### 3) SceneEvent ✅
 Scene lifecycle:
 - `scene.requested` (path/name)
 - `scene.loaded`
@@ -200,6 +202,9 @@ This list is intentionally short and should be updated when code expands.
 - ✅ `ActionQueue` (push/pop)
 - ✅ `UiMessage::ButtonPressed(path)` → interpreter pushes `Action::LoadScene(path)`
 - ✅ `UiMessage::Quit` → interpreter pushes `Action::Quit`
+- ✅ `SceneEvent` (Requested, Loaded, Ready)
+- ✅ `InputAction` (Move, Turn, Jump, Run, Look)
+- ✅ `InputActionMessage` (Entity, InputAction)
 - ✅ Executor:
   - `LoadScene` loads a `GameLevel` asset and transitions to `LoadingScene`
   - `Quit` writes `AppExit::Success`

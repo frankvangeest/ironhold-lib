@@ -13,6 +13,7 @@ pub fn check_project_loaded(
     configs: Res<Assets<ProjectConfig>>,
     asset_server: Res<AssetServer>,
     mut next_state: ResMut<NextState<AppState>>,
+    mut scene_events: MessageWriter<SceneEvent>,
 ) {
     if let Some(config) = configs.get(&config_handle.0) {
         if let Err(e) = config.validate() {
@@ -24,6 +25,7 @@ pub fn check_project_loaded(
         let scene_handle = asset_server.load(config.initial_scene.clone());
         commands.insert_resource(LevelHandle(scene_handle));
         
+        scene_events.write(SceneEvent::Requested(config.initial_scene.clone()));
         next_state.set(AppState::LoadingScene);
     }
 }
@@ -37,6 +39,7 @@ pub fn spawn_level(
     mut next_state: ResMut<NextState<AppState>>,
     state: Res<State<AppState>>,
     current_entities: Query<Entity, With<LevelEntity>>,
+    mut scene_events: MessageWriter<SceneEvent>,
 ) {
     let Some(level_handle) = level_handle else { return; };
     
@@ -56,6 +59,8 @@ pub fn spawn_level(
 
     if ready_to_spawn {
         if let Some(level) = levels.get(&level_handle.0) {
+            scene_events.write(SceneEvent::Loaded(asset_server.get_path(&level_handle.0).map(|p| p.path().to_string_lossy().into_owned()).unwrap_or_default()));
+            
             if let Err(e) = level.validate() {
                 panic!("Invalid GameLevel: {}", e);
             }
@@ -188,6 +193,7 @@ pub fn spawn_level(
             }
             
             next_state.set(AppState::InGame);
+            scene_events.write(SceneEvent::Ready(asset_server.get_path(&level_handle.0).map(|p| p.path().to_string_lossy().into_owned()).unwrap_or_default()));
         }
     }
 }
@@ -214,13 +220,15 @@ pub fn action_executor_system(
     asset_server: Res<AssetServer>,
     mut next_state: ResMut<NextState<AppState>>,
     mut exit: MessageWriter<AppExit>,
+    mut scene_events: MessageWriter<SceneEvent>,
 ) {
     while let Some(action) = action_queue.pop() {
         match action {
             Action::LoadScene(path) => {
                 println!("Executing Action::LoadScene: {}", path);
-                let handle = asset_server.load(path);
+                let handle = asset_server.load(path.clone());
                 commands.insert_resource(LevelHandle(handle));
+                scene_events.write(SceneEvent::Requested(path));
                 next_state.set(AppState::LoadingScene);
             }
             Action::Quit => {

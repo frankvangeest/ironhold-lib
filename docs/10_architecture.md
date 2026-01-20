@@ -22,6 +22,25 @@ Assets:
 - 🧭 Event bus with stable message schema
 - 🧪 Action executor (exists, limited set of actions)
 
+### Scene Lifecycle (Sequence)
+The transitions between states and the messages emitted are visualized below:
+
+```mermaid
+sequenceDiagram
+    participant Executor as Action Executor
+    participant Loader as Scene Manager
+    participant Bus as Message Bus
+    participant Other as Other Systems
+
+    Executor->>Loader: Action::LoadScene
+    Loader->>Bus: SceneEvent::Requested
+    Loader->>Loader: Load Asset
+    Loader->>Bus: SceneEvent::Loaded
+    Loader->>Loader: Spawn Entities
+    Loader->>Bus: SceneEvent::Ready
+    Bus->>Other: Notify (Ready)
+```
+
 **Messages (events) → Interpreter (data logic) → Actions → Executors**
 
 - **Event producers** (input/UI/triggers/etc.) emit Messages.
