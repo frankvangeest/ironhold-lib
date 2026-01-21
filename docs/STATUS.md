@@ -1,66 +1,84 @@
-# STATUS — Feature Status Matrix
+# Project Status
 
-> **Purpose:** single source of truth for what is **implemented today** vs **planned**.
->
-> **Status legend:**
-> - ✅ **Implemented** — exists in code today
-> - 🧪 **Prototype / Partial** — exists but incomplete or unstable
-> - 🧭 **Planned** — intended design; not implemented yet
+_Last updated: 2026‑01‑20_
 
----
-
-## Runtime (Messages → Actions → Execution)
-
-- ✅ **Scene load flow via UI**: UI button interaction emits a UI message and can drive a scene load request.
-- ✅ **Quit flow via UI**: UI button interaction can emit a quit message and request application exit.
-- ✅ **Action infrastructure**: `ActionQueue` exists with actions including `LoadScene` and `Quit`.
-- ✅ **Interpreter/executor pipeline**: UI messages are interpreted into actions and executed.
-- 🧭 **Unified event schema**: InputAction, SceneEvent, Trigger/Collision, AnimationMarker, etc.
-- 🧭 **Data-defined rules**: declarative Event→Action bindings authored in RON.
-
-## Scenes & Content
-
-- ✅ **RON asset loading**: project config and levels/scenes load as assets.
-- 🧪 **Scene lifecycle**: explicit requested/loaded/ready events are planned.
-- 🧭 **Scene composition schema v1**: templates, prefabs, tags, triggers.
-
-## Capabilities
-
-- ✅ **Capability systems exist**: player movement, orbit camera, animation playback are present and registered.
-- 🧪 **Configuration via RON**: partially supported; formal binding + validation planned.
-- 🧭 **Capability registry**: declare events/actions/validation rules per capability.
-
-## Data formats & Validation
-
-- ✅ **Top-level schema versioning**: `schema_version` is required for top-level project + scene files.
-- ✅ **Strict deserialization**: unknown fields are rejected for top-level formats.
-- ✅ **RON validation tests**: enforce required `schema_version`, reject unknown fields, and validate supported schema versions for `ProjectConfig` and `GameLevel`.
-- ✅ **Asset regression test**: scans `assets/*.ron` and `assets/scenes/**/*.ron` to ensure every file parses and validates (prevents future regressions).
-- 🧭 **Schema migrations**
-- 🧭 **Strict validation + diagnostics** for content authors.
-
-
-## Determinism & Networking
-
-- 🧭 **Fixed-tick deterministic gameplay loop**.
-- 🧭 **Replay tooling** (record inputs per tick, replay, state hashing).
-- 🧭 **Networking prototypes** (lockstep → prediction/reconciliation → rollback).
-
-## Platforms
-
-- ✅ **Native runner**: desktop app runner exists.
-- ✅ **Web runner**: WASM entry point exists.
-- 🧪 **Platform parity checks**: automated parity/replay tests planned.
+## Legend
+- ✅ Implemented
+- 🟡 In progress / Partial
+- ⛔ Planned (not implemented)
 
 ---
 
-## Update policy
+## Milestones
 
-- Update this file whenever:
-  - you add/remove an `Action` or message type
-  - you change any schema structs that affect user-authored RON
-  - you complete a milestone item in the roadmap
+| Milestone | Name                              | Status | Notes |
+|----------:|-----------------------------------|:------:|-------|
+| 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
+| 0.2       | Event/Action Bus refactor         |   🟡   | Message→Action→Executor exists; catalog + docs tightening in progress; behavior unchanged by design. |
+| 0.3       | Global Logic (FSM v1)             |   ⛔   | Not implemented. |
+| 0.4       | Entity Logic (FSM v1)             |   ⛔   | Not implemented. |
+| 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
+| 0.6       | Networking Prototype              |   ⛔   | Not implemented. |
 
+---
 
+## Feature Matrix (Today)
 
-==== SUMMARY: 45 files, 238158 bytes raw ====
+### Runtime & Logic
+| Area                          | Status | Notes |
+|-------------------------------|:------:|-------|
+| UI → scene load (LoadScene)   |   ✅   | Button press → `UiMessage` → `Action::LoadScene` → state transition. |
+| UI → quit (Quit)              |   ✅   | Button press → `UiMessage` → `Action::Quit` → AppExit. |
+| Action infrastructure         |   ✅   | `ActionQueue`, interpreter & executor wired. |
+| Event schema breadth          |   🟡   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` live; others planned. |
+| Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready` types exist; full lifecycle choreography is WIP. |
+
+### Data Formats & Validation
+| Area                                  | Status | Notes |
+|---------------------------------------|:------:|-------|
+| Top‑level `schema_version` required   |   ✅   | Enforced for Project & Scene (v1). |
+| Deny unknown fields                   |   ✅   | Strict serde on top‑level assets. |
+| Asset regression tests                |   ✅   | Scans `assets/**/*.ron` for schema compliance. |
+| Schema migrations/diagnostics         |   ⛔   | Planned. |
+
+### Capabilities
+| Area                        | Status | Notes |
+|-----------------------------|:------:|-------|
+| Player movement             |   ✅   | Data‑configured via scene `player` block. |
+| Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
+| Animation playback          |   ✅   | Data‑configured via `player.animations`. |
+| Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |
+
+### Platforms
+| Area                  | Status | Notes |
+|-----------------------|:------:|-------|
+| Native runner         |   ✅   | `crates/ironhold_native` (CLI can select project file). |
+| Web runner (WASM)     |   ✅   | `crates/ironhold_web` (`#[wasm_bindgen(start)]`). |
+| Platform parity tests |   ⛔   | Planned. |
+
+---
+
+## Engine ABI (today)
+
+### Messages
+- `UiMessage::ButtonPressed(String)`
+- `SceneEvent::{Requested(String), Loaded(String), Ready(String)}`
+- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}`
+- `InputActionMessage { entity, action: InputAction }`
+
+### Actions
+- `Action::LoadScene(String)`
+- `Action::Quit`
+
+> New Messages/Actions **must** update this table and include examples + tests.
+
+---
+
+## UI v1 Scope (authoring)
+- Supported element: `Button { text, action: Trigger(String) }`
+- Example:
+  ```ron
+  ui: [
+    Button(text: "Start Game", action: Trigger("start_game")),
+    Button(text: "Quit",       action: Trigger("quit")),
+  ]
