@@ -30,7 +30,8 @@ _Last updated: 2026‑01‑20_
 | UI → scene load (LoadScene)   |   ✅   | Button press → `UiMessage` → `Action::LoadScene` → state transition. |
 | UI → quit (Quit)              |   ✅   | Button press → `UiMessage` → `Action::Quit` → AppExit. |
 | Action infrastructure         |   ✅   | `ActionQueue`, interpreter & executor wired. |
-| Event schema breadth          |   🟡   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` live; others planned. |
+| Live event domains            |   ✅   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
+| Planned event domains      |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
 | Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready` types exist; full lifecycle choreography is WIP. |
 
 ### Data Formats & Validation

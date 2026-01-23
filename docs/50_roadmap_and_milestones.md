@@ -76,3 +76,5 @@ Deliverables:
 - CI green on native + web
 - no known data-breaking changes without migration notes
 ``
+
+See docs/STATUS.md for the authoritative, up‑to‑date implementation status.
