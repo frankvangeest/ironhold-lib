@@ -113,6 +113,8 @@ For any capability change:
 
 ### Observability ✅
 - Prefer structured logging for important runtime transitions.
+- Use `bevy::log::info!`, `warn!`, or `error!` instead of `println!` or `eprintln!`.
+  - This ensures logs appear correctly on all platforms (including WebAssembly browser console).
 - Avoid noisy logs in hot loops.
 
 ---

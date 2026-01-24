@@ -244,6 +244,10 @@ so running from workspace root is usually fine.
 We will add stricter schema validation (and schema versioning) so that
 invalid scene/project configs produce actionable errors.
 
+### Logging
+Always use `bevy::log::info!`, `warn!`, or `error!` macros. Do not use `println!`.
+This ensures logs are captured by the engine and displayed correctly in the browser console (WASM).
+
 ---
 
 ## 🤝 Contributing

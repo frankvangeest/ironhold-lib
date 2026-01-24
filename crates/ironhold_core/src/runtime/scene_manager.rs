@@ -19,7 +19,7 @@ pub fn check_project_loaded(
         if let Err(e) = config.validate() {
             panic!("Invalid ProjectConfig: {}", e);
         }
-        println!("Project Config Loaded. Initial Scene: {} (schema v{})", config.initial_scene, config.schema_version);
+        info!("Project Config Loaded. Initial Scene: {} (schema v{})", config.initial_scene, config.schema_version);
 
         // Load the initial scene
         let scene_handle = asset_server.load(config.initial_scene.clone());
@@ -70,7 +70,7 @@ pub fn spawn_level(
                 return; 
             }
             
-            println!("Level Loaded! schema v{}, Spawning {} models and {} ui elements", level.schema_version, level.models.len(), level.ui.len());
+            info!("Level Loaded! schema v{}, Spawning {} models and {} ui elements", level.schema_version, level.models.len(), level.ui.len());
             
             if level.schema_version == 0 {
                 warn!("GameLevel schema_version is 0 (missing). Please update to v1.");
@@ -184,7 +184,7 @@ pub fn spawn_level(
                 ));
             } else {
                 // No player - spawn a default camera for UI/static scenes
-                println!("No player in scene, spawning default camera...");
+                info!("No player in scene, spawning default camera...");
                 commands.spawn((
                     Camera3d::default(),
                     Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -214,7 +214,7 @@ pub fn message_interpreter_system(
         for rule in &config.rules {
             if rule.on == event_name {
                 for action in &rule.do_actions {
-                    println!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
+                    info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
                     action_queue.push(action.clone());
                 }
             }
@@ -234,21 +234,21 @@ pub fn action_executor_system(
     while let Some(action) = action_queue.pop() {
         match action {
             Action::LoadScene(path) => {
-                println!("Executing Action::LoadScene: {}", path);
+                info!("Executing Action::LoadScene: {}", path);
                 let handle = asset_server.load(path.clone());
                 commands.insert_resource(LevelHandle(handle));
                 scene_events.write(SceneEvent::Requested(path));
                 next_state.set(AppState::LoadingScene);
             }
             Action::Quit => {
-                println!("Executing Action::Quit");
+                info!("Executing Action::Quit");
                 exit.write(AppExit::Success);
             }
             Action::Log(msg) => {
-                println!("Action::Log: {}", msg);
+                info!("Action::Log: {}", msg);
             }
             Action::Spawn(path) => {
-                println!("Executing Action::Spawn: {}", path);
+                info!("Executing Action::Spawn: {}", path);
                 commands.spawn((
                     SceneRoot(asset_server.load(path.clone())),
                     Transform::default(),
@@ -256,7 +256,7 @@ pub fn action_executor_system(
                 ));
             }
             Action::PlayAnimation(anim) => {
-                println!("Executing Action::PlayAnimation: {}", anim);
+                info!("Executing Action::PlayAnimation: {}", anim);
                 for mut controller in &mut animation_controllers {
                     controller.current = anim.clone();
                 }

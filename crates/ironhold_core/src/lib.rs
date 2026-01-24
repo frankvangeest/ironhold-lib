@@ -7,6 +7,7 @@ pub mod runtime;
 pub mod capabilities;
 pub mod utils;
 
+
 use crate::schema::*;
 use crate::runtime::*;
 use crate::capabilities::*;
@@ -59,7 +60,7 @@ fn setup(
     ));
     
     // Load Project Config
-    println!("Loading Project Config from {}...", config_path.0);
+    info!("Loading Project Config from {}...", config_path.0);
     let handle = asset_server.load(config_path.0.clone());
     commands.insert_resource(ProjectConfigHandle(handle));
     
@@ -80,7 +81,7 @@ fn button_system(
                 *color = BackgroundColor(Color::srgb(0.35, 0.75, 0.35));
                 match action {
                     UiAction::Trigger(trigger) => {
-                        println!("Button Pressed! Emitting UiMessage: {}", trigger);
+                        info!("Button Pressed! Emitting UiMessage: {}", trigger);
                         ui_events.write(UiMessage::ButtonPressed(trigger.clone()));
                     }
                 }
@@ -104,8 +105,8 @@ pub fn start_app(project_path: Option<String>) {
     
     let config_path = project_path.unwrap_or_else(|| "project.ron".to_string());
     
-    println!("Runtime Asset Path: {}", asset_path);
-    println!("Project Config Path: {}", config_path);
+    info!("Runtime Asset Path: {}", asset_path);
+    info!("Project Config Path: {}", config_path);
 
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {

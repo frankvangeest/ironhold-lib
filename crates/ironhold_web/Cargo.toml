@@ -10,3 +10,6 @@ crate-type = ["cdylib", "rlib"]
 ironhold_core = { path = "../ironhold_core" }
 bevy = { workspace = true }
 wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

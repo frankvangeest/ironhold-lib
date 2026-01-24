@@ -1,8 +1,9 @@
 use std::path::PathBuf;
+use bevy::log::info;
 
 pub fn find_assets_folder() -> PathBuf {
     let mut current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    println!("Current Working Directory: {:?}", current);
+    info!("Current Working Directory: {:?}", current);
 
     // Search up to 5 levels parent directories
     for _ in 0..5 {

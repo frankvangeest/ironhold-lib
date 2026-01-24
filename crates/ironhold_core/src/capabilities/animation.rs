@@ -58,7 +58,7 @@ pub fn animation_playback_system(
                     commands.entity(player_ent).insert(AnimationGraphHandle(graph_handle));
                     controller.node_indices = indices;
                     controller.graph_initialized = true;
-                    println!("Animation Graph Initialized!");
+                    info!("Animation Graph Initialized!");
                 }
             }
         }
