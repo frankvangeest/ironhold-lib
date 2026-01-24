@@ -129,3 +129,13 @@ Recommended starting points:
 - `docs/40_determinism_and_networking.md`
 - `docs/50_roadmap_and_milestones.md`
 
+## Documentation requirements for Messages/Actions
+
+If you add or change a **Message** or **Action** (engine ABI):
+
+- Update `docs/STATUS.md` (Engine ABI section).
+- Update `docs/30_runtime_events_and_logic.md` (lists + semantics).
+- Update `docs/20_data_formats.md` with an authoring example if the change is user-facing.
+
+This keeps the ABI and docs consistent and is required for Beta 0.2.
+

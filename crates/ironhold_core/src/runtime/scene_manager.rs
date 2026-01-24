@@ -229,6 +229,7 @@ pub fn action_executor_system(
     mut next_state: ResMut<NextState<AppState>>,
     mut exit: MessageWriter<AppExit>,
     mut scene_events: MessageWriter<SceneEvent>,
+    mut animation_controllers: Query<&mut AnimationController>,
 ) {
     while let Some(action) = action_queue.pop() {
         match action {
@@ -242,6 +243,23 @@ pub fn action_executor_system(
             Action::Quit => {
                 println!("Executing Action::Quit");
                 exit.write(AppExit::Success);
+            }
+            Action::Log(msg) => {
+                println!("Action::Log: {}", msg);
+            }
+            Action::Spawn(path) => {
+                println!("Executing Action::Spawn: {}", path);
+                commands.spawn((
+                    SceneRoot(asset_server.load(path.clone())),
+                    Transform::default(),
+                    LevelEntity,
+                ));
+            }
+            Action::PlayAnimation(anim) => {
+                println!("Executing Action::PlayAnimation: {}", anim);
+                for mut controller in &mut animation_controllers {
+                    controller.current = anim.clone();
+                }
             }
         }
     }

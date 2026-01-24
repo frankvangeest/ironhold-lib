@@ -209,3 +209,18 @@ This list is intentionally short and should be updated when code expands.
   - `LoadScene` loads a `GameLevel` asset and transitions to `LoadingScene`
   - `Quit` writes `AppExit::Success`
 
+## Engine ABI Addendum (Actions)
+
+### Actions
+- `Action::Log(String)` — logs a message (debug/telemetry)
+- `Action::Spawn(String)` — spawns an entity by asset id/path
+- `Action::PlayAnimation(String)` — plays a named animation/clip
+
+## Action Semantics (v0.2 additions)
+
+- `Log(String)`: emits a log line from the action executor.
+- `Spawn(String)`: requests spawning an entity from an asset (for example a `.glb`).
+- `PlayAnimation(String)`: requests playing an animation clip by name.
+
+> If these actions require additional parameters (spawn position, target entity, etc.), extend the schema and update this section alongside the engine ABI list.
+

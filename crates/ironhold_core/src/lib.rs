@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use bevy::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 
@@ -109,6 +110,7 @@ pub fn start_app(project_path: Option<String>) {
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             file_path: asset_path,
+            meta_check: bevy::asset::AssetMetaCheck::Never,
             ..default()
         }))
         .insert_resource(ProjectConfigPath(config_path))

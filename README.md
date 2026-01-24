@@ -78,7 +78,7 @@ rustup target add wasm32-unknown-unknown
 
 #### Build
 ```bash
-wasm-pack build crates/ironhold_web --target web
+wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 ```
 
 #### Serve (any static server)

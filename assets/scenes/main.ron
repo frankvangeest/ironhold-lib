@@ -6,6 +6,12 @@
             position: (4.0, 0.0, 0.0),
         ),
     ],
+    ui: [
+        Button(
+            text: "Dance",
+            action: Trigger("dance"),
+        ),
+    ],
     player: Some((
         model_path: "models/character-01.glb#Scene0",
         initial_position: (0.0, 0.0, 0.0),

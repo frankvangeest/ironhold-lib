@@ -70,6 +70,9 @@ _Last updated: 2026‑01‑20_
 ### Actions
 - `Action::LoadScene(String)`
 - `Action::Quit`
+- `Action::Log(String)` — logs a message (debug/telemetry)
+- `Action::Spawn(String)` — spawns an entity by asset id/path
+- `Action::PlayAnimation(String)` — plays a named animation/clip
 
 > New Messages/Actions **must** update this table and include examples + tests.
 
@@ -83,3 +86,6 @@ _Last updated: 2026‑01‑20_
     Button(text: "Start Game", action: Trigger("start_game")),
     Button(text: "Quit",       action: Trigger("quit")),
   ]
+
+
+==== SUMMARY: 48 files, 255479 bytes raw ====

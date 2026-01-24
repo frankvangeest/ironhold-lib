@@ -5,4 +5,7 @@ use serde::Deserialize;
 pub enum Action {
     LoadScene(String),
     Quit,
+    Log(String),
+    Spawn(String),
+    PlayAnimation(String),
 }

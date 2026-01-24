@@ -69,3 +69,33 @@ ui: [
 - UI emits richer `UiMessage` events with stable IDs.
 - Global logic decides what actions happen in response.
 
+## Action Examples (v0.2)
+
+The following actions are available in the current engine ABI:
+
+- `LoadScene(String)`
+- `Quit`
+- `Log(String)`
+- `Spawn(String)`
+- `PlayAnimation(String)`
+
+Example (RON):
+
+```ron
+rules: [
+  (
+    on: Trigger("start_game"),
+    do_actions: [
+      Log("Start pressed"),
+      Spawn("assets/models/character-01.glb"),
+      PlayAnimation("idle"),
+      LoadScene("assets/scenes/main.ron"),
+    ],
+  ),
+]
+```
+
+Notes:
+- `Spawn(String)` expects an asset identifier/path (e.g. a `.glb`) that the runtime can load.
+- `PlayAnimation(String)` expects an animation/clip name that exists on the target entity.
+
