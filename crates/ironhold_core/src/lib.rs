@@ -26,6 +26,13 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "inspector")]
         inspector::add_inspector_plugins(app);
+        // Register custom component types for runtime inspection (bevy-inspector-egui)
+        #[cfg(feature = "inspector")]
+        {
+            app.register_type::<LocomotionState>();
+            app.register_type::<ActiveOverride>();
+            app.register_type::<AnimationController>();
+        }
 
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()

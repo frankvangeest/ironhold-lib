@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::reflect::Reflect;
 use std::collections::VecDeque;
 
 use crate::schema::player::{
@@ -14,7 +15,8 @@ pub struct AnimationPolicyComponent(pub AnimationPolicy);
 
 /// Locomotion intent derived from input/movement.
 /// The movement system writes this; the resolver reads it.
-#[derive(Component, Debug, Default, Clone)]
+#[derive(Component, Reflect, Debug, Default, Clone)]
+#[reflect(Component)]
 pub struct LocomotionState {
     pub moving: bool,
     pub running: bool,
@@ -29,7 +31,8 @@ pub struct AnimationRequests {
 
 /// Runtime state for the currently-active override.
 /// Single-active-clip model: one override at a time.
-#[derive(Component, Debug, Default, Clone)]
+#[derive(Component, Reflect, Debug, Default, Clone)]
+#[reflect(Component)]
 pub struct ActiveOverride {
     pub id: Option<String>,
     pub clip: Option<String>,
@@ -164,3 +167,4 @@ pub fn animation_resolver_system(
         }
     }
 }
+

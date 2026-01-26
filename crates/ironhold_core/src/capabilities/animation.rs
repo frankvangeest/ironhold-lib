@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::reflect::Reflect;
 use bevy::gltf::Gltf;
 use std::{
     collections::{
@@ -9,7 +10,8 @@ use std::{
 
 use crate::capabilities::animation_resolver::AnimationPolicyComponent;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct AnimationController {
     pub current: String,
     pub last_played: String,
@@ -73,6 +75,7 @@ pub fn animation_playback_system(
                 if let Ok(mut player) = player_query.get_mut(player_ent) {
                     if let Some(&index) = controller.node_indices.get(&controller.current) {
                         // For now: always repeat; one-shot behavior is handled by resolver expiry.
+                        player.stop_all();
                         player.play(index).repeat();
                         controller.last_played = controller.current.clone();
                     } else {
@@ -103,3 +106,4 @@ fn find_player_entity_recursive(
 
     None
 }
+
