@@ -23,6 +23,7 @@ pub fn input_translator_system(
             if keyboard_input.pressed(key) { move_vec.x -= 1.0; }
         }
         
+        info!("move_vec = {:?}", move_vec);
         if move_vec != Vec2::ZERO {
             input_events.write(InputActionMessage {
                 entity,

@@ -16,7 +16,7 @@
         ),
         (
             on: "ui.button_pressed:dance",
-            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("Dance_Loop") ],
+            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),
     ]
 )

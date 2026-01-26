@@ -1,10 +1,23 @@
 use bevy::prelude::*;
+
+// Schema
 use crate::schema::*;
+
+// Runtime
 use crate::runtime::actions::*;
 use crate::runtime::messages::*;
+
+// Capabilities
 use crate::capabilities::player::CharacterController;
 use crate::capabilities::animation::AnimationController;
 use crate::capabilities::camera::OrbitCamera;
+use crate::capabilities::animation_resolver::{
+    ActiveOverride, 
+    AnimationPolicyComponent, 
+    AnimationRequests, 
+    LocomotionState,
+};
+
 use std::collections::HashMap;
 
 pub fn check_project_loaded(
@@ -59,7 +72,12 @@ pub fn spawn_level(
 
     if ready_to_spawn {
         if let Some(level) = levels.get(&level_handle.0) {
-            scene_events.write(SceneEvent::Loaded(asset_server.get_path(&level_handle.0).map(|p| p.path().to_string_lossy().into_owned()).unwrap_or_default()));
+            scene_events.write(SceneEvent::Loaded(
+                asset_server
+                    .get_path(&level_handle.0)
+                    .map(|p| p.path().to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ));
             
             if let Err(e) = level.validate() {
                 panic!("Invalid GameLevel: {}", e);
@@ -151,9 +169,12 @@ pub fn spawn_level(
                         inputs: player_config.inputs.clone(),
                         is_running: false,
                     },
+                    LocomotionState::default(),
+                    AnimationRequests::default(),
+                    ActiveOverride::default(),
+                    AnimationPolicyComponent(player_config.animation_policy.clone()),
                     AnimationController {
-                        animations: player_config.animations.clone(),
-                        current: player_config.animations.idle.clone(),
+                        current: player_config.animation_policy.base.idle.clone(),
                         last_played: String::new(),
                         gltf_path,
                         gltf_handle,
@@ -167,7 +188,10 @@ pub fn spawn_level(
                 
                 commands.spawn((
                     Camera3d::default(),
-                    Transform::from_translation(start_pos).looking_at(Vec3::from(player_config.initial_position), Vec3::Y),
+                    Transform::from_translation(start_pos).looking_at(
+                        Vec3::from(player_config.initial_position), 
+                        Vec3::Y,
+                    ),
                     LevelEntity,
                     OrbitCamera {
                         target: player_entity,
@@ -193,7 +217,12 @@ pub fn spawn_level(
             }
             
             next_state.set(AppState::InGame);
-            scene_events.write(SceneEvent::Ready(asset_server.get_path(&level_handle.0).map(|p| p.path().to_string_lossy().into_owned()).unwrap_or_default()));
+            scene_events.write(SceneEvent::Ready(
+                asset_server
+                    .get_path(&level_handle.0)
+                    .map(|p| p.path().to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            ));
         }
     }
 }
@@ -229,7 +258,7 @@ pub fn action_executor_system(
     mut next_state: ResMut<NextState<AppState>>,
     mut exit: MessageWriter<AppExit>,
     mut scene_events: MessageWriter<SceneEvent>,
-    mut animation_controllers: Query<&mut AnimationController>,
+    mut animation_requests: Query<&mut AnimationRequests>,
 ) {
     while let Some(action) = action_queue.pop() {
         match action {
@@ -257,10 +286,11 @@ pub fn action_executor_system(
             }
             Action::PlayAnimation(anim) => {
                 info!("Executing Action::PlayAnimation: {}", anim);
-                for mut controller in &mut animation_controllers {
-                    controller.current = anim.clone();
+                for mut req in &mut animation_requests {
+                    req.queue.push_back(anim.clone());
                 }
             }
         }
     }
 }
+

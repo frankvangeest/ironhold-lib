@@ -30,20 +30,24 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
+            // Scene + UI + input
             .add_systems(Update, (
                 spawn_level,
                 button_system,
                 input_translator_system,
             ))
+            // Messages -> actions
             .add_systems(Update, (
                 message_interpreter_system,
                 action_executor_system,
             ))
+            // Capability pipeline (ordered): movement -> resolver -> playback
             .add_systems(Update, (
                 player_movement_system,
+                animation_resolver_system,
                 camera_orbit_system,
                 animation_playback_system,
-            ));
+            ).chain());
     }
 }
 
@@ -118,3 +122,4 @@ pub fn start_app(project_path: Option<String>) {
         .add_plugins(GamePlugin)
         .run();
 }
+
