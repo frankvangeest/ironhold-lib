@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::reflect::Reflect;
 use bevy::gltf::Gltf;
+use std::time::Duration;
 use std::{
     collections::{
         HashMap,
@@ -19,6 +20,8 @@ pub struct AnimationController {
     pub gltf_handle: Handle<Gltf>,
     pub node_indices: HashMap<String, AnimationNodeIndex>,
     pub graph_initialized: bool,
+    pub transition_ms: u64,
+    pub should_loop: bool,
 }
 
 pub fn animation_playback_system(
@@ -26,7 +29,8 @@ pub fn animation_playback_system(
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     mut controller_query: Query<(Entity, &mut AnimationController, &AnimationPolicyComponent)>,
-    mut player_query: Query<&mut AnimationPlayer>,
+    player_marker_query: Query<(), With<AnimationPlayer>>,
+    mut player_query: Query<(&mut AnimationPlayer, Option<&mut AnimationTransitions>)>,
     children_query: Query<&Children>,
 ) {
     for (entity, mut controller, policy_comp) in &mut controller_query {
@@ -60,8 +64,8 @@ pub fn animation_playback_system(
                 let graph_handle = graphs.add(graph);
 
                 // Find entity with AnimationPlayer to insert Graph handle
-                if let Some(player_ent) = find_player_entity_recursive(entity, &player_query, &children_query) {
-                    commands.entity(player_ent).insert(AnimationGraphHandle(graph_handle));
+                if let Some(player_ent) = find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+                    commands.entity(player_ent).insert((AnimationGraphHandle(graph_handle), AnimationTransitions::new()));
                     controller.node_indices = indices;
                     controller.graph_initialized = true;
                     info!("Animation Graph Initialized!");
@@ -71,12 +75,23 @@ pub fn animation_playback_system(
 
         // 2. Handle Playback
         if controller.graph_initialized && controller.current != controller.last_played {
-            if let Some(player_ent) = find_player_entity_recursive(entity, &player_query, &children_query) {
-                if let Ok(mut player) = player_query.get_mut(player_ent) {
+            if let Some(player_ent) = find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+                if let Ok((mut player, maybe_transitions)) = player_query.get_mut(player_ent) {
                     if let Some(&index) = controller.node_indices.get(&controller.current) {
-                        // For now: always repeat; one-shot behavior is handled by resolver expiry.
-                        player.stop_all();
-                        player.play(index).repeat();
+                        let duration = if controller.transition_ms == 0 { Duration::ZERO } else { Duration::from_millis(controller.transition_ms) };
+                        if let Some(mut transitions) = maybe_transitions {
+                            let active_anim = transitions.play(&mut player, index, duration);
+                            if controller.should_loop {
+                                active_anim.repeat();
+                            }
+                        } else {
+                            // Fallback: ensure exclusive playback
+                            player.stop_all();
+                            let active_anim = player.play(index);
+                            if controller.should_loop {
+                                active_anim.repeat();
+                            }
+                        }
                         controller.last_played = controller.current.clone();
                     } else {
                         warn!("No node index for requested animation: {}", controller.current);
@@ -89,7 +104,7 @@ pub fn animation_playback_system(
 
 fn find_player_entity_recursive(
     entity: Entity,
-    player_query: &Query<&mut AnimationPlayer>,
+    player_query: &Query<(), With<AnimationPlayer>>,
     children_query: &Query<&Children>,
 ) -> Option<Entity> {
     if player_query.contains(entity) {

@@ -90,6 +90,11 @@ pub struct AnimationPolicy {
     /// Data-defined overrides / abilities.
     #[serde(default)]
     pub overrides: Vec<AnimationOverrideDef>,
+
+    /// Default transition duration (milliseconds) when switching animations.
+    /// If omitted, transitions are instant.
+    #[serde(default)]
+    pub default_transition_ms: Option<u64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -128,6 +133,10 @@ pub struct AnimationOverrideDef {
     /// If set, the override will auto-expire after this duration.
     #[serde(default)]
     pub duration: Option<f32>,
+
+    /// Per-override transition duration (ms). If set, overrides the global default.
+    #[serde(default)]
+    pub transition_ms: Option<u64>,
 }
 
 fn default_priority() -> i32 {

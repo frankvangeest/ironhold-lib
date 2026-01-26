@@ -33,6 +33,9 @@
             jump: "Space",
         ),
         animation_policy: (
+            // Optional global default transition (ms). Omit for instant switching.
+            default_transition_ms: Some(150),
+            
             base: (
                 idle: "Idle_Loop",
                 walk: "Walk_Loop",

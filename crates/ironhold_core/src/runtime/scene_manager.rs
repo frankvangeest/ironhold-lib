@@ -180,6 +180,8 @@ pub fn spawn_level(
                         gltf_handle,
                         node_indices: HashMap::new(),
                         graph_initialized: false,
+                        transition_ms: 0,
+                        should_loop: true,
                     }
                 )).id();
 

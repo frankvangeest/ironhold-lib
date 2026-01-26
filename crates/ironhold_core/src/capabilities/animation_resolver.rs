@@ -39,6 +39,7 @@ pub struct ActiveOverride {
     pub priority: i32,
     pub cancel_on_move: bool,
     pub stop_action: Option<String>,
+    pub transition_ms: u64,
     pub expires_at: Option<f32>,
     pub looping: bool,
 }
@@ -50,18 +51,20 @@ impl ActiveOverride {
         self.priority = 0;
         self.cancel_on_move = false;
         self.stop_action = None;
+        self.transition_ms = 0;
         self.expires_at = None;
         self.looping = true;
     }
 }
 
-fn build_active_from_def(def: &AnimationOverrideDef, now: f32) -> ActiveOverride {
+fn build_active_from_def(def: &AnimationOverrideDef, now: f32, default_transition_ms: u64) -> ActiveOverride {
     ActiveOverride {
         id: Some(def.id.clone()),
         clip: Some(def.clip.clone()),
         priority: def.priority,
         cancel_on_move: def.cancel_on_move,
         stop_action: def.stop_action.clone(),
+        transition_ms: def.transition_ms.unwrap_or(default_transition_ms),
         expires_at: def.duration.map(|d| now + d),
         looping: def.looping,
     }
@@ -84,6 +87,7 @@ pub fn animation_resolver_system(
 
     for (policy_comp, loco, mut requests, mut active, mut anim_ctrl) in &mut query {
         let policy = &policy_comp.0;
+        let default_transition_ms = policy.default_transition_ms.unwrap_or(0);
 
         // 1) Expire time-based overrides.
         if let Some(exp) = active.expires_at {
@@ -109,7 +113,7 @@ pub fn animation_resolver_system(
 
             // override id
             if let Some(def) = policy.overrides.iter().find(|d| d.id == cmd) {
-                let candidate = build_active_from_def(def, now);
+                let candidate = build_active_from_def(def, now, default_transition_ms);
                 if active.clip.is_none() || candidate.priority >= active.priority {
                     *active = candidate;
                 }
@@ -124,6 +128,7 @@ pub fn animation_resolver_system(
                     priority: 0,
                     cancel_on_move: false,
                     stop_action: None,
+                    transition_ms: default_transition_ms,
                     expires_at: None,
                     looping: true,
                 };
@@ -140,6 +145,7 @@ pub fn animation_resolver_system(
                 priority: 0,
                 cancel_on_move: false,
                 stop_action: None,
+                transition_ms: default_transition_ms,
                 expires_at: None,
                 looping: true,
             };
@@ -148,20 +154,23 @@ pub fn animation_resolver_system(
             }
         }
 
-        // 4) Choose final clip.
-        let chosen_clip = if let Some(clip) = &active.clip {
-            clip.clone()
+        // 4) Choose final clip + metadata.
+        let (chosen_clip, chosen_looping, chosen_transition_ms) = if let Some(clip) = &active.clip {
+            (clip.clone(), active.looping, active.transition_ms)
         } else if loco.moving {
-            if loco.running {
-                policy.base.run.clone()
-            } else {
-                policy.base.walk.clone()
-            }
+            let clip = if loco.running { 
+                policy.base.run.clone() 
+            } else { 
+                policy.base.walk.clone() 
+            };
+            (clip, true, default_transition_ms)
         } else {
-            policy.base.idle.clone()
+            (policy.base.idle.clone(), true, default_transition_ms)
         };
 
-        // 5) Write current (single-writer).
+        // 5) Write current + transition settings (single-writer).
+        anim_ctrl.transition_ms = chosen_transition_ms;
+        anim_ctrl.should_loop = chosen_looping;
         if anim_ctrl.current != chosen_clip {
             anim_ctrl.current = chosen_clip;
         }
