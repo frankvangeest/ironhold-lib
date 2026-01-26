@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 ironhold_core = { path = "../ironhold_core" }
 bevy = { workspace = true }
+[features]
+inspector = ["ironhold_core/inspector"]

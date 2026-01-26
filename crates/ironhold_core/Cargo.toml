@@ -8,3 +8,7 @@ bevy = { workspace = true }
 serde = { workspace = true }
 ron = { workspace = true }
 bevy_common_assets = { workspace = true, features = ["ron"] }
+bevy_inspector_egui = { package = "bevy-inspector-egui", version = "0.36", optional = true }
+
+[features]
+inspector = ["dep:bevy_inspector_egui"]

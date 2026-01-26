@@ -7,6 +7,10 @@ pub mod runtime;
 pub mod capabilities;
 pub mod utils;
 
+// Optional debug inspector (native + web)
+#[cfg(feature = "inspector")]
+pub mod inspector;
+
 
 use crate::schema::*;
 use crate::runtime::*;
@@ -20,6 +24,9 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "inspector")]
+        inspector::add_inspector_plugins(app);
+
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()
             .add_message::<UiMessage>()
@@ -62,6 +69,19 @@ fn setup(
         DirectionalLight::default(),
         Transform::from_xyz(3.0, 10.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+
+    // Persistent UI camera for overlays (Egui / Inspector). Not tagged LevelEntity,
+    // so it survives scene transitions.
+    commands.spawn((
+        Camera2d,
+        bevy::ui::IsDefaultUiCamera,
+        bevy::prelude::Camera {
+            order: 100,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+    ));
+
     
     // Load Project Config
     info!("Loading Project Config from {}...", config_path.0);
@@ -122,4 +142,5 @@ pub fn start_app(project_path: Option<String>) {
         .add_plugins(GamePlugin)
         .run();
 }
+
 

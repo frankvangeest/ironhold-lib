@@ -70,6 +70,6 @@ pub fn player_movement_system(
             loco.moving = false;
             loco.running = false;
         }
-        info!("locomotion: moving={}, running={}", loco.moving, loco.running);
+        // info!("locomotion: moving={}, running={}", loco.moving, loco.running);
     }
 }

@@ -50,6 +50,13 @@ ironhold-lib/
 cargo run -p ironhold_native
 ```
 
+or with inspector enabled
+
+```bash
+cargo run -p ironhold_native --all-features
+```
+
+
 This runs the Bevy app using the shared runtime in `ironhold_core` and loads:
 - `assets/project.ron`
 - the configured initial scene (e.g. `assets/scenes/start-menu.ron`)
