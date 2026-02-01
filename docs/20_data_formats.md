@@ -99,3 +99,16 @@ Notes:
 - `Spawn(String)` expects an asset identifier/path (e.g. a `.glb`) that the runtime can load.
 - `PlayAnimation(String)` expects an animation/clip name that exists on the target entity.
 
+
+
+# Model Fixups (ProjectConfig)
+
+`model_fixes` provides per-asset transform corrections that are applied to **every instance** of the referenced model across all scenes. Use this to compensate for authoring issues such as off-center pivots, wrong up-axis, or unit scale mismatches.
+
+- **Key**: asset path as referenced in scenes (e.g., `models/my.glb#Scene0`).
+- **Fields**:
+  - `pivot_offset: (f32, f32, f32)` – meters; applied as child local translation.
+  - `rotation_deg: (f32, f32, f32)` – Euler degrees, order **YXZ**.
+  - `scale: (f32, f32, f32)` – local scale.
+
+At runtime, instances are spawned with a **parent (instance transform)** and **child (GLB scene)**. The fixup is applied to the child’s local transform so it persists across resets and keeps gameplay transforms clean.

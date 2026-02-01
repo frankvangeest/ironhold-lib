@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::schema::project::ProjectConfig;
 
 // Schema
 use crate::schema::*;
@@ -6,6 +7,7 @@ use crate::schema::*;
 // Runtime
 use crate::runtime::actions::*;
 use crate::runtime::messages::*;
+use crate::runtime::model_spawner::*;
 
 // Capabilities
 use crate::capabilities::player::CharacterController;
@@ -53,8 +55,12 @@ pub fn spawn_level(
     state: Res<State<AppState>>,
     current_entities: Query<Entity, With<LevelEntity>>,
     mut scene_events: MessageWriter<SceneEvent>,
+    config_handle: Res<ProjectConfigHandle>,
+    configs: Res<Assets<ProjectConfig>>,
+    model_spawner: Res<ModelSpawner>,
 ) {
     let Some(level_handle) = level_handle else { return; };
+    let Some(project) = configs.get(&config_handle.0) else { return; };
     
     let mut ready_to_spawn = false;
 
@@ -101,11 +107,18 @@ pub fn spawn_level(
             }
 
             for model in &level.models {
-                commands.spawn((
-                    SceneRoot(asset_server.load(model.path.clone())),
-                    Transform::from_translation(Vec3::from(model.position)),
-                    LevelEntity,
-                ));
+                let parent_tf = Transform {
+                    translation: Vec3::new(model.position.0, model.position.1, model.position.2),
+                    ..Default::default()
+                };
+                let spawned = model_spawner.spawn_instance(
+                    &mut commands,
+                    &asset_server,
+                    &project,
+                    model.path.clone(),
+                    parent_tf,
+                );
+                commands.entity(spawned.parent).insert(LevelEntity);
             }
 
             if !level.ui.is_empty() {
@@ -158,9 +171,18 @@ pub fn spawn_level(
                 let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
                 let gltf_handle = asset_server.load(gltf_path.clone());
 
-                let player_entity = commands.spawn((
-                    SceneRoot(asset_server.load(player_config.model_path.clone())),
+                // Use ModelSpawner to spawn player character with fixes applied
+                let spawned = model_spawner.spawn_instance(
+                    &mut commands,
+                    &asset_server,
+                    &project,
+                    player_config.model_path.clone(),
                     Transform::from_translation(Vec3::from(player_config.initial_position)),
+                );
+                
+                // Add player-specific components to the parent entity
+                let player_entity = spawned.parent;
+                commands.entity(player_entity).insert((
                     LevelEntity,
                     CharacterController {
                         walk_speed: 3.0,
@@ -182,8 +204,8 @@ pub fn spawn_level(
                         graph_initialized: false,
                         transition_ms: 0,
                         should_loop: true,
-                    }
-                )).id();
+                    },
+                ));
 
                 // Spawn Orbit Camera matching config
                 let start_pos = Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
@@ -295,4 +317,6 @@ pub fn action_executor_system(
         }
     }
 }
+
+
 

@@ -36,6 +36,7 @@ impl Plugin for GamePlugin {
 
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()
+            .init_resource::<ModelSpawner>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
