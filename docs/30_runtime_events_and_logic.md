@@ -35,16 +35,16 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A minimal action layer exists: `ActionQueue` plus actions such as `LoadScene(String)` and `Quit`.
-- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction.
-- ✅ **[NEW]** Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
-- ✅ **[NEW]** Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
-- ✅ A message interpreter maps UI messages to actions.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, and `PlayAnimation`.
+- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction using `Trigger("id")`.
+- ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
+- ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
+- ✅ A message interpreter maps UI messages to actions using project-level `rules`.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a level asset and transitions to the loading state.
   - `Quit` requests app exit (writes `AppExit::Success`).
-
-> Note: the broader event catalog and data-defined logic rules described below are not implemented yet.
+  - `Spawn(path)` spawns a scene/model.
+  - `PlayAnimation(clip)` plays an animation on available controllers.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -199,15 +199,20 @@ This list is intentionally short and should be updated when code expands.
 
 - ✅ `Action::LoadScene(String)`
 - ✅ `Action::Quit`
+- ✅ `Action::Log(String)`
+- ✅ `Action::Spawn(String)`
+- ✅ `Action::PlayAnimation(String)`
 - ✅ `ActionQueue` (push/pop)
-- ✅ `UiMessage::ButtonPressed(path)` → interpreter pushes `Action::LoadScene(path)`
-- ✅ `UiMessage::Quit` → interpreter pushes `Action::Quit`
+- ✅ `UiMessage::ButtonPressed(trigger_id)` → interpreter matches against `rules` in `ProjectConfig`
 - ✅ `SceneEvent` (Requested, Loaded, Ready)
 - ✅ `InputAction` (Move, Turn, Jump, Run, Look)
 - ✅ `InputActionMessage` (Entity, InputAction)
 - ✅ Executor:
   - `LoadScene` loads a `GameLevel` asset and transitions to `LoadingScene`
   - `Quit` writes `AppExit::Success`
+  - `Spawn(path)` spawns a scene/model
+  - `PlayAnimation(clip)` plays an animation
+  - `Log(msg)` outputs to info! log
 
 ## Engine ABI Addendum (Actions)
 

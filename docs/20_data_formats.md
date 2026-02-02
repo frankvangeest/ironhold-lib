@@ -36,7 +36,7 @@ Purpose:
 
 Recommended stable subset:
 - `schema_version: 1`
-- `models: [{ path, position, rotation?, scale? }]`
+- `models: [{ path, position: (x, y, z) }]`
 - `ui: [UiElement]`
 - `player: PlayerConfig?`
 
@@ -48,28 +48,41 @@ Future additions (planned):
 ## UI
 
 ### Current (implemented)
-- Buttons with action `LoadScene("scenes/main.ron")`
-- Buttons with action `Quit`
+- Buttons with action `Trigger("string_id")`.
+- Triggers are mapped to engine actions in `project.ron`.
 
 Example:
 ```ron
 ui: [
   Button(
     text: "Start Game",
-    action: LoadScene("scenes/main.ron"),
+    action: Trigger("start_game"),
+    position: Some((100.0, 100.0)), // Optional, defaults to None (centered)
   ),
   Button(
     text: "Quit",
-    action: Quit,
+    action: Trigger("quit"),
   )
 ]
 ```
 
-### Planned
-- UI emits richer `UiMessage` events with stable IDs.
-- Global logic decides what actions happen in response.
+### Mapping Triggers to Actions (`project.ron`)
+UI triggers are handled by the `rules` list in your `project.ron` file.
 
-## Action Examples (v0.2)
+```ron
+rules: [
+  (
+    on: "ui.button_pressed:start_game",
+    do_actions: [ Log("Start pressed"), LoadScene("scenes/main.ron") ],
+  ),
+  (
+    on: "ui.button_pressed:quit",
+    do_actions: [ Quit ],
+  ),
+]
+```
+
+## Action Examples
 
 The following actions are available in the current engine ABI:
 

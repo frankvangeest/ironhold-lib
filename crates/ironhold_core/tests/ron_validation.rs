@@ -121,17 +121,12 @@ fn test_game_level_full() {
                     jump: "Space",
                     run: "ShiftLeft"
                 ),
-                animations: (
-                    idle: "Idle",
-                    walk: "Walk",
-                    run: "Run",
-                    jump_enter: "JumpEnter",
-                    jump_loop: "JumpLoop",
-                    jump_exit: "JumpExit",
-                    death: "Death",
-                    dance: "Dance",
-                    crouch_idle: "CrouchIdle",
-                    crouch_forward: "CrouchForward",                    roll: "Roll"
+                animation_policy: (
+                    base: (
+                        idle: "Idle",
+                        walk: "Walk",
+                        run: "Run",
+                    ),
                 )
             ))
         )

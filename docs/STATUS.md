@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑01‑20_
+_Last updated: 2026‑02‑02_
 
 ## Legend
 - ✅ Implemented
@@ -14,7 +14,7 @@ _Last updated: 2026‑01‑20_
 | Milestone | Name                              | Status | Notes |
 |----------:|-----------------------------------|:------:|-------|
 | 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
-| 0.2       | Event/Action Bus refactor         |   🟡   | Message→Action→Executor exists; catalog + docs tightening in progress; behavior unchanged by design. |
+| 0.2       | Event/Action Bus refactor         |   ✅   | Message→Interpreter→Action→Executor fully wired with project-level logic rules. |
 | 0.3       | Global Logic (FSM v1)             |   ⛔   | Not implemented. |
 | 0.4       | Entity Logic (FSM v1)             |   ⛔   | Not implemented. |
 | 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
@@ -27,11 +27,11 @@ _Last updated: 2026‑01‑20_
 ### Runtime & Logic
 | Area                          | Status | Notes |
 |-------------------------------|:------:|-------|
-| UI → scene load (LoadScene)   |   ✅   | Button press → `UiMessage` → `Action::LoadScene` → state transition. |
-| UI → quit (Quit)              |   ✅   | Button press → `UiMessage` → `Action::Quit` → AppExit. |
-| Action infrastructure         |   ✅   | `ActionQueue`, interpreter & executor wired. |
+| UI → logic trigger            |   ✅   | Button press → `UiMessage` → Project Rule matched → Action(s) queued. |
+| Logic → Action execution      |   ✅   | `ActionQueue` processed by `action_executor_system`. |
+| Action infrastructure         |   ✅   | interpreter & executor wired. |
 | Live event domains            |   ✅   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
-| Planned event domains      |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
+| Planned event domains         |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
 | Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready` types exist; full lifecycle choreography is WIP. |
 
 ### Data Formats & Validation
@@ -78,14 +78,31 @@ _Last updated: 2026‑01‑20_
 
 ---
 
+## Project Logic (rules)
+- Project files map events to actions.
+- Example:
+  ```ron
+  rules: [
+    (
+      on: "ui.button_pressed:start_game",
+      do_actions: [ Log("Starting"), LoadScene("scenes/main.ron") ],
+    ),
+  ]
+  ```
+
 ## UI v1 Scope (authoring)
-- Supported element: `Button { text, action: Trigger(String) }`
+- Supported element: `Button { text, action: Trigger(String), position: Option<(f32, f32)> }`
 - Example:
   ```ron
   ui: [
-    Button(text: "Start Game", action: Trigger("start_game")),
-    Button(text: "Quit",       action: Trigger("quit")),
+    Button(
+      text: "Start Game", 
+      action: Trigger("start_game"), 
+      position: Some((100.0, 100.0)) // Optional, defaults to None (centered)
+    ),
+    Button(
+      text: "Quit",       
+      action: Trigger("quit")
+    ),
   ]
-
-
-==== SUMMARY: 48 files, 255479 bytes raw ====
+  ```

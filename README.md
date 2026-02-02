@@ -106,11 +106,31 @@ Open:
 
 ### Project file: `assets/project.ron`
 
-Minimal project config selects the initial scene:
+Minimal project config selects the initial scene and defines global rules:
 
 ```ron
 (
+  schema_version: 1,
   initial_scene: "scenes/start-menu.ron",
+  // Optional: Global per-asset corrections
+  model_fixes: {
+    "models/character-01.glb#Scene0": (
+      pivot_offset: (0.0, -0.9, 0.0),
+      rotation_deg: (0.0, 180.0, 0.0),
+      scale: (0.1, 0.1, 0.1),
+    ),
+  },
+  // Optional: Map events (e.g. UI triggers) to engine actions
+  rules: [
+    (
+      on: "ui.button_pressed:start_game",
+      do_actions: [ Log("Starting Game"), LoadScene("scenes/main.ron") ],
+    ),
+    (
+      on: "ui.button_pressed:quit",
+      do_actions: [ Quit ],
+    ),
+  ],
 )
 ```
 
@@ -119,40 +139,59 @@ Minimal project config selects the initial scene:
 A scene defines:
 - `models`: list of `.glb` models to spawn
 - `ui`: UI elements (e.g. buttons)
-- `player`: optional player config (model + camera + inputs + animations)
+- `player`: optional player config (model + camera + inputs + animation policy)
 
-Example (conceptual shape; see your current `assets/scenes/*.ron` for real fields):
+Example:
 
 ```ron
 (
   schema_version: 1,
   models: [
-    (path: "models/anvil.glb", position: (2.0, 0.0, 0.0)),
+    (path: "models/anvil.glb#Scene0", position: (2.0, 0.0, 0.0)),
   ],
   ui: [
-    (Button: (text: "Start Game", action: (LoadScene: "scenes/main.ron"))),
+    Button(
+      text: "Start Game", 
+      action: Trigger("start_game"),
+      position: Some((100.0, 100.0)), // Optional, defaults to None (centered)
+    ),
   ],
   player: Some((
-    model_path: "models/character-01.glb",
+    model_path: "models/character-01.glb#Scene0",
     initial_position: (0.0, 0.0, 2.0),
     inputs: (
       forward: "KeyW",
       backward: "KeyS",
       left: "KeyA",
       right: "KeyD",
+      strafe_left: "KeyQ",
+      strafe_right: "KeyE",
       jump: "Space",
-      run: "ShiftLeft",
+      run: "ShiftLeft", // Optional, defaults to "ShiftLeft"
     ),
     camera: (
+      offset: (0.0, 2.0, 5.0),
+      look_at_offset: (0.0, 1.0, 0.0),
       orbit_speed: 0.01,
       zoom_speed: 0.2,
       min_radius: 2.0,
       max_radius: 8.0,
     ),
-    animations: (
-      idle: "Idle",
-      walk: "Walk",
-      run: "Run",
+    animation_policy: (
+      base: (
+        idle: "Idle",
+        walk: "Walk",
+        run: "Run",
+      ),
+      // Optional: semantic aliases
+      clips: {
+        "dance": "Dance_Loop",
+      },
+      // Optional: one-shot or looping overrides
+      overrides: [
+        (id: "dance", clip: "Dance_Loop", looping: true, cancel_on_move: true),
+      ],
+      default_transition_ms: Some(250),
     ),
   )),
 )
