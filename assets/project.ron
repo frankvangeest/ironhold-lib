@@ -4,12 +4,12 @@
     // Global per-asset corrections
     model_fixes: {
         "models/character-01.glb#Scene0": (
-            pivot_offset: (0.0, -0.90, 0.0),
+            pivot_offset: (0.0, 0.0, 0.0),
             rotation_deg: (0.0, 180.0, 0.0),
-            scale: (0.1, 0.1, 0.1),
+            scale: (1.0, 1.0, 1.0),
         ),
         "models/treasure-chest-01.glb#Scene0": (
-            pivot_offset: (0.0, -0.30, 0.0),
+            pivot_offset: (0.0, 0.0, 0.0),
             rotation_deg: (0.0, 90.0, 0.0),
             scale: (2.2, 2.2, 2.2),
         ),
