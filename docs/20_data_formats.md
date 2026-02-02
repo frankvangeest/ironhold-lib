@@ -51,17 +51,34 @@ Future additions (planned):
 - Buttons with action `Trigger("string_id")`.
 - Triggers are mapped to engine actions in `project.ron`.
 
+#### Button Properties
+- `text: String` – The text displayed on the button.
+- `action: UiAction` – The action to trigger (e.g., `Trigger("id")`).
+- `position: Option<(f32, f32)>` – Absolute pixel position `(x, y)`. Defaults to centered.
+- `width: Option<f32>` – Width in pixels. Defaults to `200.0`.
+- `height: Option<f32>` – Height in pixels. Defaults to `65.0`.
+- `font_size: Option<f32>` – Font size. Defaults to `26.0`.
+- `border_color: Option<(f32, f32, f32, f32)>` – RGBA tuple `(0.0-1.0)`. Defaults to Black.
+- `background_color: Option<(f32, f32, f32, f32)>` – RGBA tuple `(0.0-1.0)`. Defaults to Dark Grey.
+- `text_color: Option<(f32, f32, f32, f32)>` – RGBA tuple `(0.0-1.0)`. Defaults to Light Grey.
+
 Example:
 ```ron
 ui: [
   Button(
     text: "Start Game",
     action: Trigger("start_game"),
-    position: Some((100.0, 100.0)), // Optional, defaults to None (centered)
+    position: Some((100.0, 100.0)),
+    width: Some(300.0),
+    height: Some(65.0),
+    font_size: Some(26.0),
+    background_color: Some((0.1, 0.1, 0.1, 0.9)),
   ),
   Button(
     text: "Quit",
     action: Trigger("quit"),
+    position: Some((100.0, 200.0)),
+    width: Some(300.0),
   )
 ]
 ```

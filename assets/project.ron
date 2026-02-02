@@ -28,6 +28,10 @@
             do_actions: [ Log("Test Action Triggered"), Spawn("models/treasure-chest-02.glb#Scene0") ],
         ),
         (
+            on: "ui.button_pressed:start_menu",
+            do_actions: [ Log("LoadScene Triggered"), LoadScene("scenes/start-menu.ron") ],
+        ),
+        (
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),

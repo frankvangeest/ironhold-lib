@@ -153,7 +153,12 @@ Example:
     Button(
       text: "Start Game", 
       action: Trigger("start_game"),
-      position: Some((100.0, 100.0)), // Optional, defaults to None (centered)
+      position: Some((100.0, 100.0)), // Optional (absolute px)
+      width: Some(200.0),             // Optional (px)
+      height: Some(80.0),             // Optional (px)
+      font_size: Some(40.0),          // Optional
+      background_color: Some((0.2, 0.2, 0.2, 0.8)), // Optional RGBA
+      text_color: Some((1.0, 1.0, 1.0, 1.0)),       // Optional RGBA
     ),
   ],
   player: Some((

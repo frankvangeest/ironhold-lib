@@ -135,10 +135,20 @@ pub fn spawn_level(
                 .with_children(|parent| {
                     for element in &level.ui {
                         match element {
-                            UiElement::Button { text, action, position } => {
+                            UiElement::Button { 
+                                text, 
+                                action, 
+                                position,
+                                width,
+                                height,
+                                font_size,
+                                border_color,
+                                background_color,
+                                text_color,
+                            } => {
                                 let mut node = Node {
-                                    width: Val::Px(150.0),
-                                    height: Val::Px(65.0),
+                                    width: Val::Px(width.unwrap_or(200.0)),
+                                    height: Val::Px(height.unwrap_or(65.0)),
                                     border: UiRect::all(Val::Px(5.0)),
                                     justify_content: JustifyContent::Center,
                                     align_items: AlignItems::Center,
@@ -151,21 +161,31 @@ pub fn spawn_level(
                                     node.top = Val::Px(*y);
                                 }
 
+                                let b_color = border_color
+                                    .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                                    .unwrap_or(Color::BLACK);
+                                let bg_color = background_color
+                                    .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                                    .unwrap_or(Color::srgb(0.15, 0.15, 0.15));
+
                                 parent.spawn((
                                     Button,
                                     node,
-                                    BorderColor::from(Color::BLACK),
-                                    BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                                    BorderColor::from(b_color),
+                                    BackgroundColor(bg_color),
                                     action.clone(),
                                 ))
                                 .with_children(|parent| {
+                                    let t_color = text_color
+                                        .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                                        .unwrap_or(Color::srgb(0.9, 0.9, 0.9));
                                     parent.spawn((
                                         Text::new(text),
                                         TextFont {
-                                            font_size: 33.0,
+                                            font_size: font_size.unwrap_or(26.0),
                                             ..default()
                                         },
-                                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                                        TextColor(t_color),
                                     ));
                                 });
                             }
