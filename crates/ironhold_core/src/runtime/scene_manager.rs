@@ -135,17 +135,25 @@ pub fn spawn_level(
                 .with_children(|parent| {
                     for element in &level.ui {
                         match element {
-                            UiElement::Button { text, action } => {
+                            UiElement::Button { text, action, position } => {
+                                let mut node = Node {
+                                    width: Val::Px(150.0),
+                                    height: Val::Px(65.0),
+                                    border: UiRect::all(Val::Px(5.0)),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                };
+
+                                if let Some((x, y)) = position {
+                                    node.position_type = PositionType::Absolute;
+                                    node.left = Val::Px(*x);
+                                    node.top = Val::Px(*y);
+                                }
+
                                 parent.spawn((
                                     Button,
-                                    Node {
-                                        width: Val::Px(150.0),
-                                        height: Val::Px(65.0),
-                                        border: UiRect::all(Val::Px(5.0)),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
+                                    node,
                                     BorderColor::from(Color::BLACK),
                                     BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
                                     action.clone(),

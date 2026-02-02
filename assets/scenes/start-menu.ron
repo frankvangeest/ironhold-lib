@@ -10,14 +10,17 @@
         Button(
             text: "Start Game",
             action: Trigger("start_game"),
+            position: Some((100.0, 100.0)),
         ),
         Button(
             text: "Quit",
             action: Trigger("quit"),
+            position: Some((100.0, 200.0)),
         ),
         Button(
             text: "Test Actions",
             action: Trigger("test_actions"),
+            position: Some((100.0, 300.0)),
         )
     ]
 )

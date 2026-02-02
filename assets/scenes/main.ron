@@ -10,6 +10,7 @@
         Button(
             text: "Dance",
             action: Trigger("dance"),
+            position: Some((100.0, 100.0)),
         ),
     ],
     player: Some((

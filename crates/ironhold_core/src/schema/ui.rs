@@ -6,6 +6,8 @@ pub enum UiElement {
     Button {
         text: String,
         action: UiAction,
+        #[serde(default)]
+        position: Option<(f32, f32)>,
     },
 }
 

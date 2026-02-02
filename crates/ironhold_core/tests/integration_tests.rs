@@ -386,3 +386,71 @@ fn model_fixup_persists_reset() {
     
     app.update(); // Flush commands from system_once
 }
+
+#[test]
+fn test_ui_button_positioning() {
+    let mut app = App::new();
+    
+    app.add_plugins(MinimalPlugins)
+       .add_plugins(bevy::state::app::StatesPlugin)
+       .add_plugins(AssetPlugin::default())
+       .add_message::<bevy::input::mouse::MouseMotion>()
+       .add_message::<bevy::input::mouse::MouseWheel>()
+       .init_resource::<ButtonInput<KeyCode>>()
+       .init_resource::<ButtonInput<MouseButton>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Gltf>()
+       .init_asset::<Scene>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
+       .insert_resource(ProjectConfigPath("project.ron".to_string()))
+       .add_plugins(GamePlugin);
+       
+    app.update();
+    
+    // 1. Setup a level with a positioned button
+    let level_handle = {
+        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
+        let config_handle = configs.add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/tests/test_scene.ron".to_string(),
+            rules: vec![],
+            model_fixes: HashMap::new(),
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+        let mut levels = app.world_mut().resource_mut::<Assets<ironhold_core::schema::GameLevel>>();
+        levels.add(ironhold_core::schema::GameLevel {
+            schema_version: 1,
+            models: vec![],
+            ui: vec![
+                ironhold_core::schema::UiElement::Button {
+                    text: "Positioned".to_string(),
+                    action: ironhold_core::schema::UiAction::Trigger("test".to_string()),
+                    position: Some((123.0, 456.0)),
+                }
+            ],
+            player: None,
+        })
+    };
+    
+    app.world_mut().insert_resource(ironhold_core::schema::LevelHandle(level_handle));
+    
+    // 2. Transition to LoadingScene and then InGame to trigger spawn_level
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    
+    // 3. Verify the spawned button's Node configuration
+    let mut query = app.world_mut().query::<(&Button, &Node)>();
+    let mut found = false;
+    for (_button, node) in query.iter(app.world()) {
+        if node.position_type == PositionType::Absolute {
+            assert_eq!(node.left, Val::Px(123.0));
+            assert_eq!(node.top, Val::Px(456.0));
+            found = true;
+        }
+    }
+    assert!(found, "Should have found a button with absolute positioning");
+}
