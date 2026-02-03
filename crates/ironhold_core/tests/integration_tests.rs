@@ -429,6 +429,12 @@ fn test_ui_button_positioning() {
                     text: "Positioned".to_string(),
                     action: ironhold_core::schema::UiAction::Trigger("test".to_string()),
                     position: Some((123.0, 456.0)),
+                    width: None,
+                    height: None,
+                    font_size: None,
+                    border_color: None,
+                    background_color: None,
+                    text_color: None,
                 }
             ],
             player: None,
@@ -453,4 +459,117 @@ fn test_ui_button_positioning() {
         }
     }
     assert!(found, "Should have found a button with absolute positioning");
+}
+#[test]
+fn test_entity_names() {
+    let mut app = App::new();
+    
+    app.add_plugins(MinimalPlugins)
+       .add_plugins(bevy::state::app::StatesPlugin)
+       .add_plugins(AssetPlugin::default())
+       .add_message::<bevy::input::mouse::MouseMotion>()
+       .add_message::<bevy::input::mouse::MouseWheel>()
+       .init_resource::<ButtonInput<KeyCode>>()
+       .init_resource::<ButtonInput<MouseButton>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Gltf>()
+       .init_asset::<Scene>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
+       .insert_resource(ProjectConfigPath("project.ron".to_string()))
+       .add_plugins(GamePlugin);
+       
+    app.update();
+    
+    // 1. Setup a level with a player and a button
+    let level_handle = {
+        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
+        let config_handle = configs.add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/tests/test_scene.ron".to_string(),
+            rules: vec![],
+            model_fixes: HashMap::new(),
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+        let mut levels = app.world_mut().resource_mut::<Assets<ironhold_core::schema::GameLevel>>();
+        levels.add(ironhold_core::schema::GameLevel {
+            schema_version: 1,
+            models: vec![
+                ironhold_core::schema::level::ModelInfo {
+                    path: "models/cube.glb".to_string(),
+                    position: (0.0, 0.0, 0.0),
+                }
+            ],
+            ui: vec![
+                ironhold_core::schema::UiElement::Button {
+                    text: "Start".to_string(),
+                    action: ironhold_core::schema::UiAction::Trigger("start".to_string()),
+                    position: None,
+                    width: None,
+                    height: None,
+                    font_size: None,
+                    border_color: None,
+                    background_color: None,
+                    text_color: None,
+                }
+            ],
+            player: Some(ironhold_core::schema::player::PlayerConfig {
+                model_path: "models/player.glb".to_string(),
+                initial_position: (0.0, 0.0, 0.0),
+                inputs: ironhold_core::schema::player::InputMap {
+                    forward: "KeyW".to_string(),
+                    backward: "KeyS".to_string(),
+                    left: "KeyA".to_string(),
+                    right: "KeyD".to_string(),
+                    strafe_left: "KeyQ".to_string(),
+                    strafe_right: "KeyE".to_string(),
+                    jump: "Space".to_string(),
+                    run: "ShiftLeft".to_string(),
+                },
+                camera: ironhold_core::schema::player::CameraConfig {
+                    offset: (0.0, 5.0, 10.0),
+                    zoom_speed: 1.0,
+                    orbit_speed: 1.0,
+                    min_radius: 1.0,
+                    max_radius: 20.0,
+                    look_at_offset: (0.0, 1.0, 0.0),
+                },
+                animation_policy: ironhold_core::schema::player::AnimationPolicy {
+                    base: ironhold_core::schema::player::BaseAnimations {
+                        idle: "idle".to_string(),
+                        walk: "walk".to_string(),
+                        run: "run".to_string(),
+                    },
+                    clips: HashMap::new(),
+                    overrides: vec![],
+                    default_transition_ms: None,
+                },
+            }),
+        })
+    };
+    
+    app.world_mut().insert_resource(ironhold_core::schema::LevelHandle(level_handle));
+    
+    // 2. Trigger spawn
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    
+    // 3. Verify names
+    let mut names = app.world_mut().query::<&Name>();
+    let name_list: Vec<String> = names.iter(app.world()).map(|n| n.as_str().to_string()).collect();
+    
+    println!("Spawned names: {:?}", name_list);
+    
+    assert!(name_list.contains(&"Directional Light".to_string()));
+    assert!(name_list.contains(&"UI Camera".to_string()));
+    assert!(name_list.contains(&"UI Root".to_string()));
+    assert!(name_list.contains(&"Button: Start".to_string()));
+    assert!(name_list.contains(&"Text: Start".to_string()));
+    assert!(name_list.contains(&"Player".to_string()));
+    assert!(name_list.contains(&"Orbit Camera".to_string()));
+    assert!(name_list.contains(&"cube.glb".to_string()));
+    assert!(name_list.contains(&"Model Scene Root".to_string()));
 }

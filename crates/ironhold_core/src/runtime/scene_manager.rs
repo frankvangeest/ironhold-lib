@@ -122,7 +122,8 @@ pub fn spawn_level(
             }
 
             if !level.ui.is_empty() {
-                 commands.spawn((
+                commands.spawn((
+                    Name::new("UI Root"),
                     Node {
                         width: Val::Percent(100.0),
                         height: Val::Percent(100.0),
@@ -169,6 +170,7 @@ pub fn spawn_level(
                                     .unwrap_or(Color::srgb(0.15, 0.15, 0.15));
 
                                 parent.spawn((
+                                    Name::new(format!("Button: {}", text)),
                                     Button,
                                     node,
                                     BorderColor::from(b_color),
@@ -180,6 +182,7 @@ pub fn spawn_level(
                                         .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
                                         .unwrap_or(Color::srgb(0.9, 0.9, 0.9));
                                     parent.spawn((
+                                        Name::new(format!("Text: {}", text)),
                                         Text::new(text),
                                         TextFont {
                                             font_size: font_size.unwrap_or(26.0),
@@ -211,6 +214,7 @@ pub fn spawn_level(
                 // Add player-specific components to the parent entity
                 let player_entity = spawned.parent;
                 commands.entity(player_entity).insert((
+                    Name::new("Player"),
                     LevelEntity,
                     CharacterController {
                         walk_speed: 3.0,
@@ -239,6 +243,7 @@ pub fn spawn_level(
                 let start_pos = Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
                 
                 commands.spawn((
+                    Name::new("Orbit Camera"),
                     Camera3d::default(),
                     Transform::from_translation(start_pos).looking_at(
                         Vec3::from(player_config.initial_position), 
@@ -262,6 +267,7 @@ pub fn spawn_level(
                 // No player - spawn a default camera for UI/static scenes
                 info!("No player in scene, spawning default camera...");
                 commands.spawn((
+                    Name::new("Default Camera"),
                     Camera3d::default(),
                     Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
                     LevelEntity,
@@ -330,7 +336,9 @@ pub fn action_executor_system(
             }
             Action::Spawn(path) => {
                 info!("Executing Action::Spawn: {}", path);
+                let name = path.split('/').last().unwrap_or(&path).to_string();
                 commands.spawn((
+                    Name::new(name),
                     SceneRoot(asset_server.load(path.clone())),
                     Transform::default(),
                     LevelEntity,

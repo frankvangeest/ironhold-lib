@@ -26,8 +26,10 @@ impl ModelSpawner {
             .cloned()
             .unwrap_or_default();
 
+        let name = path.split('/').last().unwrap_or(&path).to_string();
         let parent = commands
             .spawn((
+                Name::new(name),
                 parent_tf,
                 Visibility::default(),
                 LevelEntity,
@@ -45,6 +47,7 @@ impl ModelSpawner {
 
         let child = commands
             .spawn((
+                Name::new("Model Scene Root"),
                 SceneRoot(asset_server.load(path)),
                 Transform { translation: fix_t, rotation: fix_r, scale: fix_s },
                 Visibility::default(),
