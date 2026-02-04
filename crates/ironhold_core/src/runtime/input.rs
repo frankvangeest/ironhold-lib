@@ -6,7 +6,16 @@ pub fn input_translator_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     query: Query<(Entity, &CharacterController)>,
     mut input_events: MessageWriter<InputActionMessage>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
     for (entity, controller) in &query {
         let mut move_vec = Vec2::ZERO;
         

@@ -22,7 +22,16 @@ pub fn camera_orbit_system(
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut camera_query: Query<(&mut Transform, &mut OrbitCamera), Without<CharacterController>>,
     mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCamera>)>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
     // Collect mouse motion
     let mut mouse_delta = Vec2::ZERO;
     for event in mouse_motion_events.read() {

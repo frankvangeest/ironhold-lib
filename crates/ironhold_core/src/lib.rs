@@ -107,7 +107,16 @@ fn button_system(
         (Changed<Interaction>, With<Button>),
     >,
     mut ui_events: MessageWriter<UiMessage>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
     let mut interaction_query = interaction_query;
     for (interaction, mut color, action) in &mut interaction_query {
         match *interaction {
