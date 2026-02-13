@@ -164,6 +164,33 @@ fn test_game_level_wrong_schema_version_is_invalid() {
 }
 
 #[test]
+fn test_game_level_with_terrain() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            terrain: Some((
+                heightmap_path: "terrain/heightmap.png",
+                splatmap_path: "terrain/splatmap.png",
+                height_scale: 10.0,
+                horizontal_scale: 1.0,
+                position: (0.0, -10.0, 0.0),
+                chunk_size: 64,
+                material_paths: [
+                    "terrain/dirt.png",
+                    "terrain/grass.png",
+                    "terrain/rock.png",
+                    "terrain/snow.png",
+                ],
+            )),
+        )
+    "#;
+    let level: GameLevel = from_str(ron_str).expect("Failed to deserialize GameLevel with terrain");
+    let terrain = level.terrain.unwrap();
+    assert_eq!(terrain.material_paths.len(), 4);
+    assert_eq!(terrain.splatmap_path, "terrain/splatmap.png");
+}
+
+#[test]
 fn test_game_level_unknown_field_is_error() {
     let ron_str = r#"
         (

@@ -70,6 +70,12 @@ cargo run -p ironhold_native -- project_02.ron
 
 > `project_02.ron` should be in the `assets` directory.
 
+Or a combination:
+
+```bash
+cargo run -p ironhold_native --all-features -- terrain_demo.ron
+```
+
 ---
 
 ### 2) Web / WASM

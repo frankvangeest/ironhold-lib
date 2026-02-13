@@ -10,5 +10,5 @@ pub use camera::*;
 pub use animation::*;
 pub use animation_resolver::*;
 pub use terrain::*;
-// pub use terrain_material::*;
+pub use terrain_material::*;
 

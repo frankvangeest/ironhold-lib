@@ -3,14 +3,14 @@ use bevy::asset::RenderAssetUsages;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use futures_lite::future;
 use crate::schema::level::TerrainConfig;
+use crate::capabilities::terrain_material::TerrainMaterial;
 use bevy::render::render_resource::PrimitiveTopology;
-// use crate::capabilities::terrain_material::TerrainMaterial;
 
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        // app.add_plugins(MaterialPlugin::<TerrainMaterial>::default());
+        app.add_plugins(MaterialPlugin::<TerrainMaterial>::default());
         app.add_systems(Update, (
             terrain_init_system,
             start_terrain_generation_system,
@@ -23,11 +23,11 @@ impl Plugin for TerrainPlugin {
 pub struct TerrainLoading {
     pub heightmap_handle: Handle<Image>,
     pub splatmap_handle: Handle<Image>,
-    // pub material_handles: Vec<Handle<Image>>,
+    pub material_handles: Vec<Handle<Image>>,
 }
 
 #[derive(Component)]
-pub struct TerrainGenerationTask(Task<(Mesh, StandardMaterial)>);
+pub struct TerrainGenerationTask(Task<Mesh>);
 
 #[derive(Component)]
 pub struct TerrainReady;
@@ -41,10 +41,14 @@ fn terrain_init_system(
         info!("Initializing Terrain: {}", config.heightmap_path);
         let heightmap_handle = asset_server.load(config.heightmap_path.clone());
         let splatmap_handle = asset_server.load(config.splatmap_path.clone());
+        let material_handles = config.material_paths.iter()
+            .map(|path| asset_server.load(path.clone()))
+            .collect();
         
         commands.entity(entity).insert(TerrainLoading {
             heightmap_handle,
             splatmap_handle,
+            material_handles,
         });
     }
 }
@@ -71,18 +75,11 @@ fn start_terrain_generation_system(
 
                 let task = thread_pool.spawn(async move {
                     info!("Terrain Task Started on Worker Thread");
-                    let mesh = generate_terrain_mesh_raw(width, height, &data, height_scale, horizontal_scale);
-                    
-                    let material = StandardMaterial {
-                        base_color: Color::srgb(0.3, 0.8, 0.3),
-                        ..default()
-                    };
-                    
-                    (mesh, material)
+                    generate_terrain_mesh_raw(width, height, &data, height_scale, horizontal_scale)
                 });
 
                 commands.entity(entity).insert(TerrainGenerationTask(task));
-                commands.entity(entity).remove::<TerrainLoading>();
+                // NOTE: Do NOT remove TerrainLoading here — poll_terrain_generation_system needs it
             }
         }
     }
@@ -91,16 +88,26 @@ fn start_terrain_generation_system(
 // 2. Poll Task -> Apply Result
 fn poll_terrain_generation_system(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut TerrainGenerationTask, &TerrainConfig)>,
+    mut query: Query<(Entity, &mut TerrainGenerationTask, &TerrainConfig, &TerrainLoading)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
 ) {
-    for (entity, mut task, config) in &mut query {
-        if let Some((mesh, material)) = future::block_on(future::poll_once(&mut task.0)) {
+    for (entity, mut task, config, loading) in &mut query {
+        if let Some(mesh) = future::block_on(future::poll_once(&mut task.0)) {
             info!("Terrain Generation Completed. Applying to entity.");
             
             let mesh_handle = meshes.add(mesh);
-            let material_handle = materials.add(material);
+            
+            // Construct TerrainMaterial using handles from loading
+            let terrain_material = TerrainMaterial {
+                uv_scale: 10.0, // Should probably be in config but 10.0 is a good default
+                splatmap: loading.splatmap_handle.clone(),
+                texture_r: loading.material_handles.get(0).cloned().unwrap_or_default(),
+                texture_g: loading.material_handles.get(1).cloned().unwrap_or_default(),
+                texture_b: loading.material_handles.get(2).cloned().unwrap_or_default(),
+                texture_a: loading.material_handles.get(3).cloned().unwrap_or_default(),
+            };
+            let material_handle = terrain_materials.add(terrain_material);
 
             let (px, py, pz) = config.position;
 
@@ -113,6 +120,7 @@ fn poll_terrain_generation_system(
             ));
             
             commands.entity(entity).remove::<TerrainGenerationTask>();
+            commands.entity(entity).remove::<TerrainLoading>();
         }
     }
 }
