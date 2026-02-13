@@ -26,18 +26,59 @@
             strafe_right: "KeyE",
             jump: "Space",
         ),
-        animations: (
-            idle: "Idle_Loop",
-            walk: "Walk_Loop",
-            run: "Sprint_Loop",
-            jump_enter: "Jump_Start",
-            jump_loop: "Jump_Loop",
-            jump_exit: "Jump_Land",
-            death: "Death01",
-            dance: "Dance_Loop",
-            crouch_idle: "Crouch_Idle_Loop",
-            crouch_forward: "Crouch_Fwd_Loop",
-            roll: "Roll",
+        animation_policy: (
+            // Optional global default transition (ms). Omit for instant switching.
+            default_transition_ms: Some(150),
+            
+            base: (
+                idle: "Idle_Loop",
+                walk: "Walk_Loop",
+                run:  "Sprint_Loop",
+            ),
+
+            // Optional aliases (semantic key -> glTF clip name)
+            clips: {
+                "dance": "Dance_Loop",
+                "sit": "Sitting_Idle_Loop",
+                "torch_idle": "Idle_Torch_Loop",
+                "attack_light": "Sword_Attack",
+            },
+
+            // Overrides define cancellation and stop commands.
+            overrides: [
+                (
+                    id: "dance",
+                    clip: "Dance_Loop",
+                    priority: 50,
+                    looping: true,
+                    cancel_on_move: true,
+                    stop_action: Some("stop_dance"),
+                ),
+                (
+                    id: "sit",
+                    clip: "Sitting_Idle_Loop",
+                    priority: 60,
+                    looping: true,
+                    cancel_on_move: true,
+                    stop_action: Some("stand"),
+                ),
+                (
+                    id: "torch_idle",
+                    clip: "Idle_Torch_Loop",
+                    priority: 40,
+                    looping: true,
+                    cancel_on_move: false,
+                    stop_action: Some("stop_torch"),
+                ),
+                (
+                    id: "attack_light",
+                    clip: "Sword_Attack",
+                    priority: 100,
+                    looping: false,
+                    duration: Some(0.6),
+                    cancel_on_move: false,
+                ),
+            ],
         ),
     )),
 )

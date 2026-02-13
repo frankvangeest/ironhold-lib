@@ -43,6 +43,7 @@ impl Plugin for GamePlugin {
             .add_message::<AppExit>()
             .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
+            .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input

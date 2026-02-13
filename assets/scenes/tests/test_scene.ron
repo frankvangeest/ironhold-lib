@@ -7,5 +7,5 @@
             text: "Start Game",
             action: Trigger("start_game"),
         ),
-    ]
+    ],
 )

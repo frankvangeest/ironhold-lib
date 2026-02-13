@@ -11,6 +11,7 @@ assets:
   - https://cc0textures.com/
   - https://texturehaven.com/
   - https://publicdomaintextures.com/
+  https://3dtextures.me/
 - sounds:
   - https://freesound.org/
   - https://opengameart.org/sounds

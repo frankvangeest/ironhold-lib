@@ -20,10 +20,13 @@ fn test_ui_button_to_load_scene_action() {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Assets<Mesh>>()
-       .init_resource::<Assets<StandardMaterial>>()
-       .init_resource::<Assets<Gltf>>()
-       .init_resource::<Assets<AnimationGraph>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
+       .init_asset::<Scene>()
+       .init_asset::<Gltf>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
        
@@ -75,10 +78,13 @@ fn test_scene_lifecycle_events() {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Assets<Mesh>>()
-       .init_resource::<Assets<StandardMaterial>>()
-       .init_resource::<Assets<Gltf>>()
-       .init_resource::<Assets<AnimationGraph>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
+       .init_asset::<Scene>()
+       .init_asset::<Gltf>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
        
@@ -107,10 +113,13 @@ fn test_input_abstraction_flow() {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Assets<Mesh>>()
-       .init_resource::<Assets<StandardMaterial>>()
-       .init_resource::<Assets<Gltf>>()
-       .init_resource::<Assets<AnimationGraph>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
+       .init_asset::<Scene>()
+       .init_asset::<Gltf>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
 
@@ -190,10 +199,13 @@ fn test_action_to_state_transition() {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Assets<Mesh>>()
-       .init_resource::<Assets<StandardMaterial>>()
-       .init_resource::<Assets<Gltf>>()
-       .init_resource::<Assets<AnimationGraph>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
+       .init_asset::<Scene>()
+       .init_asset::<Gltf>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
        
@@ -233,10 +245,13 @@ fn test_ui_button_to_quit_action() {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Assets<Mesh>>()
-       .init_resource::<Assets<StandardMaterial>>()
-       .init_resource::<Assets<Gltf>>()
-       .init_resource::<Assets<AnimationGraph>>()
+       .init_asset::<Mesh>()
+       .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
+       .init_asset::<Scene>()
+       .init_asset::<Gltf>()
+       .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
        
@@ -287,9 +302,11 @@ fn model_fixup_persists_reset() {
        .init_resource::<ButtonInput<MouseButton>>()
        .init_asset::<Mesh>()
        .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
        .init_asset::<Gltf>()
        .init_asset::<Scene>()
        .init_asset::<AnimationGraph>()
+       .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
        
@@ -400,6 +417,7 @@ fn test_ui_button_positioning() {
        .init_resource::<ButtonInput<MouseButton>>()
        .init_asset::<Mesh>()
        .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
        .init_asset::<Gltf>()
        .init_asset::<Scene>()
        .init_asset::<AnimationGraph>()
@@ -438,6 +456,7 @@ fn test_ui_button_positioning() {
                 }
             ],
             player: None,
+            terrain: None,
         })
     };
     
@@ -473,6 +492,7 @@ fn test_entity_names() {
        .init_resource::<ButtonInput<MouseButton>>()
        .init_asset::<Mesh>()
        .init_asset::<StandardMaterial>()
+       .init_asset::<Image>()
        .init_asset::<Gltf>()
        .init_asset::<Scene>()
        .init_asset::<AnimationGraph>()
@@ -547,6 +567,7 @@ fn test_entity_names() {
                     default_transition_ms: None,
                 },
             }),
+            terrain: None,
         })
     };
     

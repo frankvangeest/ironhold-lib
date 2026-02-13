@@ -1,11 +1,7 @@
 (
     schema_version: 1,
-    models: [
-        (
-            path: "models/treasure-chest-01.glb#Scene0",
-            position: (4.0, 0.0, 0.0),
-        ),
-    ],
+    models: [],
+    ui: [],
     player: Some((
         model_path: "models/character-01.glb#Scene0",
         initial_position: (0.0, 0.0, 0.0),
@@ -80,5 +76,18 @@
                 ),
             ],
         ),
+    )),
+    terrain: Some((
+        heightmap_path: "terrain/heightmap.png",
+        splatmap_path: "terrain/splatmap.png",
+        height_scale: 10.0,
+        //horizontal_scale: 100.0,
+        position: (0.0, -10.0, 0.0),
+        chunk_size: 64, // Not currently used but in schema
+        material_paths: [
+            "terrain/grass.png",
+            "terrain/dirt.png",
+            "terrain/rock.png",
+        ],
     )),
 )

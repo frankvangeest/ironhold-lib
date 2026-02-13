@@ -274,6 +274,16 @@ pub fn spawn_level(
                 ));
             }
             
+            // Spawn Terrain
+            if let Some(terrain_config) = &level.terrain {
+                info!("Spawning Terrain...");
+                commands.spawn((
+                    Name::new("Terrain"),
+                    LevelEntity,
+                    terrain_config.clone(),
+                ));
+            }
+            
             next_state.set(AppState::InGame);
             scene_events.write(SceneEvent::Ready(
                 asset_server

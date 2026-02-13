@@ -3084,6 +3084,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_common_assets",
+ "futures-lite",
  "ron 0.11.0",
  "serde",
 ]
