@@ -12,6 +12,8 @@ Games are defined by **data files** (`.ron`) and assets (models, textures, audio
 - Load a **project** from `assets/project.ron`
 - Load a **scene** from `assets/scenes/*.ron`
 - Spawn **models** from `.glb`
+- Render **terrain** from heightmaps and splatmaps (WebGPU compatible)
+- Configure **HDR lighting** (Ambient, Directional sun, IBL Environment Maps)
 - Optional **player** with:
   - configurable input mapping (WASD etc.)
   - orbit camera
@@ -145,6 +147,7 @@ Minimal project config selects the initial scene and defines global rules:
 A scene defines:
 - `models`: list of `.glb` models to spawn
 - `ui`: UI elements (e.g. buttons)
+- `lighting`: optional HDR ambient, directional, and environment map lighting
 - `player`: optional player config (model + camera + inputs + animation policy)
 
 Example:
@@ -167,6 +170,25 @@ Example:
       text_color: Some((1.0, 1.0, 1.0, 1.0)),       // Optional RGBA
     ),
   ],
+  lighting: Some((
+    ambient: Some((
+      color: (1.0, 1.0, 1.0),
+      brightness: 200.0,
+    )),
+    directional: Some((
+      color: (1.0, 0.95, 0.85),
+      illuminance: 30000.0,
+      direction: (0.3, -1.0, 0.2),
+      shadows: true,
+    )),
+    environment: Some((
+      asset_path: Some("textures/skybox.ktx2"),
+      fallback: Some((
+        intensity: 2500.0,
+        sun_direction: (0.3, -1.0, 0.2),
+      )),
+    )),
+  )),
   player: Some((
     model_path: "models/character-01.glb#Scene0",
     initial_position: (0.0, 0.0, 2.0),

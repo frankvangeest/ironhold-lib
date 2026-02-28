@@ -24,6 +24,9 @@ Minimum:
 - `schema_version: 1`
 - `initial_scene: "scenes/start-menu.ron"`
 
+Optional:
+- `global_environment: EnvironmentMapConfig` - Fallback environment map lighting across all scenes if they don't explicitly define one. (See Lighting section below).
+
 Future additions (planned):
 - `global_logic: "logic/global.ron"`
 - `input_profiles: {...}`
@@ -39,11 +42,37 @@ Recommended stable subset:
 - `models: [{ path, position: (x, y, z) }]`
 - `ui: [UiElement]`
 - `player: PlayerConfig?`
+- `lighting: LightingConfig?`
 
 Future additions (planned):
 - `entities: [...]` (generic entity definitions)
 - `behaviors: [...]` (per-entity behavior machine references)
 - `triggers: [...]`
+
+## Lighting (Scene and Project)
+
+The engine supports data-driven HDR lighting via the `LightingConfig` block in scene `.ron` files, and a fallback `global_environment` in `project.ron`.
+
+### Scene Lighting (`lighting: LightingConfig`)
+Configures the lights spawned when a scene loads:
+- `ambient: Option<AmbientLightConfig>`
+  - `color: (r, g, b)` (linear RGB)
+  - `brightness: f32` (lux)
+- `directional: Option<DirectionalLightConfig>`
+  - `color: (r, g, b)`
+  - `illuminance: f32` (lux, e.g., 50000.0 for sun)
+  - `direction: (x, y, z)` (normalized vector pointing *towards* the light target)
+  - `shadows: bool` (whether to cast shadows)
+- `environment: Option<EnvironmentMapConfig>`
+  - Overrides the project's global environment map for this specific scene.
+
+### Environment Maps (`EnvironmentMapConfig`)
+Provides realistic Image-Based Lighting (IBL) reflections and ambient fill.
+- `asset_path: Option<String>` – Path to a `.ktx2` cubemap texture.
+- `fallback: Option<EnvironmentFallbackConfig>` – Generates a procedural sky/environment map if `asset_path` is empty or the file fails to load.
+  - `intensity: f32`
+  - `sun_direction: (x, y, z)` (Affects procedural sky gradient)
+
 
 ## UI
 

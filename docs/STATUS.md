@@ -48,6 +48,8 @@ _Last updated: 2026‑02‑02_
 | Player movement             |   ✅   | Data‑configured via scene `player` block. |
 | Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
+| Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
+| HDR Lighting (IBL)          |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. |
 | Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |
 
 ### Platforms
