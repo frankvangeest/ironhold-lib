@@ -9,10 +9,8 @@ use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
 
-#[test]
-fn test_ui_button_to_load_scene_action() {
+fn setup_test_app() -> App {
     let mut app = App::new();
-    
     app.add_plugins(MinimalPlugins)
        .add_plugins(bevy::state::app::StatesPlugin)
        .add_plugins(AssetPlugin::default())
@@ -23,12 +21,19 @@ fn test_ui_button_to_load_scene_action() {
        .init_asset::<Mesh>()
        .init_asset::<StandardMaterial>()
        .init_asset::<Image>()
+       .init_asset::<Shader>()
+       .init_asset::<ironhold_core::capabilities::terrain_material::TerrainMaterial>()
        .init_asset::<Scene>()
        .init_asset::<Gltf>()
        .init_asset::<AnimationGraph>()
        .init_asset::<ironhold_core::schema::GameLevel>()
        .insert_resource(ProjectConfigPath("project.ron".to_string()))
        .add_plugins(GamePlugin);
+    app
+}
+#[test]
+fn test_ui_button_to_load_scene_action() {
+    let mut app = setup_test_app();
        
     // 1. Run once to process Startup (setup)
     app.update();
@@ -46,6 +51,7 @@ fn test_ui_button_to_load_scene_action() {
                 }
             ],
             model_fixes: HashMap::new(),
+            global_environment: None,
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
     }
@@ -70,23 +76,7 @@ fn test_ui_button_to_load_scene_action() {
 
 #[test]
 fn test_scene_lifecycle_events() {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Scene>()
-       .init_asset::<Gltf>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
+    let mut app = setup_test_app();
        
     app.update();
     
@@ -105,23 +95,7 @@ fn test_scene_lifecycle_events() {
 
 #[test]
 fn test_input_abstraction_flow() {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Scene>()
-       .init_asset::<Gltf>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
+    let mut app = setup_test_app();
 
     // Initial run
     app.update();
@@ -191,23 +165,7 @@ fn test_input_abstraction_flow() {
 
 #[test]
 fn test_action_to_state_transition() {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Scene>()
-       .init_asset::<Gltf>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
+    let mut app = setup_test_app();
        
     // 1. Run once to handle Startup
     app.update();
@@ -236,25 +194,8 @@ fn test_action_to_state_transition() {
 
 #[test]
 fn test_ui_button_to_quit_action() {
-    let mut app = App::new();
+    let mut app = setup_test_app();
     
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Scene>()
-       .init_asset::<Gltf>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
-       
     // 1. Run once to process Startup (setup)
     app.update();
     
@@ -271,6 +212,7 @@ fn test_ui_button_to_quit_action() {
                 }
             ],
             model_fixes: HashMap::new(),
+            global_environment: None,
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
     }
@@ -291,25 +233,8 @@ fn test_ui_button_to_quit_action() {
 
 #[test]
 fn model_fixup_persists_reset() {
-    let mut app = App::new();
+    let mut app = setup_test_app();
     
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Gltf>()
-       .init_asset::<Scene>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
-       
     // 1. Run once to process Startup (setup)
     app.update();
     
@@ -332,6 +257,7 @@ fn model_fixup_persists_reset() {
                 map.insert(test_path.clone(), fix.clone());
                 map
             },
+            global_environment: None,
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
     }
@@ -406,25 +332,8 @@ fn model_fixup_persists_reset() {
 
 #[test]
 fn test_ui_button_positioning() {
-    let mut app = App::new();
+    let mut app = setup_test_app();
     
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Gltf>()
-       .init_asset::<Scene>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
-       
     app.update();
     
     // 1. Setup a level with a positioned button
@@ -435,6 +344,7 @@ fn test_ui_button_positioning() {
             initial_scene: "scenes/tests/test_scene.ron".to_string(),
             rules: vec![],
             model_fixes: HashMap::new(),
+            global_environment: None,
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
@@ -457,6 +367,7 @@ fn test_ui_button_positioning() {
             ],
             player: None,
             terrain: None,
+            lighting: None,
         })
     };
     
@@ -481,25 +392,8 @@ fn test_ui_button_positioning() {
 }
 #[test]
 fn test_entity_names() {
-    let mut app = App::new();
+    let mut app = setup_test_app();
     
-    app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_asset::<Mesh>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
-       .init_asset::<Gltf>()
-       .init_asset::<Scene>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
-       .insert_resource(ProjectConfigPath("project.ron".to_string()))
-       .add_plugins(GamePlugin);
-       
     app.update();
     
     // 1. Setup a level with a player and a button
@@ -510,6 +404,7 @@ fn test_entity_names() {
             initial_scene: "scenes/tests/test_scene.ron".to_string(),
             rules: vec![],
             model_fixes: HashMap::new(),
+            global_environment: None,
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
@@ -568,6 +463,19 @@ fn test_entity_names() {
                 },
             }),
             terrain: None,
+            lighting: Some(ironhold_core::schema::level::LightingConfig {
+                ambient: Some(ironhold_core::schema::level::AmbientLightConfig {
+                    color: (1.0, 1.0, 1.0),
+                    brightness: 100.0,
+                }),
+                directional: Some(ironhold_core::schema::level::DirectionalLightConfig {
+                    color: (1.0, 1.0, 1.0),
+                    illuminance: 10000.0,
+                    direction: (0.0, -1.0, 0.0),
+                    shadows_enabled: true,
+                }),
+                environment: None,
+            }),
         })
     };
     
@@ -584,6 +492,7 @@ fn test_entity_names() {
     
     println!("Spawned names: {:?}", name_list);
     
+    assert!(name_list.contains(&"Ambient Light".to_string()));
     assert!(name_list.contains(&"Directional Light".to_string()));
     assert!(name_list.contains(&"UI Camera".to_string()));
     assert!(name_list.contains(&"UI Root".to_string()));

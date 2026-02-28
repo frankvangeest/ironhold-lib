@@ -39,7 +39,58 @@ pub struct GameLevel {
     pub player: Option<PlayerConfig>,
     #[serde(default)]
     pub terrain: Option<TerrainConfig>,
+    #[serde(default)]
+    pub lighting: Option<LightingConfig>,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LightingConfig {
+    #[serde(default)]
+    pub ambient: Option<AmbientLightConfig>,
+    #[serde(default)]
+    pub directional: Option<DirectionalLightConfig>,
+    #[serde(default)]
+    pub environment: Option<EnvironmentMapConfig>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct AmbientLightConfig {
+    pub color: (f32, f32, f32),      // RGB
+    pub brightness: f32,             // Lux
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DirectionalLightConfig {
+    pub color: (f32, f32, f32),      // RGB
+    pub illuminance: f32,            // Lux
+    pub direction: (f32, f32, f32),  // XYZ (will be normalized automatically)
+    #[serde(default = "default_true")]
+    pub shadows_enabled: bool,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentMapConfig {
+    #[serde(default)]
+    pub diffuse_path: Option<String>,
+    #[serde(default)]
+    pub specular_path: Option<String>,
+    pub intensity: f32,
+    #[serde(default)]
+    pub fallback: Option<GeneratedEnvironmentMapLight>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GeneratedEnvironmentMapLight {
+    pub top_color: (f32, f32, f32),
+    pub bottom_color: (f32, f32, f32),
+}
+
+fn default_true() -> bool { true }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ModelInfo {

@@ -26,6 +26,8 @@ pub struct ProjectConfig {
     pub rules: Vec<LogicRule>,
     #[serde(default)]
     pub model_fixes: HashMap<String, TransformFix>,
+    #[serde(default)]
+    pub global_environment: Option<crate::schema::level::EnvironmentMapConfig>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

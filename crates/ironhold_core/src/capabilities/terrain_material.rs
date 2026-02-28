@@ -1,10 +1,16 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
+use bevy::shader::{Shader, ShaderRef};
+
+use bevy::asset::Handle;
+use bevy::asset::uuid_handle;
+
+pub const TERRAIN_SHADER_HANDLE: Handle<Shader> = uuid_handle!("74657272-6169-4e5f-8d61-746572696101");
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct TerrainMaterial {
     #[uniform(0)]
-    pub uv_scale: f32,
+    pub uv_scale: Vec4,  // Only .x is used; padded to 16 bytes for WebGPU alignment
 
     #[texture(1)]
     #[sampler(2)]
@@ -27,10 +33,8 @@ pub struct TerrainMaterial {
     pub texture_a: Handle<Image>,
 }
 
-use bevy::shader::ShaderRef;
-
 impl Material for TerrainMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/terrain.wgsl".into()
+        TERRAIN_SHADER_HANDLE.into()
     }
 }

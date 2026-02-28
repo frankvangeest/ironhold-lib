@@ -91,4 +91,16 @@
             "terrain/snow.png",
         ],
     )),
+    lighting: Some((
+        ambient: Some((
+            color: (0.8, 0.85, 1.0),
+            brightness: 120.0,
+        )),
+        directional: Some((
+            color: (1.0, 0.95, 0.85),
+            illuminance: 15000.0,
+            direction: (0.3, -1.0, 0.2),
+            shadows_enabled: true,
+        )),
+    )),
 )

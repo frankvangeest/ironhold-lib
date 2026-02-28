@@ -81,4 +81,18 @@
             ],
         ),
     )),
+    terrain: Some((
+        heightmap_path: "terrain/heightmap.png",
+        splatmap_path: "terrain/splatmap.png",
+        height_scale: 10.0,
+        //horizontal_scale: 100.0,
+        position: (0.0, -10.0, 0.0),
+        chunk_size: 64, // Not currently used but in schema
+        material_paths: [
+            "terrain/dirt.png",
+            "terrain/grass.png",
+            "terrain/rock.png",
+            "terrain/snow.png",
+        ],
+    )),
 )

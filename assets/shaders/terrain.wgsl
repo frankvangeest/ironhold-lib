@@ -1,7 +1,7 @@
 #import bevy_pbr::forward_io::VertexOutput
 
 struct TerrainMaterial {
-    uv_scale: f32,
+    uv_scale: vec4<f32>,  // Only .x is used; padded for WebGPU 16-byte alignment
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: TerrainMaterial;
@@ -25,7 +25,7 @@ fn fragment(
     mesh: VertexOutput,
 ) -> @location(0) vec4<f32> {
     let splat = textureSample(splatmap, splatmap_sampler, mesh.uv);
-    let uv_tiled = mesh.uv * material.uv_scale;
+    let uv_tiled = mesh.uv * material.uv_scale.x;
     
     let col_r = textureSample(texture_r, sampler_r, uv_tiled);
     let col_g = textureSample(texture_g, sampler_g, uv_tiled);

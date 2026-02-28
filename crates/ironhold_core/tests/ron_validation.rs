@@ -191,6 +191,39 @@ fn test_game_level_with_terrain() {
 }
 
 #[test]
+fn test_game_level_with_lighting() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            lighting: Some((
+                ambient: Some((
+                    color: (0.1, 0.2, 0.3),
+                    brightness: 50.0,
+                )),
+                directional: Some((
+                    color: (1.0, 1.0, 0.9),
+                    illuminance: 12000.0,
+                    direction: (1.0, -1.0, 0.0),
+                )),
+                environment: Some((
+                    intensity: 1.0,
+                    fallback: Some((
+                        top_color: (0.7, 0.8, 1.0),
+                        bottom_color: (0.1, 0.1, 0.1),
+                    )),
+                )),
+            )),
+        )
+    "#;
+    let level: GameLevel = from_str(ron_str).expect("Failed to deserialize GameLevel with lighting");
+    let lighting = level.lighting.unwrap();
+    assert!(lighting.ambient.is_some());
+    assert!(lighting.directional.is_some());
+    assert!(lighting.environment.is_some());
+    assert_eq!(lighting.environment.unwrap().intensity, 1.0);
+}
+
+#[test]
 fn test_game_level_unknown_field_is_error() {
     let ron_str = r#"
         (

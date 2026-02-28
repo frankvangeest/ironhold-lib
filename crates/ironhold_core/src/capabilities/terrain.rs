@@ -11,6 +11,7 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<TerrainMaterial>::default());
+        app.add_systems(Startup, setup_terrain_shader);
         app.add_systems(Update, (
             terrain_init_system,
             start_terrain_generation_system,
@@ -100,7 +101,7 @@ fn poll_terrain_generation_system(
             
             // Construct TerrainMaterial using handles from loading
             let terrain_material = TerrainMaterial {
-                uv_scale: 10.0, // Should probably be in config but 10.0 is a good default
+                uv_scale: Vec4::new(10.0, 0.0, 0.0, 0.0), // Only .x is used
                 splatmap: loading.splatmap_handle.clone(),
                 texture_r: loading.material_handles.get(0).cloned().unwrap_or_default(),
                 texture_g: loading.material_handles.get(1).cloned().unwrap_or_default(),
@@ -199,4 +200,13 @@ fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_sc
     mesh.compute_flat_normals();
     
     mesh
+}
+
+// Inject the embedded shader so WebGPU doesn't rely on runtime asset loading for it
+fn setup_terrain_shader(mut shaders: ResMut<Assets<Shader>>) {
+    let shader = bevy::shader::Shader::from_wgsl(
+        include_str!("../../../../assets/shaders/terrain.wgsl"),
+        "shaders/terrain.wgsl"
+    );
+    let _ = shaders.insert(&crate::capabilities::terrain_material::TERRAIN_SHADER_HANDLE, shader);
 }
