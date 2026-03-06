@@ -44,11 +44,13 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
+            .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input
             .add_systems(Update, (
                 spawn_level,
+                spawn_player_when_terrain_ready,
                 button_system,
                 input_translator_system,
             ))

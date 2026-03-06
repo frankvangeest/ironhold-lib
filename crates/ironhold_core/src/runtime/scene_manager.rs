@@ -22,8 +22,12 @@ use crate::capabilities::animation_resolver::{
 
 use std::collections::HashMap;
 use bevy::asset::RenderAssetUsages;
+use bevy_rapier3d::prelude::*;
 use bevy::render::render_resource::{TextureViewDescriptor};
 // Lights and Image are in the prelude.
+
+#[derive(Component)]
+pub struct PendingPlayerConfig(pub PlayerConfig);
 
 pub fn check_project_loaded(
     mut commands: Commands,
@@ -201,72 +205,20 @@ pub fn spawn_level(
                 });
             }
             
-            // Spawn Player
+            // Spawn Player (Delayed if terrain exists)
             if let Some(player_config) = &level.player {
-                let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
-                let gltf_handle = asset_server.load(gltf_path.clone());
-
-                // Use ModelSpawner to spawn player character with fixes applied
-                let spawned = model_spawner.spawn_instance(
-                    &mut commands,
-                    &asset_server,
-                    &project,
-                    player_config.model_path.clone(),
-                    Transform::from_translation(Vec3::from(player_config.initial_position)),
-                );
-                
-                // Add player-specific components to the parent entity
-                let player_entity = spawned.parent;
-                commands.entity(player_entity).insert((
-                    Name::new("Player"),
-                    LevelEntity,
-                    CharacterController {
-                        walk_speed: 3.0,
-                        run_speed: 6.0,
-                        rot_speed: 3.0,
-                        inputs: player_config.inputs.clone(),
-                        is_running: false,
-                    },
-                    LocomotionState::default(),
-                    AnimationRequests::default(),
-                    ActiveOverride::default(),
-                    AnimationPolicyComponent(player_config.animation_policy.clone()),
-                    AnimationController {
-                        current: player_config.animation_policy.base.idle.clone(),
-                        last_played: String::new(),
-                        gltf_path,
-                        gltf_handle,
-                        node_indices: HashMap::new(),
-                        graph_initialized: false,
-                        transition_ms: 0,
-                        should_loop: true,
-                    },
-                ));
-
-                // Spawn Orbit Camera matching config
-                let start_pos = Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
-                
-                commands.spawn((
-                    Name::new("Orbit Camera"),
-                    Camera3d::default(),
-                    Transform::from_translation(start_pos).looking_at(
-                        Vec3::from(player_config.initial_position), 
-                        Vec3::Y,
-                    ),
-                    LevelEntity,
-                    OrbitCamera {
-                        target: player_entity,
-                        radius: Vec3::from(player_config.camera.offset).length(),
-                        offset: Vec3::from(player_config.camera.offset),
-                        zoom_speed: player_config.camera.zoom_speed,
-                        orbit_speed: player_config.camera.orbit_speed,
-                        min_radius: player_config.camera.min_radius,
-                        max_radius: player_config.camera.max_radius,
-                        pitch: 0.5, // Approx starting pitch
-                        yaw: 0.0,
-                        look_at_offset: Vec3::from(player_config.camera.look_at_offset),
-                    }
-                ));
+                if level.terrain.is_some() {
+                    info!("Terrain detected. Delaying player spawn...");
+                    commands.spawn(PendingPlayerConfig(player_config.clone()));
+                } else {
+                    spawn_player_entity(
+                        &mut commands,
+                        &asset_server,
+                        &project,
+                        &model_spawner,
+                        player_config,
+                    );
+                }
             } else {
                 // No player - spawn a default camera for UI/static scenes
                 info!("No player in scene, spawning default camera...");
@@ -522,3 +474,104 @@ pub fn action_executor_system(
 
 
 
+pub fn spawn_player_when_terrain_ready(
+    mut commands: Commands,
+    terrain_query: Query<Entity, Added<crate::capabilities::terrain::TerrainReady>>,
+    pending_query: Query<(Entity, &PendingPlayerConfig)>,
+    asset_server: Res<AssetServer>,
+    config_handle: Res<ProjectConfigHandle>,
+    configs: Res<Assets<ProjectConfig>>,
+    model_spawner: Res<ModelSpawner>,
+) {
+    if terrain_query.is_empty() { return; }
+    let Some(project) = configs.get(&config_handle.0) else { return; };
+
+    for (pending_entity, pending) in &pending_query {
+        info!("Terrain is ready. Spawning player...");
+        spawn_player_entity(
+            &mut commands,
+            &asset_server,
+            &project,
+            &model_spawner,
+            &pending.0,
+        );
+        commands.entity(pending_entity).despawn();
+    }
+}
+
+fn spawn_player_entity(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    project: &ProjectConfig,
+    model_spawner: &ModelSpawner,
+    player_config: &PlayerConfig,
+) {
+    let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
+    let gltf_handle = asset_server.load(gltf_path.clone());
+
+    let spawned = model_spawner.spawn_instance(
+        commands,
+        asset_server,
+        project,
+        player_config.model_path.clone(),
+        Transform::from_translation(Vec3::from(player_config.initial_position)),
+    );
+    
+    let player_entity = spawned.parent;
+    commands.entity(player_entity).insert((
+        Name::new("Player"),
+        LevelEntity,
+        CharacterController {
+            walk_speed: 3.0,
+            run_speed: 6.0,
+            rot_speed: 3.0,
+            inputs: player_config.inputs.clone(),
+            is_running: false,
+        },
+        LocomotionState::default(),
+        AnimationRequests::default(),
+        ActiveOverride::default(),
+        AnimationPolicyComponent(player_config.animation_policy.clone()),
+        AnimationController {
+            current: player_config.animation_policy.base.idle.clone(),
+            last_played: String::new(),
+            gltf_path,
+            gltf_handle,
+            node_indices: HashMap::new(),
+            graph_initialized: false,
+            transition_ms: 0,
+            should_loop: true,
+        },
+        // Physics
+        RigidBody::Dynamic,
+        Collider::capsule_y(0.8, 0.4), // Adjust to model size
+        LockedAxes::ROTATION_LOCKED,
+        Damping { linear_damping: 0.5, angular_damping: 0.5 },
+        Velocity::default(),
+        ExternalImpulse::default(),
+    ));
+
+    // Spawn Orbit Camera
+    let start_pos = Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
+    commands.spawn((
+        Name::new("Orbit Camera"),
+        Camera3d::default(),
+        Transform::from_translation(start_pos).looking_at(
+            Vec3::from(player_config.initial_position), 
+            Vec3::Y,
+        ),
+        LevelEntity,
+        OrbitCamera {
+            target: player_entity,
+            radius: Vec3::from(player_config.camera.offset).length(),
+            offset: Vec3::from(player_config.camera.offset),
+            zoom_speed: player_config.camera.zoom_speed,
+            orbit_speed: player_config.camera.orbit_speed,
+            min_radius: player_config.camera.min_radius,
+            max_radius: player_config.camera.max_radius,
+            pitch: 0.5,
+            yaw: 0.0,
+            look_at_offset: Vec3::from(player_config.camera.look_at_offset),
+        }
+    ));
+}

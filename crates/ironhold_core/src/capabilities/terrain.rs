@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use bevy::asset::RenderAssetUsages;
+use bevy_mesh::Indices;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use futures_lite::future;
 use crate::schema::level::TerrainConfig;
 use crate::capabilities::terrain_material::TerrainMaterial;
 use bevy::render::render_resource::PrimitiveTopology;
+use bevy_rapier3d::prelude::*;
 
 pub struct TerrainPlugin;
 
@@ -97,6 +99,7 @@ fn poll_terrain_generation_system(
         if let Some(mesh) = future::block_on(future::poll_once(&mut task.0)) {
             info!("Terrain Generation Completed. Applying to entity.");
             
+            let collider = Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh(TriMeshFlags::default())).unwrap();
             let mesh_handle = meshes.add(mesh);
             
             // Construct TerrainMaterial using handles from loading
@@ -118,6 +121,8 @@ fn poll_terrain_generation_system(
                 Transform::from_xyz(px, py, pz),
                 Visibility::default(),
                 TerrainReady,
+                RigidBody::Fixed,
+                collider,
             ));
             
             commands.entity(entity).remove::<TerrainGenerationTask>();
@@ -128,13 +133,9 @@ fn poll_terrain_generation_system(
 
 // Pure function, no bevy types except Mesh output
 fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_scale: f32, horizontal_scale: f32) -> Mesh {
-    // Create a mesh
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
     
-    // Pre-allocate
-    let num_quads = (width - 1) * (height - 1);
-    let num_verts = num_quads * 6;
-    
+    let num_verts = width * height;
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(num_verts);
     let mut normals: Vec<[f32; 3]> = Vec::with_capacity(num_verts);
     let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(num_verts);
@@ -152,52 +153,46 @@ fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_sc
     let offset_x = (width - 1) as f32 * horizontal_scale * 0.5;
     let offset_z = (height - 1) as f32 * horizontal_scale * 0.5;
 
-    // Non-indexed geometry
-    for z in 0..height-1 {
-        for x in 0..width-1 {
-            let y00 = extract_height(x, z);
-            let y10 = extract_height(x+1, z);
-            let y01 = extract_height(x, z+1);
-            let y11 = extract_height(x+1, z+1);
-            
-            let vx0 = x as f32 * horizontal_scale - offset_x;
-            let vx1 = (x + 1) as f32 * horizontal_scale - offset_x;
-            let vz0 = z as f32 * horizontal_scale - offset_z;
-            let vz1 = (z + 1) as f32 * horizontal_scale - offset_z;
+    // 1. Generate Vertices
+    for z in 0..height {
+        for x in 0..width {
+            let y = extract_height(x, z);
+            let vx = x as f32 * horizontal_scale - offset_x;
+            let vz = z as f32 * horizontal_scale - offset_z;
+
+            positions.push([vx, y, vz]);
+            normals.push([0.0, 1.0, 0.0]); // Placeholder, compute_smooth_normals will fix this
+            uvs.push([x as f32 / (width - 1) as f32, z as f32 / (height - 1) as f32]);
+        }
+    }
+
+    // 2. Generate Indices
+    let mut indices = Vec::with_capacity((width - 1) * (height - 1) * 6);
+    for z in 0..height - 1 {
+        for x in 0..width - 1 {
+            let i00 = z * width + x;
+            let i10 = z * width + (x + 1);
+            let i01 = (z + 1) * width + x;
+            let i11 = (z + 1) * width + (x + 1);
 
             // Tri 1
-            positions.push([vx0, y00, vz0]);
-            uvs.push([x as f32 / width as f32, z as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
-
-            positions.push([vx1, y10, vz0]);
-            uvs.push([(x+1) as f32 / width as f32, z as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
-
-            positions.push([vx0, y01, vz1]);
-            uvs.push([x as f32 / width as f32, (z+1) as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
+            indices.push(i00 as u32);
+            indices.push(i10 as u32);
+            indices.push(i01 as u32);
 
             // Tri 2
-            positions.push([vx1, y10, vz0]);
-            uvs.push([(x+1) as f32 / width as f32, z as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
-
-            positions.push([vx1, y11, vz1]);
-            uvs.push([(x+1) as f32 / width as f32, (z+1) as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
-
-            positions.push([vx0, y01, vz1]);
-            uvs.push([x as f32 / width as f32, (z+1) as f32 / height as f32]);
-            normals.push([0.0, 1.0, 0.0]);
+            indices.push(i10 as u32);
+            indices.push(i11 as u32);
+            indices.push(i01 as u32);
         }
     }
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
     
-    mesh.compute_flat_normals();
+    mesh.compute_smooth_normals();
     
     mesh
 }

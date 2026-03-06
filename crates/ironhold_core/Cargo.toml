@@ -9,6 +9,8 @@ serde = { workspace = true }
 ron = { workspace = true }
 bevy_common_assets = { workspace = true, features = ["ron"] }
 bevy_inspector_egui = { package = "bevy-inspector-egui", version = "0.36", optional = true }
+bevy_rapier3d = { version = "0.33", features = ["enhanced-determinism", "serde-serialize"] }
+bevy_mesh = "0.18"
 futures-lite = "2.3"
 
 [features]
