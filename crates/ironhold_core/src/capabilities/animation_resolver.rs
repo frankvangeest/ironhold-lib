@@ -15,11 +15,22 @@ pub struct AnimationPolicyComponent(pub AnimationPolicy);
 
 /// Locomotion intent derived from input/movement.
 /// The movement system writes this; the resolver reads it.
-#[derive(Component, Reflect, Debug, Default, Clone)]
+#[derive(Component, Reflect, Debug, Clone)]
 #[reflect(Component)]
 pub struct LocomotionState {
     pub moving: bool,
     pub running: bool,
+    pub is_grounded: bool,
+}
+
+impl Default for LocomotionState {
+    fn default() -> Self {
+        Self {
+            moving: false,
+            running: false,
+            is_grounded: true,
+        }
+    }
 }
 
 /// A small queue of animation commands (strings).
@@ -157,6 +168,8 @@ pub fn animation_resolver_system(
         // 4) Choose final clip + metadata.
         let (chosen_clip, chosen_looping, chosen_transition_ms) = if let Some(clip) = &active.clip {
             (clip.clone(), active.looping, active.transition_ms)
+        } else if !loco.is_grounded {
+            (policy.base.jump_loop.clone(), true, default_transition_ms)
         } else if loco.moving {
             let clip = if loco.running { 
                 policy.base.run.clone() 

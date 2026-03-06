@@ -102,6 +102,7 @@ pub struct BaseAnimations {
     pub idle: String,
     pub walk: String,
     pub run: String,
+    pub jump_loop: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]

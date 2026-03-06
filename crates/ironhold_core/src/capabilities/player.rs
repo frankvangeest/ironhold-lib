@@ -4,7 +4,7 @@ use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use std::collections::HashMap;
 
-use crate::capabilities::animation_resolver::LocomotionState;
+use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
 
 #[derive(Component)]
 pub struct CharacterController {
@@ -25,7 +25,7 @@ pub fn player_movement_system(
         &mut CharacterController, 
         &mut LocomotionState,
         &mut Velocity,
-        &mut ExternalImpulse,
+        &mut AnimationRequests,
     )>,
     rapier_context: ReadRapierContext,
 ) {
@@ -35,10 +35,29 @@ pub fn player_movement_system(
         actions.entry(event.entity).or_insert_with(Vec::new).push(event.action.clone());
     }
 
-    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut impulse) in &mut query {
+    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests) in &mut query {
         let mut move_vec = Vec3::ZERO;
         let mut rotation = 0.0;
         let mut jumping = false;
+
+        // Perform raycast for ground detection every frame for animation state
+        let ray_pos = global_transform.translation();
+        let ray_dir = -Vec3::Y;
+        let max_toi = 1.5;
+        let was_grounded = loco.is_grounded;
+        
+        loco.is_grounded = rapier_context.cast_ray(
+            ray_pos, 
+            ray_dir, 
+            max_toi, 
+            true, 
+            QueryFilter::new().exclude_rigid_body(entity)
+        ).is_some();
+
+        // Detect landing
+        if !was_grounded && loco.is_grounded {
+            requests.queue.push_back("jump_exit".to_string());
+        }
 
         if let Some(entity_actions) = actions.get(&entity) {
             for action in entity_actions {
@@ -91,22 +110,10 @@ pub fn player_movement_system(
         }
 
         // Simple Jump logic
-        if jumping {
-            // Downward raycast to detect floor
-            let ray_pos = global_transform.translation();
-            let ray_dir = -Vec3::Y;
-            let max_toi = 0.6; // Slightly more than half-height
-
-            if let Some((_entity, _toi)) = rapier_context.cast_ray(
-                ray_pos, 
-                ray_dir, 
-                max_toi, 
-                true, 
-                QueryFilter::new().exclude_rigid_body(entity)
-            ) {
-                info!("Player Jumped!");
-                impulse.impulse = Vec3::Y * 4.0; 
-            }
+        if jumping && loco.is_grounded {
+            info!("Jump triggered! Set velocity and push jump_enter");
+            velocity.linvel.y = 5.0; 
+            requests.queue.push_back("jump_enter".to_string());
         }
     }
 }

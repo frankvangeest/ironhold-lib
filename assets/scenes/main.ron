@@ -50,6 +50,7 @@
                 idle: "Idle_Loop",
                 walk: "Walk_Loop",
                 run:  "Sprint_Loop",
+                jump_loop: "Jump_Loop",
             ),
 
             // Optional aliases (semantic key -> glTF clip name)
@@ -62,6 +63,23 @@
 
             // Overrides define cancellation and stop commands.
             overrides: [
+                (
+                    id: "jump_enter",
+                    clip: "Jump_Start",
+                    priority: 200,
+                    looping: false,
+                    duration: Some(0.4),
+                    cancel_on_move: false,
+                ),
+                (
+                    id: "jump_exit",
+                    clip: "Jump_Land",
+                    priority: 200,
+                    looping: false,
+                    duration: Some(0.4),
+                    cancel_on_move: false,
+                    transition_ms: Some(100),
+                ),
                 (
                     id: "dance",
                     clip: "Dance_Loop",
