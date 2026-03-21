@@ -27,13 +27,15 @@ pub fn player_movement_system(
         &mut Velocity,
         &mut AnimationRequests,
     )>,
-    rapier_context: ReadRapierContext,
+    rapier_context: Option<ReadRapierContext>,
 ) {
-    let Ok(rapier_context) = rapier_context.single() else { return; };
     let mut actions = HashMap::new();
     for event in input_events.read() {
         actions.entry(event.entity).or_insert_with(Vec::new).push(event.action.clone());
     }
+
+    // Try to get the rapier context, but don't panic if it's missing (e.g. in headless tests)
+    let rapier_context = rapier_context.as_ref().and_then(|rc| rc.single().ok());
 
     for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests) in &mut query {
         let mut move_vec = Vec3::ZERO;
@@ -41,18 +43,24 @@ pub fn player_movement_system(
         let mut jumping = false;
 
         // Perform raycast for ground detection every frame for animation state
-        let ray_pos = global_transform.translation();
-        let ray_dir = -Vec3::Y;
-        let max_toi = 1.5;
         let was_grounded = loco.is_grounded;
         
-        loco.is_grounded = rapier_context.cast_ray(
-            ray_pos, 
-            ray_dir, 
-            max_toi, 
-            true, 
-            QueryFilter::new().exclude_rigid_body(entity)
-        ).is_some();
+        if let Some(ref context) = rapier_context {
+            let ray_pos = global_transform.translation();
+            let ray_dir = -Vec3::Y;
+            let max_toi = 1.5;
+            
+            loco.is_grounded = context.cast_ray(
+                ray_pos, 
+                ray_dir, 
+                max_toi, 
+                true, 
+                QueryFilter::new().exclude_rigid_body(entity)
+            ).is_some();
+        } else {
+            // Default to grounded if no physics (for basic testing)
+            loco.is_grounded = true;
+        }
 
         // Detect landing
         if !was_grounded && loco.is_grounded {

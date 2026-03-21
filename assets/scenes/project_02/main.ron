@@ -34,6 +34,7 @@
                 idle: "Idle_Loop",
                 walk: "Walk_Loop",
                 run:  "Sprint_Loop",
+                jump_loop: "Jump_Loop",
             ),
 
             // Optional aliases (semantic key -> glTF clip name)

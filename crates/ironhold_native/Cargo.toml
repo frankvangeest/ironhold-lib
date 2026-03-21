@@ -8,3 +8,9 @@ ironhold_core = { path = "../ironhold_core" }
 bevy = { workspace = true }
 [features]
 inspector = ["ironhold_core/inspector"]
+
+[profile.test]
+debug = true
+opt-level = 0
+debug-assertions = true
+overflow-checks = true

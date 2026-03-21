@@ -75,14 +75,15 @@ fn setup(
     mut next_state: ResMut<NextState<AppState>>,
     config_path: Res<ProjectConfigPath>,
 ) {
+    info!("SETUP Startup System Running: config_path={}", config_path.0);
     // Persistent UI camera for overlays (Egui / Inspector). Not tagged LevelEntity,
     // so it survives scene transitions.
     commands.spawn((
-        Name::new("UI Camera"),
+        Name::new("Persistent Overlay Camera"),
         Camera2d,
-        bevy::ui::IsDefaultUiCamera,
+        // bevy::ui::IsDefaultUiCamera,
         bevy::prelude::Camera {
-            order: 100,
+            order: 1000, 
             clear_color: ClearColorConfig::None,
             ..default()
         },
@@ -90,10 +91,9 @@ fn setup(
 
     
     // Load Project Config
-    info!("Loading Project Config from {}...", config_path.0);
     let handle = asset_server.load(config_path.0.clone());
     commands.insert_resource(ProjectConfigHandle(handle));
-    
+    info!("Inserted ProjectConfigHandle");
     next_state.set(AppState::LoadingProject);
 }
 

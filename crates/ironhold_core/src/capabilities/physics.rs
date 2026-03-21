@@ -5,6 +5,7 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(not(test))]
         app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default());
         
         // Configure gravity (default is -9.81 on Y, which is fine)

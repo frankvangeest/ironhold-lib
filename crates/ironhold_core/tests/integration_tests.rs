@@ -12,17 +12,27 @@ use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, 
 fn setup_test_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
+    //    .add_plugins(bevy::log::LogPlugin::default())
        .add_plugins(bevy::state::app::StatesPlugin)
+       .add_plugins(bevy::transform::TransformPlugin)
        .add_plugins(AssetPlugin::default())
+       .add_plugins(bevy::scene::ScenePlugin)
        .add_message::<bevy::input::mouse::MouseMotion>()
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
+       .init_resource::<Messages<UiMessage>>()
+       .init_resource::<Messages<SceneEvent>>()
+       .init_resource::<Messages<InputActionMessage>>()
+       .init_resource::<Messages<AppExit>>()
+       .init_resource::<Messages<bevy::input::mouse::MouseMotion>>()
+       .init_resource::<Messages<bevy::input::mouse::MouseWheel>>()
        .init_asset::<Mesh>()
+       .init_asset::<bevy::shader::Shader>()
+       .init_asset::<ironhold_core::capabilities::terrain_material::TerrainMaterial>()
        .init_asset::<StandardMaterial>()
        .init_asset::<Image>()
-       .init_asset::<Shader>()
-       .init_asset::<ironhold_core::capabilities::terrain_material::TerrainMaterial>()
+
        .init_asset::<Scene>()
        .init_asset::<Gltf>()
        .init_asset::<AnimationGraph>()
@@ -103,6 +113,7 @@ fn test_input_abstraction_flow() {
     // 1. Setup an entity with CharacterController
     let entity = app.world_mut().spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
         CharacterController {
             walk_speed: 10.0,
             run_speed: 20.0,
@@ -127,6 +138,7 @@ fn test_input_abstraction_flow() {
                 idle: "idle".to_string(),
                 walk: "walk".to_string(),
                 run: "run".to_string(),
+                jump_loop: "idle".to_string(),
             },
             clips: std::collections::HashMap::new(),
             overrides: vec![],
@@ -142,25 +154,30 @@ fn test_input_abstraction_flow() {
             transition_ms: 0,
             should_loop: true,
         },
+        bevy_rapier3d::prelude::RigidBody::Dynamic,
+        bevy_rapier3d::prelude::Velocity::zero(),
     )).id();
 
     // 2. Simulate "W" key press
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyW);
     
-    // 3. Run systems: input_translator_system -> player_movement_system
+    // 3. Run systems: input_translator_system writes InputActionMessage
+    app.update();
+    // Run again: player_movement_system reads the message from the previous frame
+    // (systems are in separate unordered Update sets, so we need a second update)
     app.update();
     
-    // 4. Verify InputActionMessage was emitted
+    // 4. Verify InputActionMessage was emitted (available from previous frame)
     app.world_mut().run_system_once(move |mut input_events: MessageReader<InputActionMessage>| {
         let events: Vec<_> = input_events.read().cloned().collect();
         assert!(events.iter().any(|e| e.entity == entity && matches!(e.action, InputAction::Move(v) if v.y > 0.0)));
     }).unwrap();
     
-    // 5. Verify character transform moved forward (+Y in our abstract Move, which translates to transform.forward() in player_movement_system)
-    // Note: Transform::forward() is usually (0, 0, -1) in Bevy 3D.
-    // In our player_movement_system: velocity += *forward * dir.y;
-    let transform = app.world().entity(entity).get::<Transform>().unwrap();
-    assert!(transform.translation.z < 0.0); // Moved forward in Bevy's -Z direction
+    // 5. Verify character velocity moved forward (rapier physics sets linvel, not transform directly)
+    // Note: Transform::forward() is (0, 0, -1) in Bevy 3D.
+    // player_movement_system sets velocity.linvel.z = move_vec.z * speed (which is negative for forward).
+    let velocity = app.world().entity(entity).get::<bevy_rapier3d::prelude::Velocity>().unwrap();
+    assert!(velocity.linvel.z < 0.0, "Expected Z velocity < 0 (forward movement), got {}", velocity.linvel.z);
 }
 
 #[test]
@@ -456,6 +473,7 @@ fn test_entity_names() {
                         idle: "idle".to_string(),
                         walk: "walk".to_string(),
                         run: "run".to_string(),
+                        jump_loop: "idle".to_string(),
                     },
                     clips: HashMap::new(),
                     overrides: vec![],
@@ -494,7 +512,7 @@ fn test_entity_names() {
     
     assert!(name_list.contains(&"Ambient Light".to_string()));
     assert!(name_list.contains(&"Directional Light".to_string()));
-    assert!(name_list.contains(&"UI Camera".to_string()));
+    assert!(name_list.contains(&"Persistent Overlay Camera".to_string()));
     assert!(name_list.contains(&"UI Root".to_string()));
     assert!(name_list.contains(&"Button: Start".to_string()));
     assert!(name_list.contains(&"Text: Start".to_string()));

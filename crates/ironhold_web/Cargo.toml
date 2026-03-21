@@ -13,5 +13,12 @@ wasm-bindgen = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
 [features]
 inspector = ["ironhold_core/inspector"]
+
+[profile.test]
+debug = true
+opt-level = 0
+debug-assertions = true
+overflow-checks = true

@@ -126,6 +126,7 @@ fn test_game_level_full() {
                         idle: "Idle",
                         walk: "Walk",
                         run: "Run",
+                        jump_loop: "Jump_Loop",
                     ),
                 )
             ))

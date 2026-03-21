@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { workspace = true }
+bevy = { workspace = true, features = ["debug"] }
 serde = { workspace = true }
 ron = { workspace = true }
 bevy_common_assets = { workspace = true, features = ["ron"] }
@@ -15,3 +15,9 @@ futures-lite = "2.3"
 
 [features]
 inspector = ["dep:bevy_inspector_egui"]
+
+[profile.test]
+debug = true
+opt-level = 0
+debug-assertions = true
+overflow-checks = true

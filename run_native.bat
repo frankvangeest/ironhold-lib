@@ -1,0 +1,1 @@
+cargo run -p ironhold_native --all-features
