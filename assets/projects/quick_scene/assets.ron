@@ -1,0 +1,25 @@
+(
+  models: {
+    "hero": (
+      path: "shared/models/character-01.glb#Scene0",
+    ),
+    "orc": (
+      path: "shared/models/creatures/orc.glb#Scene0",
+    ),
+    "terrain_demo": (
+      path: "terrain/heightmap.png",
+    ),
+  },
+
+  textures: {
+    "grass": "shared/terrain/grass.png",
+    "rock": "shared/terrain/rock.png",
+    "snow": "shared/terrain/snow.png",
+  },
+
+  audio: {
+    "click": "shared/audio/menu-button-click.wav",
+    "walk": "shared/audio/walk.wav",
+    "run_grass": "shared/audio/run-grass.wav",
+  },
+)

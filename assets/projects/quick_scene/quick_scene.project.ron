@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    project_id: Some("quick_scene"),
+    display_name: Some("Quick Scene"),
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: Some("assets.ron"),
+    prefab_catalog: Some("prefabs/prefabs.ron"),
+    rules_path: Some("logic/rules.ron"),
+    model_fixes_path: Some("overrides/model_fixes.ron"),
+
+    global_environment: Some((
+        intensity: 400.0,
+        fallback: Some((
+            top_color: (0.1, 0.2, 0.4),
+            bottom_color: (0.01, 0.01, 0.01),
+        )),
+    )),
+)

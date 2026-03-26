@@ -17,6 +17,26 @@ fn test_project_config_deserialization() {
 }
 
 #[test]
+fn test_project_config_v2_deserialization() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            initial_scene: "scenes/main.ron",
+            project_id: Some("my_project"),
+            display_name: Some("My Project"),
+            asset_catalog: Some("assets.ron"),
+            prefab_catalog: Some("prefabs/prefabs.ron"),
+            rules_path: Some("logic/rules.ron"),
+            model_fixes_path: Some("overrides/model_fixes.ron"),
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize v2 ProjectConfig");
+    assert_eq!(config.schema_version, 2);
+    assert_eq!(config.project_id.as_deref(), Some("my_project"));
+    assert!(config.validate().is_ok());
+}
+
+#[test]
 fn test_project_config_missing_schema_version_is_error() {
     let ron_str = r#"
         (
@@ -121,14 +141,7 @@ fn test_game_level_full() {
                     jump: "Space",
                     run: "ShiftLeft"
                 ),
-                animation_policy: (
-                    base: (
-                        idle: "Idle",
-                        walk: "Walk",
-                        run: "Run",
-                        jump_loop: "Jump_Loop",
-                    ),
-                )
+                animation_policy: "prefabs/animation/player_policy.ron"
             ))
         )
     "#;

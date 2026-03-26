@@ -1,0 +1,13 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:quit",
+            do_actions: [ Log("Quit Triggered"), Quit ],
+        ),
+        (
+            on: "ui.button_pressed:dance",
+            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
+        ),
+    ],
+)

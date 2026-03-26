@@ -20,6 +20,12 @@ use crate::utils::find_assets_folder;
 #[derive(Resource)]
 pub struct ProjectConfigPath(pub String);
 
+/// The directory prefix of the loaded project file, relative to the assets root.
+/// Used to resolve project-relative paths (e.g. scene paths in project.ron).
+/// Empty string means the project file is at the assets root.
+#[derive(Resource, Clone, Default)]
+pub struct ProjectRoot(pub String);
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -37,12 +43,17 @@ impl Plugin for GamePlugin {
         app.init_state::<AppState>()
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
+            .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
+            .init_resource::<crate::runtime::scene_manager::LoadedRules>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
             .add_message::<AppExit>()
             .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_systems(Startup, setup)
@@ -51,6 +62,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 spawn_level,
                 spawn_player_when_terrain_ready,
+                animation_policy_loader_system,
                 button_system,
                 input_translator_system,
             ))
@@ -142,7 +154,14 @@ pub fn start_app(project_path: Option<String>) {
         find_assets_folder().to_string_lossy().to_string()
     };
     
-    let config_path = project_path.unwrap_or_else(|| "project.ron".to_string());
+    let config_path = project_path.unwrap_or_else(|| "projects/quick_scene/quick_scene.project.ron".to_string());
+
+    let project_root = std::path::Path::new(&config_path)
+        .parent()
+        .and_then(|p| p.to_str())
+        .unwrap_or("")
+        .replace('\\', "/")
+        .to_string();
     
     info!("Runtime Asset Path: {}", asset_path);
     info!("Project Config Path: {}", config_path);
@@ -154,6 +173,7 @@ pub fn start_app(project_path: Option<String>) {
             ..default()
         }))
         .insert_resource(ProjectConfigPath(config_path))
+        .insert_resource(ProjectRoot(project_root))
         .add_plugins(GamePlugin)
         .run();
 }

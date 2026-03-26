@@ -1,0 +1,35 @@
+(
+    schema_version: 1,
+    models: [
+        (
+            path: "shared/models/anvil.glb#Scene0",
+            position: (4.0, 0.0, 0.0),
+        ),
+    ],
+    ui: [
+        Button(
+            text: "Start Game",
+            action: Trigger("start_game"),
+            position: Some((100.0, 100.0)),
+            width: Some(300.0),
+            font_size: Some(26.0),
+            border_color: Some((0.8, 0.2, 0.2, 1.0)),
+            background_color: Some((0.2, 0.2, 0.2, 0.8)),
+            text_color: Some((1.0, 1.0, 1.0, 1.0)),
+        ),
+        Button(
+            text: "Quit",
+            action: Trigger("quit"),
+            position: Some((100.0, 200.0)),
+            width: Some(300.0),
+            font_size: Some(30.0),
+        ),
+        Button(
+            text: "Test Actions",
+            action: Trigger("test_actions"),
+            position: Some((100.0, 300.0)),
+            width: Some(300.0),
+            font_size: Some(30.0),
+        )
+    ]
+)

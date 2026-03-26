@@ -1,0 +1,1 @@
+cargo run -p ironhold_native --all-features -- --project 3rd_person_game_demo

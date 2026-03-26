@@ -200,8 +200,8 @@ fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_sc
 // Inject the embedded shader so WebGPU doesn't rely on runtime asset loading for it
 fn setup_terrain_shader(mut shaders: ResMut<Assets<Shader>>) {
     let shader = bevy::shader::Shader::from_wgsl(
-        include_str!("../../../../assets/shaders/terrain.wgsl"),
-        "shaders/terrain.wgsl"
+        include_str!("../../../../assets/shared/shaders/terrain.wgsl"),
+        "shared/shaders/terrain.wgsl"
     );
     let _ = shaders.insert(&crate::capabilities::terrain_material::TERRAIN_SHADER_HANDLE, shader);
 }

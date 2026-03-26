@@ -1,0 +1,35 @@
+(
+  prefabs: {
+    "player_warrior": (
+      kind: "actor",
+      model: "hero",
+      components: (
+        health: (max: 100, current: 100),
+        movement: (speed: 5.0, run_speed: 8.5),
+        tags: ["player"],
+      ),
+      animation_policy: "prefabs/player_anim_policy.ron",
+    ),
+
+    "enemy_orc_melee": (
+      kind: "actor",
+      model: "orc",
+      components: (
+        health: (max: 35, current: 35),
+        ai: (behavior: "melee_chase"),
+        faction: "enemy",
+        tags: ["enemy"],
+      ),
+    ),
+
+    "loot_chest": (
+      kind: "prop",
+      model: "chest",
+      components: (
+        loot_table: "basic_chest",
+        interactable: true,
+        tags: ["loot"],
+      ),
+    ),
+  }
+)

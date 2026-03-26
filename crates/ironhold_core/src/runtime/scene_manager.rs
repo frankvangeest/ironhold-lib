@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use crate::schema::project::ProjectConfig;
+use std::collections::HashMap;
+use crate::ProjectRoot;
 
 // Schema
 use crate::schema::*;
@@ -14,20 +15,60 @@ use crate::capabilities::player::CharacterController;
 use crate::capabilities::animation::AnimationController;
 use crate::capabilities::camera::OrbitCamera;
 use crate::capabilities::animation_resolver::{
-    ActiveOverride, 
-    AnimationPolicyComponent, 
-    AnimationRequests, 
+    ActiveOverride,
+    AnimationPolicyComponent,
+    AnimationRequests,
     LocomotionState,
 };
+use crate::schema::player::AnimationPolicy;
 
-use std::collections::HashMap;
 use bevy::asset::RenderAssetUsages;
 use bevy_rapier3d::prelude::*;
 use bevy::render::render_resource::{TextureViewDescriptor};
 // Lights and Image are in the prelude.
 
+/// The final merged model-fix map, assembled from inline project fixes and (optionally) an
+/// external `model_fixes.ron` file.  Always available after project loading completes.
+#[derive(Resource, Default)]
+pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
+
+/// The rules loaded for the current project. Populated from inline `config.rules` (v1)
+/// or from the external `logic/rules.ron` file (v2). Always available after project loading.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedRules(pub Vec<LogicRule>);
+
+/// Tracks externally-loaded project config files that are still loading.
+/// Inserted by `check_project_loaded` on the first frame the project config is ready,
+/// removed implicitly once the project transitions to `LoadingScene`.
+#[derive(Resource)]
+pub struct PendingProjectLoads {
+    pub model_fixes: Option<Handle<ModelFixesAsset>>,
+    pub rules: Option<Handle<LogicRulesAsset>>,
+}
+
 #[derive(Component)]
 pub struct PendingPlayerConfig(pub PlayerConfig);
+
+/// Holds a handle to an AnimationPolicy asset that is still loading.
+/// Replaced by AnimationPolicyComponent once the asset resolves.
+#[derive(Component)]
+pub struct PendingAnimationPolicy(pub Handle<AnimationPolicy>);
+
+pub fn animation_policy_loader_system(
+    mut commands: Commands,
+    mut pending: Query<(Entity, &PendingAnimationPolicy, &mut AnimationController)>,
+    policies: Res<Assets<AnimationPolicy>>,
+) {
+    for (entity, pending_policy, mut controller) in &mut pending {
+        if let Some(policy) = policies.get(&pending_policy.0) {
+            controller.current = policy.base.idle.clone();
+            commands.entity(entity)
+                .insert(AnimationPolicyComponent(policy.clone()))
+                .remove::<PendingAnimationPolicy>();
+            info!("AnimationPolicy loaded — initial animation: {}", policy.base.idle);
+        }
+    }
+}
 
 pub fn check_project_loaded(
     mut commands: Commands,
@@ -36,20 +77,87 @@ pub fn check_project_loaded(
     asset_server: Res<AssetServer>,
     mut next_state: ResMut<NextState<AppState>>,
     mut scene_events: MessageWriter<SceneEvent>,
+    project_root: Res<ProjectRoot>,
+    pending: Option<Res<PendingProjectLoads>>,
+    model_fixes_assets: Res<Assets<ModelFixesAsset>>,
+    rules_assets: Res<Assets<LogicRulesAsset>>,
 ) {
-    if let Some(config) = configs.get(&config_handle.0) {
-        if let Err(e) = config.validate() {
-            panic!("Invalid ProjectConfig: {}", e);
-        }
-        info!("Project Config Loaded. Initial Scene: {} (schema v{})", config.initial_scene, config.schema_version);
+    let Some(config) = configs.get(&config_handle.0) else { return; };
 
-        // Load the initial scene
-        let scene_handle = asset_server.load(config.initial_scene.clone());
-        commands.insert_resource(LevelHandle(scene_handle));
-        
-        scene_events.write(SceneEvent::Requested(config.initial_scene.clone()));
-        next_state.set(AppState::LoadingScene);
+    if let Err(e) = config.validate() {
+        panic!("Invalid ProjectConfig: {}", e);
     }
+
+    // Phase 1: kick off all external file loads on the first frame the project config is ready.
+    if pending.is_none() {
+        let model_fixes_handle = config.model_fixes_path.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading external model fixes from: {}", resolved);
+            asset_server.load::<ModelFixesAsset>(resolved)
+        });
+        let rules_handle = config.rules_path.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading external rules from: {}", resolved);
+            asset_server.load::<LogicRulesAsset>(resolved)
+        });
+
+        let any_pending = model_fixes_handle.is_some() || rules_handle.is_some();
+        commands.insert_resource(PendingProjectLoads {
+            model_fixes: model_fixes_handle,
+            rules: rules_handle,
+        });
+
+        if any_pending {
+            return; // Wait for next frame.
+        }
+
+        // No external files — store inline data and proceed.
+        commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
+        commands.insert_resource(LoadedRules(config.rules.clone()));
+    } else {
+        // Phase 2: wait for all pending loads to complete.
+        let pending = pending.unwrap();
+
+        if let Some(h) = &pending.model_fixes {
+            if model_fixes_assets.get(h).is_none() { return; }
+        }
+        if let Some(h) = &pending.rules {
+            if rules_assets.get(h).is_none() { return; }
+        }
+
+        // Phase 3: merge and store results.
+        let mut merged_fixes = config.model_fixes.clone();
+        if let Some(h) = &pending.model_fixes {
+            if let Some(fixes_asset) = model_fixes_assets.get(h) {
+                merged_fixes.extend(fixes_asset.model_fixes.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+        commands.insert_resource(MergedModelFixes(merged_fixes));
+
+        let rules = if let Some(h) = &pending.rules {
+            rules_assets.get(h).map(|a| a.rules.clone()).unwrap_or_default()
+        } else {
+            config.rules.clone()
+        };
+        commands.insert_resource(LoadedRules(rules));
+    }
+
+    let scene_path = resolve_project_path(&project_root.0, &config.initial_scene);
+    info!("Project Config Loaded (schema v{}). Initial Scene: {}", config.schema_version, scene_path);
+
+    let scene_handle = asset_server.load(scene_path.clone());
+    commands.insert_resource(LevelHandle(scene_handle));
+    scene_events.write(SceneEvent::Requested(scene_path));
+    next_state.set(AppState::LoadingScene);
+}
+
+/// Resolves a project-relative path against the project root directory.
+/// If the path already looks absolute (starts with a known top-level dir) it is returned as-is.
+fn resolve_project_path(project_root: &str, path: &str) -> String {
+    if project_root.is_empty() {
+        return path.to_string();
+    }
+    format!("{}/{}", project_root, path)
 }
 
 pub fn spawn_level(
@@ -65,7 +173,9 @@ pub fn spawn_level(
     config_handle: Res<ProjectConfigHandle>,
     configs: Res<Assets<ProjectConfig>>,
     model_spawner: Res<ModelSpawner>,
+    merged_fixes: Res<MergedModelFixes>,
     mut images: ResMut<Assets<Image>>,
+    project_root: Res<ProjectRoot>,
 ) {
     let Some(level_handle) = level_handle else { return; };
     let Some(project) = configs.get(&config_handle.0) else { return; };
@@ -122,7 +232,7 @@ pub fn spawn_level(
                 let spawned = model_spawner.spawn_instance(
                     &mut commands,
                     &asset_server,
-                    &project,
+                    &merged_fixes.0,
                     model.path.clone(),
                     parent_tf,
                 );
@@ -214,9 +324,10 @@ pub fn spawn_level(
                     spawn_player_entity(
                         &mut commands,
                         &asset_server,
-                        &project,
+                        &merged_fixes.0,
                         &model_spawner,
                         player_config,
+                        &project_root.0,
                     );
                 }
             } else {
@@ -406,17 +517,14 @@ fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight)
 pub fn message_interpreter_system(
     mut ui_events: MessageReader<UiMessage>,
     mut action_queue: ResMut<ActionQueue>,
-    config_handle: Res<ProjectConfigHandle>,
-    configs: Res<Assets<ProjectConfig>>,
+    loaded_rules: Res<LoadedRules>,
 ) {
-    let Some(config) = configs.get(&config_handle.0) else { return; };
-
     for event in ui_events.read() {
         let event_name = match event {
             UiMessage::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
         };
 
-        for rule in &config.rules {
+        for rule in &loaded_rules.0 {
             if rule.on == event_name {
                 for action in &rule.do_actions {
                     info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
@@ -435,14 +543,16 @@ pub fn action_executor_system(
     mut exit: MessageWriter<AppExit>,
     mut scene_events: MessageWriter<SceneEvent>,
     mut animation_requests: Query<&mut AnimationRequests>,
+    project_root: Res<ProjectRoot>,
 ) {
     while let Some(action) = action_queue.pop() {
         match action {
             Action::LoadScene(path) => {
-                info!("Executing Action::LoadScene: {}", path);
-                let handle = asset_server.load(path.clone());
+                let resolved = resolve_project_path(&project_root.0, &path);
+                info!("Executing Action::LoadScene: {}", resolved);
+                let handle = asset_server.load(resolved.clone());
                 commands.insert_resource(LevelHandle(handle));
-                scene_events.write(SceneEvent::Requested(path));
+                scene_events.write(SceneEvent::Requested(resolved));
                 next_state.set(AppState::LoadingScene);
             }
             Action::Quit => {
@@ -479,21 +589,21 @@ pub fn spawn_player_when_terrain_ready(
     terrain_query: Query<Entity, Added<crate::capabilities::terrain::TerrainReady>>,
     pending_query: Query<(Entity, &PendingPlayerConfig)>,
     asset_server: Res<AssetServer>,
-    config_handle: Res<ProjectConfigHandle>,
-    configs: Res<Assets<ProjectConfig>>,
     model_spawner: Res<ModelSpawner>,
+    merged_fixes: Res<MergedModelFixes>,
+    project_root: Res<ProjectRoot>,
 ) {
     if terrain_query.is_empty() { return; }
-    let Some(project) = configs.get(&config_handle.0) else { return; };
 
     for (pending_entity, pending) in &pending_query {
         info!("Terrain is ready. Spawning player...");
         spawn_player_entity(
             &mut commands,
             &asset_server,
-            &project,
+            &merged_fixes.0,
             &model_spawner,
             &pending.0,
+            &project_root.0,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -502,21 +612,26 @@ pub fn spawn_player_when_terrain_ready(
 fn spawn_player_entity(
     commands: &mut Commands,
     asset_server: &AssetServer,
-    project: &ProjectConfig,
+    fixes: &HashMap<String, TransformFix>,
     model_spawner: &ModelSpawner,
     player_config: &PlayerConfig,
+    project_root: &str,
 ) {
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
 
+    let policy_path = resolve_project_path(project_root, &player_config.animation_policy);
+    let policy_handle: Handle<AnimationPolicy> = asset_server.load(policy_path.clone());
+    info!("Loading AnimationPolicy from: {}", policy_path);
+
     let spawned = model_spawner.spawn_instance(
         commands,
         asset_server,
-        project,
+        fixes,
         player_config.model_path.clone(),
         Transform::from_translation(Vec3::from(player_config.initial_position)),
     );
-    
+
     let player_entity = spawned.parent;
     commands.entity(player_entity).insert((
         Name::new("Player"),
@@ -531,9 +646,9 @@ fn spawn_player_entity(
         LocomotionState::default(),
         AnimationRequests::default(),
         ActiveOverride::default(),
-        AnimationPolicyComponent(player_config.animation_policy.clone()),
+        PendingAnimationPolicy(policy_handle.clone()),
         AnimationController {
-            current: player_config.animation_policy.base.idle.clone(),
+            current: String::new(), // will be set once policy loads
             last_played: String::new(),
             gltf_path,
             gltf_handle,
@@ -544,7 +659,7 @@ fn spawn_player_entity(
         },
         // Physics
         RigidBody::Dynamic,
-        Collider::capsule_y(0.8, 0.4), // Adjust to model size
+        Collider::capsule_y(0.8, 0.4),
         LockedAxes::ROTATION_LOCKED,
         Damping { linear_damping: 0.5, angular_damping: 0.5 },
         Velocity::default(),

@@ -46,6 +46,7 @@ pub fn animation_playback_system(
                 clip_names.insert(policy.base.idle.clone());
                 clip_names.insert(policy.base.walk.clone());
                 clip_names.insert(policy.base.run.clone());
+                clip_names.insert(policy.base.jump_loop.clone());
                 for v in policy.clips.values() {
                     clip_names.insert(v.clone());
                 }
@@ -84,15 +85,16 @@ pub fn animation_playback_system(
                             if controller.should_loop {
                                 active_anim.repeat();
                             }
+                            // Only commit last_played when AnimationTransitions is ready.
+                            // AnimationGraphHandle + AnimationTransitions are inserted via deferred
+                            // commands on the same frame the graph is initialized, so they won't
+                            // be present until the next frame. Skipping last_played here causes
+                            // a retry next frame via the transitions path.
+                            controller.last_played = controller.current.clone();
                         } else {
-                            // Fallback: ensure exclusive playback
-                            player.stop_all();
-                            let active_anim = player.play(index);
-                            if controller.should_loop {
-                                active_anim.repeat();
-                            }
+                            // AnimationTransitions not yet applied (deferred command still pending).
+                            // Don't update last_played — retry next frame when transitions exist.
                         }
-                        controller.last_played = controller.current.clone();
                     } else {
                         warn!("No node index for requested animation: {}", controller.current);
                     }

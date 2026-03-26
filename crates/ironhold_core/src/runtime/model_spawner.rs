@@ -2,7 +2,8 @@
 //! Centralized model spawner that always applies per-asset fixups from ProjectConfig.
 //! Bevy 0.18: SceneRoot host must include Transform + Visibility.
 use bevy::prelude::*;
-use crate::schema::project::ProjectConfig;
+use std::collections::HashMap;
+use crate::schema::project::TransformFix;
 use crate::schema::level::LevelEntity;
 
 pub struct SpawnedModel { pub parent: Entity, pub child: Entity }
@@ -15,14 +16,13 @@ impl ModelSpawner {
         &self,
         commands: &mut Commands,
         asset_server: &AssetServer,
-        project: &ProjectConfig,
+        fixes: &HashMap<String, TransformFix>,
         path: String,
         parent_tf: Transform,
     ) -> SpawnedModel {
-        let fix = project
-            .model_fixes
+        let fix = fixes
             .get(&path)
-            .or_else(|| path.split('#').next().and_then(|base| project.model_fixes.get(base)))
+            .or_else(|| path.split('#').next().and_then(|base| fixes.get(base)))
             .cloned()
             .unwrap_or_default();
 

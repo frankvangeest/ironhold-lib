@@ -1,0 +1,69 @@
+(
+    default_transition_ms: Some(150),
+
+    base: (
+        idle:      "Idle_Loop",
+        walk:      "Walk_Loop",
+        run:       "Sprint_Loop",
+        jump_loop: "Jump_Loop",
+    ),
+
+    clips: {
+        "dance":        "Dance_Loop",
+        "sit":          "Sitting_Idle_Loop",
+        "torch_idle":   "Idle_Torch_Loop",
+        "attack_light": "Sword_Attack",
+    },
+
+    overrides: [
+        (
+            id: "jump_enter",
+            clip: "Jump_Start",
+            priority: 200,
+            looping: false,
+            duration: Some(0.4),
+            cancel_on_move: false,
+        ),
+        (
+            id: "jump_exit",
+            clip: "Jump_Land",
+            priority: 200,
+            looping: false,
+            duration: Some(0.4),
+            cancel_on_move: false,
+            transition_ms: Some(100),
+        ),
+        (
+            id: "dance",
+            clip: "Dance_Loop",
+            priority: 50,
+            looping: true,
+            cancel_on_move: true,
+            stop_action: Some("stop_dance"),
+        ),
+        (
+            id: "sit",
+            clip: "Sitting_Idle_Loop",
+            priority: 60,
+            looping: true,
+            cancel_on_move: true,
+            stop_action: Some("stand"),
+        ),
+        (
+            id: "torch_idle",
+            clip: "Idle_Torch_Loop",
+            priority: 40,
+            looping: true,
+            cancel_on_move: false,
+            stop_action: Some("stop_torch"),
+        ),
+        (
+            id: "attack_light",
+            clip: "Sword_Attack",
+            priority: 100,
+            looping: false,
+            duration: Some(0.6),
+            cancel_on_move: false,
+        ),
+    ],
+)

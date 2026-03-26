@@ -2,7 +2,7 @@
     schema_version: 1,
     models: [
         (
-            path: "models/anvil.glb#Scene0",
+            path: "shared/models/anvil.glb#Scene0",
             position: (4.0, 0.0, 0.0),
         ),
     ],

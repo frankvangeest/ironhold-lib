@@ -1,0 +1,73 @@
+(
+    schema_version: 1,
+    models: [
+        (
+            path: "shared/models/treasure-chest-01.glb#Scene0",
+            position: (4.0, 0.0, 0.0),
+        ),
+        (
+            path: "shared/models/creatures/alpaking.glb#Scene0",
+            position: (4.0, 0.0, -4.0),
+        ),
+    ],
+    ui: [
+        Button(
+            text: "Start Menu",
+            action: Trigger("start_menu"),
+            position: Some((100.0, 100.0)),
+        ),
+        Button(
+            text: "Dance",
+            action: Trigger("dance"),
+            position: Some((100.0, 200.0)),
+        ),
+    ],
+    player: Some((
+        model_path: "shared/models/character-01.glb#Scene0",
+        initial_position: (0.0, 0.0, 0.0),
+        camera: (
+            offset: (0.0, 5.0, 10.0),
+            look_at_offset: (0.0, 2.0, 0.0),
+            zoom_speed: 10.0,
+            orbit_speed: 0.5,
+            min_radius: 2.0,
+            max_radius: 20.0,
+        ),
+        inputs: (
+            forward: "KeyW",
+            backward: "KeyS",
+            left: "KeyA",
+            right: "KeyD",
+            strafe_left: "KeyQ",
+            strafe_right: "KeyE",
+            jump: "Space",
+        ),
+        animation_policy: "prefabs/animation/player_policy.ron",
+    )),
+    terrain: Some((
+        heightmap_path: "shared/terrain/heightmap.png",
+        splatmap_path: "shared/terrain/splatmap.png",
+        height_scale: 10.0,
+        //horizontal_scale: 100.0,
+        position: (0.0, -10.0, 0.0),
+        chunk_size: 64,
+        material_paths: [
+            "shared/terrain/dirt.png",
+            "shared/terrain/grass.png",
+            "shared/terrain/rock.png",
+            "shared/terrain/snow.png",
+        ],
+    )),
+    lighting: Some((
+        ambient: Some((
+            color: (0.8, 0.85, 1.0),
+            brightness: 120.0,
+        )),
+        directional: Some((
+            color: (1.0, 0.95, 0.85),
+            illuminance: 15000.0,
+            direction: (0.3, -1.0, 0.2),
+            shadows_enabled: true,
+        )),
+    )),
+)

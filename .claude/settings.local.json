@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"\\\\.ron\\\\|\\\\.png\\\\|\\\\.gltf\\\\|\\\\.glb\\\\|shared/\\\\|projects/\" /c/git/rust/ironhold-lib/crates --include=*.rs)",
+      "Bash(grep -r projects/ /c/git/rust/ironhold-lib/crates --include=*.rs)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clean)",
+      "Bash(cargo clippy)",
+      "Bash(cargo fmt --check)",
+      "Bash(cargo build:*)",
+      "Bash(dir:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

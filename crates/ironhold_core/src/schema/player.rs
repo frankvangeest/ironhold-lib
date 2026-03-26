@@ -9,10 +9,9 @@ pub struct PlayerConfig {
     pub camera: CameraConfig,
     pub inputs: InputMap,
 
-    /// Data-driven animation policy.
-    ///
-    /// New abilities and animations can be added via RON without recompiling.
-    pub animation_policy: AnimationPolicy,
+    /// Path to the animation policy file, relative to the project root.
+    /// e.g. "prefabs/animation/player_policy.ron"
+    pub animation_policy: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -78,7 +77,7 @@ impl InputMap {
 // Animation policy schema
 // -----------------------
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct AnimationPolicy {
     /// Base locomotion clips used when no override is active.
     pub base: BaseAnimations,
