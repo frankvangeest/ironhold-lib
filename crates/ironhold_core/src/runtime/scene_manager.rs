@@ -4,6 +4,9 @@ use crate::ProjectRoot;
 
 // Schema
 use crate::schema::*;
+use crate::schema::scene_v2::GameSceneV2;
+use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
+use crate::schema::player::{PlayerConfig, CameraConfig, InputMap};
 
 // Runtime
 use crate::runtime::actions::*;
@@ -37,6 +40,15 @@ pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedRules(pub Vec<LogicRule>);
 
+#[derive(Resource)]
+pub struct SceneHandleV2(pub Handle<GameSceneV2>);
+
+#[derive(Resource, Default, Clone)]
+pub struct LoadedAssetCatalog(pub AssetCatalog);
+
+#[derive(Resource, Default, Clone)]
+pub struct LoadedPrefabCatalog(pub PrefabCatalog);
+
 /// Tracks externally-loaded project config files that are still loading.
 /// Inserted by `check_project_loaded` on the first frame the project config is ready,
 /// removed implicitly once the project transitions to `LoadingScene`.
@@ -44,6 +56,8 @@ pub struct LoadedRules(pub Vec<LogicRule>);
 pub struct PendingProjectLoads {
     pub model_fixes: Option<Handle<ModelFixesAsset>>,
     pub rules: Option<Handle<LogicRulesAsset>>,
+    pub asset_catalog: Option<Handle<AssetCatalog>>,
+    pub prefab_catalog: Option<Handle<PrefabCatalog>>,
 }
 
 #[derive(Component)]
@@ -81,6 +95,8 @@ pub fn check_project_loaded(
     pending: Option<Res<PendingProjectLoads>>,
     model_fixes_assets: Res<Assets<ModelFixesAsset>>,
     rules_assets: Res<Assets<LogicRulesAsset>>,
+    asset_catalog_assets: Res<Assets<AssetCatalog>>,
+    prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
 
@@ -100,11 +116,26 @@ pub fn check_project_loaded(
             info!("Loading external rules from: {}", resolved);
             asset_server.load::<LogicRulesAsset>(resolved)
         });
+        let asset_catalog_handle = config.asset_catalog.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading asset catalog from: {}", resolved);
+            asset_server.load::<AssetCatalog>(resolved)
+        });
+        let prefab_catalog_handle = config.prefab_catalog.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading prefab catalog from: {}", resolved);
+            asset_server.load::<PrefabCatalog>(resolved)
+        });
 
-        let any_pending = model_fixes_handle.is_some() || rules_handle.is_some();
+        let any_pending = model_fixes_handle.is_some()
+            || rules_handle.is_some()
+            || asset_catalog_handle.is_some()
+            || prefab_catalog_handle.is_some();
         commands.insert_resource(PendingProjectLoads {
             model_fixes: model_fixes_handle,
             rules: rules_handle,
+            asset_catalog: asset_catalog_handle,
+            prefab_catalog: prefab_catalog_handle,
         });
 
         if any_pending {
@@ -114,6 +145,8 @@ pub fn check_project_loaded(
         // No external files — store inline data and proceed.
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
         commands.insert_resource(LoadedRules(config.rules.clone()));
+        commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+        commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
     } else {
         // Phase 2: wait for all pending loads to complete.
         let pending = pending.unwrap();
@@ -123,6 +156,12 @@ pub fn check_project_loaded(
         }
         if let Some(h) = &pending.rules {
             if rules_assets.get(h).is_none() { return; }
+        }
+        if let Some(h) = &pending.asset_catalog {
+            if asset_catalog_assets.get(h).is_none() { return; }
+        }
+        if let Some(h) = &pending.prefab_catalog {
+            if prefab_catalog_assets.get(h).is_none() { return; }
         }
 
         // Phase 3: merge and store results.
@@ -140,13 +179,32 @@ pub fn check_project_loaded(
             config.rules.clone()
         };
         commands.insert_resource(LoadedRules(rules));
+
+        let asset_catalog = if let Some(h) = &pending.asset_catalog {
+            asset_catalog_assets.get(h).cloned().unwrap_or_default()
+        } else {
+            AssetCatalog::default()
+        };
+        commands.insert_resource(LoadedAssetCatalog(asset_catalog));
+
+        let prefab_catalog = if let Some(h) = &pending.prefab_catalog {
+            prefab_catalog_assets.get(h).cloned().unwrap_or_default()
+        } else {
+            PrefabCatalog::default()
+        };
+        commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
     }
 
     let scene_path = resolve_project_path(&project_root.0, &config.initial_scene);
     info!("Project Config Loaded (schema v{}). Initial Scene: {}", config.schema_version, scene_path);
 
-    let scene_handle = asset_server.load(scene_path.clone());
-    commands.insert_resource(LevelHandle(scene_handle));
+    if scene_path.ends_with(".scene.ron") {
+        let scene_handle: Handle<GameSceneV2> = asset_server.load(scene_path.clone());
+        commands.insert_resource(SceneHandleV2(scene_handle));
+    } else {
+        let scene_handle = asset_server.load(scene_path.clone());
+        commands.insert_resource(LevelHandle(scene_handle));
+    }
     scene_events.write(SceneEvent::Requested(scene_path));
     next_state.set(AppState::LoadingScene);
 }
@@ -179,7 +237,7 @@ pub fn spawn_level(
 ) {
     let Some(level_handle) = level_handle else { return; };
     let Some(project) = configs.get(&config_handle.0) else { return; };
-    
+
     let mut ready_to_spawn = false;
 
     for event in events.read() {
@@ -202,18 +260,18 @@ pub fn spawn_level(
                     .map(|p| p.path().to_string_lossy().into_owned())
                     .unwrap_or_default()
             ));
-            
+
             if let Err(e) = level.validate() {
                 panic!("Invalid GameLevel: {}", e);
             }
 
-            // Only spawn if we are NOT already InGame to avoid duplication loops 
+            // Only spawn if we are NOT already InGame to avoid duplication loops
             if *state.get() == AppState::InGame {
-                return; 
+                return;
             }
-            
+
             info!("Level Loaded! schema v{}, Spawning {} models and {} ui elements", level.schema_version, level.models.len(), level.ui.len());
-            
+
             if level.schema_version == 0 {
                 warn!("GameLevel schema_version is 0 (missing). Please update to v1.");
             } else if level.schema_version > 1 {
@@ -254,9 +312,9 @@ pub fn spawn_level(
                 .with_children(|parent| {
                     for element in &level.ui {
                         match element {
-                            UiElement::Button { 
-                                text, 
-                                action, 
+                            UiElement::Button {
+                                text,
+                                action,
                                 position,
                                 width,
                                 height,
@@ -314,7 +372,7 @@ pub fn spawn_level(
                     }
                 });
             }
-            
+
             // Spawn Player (Delayed if terrain exists)
             if let Some(player_config) = &level.player {
                 if level.terrain.is_some() {
@@ -340,7 +398,7 @@ pub fn spawn_level(
                     LevelEntity,
                 ));
             }
-            
+
             // Spawn Terrain
             if let Some(terrain_config) = &level.terrain {
                 info!("Spawning Terrain...");
@@ -359,7 +417,7 @@ pub fn spawn_level(
                 &asset_server,
                 &mut images,
             );
-            
+
             next_state.set(AppState::InGame);
             scene_events.write(SceneEvent::Ready(
                 asset_server
@@ -371,6 +429,325 @@ pub fn spawn_level(
     }
 }
 
+/// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct SceneV2Params<'w> {
+    pub scene_handle: Option<Res<'w, SceneHandleV2>>,
+    pub scenes: Res<'w, Assets<GameSceneV2>>,
+    pub config_handle: Res<'w, ProjectConfigHandle>,
+    pub configs: Res<'w, Assets<ProjectConfig>>,
+    pub asset_catalog: Res<'w, LoadedAssetCatalog>,
+    pub prefab_catalog: Res<'w, LoadedPrefabCatalog>,
+    pub project_root: Res<'w, ProjectRoot>,
+}
+
+pub fn spawn_scene_v2(
+    mut commands: Commands,
+    params: SceneV2Params,
+    asset_server: Res<AssetServer>,
+    mut events: MessageReader<AssetEvent<GameSceneV2>>,
+    mut next_state: ResMut<NextState<AppState>>,
+    state: Res<State<AppState>>,
+    current_entities: Query<Entity, With<LevelEntity>>,
+    mut scene_events: MessageWriter<SceneEvent>,
+    model_spawner: Res<ModelSpawner>,
+    merged_fixes: Res<MergedModelFixes>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let Some(scene_handle) = params.scene_handle.as_ref() else { return; };
+    let Some(project) = params.configs.get(&params.config_handle.0) else { return; };
+
+    let mut ready_to_spawn = false;
+    for event in events.read() {
+        if event.is_loaded_with_dependencies(&scene_handle.0) {
+            ready_to_spawn = true;
+        }
+    }
+    if (*state.get() == AppState::LoadingScene || *state.get() == AppState::LoadingProject)
+        && params.scenes.get(&scene_handle.0).is_some()
+    {
+        ready_to_spawn = true;
+    }
+
+    if !ready_to_spawn { return; }
+    if *state.get() == AppState::InGame { return; }
+
+    let Some(scene) = params.scenes.get(&scene_handle.0) else { return; };
+
+    scene_events.write(SceneEvent::Loaded(
+        asset_server
+            .get_path(&scene_handle.0)
+            .map(|p| p.path().to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    ));
+
+    info!("Scene V2 Loaded! name={}, {} entities, {} ui", scene.name, scene.entities.len(), scene.ui.len());
+
+    for entity in current_entities.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn entities from prefabs
+    let mut player_config: Option<PlayerConfig> = None;
+    for entity_def in &scene.entities {
+        let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
+            warn!("Prefab '{}' not found in catalog, skipping entity '{}'", entity_def.prefab, entity_def.id);
+            continue;
+        };
+
+        let model_path = if let Some(catalog_entry) = params.asset_catalog.0.models.get(&prefab.model) {
+            catalog_entry.path.clone()
+        } else {
+            warn!("Model key '{}' not found in asset catalog, skipping entity '{}'", prefab.model, entity_def.id);
+            continue;
+        };
+
+        let is_player = prefab.components.tags.contains(&"player".to_string());
+
+        let t = &entity_def.transform;
+        let translation = Vec3::new(t.translation.0, t.translation.1, t.translation.2);
+        let rotation = Quat::from_euler(
+            EulerRot::XYZ,
+            t.rotation_euler_deg.0.to_radians(),
+            t.rotation_euler_deg.1.to_radians(),
+            t.rotation_euler_deg.2.to_radians(),
+        );
+        let scale = Vec3::new(t.scale.0, t.scale.1, t.scale.2);
+        let transform = Transform { translation, rotation, scale };
+
+        if is_player {
+            // Build PlayerConfig from prefab data
+            let animation_policy = prefab.animation_policy.clone()
+                .unwrap_or_else(|| "prefabs/animation/player_policy.ron".to_string());
+            player_config = Some(PlayerConfig {
+                model_path,
+                initial_position: (translation.x, translation.y, translation.z),
+                camera: default_camera_config(),
+                inputs: default_input_map(),
+                animation_policy,
+            });
+        } else {
+            // Spawn as static model entity
+            let spawned = model_spawner.spawn_instance(
+                &mut commands,
+                &asset_server,
+                &merged_fixes.0,
+                model_path,
+                transform,
+            );
+            commands.entity(spawned.parent).insert((
+                Name::new(entity_def.id.clone()),
+                LevelEntity,
+            ));
+        }
+    }
+
+    // Spawn UI buttons
+    if !scene.ui.is_empty() {
+        commands.spawn((
+            Name::new("UI Root"),
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            LevelEntity,
+        ))
+        .with_children(|parent| {
+            for btn in &scene.ui {
+                let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action).to_string();
+                let mut node = Node {
+                    width: Val::Px(btn.size.0),
+                    height: Val::Px(btn.size.1),
+                    border: UiRect::all(Val::Px(5.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                };
+                node.position_type = PositionType::Absolute;
+                node.left = Val::Px(btn.position.0);
+                node.top = Val::Px(btn.position.1);
+                parent.spawn((
+                    Name::new(format!("Button: {}", btn.text)),
+                    Button,
+                    node,
+                    BorderColor::from(Color::BLACK),
+                    BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                    UiAction::Trigger(trigger),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        Name::new(format!("Text: {}", btn.text)),
+                        Text::new(btn.text.clone()),
+                        TextFont { font_size: 26.0, ..default() },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    ));
+                });
+            }
+        });
+    }
+
+    // Spawn player (delayed if terrain present)
+    if let Some(pc) = player_config {
+        if scene.terrain.is_some() {
+            info!("Terrain detected. Delaying player spawn...");
+            commands.spawn(PendingPlayerConfig(pc));
+        } else {
+            spawn_player_entity(
+                &mut commands,
+                &asset_server,
+                &merged_fixes.0,
+                &model_spawner,
+                &pc,
+                &params.project_root.0,
+            );
+        }
+    } else {
+        info!("No player entity in v2 scene, spawning default camera...");
+        commands.spawn((
+            Name::new("Default Camera"),
+            Camera3d::default(),
+            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+            LevelEntity,
+        ));
+    }
+
+    // Spawn Terrain
+    if let Some(terrain_v2) = &scene.terrain {
+        info!("Spawning V2 Terrain...");
+        use crate::schema::level::TerrainConfig;
+        let terrain_config = TerrainConfig {
+            heightmap_path: terrain_v2.heightmap.clone(),
+            splatmap_path: terrain_v2.splatmap.clone(),
+            height_scale: terrain_v2.scale.1 * 100.0,
+            horizontal_scale: terrain_v2.scale.0 * 100.0,
+            position: (0.0, -10.0, 0.0),
+            chunk_size: terrain_v2.chunk_size,
+            material_paths: terrain_v2.material_paths.clone(),
+        };
+        commands.spawn((
+            Name::new("Terrain"),
+            LevelEntity,
+            terrain_config,
+        ));
+    }
+
+    // Apply lighting
+    apply_lighting_v2(
+        &mut commands,
+        scene,
+        project,
+        &asset_server,
+        &mut images,
+    );
+
+    next_state.set(AppState::InGame);
+    scene_events.write(SceneEvent::Ready(
+        asset_server
+            .get_path(&scene_handle.0)
+            .map(|p| p.path().to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    ));
+}
+
+fn apply_lighting_v2(
+    commands: &mut Commands,
+    scene: &GameSceneV2,
+    project: &ProjectConfig,
+    asset_server: &AssetServer,
+    images: &mut Assets<Image>,
+) {
+    if let Some(lighting) = &scene.lighting {
+        // Ambient
+        if let Some((r, g, b)) = lighting.ambient {
+            commands.spawn((
+                Name::new("Ambient Light"),
+                AmbientLight {
+                    color: Color::srgba(r, g, b, 1.0),
+                    brightness: 150.0,
+                    ..default()
+                },
+                LevelEntity,
+            ));
+        }
+
+        // Directional
+        if let Some(dl) = &lighting.directional {
+            let rot = Quat::from_euler(
+                EulerRot::XYZ,
+                dl.rotation_euler_deg.0.to_radians(),
+                dl.rotation_euler_deg.1.to_radians(),
+                dl.rotation_euler_deg.2.to_radians(),
+            );
+            commands.spawn((
+                Name::new("Directional Light"),
+                DirectionalLight {
+                    color: Color::srgba(dl.color.0, dl.color.1, dl.color.2, 1.0),
+                    illuminance: dl.intensity,
+                    shadows_enabled: dl.shadows_enabled,
+                    ..default()
+                },
+                Transform::from_rotation(rot),
+                LevelEntity,
+            ));
+        }
+    }
+
+    // Environment map from project global_environment
+    if let Some(env) = &project.global_environment {
+        let (d_handle, s_handle) = if env.diffuse_path.is_none() && env.specular_path.is_none() {
+            if let Some(fallback) = &env.fallback {
+                let img = generate_cubemap(fallback);
+                let handle = images.add(img);
+                (handle.clone(), handle)
+            } else {
+                (Handle::default(), Handle::default())
+            }
+        } else {
+            let d = env.diffuse_path.as_ref().map(|p| asset_server.load(p)).unwrap_or_default();
+            let s = env.specular_path.as_ref().map(|p| asset_server.load(p)).unwrap_or_default();
+            (d, s)
+        };
+
+        if d_handle != Handle::default() || s_handle != Handle::default() {
+            commands.spawn((
+                Name::new("Environment Map Light"),
+                EnvironmentMapLight {
+                    diffuse_map: d_handle,
+                    specular_map: s_handle,
+                    intensity: env.intensity,
+                    ..default()
+                },
+                LevelEntity,
+            ));
+        }
+    }
+}
+
+fn default_camera_config() -> CameraConfig {
+    CameraConfig {
+        offset: (0.0, 5.0, 10.0),
+        look_at_offset: (0.0, 2.0, 0.0),
+        zoom_speed: 10.0,
+        orbit_speed: 0.5,
+        min_radius: 2.0,
+        max_radius: 20.0,
+    }
+}
+
+fn default_input_map() -> InputMap {
+    InputMap {
+        forward: "KeyW".to_string(),
+        backward: "KeyS".to_string(),
+        left: "KeyA".to_string(),
+        right: "KeyD".to_string(),
+        strafe_left: "KeyQ".to_string(),
+        strafe_right: "KeyE".to_string(),
+        jump: "Space".to_string(),
+        run: "ShiftLeft".to_string(),
+    }
+}
+
 fn apply_lighting(
     commands: &mut Commands,
     level: &GameLevel,
@@ -379,7 +756,7 @@ fn apply_lighting(
     images: &mut Assets<Image>,
 ) {
     let lighting = level.lighting.as_ref();
-    
+
     // 1. Ambient Light
     if let Some(ambient) = lighting.and_then(|l| l.ambient.as_ref()) {
         commands.spawn((
@@ -424,17 +801,17 @@ fn apply_lighting(
         let diffuse_handle = env.diffuse_path.as_ref().map(|p| asset_server.load(p));
         let specular_handle = env.specular_path.as_ref().map(|p| asset_server.load(p));
 
-        // Note: For now we just load what's there. 
+        // Note: For now we just load what's there.
         // If they are missing, we should fallback to generated.
         // However, asset_server.load is async, so we can't easily check 'missing' here without checking disk.
         // For the sake of the requirement: "Generate... if no .ktx2 file is present".
-        
-        // We'll spawn a "Loader" entity that checks for asset readiness or we can just try to load 
+
+        // We'll spawn a "Loader" entity that checks for asset readiness or we can just try to load
         // and if it fails (not easily checkable here), it stays black.
-        
+
         // To strictly follow "If specified but not found, generate", we'd need to check Path.
         // But for WASM compatibility, Path doesn't work.
-        
+
         // Better approach: If paths are None, OR if we want to force generation via fallback config.
         let (d_handle, s_handle) = if env.diffuse_path.is_none() && env.specular_path.is_none() {
             if let Some(fallback) = &env.fallback {
@@ -465,7 +842,7 @@ fn apply_lighting(
 
 fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight) -> Image {
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureViewDimension};
-    
+
     // Create a tiny 1x1 6-layer cubemap
     // Colors: 0: +X, 1: -X, 2: +Y (top), 3: -Y (bottom), 4: +Z, 5: -Z
     let top = [
@@ -480,7 +857,7 @@ fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight)
         (config.bottom_color.2 * 255.0) as u8,
         255
     ];
-    
+
     // Mid color for sides
     let mid = [
         ((config.top_color.0 + config.bottom_color.0) * 0.5 * 255.0) as u8,
@@ -506,12 +883,12 @@ fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight)
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
     );
-    
+
     image.texture_view_descriptor = Some(TextureViewDescriptor {
         dimension: Some(TextureViewDimension::Cube),
         ..default()
     });
-    
+
     image
 }
 pub fn message_interpreter_system(
@@ -550,8 +927,13 @@ pub fn action_executor_system(
             Action::LoadScene(path) => {
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
-                let handle = asset_server.load(resolved.clone());
-                commands.insert_resource(LevelHandle(handle));
+                if resolved.ends_with(".scene.ron") {
+                    let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
+                    commands.insert_resource(SceneHandleV2(handle));
+                } else {
+                    let handle = asset_server.load(resolved.clone());
+                    commands.insert_resource(LevelHandle(handle));
+                }
                 scene_events.write(SceneEvent::Requested(resolved));
                 next_state.set(AppState::LoadingScene);
             }
@@ -672,7 +1054,7 @@ fn spawn_player_entity(
         Name::new("Orbit Camera"),
         Camera3d::default(),
         Transform::from_translation(start_pos).looking_at(
-            Vec3::from(player_config.initial_position), 
+            Vec3::from(player_config.initial_position),
             Vec3::Y,
         ),
         LevelEntity,

@@ -6,6 +6,15 @@
     "orc": (
       path: "shared/models/creatures/orc.glb#Scene0",
     ),
+    "chest": (
+      path: "shared/models/treasure-chest-01.glb#Scene0",
+    ),
+    "anvil": (
+      path: "shared/models/anvil.glb#Scene0",
+    ),
+    "alpaking": (
+      path: "shared/models/creatures/alpaking.glb#Scene0",
+    ),
     "terrain_demo": (
       path: "terrain/heightmap.png",
     ),

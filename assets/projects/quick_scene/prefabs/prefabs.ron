@@ -8,7 +8,7 @@
         movement: (speed: 5.0, run_speed: 8.5),
         tags: ["player"],
       ),
-      animation_policy: "prefabs/player_anim_policy.ron",
+      animation_policy: Some("prefabs/animation/player_policy.ron"),
     ),
 
     "enemy_orc_melee": (

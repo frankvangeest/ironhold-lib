@@ -45,6 +45,8 @@ impl Plugin for GamePlugin {
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
+            .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
+            .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
@@ -54,6 +56,9 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_systems(Startup, setup)
@@ -61,6 +66,7 @@ impl Plugin for GamePlugin {
             // Scene + UI + input
             .add_systems(Update, (
                 spawn_level,
+                spawn_scene_v2,
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
                 button_system,

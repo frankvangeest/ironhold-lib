@@ -1,0 +1,12 @@
+(
+  prefabs: {
+    "player_warrior": (
+      kind: "actor",
+      model: "hero",
+      components: (
+        tags: ["player"],
+      ),
+      animation_policy: Some("prefabs/animation/player_policy.ron"),
+    ),
+  }
+)

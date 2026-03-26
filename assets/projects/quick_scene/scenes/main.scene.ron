@@ -1,64 +1,99 @@
 (
-    schema_version: 1,
-    models: [
-        (
-            path: "shared/models/anvil.glb#Scene0",
-            position: (2.0, 0.0, 0.0),
-        ),
+  schema_version: 2,
+  name: "main",
+
+  lighting: Some((
+    ambient: Some((0.35, 0.35, 0.4)),
+    directional: Some((
+      color: (1.0, 0.98, 0.92),
+      intensity: 12000.0,
+      rotation_euler_deg: (-45.0, 35.0, 0.0),
+    )),
+  )),
+
+  terrain: Some((
+    heightmap: "shared/terrain/heightmap.png",
+    splatmap: "shared/terrain/splatmap.png",
+    scale: (2.0, 0.2, 2.0),
+    material_paths: [
+      "shared/terrain/grass.png",
+      "shared/terrain/rock.png",
+      "shared/terrain/dirt.png",
+      "shared/terrain/snow.png",
     ],
-    ui: [
-        Button(
-            text: "Dance",
-            action: Trigger("dance"),
-            position: Some((100.0, 200.0)),
-        ),
-    ],
-    player: Some((
-        model_path: "shared/models/character-01.glb#Scene0",
-        initial_position: (0.0, 0.0, 0.0),
-        camera: (
-            offset: (0.0, 5.0, 10.0),
-            look_at_offset: (0.0, 2.0, 0.0),
-            zoom_speed: 10.0,
-            orbit_speed: 0.5,
-            min_radius: 2.0,
-            max_radius: 20.0,
-        ),
-        inputs: (
-            forward: "KeyW",
-            backward: "KeyS",
-            left: "KeyA",
-            right: "KeyD",
-            strafe_left: "KeyQ",
-            strafe_right: "KeyE",
-            jump: "Space",
-        ),
-        animation_policy: "prefabs/animation/player_policy.ron",
-    )),
-    terrain: Some((
-        heightmap_path: "shared/terrain/heightmap.png",
-        splatmap_path: "shared/terrain/splatmap.png",
-        height_scale: 10.0,
-        //horizontal_scale: 100.0,
-        position: (0.0, -10.0, 0.0),
-        chunk_size: 64,
-        material_paths: [
-            "shared/terrain/dirt.png",
-            "shared/terrain/grass.png",
-            "shared/terrain/rock.png",
-            "shared/terrain/snow.png",
-        ],
-    )),
-    lighting: Some((
-        ambient: Some((
-            color: (0.8, 0.85, 1.0),
-            brightness: 120.0,
-        )),
-        directional: Some((
-            color: (1.0, 0.95, 0.85),
-            illuminance: 15000.0,
-            direction: (0.3, -1.0, 0.2),
-            shadows_enabled: true,
-        )),
-    )),
+  )),
+
+  spawn_points: {
+    "player_start": (0.0, 4.0, 0.0),
+    "enemy_wave_a": (20.0, 0.0, 12.0),
+  },
+
+  entities: [
+    (
+      id: "player_01",
+      prefab: "player_warrior",
+      transform: (
+        translation: (0.0, 4.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "orc_01",
+      prefab: "enemy_orc_melee",
+      transform: (
+        translation: (15.0, 0.0, 5.0),
+        rotation_euler_deg: (0.0, 180.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "orc_02",
+      prefab: "enemy_orc_melee",
+      transform: (
+        translation: (18.0, 0.0, 7.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "chest_01",
+      prefab: "loot_chest",
+      transform: (
+        translation: (30.0, 0.0, 12.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+  ],
+
+  ui: [
+    (
+      kind: "button",
+      id: "pause_button",
+      text: "Pause",
+      action: "ui.pause",
+      position: (20.0, 20.0),
+      size: (150.0, 40.0),
+    ),
+    (
+      kind: "button",
+      id: "dance_button",
+      text: "Dance",
+      action: "ui.dance",
+      position: (20.0, 60.0),
+      size: (150.0, 40.0),
+    ),
+    (
+      kind: "button",
+      id: "quit_button",
+      text: "Quit",
+      action: "ui.quit",
+      position: (20.0, 100.0),
+      size: (150.0, 40.0),
+    ),
+  ],
 )

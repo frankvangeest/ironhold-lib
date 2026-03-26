@@ -1,35 +1,52 @@
 (
-    schema_version: 1,
-    models: [
-        (
-            path: "shared/models/anvil.glb#Scene0",
-            position: (4.0, 0.0, 0.0),
-        ),
-    ],
-    ui: [
-        Button(
-            text: "Start Game",
-            action: Trigger("start_game"),
-            position: Some((100.0, 100.0)),
-            width: Some(300.0),
-            font_size: Some(26.0),
-            border_color: Some((0.8, 0.2, 0.2, 1.0)),
-            background_color: Some((0.2, 0.2, 0.2, 0.8)),
-            text_color: Some((1.0, 1.0, 1.0, 1.0)),
-        ),
-        Button(
-            text: "Quit",
-            action: Trigger("quit"),
-            position: Some((100.0, 200.0)),
-            width: Some(300.0),
-            font_size: Some(30.0),
-        ),
-        Button(
-            text: "Test Actions",
-            action: Trigger("test_actions"),
-            position: Some((100.0, 300.0)),
-            width: Some(300.0),
-            font_size: Some(30.0),
-        )
-    ]
+  schema_version: 2,
+  name: "start_menu",
+
+  lighting: Some((
+    ambient: Some((0.3, 0.3, 0.35)),
+    directional: Some((
+      color: (1.0, 0.95, 0.85),
+      intensity: 8000.0,
+      rotation_euler_deg: (-30.0, 45.0, 0.0),
+    )),
+  )),
+
+  entities: [
+    (
+      id: "anvil_01",
+      prefab: "prop_anvil",
+      transform: (
+        translation: (4.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+  ],
+
+  ui: [
+    (
+      kind: "button",
+      id: "start_game_button",
+      text: "Start Game",
+      action: "ui.start_game",
+      position: (100.0, 100.0),
+      size: (300.0, 65.0),
+    ),
+    (
+      kind: "button",
+      id: "quit_button",
+      text: "Quit",
+      action: "ui.quit",
+      position: (100.0, 200.0),
+      size: (300.0, 65.0),
+    ),
+    (
+      kind: "button",
+      id: "test_actions_button",
+      text: "Test Actions",
+      action: "ui.test_actions",
+      position: (100.0, 300.0),
+      size: (300.0, 65.0),
+    ),
+  ],
 )

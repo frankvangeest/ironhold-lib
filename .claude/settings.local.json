@@ -9,7 +9,8 @@
       "Bash(cargo fmt --check)",
       "Bash(cargo build:*)",
       "Bash(dir:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find C:/git/rust/ironhold-lib/assets/projects -name *.ron)"
     ]
   }
 }

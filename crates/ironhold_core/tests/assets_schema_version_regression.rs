@@ -1,4 +1,5 @@
 use ironhold_core::schema::{GameLevel, ProjectConfig};
+use ironhold_core::schema::scene_v2::GameSceneV2;
 use ron::de::from_str;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -79,9 +80,19 @@ fn regression_schema_version_in_assets() {
     for file in &level_files {
         let contents = fs::read_to_string(file)
             .unwrap_or_else(|e| panic!("Failed to read {}: {}", file.display(), e));
-        let level: GameLevel = from_str(&contents)
-            .unwrap_or_else(|e| panic!("GameLevel failed to parse {}: {}", file.display(), e));
-        level.validate()
-            .unwrap_or_else(|e| panic!("GameLevel failed validation {}: {}", file.display(), e));
+        let file_name = file.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if file_name.ends_with(".scene.ron") {
+            // Scene v2 format
+            let _scene: GameSceneV2 = from_str(&contents)
+                .unwrap_or_else(|e| panic!("GameSceneV2 failed to parse {}: {}", file.display(), e));
+        } else {
+            // Scene v1 format (GameLevel)
+            let level: GameLevel = from_str(&contents)
+                .unwrap_or_else(|e| panic!("GameLevel failed to parse {}: {}", file.display(), e));
+            level.validate()
+                .unwrap_or_else(|e| panic!("GameLevel failed validation {}: {}", file.display(), e));
+        }
     }
 }

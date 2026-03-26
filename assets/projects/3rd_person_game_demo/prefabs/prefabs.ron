@@ -4,20 +4,15 @@
       kind: "actor",
       model: "hero",
       components: (
-        health: (max: 100, current: 100),
-        movement: (speed: 5.0, run_speed: 8.5),
         tags: ["player"],
       ),
-      animation_policy: "prefabs/player_anim_policy.ron",
+      animation_policy: Some("prefabs/animation/player_policy.ron"),
     ),
 
     "enemy_orc_melee": (
       kind: "actor",
       model: "orc",
       components: (
-        health: (max: 35, current: 35),
-        ai: (behavior: "melee_chase"),
-        faction: "enemy",
         tags: ["enemy"],
       ),
     ),
@@ -26,9 +21,23 @@
       kind: "prop",
       model: "chest",
       components: (
-        loot_table: "basic_chest",
-        interactable: true,
         tags: ["loot"],
+      ),
+    ),
+
+    "prop_anvil": (
+      kind: "prop",
+      model: "anvil",
+      components: (
+        tags: [],
+      ),
+    ),
+
+    "creature_alpaking": (
+      kind: "actor",
+      model: "alpaking",
+      components: (
+        tags: ["creature"],
       ),
     ),
   }
