@@ -10,7 +10,9 @@
       "Bash(cargo build:*)",
       "Bash(dir:*)",
       "Bash(wc:*)",
-      "Bash(find C:/git/rust/ironhold-lib/assets/projects -name *.ron)"
+      "Bash(find C:/git/rust/ironhold-lib/assets/projects -name *.ron)",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\git\\\\rust\\\\ironhold-lib\\\\assets\\\\shared\\\\textures' | Select-Object Name, Length\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

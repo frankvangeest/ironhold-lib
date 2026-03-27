@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use super::material::MaterialDef;
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct AssetCatalog {
@@ -10,8 +11,8 @@ pub struct AssetCatalog {
     pub textures: HashMap<String, String>,
     #[serde(default)]
     pub audio: HashMap<String, String>,
-    // #[serde(default)]
-    // pub materials: HashMap<String, MaterialDef>,
+    #[serde(default)]
+    pub materials: HashMap<String, MaterialDef>,
 }
 
 impl Default for AssetCatalog {
@@ -20,7 +21,7 @@ impl Default for AssetCatalog {
             models: HashMap::new(),
             textures: HashMap::new(),
             audio: HashMap::new(),
-            // materials: HashMap::new(),
+            materials: HashMap::new(),
         }
     }
 }
@@ -50,6 +51,9 @@ pub struct PrefabDef {
     pub model: String,  // key into AssetCatalog.models
     #[serde(default)]
     pub animation_policy: Option<String>,
+    /// Optional material key from AssetCatalog.materials to override the model's embedded material.
+    #[serde(default)]
+    pub material: Option<String>,
     #[serde(default)]
     pub components: PrefabComponents,
 }

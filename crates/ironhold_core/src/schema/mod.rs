@@ -5,6 +5,7 @@ pub mod ui;
 pub mod actions;
 pub mod scene_v2;
 pub mod catalog;
+pub mod material;
 
 pub use project::*;
 pub use level::*;
@@ -13,3 +14,4 @@ pub use ui::*;
 pub use actions::*;
 pub use scene_v2::*;
 pub use catalog::*;
+pub use material::*;

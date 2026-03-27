@@ -22,3 +22,6 @@ target
 
 # Project dump
 project_dump.txt
+
+# Screenshots
+screenshots/*

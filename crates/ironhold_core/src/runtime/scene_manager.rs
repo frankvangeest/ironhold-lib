@@ -12,6 +12,7 @@ use crate::schema::player::{PlayerConfig, CameraConfig, InputMap};
 use crate::runtime::actions::*;
 use crate::runtime::messages::*;
 use crate::runtime::model_spawner::*;
+use crate::runtime::material_factory::{BuiltMaterials, MaterialFactory, PendingMaterialOverride};
 
 // Capabilities
 use crate::capabilities::player::CharacterController;
@@ -24,6 +25,7 @@ use crate::capabilities::animation_resolver::{
     LocomotionState,
 };
 use crate::schema::player::AnimationPolicy;
+use crate::capabilities::terrain_material::TerrainMaterial;
 
 use bevy::asset::RenderAssetUsages;
 use bevy_rapier3d::prelude::*;
@@ -453,6 +455,9 @@ pub fn spawn_scene_v2(
     model_spawner: Res<ModelSpawner>,
     merged_fixes: Res<MergedModelFixes>,
     mut images: ResMut<Assets<Image>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
+    mut built_materials: ResMut<BuiltMaterials>,
 ) {
     let Some(scene_handle) = params.scene_handle.as_ref() else { return; };
     let Some(project) = params.configs.get(&params.config_handle.0) else { return; };
@@ -485,6 +490,22 @@ pub fn spawn_scene_v2(
 
     for entity in current_entities.iter() {
         commands.entity(entity).despawn();
+    }
+
+    // Build material handles from the asset catalog for this scene.
+    built_materials.0.clear();
+    for (name, mat_def) in &params.asset_catalog.0.materials {
+        let handle = MaterialFactory::build(
+            &asset_server,
+            &mut standard_materials,
+            &mut terrain_materials,
+            name,
+            mat_def,
+        );
+        built_materials.0.insert(name.clone(), handle);
+    }
+    if !params.asset_catalog.0.materials.is_empty() {
+        info!("Built {} material(s) from asset catalog", params.asset_catalog.0.materials.len());
     }
 
     // Spawn entities from prefabs
@@ -535,10 +556,12 @@ pub fn spawn_scene_v2(
                 model_path,
                 transform,
             );
-            commands.entity(spawned.parent).insert((
-                Name::new(entity_def.id.clone()),
-                LevelEntity,
-            ));
+            let mut ec = commands.entity(spawned.parent);
+            ec.insert((Name::new(entity_def.id.clone()), LevelEntity));
+            // Apply a material override if the prefab requests one.
+            if let Some(mat_key) = &prefab.material {
+                ec.insert(PendingMaterialOverride(mat_key.clone()));
+            }
         }
     }
 

@@ -6,8 +6,11 @@
     "orc": (
       path: "shared/models/creatures/orc.glb#Scene0",
     ),
-    "terrain_demo": (
-      path: "terrain/heightmap.png",
+    "anvil": (
+      path: "shared/models/anvil.glb#Scene0",
+    ),
+    "chest": (
+      path: "shared/models/treasure-chest-01.glb#Scene0",
     ),
   },
 
@@ -22,4 +25,52 @@
     "walk": "shared/audio/walk.wav",
     "run_grass": "shared/audio/run-grass.wav",
   },
+
+  materials: {
+    "wood_crate": (
+      kind: Standard((
+        base_color: (r: 1.0, g: 1.0, b: 1.0, a: 1.0),
+        base_color_texture: Some("shared/textures/wood_crate_albedo.png"),
+        normal_map_texture: Some("shared/textures/wood_crate_normal.png"),
+        metallic: 0.0,
+        perceptual_roughness: 0.85,
+        reflectance: 0.3,
+      )),
+      alpha_mode: Opaque,
+      double_sided: false,
+      unlit: false,
+      tags: ["prop", "wood"],
+    ),
+
+    "foliage_leaves": (
+      kind: Standard((
+        base_color: (r: 1.0, g: 1.0, b: 1.0, a: 1.0),
+        base_color_texture: Some("shared/textures/leaves_albedo.png"),
+        normal_map_texture: None,
+        metallic: 0.0,
+        perceptual_roughness: 1.0,
+        reflectance: 0.2,
+      )),
+      alpha_mode: Mask(0.5),
+      double_sided: true,
+      unlit: false,
+      tags: ["foliage"],
+    ),
+
+    "terrain_grass_rock": (
+      kind: Terrain((
+        splatmap: "shared/terrain/splatmap.png",
+        layers: [
+          "shared/terrain/grass.png",
+          "shared/terrain/rock.png",
+          "shared/terrain/dirt.png",
+          "shared/terrain/snow.png",
+        ],
+      )),
+      alpha_mode: Opaque,
+      double_sided: false,
+      unlit: false,
+      tags: ["terrain"],
+    ),
+  }
 )

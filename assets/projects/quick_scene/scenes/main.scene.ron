@@ -68,6 +68,16 @@
         scale: (1.0, 1.0, 1.0),
       ),
     ),
+
+    (
+      id: "anvil_01",
+      prefab: "prop_anvil",
+      transform: (
+        translation: (5.0, 4.0, 2.0),
+        rotation_euler_deg: (0.0, 45.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
   ],
 
   ui: [

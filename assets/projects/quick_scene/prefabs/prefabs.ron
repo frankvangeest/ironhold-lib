@@ -31,5 +31,14 @@
         tags: ["loot"],
       ),
     ),
+
+    "prop_anvil": (
+      kind: "prop",
+      model: "anvil",
+      material: Some("wood_crate"),
+      components: (
+        tags: ["prop"],
+      ),
+    ),
   }
 )

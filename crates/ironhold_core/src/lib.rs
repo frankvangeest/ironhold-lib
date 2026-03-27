@@ -47,6 +47,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
+            .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
@@ -69,6 +70,7 @@ impl Plugin for GamePlugin {
                 spawn_scene_v2,
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
+                apply_material_overrides,
                 button_system,
                 input_translator_system,
             ))
