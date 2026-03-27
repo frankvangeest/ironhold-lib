@@ -2,6 +2,10 @@
 name = "ironhold_web"
 version = "0.1.0"
 edition = "2021"
+description = "The runtime web build of Ironhold"
+repository = "https://github.com/frankvangeest/ironhold-lib"
+license = "MIT OR Apache-2.0"
+authors = ["Frank van Geest"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -16,9 +20,3 @@ wasm-opt = false
 
 [features]
 inspector = ["ironhold_core/inspector"]
-
-[profile.test]
-debug = true
-opt-level = 0
-debug-assertions = true
-overflow-checks = true

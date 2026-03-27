@@ -154,16 +154,32 @@ pub fn check_project_loaded(
         let pending = pending.unwrap();
 
         if let Some(h) = &pending.model_fixes {
-            if model_fixes_assets.get(h).is_none() { return; }
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(_) => { warn!("model_fixes failed to load — proceeding without it"); }
+                _ => { return; }
+            }
         }
         if let Some(h) = &pending.rules {
-            if rules_assets.get(h).is_none() { return; }
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(_) => { warn!("rules failed to load — proceeding without it"); }
+                _ => { return; }
+            }
         }
         if let Some(h) = &pending.asset_catalog {
-            if asset_catalog_assets.get(h).is_none() { return; }
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(_) => { warn!("asset catalog failed to load — models/materials will be missing"); }
+                _ => { return; }
+            }
         }
         if let Some(h) = &pending.prefab_catalog {
-            if prefab_catalog_assets.get(h).is_none() { return; }
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(_) => { warn!("prefab catalog failed to load — entities will not spawn"); }
+                _ => { return; }
+            }
         }
 
         // Phase 3: merge and store results.

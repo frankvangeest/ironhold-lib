@@ -12,7 +12,8 @@
       "Bash(wc:*)",
       "Bash(find C:/git/rust/ironhold-lib/assets/projects -name *.ron)",
       "Bash(powershell -Command \"Get-ChildItem 'C:\\\\git\\\\rust\\\\ironhold-lib\\\\assets\\\\shared\\\\textures' | Select-Object Name, Length\")",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(wasm-pack build:*)"
     ]
   }
 }

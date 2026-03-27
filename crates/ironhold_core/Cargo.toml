@@ -2,6 +2,10 @@
 name = "ironhold_core"
 version = "0.1.0"
 edition = "2021"
+description = "The core runtime of Ironhold"
+repository = "https://github.com/frankvangeest/ironhold-lib"
+license = "MIT OR Apache-2.0"
+authors = ["Frank van Geest"]
 
 [dependencies]
 bevy = { workspace = true, features = ["debug"] }
@@ -15,9 +19,3 @@ futures-lite = "2.3"
 
 [features]
 inspector = ["dep:bevy_inspector_egui"]
-
-[profile.test]
-debug = true
-opt-level = 0
-debug-assertions = true
-overflow-checks = true
