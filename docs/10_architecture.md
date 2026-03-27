@@ -2,16 +2,28 @@
 # Architecture
 
 ## Current state (today)
-- `ironhold_core`: core Bevy plugin(s), RON asset types, scene spawning, player controller, orbit camera, animation mapping, UI button -> scene load.
-- `ironhold_native`: desktop runner calling `ironhold_core::start_app()`.
-- `ironhold_web`: WASM runner exposing `start()` via wasm-bindgen.
- 
+- `ironhold_core`: core Bevy plugin(s), RON asset types, scene spawning, player controller, orbit camera, animation mapping, UI button → scene load.
+- `ironhold_native`: desktop runner calling `ironhold_core::start_app()`; selects project via `--project <name>` CLI arg.
+- `ironhold_web`: WASM runner exposing `start()` via wasm-bindgen; reads `?project=<name>` from the page URL and passes it to `start_app`.
+
 ## Internal Structure
 The `ironhold_core` crate is organized into modular sub-modules to maintain separation of concerns:
 - **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameLevel`).
 - **`runtime/`**: Core engine logic, including the Message/Action interpreter and the `SceneManager`.
 - **`capabilities/`**: Reusable gameplay systems (e.g., `CharacterController`, `OrbitCamera`).
 - **`utils.rs`**: Shared utility functions like asset folder discovery.
+
+### DebugState resource
+`DebugState` (defined in `lib.rs`) is a plain resource updated every `PostUpdate` frame by `update_debug_state`:
+
+| Field | Content |
+|-------|---------|
+| `frame` | Frame counter (monotonically increasing) |
+| `app_state` | Current `AppState` variant as a string (e.g. `"InGame"`) |
+| `last_action` | Debug repr of the last `Action` dispatched by `action_executor_system` |
+| `scene` | Asset path of the most recently fully-loaded scene (from `SceneEvent::Ready`) |
+
+On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
 
 Assets:
 - `assets/project.ron`: selects initial scene.

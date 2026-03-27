@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑02‑02_
+_Last updated: 2026‑03‑27_
 
 ## Legend
 - ✅ Implemented
@@ -55,9 +55,9 @@ _Last updated: 2026‑02‑02_
 ### Platforms
 | Area                  | Status | Notes |
 |-----------------------|:------:|-------|
-| Native runner         |   ✅   | `crates/ironhold_native` (CLI can select project file). |
-| Web runner (WASM)     |   ✅   | `crates/ironhold_web` (`#[wasm_bindgen(start)]`). |
-| Platform parity tests |   ⛔   | Planned. |
+| Native runner         |   ✅   | `crates/ironhold_native` (CLI can select project with `--project <name>`). |
+| Web runner (WASM)     |   ✅   | `crates/ironhold_web`; project selectable via `?project=<name>` URL param. |
+| Platform parity tests |   ✅   | Headless Chromium browser test suite (`test_web.py`) covering all three example projects. |
 
 ---
 
@@ -77,6 +77,10 @@ _Last updated: 2026‑02‑02_
 - `Action::PlayAnimation(String)` — plays a named animation/clip
 
 > New Messages/Actions **must** update this table and include examples + tests.
+
+### Debug / Test Surface
+- `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`.
+- On WASM, `DebugState` is serialised as JSON into `<div id="debug-state">` by `sync_debug_state_to_dom`, making it readable by browser automation tools.
 
 ---
 

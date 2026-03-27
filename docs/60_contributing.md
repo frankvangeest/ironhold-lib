@@ -93,6 +93,21 @@ For any capability change:
 - Add a “golden” RON file under `assets/` for new schema features.
 - Add a regression test that loads it.
 
+### Browser tests ✅
+`test_web.py` runs a headless Chromium suite against the WASM build. Run it before submitting changes that touch rendering, scene loading, UI, or the action pipeline:
+
+```bash
+python test_web.py --skip-build   # fast: reuses existing pkg/
+python test_web.py                # full: rebuilds WASM first
+```
+
+If a rendering change is intentional, regenerate baselines:
+```bash
+python test_web.py --update-baselines
+```
+
+If you add a new UI button that should be testable, note its canvas coordinates (derived from `position` + `size / 2` in the scene file) — Bevy UI renders inside the WebGPU canvas, not as DOM elements, so clicks must use `page.mouse.click(x, y)`.
+
 ---
 
 ## Pull request checklist
@@ -100,6 +115,7 @@ For any capability change:
 - [ ] Documentation updated (use ✅/🧪/🧭 labeling)
 - [ ] Example project updated or a new example added
 - [ ] Tests added/updated (unit/integration as appropriate)
+- [ ] Browser tests pass (`python test_web.py --skip-build`); baselines updated if rendering changed
 - [ ] Schema compatibility considered (version bump + migration notes if needed)
 - [ ] No accidental platform-specific behavior in core logic
 

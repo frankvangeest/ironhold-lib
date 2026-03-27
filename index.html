@@ -10,6 +10,8 @@
     </style>
 </head>
 <body>
+    <!-- Populated each frame by the WASM runtime for browser testing -->
+    <div id="debug-state" style="display:none"></div>
     <script type="module">
         // This assumes wasm-pack build --target web --out-dir pkg
         import init from './pkg/ironhold_web.js';

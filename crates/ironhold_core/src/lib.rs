@@ -26,6 +26,19 @@ pub struct ProjectConfigPath(pub String);
 #[derive(Resource, Clone, Default)]
 pub struct ProjectRoot(pub String);
 
+/// Live game state exposed to the DOM (WASM) and available to tests.
+/// Updated every frame by `update_debug_state`.
+#[derive(Resource, Default)]
+pub struct DebugState {
+    pub frame: u64,
+    /// String form of the current `AppState` variant (e.g. `"InGame"`).
+    pub app_state: String,
+    /// Debug representation of the last `Action` executed (e.g. `PlayAnimation("dance")`).
+    pub last_action: String,
+    /// Asset path of the most recently fully-loaded scene.
+    pub scene: String,
+}
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -41,6 +54,7 @@ impl Plugin for GamePlugin {
         }
 
         app.init_state::<AppState>()
+            .init_resource::<DebugState>()
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
@@ -85,7 +99,12 @@ impl Plugin for GamePlugin {
                 animation_resolver_system,
                 camera_orbit_system,
                 animation_playback_system,
-            ).chain());
+            ).chain())
+            // Debug state (runs last so it sees the final app_state for this frame)
+            .add_systems(PostUpdate, update_debug_state);
+
+        #[cfg(target_arch = "wasm32")]
+        app.add_systems(PostUpdate, sync_debug_state_to_dom.after(update_debug_state));
     }
 }
 
@@ -153,6 +172,35 @@ fn button_system(
             }
         }
     }
+}
+
+fn update_debug_state(
+    mut debug: ResMut<DebugState>,
+    state: Res<State<AppState>>,
+    mut scene_events: MessageReader<SceneEvent>,
+) {
+    debug.frame += 1;
+    debug.app_state = format!("{:?}", state.get());
+    for event in scene_events.read() {
+        if let SceneEvent::Ready(path) = event {
+            debug.scene = path.clone();
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sync_debug_state_to_dom(debug: Res<DebugState>) {
+    let Some(window) = web_sys::window() else { return };
+    let Some(document) = window.document() else { return };
+    let Some(el) = document.get_element_by_id("debug-state") else { return };
+    let json = format!(
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}"}}"#,
+        debug.frame,
+        debug.app_state,
+        debug.last_action.replace('"', "\\\""),
+        debug.scene.replace('"', "\\\""),
+    );
+    el.set_inner_html(&json);
 }
 
 pub fn start_app(project_path: Option<String>) {

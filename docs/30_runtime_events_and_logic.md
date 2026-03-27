@@ -36,15 +36,17 @@ This separation helps:
 This section is factual and reflects what exists right now.
 
 - ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, and `PlayAnimation`.
-- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction using `Trigger("id")`.
+- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiMessage::ButtonPressed("dance")`).
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
-- ✅ A message interpreter maps UI messages to actions using project-level `rules`.
+- ✅ A message interpreter maps UI messages to actions using data-defined rules loaded from `logic/rules.ron`.
 - ✅ An action executor applies actions; notably:
-  - `LoadScene(path)` loads a level asset and transitions to the loading state.
+  - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
   - `Quit` requests app exit (writes `AppExit::Success`).
   - `Spawn(path)` spawns a scene/model.
   - `PlayAnimation(clip)` plays an animation on available controllers.
+  - `Log(msg)` emits an `info!` log line.
+- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, and `frame` for observability and browser-based testing.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -136,23 +138,25 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
 - **Filters/conditions**: restrict rules (by entity tags, state variables, scene, etc.). 🧭
 - **Parameters**: allow payload data to flow into actions (e.g., button id → scene path). 🧭
 
-### Example (planned, pseudo-RON)
+### Example ✅
 ```ron
+// logic/rules.ron
 (
-  rules: [
-    (
-      on: "ui.start_game",
-      do: [ (LoadScene: "scenes/main.ron") ],
-    ),
-    (
-      on: "ui.quit",
-      do: [ Quit ],
-    ),
-  ],
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:start_game",
+            do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ],
+        ),
+        (
+            on: "ui.button_pressed:quit",
+            do_actions: [ Quit ],
+        ),
+    ],
 )
 ```
 
-> The exact schema is not finalized; this is illustrative.
+Event name format: `"<domain>.<type>:<payload>"`. The interpreter matches the full string against each rule's `on` field. UI button events are always `"ui.button_pressed:<trigger>"` where the trigger is the button's `action` field with the `"ui."` prefix stripped.
 
 ## Execution model (planned)
 
@@ -172,19 +176,20 @@ Applies actions to the world. Key design points:
 
 ## Milestone mapping (suggested)
 
-- **MVP (implemented today)** ✅
-  - ✅ UiEvent subset: button press and quit request → `UiMessage`
-  - ✅ Action subset: `LoadScene`, `Quit`
-  - ✅ Executor applies `LoadScene` and `Quit`
+- **Milestone 0.1 + 0.2 (implemented)** ✅
+  - ✅ `UiMessage::ButtonPressed` emitted by UI buttons; mapped to actions via data-defined rules
+  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`
+  - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
+  - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready}`
+  - ✅ Data-defined `logic/rules.ron` wired to interpreter + executor
+  - ✅ `DebugState` resource for runtime observability
 
-- **Milestone: Event schema v1** 🧭
-  - InputAction abstraction
-  - Scene lifecycle events
-  - Basic trigger events
+- **Milestone: Rule bindings v2** 🧭
+  - Conditions/filters on rules (entity tags, state variables, scene)
+  - Parameter flow from event payload into actions
 
-- **Milestone: Rule bindings v1** 🧭
-  - Data-defined event→action rules
-  - Validation + diagnostics
+- **Milestone: Trigger / Collision events** 🧭
+  - Spatial trigger events (`trigger.enter`, `trigger.exit`)
 
 - **Milestone: Deterministic core hooks** 🧭
   - Fixed tick loop for gameplay
@@ -195,37 +200,24 @@ Applies actions to the world. Key design points:
 - A complete visual scripting system 🧭
 
 ## Appendix: Implemented subset (today)
-This list is intentionally short and should be updated when code expands.
 
-- ✅ `Action::LoadScene(String)`
-- ✅ `Action::Quit`
-- ✅ `Action::Log(String)`
-- ✅ `Action::Spawn(String)`
-- ✅ `Action::PlayAnimation(String)`
-- ✅ `ActionQueue` (push/pop)
-- ✅ `UiMessage::ButtonPressed(trigger_id)` → interpreter matches against `rules` in `ProjectConfig`
-- ✅ `SceneEvent` (Requested, Loaded, Ready)
-- ✅ `InputAction` (Move, Turn, Jump, Run, Look)
-- ✅ `InputActionMessage` (Entity, InputAction)
-- ✅ Executor:
-  - `LoadScene` loads a `GameLevel` asset and transitions to `LoadingScene`
-  - `Quit` writes `AppExit::Success`
-  - `Spawn(path)` spawns a scene/model
-  - `PlayAnimation(clip)` plays an animation
-  - `Log(msg)` outputs to info! log
+### Messages ✅
+- `UiMessage::ButtonPressed(String)` — emitted when a UI button is pressed; trigger is the button's `action` field with `"ui."` prefix stripped
+- `SceneEvent::{Requested(String), Loaded(String), Ready(String)}` — scene lifecycle
+- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}` — abstract input
+- `InputActionMessage { entity: Entity, action: InputAction }` — input bound to an entity
 
-## Engine ABI Addendum (Actions)
+### Actions ✅
+- `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`
+- `Quit` — writes `AppExit::Success`
+- `Log(String)` — emits an `info!` log line
+- `Spawn(String)` — spawns a model by asset path
+- `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
 
-### Actions
-- `Action::Log(String)` — logs a message (debug/telemetry)
-- `Action::Spawn(String)` — spawns an entity by asset id/path
-- `Action::PlayAnimation(String)` — plays a named animation/clip
+### Infrastructure ✅
+- `ActionQueue` — push/pop queue processed each frame by `action_executor_system`
+- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`; serialised to DOM on WASM for browser testing
+- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`
 
-## Action Semantics (v0.2 additions)
-
-- `Log(String)`: emits a log line from the action executor.
-- `Spawn(String)`: requests spawning an entity from an asset (for example a `.glb`).
-- `PlayAnimation(String)`: requests playing an animation clip by name.
-
-> If these actions require additional parameters (spawn position, target entity, etc.), extend the schema and update this section alongside the engine ABI list.
+> New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
 

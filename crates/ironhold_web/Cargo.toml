@@ -15,6 +15,10 @@ ironhold_core = { path = "../ironhold_core" }
 bevy = { workspace = true }
 wasm-bindgen = { workspace = true }
 
+# For the DebugState in the DOM and browser tests
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Location", "UrlSearchParams"] }
+
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 

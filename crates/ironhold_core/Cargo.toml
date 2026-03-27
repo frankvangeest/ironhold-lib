@@ -17,5 +17,9 @@ bevy_rapier3d = { version = "0.33", features = ["enhanced-determinism", "serde-s
 bevy_mesh = "0.18"
 futures-lite = "2.3"
 
+# For the DebugState in the DOM and browser tests
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Document", "Element"] }
+
 [features]
 inspector = ["dep:bevy_inspector_egui"]

@@ -960,8 +960,10 @@ pub fn action_executor_system(
     mut scene_events: MessageWriter<SceneEvent>,
     mut animation_requests: Query<&mut AnimationRequests>,
     project_root: Res<ProjectRoot>,
+    mut debug: ResMut<crate::DebugState>,
 ) {
     while let Some(action) = action_queue.pop() {
+        debug.last_action = format!("{:?}", action);
         match action {
             Action::LoadScene(path) => {
                 let resolved = resolve_project_path(&project_root.0, &path);
