@@ -86,16 +86,19 @@ impl Plugin for GamePlugin {
                 animation_policy_loader_system,
                 apply_material_overrides,
                 button_system,
-                input_translator_system,
             ))
             // Messages -> actions
             .add_systems(Update, (
                 message_interpreter_system,
                 action_executor_system,
             ))
-            // Capability pipeline (ordered): movement -> resolver -> playback
-            .add_systems(Update, (
+            // Physics-driven input + movement must run in FixedUpdate for stable simulation
+            .add_systems(FixedUpdate, (
+                input_translator_system,
                 player_movement_system,
+            ).chain())
+            // Visual/animation pipeline stays in Update (rendering cadence, not physics)
+            .add_systems(Update, (
                 animation_resolver_system,
                 camera_orbit_system,
                 animation_playback_system,
