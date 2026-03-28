@@ -40,6 +40,16 @@
     ),
 
     (
+      id: "giant_npc_01",
+      prefab: "giant_npc",
+      transform: (
+        translation: (5.0, 0.0, 4.0),
+        rotation_euler_deg: (0.0, 210.0, 0.0),
+        scale: (3.0, 3.0, 3.0),
+      ),
+    ),
+
+    (
       id: "orc_01",
       prefab: "enemy_orc_melee",
       transform: (

@@ -57,6 +57,19 @@
       tags: ["foliage"],
     ),
 
+    "giant_green": (
+      kind: Standard((
+        base_color: (r: 0.15, g: 0.75, b: 0.25, a: 1.0),
+        metallic: 0.0,
+        perceptual_roughness: 0.8,
+        reflectance: 0.3,
+      )),
+      alpha_mode: Opaque,
+      double_sided: false,
+      unlit: false,
+      tags: ["npc", "giant"],
+    ),
+
     "terrain_grass_rock": (
       kind: Terrain((
         splatmap: "shared/terrain/splatmap.png",

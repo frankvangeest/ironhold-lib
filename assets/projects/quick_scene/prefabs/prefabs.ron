@@ -32,6 +32,16 @@
       ),
     ),
 
+    "giant_npc": (
+      kind: "actor",
+      model: "hero",
+      material: Some("giant_green"),
+      animation_policy: Some("prefabs/animation/giant_npc_policy.ron"),
+      components: (
+        tags: ["npc", "giant"],
+      ),
+    ),
+
     "prop_anvil": (
       kind: "prop",
       model: "anvil",

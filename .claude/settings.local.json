@@ -13,7 +13,11 @@
       "Bash(find C:/git/rust/ironhold-lib/assets/projects -name *.ron)",
       "Bash(powershell -Command \"Get-ChildItem 'C:\\\\git\\\\rust\\\\ironhold-lib\\\\assets\\\\shared\\\\textures' | Select-Object Name, Length\")",
       "Bash(grep -v \"^$\")",
-      "Bash(wasm-pack build:*)"
+      "Bash(wasm-pack build:*)",
+      "Bash(python test_web.py --skip-build --update-baselines 2>&1)",
+      "Bash(python test_web.py --skip-build)",
+      "Bash(python test_web.py)",
+      "Bash(cargo check:*)"
     ]
   }
 }

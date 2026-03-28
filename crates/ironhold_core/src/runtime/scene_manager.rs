@@ -564,12 +564,12 @@ pub fn spawn_scene_v2(
                 animation_policy,
             });
         } else {
-            // Spawn as static model entity
+            // Spawn as non-player model entity (prop or NPC actor)
             let spawned = model_spawner.spawn_instance(
                 &mut commands,
                 &asset_server,
                 &merged_fixes.0,
-                model_path,
+                model_path.clone(),
                 transform,
             );
             let mut ec = commands.entity(spawned.parent);
@@ -577,6 +577,30 @@ pub fn spawn_scene_v2(
             // Apply a material override if the prefab requests one.
             if let Some(mat_key) = &prefab.material {
                 ec.insert(PendingMaterialOverride(mat_key.clone()));
+            }
+            // If the prefab declares an animation policy, wire up the animation components
+            // so the animation_policy_loader / resolver / playback systems can drive this actor.
+            if let Some(policy_path) = &prefab.animation_policy {
+                let resolved = resolve_project_path(&params.project_root.0, policy_path);
+                let policy_handle: Handle<AnimationPolicy> = asset_server.load(resolved);
+                let gltf_path = model_path.split('#').next().unwrap_or("").to_string();
+                let gltf_handle = asset_server.load(gltf_path.clone());
+                ec.insert((
+                    PendingAnimationPolicy(policy_handle),
+                    AnimationController {
+                        current: String::new(),
+                        last_played: String::new(),
+                        gltf_path,
+                        gltf_handle,
+                        node_indices: HashMap::new(),
+                        graph_initialized: false,
+                        transition_ms: 0,
+                        should_loop: true,
+                    },
+                    LocomotionState::default(),
+                    AnimationRequests::default(),
+                    ActiveOverride::default(),
+                ));
             }
         }
     }

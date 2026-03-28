@@ -1,0 +1,17 @@
+(
+    default_transition_ms: Some(200),
+
+    // All base locomotion clips point to Dance_Loop so the giant is always dancing.
+    base: (
+        idle:      "Dance_Loop",
+        walk:      "Dance_Loop",
+        run:       "Dance_Loop",
+        jump_loop: "Dance_Loop",
+    ),
+
+    clips: {
+        "dance": "Dance_Loop",
+    },
+
+    overrides: [],
+)
