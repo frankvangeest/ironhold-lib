@@ -25,3 +25,4 @@ project_dump.txt
 
 # Screenshots
 screenshots/*
+.well-known/appspecific/com.chrome.devtools.json
