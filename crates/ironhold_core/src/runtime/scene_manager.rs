@@ -984,6 +984,7 @@ pub fn action_executor_system(
     mut scene_events: MessageWriter<SceneEvent>,
     mut animation_requests: Query<&mut AnimationRequests>,
     project_root: Res<ProjectRoot>,
+    asset_catalog: Res<LoadedAssetCatalog>,
     mut debug: ResMut<crate::DebugState>,
 ) {
     while let Some(action) = action_queue.pop() {
@@ -1023,6 +1024,34 @@ pub fn action_executor_system(
                 info!("Executing Action::PlayAnimation: {}", anim);
                 for mut req in &mut animation_requests {
                     req.queue.push_back(anim.clone());
+                }
+            }
+            Action::PlaySound(key) => {
+                if let Some(path) = asset_catalog.0.audio.get(&key) {
+                    // Formats enabled via Bevy features in Cargo.toml (wav, vorbis, mp3).
+                    // Attempting to play an unsupported format panics inside Bevy's decoder.
+                    const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];
+                    let ext = std::path::Path::new(path.as_str())
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if !SUPPORTED.contains(&ext.as_str()) {
+                        warn!(
+                            "Action::PlaySound: unsupported audio format '.{}' for key {:?} \
+                             (path: {}). Supported formats: {:?}",
+                            ext, key, path, SUPPORTED
+                        );
+                    } else {
+                        info!("Executing Action::PlaySound: {} -> {}", key, path);
+                        let handle: Handle<bevy::audio::AudioSource> = asset_server.load(path.clone());
+                        commands.spawn((
+                            bevy::audio::AudioPlayer::new(handle),
+                            bevy::audio::PlaybackSettings::DESPAWN,
+                        ));
+                    }
+                } else {
+                    warn!("Action::PlaySound: key {:?} not found in audio catalog", key);
                 }
             }
         }

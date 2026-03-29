@@ -96,26 +96,27 @@ Animation timeline markers:
 - Names should be **stable** and **namespaced**.
 - Payload schemas should be documented and versioned.
 
-## Action model (planned)
+## Action model
 Actions represent explicit operations the runtime can execute.
 
 ### Action categories
 
 #### Scene actions 🧭
-- `LoadScene(path)`
-- `UnloadScene(name)`
+- `LoadScene(path)` ✅
+- `UnloadScene(name)` 🧭
 
-#### App/system actions 🧭
-- `Quit`
+#### App/system actions ✅
+- `Quit` ✅
+- `Log(message)` ✅
 
-#### Entity actions 🧭
-- `Spawn(template_id)`
-- `Despawn(entity)`
-- `SetTransform(entity, transform)`
+#### Entity actions
+- `Spawn(asset_path)` ✅
+- `Despawn(entity)` 🧭
+- `SetTransform(entity, transform)` 🧭
 
-#### Animation/audio actions 🧭
-- `PlayAnimation(entity, clip, options)`
-- `PlaySound(sound_id, options)`
+#### Animation/audio actions
+- `PlayAnimation(clip_id)` ✅ — plays a named animation by semantic ID (see AnimationPolicy)
+- `PlaySound(audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys
 
 #### State/variables actions 🧭
 - `SetVar(key, value)`
@@ -178,7 +179,7 @@ Applies actions to the world. Key design points:
 
 - **Milestone 0.1 + 0.2 (implemented)** ✅
   - ✅ `UiMessage::ButtonPressed` emitted by UI buttons; mapped to actions via data-defined rules
-  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`
+  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
   - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready}`
   - ✅ Data-defined `logic/rules.ron` wired to interpreter + executor

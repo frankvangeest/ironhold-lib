@@ -17,7 +17,8 @@
       "Bash(python test_web.py --skip-build --update-baselines 2>&1)",
       "Bash(python test_web.py --skip-build)",
       "Bash(python test_web.py)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(grep:*)"
     ]
   }
 }

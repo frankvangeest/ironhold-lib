@@ -362,6 +362,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `LoadScene("path")` | Load a `.scene.ron` file relative to the project root |
 | `Spawn("asset/path.glb#Scene0")` | Spawn a model by asset path |
 | `PlayAnimation("id")` | Play an animation by semantic ID (see AnimationPolicy) |
+| `PlaySound("key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format |
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
 

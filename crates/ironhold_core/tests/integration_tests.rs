@@ -39,6 +39,7 @@ fn setup_test_app() -> App {
        .init_asset::<ironhold_core::schema::GameLevel>()
        .init_asset::<ironhold_core::schema::player::AnimationPolicy>()
        .init_asset::<ironhold_core::schema::project::LogicRulesAsset>()
+       .init_asset::<bevy::audio::AudioSource>()
        .insert_resource(ProjectConfigPath("projects/integration_tests/integration_tests.project.ron".to_string()))
        .insert_resource(ProjectRoot("projects/integration_tests".to_string()))
        .add_plugins(GamePlugin);
@@ -549,4 +550,73 @@ fn test_entity_names() {
     assert!(name_list.contains(&"Orbit Camera".to_string()));
     assert!(name_list.contains(&"cube.glb".to_string()));
     assert!(name_list.contains(&"Model Scene Root".to_string()));
+}
+
+#[test]
+fn test_play_sound_action_spawns_audio_player() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Provide a catalog with a known audio key
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("click".to_string(), "shared/audio/menu-button-click.wav".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("click".to_string()));
+    app.update();
+
+    let count = app.world_mut()
+        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 1, "Expected one AudioPlayer entity to be spawned for PlaySound");
+}
+
+#[test]
+fn test_play_sound_unsupported_format_does_not_panic() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Register a catalog entry with an unsupported file extension
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("bad".to_string(), "shared/audio/soundtrack.aac".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("bad".to_string()));
+    app.update(); // Must not panic
+
+    // No AudioPlayer should have been spawned
+    let count = app.world_mut()
+        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "Unsupported format should be rejected before spawning AudioPlayer");
+}
+
+#[test]
+fn test_play_sound_missing_key_does_not_panic() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // No audio entries in the default catalog — should warn and not panic
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("nonexistent".to_string()));
+    app.update();
+
+    let count = app.world_mut()
+        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "No AudioPlayer should be spawned for an unknown sound key");
 }

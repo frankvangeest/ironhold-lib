@@ -75,6 +75,7 @@ _Last updated: 2026‑03‑27_
 - `Action::Log(String)` — logs a message (debug/telemetry)
 - `Action::Spawn(String)` — spawns an entity by asset id/path
 - `Action::PlayAnimation(String)` — plays a named animation/clip
+- `Action::PlaySound(String)` — plays a sound by audio catalog key; warns and no-ops for unsupported formats or missing keys
 
 > New Messages/Actions **must** update this table and include examples + tests.
 

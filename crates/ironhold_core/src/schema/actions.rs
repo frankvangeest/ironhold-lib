@@ -8,4 +8,5 @@ pub enum Action {
     Log(String),
     Spawn(String),
     PlayAnimation(String),
+    PlaySound(String),
 }
