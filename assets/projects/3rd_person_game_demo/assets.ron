@@ -33,5 +33,6 @@
     "click": "shared/audio/menu-button-click.wav",
     "walk": "shared/audio/walk.wav",
     "run_grass": "shared/audio/run-grass.wav",
+    "bg_music": "shared/audio/bg-music-balance.mp3",
   },
 )

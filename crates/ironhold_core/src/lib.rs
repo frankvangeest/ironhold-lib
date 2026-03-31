@@ -89,11 +89,11 @@ impl Plugin for GamePlugin {
                 apply_material_overrides,
                 button_system,
             ))
-            // Messages -> actions
+            // Messages -> actions (chained: interpreter must run before executor each frame)
             .add_systems(Update, (
                 message_interpreter_system,
                 action_executor_system,
-            ))
+            ).chain())
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (
                 input_translator_system,

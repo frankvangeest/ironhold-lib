@@ -15,3 +15,5 @@ assets:
 - sounds:
   - https://freesound.org/
   - https://opengameart.org/sounds
+    - bg-music-balance.mp3
+      - https://opengameart.org/content/balance-0

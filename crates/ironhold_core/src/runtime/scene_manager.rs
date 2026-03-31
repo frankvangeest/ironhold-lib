@@ -1032,8 +1032,25 @@ fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight)
 
     image
 }
+/// Marker component for the currently playing background music entity.
+/// Used by `Action::PlayMusicLoop` to stop the previous track before starting a new one.
+#[derive(Component)]
+pub struct BackgroundMusic;
+
+fn match_rules(event_name: &str, loaded_rules: &LoadedRules, action_queue: &mut ActionQueue) {
+    for rule in &loaded_rules.0 {
+        if rule.on == event_name {
+            for action in &rule.do_actions {
+                info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
+                action_queue.push(action.clone());
+            }
+        }
+    }
+}
+
 pub fn message_interpreter_system(
     mut ui_events: MessageReader<UiMessage>,
+    mut scene_events: MessageReader<SceneEvent>,
     mut action_queue: ResMut<ActionQueue>,
     loaded_rules: Res<LoadedRules>,
 ) {
@@ -1041,14 +1058,21 @@ pub fn message_interpreter_system(
         let event_name = match event {
             UiMessage::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
         };
+        match_rules(&event_name, &loaded_rules, &mut action_queue);
+    }
 
-        for rule in &loaded_rules.0 {
-            if rule.on == event_name {
-                for action in &rule.do_actions {
-                    info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
-                    action_queue.push(action.clone());
-                }
-            }
+    for event in scene_events.read() {
+        if let SceneEvent::Ready(path) = event {
+            // Derive scene name from the asset path stem, e.g.
+            // "projects/demo/scenes/main.scene.ron" → "scene.ready:main"
+            let stem = std::path::Path::new(path)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or(path.as_str())
+                .trim_end_matches(".scene.ron")
+                .trim_end_matches(".ron");
+            let event_name = format!("scene.ready:{}", stem);
+            match_rules(&event_name, &loaded_rules, &mut action_queue);
         }
     }
 }
@@ -1066,6 +1090,7 @@ pub fn action_executor_system(
     mut spawn_params: SpawnParams,
     mut debug: ResMut<crate::DebugState>,
     mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
+    bg_music_query: Query<Entity, With<BackgroundMusic>>,
 ) {
     while let Some(action) = action_queue.pop() {
         debug.last_action = format!("{:?}", action);
@@ -1144,6 +1169,36 @@ pub fn action_executor_system(
                 info!("Executing Action::PlayAnimation: {}", anim);
                 for mut req in &mut animation_requests {
                     req.queue.push_back(anim.clone());
+                }
+            }
+            Action::PlayMusicLoop(key) => {
+                // Stop any currently playing background music.
+                for entity in bg_music_query.iter() {
+                    commands.entity(entity).despawn();
+                }
+                if let Some(path) = asset_catalog.0.audio.get(&key) {
+                    const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];
+                    let ext = std::path::Path::new(path.as_str())
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if !SUPPORTED.contains(&ext.as_str()) {
+                        warn!(
+                            "Action::PlayMusicLoop: unsupported format '.{}' for key {:?}",
+                            ext, key
+                        );
+                    } else {
+                        info!("Action::PlayMusicLoop: {} -> {}", key, path);
+                        let handle: Handle<bevy::audio::AudioSource> = asset_server.load(path.clone());
+                        commands.spawn((
+                            BackgroundMusic,
+                            bevy::audio::AudioPlayer::new(handle),
+                            bevy::audio::PlaybackSettings::LOOP,
+                        ));
+                    }
+                } else {
+                    warn!("Action::PlayMusicLoop: key {:?} not found in audio catalog", key);
                 }
             }
             Action::SetVolume(pct) => {

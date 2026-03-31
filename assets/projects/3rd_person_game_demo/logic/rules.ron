@@ -26,6 +26,10 @@
             do_actions: [ Log("Back to Start Menu"), LoadScene("scenes/start_menu.scene.ron") ],
         ),
         (
+            on: "scene.ready:main",
+            do_actions: [ PlayMusicLoop("bg_music") ],
+        ),
+        (
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),
