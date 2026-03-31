@@ -61,6 +61,8 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
+            .init_resource::<crate::runtime::scene_manager::LoadedSpawnPoints>()
+            .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()

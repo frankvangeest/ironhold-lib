@@ -51,6 +51,36 @@ pub struct LoadedAssetCatalog(pub AssetCatalog);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedPrefabCatalog(pub PrefabCatalog);
 
+/// Named spawn points from the most recently loaded scene. Available to `Action::Spawn`
+/// so dynamically spawned entities can use scene-defined positions.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedSpawnPoints(pub HashMap<String, (f32, f32, f32)>);
+
+/// Stable handle attached to every entity spawned via `Action::Spawn`.
+/// Used by `Action::Despawn` to locate and remove the entity.
+#[derive(Component, Debug, Clone)]
+pub struct SpawnId(pub String);
+
+/// Tracks all dynamically spawned entities by their spawn ID.
+/// Cleared automatically on scene load so stale IDs don't linger.
+#[derive(Resource, Default)]
+pub struct SpawnRegistry {
+    pub counter: u64,
+    pub entities: HashMap<String, Entity>,
+}
+
+/// Bundled SystemParam for spawn/despawn operations in `action_executor_system`.
+/// Groups resources that would otherwise push the system past Bevy's 16-param limit.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct SpawnParams<'w, 's> {
+    pub registry: ResMut<'w, SpawnRegistry>,
+    pub prefab_catalog: Res<'w, LoadedPrefabCatalog>,
+    pub spawn_points: Res<'w, LoadedSpawnPoints>,
+    pub model_spawner: Res<'w, ModelSpawner>,
+    pub merged_fixes: Res<'w, MergedModelFixes>,
+    pub spawned: Query<'w, 's, (Entity, &'static SpawnId)>,
+}
+
 /// Tracks externally-loaded project config files that are still loading.
 /// Inserted by `check_project_loaded` on the first frame the project config is ready,
 /// removed implicitly once the project transitions to `LoadingScene`.
@@ -69,6 +99,57 @@ pub struct PendingPlayerConfig(pub PlayerConfig);
 /// Replaced by AnimationPolicyComponent once the asset resolves.
 #[derive(Component)]
 pub struct PendingAnimationPolicy(pub Handle<AnimationPolicy>);
+
+/// Instantiates a prefab entity: spawns the model, applies material overrides and
+/// animation components based on what the PrefabDef declares.  Called from both
+/// `spawn_scene_v2` (scene entities) and the `Action::Spawn` executor (dynamic spawns)
+/// so the two paths are guaranteed to be identical.
+///
+/// Returns the parent entity so callers can attach extra components (e.g. `SpawnId`).
+pub fn spawn_prefab_instance(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    model_spawner: &ModelSpawner,
+    fixes: &HashMap<String, TransformFix>,
+    project_root: &str,
+    prefab: &crate::schema::catalog::PrefabDef,
+    model_path: String,
+    transform: Transform,
+    name: &str,
+) -> Entity {
+    let spawned = model_spawner.spawn_instance(commands, asset_server, fixes, model_path.clone(), transform);
+    let mut ec = commands.entity(spawned.parent);
+    ec.insert(Name::new(name.to_string()));
+
+    if let Some(mat_key) = &prefab.material {
+        ec.insert(PendingMaterialOverride(mat_key.clone()));
+    }
+
+    if let Some(policy_path) = &prefab.animation_policy {
+        let resolved = resolve_project_path(project_root, policy_path);
+        let policy_handle: Handle<AnimationPolicy> = asset_server.load(resolved);
+        let gltf_path = model_path.split('#').next().unwrap_or("").to_string();
+        let gltf_handle = asset_server.load(gltf_path.clone());
+        ec.insert((
+            PendingAnimationPolicy(policy_handle),
+            AnimationController {
+                current: String::new(),
+                last_played: String::new(),
+                gltf_path,
+                gltf_handle,
+                node_indices: HashMap::new(),
+                graph_initialized: false,
+                transition_ms: 0,
+                should_loop: true,
+            },
+            LocomotionState::default(),
+            AnimationRequests::default(),
+            ActiveOverride::default(),
+        ));
+    }
+
+    spawned.parent
+}
 
 pub fn animation_policy_loader_system(
     mut commands: Commands,
@@ -474,6 +555,7 @@ pub fn spawn_scene_v2(
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
     mut built_materials: ResMut<BuiltMaterials>,
+    mut spawn_registry: ResMut<SpawnRegistry>,
 ) {
     let Some(scene_handle) = params.scene_handle.as_ref() else { return; };
     let Some(project) = params.configs.get(&params.config_handle.0) else { return; };
@@ -503,6 +585,10 @@ pub fn spawn_scene_v2(
     ));
 
     info!("Scene V2 Loaded! name={}, {} entities, {} ui", scene.name, scene.entities.len(), scene.ui.len());
+
+    commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
+    spawn_registry.entities.clear();
+    spawn_registry.counter = 0;
 
     for entity in current_entities.iter() {
         commands.entity(entity).despawn();
@@ -564,44 +650,20 @@ pub fn spawn_scene_v2(
                 animation_policy,
             });
         } else {
-            // Spawn as non-player model entity (prop or NPC actor)
-            let spawned = model_spawner.spawn_instance(
+            let parent = spawn_prefab_instance(
                 &mut commands,
                 &asset_server,
+                &model_spawner,
                 &merged_fixes.0,
-                model_path.clone(),
+                &params.project_root.0,
+                prefab,
+                model_path,
                 transform,
+                &entity_def.id,
             );
-            let mut ec = commands.entity(spawned.parent);
-            ec.insert((Name::new(entity_def.id.clone()), LevelEntity));
-            // Apply a material override if the prefab requests one.
-            if let Some(mat_key) = &prefab.material {
-                ec.insert(PendingMaterialOverride(mat_key.clone()));
-            }
-            // If the prefab declares an animation policy, wire up the animation components
-            // so the animation_policy_loader / resolver / playback systems can drive this actor.
-            if let Some(policy_path) = &prefab.animation_policy {
-                let resolved = resolve_project_path(&params.project_root.0, policy_path);
-                let policy_handle: Handle<AnimationPolicy> = asset_server.load(resolved);
-                let gltf_path = model_path.split('#').next().unwrap_or("").to_string();
-                let gltf_handle = asset_server.load(gltf_path.clone());
-                ec.insert((
-                    PendingAnimationPolicy(policy_handle),
-                    AnimationController {
-                        current: String::new(),
-                        last_played: String::new(),
-                        gltf_path,
-                        gltf_handle,
-                        node_indices: HashMap::new(),
-                        graph_initialized: false,
-                        transition_ms: 0,
-                        should_loop: true,
-                    },
-                    LocomotionState::default(),
-                    AnimationRequests::default(),
-                    ActiveOverride::default(),
-                ));
-            }
+            // LevelEntity is already set by spawn_prefab_instance via ModelSpawner;
+            // re-insert here to be explicit and in case the name was overridden.
+            commands.entity(parent).insert(LevelEntity);
         }
     }
 
@@ -985,6 +1047,7 @@ pub fn action_executor_system(
     mut animation_requests: Query<&mut AnimationRequests>,
     project_root: Res<ProjectRoot>,
     asset_catalog: Res<LoadedAssetCatalog>,
+    mut spawn_params: SpawnParams,
     mut debug: ResMut<crate::DebugState>,
 ) {
     while let Some(action) = action_queue.pop() {
@@ -1010,15 +1073,55 @@ pub fn action_executor_system(
             Action::Log(msg) => {
                 info!("Action::Log: {}", msg);
             }
-            Action::Spawn(path) => {
-                info!("Executing Action::Spawn: {}", path);
-                let name = path.split('/').last().unwrap_or(&path).to_string();
-                commands.spawn((
-                    Name::new(name),
-                    SceneRoot(asset_server.load(path.clone())),
-                    Transform::default(),
-                    LevelEntity,
-                ));
+            Action::Spawn { prefab, id } => {
+                let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab) else {
+                    warn!("Action::Spawn: prefab {:?} not found in catalog", prefab);
+                    continue;
+                };
+                let Some(model_entry) = asset_catalog.0.models.get(&prefab_def.model) else {
+                    warn!("Action::Spawn: model key {:?} not found in asset catalog", prefab_def.model);
+                    continue;
+                };
+                let model_path = model_entry.path.clone();
+                let prefab_def = prefab_def.clone();
+
+                let spawn_id = id.unwrap_or_else(|| {
+                    spawn_params.registry.counter += 1;
+                    format!("{}_{}", prefab, spawn_params.registry.counter)
+                });
+
+                let (sx, sy, sz) = spawn_params.spawn_points.0.iter()
+                    .find(|(k, _)| !k.starts_with("player"))
+                    .map(|(_, v)| *v)
+                    .unwrap_or((10.0, 2.0, 10.0));
+                let transform = Transform::from_xyz(sx, sy + 1.0, sz);
+
+                info!("Action::Spawn: spawned '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})", spawn_id, prefab, sx, sy, sz);
+                let parent = spawn_prefab_instance(
+                    &mut commands,
+                    &asset_server,
+                    &spawn_params.model_spawner,
+                    &spawn_params.merged_fixes.0,
+                    &project_root.0,
+                    &prefab_def,
+                    model_path,
+                    transform,
+                    &spawn_id,
+                );
+                commands.entity(parent).insert(SpawnId(spawn_id.clone()));
+                spawn_params.registry.entities.insert(spawn_id, parent);
+            }
+            Action::Despawn(target_id) => {
+                let found = spawn_params.spawned.iter()
+                    .find(|(_, sid)| sid.0 == target_id)
+                    .map(|(e, _)| e);
+                if let Some(entity) = found {
+                    info!("Action::Despawn: removing '{}' (entity {:?})", target_id, entity);
+                    commands.entity(entity).despawn();
+                    spawn_params.registry.entities.remove(&target_id);
+                } else {
+                    warn!("Action::Despawn: no entity with spawn id {:?}", target_id);
+                }
             }
             Action::PlayAnimation(anim) => {
                 info!("Executing Action::PlayAnimation: {}", anim);

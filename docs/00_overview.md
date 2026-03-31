@@ -23,6 +23,8 @@ Ironhold-lib is a cross-platform (native + web/WASM) game runtime built on **Bev
    Versioned data formats with validation and migration paths.
 5. **Determinism-ready foundation** 🧭  
    A path toward deterministic simulation for multiplayer/rollback, without requiring determinism everywhere from day one.
+6. **Support for multiple 3D game formats** 🧭  
+   Support for multiple 3D game formats, such as 3rd Person, First Person, Platformer and Strategy games.
 
 ## Big ideas
 

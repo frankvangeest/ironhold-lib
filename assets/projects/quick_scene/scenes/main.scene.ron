@@ -50,28 +50,8 @@
     ),
 
     (
-      id: "orc_01",
-      prefab: "enemy_orc_melee",
-      transform: (
-        translation: (15.0, 0.0, 5.0),
-        rotation_euler_deg: (0.0, 180.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
-    (
-      id: "orc_02",
-      prefab: "enemy_orc_melee",
-      transform: (
-        translation: (18.0, 0.0, 7.0),
-        rotation_euler_deg: (0.0, 90.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
-    (
       id: "chest_01",
-      prefab: "loot_chest",
+      prefab: "chest_01",
       transform: (
         translation: (30.0, 0.0, 12.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -97,7 +77,7 @@
       text: "Pause",
       action: "ui.pause",
       position: (20.0, 20.0),
-      size: (150.0, 40.0),
+      size: (200.0, 40.0),
     ),
     (
       kind: "button",
@@ -105,15 +85,23 @@
       text: "Dance",
       action: "ui.dance",
       position: (20.0, 60.0),
-      size: (150.0, 40.0),
+      size: (200.0, 40.0),
+    ),
+    (
+      kind: "button",
+      id: "spawn_enemy_button",
+      text: "Spawn Enemy",
+      action: "ui.spawn_enemy",
+      position: (20.0, 100.0),
+      size: (200.0, 40.0),
     ),
     (
       kind: "button",
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
-      position: (20.0, 100.0),
-      size: (150.0, 40.0),
+      position: (20.0, 140.0),
+      size: (200.0, 40.0),
     ),
   ],
 )

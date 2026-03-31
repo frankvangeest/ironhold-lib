@@ -11,7 +11,7 @@
         ),
         (
             on: "ui.button_pressed:test_actions",
-            do_actions: [ Log("Test Action Triggered"), Spawn("shared/models/treasure-chest-02.glb#Scene0") ],
+            do_actions: [ Log("Test Action Triggered"), Spawn(prefab: "chest_02") ],
         ),
         (
             on: "ui.button_pressed:start_menu",

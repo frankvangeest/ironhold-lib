@@ -39,7 +39,7 @@
     ),
     (
       id: "chest_01",
-      prefab: "loot_chest",
+      prefab: "chest_01",
       transform: (
         translation: (4.0, 0.0, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),

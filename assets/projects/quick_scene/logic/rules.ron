@@ -11,7 +11,7 @@
         ),
         (
             on: "ui.button_pressed:test_actions",
-            do_actions: [ Log("Test Action Triggered"), PlaySound("click"), Spawn("shared/models/treasure-chest-02.glb#Scene0") ],
+            do_actions: [ Log("Test Action Triggered"), PlaySound("click"), Spawn(prefab: "chest_02") ],
         ),
         (
             on: "ui.button_pressed:start_menu",
@@ -20,6 +20,10 @@
         (
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlaySound("click"), PlayAnimation("dance") ],
+        ),
+        (
+            on: "ui.button_pressed:spawn_enemy",
+            do_actions: [ Log("Spawning enemy orc"), PlaySound("click"), Spawn(prefab: "enemy_orc_melee") ],
         ),
     ],
 )

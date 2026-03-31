@@ -133,7 +133,7 @@ File extension must be `.scene.ron`.
     ),
     (
       id: "chest_01",
-      prefab: "loot_chest",
+      prefab: "chest_01",
       transform: (
         translation: (5.0, 0.0, 3.0),
         rotation_euler_deg: (0.0, 45.0, 0.0),

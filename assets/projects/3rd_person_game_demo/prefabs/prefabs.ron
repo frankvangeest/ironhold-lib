@@ -17,9 +17,17 @@
       ),
     ),
 
-    "loot_chest": (
+    "chest_01": (
       kind: "prop",
-      model: "chest",
+      model: "chest_01",
+      components: (
+        tags: ["loot"],
+      ),
+    ),
+
+    "chest_02": (
+      kind: "prop",
+      model: "chest_02",
       components: (
         tags: ["loot"],
       ),

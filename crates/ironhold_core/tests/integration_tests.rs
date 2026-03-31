@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules};
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -619,4 +619,152 @@ fn test_play_sound_missing_key_does_not_panic() {
         .iter(app.world())
         .count();
     assert_eq!(count, 0, "No AudioPlayer should be spawned for an unknown sound key");
+}
+
+#[test]
+fn test_spawn_action_assigns_spawn_id_and_registers() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Provide minimal catalog entries for the orc prefab
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("enemy_orc_melee".to_string(), PrefabDef {
+                kind: "actor".to_string(),
+                model: "orc".to_string(),
+                animation_policy: None,
+                material: None,
+                components: PrefabComponents::default(),
+            }),
+        ]),
+    }));
+
+    // Spawn with an explicit ID
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()) }
+    );
+    app.update();
+
+    // SpawnId component should exist on the spawned entity
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert!(ids.contains(&"orc_test".to_string()), "SpawnId 'orc_test' should be present, got: {:?}", ids);
+
+    // Registry should track the entity
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert!(registry.entities.contains_key("orc_test"), "Registry should contain 'orc_test'");
+}
+
+#[test]
+fn test_spawn_auto_id_increments_counter() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("enemy_orc_melee".to_string(), PrefabDef {
+                kind: "actor".to_string(),
+                model: "orc".to_string(),
+                animation_policy: None,
+                material: None,
+                components: PrefabComponents::default(),
+            }),
+        ]),
+    }));
+
+    // Spawn twice without explicit IDs
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None }
+    );
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None }
+    );
+    app.update();
+
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert_eq!(ids.len(), 2, "Two entities should have been spawned");
+    assert!(ids.iter().any(|id| id.starts_with("enemy_orc_melee_")), "IDs should be auto-prefixed with prefab name");
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert_eq!(registry.counter, 2, "Counter should be 2 after two auto-spawns");
+    assert_eq!(registry.entities.len(), 2);
+}
+
+#[test]
+fn test_despawn_removes_entity_by_spawn_id() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("enemy_orc_melee".to_string(), PrefabDef {
+                kind: "actor".to_string(),
+                model: "orc".to_string(),
+                animation_policy: None,
+                material: None,
+                components: PrefabComponents::default(),
+            }),
+        ]),
+    }));
+
+    // Spawn then despawn
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()) }
+    );
+    app.update();
+
+    assert!(app.world_mut().query::<&SpawnId>().iter(app.world()).any(|s| s.0 == "doomed_orc"));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Despawn("doomed_orc".to_string()));
+    app.update(); // executor queues despawn
+    app.update(); // commands flush and entity is removed
+
+    let still_exists = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .any(|s| s.0 == "doomed_orc");
+    assert!(!still_exists, "Entity 'doomed_orc' should have been despawned");
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert!(!registry.entities.contains_key("doomed_orc"), "Registry should no longer contain 'doomed_orc'");
+}
+
+#[test]
+fn test_despawn_unknown_id_does_not_panic() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Despawn("ghost".to_string()));
+    app.update(); // should warn and not panic
 }

@@ -9,8 +9,11 @@
     "anvil": (
       path: "shared/models/anvil.glb#Scene0",
     ),
-    "chest": (
+    "chest_01": (
       path: "shared/models/treasure-chest-01.glb#Scene0",
+    ),
+    "chest_02": (
+      path: "shared/models/treasure-chest-02.glb#Scene0",
     ),
   },
 

@@ -8,5 +8,13 @@
       ),
       animation_policy: Some("prefabs/animation/player_policy.ron"),
     ),
+
+    "enemy_orc_melee": (
+      kind: "actor",
+      model: "orc",
+      components: (
+        tags: ["enemy"],
+      ),
+    ),
   }
 )
