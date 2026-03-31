@@ -679,35 +679,51 @@ pub fn spawn_scene_v2(
             LevelEntity,
         ))
         .with_children(|parent| {
-            for btn in &scene.ui {
-                let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action).to_string();
+            for el in &scene.ui {
                 let mut node = Node {
-                    width: Val::Px(btn.size.0),
-                    height: Val::Px(btn.size.1),
-                    border: UiRect::all(Val::Px(5.0)),
+                    width: Val::Px(el.size.0),
+                    height: Val::Px(el.size.1),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
                 };
                 node.position_type = PositionType::Absolute;
-                node.left = Val::Px(btn.position.0);
-                node.top = Val::Px(btn.position.1);
-                parent.spawn((
-                    Name::new(format!("Button: {}", btn.text)),
-                    Button,
-                    node,
-                    BorderColor::from(Color::BLACK),
-                    BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                    UiAction::Trigger(trigger),
-                ))
-                .with_children(|parent| {
+                node.left = Val::Px(el.position.0);
+                node.top = Val::Px(el.position.1);
+
+                if el.kind == "label" {
                     parent.spawn((
-                        Name::new(format!("Text: {}", btn.text)),
-                        Text::new(btn.text.clone()),
-                        TextFont { font_size: 26.0, ..default() },
-                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                    ));
-                });
+                        Name::new(format!("Label: {}", el.text)),
+                        node,
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Name::new(format!("Text: {}", el.text)),
+                            Text::new(el.text.clone()),
+                            TextFont { font_size: 22.0, ..default() },
+                            TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                        ));
+                    });
+                } else {
+                    let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
+                    node.border = UiRect::all(Val::Px(5.0));
+                    parent.spawn((
+                        Name::new(format!("Button: {}", el.text)),
+                        Button,
+                        node,
+                        BorderColor::from(Color::BLACK),
+                        BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                        UiAction::Trigger(trigger),
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Name::new(format!("Text: {}", el.text)),
+                            Text::new(el.text.clone()),
+                            TextFont { font_size: 26.0, ..default() },
+                            TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                        ));
+                    });
+                }
             }
         });
     }
@@ -1049,6 +1065,7 @@ pub fn action_executor_system(
     asset_catalog: Res<LoadedAssetCatalog>,
     mut spawn_params: SpawnParams,
     mut debug: ResMut<crate::DebugState>,
+    mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
 ) {
     while let Some(action) = action_queue.pop() {
         debug.last_action = format!("{:?}", action);
@@ -1127,6 +1144,15 @@ pub fn action_executor_system(
                 info!("Executing Action::PlayAnimation: {}", anim);
                 for mut req in &mut animation_requests {
                     req.queue.push_back(anim.clone());
+                }
+            }
+            Action::SetVolume(pct) => {
+                let linear = (pct.min(100) as f32) / 100.0;
+                info!("Action::SetVolume: {}% (linear {:.2})", pct, linear);
+                if let Some(ref mut gv) = global_volume {
+                    gv.volume = bevy::audio::Volume::Linear(linear);
+                } else {
+                    warn!("Action::SetVolume: GlobalVolume resource not available");
                 }
             }
             Action::PlaySound(key) => {

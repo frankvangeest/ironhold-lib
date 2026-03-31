@@ -17,7 +17,7 @@ pub struct GameSceneV2 {
     #[serde(default)]
     pub entities: Vec<SceneEntityDef>,
     #[serde(default)]
-    pub ui: Vec<UiButtonDefV2>,
+    pub ui: Vec<UiElementDefV2>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -72,11 +72,14 @@ pub struct SceneTransformV2 {
 fn one_vec3() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct UiButtonDefV2 {
+pub struct UiElementDefV2 {
+    /// "button" renders an interactive button; "label" renders non-interactive text.
     pub kind: String,
     pub id: String,
     pub text: String,
-    /// Action trigger. "ui." prefix is stripped when firing (e.g. "ui.quit" → "quit").
+    /// Action trigger for kind="button". "ui." prefix is stripped when firing.
+    /// May be omitted (defaults to empty) for kind="label".
+    #[serde(default)]
     pub action: String,
     pub position: (f32, f32),
     pub size: (f32, f32),

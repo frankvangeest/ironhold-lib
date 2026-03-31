@@ -29,5 +29,25 @@
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),
+        (
+            on: "ui.button_pressed:set_volume_0",
+            do_actions: [ Log("Volume: Mute"), SetVolume(0) ],
+        ),
+        (
+            on: "ui.button_pressed:set_volume_25",
+            do_actions: [ Log("Volume: 25%"), SetVolume(25) ],
+        ),
+        (
+            on: "ui.button_pressed:set_volume_50",
+            do_actions: [ Log("Volume: 50%"), SetVolume(50) ],
+        ),
+        (
+            on: "ui.button_pressed:set_volume_75",
+            do_actions: [ Log("Volume: 75%"), SetVolume(75) ],
+        ),
+        (
+            on: "ui.button_pressed:set_volume_100",
+            do_actions: [ Log("Volume: 100%"), SetVolume(100) ],
+        ),
     ],
 )

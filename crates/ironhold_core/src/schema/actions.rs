@@ -17,4 +17,6 @@ pub enum Action {
     Despawn(String),
     PlayAnimation(String),
     PlaySound(String),
+    /// Set global audio volume. Value is 0–100 (percent). 0 = mute, 100 = full.
+    SetVolume(u8),
 }
