@@ -74,5 +74,13 @@
       position: (100.0, 180.0),
       size: (200.0, 60.0),
     ),
+    (
+      kind: "button",
+      id: "test_actions_button",
+      text: "Test Actions",
+      action: "ui.test_actions",
+      position: (100.0, 260.0),
+      size: (200.0, 60.0),
+    ),
   ],
 )

@@ -18,6 +18,14 @@
             do_actions: [ Log("LoadScene Triggered"), LoadScene("scenes/start_menu.scene.ron") ],
         ),
         (
+            on: "ui.button_pressed:options",
+            do_actions: [ Log("Options Triggered"), LoadScene("scenes/options.scene.ron") ],
+        ),
+        (
+            on: "ui.button_pressed:back_to_start_menu",
+            do_actions: [ Log("Back to Start Menu"), LoadScene("scenes/start_menu.scene.ron") ],
+        ),
+        (
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),
