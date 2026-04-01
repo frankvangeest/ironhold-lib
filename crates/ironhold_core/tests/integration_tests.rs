@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState};
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -993,4 +993,447 @@ fn test_fsm_global_on_fires_regardless_of_state() {
     let debug = app.world().resource::<ironhold_core::DebugState>();
     assert_eq!(debug.last_action, "Log(\"global_fired\")",
         "global_on binding should fire from any state");
+}
+
+// ── Rules interpreter additional tests ────────────────────────────────────────
+
+#[test]
+fn test_rules_no_match_does_not_queue_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "ui.button_pressed:something_else".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("should_not_fire".to_string())],
+        },
+    ]));
+
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("unmatched_event".to_string()));
+    app.update();
+
+    let queue = app.world().resource::<ActionQueue>();
+    assert!(queue.0.is_empty(), "No rule matched — queue must stay empty");
+}
+
+#[test]
+fn test_rules_scene_event_ready_triggers_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "scene.ready:main".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("scene_ready_fired".to_string())],
+        },
+    ]));
+
+    // Interpreter strips path to stem "main" via scene_path_stem.
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_ready_fired\")",
+        "scene.ready:main rule should fire on SceneEvent::Ready for main scene");
+}
+
+// ── FSM interpreter additional tests ──────────────────────────────────────────
+
+#[test]
+fn test_fsm_exit_action_fires_on_transition() {
+    // "b" has no entry actions, so last_action after the transition reflects the exit action.
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState {
+                name: "a".to_string(),
+                entry_actions: vec![],
+                exit_actions: vec![Action::Log("exited_a".to_string())],
+                on: vec![],
+            },
+            FsmState {
+                name: "b".to_string(),
+                entry_actions: vec![],
+                exit_actions: vec![],
+                on: vec![],
+            },
+        ],
+        transitions: vec![
+            FsmTransition {
+                from: Some("a".to_string()),
+                on: "ui.button_pressed:go".to_string(),
+                to: "b".to_string(),
+            },
+        ],
+        global_on: vec![],
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("go".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b");
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"exited_a\")",
+        "Exit action should be the last executed action when target state has no entry actions");
+}
+
+#[test]
+fn test_fsm_scene_event_triggers_transition() {
+    let mut fsm = make_test_fsm();
+    // Any-state transition triggered by a scene ready event.
+    fsm.transitions.push(FsmTransition {
+        from: None,
+        on: "scene.ready:main".to_string(),
+        to: "b".to_string(),
+    });
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b", "SceneEvent::Ready should trigger an FSM transition");
+}
+
+#[test]
+fn test_fsm_scene_event_triggers_in_state_on_binding() {
+    let mut fsm = make_test_fsm();
+    // Add a scene.ready binding to state "a".
+    fsm.states[0].on.push(FsmEventBinding {
+        event: "scene.ready:start_menu".to_string(),
+        do_actions: vec![Action::Log("scene_ready_in_state_a".to_string())],
+    });
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/start_menu.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_ready_in_state_a\")",
+        "SceneEvent should trigger an in-state on binding when in the matching state");
+}
+
+#[test]
+fn test_fsm_no_loaded_state_machine_is_noop() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Explicit None — no FSM loaded.
+    app.world_mut().insert_resource(LoadedStateMachine(None));
+
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("any_event".to_string()));
+    app.update(); // must not panic
+
+    let queue = app.world().resource::<ActionQueue>();
+    assert!(queue.0.is_empty(), "No FSM loaded — action queue must remain empty");
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "", "LogicState must remain unchanged when no FSM is loaded");
+}
+
+// ── Executor additional tests ──────────────────────────────────────────────────
+
+#[test]
+fn test_log_action_updates_debug_last_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::Log("hello_world".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"hello_world\")");
+}
+
+#[test]
+fn test_load_scene_overlay_sets_overlay_load_mode() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::LoadSceneOverlay("scenes/pause.scene.ron".to_string()));
+    app.update();
+
+    let mode = app.world().resource::<PendingSceneLoadMode>();
+    assert_eq!(*mode, PendingSceneLoadMode::Overlay,
+        "LoadSceneOverlay should set PendingSceneLoadMode to Overlay");
+}
+
+#[test]
+fn test_unload_overlay_despawns_overlay_entities() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Spawn two overlay entities.
+    app.world_mut().spawn(OverlayEntity);
+    app.world_mut().spawn(OverlayEntity);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::UnloadOverlay);
+    app.update(); // executor queues despawn commands
+    app.update(); // flush
+
+    let count = app.world_mut()
+        .query::<&OverlayEntity>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "UnloadOverlay should despawn all OverlayEntity entities");
+}
+
+#[test]
+fn test_toggle_overlay_opens_when_no_overlay_active() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // No OverlayEntity present — toggle should open (set load mode to Overlay).
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ToggleOverlay("scenes/pause.scene.ron".to_string()));
+    app.update();
+
+    let mode = app.world().resource::<PendingSceneLoadMode>();
+    assert_eq!(*mode, PendingSceneLoadMode::Overlay,
+        "ToggleOverlay with no active overlay should set load mode to Overlay");
+}
+
+#[test]
+fn test_toggle_overlay_closes_when_overlay_active() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Spawn an overlay entity so ToggleOverlay sees an active overlay.
+    app.world_mut().spawn(OverlayEntity);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ToggleOverlay("scenes/pause.scene.ron".to_string()));
+    app.update(); // executor queues despawn
+    app.update(); // flush
+
+    let count = app.world_mut()
+        .query::<&OverlayEntity>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0,
+        "ToggleOverlay with an active overlay should despawn all OverlayEntity entities");
+}
+
+#[test]
+fn test_play_music_loop_spawns_background_music() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("bg_music".to_string(), "shared/audio/theme.ogg".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop("bg_music".to_string()));
+    app.update();
+
+    let count = app.world_mut()
+        .query::<&BackgroundMusic>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 1, "PlayMusicLoop should spawn exactly one BackgroundMusic entity");
+}
+
+#[test]
+fn test_play_music_loop_stops_previous_track_and_spawns_new() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("track_a".to_string(), "shared/audio/track_a.ogg".to_string()),
+            ("track_b".to_string(), "shared/audio/track_b.ogg".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    // Start first track.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop("track_a".to_string()));
+    app.update();
+    app.update(); // flush despawn commands from any previous music stop
+
+    // Start second track — should stop the first and spawn a new one.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop("track_b".to_string()));
+    app.update();
+    app.update(); // flush
+
+    let count = app.world_mut()
+        .query::<&BackgroundMusic>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 1,
+        "PlayMusicLoop should replace the previous track — exactly one BackgroundMusic entity");
+}
+
+#[test]
+fn test_play_music_loop_unsupported_format_does_not_panic() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("bad_music".to_string(), "shared/audio/track.aac".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop("bad_music".to_string()));
+    app.update(); // must not panic
+
+    let count = app.world_mut()
+        .query::<&BackgroundMusic>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "Unsupported audio format should not spawn a BackgroundMusic entity");
+}
+
+#[test]
+fn test_play_music_loop_missing_key_does_not_panic() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop("nonexistent_track".to_string()));
+    app.update(); // must not panic
+
+    let count = app.world_mut()
+        .query::<&BackgroundMusic>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "Missing audio key should not spawn a BackgroundMusic entity");
+}
+
+#[test]
+fn test_stop_music_despawns_background_music() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Manually place a BackgroundMusic entity in the world.
+    app.world_mut().spawn(BackgroundMusic);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::StopMusic);
+    app.update(); // executor queues despawn
+    app.update(); // flush
+
+    let count = app.world_mut()
+        .query::<&BackgroundMusic>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 0, "StopMusic should despawn all BackgroundMusic entities");
+}
+
+#[test]
+fn test_set_volume_updates_global_volume() {
+    let mut app = setup_test_app();
+    app.insert_resource(bevy::audio::GlobalVolume::default());
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::SetVolume(50));
+    app.update();
+
+    let gv = app.world().resource::<bevy::audio::GlobalVolume>();
+    let linear = match gv.volume {
+        bevy::audio::Volume::Linear(v) => v,
+        _ => panic!("Expected Volume::Linear"),
+    };
+    assert!((linear - 0.5).abs() < 1e-5, "SetVolume(50) should set GlobalVolume to 0.5 linear");
+}
+
+#[test]
+fn test_set_volume_clamped_to_100() {
+    let mut app = setup_test_app();
+    app.insert_resource(bevy::audio::GlobalVolume::default());
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::SetVolume(150)); // over 100 — clamped
+    app.update();
+
+    let gv = app.world().resource::<bevy::audio::GlobalVolume>();
+    let linear = match gv.volume {
+        bevy::audio::Volume::Linear(v) => v,
+        _ => panic!("Expected Volume::Linear"),
+    };
+    assert!((linear - 1.0).abs() < 1e-5, "SetVolume > 100 should clamp to 1.0 linear");
+}
+
+#[test]
+fn test_set_volume_no_resource_does_not_panic() {
+    // GlobalVolume resource absent — executor warns but must not panic.
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::SetVolume(80));
+    app.update(); // must not panic
+}
+
+#[test]
+fn test_preload_scene_ron_pushes_handle() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::Preload("scenes/pause.scene.ron".to_string()));
+    app.update();
+
+    let preloaded = app.world().resource::<PreloadedScenes>();
+    assert_eq!(preloaded.0.len(), 1, "Preload should store the handle in PreloadedScenes");
+}
+
+#[test]
+fn test_preload_non_scene_path_does_not_panic() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Non-.scene.ron path — executor should warn, not push a handle.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::Preload("textures/something.png".to_string()));
+    app.update(); // must not panic
+
+    let preloaded = app.world().resource::<PreloadedScenes>();
+    assert_eq!(preloaded.0.len(), 0,
+        "Non-.scene.ron path should not be added to PreloadedScenes");
 }

@@ -125,7 +125,7 @@ pub struct BackgroundMusic;
 
 /// Controls whether the next `SceneHandleV2` load replaces the world or adds as an overlay.
 /// Set by `action_executor_system` before loading; reset to Replace by `spawn_scene_v2` after use.
-#[derive(Resource, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum PendingSceneLoadMode {
     #[default]
     Replace,
