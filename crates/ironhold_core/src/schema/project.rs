@@ -65,6 +65,13 @@ pub struct ProjectConfig {
 
     #[serde(default)]
     pub global_environment: Option<crate::schema::level::EnvironmentMapConfig>,
+
+    /// Global key → event trigger mappings, applied regardless of which scene is active.
+    /// Key names use the same string format as InputMap (e.g. "Escape", "Tab", "F1").
+    /// The value is the trigger name fired as `ui.button_pressed:<trigger>`.
+    /// Example: `{ "Escape": "toggle_pause" }` fires `ui.button_pressed:toggle_pause` on Escape.
+    #[serde(default)]
+    pub global_key_bindings: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

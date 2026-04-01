@@ -19,6 +19,20 @@ pub enum Action {
     PlaySound(String),
     /// Play an audio file in a loop as background music. Stops any currently playing music.
     PlayMusicLoop(String),
+    /// Stop the currently playing background music.
+    StopMusic,
+    /// Load a scene on top of the current one without unloading the game world.
+    /// Only the UI section of the overlay scene is spawned; 3D entities are ignored.
+    /// Entities are tagged OverlayEntity and removed by UnloadOverlay or any full LoadScene.
+    LoadSceneOverlay(String),
+    /// Remove all OverlayEntity entities (dismiss the current overlay).
+    UnloadOverlay,
+    /// If an overlay is currently active: unload it. Otherwise: load the given path as an overlay.
+    /// Use this for ESC-style toggles so the same key/button opens and closes the overlay.
+    ToggleOverlay(String),
     /// Set global audio volume. Value is 0–100 (percent). 0 = mute, 100 = full.
     SetVolume(u8),
+    /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
+    /// Takes a project-relative path. Does not spawn or transition; purely warms the cache.
+    Preload(String),
 }

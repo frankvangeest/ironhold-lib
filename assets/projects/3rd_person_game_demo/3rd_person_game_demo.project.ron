@@ -17,4 +17,8 @@
             bottom_color: (0.01, 0.01, 0.01),
         )),
     )),
+
+    global_key_bindings: {
+        "Escape": "toggle_pause",
+    },
 )

@@ -1,6 +1,32 @@
 use bevy::prelude::*;
 use crate::runtime::messages::*;
+use crate::runtime::scene_manager::LoadedKeyBindings;
 use crate::capabilities::player::CharacterController;
+use crate::schema::AppState;
+use crate::schema::player::InputMap;
+
+/// Translates global key presses into UI messages using the project's `global_key_bindings`.
+/// Only fires in `InGame` state. Runs in `Update` (not `FixedUpdate`) so it
+/// responds every rendered frame regardless of physics tick rate.
+pub fn global_input_system(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    state: Res<State<AppState>>,
+    key_bindings: Res<LoadedKeyBindings>,
+    mut ui_events: MessageWriter<UiMessage>,
+) {
+    if *state.get() != AppState::InGame { return; }
+
+    for (key_name, trigger) in &key_bindings.0 {
+        if let Some(key_code) = InputMap::parse_key(key_name) {
+            if keyboard_input.just_pressed(key_code) {
+                ui_events.write(UiMessage::ButtonPressed(trigger.clone()));
+            }
+        } else {
+            // Unknown key name — silently skip. A warning is logged at project load time
+            // in check_project_loaded so the designer gets early feedback without spamming.
+        }
+    }
+}
 
 pub fn input_translator_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,

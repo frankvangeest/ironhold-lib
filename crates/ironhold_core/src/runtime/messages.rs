@@ -10,6 +10,9 @@ pub enum SceneEvent {
     Requested(String),
     Loaded(String),
     Ready(String),
+    /// Emitted just before a full scene replace (not overlays). Rules can react via
+    /// `scene.unloading:<name>` to clean up (e.g. stop music, save state).
+    Unloading(String),
 }
 
 #[derive(Message, Debug, Clone)]

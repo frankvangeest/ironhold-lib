@@ -38,6 +38,10 @@ python test_web.py --skip-build
 
 # Overwrite stored screenshot baselines after intentional visual changes
 python test_web.py --update-baselines
+
+# Overwrite baseline for a single project (or 'pause_nav' for navigation steps)
+python test_web.py --update-baseline quick_scene
+python test_web.py --update-baseline pause_nav
 ```
 
 ## Architecture Overview
@@ -101,9 +105,9 @@ See `tests/support.rs` for the `setup_test_app()` helper.
 
 ## Browser Test Suite (`test_web.py`)
 
-Runs 8 headless Chromium tests against the built WASM package. Requires `playwright install chromium` (one-time).
+Runs 9 headless Chromium tests against the built WASM package. Requires `playwright install chromium` (one-time).
 
-**Four test categories:**
+**Five test categories:**
 
 | Category | Tests | What it checks |
 |----------|-------|----------------|
@@ -111,6 +115,7 @@ Runs 8 headless Chromium tests against the built WASM package. Requires `playwri
 | `action` | `dance_button` | Clicking the Dance button (canvas coords) fires `PlayAnimation` via the rules pipeline |
 | `transition` | `start_game` | Clicking Start Game transitions `start_menu.scene.ron` → `main.scene.ron` |
 | `baseline` | one per project | Screenshot diff vs stored baseline stays under 2% changed pixels |
+| `navigation` | `pause_menu_flow` | Full menu flow: start menu → main → Esc (pause) → Esc (close) → Esc (pause) → Resume; screenshot at each step |
 
 **`DebugState` resource** — the test harness reads a hidden `<div id="debug-state">` that the WASM runtime updates every frame with JSON:
 ```json
@@ -122,7 +127,7 @@ This is written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironh
 
 **Canvas coordinate clicks** — Bevy UI renders inside the WebGPU canvas, not as DOM elements. Button clicks in tests must use `page.mouse.click(x, y)` with coordinates derived from the scene's `position` + `size/2` fields.
 
-**Baseline screenshots** live in `screenshots/baselines/` (gitignored). Run `--update-baselines` after any intentional rendering change.
+**Baseline screenshots** live in `screenshots/baselines/` (project baselines) and `screenshots/pause_nav/baselines/` (navigation step baselines), both gitignored. Run `--update-baselines` after any intentional rendering change.
 
 ## Technology Notes
 

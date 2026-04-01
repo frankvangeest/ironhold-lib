@@ -1,10 +1,11 @@
 """Browser test suite for the Ironhold WASM / WebGPU build.
 
-Runs four test categories against a locally served build:
+Runs five test categories against a locally served build:
   1. Smoke      — every project loads to InGame with no errors
   2. Action     — clicking a UI button fires the expected Action
   3. Transition — a LoadScene action transitions the scene correctly
   4. Baseline   — per-project screenshots are diffed against stored baselines
+  5. Navigation — multi-step menu flows with per-step screenshots
 
 Usage:
     python test_web.py [--skip-build] [--update-baselines] [--screenshot-dir DIR]
@@ -199,9 +200,12 @@ async def test_scene_transition(context: BrowserContext) -> None:
             timeout_s=CANVAS_TIMEOUT,
         )
 
-        if "LoadScene" not in final_state.get("last_action", ""):
+        # Verify the scene actually changed to main (not just any different scene).
+        # We don't assert last_action == LoadScene here because on-load rules (e.g.
+        # PlayMusicLoop, Preload) fire immediately after scene.ready and overwrite it.
+        if "main" not in final_state.get("scene", ""):
             raise TestFailure(
-                f"Expected last_action to contain LoadScene, got: {final_state.get('last_action')}"
+                f"Expected scene to contain 'main', got: {final_state.get('scene')}"
             )
         if errors:
             raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
@@ -251,10 +255,127 @@ async def test_screenshot_baseline(
 
 
 # ---------------------------------------------------------------------------
+# Test 5 — Navigation: pause menu flow with per-step screenshots
+# ---------------------------------------------------------------------------
+
+async def test_pause_menu_navigation(
+    context: BrowserContext,
+    screenshot_dir: Path,
+    update: bool,
+) -> None:
+    """
+    Full pause menu navigation flow for 3rd_person_game_demo:
+      1. Start menu (screenshot)
+      2. Click Start Game → main scene (screenshot)
+      3. Press Esc → pause menu opens (screenshot)
+      4. Press Esc → pause menu closes (screenshot)
+      5. Press Esc → pause menu opens again (screenshot)
+      6. Click Resume → main scene (screenshot)
+
+    Button coordinates (absolute-positioned, 1280×720 viewport):
+      Start Game: position=(100,100) size=(300,65) → click (250, 132)
+
+    Resume button (ui_panel centered layout, panel width=320 padding=30 gap=16):
+      Panel height = 30 + (50+16+65+16+65) + 30 = 272 → top = (720-272)/2 = 224
+      Resume center y = 224 + 30 + 50 + 16 + 65/2 = 352
+      Resume center x = 1280/2 = 640 → click (640, 352)
+    """
+    page, errors = await open_project(context, "3rd_person_game_demo")
+    steps_dir = screenshot_dir / "pause_nav"
+    steps_dir.mkdir(parents=True, exist_ok=True)
+
+    async def snap(name: str) -> None:
+        """Capture a step screenshot and diff against its baseline (or create one)."""
+        await asyncio.sleep(0.6)   # let one rendered frame settle
+        current = steps_dir / f"{name}_current.png"
+        baseline = steps_dir / "baselines" / f"{name}.png"
+        await page.screenshot(path=str(current))
+        if update or not baseline.exists():
+            baseline.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(current, baseline)
+            label = "updated" if baseline.exists() else "created"
+            print(f"      baseline {label}: {name}")
+        else:
+            diff = compare_screenshots(str(baseline), str(current))
+            verdict = "OK" if diff <= BASELINE_DIFF_THRESHOLD else "DIFF"
+            print(f"      {name}: {diff:.2%} — {verdict}")
+            if diff > BASELINE_DIFF_THRESHOLD:
+                raise TestFailure(
+                    f"Screenshot '{name}' diff {diff:.1%} exceeds threshold. See: {current}"
+                )
+
+    async def after_input(frame_before: int, expected_action: str = "") -> dict:
+        """Wait for Bevy to process an input: frame advances past frame_before and,
+        if expected_action is given, last_action must contain that string."""
+        def pred(s: dict) -> bool:
+            if s.get("frame", 0) <= frame_before:
+                return False
+            if expected_action and expected_action not in s.get("last_action", ""):
+                return False
+            return True
+        return await wait_for_debug_state(page, pred)
+
+    try:
+        # ── Step 1: start menu ──────────────────────────────────────────────
+        await wait_for_debug_state(
+            page, lambda s: s.get("app_state") == "InGame", timeout_s=CANVAS_TIMEOUT
+        )
+        await snap("01_start_menu")
+
+        # ── Step 2: Start Game → main scene ────────────────────────────────
+        state = await wait_for_debug_state(page, lambda s: True)
+        frame = state["frame"]
+        await page.mouse.click(250, 132)   # Start Game button
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("app_state") == "InGame" and "main" in s.get("scene", ""),
+            timeout_s=CANVAS_TIMEOUT,
+        )
+        await snap("02_main_scene")
+
+        # ── Step 3: Esc → pause overlay opens ──────────────────────────────
+        state = await wait_for_debug_state(page, lambda s: True)
+        frame = state["frame"]
+        await page.keyboard.press("Escape")
+        await after_input(frame, expected_action="ToggleOverlay")
+        await snap("03_pause_menu_open")
+
+        # ── Step 4: Esc → pause overlay closes ─────────────────────────────
+        state = await wait_for_debug_state(page, lambda s: True)
+        frame = state["frame"]
+        await page.keyboard.press("Escape")
+        await after_input(frame, expected_action="ToggleOverlay")
+        await snap("04_main_scene_after_esc_close")
+
+        # ── Step 5: Esc → pause overlay opens again ─────────────────────────
+        state = await wait_for_debug_state(page, lambda s: True)
+        frame = state["frame"]
+        await page.keyboard.press("Escape")
+        await after_input(frame, expected_action="ToggleOverlay")
+        await snap("05_pause_menu_reopen")
+
+        # ── Step 6: Resume button → overlay dismissed ───────────────────────
+        state = await wait_for_debug_state(page, lambda s: True)
+        frame = state["frame"]
+        await page.mouse.click(640, 352)   # Resume button (centered panel layout)
+        await after_input(frame, expected_action="UnloadOverlay")
+        await snap("06_main_scene_after_resume")
+
+        if errors:
+            raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+    finally:
+        await page.close()
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
-async def run_all(screenshot_dir: Path, update_baselines: bool) -> list[tuple[str, bool, str]]:
+async def run_all(
+    screenshot_dir: Path,
+    update_baselines: bool,
+    update_baseline_projects: set[str],
+) -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
 
     async with async_playwright() as pw:
@@ -299,13 +420,27 @@ async def run_all(screenshot_dir: Path, update_baselines: bool) -> list[tuple[st
         for project in PROJECTS:
             label = f"baseline:{project}"
             print(f"  [{label}]")
+            # Per-project --update-baseline overrides the global flag for this project only.
+            update_this = update_baselines or project in update_baseline_projects
             try:
-                await test_screenshot_baseline(context, project, screenshot_dir, update_baselines)
+                await test_screenshot_baseline(context, project, screenshot_dir, update_this)
                 results.append((label, True, ""))
                 print(f"    PASS")
             except TestFailure as e:
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
+
+        # --- Navigation: pause menu flow ---
+        label = "navigation:pause_menu_flow"
+        print(f"  [{label}]")
+        update_nav = update_baselines or "pause_nav" in update_baseline_projects
+        try:
+            await test_pause_menu_navigation(context, screenshot_dir, update_nav)
+            results.append((label, True, ""))
+            print(f"    PASS")
+        except TestFailure as e:
+            results.append((label, False, str(e)))
+            print(f"    FAIL: {e}")
 
         await browser.close()
 
@@ -329,12 +464,18 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--skip-build", action="store_true")
-    parser.add_argument("--update-baselines", action="store_true")
+    parser.add_argument("--update-baselines", action="store_true",
+                        help="Overwrite all stored baselines")
+    parser.add_argument("--update-baseline", metavar="TARGET", action="append", default=[],
+                        dest="update_baseline_targets",
+                        help="Overwrite baseline for a specific project or 'pause_nav' "
+                             "(repeatable). E.g. --update-baseline quick_scene")
     parser.add_argument("--screenshot-dir", default="screenshots")
     args = parser.parse_args()
 
     screenshot_dir = Path(args.screenshot_dir)
     screenshot_dir.mkdir(exist_ok=True)
+    update_baseline_projects: set[str] = set(args.update_baseline_targets)
 
     if not args.skip_build:
         if not build_wasm():
@@ -353,7 +494,7 @@ def main() -> None:
     time.sleep(1)
 
     try:
-        results = asyncio.run(run_all(screenshot_dir, args.update_baselines))
+        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects))
     finally:
         server.terminate()
         server.wait()

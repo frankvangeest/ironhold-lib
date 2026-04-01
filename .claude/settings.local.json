@@ -18,7 +18,9 @@
       "Bash(python test_web.py --skip-build)",
       "Bash(python test_web.py)",
       "Bash(cargo check:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(python -m py_compile test_web.py)"
     ]
   }
 }

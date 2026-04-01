@@ -42,6 +42,17 @@ pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedRules(pub Vec<LogicRule>);
 
+/// Global key bindings loaded from the project config.
+/// Maps key name strings (e.g. "Escape") to event trigger names (e.g. "toggle_pause").
+/// Drives `global_input_system` so game creators control all key→event wiring from RON.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedKeyBindings(pub std::collections::HashMap<String, String>);
+
+/// Holds pre-loaded scene asset handles so they stay cached and are ready instantly when needed.
+/// Populated by `Action::Preload`. Cleared on a full `LoadScene` so stale handles don't linger.
+#[derive(Resource, Default)]
+pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
+
 #[derive(Resource)]
 pub struct SceneHandleV2(pub Handle<GameSceneV2>);
 
@@ -228,6 +239,15 @@ pub fn check_project_loaded(
         // No external files — store inline data and proceed.
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
         commands.insert_resource(LoadedRules(config.rules.clone()));
+        {
+            let key_bindings = config.global_key_bindings.clone();
+            for key_name in key_bindings.keys() {
+                if crate::schema::player::InputMap::parse_key(key_name).is_none() {
+                    warn!("global_key_bindings: unrecognised key name {:?} — binding will have no effect", key_name);
+                }
+            }
+            commands.insert_resource(LoadedKeyBindings(key_bindings));
+        }
         commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
         commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
     } else {
@@ -278,6 +298,13 @@ pub fn check_project_loaded(
             config.rules.clone()
         };
         commands.insert_resource(LoadedRules(rules));
+        let key_bindings = config.global_key_bindings.clone();
+        for key_name in key_bindings.keys() {
+            if crate::schema::player::InputMap::parse_key(key_name).is_none() {
+                warn!("global_key_bindings: unrecognised key name {:?} — binding will have no effect", key_name);
+            }
+        }
+        commands.insert_resource(LoadedKeyBindings(key_bindings));
 
         let asset_catalog = if let Some(h) = &pending.asset_catalog {
             asset_catalog_assets.get(h).cloned().unwrap_or_default()
@@ -528,6 +555,30 @@ pub fn spawn_level(
     }
 }
 
+/// Marks entities that belong to an overlay scene (e.g. pause menu, HUD).
+/// Overlay entities are despawned by `Action::UnloadOverlay` and by any full `LoadScene`.
+/// They are NOT despawned when another overlay is loaded (the old overlay is replaced).
+#[derive(Component)]
+pub struct OverlayEntity;
+
+/// Controls whether the next `SceneHandleV2` load replaces the world or adds as an overlay.
+/// Set by `action_executor_system` before loading; reset to Replace by `spawn_scene_v2` after use.
+#[derive(Resource, Default, PartialEq, Eq, Clone, Copy)]
+pub enum PendingSceneLoadMode {
+    #[default]
+    Replace,
+    Overlay,
+}
+
+/// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct SceneMaterialParams<'w> {
+    pub images: ResMut<'w, Assets<Image>>,
+    pub standard: ResMut<'w, Assets<StandardMaterial>>,
+    pub terrain: ResMut<'w, Assets<TerrainMaterial>>,
+    pub built: ResMut<'w, BuiltMaterials>,
+}
+
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct SceneV2Params<'w> {
@@ -547,18 +598,18 @@ pub fn spawn_scene_v2(
     mut events: MessageReader<AssetEvent<GameSceneV2>>,
     mut next_state: ResMut<NextState<AppState>>,
     state: Res<State<AppState>>,
-    current_entities: Query<Entity, With<LevelEntity>>,
+    level_entities: Query<Entity, With<LevelEntity>>,
+    overlay_entities: Query<Entity, With<OverlayEntity>>,
     mut scene_events: MessageWriter<SceneEvent>,
     model_spawner: Res<ModelSpawner>,
     merged_fixes: Res<MergedModelFixes>,
-    mut images: ResMut<Assets<Image>>,
-    mut standard_materials: ResMut<Assets<StandardMaterial>>,
-    mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
-    mut built_materials: ResMut<BuiltMaterials>,
+    mut mats: SceneMaterialParams,
     mut spawn_registry: ResMut<SpawnRegistry>,
+    mut load_mode: ResMut<PendingSceneLoadMode>,
 ) {
     let Some(scene_handle) = params.scene_handle.as_ref() else { return; };
     let Some(project) = params.configs.get(&params.config_handle.0) else { return; };
+    let is_overlay = *load_mode == PendingSceneLoadMode::Overlay;
 
     let mut ready_to_spawn = false;
     for event in events.read() {
@@ -566,14 +617,15 @@ pub fn spawn_scene_v2(
             ready_to_spawn = true;
         }
     }
-    if (*state.get() == AppState::LoadingScene || *state.get() == AppState::LoadingProject)
-        && params.scenes.get(&scene_handle.0).is_some()
-    {
+    let can_spawn_state = *state.get() == AppState::LoadingScene
+        || *state.get() == AppState::LoadingProject
+        || (is_overlay && *state.get() == AppState::InGame);
+    if can_spawn_state && params.scenes.get(&scene_handle.0).is_some() {
         ready_to_spawn = true;
     }
 
     if !ready_to_spawn { return; }
-    if *state.get() == AppState::InGame { return; }
+    if *state.get() == AppState::InGame && !is_overlay { return; }
 
     let Some(scene) = params.scenes.get(&scene_handle.0) else { return; };
 
@@ -586,209 +638,291 @@ pub fn spawn_scene_v2(
 
     info!("Scene V2 Loaded! name={}, {} entities, {} ui", scene.name, scene.entities.len(), scene.ui.len());
 
-    commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
-    spawn_registry.entities.clear();
-    spawn_registry.counter = 0;
-
-    for entity in current_entities.iter() {
+    // Always remove any existing overlay (loading a new scene or new overlay replaces it).
+    for entity in overlay_entities.iter() {
         commands.entity(entity).despawn();
     }
 
-    // Build material handles from the asset catalog for this scene.
-    built_materials.0.clear();
-    for (name, mat_def) in &params.asset_catalog.0.materials {
-        let handle = MaterialFactory::build(
-            &asset_server,
-            &mut standard_materials,
-            &mut terrain_materials,
-            name,
-            mat_def,
-        );
-        built_materials.0.insert(name.clone(), handle);
-    }
-    if !params.asset_catalog.0.materials.is_empty() {
-        info!("Built {} material(s) from asset catalog", params.asset_catalog.0.materials.len());
-    }
+    if is_overlay {
+        // Overlay mode: keep the game world, only spawn the UI section.
+        // Reset load_mode immediately so subsequent loads default to Replace.
+        *load_mode = PendingSceneLoadMode::Replace;
+    } else {
+        // Replace mode: tear down the existing world.
+        commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
+        spawn_registry.entities.clear();
+        spawn_registry.counter = 0;
 
-    // Spawn entities from prefabs
-    let mut player_config: Option<PlayerConfig> = None;
-    for entity_def in &scene.entities {
-        let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
-            warn!("Prefab '{}' not found in catalog, skipping entity '{}'", entity_def.prefab, entity_def.id);
-            continue;
-        };
-
-        let model_path = if let Some(catalog_entry) = params.asset_catalog.0.models.get(&prefab.model) {
-            catalog_entry.path.clone()
-        } else {
-            warn!("Model key '{}' not found in asset catalog, skipping entity '{}'", prefab.model, entity_def.id);
-            continue;
-        };
-
-        let is_player = prefab.components.tags.contains(&"player".to_string());
-
-        let t = &entity_def.transform;
-        let translation = Vec3::new(t.translation.0, t.translation.1, t.translation.2);
-        let rotation = Quat::from_euler(
-            EulerRot::XYZ,
-            t.rotation_euler_deg.0.to_radians(),
-            t.rotation_euler_deg.1.to_radians(),
-            t.rotation_euler_deg.2.to_radians(),
-        );
-        let scale = Vec3::new(t.scale.0, t.scale.1, t.scale.2);
-        let transform = Transform { translation, rotation, scale };
-
-        if is_player {
-            // Build PlayerConfig from prefab data
-            let animation_policy = prefab.animation_policy.clone()
-                .unwrap_or_else(|| "prefabs/animation/player_policy.ron".to_string());
-            player_config = Some(PlayerConfig {
-                model_path,
-                initial_position: (translation.x, translation.y, translation.z),
-                camera: default_camera_config(),
-                inputs: default_input_map(),
-                animation_policy,
-            });
-        } else {
-            let parent = spawn_prefab_instance(
-                &mut commands,
-                &asset_server,
-                &model_spawner,
-                &merged_fixes.0,
-                &params.project_root.0,
-                prefab,
-                model_path,
-                transform,
-                &entity_def.id,
-            );
-            // LevelEntity is already set by spawn_prefab_instance via ModelSpawner;
-            // re-insert here to be explicit and in case the name was overridden.
-            commands.entity(parent).insert(LevelEntity);
+        for entity in level_entities.iter() {
+            commands.entity(entity).despawn();
         }
-    }
 
-    // Spawn UI buttons
+        // Build material handles from the asset catalog for this scene.
+        mats.built.0.clear();
+        for (name, mat_def) in &params.asset_catalog.0.materials {
+            let handle = MaterialFactory::build(
+                &asset_server,
+                &mut mats.standard,
+                &mut mats.terrain,
+                name,
+                mat_def,
+            );
+            mats.built.0.insert(name.clone(), handle);
+        }
+        if !params.asset_catalog.0.materials.is_empty() {
+            info!("Built {} material(s) from asset catalog", params.asset_catalog.0.materials.len());
+        }
+
+        // Spawn entities from prefabs
+        let mut player_config: Option<PlayerConfig> = None;
+        for entity_def in &scene.entities {
+            let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
+                warn!("Prefab '{}' not found in catalog, skipping entity '{}'", entity_def.prefab, entity_def.id);
+                continue;
+            };
+
+            let model_path = if let Some(catalog_entry) = params.asset_catalog.0.models.get(&prefab.model) {
+                catalog_entry.path.clone()
+            } else {
+                warn!("Model key '{}' not found in asset catalog, skipping entity '{}'", prefab.model, entity_def.id);
+                continue;
+            };
+
+            let is_player = prefab.components.tags.contains(&"player".to_string());
+
+            let t = &entity_def.transform;
+            let translation = Vec3::new(t.translation.0, t.translation.1, t.translation.2);
+            let rotation = Quat::from_euler(
+                EulerRot::XYZ,
+                t.rotation_euler_deg.0.to_radians(),
+                t.rotation_euler_deg.1.to_radians(),
+                t.rotation_euler_deg.2.to_radians(),
+            );
+            let scale = Vec3::new(t.scale.0, t.scale.1, t.scale.2);
+            let transform = Transform { translation, rotation, scale };
+
+            if is_player {
+                let animation_policy = prefab.animation_policy.clone()
+                    .unwrap_or_else(|| "prefabs/animation/player_policy.ron".to_string());
+                player_config = Some(PlayerConfig {
+                    model_path,
+                    initial_position: (translation.x, translation.y, translation.z),
+                    camera: default_camera_config(),
+                    inputs: default_input_map(),
+                    animation_policy,
+                });
+            } else {
+                let parent = spawn_prefab_instance(
+                    &mut commands,
+                    &asset_server,
+                    &model_spawner,
+                    &merged_fixes.0,
+                    &params.project_root.0,
+                    prefab,
+                    model_path,
+                    transform,
+                    &entity_def.id,
+                );
+                commands.entity(parent).insert(LevelEntity);
+            }
+        }
+
+        // Spawn player (delayed if terrain present)
+        if let Some(pc) = player_config {
+            if scene.terrain.is_some() {
+                info!("Terrain detected. Delaying player spawn...");
+                commands.spawn(PendingPlayerConfig(pc));
+            } else {
+                spawn_player_entity(
+                    &mut commands,
+                    &asset_server,
+                    &merged_fixes.0,
+                    &model_spawner,
+                    &pc,
+                    &params.project_root.0,
+                );
+            }
+        } else {
+            info!("No player entity in v2 scene, spawning default camera...");
+            commands.spawn((
+                Name::new("Default Camera"),
+                Camera3d::default(),
+                Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+                LevelEntity,
+            ));
+        }
+
+        // Spawn Terrain
+        if let Some(terrain_v2) = &scene.terrain {
+            info!("Spawning V2 Terrain...");
+            use crate::schema::level::TerrainConfig;
+            let terrain_config = TerrainConfig {
+                heightmap_path: terrain_v2.heightmap.clone(),
+                splatmap_path: terrain_v2.splatmap.clone(),
+                height_scale: terrain_v2.scale.1 * 100.0,
+                horizontal_scale: terrain_v2.scale.0 * 100.0,
+                position: (0.0, -10.0, 0.0),
+                chunk_size: terrain_v2.chunk_size,
+                material_paths: terrain_v2.material_paths.clone(),
+            };
+            commands.spawn((
+                Name::new("Terrain"),
+                LevelEntity,
+                terrain_config,
+            ));
+        }
+
+        // Apply lighting
+        apply_lighting_v2(
+            &mut commands,
+            scene,
+            project,
+            &asset_server,
+            &mut mats.images,
+        );
+
+        next_state.set(AppState::InGame);
+    } // end if !is_overlay
+
+    // Spawn UI — always runs for both Replace and Overlay mode.
+    // In Overlay mode the root is tagged OverlayEntity; in Replace mode, LevelEntity.
     if !scene.ui.is_empty() {
-        commands.spawn((
-            Name::new("UI Root"),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                ..default()
-            },
-            LevelEntity,
-        ))
-        .with_children(|parent| {
-            for el in &scene.ui {
-                let mut node = Node {
-                    width: Val::Px(el.size.0),
-                    height: Val::Px(el.size.1),
+        if let Some(panel_def) = &scene.ui_panel {
+            // Panel mode: full-screen flex root → centered panel box → column of elements.
+            let mut root_cmd = commands.spawn((
+                Name::new("UI Root"),
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
-                };
-                node.position_type = PositionType::Absolute;
-                node.left = Val::Px(el.position.0);
-                node.top = Val::Px(el.position.1);
-
-                if el.kind == "label" {
-                    parent.spawn((
-                        Name::new(format!("Label: {}", el.text)),
-                        node,
-                    ))
-                    .with_children(|parent| {
-                        parent.spawn((
-                            Name::new(format!("Text: {}", el.text)),
-                            Text::new(el.text.clone()),
-                            TextFont { font_size: 22.0, ..default() },
-                            TextColor(Color::srgb(0.75, 0.75, 0.75)),
-                        ));
-                    });
-                } else {
-                    let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
-                    node.border = UiRect::all(Val::Px(5.0));
-                    parent.spawn((
-                        Name::new(format!("Button: {}", el.text)),
-                        Button,
-                        node,
-                        BorderColor::from(Color::BLACK),
-                        BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
-                        UiAction::Trigger(trigger),
-                    ))
-                    .with_children(|parent| {
-                        parent.spawn((
-                            Name::new(format!("Text: {}", el.text)),
-                            Text::new(el.text.clone()),
-                            TextFont { font_size: 26.0, ..default() },
-                            TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                        ));
-                    });
-                }
+                },
+            ));
+            if is_overlay {
+                root_cmd.insert(OverlayEntity);
+            } else {
+                root_cmd.insert(LevelEntity);
             }
+            let (pr, pg, pb, pa) = panel_def.background_color;
+            let padding = panel_def.padding;
+            let gap = panel_def.gap;
+            let panel_width = panel_def.width.map(Val::Px).unwrap_or(Val::Auto);
+            let ui_elements = scene.ui.clone();
+            root_cmd.with_children(|parent| {
+                parent.spawn((
+                    Name::new("Panel"),
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        padding: UiRect::all(Val::Px(padding)),
+                        row_gap: Val::Px(gap),
+                        width: panel_width,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(pr, pg, pb, pa)),
+                ))
+                .with_children(|parent| {
+                    for el in &ui_elements {
+                        let node = Node {
+                            width: Val::Px(el.size.0),
+                            height: Val::Px(el.size.1),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        };
+                        spawn_ui_element_node(parent, el, node);
+                    }
+                });
+            });
+        } else {
+            // Absolute positioning mode.
+            let mut root_cmd = commands.spawn((
+                Name::new("UI Root"),
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+            ));
+            if is_overlay {
+                root_cmd.insert(OverlayEntity);
+            } else {
+                root_cmd.insert(LevelEntity);
+            }
+            root_cmd.with_children(|parent| {
+                for el in &scene.ui {
+                    let node = Node {
+                        width: Val::Px(el.size.0),
+                        height: Val::Px(el.size.1),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(el.position.0),
+                        top: Val::Px(el.position.1),
+                        ..default()
+                    };
+                    spawn_ui_element_node(parent, el, node);
+                }
+            });
+        }
+    }
+
+    // Only emit Ready for full scene loads. Overlays must not overwrite debug.scene
+    // (which tracks the active main scene) — otherwise the scene.unloading:<name>
+    // event fires with the overlay's name instead of the main scene's name, breaking
+    // rules like `scene.unloading:main → StopMusic`.
+    if !is_overlay {
+        scene_events.write(SceneEvent::Ready(
+            asset_server
+                .get_path(&scene_handle.0)
+                .map(|p| p.path().to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        ));
+    }
+}
+
+fn spawn_ui_element_node(
+    parent: &mut ChildSpawnerCommands,
+    el: &crate::schema::scene_v2::UiElementDefV2,
+    node: Node,
+) {
+    if el.kind == "label" {
+        parent.spawn((
+            Name::new(format!("Label: {}", el.text)),
+            node,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Name::new(format!("Text: {}", el.text)),
+                Text::new(el.text.clone()),
+                TextFont { font_size: 22.0, ..default() },
+                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+            ));
+        });
+    } else {
+        let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
+        let mut btn_node = node;
+        btn_node.border = UiRect::all(Val::Px(5.0));
+        parent.spawn((
+            Name::new(format!("Button: {}", el.text)),
+            Button,
+            btn_node,
+            BorderColor::from(Color::BLACK),
+            BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+            UiAction::Trigger(trigger),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Name::new(format!("Text: {}", el.text)),
+                Text::new(el.text.clone()),
+                TextFont { font_size: 26.0, ..default() },
+                TextColor(Color::srgb(0.9, 0.9, 0.9)),
+            ));
         });
     }
-
-    // Spawn player (delayed if terrain present)
-    if let Some(pc) = player_config {
-        if scene.terrain.is_some() {
-            info!("Terrain detected. Delaying player spawn...");
-            commands.spawn(PendingPlayerConfig(pc));
-        } else {
-            spawn_player_entity(
-                &mut commands,
-                &asset_server,
-                &merged_fixes.0,
-                &model_spawner,
-                &pc,
-                &params.project_root.0,
-            );
-        }
-    } else {
-        info!("No player entity in v2 scene, spawning default camera...");
-        commands.spawn((
-            Name::new("Default Camera"),
-            Camera3d::default(),
-            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-            LevelEntity,
-        ));
-    }
-
-    // Spawn Terrain
-    if let Some(terrain_v2) = &scene.terrain {
-        info!("Spawning V2 Terrain...");
-        use crate::schema::level::TerrainConfig;
-        let terrain_config = TerrainConfig {
-            heightmap_path: terrain_v2.heightmap.clone(),
-            splatmap_path: terrain_v2.splatmap.clone(),
-            height_scale: terrain_v2.scale.1 * 100.0,
-            horizontal_scale: terrain_v2.scale.0 * 100.0,
-            position: (0.0, -10.0, 0.0),
-            chunk_size: terrain_v2.chunk_size,
-            material_paths: terrain_v2.material_paths.clone(),
-        };
-        commands.spawn((
-            Name::new("Terrain"),
-            LevelEntity,
-            terrain_config,
-        ));
-    }
-
-    // Apply lighting
-    apply_lighting_v2(
-        &mut commands,
-        scene,
-        project,
-        &asset_server,
-        &mut images,
-    );
-
-    next_state.set(AppState::InGame);
-    scene_events.write(SceneEvent::Ready(
-        asset_server
-            .get_path(&scene_handle.0)
-            .map(|p| p.path().to_string_lossy().into_owned())
-            .unwrap_or_default(),
-    ));
 }
 
 fn apply_lighting_v2(
@@ -1062,19 +1196,28 @@ pub fn message_interpreter_system(
     }
 
     for event in scene_events.read() {
-        if let SceneEvent::Ready(path) = event {
-            // Derive scene name from the asset path stem, e.g.
-            // "projects/demo/scenes/main.scene.ron" → "scene.ready:main"
-            let stem = std::path::Path::new(path)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or(path.as_str())
-                .trim_end_matches(".scene.ron")
-                .trim_end_matches(".ron");
-            let event_name = format!("scene.ready:{}", stem);
-            match_rules(&event_name, &loaded_rules, &mut action_queue);
-        }
+        let event_name = match event {
+            SceneEvent::Ready(path) => {
+                let stem = scene_path_stem(path);
+                format!("scene.ready:{}", stem)
+            }
+            SceneEvent::Unloading(path) => {
+                let stem = scene_path_stem(path);
+                format!("scene.unloading:{}", stem)
+            }
+            _ => continue,
+        };
+        match_rules(&event_name, &loaded_rules, &mut action_queue);
     }
+}
+
+fn scene_path_stem(path: &str) -> &str {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(path)
+        .trim_end_matches(".scene.ron")
+        .trim_end_matches(".ron")
 }
 
 pub fn action_executor_system(
@@ -1091,11 +1234,20 @@ pub fn action_executor_system(
     mut debug: ResMut<crate::DebugState>,
     mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
     bg_music_query: Query<Entity, With<BackgroundMusic>>,
+    overlay_entities: Query<Entity, With<OverlayEntity>>,
+    mut load_mode: ResMut<PendingSceneLoadMode>,
+    mut preloaded: ResMut<PreloadedScenes>,
 ) {
     while let Some(action) = action_queue.pop() {
         debug.last_action = format!("{:?}", action);
         match action {
             Action::LoadScene(path) => {
+                // Notify rules that the current scene is about to be replaced.
+                if !debug.scene.is_empty() {
+                    scene_events.write(SceneEvent::Unloading(debug.scene.clone()));
+                }
+                preloaded.0.clear();
+                *load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
                 if resolved.ends_with(".scene.ron") {
@@ -1107,6 +1259,37 @@ pub fn action_executor_system(
                 }
                 scene_events.write(SceneEvent::Requested(resolved));
                 next_state.set(AppState::LoadingScene);
+            }
+            Action::LoadSceneOverlay(path) => {
+                *load_mode = PendingSceneLoadMode::Overlay;
+                let resolved = resolve_project_path(&project_root.0, &path);
+                info!("Executing Action::LoadSceneOverlay: {}", resolved);
+                let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
+                commands.insert_resource(SceneHandleV2(handle));
+                scene_events.write(SceneEvent::Requested(resolved));
+            }
+            Action::UnloadOverlay => {
+                info!("Executing Action::UnloadOverlay");
+                for entity in overlay_entities.iter() {
+                    commands.entity(entity).despawn();
+                }
+            }
+            Action::ToggleOverlay(path) => {
+                if overlay_entities.is_empty() {
+                    // No overlay active — load it.
+                    *load_mode = PendingSceneLoadMode::Overlay;
+                    let resolved = resolve_project_path(&project_root.0, &path);
+                    info!("Action::ToggleOverlay: opening overlay {}", resolved);
+                    let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
+                    commands.insert_resource(SceneHandleV2(handle));
+                    scene_events.write(SceneEvent::Requested(resolved));
+                } else {
+                    // Overlay is active — dismiss it.
+                    info!("Action::ToggleOverlay: closing overlay");
+                    for entity in overlay_entities.iter() {
+                        commands.entity(entity).despawn();
+                    }
+                }
             }
             Action::Quit => {
                 info!("Executing Action::Quit");
@@ -1171,6 +1354,12 @@ pub fn action_executor_system(
                     req.queue.push_back(anim.clone());
                 }
             }
+            Action::StopMusic => {
+                info!("Executing Action::StopMusic");
+                for entity in bg_music_query.iter() {
+                    commands.entity(entity).despawn();
+                }
+            }
             Action::PlayMusicLoop(key) => {
                 // Stop any currently playing background music.
                 for entity in bg_music_query.iter() {
@@ -1208,6 +1397,16 @@ pub fn action_executor_system(
                     gv.volume = bevy::audio::Volume::Linear(linear);
                 } else {
                     warn!("Action::SetVolume: GlobalVolume resource not available");
+                }
+            }
+            Action::Preload(path) => {
+                let resolved = resolve_project_path(&project_root.0, &path);
+                info!("Action::Preload: warming cache for {}", resolved);
+                if resolved.ends_with(".scene.ron") {
+                    let handle: Handle<GameSceneV2> = asset_server.load(resolved);
+                    preloaded.0.push(handle);
+                } else {
+                    warn!("Action::Preload: only .scene.ron paths are supported (got {})", resolved);
                 }
             }
             Action::PlaySound(key) => {

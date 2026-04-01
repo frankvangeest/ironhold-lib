@@ -73,6 +73,7 @@ fn test_ui_button_to_load_scene_action() {
             asset_catalog: None,
             prefab_catalog: None,
             global_environment: None,
+            global_key_bindings: std::collections::HashMap::new(),
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
         app.world_mut().insert_resource(LoadedRules(rules));
@@ -249,6 +250,7 @@ fn test_ui_button_to_quit_action() {
             asset_catalog: None,
             prefab_catalog: None,
             global_environment: None,
+            global_key_bindings: std::collections::HashMap::new(),
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
         app.world_mut().insert_resource(LoadedRules(rules));
@@ -301,6 +303,7 @@ fn model_fixup_persists_reset() {
             asset_catalog: None,
             prefab_catalog: None,
             global_environment: None,
+            global_key_bindings: std::collections::HashMap::new(),
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
     }
@@ -396,6 +399,7 @@ fn test_ui_button_positioning() {
             asset_catalog: None,
             prefab_catalog: None,
             global_environment: None,
+            global_key_bindings: std::collections::HashMap::new(),
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
@@ -462,6 +466,7 @@ fn test_entity_names() {
             asset_catalog: None,
             prefab_catalog: None,
             global_environment: None,
+            global_key_bindings: std::collections::HashMap::new(),
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 

@@ -18,6 +18,10 @@ pub struct GameSceneV2 {
     pub entities: Vec<SceneEntityDef>,
     #[serde(default)]
     pub ui: Vec<UiElementDefV2>,
+    /// When set, the UI elements are laid out in a centered panel box instead of
+    /// using absolute positioning. `position` on each element is ignored in this mode.
+    #[serde(default)]
+    pub ui_panel: Option<UiPanelDef>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -81,6 +85,28 @@ pub struct UiElementDefV2 {
     /// May be omitted (defaults to empty) for kind="label".
     #[serde(default)]
     pub action: String,
+    /// Absolute position in pixels. Ignored when `ui_panel` is set on the scene.
+    #[serde(default)]
     pub position: (f32, f32),
     pub size: (f32, f32),
 }
+
+/// When present on a scene, UI elements are laid out in a centered panel box
+/// instead of using absolute positioning.
+#[derive(Deserialize, Debug, Clone)]
+pub struct UiPanelDef {
+    /// Background color of the panel box as RGBA (0.0–1.0).
+    pub background_color: (f32, f32, f32, f32),
+    /// Inner padding around panel contents in pixels.
+    #[serde(default = "default_panel_padding")]
+    pub padding: f32,
+    /// Gap between child elements in pixels.
+    #[serde(default = "default_panel_gap")]
+    pub gap: f32,
+    /// Optional fixed width of the panel in pixels. Auto-sized if omitted.
+    #[serde(default)]
+    pub width: Option<f32>,
+}
+
+fn default_panel_padding() -> f32 { 20.0 }
+fn default_panel_gap() -> f32 { 12.0 }

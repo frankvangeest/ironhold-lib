@@ -59,10 +59,13 @@ impl Plugin for GamePlugin {
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
+            .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedSpawnPoints>()
             .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
+            .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
+            .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
@@ -83,12 +86,20 @@ impl Plugin for GamePlugin {
             // Scene + UI + input
             .add_systems(Update, (
                 spawn_level,
-                spawn_scene_v2,
+                // spawn_scene_v2 must run BEFORE the message/action pipeline each frame.
+                // The action executor sets load_mode (ResMut, immediate) but updates
+                // SceneHandleV2 via commands (deferred). If spawn_scene_v2 ran after the
+                // executor in the same frame it would see load_mode=Overlay with the old
+                // SceneHandleV2, triggering a spurious spawn and resetting load_mode to
+                // Replace before the correct handle is ever visible.
+                spawn_scene_v2.before(message_interpreter_system),
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
                 apply_material_overrides,
                 button_system,
             ))
+            // Global key input (ESC, etc.) → UI messages, must run before interpreter
+            .add_systems(Update, global_input_system.before(message_interpreter_system))
             // Messages -> actions (chained: interpreter must run before executor each frame)
             .add_systems(Update, (
                 message_interpreter_system,

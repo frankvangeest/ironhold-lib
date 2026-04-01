@@ -27,7 +27,23 @@
         ),
         (
             on: "scene.ready:main",
-            do_actions: [ PlayMusicLoop("bg_music") ],
+            do_actions: [ PlayMusicLoop("bg_music"), Preload("scenes/pause.scene.ron") ],
+        ),
+        (
+            on: "ui.button_pressed:toggle_pause",
+            do_actions: [ ToggleOverlay("scenes/pause.scene.ron") ],
+        ),
+        (
+            on: "ui.button_pressed:resume",
+            do_actions: [ UnloadOverlay ],
+        ),
+        (
+            on: "ui.button_pressed:pause_quit",
+            do_actions: [ Log("Quit from pause menu"), Quit ],
+        ),
+        (
+            on: "scene.unloading:main",
+            do_actions: [ StopMusic ],
         ),
         (
             on: "ui.button_pressed:dance",

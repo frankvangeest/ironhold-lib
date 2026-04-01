@@ -1,0 +1,36 @@
+(
+  schema_version: 2,
+  name: "pause",
+
+  entities: [],
+
+  ui_panel: Some((
+    background_color: (0.05, 0.05, 0.1, 0.92),
+    padding: 30.0,
+    gap: 16.0,
+    width: Some(320.0),
+  )),
+
+  ui: [
+    (
+      kind: "label",
+      id: "pause_title",
+      text: "Paused",
+      size: (280.0, 50.0),
+    ),
+    (
+      kind: "button",
+      id: "resume_button",
+      text: "Resume",
+      action: "ui.resume",
+      size: (280.0, 65.0),
+    ),
+    (
+      kind: "button",
+      id: "quit_button",
+      text: "Quit Game",
+      action: "ui.pause_quit",
+      size: (280.0, 65.0),
+    ),
+  ],
+)
