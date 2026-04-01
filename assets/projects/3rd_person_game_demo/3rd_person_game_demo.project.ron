@@ -1,5 +1,5 @@
 (
-    schema_version: 2,
+    schema_version: 3,
     project_id: Some("3rd_person_game_demo"),
     display_name: Some("3rd Person Game Demo"),
 
@@ -7,7 +7,7 @@
 
     asset_catalog: Some("assets.ron"),
     prefab_catalog: Some("prefabs/prefabs.ron"),
-    rules_path: Some("logic/rules.ron"),
+    state_machine_path: Some("logic/state_machine.ron"),
     model_fixes_path: Some("overrides/model_fixes.ron"),
 
     global_environment: Some((

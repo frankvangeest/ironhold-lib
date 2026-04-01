@@ -1,4 +1,5 @@
-use ironhold_core::schema::{GameLevel, ProjectConfig};
+use ironhold_core::schema::{GameLevel, ProjectConfig, StateMachineAsset};
+use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ron::de::from_str;
 use std::fs;
@@ -93,6 +94,31 @@ fn regression_schema_version_in_assets() {
                 .unwrap_or_else(|e| panic!("GameLevel failed to parse {}: {}", file.display(), e));
             level.validate()
                 .unwrap_or_else(|e| panic!("GameLevel failed validation {}: {}", file.display(), e));
+        }
+    }
+
+    // 3) Logic files: assets/projects/*/logic/rules.ron and logic/state_machine.ron
+    let project_dirs = fs::read_dir(&projects_dir)
+        .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
+
+    for entry in project_dirs.flatten() {
+        let logic_dir = entry.path().join("logic");
+        if !logic_dir.is_dir() { continue; }
+
+        let rules_file = logic_dir.join("rules.ron");
+        if rules_file.is_file() {
+            let contents = fs::read_to_string(&rules_file)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", rules_file.display(), e));
+            let _: LogicRulesAsset = from_str(&contents)
+                .unwrap_or_else(|e| panic!("LogicRulesAsset failed to parse {}: {}", rules_file.display(), e));
+        }
+
+        let sm_file = logic_dir.join("state_machine.ron");
+        if sm_file.is_file() {
+            let contents = fs::read_to_string(&sm_file)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", sm_file.display(), e));
+            let _: StateMachineAsset = from_str(&contents)
+                .unwrap_or_else(|e| panic!("StateMachineAsset failed to parse {}: {}", sm_file.display(), e));
         }
     }
 }

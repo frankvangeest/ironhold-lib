@@ -47,19 +47,21 @@ Entry point for a project. References all other files.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `schema_version` | `u32` | ✅ | Must be `1` or `2` |
+| `schema_version` | `u32` | ✅ | Must be `1`, `2`, or `3` |
 | `initial_scene` | `String` | ✅ | Path to starting scene, relative to project root |
-| `project_id` | `Option<String>` | v2 | Machine-readable identifier |
-| `display_name` | `Option<String>` | v2 | Human-readable name |
-| `asset_catalog` | `Option<String>` | v2 | Path to `assets.ron` |
-| `prefab_catalog` | `Option<String>` | v2 | Path to `prefabs/prefabs.ron` |
-| `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` |
-| `model_fixes_path` | `Option<String>` | v1/v2 | Path to `overrides/model_fixes.ron` |
+| `project_id` | `Option<String>` | v2+ | Machine-readable identifier |
+| `display_name` | `Option<String>` | v2+ | Human-readable name |
+| `asset_catalog` | `Option<String>` | v2+ | Path to `assets.ron` |
+| `prefab_catalog` | `Option<String>` | v2+ | Path to `prefabs/prefabs.ron` |
+| `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` (rules workflow) |
+| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow; use instead of `rules_path`) |
+| `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
+| `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
-| `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2) |
+| `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
-**Example (v2):**
+**Example (v2 — rules workflow):**
 ```ron
 (
     schema_version: 2,
@@ -72,14 +74,26 @@ Entry point for a project. References all other files.
     prefab_catalog: Some("prefabs/prefabs.ron"),
     rules_path: Some("logic/rules.ron"),
     model_fixes_path: Some("overrides/model_fixes.ron"),
+)
+```
 
-    global_environment: Some((
-        intensity: 400.0,
-        fallback: Some((
-            top_color: (0.1, 0.2, 0.4),
-            bottom_color: (0.01, 0.01, 0.01),
-        )),
-    )),
+**Example (v3 — FSM workflow):**
+```ron
+(
+    schema_version: 3,
+    project_id: Some("my_game"),
+    display_name: Some("My Game"),
+
+    initial_scene: "scenes/start_menu.scene.ron",
+
+    asset_catalog: Some("assets.ron"),
+    prefab_catalog: Some("prefabs/prefabs.ron"),
+    state_machine_path: Some("logic/state_machine.ron"),
+    model_fixes_path: Some("overrides/model_fixes.ron"),
+
+    global_key_bindings: {
+        "Escape": "toggle_pause",
+    },
 )
 ```
 

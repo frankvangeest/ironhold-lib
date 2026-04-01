@@ -1,0 +1,64 @@
+(
+    schema_version: 1,
+    initial_state: "menu",
+
+    // Any-state event bindings that do NOT change state.
+    // Useful for global hotkeys or debug commands applicable in every state.
+    global_on: [],
+
+    states: [
+        (
+            name: "menu",
+            entry_actions: [],
+            exit_actions: [],
+            on: [
+                ( event: "ui.button_pressed:start_game", do_actions: [ Log("LoadScene Triggered"), LoadScene("scenes/main.scene.ron") ] ),
+                ( event: "ui.button_pressed:options",    do_actions: [ Log("Options Triggered"),   LoadScene("scenes/options.scene.ron") ] ),
+                ( event: "ui.button_pressed:quit",       do_actions: [ Log("Quit Triggered"),      Quit ] ),
+            ],
+        ),
+        (
+            name: "options",
+            entry_actions: [],
+            exit_actions: [],
+            on: [
+                ( event: "ui.button_pressed:back_to_start_menu", do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
+                ( event: "ui.button_pressed:set_volume_0",       do_actions: [ SetVolume(0) ] ),
+                ( event: "ui.button_pressed:set_volume_25",      do_actions: [ SetVolume(25) ] ),
+                ( event: "ui.button_pressed:set_volume_50",      do_actions: [ SetVolume(50) ] ),
+                ( event: "ui.button_pressed:set_volume_75",      do_actions: [ SetVolume(75) ] ),
+                ( event: "ui.button_pressed:set_volume_100",     do_actions: [ SetVolume(100) ] ),
+            ],
+        ),
+        (
+            name: "playing",
+            entry_actions: [ PlayMusicLoop("bg_music"), Preload("scenes/pause.scene.ron") ],
+            exit_actions:  [ StopMusic ],
+            on: [
+                ( event: "ui.button_pressed:dance",        do_actions: [ PlayAnimation("dance") ] ),
+                ( event: "ui.button_pressed:test_actions", do_actions: [ Spawn(prefab: "chest_02") ] ),
+                ( event: "ui.button_pressed:start_menu",   do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
+            ],
+        ),
+        (
+            name: "paused",
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
+            exit_actions:  [ UnloadOverlay ],
+            on: [
+                ( event: "ui.button_pressed:pause_quit", do_actions: [ Quit ] ),
+            ],
+        ),
+    ],
+
+    transitions: [
+        // Scene lifecycle drives state entry (from omitted = fires from any state).
+        ( on: "scene.ready:start_menu", to: "menu" ),
+        ( on: "scene.ready:options",    to: "options" ),
+        ( on: "scene.ready:main",       to: "playing" ),
+
+        // State-specific transitions.
+        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+        ( from: Some("paused"),  on: "ui.button_pressed:resume",       to: "playing" ),
+    ],
+)

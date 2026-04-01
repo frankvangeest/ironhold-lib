@@ -61,6 +61,7 @@ impl Plugin for GamePlugin {
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
+            .init_resource::<crate::runtime::scene_manager::LoadedStateMachine>()
             .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
@@ -78,6 +79,7 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
+            .add_plugins(RonAssetPlugin::<crate::schema::project::StateMachineAsset>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
@@ -103,9 +105,10 @@ impl Plugin for GamePlugin {
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
-            // Messages -> actions (chained: interpreter must run before executor each frame)
+            // Messages -> actions (chained: interpreters must run before executor each frame)
             .add_systems(Update, (
                 message_interpreter_system,
+                fsm_interpreter_system,
                 action_executor_system,
             ).chain())
             // Physics-driven input + movement must run in FixedUpdate for stable simulation

@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 use crate::ProjectRoot;
 use crate::schema::*;
+use crate::schema::project::StateMachineAsset;
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
-    MergedModelFixes, LoadedRules, LoadedKeyBindings, LoadedAssetCatalog, LoadedPrefabCatalog,
-    PendingProjectLoads, SceneHandleV2, resolve_project_path,
+    MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings,
+    LoadedAssetCatalog, LoadedPrefabCatalog, PendingProjectLoads, SceneHandleV2,
+    LogicState, resolve_project_path,
 };
 
 pub fn check_project_loaded(
@@ -21,6 +23,7 @@ pub fn check_project_loaded(
     pending: Option<Res<PendingProjectLoads>>,
     model_fixes_assets: Res<Assets<ModelFixesAsset>>,
     rules_assets: Res<Assets<LogicRulesAsset>>,
+    state_machine_assets: Res<Assets<StateMachineAsset>>,
     asset_catalog_assets: Res<Assets<AssetCatalog>>,
     prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
 ) {
@@ -42,6 +45,11 @@ pub fn check_project_loaded(
             info!("Loading external rules from: {}", resolved);
             asset_server.load::<LogicRulesAsset>(resolved)
         });
+        let state_machine_handle = config.state_machine_path.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading state machine from: {}", resolved);
+            asset_server.load::<StateMachineAsset>(resolved)
+        });
         let asset_catalog_handle = config.asset_catalog.as_ref().map(|p| {
             let resolved = resolve_project_path(&project_root.0, p);
             info!("Loading asset catalog from: {}", resolved);
@@ -55,11 +63,13 @@ pub fn check_project_loaded(
 
         let any_pending = model_fixes_handle.is_some()
             || rules_handle.is_some()
+            || state_machine_handle.is_some()
             || asset_catalog_handle.is_some()
             || prefab_catalog_handle.is_some();
         commands.insert_resource(PendingProjectLoads {
             model_fixes: model_fixes_handle,
             rules: rules_handle,
+            state_machine: state_machine_handle,
             asset_catalog: asset_catalog_handle,
             prefab_catalog: prefab_catalog_handle,
         });
@@ -71,6 +81,7 @@ pub fn check_project_loaded(
         // No external files — store inline data and proceed.
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
         commands.insert_resource(LoadedRules(config.rules.clone()));
+        commands.insert_resource(LoadedStateMachine(None));
         {
             let key_bindings = config.global_key_bindings.clone();
             for key_name in key_bindings.keys() {
@@ -103,6 +114,15 @@ pub fn check_project_loaded(
                 bevy::asset::LoadState::Loaded => {}
                 bevy::asset::LoadState::Failed(_) => {
                     warn!("rules failed to load — proceeding without it");
+                }
+                _ => { return; }
+            }
+        }
+        if let Some(h) = &pending.state_machine {
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(_) => {
+                    warn!("state machine failed to load — proceeding without it");
                 }
                 _ => { return; }
             }
@@ -143,6 +163,20 @@ pub fn check_project_loaded(
             config.rules.clone()
         };
         commands.insert_resource(LoadedRules(rules));
+
+        let fsm = pending.state_machine.as_ref()
+            .and_then(|h| state_machine_assets.get(h))
+            .cloned();
+        if let Some(ref machine) = fsm {
+            info!(
+                "State machine loaded: initial_state=\"{}\", {} states, {} transitions",
+                machine.initial_state,
+                machine.states.len(),
+                machine.transitions.len(),
+            );
+            commands.insert_resource(LogicState(machine.initial_state.clone()));
+        }
+        commands.insert_resource(LoadedStateMachine(fsm));
 
         let key_bindings = config.global_key_bindings.clone();
         for key_name in key_bindings.keys() {

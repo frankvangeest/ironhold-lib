@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑04‑01_
+_Last updated: 2026‑04‑02_
 
 ## Legend
 - ✅ Implemented
@@ -15,7 +15,7 @@ _Last updated: 2026‑04‑01_
 |----------:|-----------------------------------|:------:|-------|
 | 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
 | 0.2       | Event/Action Bus refactor         |   ✅   | Message→Interpreter→Action→Executor fully wired with project-level logic rules. |
-| 0.3       | Global Logic (FSM v1)             |   🟡   | Named logic states (`LogicState`), state-gated rules (`when`), and `EnterState` action implemented. Proper FSM asset type with explicit states, transitions, and entry/exit actions not yet implemented. |
+| 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states, state-gated rules, `EnterState`, and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` migrated to FSM. |
 | 0.4       | Entity Logic (FSM v1)             |   ⛔   | Not implemented. |
 | 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
 | 0.6       | Networking Prototype              |   ⛔   | Not implemented. |
@@ -31,6 +31,7 @@ _Last updated: 2026‑04‑01_
 | Logic → Action execution      |   ✅   | `ActionQueue` processed by `action_executor_system`. |
 | Action infrastructure         |   ✅   | interpreter & executor wired. |
 | State-gated rules             |   ✅   | `LogicRule.when` field gates rules to a named logic state; `EnterState` action transitions between states. |
+| FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; replaces `rules.ron` for FSM projects. |
 | Live event domains            |   ✅   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
 | Planned event domains         |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
 | Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready/Unloading` types exist; full lifecycle choreography is WIP. |
@@ -38,7 +39,7 @@ _Last updated: 2026‑04‑01_
 ### Data Formats & Validation
 | Area                                  | Status | Notes |
 |---------------------------------------|:------:|-------|
-| Top‑level `schema_version` required   |   ✅   | Enforced for Project & Scene (v1). |
+| Top‑level `schema_version` required   |   ✅   | Project: v1/v2/v3 accepted; Scene: v2. |
 | Deny unknown fields                   |   ✅   | Strict serde on top‑level assets. |
 | Asset regression tests                |   ✅   | Scans `assets/**/*.ron` for schema compliance. |
 | Schema migrations/diagnostics         |   ⛔   | Planned. |
@@ -98,24 +99,48 @@ _Last updated: 2026‑04‑01_
 
 ---
 
-## Project Logic (rules)
-- Project files map events to actions, with optional state-gating.
+## Project Logic
+
+Two authoring workflows are supported. A project uses one or the other via its `.project.ron`.
+
+### rules.ron workflow (schema v2)
+- `rules_path: Some("logic/rules.ron")` in project config.
 - Rules with `when` omitted (or `None`) fire in any logic state.
 - Rules with `when: Some("state_name")` only fire while the interpreter is in that named state.
 - `Action::EnterState(name)` transitions to a named state; `EnterState("")` returns to stateless.
+
+### state_machine.ron workflow (schema v1) ✅
+- `state_machine_path: Some("logic/state_machine.ron")` in project config.
+- Declares named states with `entry_actions`, `exit_actions`, and in-state `on` event bindings.
+- `transitions` list drives state changes (`from` optional — omit for any-state transitions).
+- `global_on` list fires regardless of current state without changing state.
+- The engine fires exit/entry actions automatically; authors do not write `EnterState` manually.
+- `initial_state` sets the starting `LogicState` immediately when the asset loads.
 - Example:
   ```ron
-  rules: [
-    // State transition — no when guard, fires always
-    ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop("bg_music") ] ),
-
-    // Gated to "playing" state
-    ( on: "ui.button_pressed:dance", when: Some("playing"), do_actions: [ PlayAnimation("dance") ] ),
-    ( on: "ui.button_pressed:toggle_pause", when: Some("playing"), do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
-
-    // Gated to "paused" state
-    ( on: "ui.button_pressed:toggle_pause", when: Some("paused"), do_actions: [ UnloadOverlay, EnterState("playing") ] ),
-  ]
+  // logic/state_machine.ron
+  (
+    schema_version: 1,
+    initial_state: "menu",
+    global_on: [],
+    states: [
+      ( name: "menu", entry_actions: [], exit_actions: [],
+        on: [ ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ) ] ),
+      ( name: "playing",
+        entry_actions: [ PlayMusicLoop("bg_music") ],
+        exit_actions:  [ StopMusic ],
+        on: [ ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ) ] ),
+      ( name: "paused",
+        entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
+        exit_actions:  [ UnloadOverlay ],
+        on: [] ),
+    ],
+    transitions: [
+      ( on: "scene.ready:main",       to: "playing" ),  // any-state
+      ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
+      ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+    ],
+  )
   ```
 
 ## UI v1 Scope (authoring)

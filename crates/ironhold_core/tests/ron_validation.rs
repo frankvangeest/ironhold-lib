@@ -1,4 +1,4 @@
-use ironhold_core::schema::{ProjectConfig, GameLevel};
+use ironhold_core::schema::{ProjectConfig, GameLevel, StateMachineAsset};
 use ron::de::from_str;
 
 // ProjectConfig tests
@@ -60,6 +60,23 @@ fn test_invalid_project_config() {
 }
 
 #[test]
+fn test_project_config_v3_deserialization() {
+    let ron_str = r#"
+        (
+            schema_version: 3,
+            initial_scene: "scenes/main.ron",
+            project_id: Some("fsm_project"),
+            state_machine_path: Some("logic/state_machine.ron"),
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize v3 ProjectConfig");
+    assert_eq!(config.schema_version, 3);
+    assert_eq!(config.state_machine_path.as_deref(), Some("logic/state_machine.ron"));
+    assert!(config.rules_path.is_none());
+    assert!(config.validate().is_ok());
+}
+
+#[test]
 fn test_project_config_wrong_schema_version_is_invalid() {
     let ron_str = r#"
         (
@@ -84,6 +101,69 @@ fn test_project_config_unknown_field_is_error() {
     "#;
     let result: Result<ProjectConfig, _> = ron::de::from_str(ron_str);
     assert!(result.is_err(), "unknown fields should be rejected");
+}
+
+// StateMachineAsset tests
+
+#[test]
+fn test_state_machine_asset_deserialization() {
+    // Covers: explicit from: Some(...), omitted from (any-state), global_on, in-state on.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "menu",
+            global_on: [
+                ( event: "ui.button_pressed:debug", do_actions: [ Log("debug") ] ),
+            ],
+            states: [
+                (
+                    name: "menu",
+                    entry_actions: [],
+                    exit_actions: [],
+                    on: [
+                        ( event: "ui.button_pressed:start", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+                    ],
+                ),
+                (
+                    name: "playing",
+                    entry_actions: [ PlayMusicLoop("bg") ],
+                    exit_actions:  [ StopMusic ],
+                    on: [],
+                ),
+            ],
+            transitions: [
+                // Omitted `from` = any state.
+                ( on: "scene.ready:main", to: "playing" ),
+                // Explicit from: Some(...).
+                ( from: Some("playing"), on: "ui.button_pressed:quit", to: "menu" ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).expect("StateMachineAsset failed to parse");
+    assert_eq!(fsm.schema_version, 1);
+    assert_eq!(fsm.initial_state, "menu");
+    assert_eq!(fsm.states.len(), 2);
+    assert_eq!(fsm.transitions.len(), 2);
+    assert_eq!(fsm.global_on.len(), 1);
+    assert!(fsm.transitions[0].from.is_none(), "omitted from must deserialise as None");
+    assert_eq!(fsm.transitions[1].from.as_deref(), Some("playing"));
+}
+
+#[test]
+fn test_state_machine_asset_bare_string_from_is_error() {
+    // Regression: `from: "playing"` (no Some wrapper) must fail — it burned us once.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "a",
+            states: [],
+            transitions: [
+                ( from: "playing", on: "ui.button_pressed:x", to: "b" ),
+            ],
+        )
+    "#;
+    let result: Result<StateMachineAsset, _> = from_str(ron_str);
+    assert!(result.is_err(), "bare string for Option<String> must be rejected by RON");
 }
 
 // GameLevel tests

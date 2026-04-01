@@ -33,6 +33,54 @@ pub struct LogicRulesAsset {
     pub rules: Vec<LogicRule>,
 }
 
+/// A standalone `.ron` asset holding a finite-state machine definition (schema v1).
+/// Replaces `logic/rules.ron` for projects that use the FSM authoring workflow.
+/// Referenced via `state_machine_path` in the project config.
+#[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+pub struct StateMachineAsset {
+    pub schema_version: u32,
+    /// The logic state the machine starts in before any transitions fire.
+    pub initial_state: String,
+    /// Named states with entry/exit actions and in-state event bindings.
+    pub states: Vec<FsmState>,
+    /// State-change transitions triggered by events.
+    pub transitions: Vec<FsmTransition>,
+    /// Event bindings that fire from any state without changing state.
+    #[serde(default)]
+    pub global_on: Vec<FsmEventBinding>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FsmState {
+    pub name: String,
+    /// Actions queued automatically when entering this state.
+    #[serde(default)]
+    pub entry_actions: Vec<Action>,
+    /// Actions queued automatically when leaving this state.
+    #[serde(default)]
+    pub exit_actions: Vec<Action>,
+    /// In-state event bindings; fire while in this state without changing state.
+    #[serde(default)]
+    pub on: Vec<FsmEventBinding>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FsmTransition {
+    /// Source state name. Omit (or `None`) to match any current state.
+    #[serde(default)]
+    pub from: Option<String>,
+    /// Event string that triggers this transition (e.g. `"ui.button_pressed:start_game"`).
+    pub on: String,
+    /// Target state after the transition fires.
+    pub to: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FsmEventBinding {
+    pub event: String,
+    pub do_actions: Vec<Action>,
+}
+
 #[derive(Deserialize, Asset, TypePath, Debug, Clone, Resource)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
@@ -45,6 +93,9 @@ pub struct ProjectConfig {
     // V2: path to external logic/rules.ron
     #[serde(default)]
     pub rules_path: Option<String>,
+    // V2: path to external logic/state_machine.ron (FSM workflow; replaces rules_path)
+    #[serde(default)]
+    pub state_machine_path: Option<String>,
 
     // V1: inline per-model transform corrections
     #[serde(default)]
@@ -90,9 +141,9 @@ pub struct ProjectConfigHandle(pub Handle<ProjectConfig>);
 
 impl ProjectConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 1 && self.schema_version != 2 {
+        if self.schema_version < 1 || self.schema_version > 3 {
             return Err(format!(
-                "Unsupported ProjectConfig schema_version {} (expected 1 or 2)",
+                "Unsupported ProjectConfig schema_version {} (expected 1, 2, or 3)",
                 self.schema_version
             ));
         }

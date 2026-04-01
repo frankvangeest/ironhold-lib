@@ -41,6 +41,7 @@ This section is factual and reflects what exists right now.
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
 - ✅ A message interpreter maps UI messages and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
 - ✅ Rules support an optional `when` guard: rules with `when: Some("state_name")` only fire while the interpreter is in that named state; rules with `when: None` (or omitted) fire in any state.
+- ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. Replaces `rules.ron` for FSM projects. States declare `entry_actions`, `exit_actions`, and in-state `on` bindings; `transitions` drive state changes; `global_on` fires from any state.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
   - `LoadSceneOverlay(path)` / `UnloadOverlay` load/unload overlay scenes (e.g. pause menu).
@@ -52,7 +53,7 @@ This section is factual and reflects what exists right now.
   - `Preload(path)` warms the asset cache for a scene before it is needed.
   - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
-- ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed.
+- ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed. FSM transitions update it directly in the interpreter.
 - ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, and `logic_state` for observability and browser-based testing.
 
 ## Event model (planned)
@@ -237,10 +238,55 @@ Applies actions to the world. Key design points:
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 
 ### Infrastructure ✅
-- `ActionQueue` — push/pop queue processed each frame by `action_executor_system`
-- `LogicState` resource — tracks the current named state (default `""`); checked by the interpreter when evaluating `when` guards
+- `ActionQueue` — LIFO stack processed each frame by `action_executor_system` (push order determines execution order)
+- `LogicState` resource — tracks the current named state (default `""`); checked by both interpreters
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
 - Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support optional `when: Option<String>` state guard
+- `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; used when `state_machine_path` is set in the project config
+
+### FSM asset schema (`logic/state_machine.ron`) ✅
+
+```ron
+(
+    schema_version: 1,
+    initial_state: "menu",   // sets LogicState on load; no entry actions fired at startup
+
+    global_on: [
+        // Fires from any state; does not change state.
+        ( event: "ui.button_pressed:debug_reload", do_actions: [ Log("reload") ] ),
+    ],
+
+    states: [
+        (
+            name: "playing",
+            entry_actions: [ PlayMusicLoop("bg_music") ],   // queued when entering this state
+            exit_actions:  [ StopMusic ],                    // queued when leaving this state
+            on: [
+                // In-state bindings: fire while in "playing", do not change state.
+                ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ),
+            ],
+        ),
+        (
+            name: "paused",
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
+            exit_actions:  [ UnloadOverlay ],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        // Omit `from` to match any current state.
+        ( on: "scene.ready:main", to: "playing" ),
+
+        // Explicit from/to.
+        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+    ],
+)
+```
+
+**Execution order per transition:** exit actions → state change → entry actions.
+The engine handles this automatically; authors do not write `EnterState` in FSM data.
 
 > New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
 

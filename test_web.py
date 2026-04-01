@@ -337,28 +337,40 @@ async def test_pause_menu_navigation(
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
         await page.keyboard.press("Escape")
-        await after_input(frame, expected_action="ToggleOverlay")
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("frame", 0) > frame and s.get("logic_state") == "paused",
+        )
         await snap("03_pause_menu_open")
 
         # ── Step 4: Esc → pause overlay closes ─────────────────────────────
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
         await page.keyboard.press("Escape")
-        await after_input(frame, expected_action="ToggleOverlay")
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("frame", 0) > frame and s.get("logic_state") == "playing",
+        )
         await snap("04_main_scene_after_esc_close")
 
         # ── Step 5: Esc → pause overlay opens again ─────────────────────────
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
         await page.keyboard.press("Escape")
-        await after_input(frame, expected_action="ToggleOverlay")
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("frame", 0) > frame and s.get("logic_state") == "paused",
+        )
         await snap("05_pause_menu_reopen")
 
         # ── Step 6: Resume button → overlay dismissed ───────────────────────
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
         await page.mouse.click(640, 352)   # Resume button (centered panel layout)
-        await after_input(frame, expected_action="UnloadOverlay")
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("frame", 0) > frame and s.get("logic_state") == "playing",
+        )
         await snap("06_main_scene_after_resume")
 
         if errors:

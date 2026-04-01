@@ -40,6 +40,11 @@ pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedRules(pub Vec<LogicRule>);
 
+/// The FSM loaded for the current project. `None` when the project uses `rules.ron` instead.
+/// Populated from `logic/state_machine.ron` when `state_machine_path` is set in the project config.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedStateMachine(pub Option<crate::schema::project::StateMachineAsset>);
+
 /// The current named logic state for the message interpreter.
 /// Rules with a matching `when` field only fire in that state.
 /// Rules with `when: None` fire regardless of the current state.
@@ -78,6 +83,7 @@ pub struct LoadedSpawnPoints(pub HashMap<String, (f32, f32, f32)>);
 pub struct PendingProjectLoads {
     pub model_fixes: Option<Handle<ModelFixesAsset>>,
     pub rules: Option<Handle<LogicRulesAsset>>,
+    pub state_machine: Option<Handle<crate::schema::project::StateMachineAsset>>,
     pub asset_catalog: Option<Handle<AssetCatalog>>,
     pub prefab_catalog: Option<Handle<PrefabCatalog>>,
 }
