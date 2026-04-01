@@ -26,3 +26,4 @@ project_dump.txt
 # Screenshots
 screenshots/*
 .well-known/appspecific/com.chrome.devtools.json
+__pycache__/test_web.cpython-312.pyc

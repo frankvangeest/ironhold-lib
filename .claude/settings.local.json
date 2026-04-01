@@ -20,7 +20,8 @@
       "Bash(cargo check:*)",
       "Bash(grep:*)",
       "Bash(cargo metadata:*)",
-      "Bash(python -m py_compile test_web.py)"
+      "Bash(python -m py_compile test_web.py)",
+      "Bash(xargs ls:*)"
     ]
   }
 }
