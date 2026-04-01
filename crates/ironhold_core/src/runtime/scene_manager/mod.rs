@@ -40,6 +40,13 @@ pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedRules(pub Vec<LogicRule>);
 
+/// The current named logic state for the message interpreter.
+/// Rules with a matching `when` field only fire in that state.
+/// Rules with `when: None` fire regardless of the current state.
+/// Set via `Action::EnterState`; default is `""` (no active state).
+#[derive(Resource, Default, Clone)]
+pub struct LogicState(pub String);
+
 /// Global key bindings loaded from the project config.
 /// Maps key name strings (e.g. "Escape") to event trigger names (e.g. "toggle_pause").
 #[derive(Resource, Default, Clone)]
@@ -143,6 +150,14 @@ pub struct SceneV2Params<'w> {
     pub asset_catalog: Res<'w, LoadedAssetCatalog>,
     pub prefab_catalog: Res<'w, LoadedPrefabCatalog>,
     pub project_root: Res<'w, ProjectRoot>,
+}
+
+/// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct SceneStateParams<'w> {
+    pub load_mode: ResMut<'w, PendingSceneLoadMode>,
+    pub preloaded: ResMut<'w, PreloadedScenes>,
+    pub logic_state: ResMut<'w, LogicState>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

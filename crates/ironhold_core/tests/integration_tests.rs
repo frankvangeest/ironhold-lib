@@ -58,6 +58,7 @@ fn test_ui_button_to_load_scene_action() {
         let rules = vec![
             LogicRule {
                 on: "ui.button_pressed:test_load".to_string(),
+                when: None,
                 do_actions: vec![Action::LoadScene("scenes/tests/test_scene.ron".to_string())],
             }
         ];
@@ -235,6 +236,7 @@ fn test_ui_button_to_quit_action() {
         let rules = vec![
             LogicRule {
                 on: "ui.button_pressed:test_quit".to_string(),
+                when: None,
                 do_actions: vec![Action::Quit],
             }
         ];

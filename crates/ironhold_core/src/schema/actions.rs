@@ -35,4 +35,8 @@ pub enum Action {
     /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
     /// Takes a project-relative path. Does not spawn or transition; purely warms the cache.
     Preload(String),
+    /// Transition the interpreter to a named logic state.
+    /// Rules with a matching `when` field become active; rules in other states are suppressed.
+    /// Use an empty string `""` to return to the stateless (always-fire) default.
+    EnterState(String),
 }

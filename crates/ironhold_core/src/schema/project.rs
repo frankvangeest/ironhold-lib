@@ -77,6 +77,10 @@ pub struct ProjectConfig {
 #[derive(Deserialize, Debug, Clone)]
 pub struct LogicRule {
     pub on: String,
+    /// Optional logic-state guard. When set, the rule only fires while the interpreter
+    /// is in the named state. When omitted (or `None`), the rule fires in every state.
+    #[serde(default)]
+    pub when: Option<String>,
     pub do_actions: Vec<Action>,
 }
 

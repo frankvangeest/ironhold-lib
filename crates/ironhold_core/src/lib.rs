@@ -37,6 +37,8 @@ pub struct DebugState {
     pub last_action: String,
     /// Asset path of the most recently fully-loaded scene.
     pub scene: String,
+    /// Current named logic state set by `Action::EnterState`. Empty string means no active state.
+    pub logic_state: String,
 }
 
 pub struct GamePlugin;
@@ -66,6 +68,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
             .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
+            .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiMessage>()
             .add_message::<SceneEvent>()
@@ -194,9 +197,11 @@ fn update_debug_state(
     mut debug: ResMut<DebugState>,
     state: Res<State<AppState>>,
     mut scene_events: MessageReader<SceneEvent>,
+    logic_state: Res<crate::runtime::scene_manager::LogicState>,
 ) {
     debug.frame += 1;
     debug.app_state = format!("{:?}", state.get());
+    debug.logic_state = logic_state.0.clone();
     for event in scene_events.read() {
         if let SceneEvent::Ready(path) = event {
             debug.scene = path.clone();
@@ -210,11 +215,12 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     let Some(document) = window.document() else { return };
     let Some(el) = document.get_element_by_id("debug-state") else { return };
     let json = format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}"}}"#,
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}"}}"#,
         debug.frame,
         debug.app_state,
         debug.last_action.replace('"', "\\\""),
         debug.scene.replace('"', "\\\""),
+        debug.logic_state.replace('"', "\\\""),
     );
     el.set_inner_html(&json);
 }

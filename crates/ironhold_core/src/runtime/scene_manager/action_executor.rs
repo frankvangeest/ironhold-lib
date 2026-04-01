@@ -7,7 +7,7 @@ use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
 use super::{
     BackgroundMusic, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
-    PreloadedScenes, SceneHandleV2, SpawnParams, resolve_project_path,
+    SceneHandleV2, SceneStateParams, SpawnParams, resolve_project_path,
 };
 
 pub fn action_executor_system(
@@ -25,8 +25,7 @@ pub fn action_executor_system(
     mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
     bg_music_query: Query<Entity, With<BackgroundMusic>>,
     overlay_entities: Query<Entity, With<OverlayEntity>>,
-    mut load_mode: ResMut<PendingSceneLoadMode>,
-    mut preloaded: ResMut<PreloadedScenes>,
+    mut scene_state: SceneStateParams,
 ) {
     while let Some(action) = action_queue.pop() {
         debug.last_action = format!("{:?}", action);
@@ -36,8 +35,8 @@ pub fn action_executor_system(
                 if !debug.scene.is_empty() {
                     scene_events.write(SceneEvent::Unloading(debug.scene.clone()));
                 }
-                preloaded.0.clear();
-                *load_mode = PendingSceneLoadMode::Replace;
+                scene_state.preloaded.0.clear();
+                *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
                 if resolved.ends_with(".scene.ron") {
@@ -51,7 +50,7 @@ pub fn action_executor_system(
                 next_state.set(AppState::LoadingScene);
             }
             Action::LoadSceneOverlay(path) => {
-                *load_mode = PendingSceneLoadMode::Overlay;
+                *scene_state.load_mode = PendingSceneLoadMode::Overlay;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadSceneOverlay: {}", resolved);
                 let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
@@ -67,7 +66,7 @@ pub fn action_executor_system(
             Action::ToggleOverlay(path) => {
                 if overlay_entities.is_empty() {
                     // No overlay active — load it.
-                    *load_mode = PendingSceneLoadMode::Overlay;
+                    *scene_state.load_mode = PendingSceneLoadMode::Overlay;
                     let resolved = resolve_project_path(&project_root.0, &path);
                     info!("Action::ToggleOverlay: opening overlay {}", resolved);
                     let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
@@ -203,7 +202,7 @@ pub fn action_executor_system(
                 info!("Action::Preload: warming cache for {}", resolved);
                 if resolved.ends_with(".scene.ron") {
                     let handle: Handle<GameSceneV2> = asset_server.load(resolved);
-                    preloaded.0.push(handle);
+                    scene_state.preloaded.0.push(handle);
                 } else {
                     warn!(
                         "Action::Preload: only .scene.ron paths are supported (got {})",
@@ -237,6 +236,10 @@ pub fn action_executor_system(
                 } else {
                     warn!("Action::PlaySound: key {:?} not found in audio catalog", key);
                 }
+            }
+            Action::EnterState(state) => {
+                info!("Action::EnterState: \"{}\" -> \"{}\"", scene_state.logic_state.0, state);
+                scene_state.logic_state.0 = state;
             }
         }
     }
