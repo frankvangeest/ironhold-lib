@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry};
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -774,4 +774,53 @@ fn test_despawn_unknown_id_does_not_panic() {
 
     app.world_mut().resource_mut::<ActionQueue>().push(Action::Despawn("ghost".to_string()));
     app.update(); // should warn and not panic
+}
+
+#[test]
+fn test_enter_state_action_updates_logic_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::EnterState("playing".to_string()));
+    app.update(); // executor fires
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "playing", "EnterState should update LogicState");
+}
+
+#[test]
+fn test_state_gated_rule_only_fires_in_matching_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Rule fires EnterState("triggered") only while in the "active" logic state.
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "ui.button_pressed:do_thing".to_string(),
+            when: Some("active".to_string()),
+            do_actions: vec![Action::EnterState("triggered".to_string())],
+        }
+    ]));
+
+    // Fire event while in the wrong state ("") — rule must be suppressed.
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("do_thing".to_string()));
+    app.update();
+    {
+        let state = app.world().resource::<LogicState>();
+        assert_eq!(state.0, "", "Rule should be suppressed in non-matching state");
+    }
+
+    // Transition to the matching state, then fire the event again.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::EnterState("active".to_string()));
+    app.update();
+
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("do_thing".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "triggered", "Rule should fire in the matching state");
 }

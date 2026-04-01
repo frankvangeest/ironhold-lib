@@ -35,18 +35,25 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, and `PlayAnimation`.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, and more.
 - ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiMessage::ButtonPressed("dance")`).
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
-- ✅ A message interpreter maps UI messages to actions using data-defined rules loaded from `logic/rules.ron`.
+- ✅ A message interpreter maps UI messages and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
+- ✅ Rules support an optional `when` guard: rules with `when: Some("state_name")` only fire while the interpreter is in that named state; rules with `when: None` (or omitted) fire in any state.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
+  - `LoadSceneOverlay(path)` / `UnloadOverlay` load/unload overlay scenes (e.g. pause menu).
   - `Quit` requests app exit (writes `AppExit::Success`).
-  - `Spawn(path)` spawns a scene/model.
+  - `Spawn { prefab, id }` / `Despawn(id)` spawn/remove prefab instances by ID.
   - `PlayAnimation(clip)` plays an animation on available controllers.
+  - `PlaySound(key)` / `PlayMusicLoop(key)` / `StopMusic` control audio.
+  - `SetVolume(pct)` sets global volume (0–100).
+  - `Preload(path)` warms the asset cache for a scene before it is needed.
+  - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
-- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, and `frame` for observability and browser-based testing.
+- ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed.
+- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, and `logic_state` for observability and browser-based testing.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -118,9 +125,10 @@ Actions represent explicit operations the runtime can execute.
 - `PlayAnimation(clip_id)` ✅ — plays a named animation by semantic ID (see AnimationPolicy)
 - `PlaySound(audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys
 
-#### State/variables actions 🧭
-- `SetVar(key, value)`
-- `IncVar(key, delta)`
+#### State/variables actions
+- `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default
+- `SetVar(key, value)` 🧭
+- `IncVar(key, delta)` 🧭
 
 #### UI actions 🧭
 - `ShowUi(panel_id)`
@@ -145,19 +153,22 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
 (
     schema_version: 2,
     rules: [
-        (
-            on: "ui.button_pressed:start_game",
-            do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ],
-        ),
-        (
-            on: "ui.button_pressed:quit",
-            do_actions: [ Quit ],
-        ),
+        // No `when` guard — fires in any state
+        ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop("bg_music") ] ),
+
+        // `when` guard — only fires while in the named state
+        ( on: "ui.button_pressed:start_game", when: Some("menu"), do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
+        ( on: "ui.button_pressed:quit",       when: Some("menu"), do_actions: [ Quit ] ),
+
+        ( on: "ui.button_pressed:toggle_pause", when: Some("playing"), do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
+        ( on: "ui.button_pressed:toggle_pause", when: Some("paused"),  do_actions: [ UnloadOverlay, EnterState("playing") ] ),
     ],
 )
 ```
 
 Event name format: `"<domain>.<type>:<payload>"`. The interpreter matches the full string against each rule's `on` field. UI button events are always `"ui.button_pressed:<trigger>"` where the trigger is the button's `action` field with the `"ui."` prefix stripped.
+
+The optional `when` field (type `Option<String>`, `#[serde(default)]`) gates a rule to a named logic state. Omitting it is equivalent to `when: None`, which fires in every state.
 
 ## Execution model (planned)
 
@@ -210,15 +221,26 @@ Applies actions to the world. Key design points:
 
 ### Actions ✅
 - `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`
+- `LoadSceneOverlay(String)` — loads a `.scene.ron` as an overlay (e.g. pause menu)
+- `UnloadOverlay` — despawns all overlay entities
+- `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
-- `Spawn(String)` — spawns a model by asset path
+- `Spawn { prefab, id }` — spawns a prefab instance by key; auto-generates ID if omitted
+- `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
+- `PlaySound(String)` — fire-and-forget audio by catalog key; warns for unsupported formats or missing keys
+- `PlayMusicLoop(String)` — starts a looping background music track by catalog key
+- `StopMusic` — stops the current background music
+- `SetVolume(u32)` — sets global audio volume 0–100
+- `Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
+- `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 
 ### Infrastructure ✅
 - `ActionQueue` — push/pop queue processed each frame by `action_executor_system`
-- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`; serialised to DOM on WASM for browser testing
-- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`
+- `LogicState` resource — tracks the current named state (default `""`); checked by the interpreter when evaluating `when` guards
+- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
+- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support optional `when: Option<String>` state guard
 
 > New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
 
