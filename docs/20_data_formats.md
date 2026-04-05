@@ -58,6 +58,7 @@ Entry point for a project. References all other files.
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
+| `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
@@ -279,11 +280,112 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | `String` | `"actor"` or `"prop"` |
-| `model` | `String` | Key into `AssetCatalog.models` |
+| `kind` | `String` | `"actor"`, `"prop"`, or `"primitive"` |
+| `model` | `String` | Key into `AssetCatalog.models`; for `kind: "primitive"` this is the Bevy shape name (see below) |
 | `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root |
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime tags; other component fields are design-time only |
+| `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
+
+### Special tag: `"flycam"` ✅
+
+A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying camera instead of a model. The `model` field is ignored. The engine creates a `Camera3d` + `FlyCamera` component at the entity's transform.
+
+**Controls:**
+- **W/S** — forward / back
+- **A/D** — strafe left / right
+- **E / Space** — ascend
+- **Q / LCtrl** — descend
+- **LShift / RShift** — fast mode
+- **Hold LMB or RMB + move mouse** — rotate view (mouse is free for UI when no button is held)
+
+To display the camera's world position in the UI, add a label element with `id: "flycam_position"` to the scene's `ui` array. The engine will update it every frame.
+
+```ron
+// In prefabs/prefabs.ron
+"flycam": (
+  kind: "prop",
+  model: "",
+  components: ( tags: ["flycam"] ),
+),
+
+// In scenes/main.scene.ron — entity
+(
+  id: "camera_01",
+  prefab: "flycam",
+  transform: (
+    translation: (0.0, 12.0, 0.0),
+    rotation_euler_deg: (-25.0, 0.0, 0.0),
+    scale: (1.0, 1.0, 1.0),
+  ),
+),
+
+// In scenes/main.scene.ron — ui label
+(
+  kind: "label",
+  id: "flycam_position",
+  text: "",
+  position: (16.0, 16.0),
+  size: (300.0, 24.0),
+),
+```
+
+### Primitive shapes ✅
+
+When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates a procedural Bevy mesh from the `model` field (the Bevy shape name) and the optional `primitive` parameters block.
+
+**Supported shape names:**
+
+| `model` value | Shape | Key dimension fields |
+|---|---|---|
+| `"Cuboid"` | Box | `size: (x, y, z)` |
+| `"Sphere"` | Sphere | `radius` |
+| `"Cylinder"` | Cylinder | `radius`, `height` |
+| `"Capsule3d"` | Capsule | `radius`, `height` (used as half_length) |
+| `"Cone"` | Cone | `radius`, `height` |
+| `"Torus"` | Torus / donut | `radius` (outer), `radius_top` (inner) |
+| `"ConicalFrustum"` | Truncated cone | `radius` (bottom), `radius_top` (top), `height` |
+
+**`PrimitiveParams` fields** (all optional — defaults apply when omitted):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `size` | `Option<(f32,f32,f32)>` | `(3,3,3)` | Cuboid XYZ extents |
+| `radius` | `Option<f32>` | shape-specific | Sphere/Cylinder/Capsule/Cone/Torus outer/Frustum bottom |
+| `radius_top` | `Option<f32>` | shape-specific | ConicalFrustum top radius; Torus inner radius |
+| `height` | `Option<f32>` | shape-specific | Cylinder/Capsule/Cone/ConicalFrustum height |
+| `color` | `Option<(f32,f32,f32)>` | project default | Linear sRGB. Priority: this field → `primitive_default_color` in project → grey `(0.7,0.7,0.7)` |
+| `roughness` | `Option<f32>` | `0.5` | PBR perceptual roughness (0 = mirror, 1 = fully rough) |
+| `metallic` | `Option<f32>` | `0.0` | PBR metallic factor (0 = dielectric, 1 = full metal) |
+
+**Example:**
+```ron
+(
+  prefabs: {
+    "marker_cube": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((2.0, 2.0, 2.0)),
+        // color omitted — uses project primitive_default_color
+        roughness: Some(0.4),
+      )),
+    ),
+    "beacon_sphere": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(1.5),
+        color: Some((0.9, 0.2, 0.2)),  // red override
+        roughness: Some(0.2),
+        metallic: Some(0.3),
+      )),
+    ),
+  }
+)
+```
 
 ---
 
@@ -408,6 +510,41 @@ Per-asset transform corrections applied to every spawned instance of a model. Us
 | `scale` | `(1,1,1)` | Local scale |
 
 Instances are spawned with a parent (instance transform) + child (GLB scene). The fix is applied to the child so gameplay transforms remain clean.
+
+---
+
+## `logic/state_machine.ron` — StateMachineAsset ✅
+
+Used when `state_machine_path` is set in the project config (schema v3). Replaces `rules.ron` for FSM-based projects. See `docs/30_runtime_events_and_logic.md` for detailed FSM semantics.
+
+**Top-level fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schema_version` | `u32` | Must be `1` |
+| `initial_state` | `String` | Starting logic state; set immediately when the asset loads |
+| `states` | `Vec<FsmState>` | Named states |
+| `transitions` | `Vec<FsmTransition>` | State-change triggers |
+| `global_on` | `Vec<FsmEventBinding>` | Event bindings that fire from any state without changing state |
+
+**`FsmState` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | State identifier |
+| `entry_actions` | `Vec<Action>` | Queued when entering this state |
+| `exit_actions` | `Vec<Action>` | Queued when leaving this state |
+| `on` | `Vec<FsmEventBinding>` | In-state event bindings (do not change state) |
+
+**`FsmTransition` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `from` | `Option<String>` | Source state; `None` matches any current state |
+| `on` | `String` | Event that triggers this transition |
+| `to` | `String` | Target state |
+
+Execution order on transition: `exit_actions` of old state → state change → `entry_actions` of new state.
 
 ---
 

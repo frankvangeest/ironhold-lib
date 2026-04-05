@@ -1,5 +1,5 @@
 (
-    schema_version: 2,
+    schema_version: 3,
     project_id: Some("terrain_demo"),
     display_name: Some("Terrain Demo"),
 
@@ -7,7 +7,7 @@
 
     asset_catalog: Some("assets.ron"),
     prefab_catalog: Some("prefabs/prefabs.ron"),
-    rules_path: Some("logic/rules.ron"),
+    state_machine_path: Some("logic/state_machine.ron"),
     model_fixes_path: Some("overrides/model_fixes.ron"),
 
     global_environment: Some((
@@ -17,4 +17,12 @@
             bottom_color: (0.01, 0.01, 0.01),
         )),
     )),
+
+    global_key_bindings: {
+        "Escape": "quit",
+    },
+
+    // Default color for all primitive shapes that don't specify their own color.
+    // Overridden per-prefab via `primitive.color` in prefabs.ron.
+    primitive_default_color: Some((0.8, 0.75, 0.6)),
 )

@@ -1,12 +1,120 @@
 (
   prefabs: {
-    "player_warrior": (
-      kind: "actor",
-      model: "hero",
+    // FlyCamera prefab. No model — the engine detects the "flycam" tag and
+    // spawns Camera3d + FlyCamera directly. The model field is required by the
+    // schema but is ignored for flycam entities.
+    "flycam": (
+      kind: "prop",
+      model: "",
       components: (
-        tags: ["player"],
+        tags: ["flycam"],
       ),
-      animation_policy: Some("prefabs/animation/player_policy.ron"),
+    ),
+
+    // ── Primitive shape prefabs ───────────────────────────────────────────────
+    // `model` is the Bevy shape name.  `primitive` holds dimension/appearance
+    // overrides — all fields are optional.  Omit `primitive` entirely or omit
+    // any field to use the built-in default for that shape.
+    //
+    // Color priority (highest wins):
+    //   1. primitive.color      — per-prefab override (set here)
+    //   2. primitive_default_color — project-level default (set in *.project.ron)
+    //   3. grey (0.7, 0.7, 0.7)  — engine fallback when nothing is set
+    //
+    // Other field reference:
+    //   size:       (x, y, z)   — Cuboid
+    //   radius:     f32         — Sphere radius | Cylinder/Capsule/Cone radius |
+    //                             Torus outer radius | ConicalFrustum bottom radius
+    //   radius_top: f32         — ConicalFrustum top radius | Torus inner radius
+    //   height:     f32         — Cylinder height | Capsule half_length |
+    //                             Cone height | ConicalFrustum height
+    //   roughness:  f32         — 0 = mirror … 1 = fully rough  (default 0.5)
+    //   metallic:   f32         — 0 = dielectric … 1 = full metal (default 0.0)
+
+    // No color set — uses project primitive_default_color (warm sand from terrain_demo.project.ron)
+    "prim_cuboid": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((4.0, 4.0, 4.0)),
+        roughness: Some(0.4),
+      )),
+    ),
+
+    "prim_sphere": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(3.0),
+        color: Some((0.9, 0.2, 0.2)),  // red — +X axis
+        roughness: Some(0.2),
+        metallic: Some(0.3),
+      )),
+    ),
+
+    "prim_cylinder": (
+      kind: "primitive",
+      model: "Cylinder",
+      components: (),
+      primitive: Some((
+        radius: Some(2.0),
+        height: Some(5.0),
+        color: Some((0.9, 0.55, 0.1)),  // orange — −X axis
+        roughness: Some(0.6),
+      )),
+    ),
+
+    "prim_capsule": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (),
+      primitive: Some((
+        radius: Some(1.5),
+        height: Some(3.0),             // used as half_length
+        color: Some((0.2, 0.9, 0.2)),  // green — +Y axis
+        roughness: Some(0.5),
+      )),
+    ),
+
+    "prim_cone": (
+      kind: "primitive",
+      model: "Cone",
+      components: (),
+      primitive: Some((
+        radius: Some(2.5),
+        height: Some(5.0),
+        color: Some((0.1, 0.45, 0.1)),  // dark green — −Y axis
+        roughness: Some(0.7),
+      )),
+    ),
+
+    "prim_torus": (
+      kind: "primitive",
+      model: "Torus",
+      components: (),
+      primitive: Some((
+        radius: Some(2.5),             // outer radius
+        radius_top: Some(0.6),         // inner radius
+        color: Some((0.2, 0.4, 0.9)),  // blue — +Z axis
+        roughness: Some(0.3),
+        metallic: Some(0.5),
+      )),
+    ),
+
+    "prim_frustum": (
+      kind: "primitive",
+      model: "ConicalFrustum",
+      components: (),
+      primitive: Some((
+        radius: Some(2.5),             // bottom radius
+        radius_top: Some(1.0),         // top radius
+        height: Some(5.0),
+        color: Some((0.7, 0.2, 0.9)),  // purple — −Z axis
+        roughness: Some(0.4),
+        metallic: Some(0.2),
+      )),
     ),
   }
 )

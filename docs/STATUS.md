@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑04‑02_
+_Last updated: 2026‑04‑05_
 
 ## Legend
 - ✅ Implemented
@@ -50,6 +50,8 @@ _Last updated: 2026‑04‑02_
 | Player movement             |   ✅   | Data‑configured via scene `player` block. |
 | Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
+| Fly camera                  |   ✅   | Free-flying camera; spawned via `"flycam"` tag on prefab. LMB/RMB hold to look, WASD move, Shift fast mode. Optional `flycam_position` UI label. |
+| Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
 | HDR Lighting (IBL)          |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. |
 | Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |

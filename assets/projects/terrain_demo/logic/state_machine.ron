@@ -1,0 +1,26 @@
+(
+    schema_version: 1,
+    initial_state: "exploring",
+
+    global_on: [
+        (
+            event: "ui.button_pressed:quit",
+            do_actions: [Quit],
+        ),
+    ],
+
+    states: [
+        (
+            name: "exploring",
+            entry_actions: [
+                Log("Terrain Demo: FlyCamera active. WASD/mouse to navigate, Shift for speed boost."),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( on: "scene.ready:terrain", to: "exploring" ),
+    ],
+)

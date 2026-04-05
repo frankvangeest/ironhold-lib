@@ -173,6 +173,7 @@ pub struct SceneMaterialParams<'w> {
     pub standard: ResMut<'w, Assets<StandardMaterial>>,
     pub terrain: ResMut<'w, Assets<TerrainMaterial>>,
     pub built: ResMut<'w, BuiltMaterials>,
+    pub meshes: ResMut<'w, Assets<Mesh>>,
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

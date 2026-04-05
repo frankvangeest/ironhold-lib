@@ -120,9 +120,11 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 animation_resolver_system,
                 camera_orbit_system,
+                fly_camera_system,
                 animation_playback_system,
             ).chain())
             // Debug state (runs last so it sees the final app_state for this frame)
+            .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

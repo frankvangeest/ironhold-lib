@@ -67,16 +67,7 @@ fn test_ui_button_to_load_scene_action() {
             schema_version: 1,
             initial_scene: "scenes/tests/test_scene.ron".to_string(),
             rules: rules.clone(),
-            rules_path: None,
-            state_machine_path: None,
-            model_fixes: HashMap::new(),
-            model_fixes_path: None,
-            project_id: None,
-            display_name: None,
-            asset_catalog: None,
-            prefab_catalog: None,
-            global_environment: None,
-            global_key_bindings: std::collections::HashMap::new(),
+            ..Default::default()
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
         app.world_mut().insert_resource(LoadedRules(rules));
@@ -246,16 +237,7 @@ fn test_ui_button_to_quit_action() {
             schema_version: 1,
             initial_scene: "scenes/tests/test_scene.ron".to_string(),
             rules: rules.clone(),
-            rules_path: None,
-            state_machine_path: None,
-            model_fixes: HashMap::new(),
-            model_fixes_path: None,
-            project_id: None,
-            display_name: None,
-            asset_catalog: None,
-            prefab_catalog: None,
-            global_environment: None,
-            global_key_bindings: std::collections::HashMap::new(),
+            ..Default::default()
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
         app.world_mut().insert_resource(LoadedRules(rules));
@@ -308,8 +290,7 @@ fn model_fixup_persists_reset() {
             display_name: None,
             asset_catalog: None,
             prefab_catalog: None,
-            global_environment: None,
-            global_key_bindings: std::collections::HashMap::new(),
+            ..Default::default()
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
     }
@@ -405,8 +386,7 @@ fn test_ui_button_positioning() {
             display_name: None,
             asset_catalog: None,
             prefab_catalog: None,
-            global_environment: None,
-            global_key_bindings: std::collections::HashMap::new(),
+            ..Default::default()
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
@@ -473,8 +453,7 @@ fn test_entity_names() {
             display_name: None,
             asset_catalog: None,
             prefab_catalog: None,
-            global_environment: None,
-            global_key_bindings: std::collections::HashMap::new(),
+            ..Default::default()
         });
         app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
@@ -653,9 +632,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: "actor".to_string(),
                 model: "orc".to_string(),
-                animation_policy: None,
-                material: None,
-                components: PrefabComponents::default(),
+                ..Default::default()
             }),
         ]),
     }));
@@ -697,9 +674,7 @@ fn test_spawn_auto_id_increments_counter() {
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: "actor".to_string(),
                 model: "orc".to_string(),
-                animation_policy: None,
-                material: None,
-                components: PrefabComponents::default(),
+                ..Default::default()
             }),
         ]),
     }));
@@ -744,9 +719,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: "actor".to_string(),
                 model: "orc".to_string(),
-                animation_policy: None,
-                material: None,
-                components: PrefabComponents::default(),
+                ..Default::default()
             }),
         ]),
     }));

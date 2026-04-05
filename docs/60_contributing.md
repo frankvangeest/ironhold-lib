@@ -85,9 +85,17 @@ For any capability change:
 ### Required for PRs ✅
 - `cargo test` passes.
 - New behavior is covered by at least one of:
-  - unit test
-  - integration test
-  - data validation test
+  - **Unit test** — `#[cfg(test)]` module in the same source file (e.g. `scene_loader.rs`). Best for pure functions and private helpers with no Bevy setup required.
+  - **Integration test** — file in `crates/ironhold_core/tests/`. Best for Bevy systems, multi-module flows, or anything that needs a real `App` via `setup_test_app()`.
+  - **Data validation test** — in `tests/ron_validation.rs`. Best for RON schema compliance and asset loading regression.
+
+**Test placement at a glance:**
+
+| What you're testing | Where it lives |
+|---|---|
+| Pure function, no Bevy | `#[cfg(test)]` block in the `.rs` file |
+| Bevy system / ECS behavior | `tests/integration_tests.rs` |
+| RON file loads correctly | `tests/ron_validation.rs` |
 
 ### Strongly recommended 🧪
 - Add a “golden” RON file under `assets/` for new schema features.

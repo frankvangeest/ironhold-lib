@@ -102,6 +102,7 @@ pub fn spawn_scene_v2(
 
         // Spawn entities from prefabs
         let mut player_config: Option<PlayerConfig> = None;
+        let mut flycam_start: Option<Transform> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
                 warn!(
@@ -110,6 +111,51 @@ pub fn spawn_scene_v2(
                 );
                 continue;
             };
+
+            let is_flycam = prefab.components.tags.contains(&"flycam".to_string());
+            let is_player = prefab.components.tags.contains(&"player".to_string());
+
+            // Build transform early — needed before model lookup so flycam can early-out.
+            let t = &entity_def.transform;
+            let translation = Vec3::new(t.translation.0, t.translation.1, t.translation.2);
+            let rotation = Quat::from_euler(
+                EulerRot::XYZ,
+                t.rotation_euler_deg.0.to_radians(),
+                t.rotation_euler_deg.1.to_radians(),
+                t.rotation_euler_deg.2.to_radians(),
+            );
+            let scale = Vec3::new(t.scale.0, t.scale.1, t.scale.2);
+            let transform = Transform { translation, rotation, scale };
+
+            if is_flycam {
+                // No model needed — just record the spawn transform.
+                flycam_start = Some(transform);
+                continue;
+            }
+
+            if prefab.kind == "primitive" {
+                // `model` field repurposed as shape name (e.g. "Sphere", "Torus").
+                // No catalog lookup — mesh is generated procedurally.
+                let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
+                match build_primitive_mesh(&prefab.model, &p) {
+                    Some(mesh) => {
+                        let mesh_handle = mats.meshes.add(mesh);
+                        let mat_handle = mats.standard.add(primitive_material(&p, project.primitive_default_color));
+                        commands.spawn((
+                            Name::new(entity_def.id.clone()),
+                            Mesh3d(mesh_handle),
+                            MeshMaterial3d(mat_handle),
+                            transform,
+                            LevelEntity,
+                        ));
+                    }
+                    None => warn!(
+                        "Unknown primitive shape '{}' for entity '{}', skipping",
+                        prefab.model, entity_def.id,
+                    ),
+                }
+                continue;
+            }
 
             let model_path = if let Some(catalog_entry) =
                 params.asset_catalog.0.models.get(&prefab.model)
@@ -122,19 +168,6 @@ pub fn spawn_scene_v2(
                 );
                 continue;
             };
-
-            let is_player = prefab.components.tags.contains(&"player".to_string());
-
-            let t = &entity_def.transform;
-            let translation = Vec3::new(t.translation.0, t.translation.1, t.translation.2);
-            let rotation = Quat::from_euler(
-                EulerRot::XYZ,
-                t.rotation_euler_deg.0.to_radians(),
-                t.rotation_euler_deg.1.to_radians(),
-                t.rotation_euler_deg.2.to_radians(),
-            );
-            let scale = Vec3::new(t.scale.0, t.scale.1, t.scale.2);
-            let transform = Transform { translation, rotation, scale };
 
             if is_player {
                 let animation_policy = prefab
@@ -164,7 +197,7 @@ pub fn spawn_scene_v2(
             }
         }
 
-        // Spawn player (delayed if terrain present)
+        // Spawn player (delayed if terrain present), flycam, or fallback camera.
         if let Some(pc) = player_config {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
@@ -179,6 +212,23 @@ pub fn spawn_scene_v2(
                     &params.project_root.0,
                 );
             }
+        } else if let Some(fc_transform) = flycam_start {
+            // Extract initial yaw/pitch from the spawn transform so the camera
+            // starts oriented correctly and the first mouse move causes no jump.
+            let (yaw, pitch, _) = fc_transform.rotation.to_euler(EulerRot::YXZ);
+            info!(
+                "Spawning FlyCamera at ({:.1}, {:.1}, {:.1})",
+                fc_transform.translation.x,
+                fc_transform.translation.y,
+                fc_transform.translation.z,
+            );
+            commands.spawn((
+                Name::new("FlyCamera"),
+                Camera3d::default(),
+                fc_transform,
+                LevelEntity,
+                crate::capabilities::flycam::FlyCamera { pitch, yaw, ..Default::default() },
+            ));
         } else {
             info!("No player entity in v2 scene, spawning default camera...");
             commands.spawn((
@@ -317,15 +367,19 @@ fn spawn_ui_element_node(
     node: Node,
 ) {
     if el.kind == "label" {
+        let el_id = el.id.clone();
         parent
             .spawn((Name::new(format!("Label: {}", el.text)), node))
             .with_children(|parent| {
-                parent.spawn((
+                let mut text_cmd = parent.spawn((
                     Name::new(format!("Text: {}", el.text)),
                     Text::new(el.text.clone()),
                     TextFont { font_size: 22.0, ..default() },
                     TextColor(Color::srgb(0.75, 0.75, 0.75)),
                 ));
+                if el_id == "flycam_position" {
+                    text_cmd.insert(crate::capabilities::flycam::FlyCamPositionLabel);
+                }
             });
     } else {
         let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
@@ -420,5 +474,119 @@ fn apply_lighting_v2(
                 LevelEntity,
             ));
         }
+    }
+}
+
+// ─── Primitive shape helpers ───────────────────────────────────────────────────
+
+fn build_primitive_mesh(shape: &str, p: &crate::schema::catalog::PrimitiveParams) -> Option<Mesh> {
+    Some(match shape {
+        "Cuboid" => {
+            let (x, y, z) = p.size.unwrap_or((3.0, 3.0, 3.0));
+            Cuboid::new(x, y, z).mesh().build()
+        }
+        "Sphere" => Sphere::new(p.radius.unwrap_or(2.0)).mesh().build(),
+        "Cylinder" => Cylinder::new(
+            p.radius.unwrap_or(1.5),
+            p.height.unwrap_or(4.0),
+        ).mesh().build(),
+        "Capsule3d" => Capsule3d {
+            radius: p.radius.unwrap_or(1.5),
+            half_length: p.height.unwrap_or(4.0),
+        }.mesh().build(),
+        "Cone" => Cone {
+            radius: p.radius.unwrap_or(2.0),
+            height: p.height.unwrap_or(4.0),
+        }.mesh().build(),
+        "Torus" => Torus::new(
+            p.radius_top.unwrap_or(0.5),  // inner radius
+            p.radius.unwrap_or(2.0),      // outer radius
+        ).mesh().build(),
+        "ConicalFrustum" => ConicalFrustum {
+            radius_top:    p.radius_top.unwrap_or(1.0),
+            radius_bottom: p.radius.unwrap_or(2.0),
+            height:        p.height.unwrap_or(4.0),
+        }.mesh().build(),
+        _ => return None,
+    })
+}
+
+/// Builds a `StandardMaterial` for a primitive shape.
+///
+/// Color priority (highest wins):
+/// 1. `p.color` — set per-prefab in the prefab catalog RON
+/// 2. `project_default` — set via `primitive_default_color` in the project RON
+/// 3. Neutral grey `(0.7, 0.7, 0.7)` — engine fallback
+pub(crate) fn primitive_material(
+    p: &crate::schema::catalog::PrimitiveParams,
+    project_default: Option<(f32, f32, f32)>,
+) -> StandardMaterial {
+    let (r, g, b) = p.color
+        .or(project_default)
+        .unwrap_or((0.7, 0.7, 0.7));
+    StandardMaterial {
+        base_color: Color::srgb(r, g, b),
+        perceptual_roughness: p.roughness.unwrap_or(0.5),
+        metallic: p.metallic.unwrap_or(0.0),
+        ..default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::catalog::PrimitiveParams;
+
+    fn color_of(mat: &StandardMaterial) -> (f32, f32, f32) {
+        let c = mat.base_color.to_srgba();
+        (
+            (c.red   * 1000.0).round() / 1000.0,
+            (c.green * 1000.0).round() / 1000.0,
+            (c.blue  * 1000.0).round() / 1000.0,
+        )
+    }
+
+    #[test]
+    fn primitive_material_prefab_color_wins_over_all() {
+        let p = PrimitiveParams {
+            color: Some((1.0, 0.0, 0.0)),
+            ..Default::default()
+        };
+        let mat = primitive_material(&p, Some((0.0, 1.0, 0.0)));
+        assert_eq!(color_of(&mat), (1.0, 0.0, 0.0), "prefab color must take priority");
+    }
+
+    #[test]
+    fn primitive_material_project_default_wins_over_grey() {
+        let p = PrimitiveParams::default(); // no color set
+        let mat = primitive_material(&p, Some((0.2, 0.4, 0.8)));
+        assert_eq!(color_of(&mat), (0.2, 0.4, 0.8), "project default must win over grey fallback");
+    }
+
+    #[test]
+    fn primitive_material_falls_back_to_grey_when_no_defaults() {
+        let p = PrimitiveParams::default();
+        let mat = primitive_material(&p, None);
+        assert_eq!(color_of(&mat), (0.7, 0.7, 0.7), "should fall back to neutral grey");
+    }
+
+    #[test]
+    fn primitive_material_roughness_and_metallic_defaults() {
+        let p = PrimitiveParams::default();
+        let mat = primitive_material(&p, None);
+        assert!((mat.perceptual_roughness - 0.5).abs() < 1e-6);
+        assert!((mat.metallic - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn primitive_material_roughness_and_metallic_overrides() {
+        let p = PrimitiveParams {
+            roughness: Some(0.1),
+            metallic: Some(0.9),
+            ..Default::default()
+        };
+        let mat = primitive_material(&p, None);
+        assert!((mat.perceptual_roughness - 0.1).abs() < 1e-6);
+        assert!((mat.metallic - 0.9).abs() < 1e-6);
     }
 }

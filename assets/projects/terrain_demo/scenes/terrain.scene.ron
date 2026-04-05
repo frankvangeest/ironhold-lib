@@ -24,15 +24,97 @@
   )),
 
   spawn_points: {
-    "player_start": (0.0, 4.0, 0.0),
+    // Elevated diagonal corner giving a clear view of all seven primitive shapes.
+    // Primitives span ±100 on each axis; this point frames them within a ~60° FoV.
+    // The underground cone at (0,-100,0) is not visible from above by design.
+    "shapes_overview": (180.0, 120.0, 180.0),
   },
 
   entities: [
+    // FlyCamera — spawns at the shapes_overview point so all primitives are in view.
+    // Controls: WASD move | LMB/RMB + mouse look | Shift fast | E/Space up | Q/Ctrl down.
     (
-      id: "player_01",
-      prefab: "player_warrior",
+      id: "camera_01",
+      prefab: "flycam",
       transform: (
-        translation: (0.0, 4.0, 0.0),
+        translation: (180.0, 120.0, 180.0),
+        rotation_euler_deg: (-30.0, 45.0, 0.0),  // pitch -30° down, yaw 45° toward -X-Z
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Origin marker — Cuboid (white)
+    (
+      id: "shape_cuboid",
+      prefab: "prim_cuboid",
+      transform: (
+        translation: (0.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // +X axis — Sphere (red)
+    (
+      id: "shape_sphere_px",
+      prefab: "prim_sphere",
+      transform: (
+        translation: (100.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // -X axis — Cylinder (orange)
+    (
+      id: "shape_cylinder_nx",
+      prefab: "prim_cylinder",
+      transform: (
+        translation: (-100.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // +Y axis — Capsule (green)
+    (
+      id: "shape_capsule_py",
+      prefab: "prim_capsule",
+      transform: (
+        translation: (0.0, 100.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // -Y axis — Cone (dark green)
+    (
+      id: "shape_cone_ny",
+      prefab: "prim_cone",
+      transform: (
+        translation: (0.0, -100.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // +Z axis — Torus (blue)
+    (
+      id: "shape_torus_pz",
+      prefab: "prim_torus",
+      transform: (
+        translation: (0.0, 0.0, 100.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // -Z axis — ConicalFrustum (purple)
+    (
+      id: "shape_frustum_nz",
+      prefab: "prim_frustum",
+      transform: (
+        translation: (0.0, 0.0, -100.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -41,20 +123,19 @@
 
   ui: [
     (
-      kind: "button",
-      id: "dance_button",
-      text: "Dance",
-      action: "ui.dance",
-      position: (100.0, 100.0),
-      size: (200.0, 60.0),
+      kind: "label",
+      id: "flycam_position",
+      text: "X: 0.0  Y: 0.0  Z: 0.0",
+      position: (16.0, 16.0),
+      size: (320.0, 32.0),
     ),
     (
       kind: "button",
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
-      position: (100.0, 180.0),
-      size: (200.0, 60.0),
+      position: (16.0, 60.0),
+      size: (120.0, 40.0),
     ),
   ],
 )

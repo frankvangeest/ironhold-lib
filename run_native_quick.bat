@@ -1,1 +1,1 @@
-cargo run -p ironhold_native --all-features
+cargo run -p ironhold_native --all-features -- --project quick_scene

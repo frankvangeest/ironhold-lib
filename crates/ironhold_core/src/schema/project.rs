@@ -81,7 +81,7 @@ pub struct FsmEventBinding {
     pub do_actions: Vec<Action>,
 }
 
-#[derive(Deserialize, Asset, TypePath, Debug, Clone, Resource)]
+#[derive(Deserialize, Asset, TypePath, Debug, Clone, Resource, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub schema_version: u32,
@@ -123,6 +123,12 @@ pub struct ProjectConfig {
     /// Example: `{ "Escape": "toggle_pause" }` fires `ui.button_pressed:toggle_pause` on Escape.
     #[serde(default)]
     pub global_key_bindings: HashMap<String, String>,
+
+    /// Default base color applied to every `kind: "primitive"` prefab that does not
+    /// specify its own `primitive.color`. Expressed as linear sRGB (r, g, b) in the
+    /// 0.0–1.0 range. When absent, the engine falls back to a neutral grey (0.7, 0.7, 0.7).
+    #[serde(default)]
+    pub primitive_default_color: Option<(f32, f32, f32)>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
