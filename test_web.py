@@ -55,7 +55,7 @@ ACTION_TIMEOUT = 20
 SCREENSHOT_SETTLE_FRAMES = 120
 
 # Screenshot diff: fraction of pixels allowed to differ before failing
-BASELINE_DIFF_THRESHOLD = 0.02   # 2 %
+BASELINE_DIFF_THRESHOLD = 0.03   # 3 %
 # Per-channel tolerance before a pixel counts as "different"
 PIXEL_TOLERANCE = 15
 

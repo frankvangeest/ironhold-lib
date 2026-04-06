@@ -635,6 +635,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
                 ..Default::default()
             }),
         ]),
+        ..Default::default()
     }));
 
     // Spawn with an explicit ID
@@ -677,6 +678,7 @@ fn test_spawn_auto_id_increments_counter() {
                 ..Default::default()
             }),
         ]),
+        ..Default::default()
     }));
 
     // Spawn twice without explicit IDs
@@ -722,6 +724,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
                 ..Default::default()
             }),
         ]),
+        ..Default::default()
     }));
 
     // Spawn then despawn

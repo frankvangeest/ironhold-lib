@@ -139,6 +139,7 @@ impl InputMap {
 // -----------------------
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AnimationPolicy {
     /// Base locomotion clips used when no override is active.
     pub base: BaseAnimations,
@@ -158,6 +159,7 @@ pub struct AnimationPolicy {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct BaseAnimations {
     pub idle: String,
     pub walk: String,
@@ -166,6 +168,7 @@ pub struct BaseAnimations {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AnimationOverrideDef {
     /// Semantic ID used by PlayAnimation("<id>")
     pub id: String,

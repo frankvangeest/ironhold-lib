@@ -169,6 +169,9 @@ pub fn check_project_loaded(
             .and_then(|h| state_machine_assets.get(h))
             .cloned();
         if let Some(ref machine) = fsm {
+            if let Err(e) = machine.validate() {
+                panic!("Invalid StateMachineAsset: {}", e);
+            }
             info!(
                 "State machine loaded: initial_state=\"{}\", {} states, {} transitions",
                 machine.initial_state,
@@ -195,6 +198,9 @@ pub fn check_project_loaded(
         } else {
             AssetCatalog::default()
         };
+        if let Err(e) = asset_catalog.validate() {
+            panic!("Invalid AssetCatalog: {}", e);
+        }
         commands.insert_resource(LoadedAssetCatalog(asset_catalog));
 
         let prefab_catalog = if let Some(h) = &pending.prefab_catalog {
@@ -202,6 +208,9 @@ pub fn check_project_loaded(
         } else {
             PrefabCatalog::default()
         };
+        if let Err(e) = prefab_catalog.validate() {
+            panic!("Invalid PrefabCatalog: {}", e);
+        }
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
     }
 

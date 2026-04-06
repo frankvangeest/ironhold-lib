@@ -1,6 +1,8 @@
 use ironhold_core::schema::{GameLevel, ProjectConfig, StateMachineAsset};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+use ironhold_core::schema::player::AnimationPolicy;
 use ron::de::from_str;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -86,8 +88,10 @@ fn regression_schema_version_in_assets() {
             .unwrap_or("");
         if file_name.ends_with(".scene.ron") {
             // Scene v2 format
-            let _scene: GameSceneV2 = from_str(&contents)
+            let scene: GameSceneV2 = from_str(&contents)
                 .unwrap_or_else(|e| panic!("GameSceneV2 failed to parse {}: {}", file.display(), e));
+            scene.validate()
+                .unwrap_or_else(|e| panic!("GameSceneV2 failed validation {}: {}", file.display(), e));
         } else {
             // Scene v1 format (GameLevel)
             let level: GameLevel = from_str(&contents)
@@ -117,8 +121,64 @@ fn regression_schema_version_in_assets() {
         if sm_file.is_file() {
             let contents = fs::read_to_string(&sm_file)
                 .unwrap_or_else(|e| panic!("Failed to read {}: {}", sm_file.display(), e));
-            let _: StateMachineAsset = from_str(&contents)
+            let fsm: StateMachineAsset = from_str(&contents)
                 .unwrap_or_else(|e| panic!("StateMachineAsset failed to parse {}: {}", sm_file.display(), e));
+            fsm.validate()
+                .unwrap_or_else(|e| panic!("StateMachineAsset failed validation {}: {}", sm_file.display(), e));
+        }
+    }
+
+    // 4) Asset catalogs: assets/projects/*/assets.ron
+    let project_dirs = fs::read_dir(&projects_dir)
+        .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
+
+    for entry in project_dirs.flatten() {
+        let catalog_file = entry.path().join("assets.ron");
+        if !catalog_file.is_file() { continue; }
+
+        let contents = fs::read_to_string(&catalog_file)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {}", catalog_file.display(), e));
+        let catalog: AssetCatalog = from_str(&contents)
+            .unwrap_or_else(|e| panic!("AssetCatalog failed to parse {}: {}", catalog_file.display(), e));
+        catalog.validate()
+            .unwrap_or_else(|e| panic!("AssetCatalog failed validation {}: {}", catalog_file.display(), e));
+    }
+
+    // 5) Prefab catalogs: assets/projects/*/prefabs/prefabs.ron
+    let project_dirs = fs::read_dir(&projects_dir)
+        .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
+
+    for entry in project_dirs.flatten() {
+        let prefab_file = entry.path().join("prefabs").join("prefabs.ron");
+        if !prefab_file.is_file() { continue; }
+
+        let contents = fs::read_to_string(&prefab_file)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {}", prefab_file.display(), e));
+        let catalog: PrefabCatalog = from_str(&contents)
+            .unwrap_or_else(|e| panic!("PrefabCatalog failed to parse {}: {}", prefab_file.display(), e));
+        catalog.validate()
+            .unwrap_or_else(|e| panic!("PrefabCatalog failed validation {}: {}", prefab_file.display(), e));
+    }
+
+    // 6) Animation policies: assets/projects/*/prefabs/animation/*.ron
+    let project_dirs = fs::read_dir(&projects_dir)
+        .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
+
+    for entry in project_dirs.flatten() {
+        let anim_dir = entry.path().join("prefabs").join("animation");
+        if !anim_dir.is_dir() { continue; }
+
+        let anim_files = fs::read_dir(&anim_dir)
+            .unwrap_or_else(|e| panic!("Failed to read animation dir {}: {}", anim_dir.display(), e));
+
+        for anim_entry in anim_files.flatten() {
+            let path = anim_entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("ron") { continue; }
+
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", path.display(), e));
+            let _policy: AnimationPolicy = from_str(&contents)
+                .unwrap_or_else(|e| panic!("AnimationPolicy failed to parse {}: {}", path.display(), e));
         }
     }
 }

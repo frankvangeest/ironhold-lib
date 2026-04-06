@@ -1,4 +1,5 @@
 (
+  schema_version: 1,
   prefabs: {
     "player_warrior": (
       kind: "actor",

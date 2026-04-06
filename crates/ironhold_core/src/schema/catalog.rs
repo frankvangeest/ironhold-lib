@@ -3,8 +3,12 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use super::material::MaterialDef;
 
+pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
+pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct AssetCatalog {
+    pub schema_version: u32,
     #[serde(default)]
     pub models: HashMap<String, ModelCatalogEntry>,
     #[serde(default)]
@@ -15,9 +19,27 @@ pub struct AssetCatalog {
     pub materials: HashMap<String, MaterialDef>,
 }
 
+impl AssetCatalog {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != ASSET_CATALOG_SCHEMA_VERSION {
+            return Err(format!(
+                "Unsupported AssetCatalog schema_version {} (expected {})",
+                self.schema_version, ASSET_CATALOG_SCHEMA_VERSION
+            ));
+        }
+        for (key, entry) in &self.models {
+            if entry.path.is_empty() {
+                return Err(format!("AssetCatalog model \"{}\" has empty path", key));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Default for AssetCatalog {
     fn default() -> Self {
         Self {
+            schema_version: ASSET_CATALOG_SCHEMA_VERSION,
             models: HashMap::new(),
             textures: HashMap::new(),
             audio: HashMap::new(),
@@ -27,25 +49,52 @@ impl Default for AssetCatalog {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ModelCatalogEntry {
     pub path: String,
 }
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct PrefabCatalog {
+    pub schema_version: u32,
     #[serde(default)]
     pub prefabs: HashMap<String, PrefabDef>,
+}
+
+impl PrefabCatalog {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != PREFAB_CATALOG_SCHEMA_VERSION {
+            return Err(format!(
+                "Unsupported PrefabCatalog schema_version {} (expected {})",
+                self.schema_version, PREFAB_CATALOG_SCHEMA_VERSION
+            ));
+        }
+        for (key, prefab) in &self.prefabs {
+            match prefab.kind.as_str() {
+                "actor" | "prop" | "primitive" => {}
+                other => {
+                    return Err(format!(
+                        "Prefab \"{}\" has unknown kind \"{}\" (expected \"actor\", \"prop\", or \"primitive\")",
+                        key, other
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for PrefabCatalog {
     fn default() -> Self {
         Self {
+            schema_version: PREFAB_CATALOG_SCHEMA_VERSION,
             prefabs: HashMap::new(),
         }
     }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct PrefabDef {
     pub kind: String,   // "actor", "prop", or "primitive"
     pub model: String,  // key into AssetCatalog.models; repurposed as shape name for "primitive" kind
@@ -64,6 +113,8 @@ pub struct PrefabDef {
 
 /// Runtime-relevant prefab component data.
 /// Additional design-time fields (health, ai, etc.) are silently ignored.
+/// NOTE: deny_unknown_fields is intentionally absent — designer-only fields like
+/// `health`, `ai`, `movement` are valid here and silently dropped at runtime.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct PrefabComponents {
     #[serde(default)]
@@ -81,6 +132,7 @@ pub struct PrefabComponents {
 /// - `roughness`  → perceptual roughness (0 = mirror, 1 = fully rough; default 0.5)
 /// - `metallic`   → metallic factor (0 = dielectric, 1 = full metal; default 0.0)
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct PrimitiveParams {
     #[serde(default)]
     pub size: Option<(f32, f32, f32)>,

@@ -19,18 +19,45 @@ pub enum AppState {
 /// A standalone `.ron` asset that holds per-model transform corrections.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct ModelFixesAsset {
-    #[serde(default)]
     pub schema_version: u32,
     #[serde(default)]
     pub model_fixes: HashMap<String, TransformFix>,
 }
 
+impl ModelFixesAsset {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version < 1 || self.schema_version > 2 {
+            return Err(format!(
+                "Unsupported ModelFixesAsset schema_version {} (expected 1 or 2)",
+                self.schema_version
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// A standalone `.ron` asset that holds the logic rules for a project (schema v2).
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct LogicRulesAsset {
-    #[serde(default)]
     pub schema_version: u32,
     pub rules: Vec<LogicRule>,
+}
+
+impl LogicRulesAsset {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version < 1 || self.schema_version > 2 {
+            return Err(format!(
+                "Unsupported LogicRulesAsset schema_version {} (expected 1 or 2)",
+                self.schema_version
+            ));
+        }
+        for (i, rule) in self.rules.iter().enumerate() {
+            if rule.on.is_empty() {
+                return Err(format!("LogicRule[{}] has empty \"on\" field", i));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A standalone `.ron` asset holding a finite-state machine definition (schema v1).
@@ -48,6 +75,52 @@ pub struct StateMachineAsset {
     /// Event bindings that fire from any state without changing state.
     #[serde(default)]
     pub global_on: Vec<FsmEventBinding>,
+}
+
+impl StateMachineAsset {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != 1 {
+            return Err(format!(
+                "Unsupported StateMachineAsset schema_version {} (expected 1)",
+                self.schema_version
+            ));
+        }
+        if self.initial_state.is_empty() {
+            return Err("StateMachineAsset initial_state must not be empty".to_string());
+        }
+        let mut state_names = std::collections::HashSet::new();
+        for state in &self.states {
+            if state.name.is_empty() {
+                return Err("FSM state has empty name".to_string());
+            }
+            if !state_names.insert(state.name.as_str()) {
+                return Err(format!("Duplicate FSM state name: \"{}\"", state.name));
+            }
+        }
+        if !self.states.is_empty() && !state_names.contains(self.initial_state.as_str()) {
+            return Err(format!(
+                "StateMachineAsset initial_state \"{}\" not found in states list",
+                self.initial_state
+            ));
+        }
+        for transition in &self.transitions {
+            if !state_names.contains(transition.to.as_str()) {
+                return Err(format!(
+                    "FSM transition to \"{}\" references unknown state",
+                    transition.to
+                ));
+            }
+            if let Some(ref from) = transition.from {
+                if !state_names.contains(from.as_str()) {
+                    return Err(format!(
+                        "FSM transition from \"{}\" references unknown state",
+                        from
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]

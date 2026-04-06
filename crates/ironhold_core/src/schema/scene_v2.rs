@@ -2,8 +2,11 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+pub const GAME_SCENE_V2_SCHEMA_VERSION: u32 = 2;
+
 /// Scene file format version 2.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct GameSceneV2 {
     pub schema_version: u32,
     #[serde(default)]
@@ -24,7 +27,44 @@ pub struct GameSceneV2 {
     pub ui_panel: Option<UiPanelDef>,
 }
 
+impl GameSceneV2 {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != GAME_SCENE_V2_SCHEMA_VERSION {
+            return Err(format!(
+                "Unsupported GameSceneV2 schema_version {} (expected {})",
+                self.schema_version, GAME_SCENE_V2_SCHEMA_VERSION
+            ));
+        }
+        let mut entity_ids = std::collections::HashSet::new();
+        for entity in &self.entities {
+            if entity.id.is_empty() {
+                return Err("Scene entity has empty id".to_string());
+            }
+            if !entity_ids.insert(entity.id.as_str()) {
+                return Err(format!("Duplicate scene entity id: \"{}\"", entity.id));
+            }
+        }
+        let mut ui_ids = std::collections::HashSet::new();
+        for elem in &self.ui {
+            if elem.id.is_empty() {
+                return Err("UI element has empty id".to_string());
+            }
+            if !ui_ids.insert(elem.id.as_str()) {
+                return Err(format!("Duplicate UI element id: \"{}\"", elem.id));
+            }
+            if elem.kind != "button" && elem.kind != "label" {
+                return Err(format!(
+                    "UI element \"{}\" has unknown kind \"{}\" (expected \"button\" or \"label\")",
+                    elem.id, elem.kind
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SceneLightingV2 {
     #[serde(default)]
     pub ambient: Option<(f32, f32, f32)>,
@@ -33,6 +73,7 @@ pub struct SceneLightingV2 {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct DirectionalLightDefV2 {
     pub color: (f32, f32, f32),
     pub intensity: f32,
@@ -44,6 +85,7 @@ pub struct DirectionalLightDefV2 {
 fn default_true() -> bool { true }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct TerrainConfigV2 {
     pub heightmap: String,
     pub splatmap: String,
@@ -64,6 +106,7 @@ pub struct TerrainConfigV2 {
 fn default_chunk_size() -> u32 { 64 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SceneEntityDef {
     pub id: String,
     pub prefab: String,
@@ -71,6 +114,7 @@ pub struct SceneEntityDef {
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SceneTransformV2 {
     #[serde(default)]
     pub translation: (f32, f32, f32),
@@ -83,6 +127,7 @@ pub struct SceneTransformV2 {
 fn one_vec3() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct UiElementDefV2 {
     /// "button" renders an interactive button; "label" renders non-interactive text.
     pub kind: String,
@@ -101,6 +146,7 @@ pub struct UiElementDefV2 {
 /// When present on a scene, UI elements are laid out in a centered panel box
 /// instead of using absolute positioning.
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct UiPanelDef {
     /// Background color of the panel box as RGBA (0.0–1.0).
     pub background_color: (f32, f32, f32, f32),

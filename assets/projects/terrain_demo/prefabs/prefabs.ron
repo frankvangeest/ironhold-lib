@@ -1,4 +1,5 @@
 (
+  schema_version: 1,
   prefabs: {
     // FlyCamera prefab. No model — the engine detects the "flycam" tag and
     // spawns Camera3d + FlyCamera directly. The model field is required by the
