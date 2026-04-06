@@ -14,7 +14,10 @@
   terrain: Some((
     heightmap: "shared/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
-    scale: (1.0, 0.1, 1.0),
+    // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
+    // 128×128 heightmap × 4 = ~508×508 unit terrain; max elevation 30 units.
+    scale: (4.0, 30.0, 4.0),
+    position: Some((0.0, -30.0, 0.0)),
     material_paths: [
       "shared/terrain/dirt.png",
       "shared/terrain/grass.png",

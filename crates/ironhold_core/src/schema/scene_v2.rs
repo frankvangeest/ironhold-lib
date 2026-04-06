@@ -47,11 +47,18 @@ fn default_true() -> bool { true }
 pub struct TerrainConfigV2 {
     pub heightmap: String,
     pub splatmap: String,
-    /// (horizontal_x, height_multiplier, horizontal_z) scale factors.
+    /// `(horizontal, height, horizontal_z)` — world units per heightmap pixel (X/Z)
+    /// and maximum terrain height in world units (Y).
+    /// Example: `(5.0, 30.0, 5.0)` gives a 635×635 unit terrain with 30 units of
+    /// elevation, using a 128×128 heightmap.
     pub scale: (f32, f32, f32),
     pub material_paths: Vec<String>,
     #[serde(default = "default_chunk_size")]
     pub chunk_size: u32,
+    /// World-space offset applied to the entire terrain mesh.
+    /// Defaults to the origin `(0, 0, 0)`.
+    #[serde(default)]
+    pub position: Option<(f32, f32, f32)>,
 }
 
 fn default_chunk_size() -> u32 { 64 }

@@ -20,6 +20,12 @@ use crate::utils::find_assets_folder;
 #[derive(Resource)]
 pub struct ProjectConfigPath(pub String);
 
+/// When inserted before app startup, overrides the project's `initial_scene` so a
+/// specific scene can be loaded directly without going through the normal flow.
+/// Used by the WASM test harness via the `?scene=<path>` URL parameter.
+#[derive(Resource)]
+pub struct InitialSceneOverride(pub String);
+
 /// The directory prefix of the loaded project file, relative to the assets root.
 /// Used to resolve project-relative paths (e.g. scene paths in project.ron).
 /// Empty string means the project file is at the assets root.
@@ -230,13 +236,13 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     el.set_inner_html(&json);
 }
 
-pub fn start_app(project_path: Option<String>) {
+pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
     let asset_path = if cfg!(target_arch = "wasm32") {
         "assets".to_string()
     } else {
         find_assets_folder().to_string_lossy().to_string()
     };
-    
+
     let config_path = project_path.unwrap_or_else(|| "projects/quick_scene/quick_scene.project.ron".to_string());
 
     let project_root = std::path::Path::new(&config_path)
@@ -245,20 +251,27 @@ pub fn start_app(project_path: Option<String>) {
         .unwrap_or("")
         .replace('\\', "/")
         .to_string();
-    
+
     info!("Runtime Asset Path: {}", asset_path);
     info!("Project Config Path: {}", config_path);
+    if let Some(ref s) = scene_override {
+        info!("Initial scene override: {}", s);
+    }
 
-    App::new()
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
-            file_path: asset_path,
-            meta_check: bevy::asset::AssetMetaCheck::Never,
-            ..default()
-        }))
-        .insert_resource(ProjectConfigPath(config_path))
-        .insert_resource(ProjectRoot(project_root))
-        .add_plugins(GamePlugin)
-        .run();
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(AssetPlugin {
+        file_path: asset_path,
+        meta_check: bevy::asset::AssetMetaCheck::Never,
+        ..default()
+    }))
+    .insert_resource(ProjectConfigPath(config_path))
+    .insert_resource(ProjectRoot(project_root));
+
+    if let Some(scene) = scene_override {
+        app.insert_resource(InitialSceneOverride(scene));
+    }
+
+    app.add_plugins(GamePlugin).run();
 }
 
 

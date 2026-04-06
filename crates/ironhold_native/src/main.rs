@@ -15,5 +15,5 @@ fn main() {
     }
     let project_path = project_name
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
-    start_app(project_path);
+    start_app(project_path, None);
 }

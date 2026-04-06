@@ -22,7 +22,9 @@
       "Bash(cargo metadata:*)",
       "Bash(python -m py_compile test_web.py)",
       "Bash(xargs ls:*)",
-      "Bash(python test_web.py --skip-build --update-baseline pause_nav)"
+      "Bash(python test_web.py --skip-build --update-baseline pause_nav)",
+      "Bash(cat C:/git/rust/ironhold-lib/assets/projects/quick_scene/scenes/*.ron)",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('C:/git/rust/ironhold-lib/test_web.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")"
     ]
   }
 }

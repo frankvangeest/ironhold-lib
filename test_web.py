@@ -4,7 +4,7 @@ Runs five test categories against a locally served build:
   1. Smoke      — every project loads to InGame with no errors
   2. Action     — clicking a UI button fires the expected Action
   3. Transition — a LoadScene action transitions the scene correctly
-  4. Baseline   — per-project screenshots are diffed against stored baselines
+  4. Scene      — per-scene screenshots are diffed against stored baselines
   5. Navigation — multi-step menu flows with per-step screenshots
 
 Usage:
@@ -41,10 +41,18 @@ BASE_URL = f"http://localhost:{PORT}"
 
 PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo"]
 
+# Root of the asset tree, relative to the working directory where this script runs.
+ASSETS_ROOT = Path("assets/projects")
+
 # Seconds to wait for <canvas> / InGame state
-CANVAS_TIMEOUT = 60
+CANVAS_TIMEOUT = 180
 # Seconds to wait for an async state change (e.g. after a button click)
 ACTION_TIMEOUT = 20
+# Frames to render after InGame before taking a baseline screenshot.
+# Allows async work (terrain mesh generation, texture streaming) to complete.
+# At 60 fps this is ~2 seconds; frame-based counting is more reliable than
+# wall-clock sleep because it tracks actual engine activity.
+SCREENSHOT_SETTLE_FRAMES = 120
 
 # Screenshot diff: fraction of pixels allowed to differ before failing
 BASELINE_DIFF_THRESHOLD = 0.02   # 2 %
@@ -86,8 +94,59 @@ async def wait_for_debug_state(page: Page, predicate, timeout_s: int = ACTION_TI
     )
 
 
-async def open_project(context: BrowserContext, project: str | None = None) -> tuple[Page, list[str]]:
-    """Open a new page for the given project, return (page, error_list)."""
+async def wait_for_scene_ready(
+    page: Page,
+    settle_frames: int = SCREENSHOT_SETTLE_FRAMES,
+) -> None:
+    """Wait for InGame state, then wait for settle_frames more frames to render.
+
+    Using frame count rather than wall-clock time ensures async scene work
+    (terrain mesh generation, texture uploads) has actually completed before
+    a screenshot is taken.
+    """
+    state = await wait_for_debug_state(
+        page,
+        lambda s: s.get("app_state") == "InGame",
+        timeout_s=CANVAS_TIMEOUT,
+    )
+    entry_frame = state.get("frame", 0)
+    await wait_for_debug_state(
+        page,
+        lambda s: s.get("frame", 0) >= entry_frame + settle_frames,
+        timeout_s=CANVAS_TIMEOUT,
+    )
+
+
+def discover_scenes(project: str) -> list[str]:
+    """Return all scene paths for a project, relative to the project root.
+
+    E.g. for ``3rd_person_game_demo`` this might return::
+
+        ["scenes/main.scene.ron", "scenes/start_menu.scene.ron", ...]
+
+    The paths are suitable for passing directly as the ``?scene=`` URL param
+    and as the ``InitialSceneOverride`` resource in the engine.
+    """
+    scenes_dir = ASSETS_ROOT / project / "scenes"
+    if not scenes_dir.is_dir():
+        return []
+    return sorted(
+        str(p.relative_to(ASSETS_ROOT / project)).replace("\\", "/")
+        for p in scenes_dir.glob("*.scene.ron")
+    )
+
+
+async def open_project(
+    context: BrowserContext,
+    project: str | None = None,
+    scene: str | None = None,
+) -> tuple[Page, list[str]]:
+    """Open a new page for the given project (and optional scene), return (page, error_list).
+
+    When *scene* is supplied it is passed as ``?scene=<path>`` which activates
+    the engine's ``InitialSceneOverride``, bypassing the project's normal
+    ``initial_scene``.
+    """
     errors: list[str] = []
 
     def on_console(msg):
@@ -103,14 +162,17 @@ async def open_project(context: BrowserContext, project: str | None = None) -> t
     page.on("pageerror", lambda e: errors.append(f"[page error] {e}"))
 
     url = f"{BASE_URL}/?project={project}" if project else BASE_URL
+    if scene:
+        url += f"&scene={scene}"
     await page.goto(url, wait_until="networkidle")
 
     try:
         await page.wait_for_selector("canvas", timeout=CANVAS_TIMEOUT * 1000)
     except Exception:
         raise TestFailure(
-            f"Timed out waiting for <canvas> on project '{project or 'default'}' — "
-            "WebGPU adapter likely failed."
+            f"Timed out waiting for <canvas> on project '{project or 'default'}'"
+            + (f", scene '{scene}'" if scene else "")
+            + " — WebGPU adapter likely failed."
         )
 
     return page, errors
@@ -215,29 +277,42 @@ async def test_scene_transition(context: BrowserContext) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 4 — Baseline: screenshot diff per project
+# Test 4 — Scene Baselines: one screenshot per scene per project
 # ---------------------------------------------------------------------------
 
-async def test_screenshot_baseline(
+def scene_baseline_key(project: str, scene: str) -> str:
+    """Return the filesystem-safe key used for the baseline filename.
+
+    E.g. ``("3rd_person_game_demo", "scenes/main.scene.ron")`` →
+    ``"3rd_person_game_demo_main"``.
+    """
+    stem = Path(scene).stem.replace(".scene", "")
+    return f"{project}_{stem}"
+
+
+async def test_screenshot_scene_baseline(
     context: BrowserContext,
     project: str,
+    scene: str,
     screenshot_dir: Path,
     update: bool,
 ) -> None:
-    page, errors = await open_project(context, project)
+    """Load *scene* directly inside *project* and diff against the stored baseline."""
+    page, errors = await open_project(context, project, scene=scene)
     try:
-        await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
-        await asyncio.sleep(2)  # let one more frame settle
+        await wait_for_scene_ready(page)
 
-        current_path = screenshot_dir / f"{project}_current.png"
-        baseline_path = screenshot_dir / "baselines" / f"{project}.png"
+        key = scene_baseline_key(project, scene)
+        baselines_dir = screenshot_dir / "scene_baselines"
+        current_path = screenshot_dir / f"{key}_current.png"
+        baseline_path = baselines_dir / f"{key}.png"
 
         await page.screenshot(path=str(current_path))
 
         if update or not baseline_path.exists():
-            baseline_path.parent.mkdir(parents=True, exist_ok=True)
+            baselines_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(current_path, baseline_path)
-            print(f"    Baseline {'updated' if baseline_path.exists() else 'created'}: {baseline_path}")
+            print(f"    Baseline {'updated' if baseline_path.exists() else 'created'}: {baseline_path.name}")
             return
 
         diff = compare_screenshots(str(baseline_path), str(current_path))
@@ -317,9 +392,7 @@ async def test_pause_menu_navigation(
 
     try:
         # ── Step 1: start menu ──────────────────────────────────────────────
-        await wait_for_debug_state(
-            page, lambda s: s.get("app_state") == "InGame", timeout_s=CANVAS_TIMEOUT
-        )
+        await wait_for_scene_ready(page)
         await snap("01_start_menu")
 
         # ── Step 2: Start Game → main scene ────────────────────────────────
@@ -428,19 +501,22 @@ async def run_all(
             results.append((label, False, str(e)))
             print(f"    FAIL: {e}")
 
-        # --- Screenshot baselines ---
+        # --- Scene baselines (one screenshot per .scene.ron per project) ---
         for project in PROJECTS:
-            label = f"baseline:{project}"
-            print(f"  [{label}]")
-            # Per-project --update-baseline overrides the global flag for this project only.
-            update_this = update_baselines or project in update_baseline_projects
-            try:
-                await test_screenshot_baseline(context, project, screenshot_dir, update_this)
-                results.append((label, True, ""))
-                print(f"    PASS")
-            except TestFailure as e:
-                results.append((label, False, str(e)))
-                print(f"    FAIL: {e}")
+            for scene in discover_scenes(project):
+                key = scene_baseline_key(project, scene)
+                label = f"scene_baseline:{key}"
+                print(f"  [{label}]")
+                update_this = update_baselines or key in update_baseline_projects
+                try:
+                    await test_screenshot_scene_baseline(
+                        context, project, scene, screenshot_dir, update_this
+                    )
+                    results.append((label, True, ""))
+                    print(f"    PASS")
+                except TestFailure as e:
+                    results.append((label, False, str(e)))
+                    print(f"    FAIL: {e}")
 
         # --- Navigation: pause menu flow ---
         label = "navigation:pause_menu_flow"
@@ -480,8 +556,10 @@ def main() -> None:
                         help="Overwrite all stored baselines")
     parser.add_argument("--update-baseline", metavar="TARGET", action="append", default=[],
                         dest="update_baseline_targets",
-                        help="Overwrite baseline for a specific project or 'pause_nav' "
-                             "(repeatable). E.g. --update-baseline quick_scene")
+                        help="Overwrite baseline for a specific target (repeatable). "
+                             "Accepted values: a project name (e.g. quick_scene), "
+                             "'pause_nav', or a scene key "
+                             "(e.g. quick_scene_main, 3rd_person_game_demo_start_menu).")
     parser.add_argument("--screenshot-dir", default="screenshots")
     args = parser.parse_args()
 

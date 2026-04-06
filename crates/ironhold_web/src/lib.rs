@@ -3,18 +3,32 @@ use ironhold_core::start_app;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    start_app(read_url_project_param());
+    let (project, scene) = read_url_params();
+    start_app(project, scene);
 }
 
-/// Reads `?project=<name>` from the page URL and converts it to a project-config path.
-/// Returns `None` if the param is absent (the engine will load its default project).
-fn read_url_project_param() -> Option<String> {
-    let window = web_sys::window()?;
-    let search = window.location().search().ok()?;
+/// Reads `?project=<name>` and `?scene=<path>` from the page URL.
+/// - `project` is converted to a project-config asset path.
+/// - `scene`   is passed through as-is and used as an `InitialSceneOverride`.
+fn read_url_params() -> (Option<String>, Option<String>) {
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return (None, None),
+    };
+    let search = match window.location().search() {
+        Ok(s) => s,
+        Err(_) => return (None, None),
+    };
     if search.is_empty() || search == "?" {
-        return None;
+        return (None, None);
     }
-    let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
-    let name = params.get("project")?;
-    Some(format!("projects/{}/{}.project.ron", name, name))
+    let params = match web_sys::UrlSearchParams::new_with_str(&search) {
+        Ok(p) => p,
+        Err(_) => return (None, None),
+    };
+    let project = params
+        .get("project")
+        .map(|name| format!("projects/{}/{}.project.ron", name, name));
+    let scene = params.get("scene");
+    (project, scene)
 }

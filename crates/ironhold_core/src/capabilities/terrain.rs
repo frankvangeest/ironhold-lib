@@ -175,15 +175,15 @@ fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_sc
             let i01 = (z + 1) * width + x;
             let i11 = (z + 1) * width + (x + 1);
 
-            // Tri 1
+            // Tri 1 — winding i00→i01→i10 gives front face normal +Y (up)
             indices.push(i00 as u32);
-            indices.push(i10 as u32);
             indices.push(i01 as u32);
+            indices.push(i10 as u32);
 
             // Tri 2
             indices.push(i10 as u32);
-            indices.push(i11 as u32);
             indices.push(i01 as u32);
+            indices.push(i11 as u32);
         }
     }
 

@@ -14,7 +14,11 @@
   terrain: Some((
     heightmap: "shared/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
-    scale: (2.0, 0.2, 2.0),
+    // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
+    // 128×128 heightmap × 4 = ~508×508 unit terrain; max elevation 30 units.
+    scale: (4.0, 30.0, 4.0),
+    // Offset the terrain down so the player spawn at (0, 4, 0) sits above the surface.
+    position: Some((0.0, -20.0, 0.0)),
     material_paths: [
       "shared/terrain/grass.png",
       "shared/terrain/rock.png",
@@ -33,7 +37,7 @@
       id: "player_01",
       prefab: "player_warrior",
       transform: (
-        translation: (0.0, 4.0, 0.0),
+        translation: (0.0, 0.0, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -43,7 +47,7 @@
       id: "giant_npc_01",
       prefab: "giant_npc",
       transform: (
-        translation: (5.0, 0.0, 4.0),
+        translation: (-10.0, 0.0, 0.0),
         rotation_euler_deg: (0.0, 210.0, 0.0),
         scale: (3.0, 3.0, 3.0),
       ),

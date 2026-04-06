@@ -26,6 +26,7 @@ pub fn check_project_loaded(
     state_machine_assets: Res<Assets<StateMachineAsset>>,
     asset_catalog_assets: Res<Assets<AssetCatalog>>,
     prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
+    scene_override: Option<Res<crate::InitialSceneOverride>>,
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
 
@@ -204,7 +205,11 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
     }
 
-    let scene_path = resolve_project_path(&project_root.0, &config.initial_scene);
+    let initial = scene_override
+        .as_deref()
+        .map(|r| r.0.as_str())
+        .unwrap_or(&config.initial_scene);
+    let scene_path = resolve_project_path(&project_root.0, initial);
     info!(
         "Project Config Loaded (schema v{}). Initial Scene: {}",
         config.schema_version, scene_path

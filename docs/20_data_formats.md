@@ -189,7 +189,8 @@ File extension must be `.scene.ron`.
 |-------|------|-------------|
 | `heightmap` | `String` | Path to greyscale PNG heightmap |
 | `splatmap` | `String` | Path to RGBA splatmap (one channel per layer) |
-| `scale` | `(f32, f32, f32)` | `(horizontal_x, height_multiplier, horizontal_z)` |
+| `scale` | `(f32, f32, f32)` | `(horizontal, max_height, horizontal_z)` — world units per heightmap pixel (X/Z) and max terrain elevation in world units (Y). E.g. `(5.0, 30.0, 5.0)` with a 128×128 heightmap gives a ~635×635 unit terrain with 30 units of elevation. |
+| `position` | `Option<(f32,f32,f32)>` | World-space offset for the entire terrain mesh. Defaults to `(0, 0, 0)`. Set a negative Y to sink the terrain so player spawn points sit above the surface. |
 | `material_paths` | `Vec<String>` | Texture paths for up to 4 terrain layers |
 | `chunk_size` | `u32` | Mesh chunk size in vertices (default `64`) |
 

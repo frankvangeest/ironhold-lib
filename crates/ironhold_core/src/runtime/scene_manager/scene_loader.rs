@@ -246,9 +246,9 @@ pub fn spawn_scene_v2(
             let terrain_config = TerrainConfig {
                 heightmap_path: terrain_v2.heightmap.clone(),
                 splatmap_path: terrain_v2.splatmap.clone(),
-                height_scale: terrain_v2.scale.1 * 100.0,
-                horizontal_scale: terrain_v2.scale.0 * 100.0,
-                position: (0.0, -10.0, 0.0),
+                height_scale: terrain_v2.scale.1,
+                horizontal_scale: terrain_v2.scale.0,
+                position: terrain_v2.position.unwrap_or((0.0, 0.0, 0.0)),
                 chunk_size: terrain_v2.chunk_size,
                 material_paths: terrain_v2.material_paths.clone(),
             };
