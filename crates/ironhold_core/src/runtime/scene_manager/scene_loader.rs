@@ -91,6 +91,7 @@ pub fn spawn_scene_v2(
                 &asset_server,
                 &mut mats.standard,
                 &mut mats.terrain,
+                &mut mats.custom,
                 name,
                 mat_def,
             );
@@ -140,14 +141,50 @@ pub fn spawn_scene_v2(
                 match build_primitive_mesh(&prefab.model, &p) {
                     Some(mesh) => {
                         let mesh_handle = mats.meshes.add(mesh);
-                        let mat_handle = mats.standard.add(primitive_material(&p, project.primitive_default_color));
-                        commands.spawn((
-                            Name::new(entity_def.id.clone()),
-                            Mesh3d(mesh_handle),
-                            MeshMaterial3d(mat_handle),
-                            transform,
-                            LevelEntity,
-                        ));
+
+                        // Check for a catalog material override on this prefab.
+                        let built_mat = prefab.material.as_ref()
+                            .and_then(|key| mats.built.0.get(key));
+
+                        match built_mat {
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
+                                commands.spawn((
+                                    Name::new(entity_def.id.clone()),
+                                    Mesh3d(mesh_handle),
+                                    MeshMaterial3d(h.clone()),
+                                    transform,
+                                    LevelEntity,
+                                ));
+                            }
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
+                                commands.spawn((
+                                    Name::new(entity_def.id.clone()),
+                                    Mesh3d(mesh_handle),
+                                    MeshMaterial3d(h.clone()),
+                                    transform,
+                                    LevelEntity,
+                                ));
+                            }
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
+                                commands.spawn((
+                                    Name::new(entity_def.id.clone()),
+                                    Mesh3d(mesh_handle),
+                                    MeshMaterial3d(h.clone()),
+                                    transform,
+                                    LevelEntity,
+                                ));
+                            }
+                            None => {
+                                let mat_handle = mats.standard.add(primitive_material(&p, project.primitive_default_color));
+                                commands.spawn((
+                                    Name::new(entity_def.id.clone()),
+                                    Mesh3d(mesh_handle),
+                                    MeshMaterial3d(mat_handle),
+                                    transform,
+                                    LevelEntity,
+                                ));
+                            }
+                        }
                     }
                     None => warn!(
                         "Unknown primitive shape '{}' for entity '{}', skipping",
@@ -225,6 +262,18 @@ pub fn spawn_scene_v2(
             commands.spawn((
                 Name::new("FlyCamera"),
                 Camera3d::default(),
+                // Avoid HDR and bloom for web compatibility
+                // And choose a high performance tonemapping option
+                // Tonemapping Options:
+                // Option 	                        Style	                    Performance	        Best For...
+                // TonyMcMapface	                Balanced, Modern	        Medium (Needs LUT)  The Default. Great for almost any style without looking "over-processed".
+                // AcesFitted	                    Cinematic, Contrast-heavy	High	            High-end 3D games looking for a filmic, "industry standard" aesthetic.
+                // Reinhard	                        Smooth, Muted	            High	            Simple scenes where you want to avoid "blown out" highlights, though it can look "washed out".
+                // ReinhardLuminance	            Detail-focused	            High	            Similar to Reinhard but preserves colors better in high-contrast areas.
+                // BlenderFilmic	                Realistic, Natural	        Medium (Needs LUT)	Photorealistic renders that need a wide dynamic range similar to Blender's default.
+                // SomewhatBoringDisplayTransform	Neutral, Simple	            High	            When you need a predictable, standard transform with minimal artistic "flavor."
+                // None	                            Raw, Linear	                Fastest	            Non-HDR scenes or specific stylized looks where you want colors to "clip" naturally.
+                bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted,
                 fc_transform,
                 LevelEntity,
                 crate::capabilities::flycam::FlyCamera { pitch, yaw, ..Default::default() },
@@ -418,9 +467,25 @@ fn apply_lighting_v2(
                 Name::new("Ambient Light"),
                 AmbientLight {
                     color: Color::srgba(r, g, b, 1.0),
-                    brightness: 150.0,
+                    brightness: lighting.ambient_brightness.unwrap_or(150.0),
                     ..default()
                 },
+                LevelEntity,
+            ));
+        }
+
+        for (i, pl) in lighting.point_lights.iter().enumerate() {
+            commands.spawn((
+                Name::new(format!("Point Light {}", i)),
+                PointLight {
+                    color: Color::srgb(pl.color.0, pl.color.1, pl.color.2),
+                    intensity: pl.intensity,
+                    radius: pl.radius,
+                    range: pl.range,
+                    shadows_enabled: pl.shadows_enabled,
+                    ..default()
+                },
+                Transform::from_translation(Vec3::new(pl.position.0, pl.position.1, pl.position.2)),
                 LevelEntity,
             ));
         }

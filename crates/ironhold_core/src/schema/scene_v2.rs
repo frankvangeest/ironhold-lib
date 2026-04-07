@@ -68,8 +68,15 @@ impl GameSceneV2 {
 pub struct SceneLightingV2 {
     #[serde(default)]
     pub ambient: Option<(f32, f32, f32)>,
+    /// Overrides the default ambient brightness (150.0).
+    /// Maps to Bevy's `AmbientLight::brightness` (lux). Works with or without HDR;
+    /// without HDR colours clip at 1.0, so keep values low (50–300 is typical).
+    #[serde(default)]
+    pub ambient_brightness: Option<f32>,
     #[serde(default)]
     pub directional: Option<DirectionalLightDefV2>,
+    #[serde(default)]
+    pub point_lights: Vec<PointLightDefV2>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -82,7 +89,29 @@ pub struct DirectionalLightDefV2 {
     pub shadows_enabled: bool,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct PointLightDefV2 {
+    pub position: (f32, f32, f32),
+    #[serde(default = "default_point_color")]
+    pub color: (f32, f32, f32),
+    /// Luminous power in lumens (default: 800.0 ≈ a bright 60 W bulb).
+    #[serde(default = "default_point_intensity")]
+    pub intensity: f32,
+    /// Radius of the sphere used for specular highlights (default: 0.0).
+    #[serde(default)]
+    pub radius: f32,
+    /// Maximum range in world units (default: 20.0).
+    #[serde(default = "default_point_range")]
+    pub range: f32,
+    #[serde(default)]
+    pub shadows_enabled: bool,
+}
+
 fn default_true() -> bool { true }
+fn default_point_color() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
+fn default_point_intensity() -> f32 { 800.0 }
+fn default_point_range() -> f32 { 20.0 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]

@@ -1,0 +1,224 @@
+(
+  schema_version: 1,
+
+  materials: {
+    // Solid hot-pink unlit — the fallback colour made intentional
+    "mat_unlit_pink": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        colors: {
+          "color_a": (r:1.0, g:0.08, b:0.58, a:1.0),
+        },
+      )),
+      unlit: true,
+    ),
+
+    // Solid teal unlit
+    "mat_unlit_teal": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        colors: {
+          "color_a": (r:0.0, g:0.85, b:0.75, a:1.0),
+        },
+      )),
+      unlit: true,
+    ),
+
+    // Checkerboard: black & white, 6 tiles
+    "mat_checker_bw": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_checker.wgsl"),
+        colors: {
+          "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
+          "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
+        },
+        floats: {
+          "tiling": 6.0,
+        },
+      )),
+    ),
+
+    // Checkerboard: orange & navy, 4 tiles
+    "mat_checker_color": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_checker.wgsl"),
+        colors: {
+          "color_a": (r:0.9, g:0.45, b:0.05, a:1.0),
+          "color_b": (r:0.05, g:0.1,  b:0.45, a:1.0),
+        },
+        floats: {
+          "tiling": 4.0,
+        },
+      )),
+    ),
+
+    // UV gradient: deep blue → sky
+    "mat_gradient_sky": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        colors: {
+          "color_a": (r:0.04, g:0.04, b:0.25, a:1.0),
+          "color_b": (r:0.45, g:0.72, b:1.0,  a:1.0),
+        },
+      )),
+    ),
+
+    // UV gradient: ember glow
+    "mat_gradient_ember": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        colors: {
+          "color_a": (r:0.6, g:0.0, b:0.0, a:1.0),
+          "color_b": (r:1.0, g:0.8, b:0.0, a:1.0),
+        },
+      )),
+    ),
+
+    // Fresnel rim: electric blue rim on dark base
+    "mat_fresnel_blue": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_fresnel.wgsl"),
+        colors: {
+          "color_a": (r:0.1, g:0.5, b:1.0,  a:1.0),
+          "color_b": (r:0.05, g:0.05, b:0.1, a:1.0),
+        },
+        floats: {
+          "rim_power": 2.5,
+        },
+      )),
+    ),
+
+    // Fresnel rim: green energy on black
+    "mat_fresnel_green": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_fresnel.wgsl"),
+        colors: {
+          "color_a": (r:0.1, g:1.0, b:0.3,  a:1.0),
+          "color_b": (r:0.0, g:0.05, b:0.0, a:1.0),
+        },
+        floats: {
+          "rim_power": 3.5,
+        },
+      )),
+    ),
+
+    // World-space stripes: red & white
+    "mat_stripes_rw": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_world_stripes.wgsl"),
+        colors: {
+          "color_a": (r:0.9, g:0.1, b:0.1, a:1.0),
+          "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
+        },
+        floats: {
+          "stripe_freq": 1.5,
+        },
+      )),
+    ),
+
+    // Normal visualizer — no colors needed
+    "mat_normals": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_normal_vis.wgsl"),
+      )),
+    ),
+
+    // ── Floor ─────────────────────────────────────────────────────────────────
+    // Dark concrete — neutral base so material colours read cleanly.
+    "mat_floor": (
+      kind: Standard((
+        base_color: (r:0.18, g:0.18, b:0.18, a:1.0),
+        metallic: 0.0,
+        perceptual_roughness: 0.9,
+      )),
+    ),
+
+    // ── Full PBR via custom_pbr.wgsl ─────────────────────────────────────────
+    // Uniform layout: colors sorted first (base_color → params_0),
+    // then floats alphabetically: metallic→p1.x, perceptual_roughness→p1.y, reflectance→p1.z
+
+    // Red plastic — dielectric, low-medium roughness
+    "mat_pbr_plastic_red": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:0.85, g:0.08, b:0.08, a:1.0),
+        },
+        floats: {
+          "metallic": 0.0,
+          "perceptual_roughness": 0.45,
+        },
+      )),
+    ),
+
+    // White plastic — dielectric, smooth
+    "mat_pbr_plastic_white": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:0.92, g:0.92, b:0.92, a:1.0),
+        },
+        floats: {
+          "metallic": 0.0,
+          "perceptual_roughness": 0.2,
+        },
+      )),
+    ),
+
+    // Chrome — fully metallic, near-mirror smooth
+    "mat_pbr_metal_chrome": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:0.9, g:0.9, b:0.95, a:1.0),
+        },
+        floats: {
+          "metallic": 1.0,
+          "perceptual_roughness": 0.05,
+        },
+      )),
+    ),
+
+    // Brushed steel — fully metallic, rough
+    "mat_pbr_metal_rough": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:0.6, g:0.62, b:0.65, a:1.0),
+        },
+        floats: {
+          "metallic": 1.0,
+          "perceptual_roughness": 0.65,
+        },
+      )),
+    ),
+
+    // Gold — metallic, warm colour, slight roughness
+    "mat_pbr_gold": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:1.0, g:0.78, b:0.1, a:1.0),
+        },
+        floats: {
+          "metallic": 1.0,
+          "perceptual_roughness": 0.18,
+        },
+      )),
+    ),
+
+    // Water — dielectric, near-zero roughness, high reflectance
+    "mat_pbr_water": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        colors: {
+          "base_color": (r:0.04, g:0.18, b:0.55, a:1.0),
+        },
+        floats: {
+          "metallic": 0.0,
+          "perceptual_roughness": 0.02,
+        },
+      )),
+    ),
+  },
+)

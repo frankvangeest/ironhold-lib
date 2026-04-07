@@ -172,6 +172,7 @@ pub struct SceneMaterialParams<'w> {
     pub images: ResMut<'w, Assets<Image>>,
     pub standard: ResMut<'w, Assets<StandardMaterial>>,
     pub terrain: ResMut<'w, Assets<TerrainMaterial>>,
+    pub custom: ResMut<'w, Assets<crate::capabilities::custom_material::CustomMaterial>>,
     pub built: ResMut<'w, BuiltMaterials>,
     pub meshes: ResMut<'w, Assets<Mesh>>,
 }

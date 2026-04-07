@@ -1,0 +1,184 @@
+(
+  schema_version: 1,
+  prefabs: {
+    // FlyCamera — no model, engine detects "flycam" tag
+    "flycam": (
+      kind: "prop",
+      model: "",
+      components: (
+        tags: ["flycam"],
+      ),
+    ),
+
+    // ── Floor ─────────────────────────────────────────────────────────────────
+    // 260 × 2 × 160 slab that covers the footprint of all four shape rows.
+    "floor_slab": (
+      kind: "primitive",
+      model: "Cuboid",
+      material: Some("mat_floor"),
+      components: (),
+      primitive: Some((
+        size: Some((260.0, 2.0, 160.0)),
+      )),
+    ),
+
+    // ── Unlit solid colours ───────────────────────────────────────────────────
+    "sphere_unlit_pink": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_unlit_pink"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    "sphere_unlit_teal": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_unlit_teal"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    // ── Procedural checkerboard ───────────────────────────────────────────────
+    "sphere_checker_bw": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_checker_bw"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    "cuboid_checker_color": (
+      kind: "primitive",
+      model: "Cuboid",
+      material: Some("mat_checker_color"),
+      components: (),
+      primitive: Some((
+        size: Some((6.0, 6.0, 6.0)),
+      )),
+    ),
+
+    // ── UV gradients ─────────────────────────────────────────────────────────
+    "capsule_gradient_sky": (
+      kind: "primitive",
+      model: "Capsule3d",
+      material: Some("mat_gradient_sky"),
+      components: (),
+      primitive: Some((
+        radius: Some(2.5),
+        height: Some(4.0),
+      )),
+    ),
+
+    "cylinder_gradient_ember": (
+      kind: "primitive",
+      model: "Cylinder",
+      material: Some("mat_gradient_ember"),
+      components: (),
+      primitive: Some((
+        radius: Some(3.0),
+        height: Some(7.0),
+      )),
+    ),
+
+    // ── Fresnel rim ───────────────────────────────────────────────────────────
+    "sphere_fresnel_blue": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_fresnel_blue"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    "torus_fresnel_green": (
+      kind: "primitive",
+      model: "Torus",
+      material: Some("mat_fresnel_green"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+        radius_top: Some(1.0),
+      )),
+    ),
+
+    // ── World-space effects ───────────────────────────────────────────────────
+    "cone_stripes": (
+      kind: "primitive",
+      model: "Cone",
+      material: Some("mat_stripes_rw"),
+      components: (),
+      primitive: Some((
+        radius: Some(3.5),
+        height: Some(8.0),
+      )),
+    ),
+
+    // ── Normal visualiser ─────────────────────────────────────────────────────
+    "sphere_normals": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_normals"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    // ── Full PBR ──────────────────────────────────────────────────────────────
+    "sphere_pbr_plastic_red": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_plastic_red"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_pbr_plastic_white": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_plastic_white"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_pbr_metal_chrome": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_metal_chrome"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_pbr_metal_rough": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_metal_rough"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_pbr_gold": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_gold"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_pbr_water": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pbr_water"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+  }
+)

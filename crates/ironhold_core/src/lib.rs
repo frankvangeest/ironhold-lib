@@ -91,6 +91,7 @@ impl Plugin for GamePlugin {
             .add_plugins(RonAssetPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
+            .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))

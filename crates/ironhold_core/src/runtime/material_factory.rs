@@ -4,15 +4,19 @@ use std::collections::HashMap;
 
 use crate::schema::material::{AlphaModeDef, ColorDef, MaterialDef, MaterialKind};
 use crate::capabilities::terrain_material::TerrainMaterial;
+use crate::capabilities::custom_material::{
+    CustomMaterial, CustomMaterialUniforms, CUSTOM_MATERIAL_FALLBACK_HANDLE,
+};
 
 // ---------------------------------------------------------------------------
-// Built material handle — erased enum so we can store Standard and Terrain
-// handles in the same map.
+// Built material handle — erased enum so we can store Standard, Terrain, and
+// Custom handles in the same map.
 // ---------------------------------------------------------------------------
 
 pub enum BuiltMaterialHandle {
     Standard(Handle<StandardMaterial>),
     Terrain(Handle<TerrainMaterial>),
+    Custom(Handle<CustomMaterial>),
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +47,7 @@ impl MaterialFactory {
         asset_server: &AssetServer,
         standard_materials: &mut Assets<StandardMaterial>,
         terrain_materials: &mut Assets<TerrainMaterial>,
+        custom_materials: &mut Assets<CustomMaterial>,
         name: &str,
         def: &MaterialDef,
     ) -> BuiltMaterialHandle {
@@ -75,24 +80,50 @@ impl MaterialFactory {
                 BuiltMaterialHandle::Terrain(terrain_materials.add(mat))
             }
             MaterialKind::Custom(custom_def) => {
-                // Custom shader pipeline not yet fully implemented.
-                // Fall back to a StandardMaterial using any available color data.
-                warn!(
-                    "Material '{}': Custom shader '{:?}' — falling back to StandardMaterial. \
-                     Custom shader support is a planned future feature.",
-                    name, custom_def.shader
-                );
-                let base_color = custom_def.colors.get("base_color")
-                    .copied()
-                    .unwrap_or(ColorDef { r: 1.0, g: 1.0, b: 1.0, a: 1.0 });
-                let mat = StandardMaterial {
-                    base_color: to_bevy_color(base_color),
+                // Resolve the fragment shader handle.
+                // If no path is specified we keep the built-in magenta fallback.
+                let shader = match &custom_def.shader {
+                    Some(path) if !path.is_empty() => {
+                        info!("Material '{}': loading custom shader from '{}'", name, path);
+                        asset_server.load::<Shader>(path.clone())
+                    }
+                    _ => {
+                        warn!(
+                            "Material '{}': no shader path specified — using magenta fallback",
+                            name
+                        );
+                        CUSTOM_MATERIAL_FALLBACK_HANDLE
+                    }
+                };
+
+                // Pack uniforms.
+                // Convention (both maps sorted alphabetically by key):
+                //   • Each color  → one Vec4 (r,g,b,a), filling params_0 first
+                //   • Each float  → packed 4-per-Vec4 into remaining param slots
+                let uniforms = pack_custom_uniforms(custom_def);
+
+                // Resolve up to 4 named texture slots.
+                let texture_0 = custom_def.textures.get("texture_0")
+                    .map(|p| asset_server.load::<Image>(p.clone()));
+                let texture_1 = custom_def.textures.get("texture_1")
+                    .map(|p| asset_server.load::<Image>(p.clone()));
+                let texture_2 = custom_def.textures.get("texture_2")
+                    .map(|p| asset_server.load::<Image>(p.clone()));
+                let texture_3 = custom_def.textures.get("texture_3")
+                    .map(|p| asset_server.load::<Image>(p.clone()));
+
+                let mat = CustomMaterial {
+                    uniforms,
+                    texture_0,
+                    texture_1,
+                    texture_2,
+                    texture_3,
+                    shader,
                     alpha_mode: map_alpha_mode(&def.alpha_mode),
                     double_sided: def.double_sided,
                     unlit: def.unlit,
-                    ..Default::default()
                 };
-                BuiltMaterialHandle::Standard(standard_materials.add(mat))
+                BuiltMaterialHandle::Custom(custom_materials.add(mat))
             }
         }
     }
@@ -175,6 +206,11 @@ pub fn apply_material_overrides(
                         .remove::<MeshMaterial3d<StandardMaterial>>()
                         .insert(MeshMaterial3d(h.clone()));
                 }
+                BuiltMaterialHandle::Custom(h) => {
+                    commands.entity(*mesh_entity)
+                        .remove::<MeshMaterial3d<StandardMaterial>>()
+                        .insert(MeshMaterial3d(h.clone()));
+                }
             }
         }
 
@@ -185,6 +221,61 @@ pub fn apply_material_overrides(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Packs a `CustomMaterialDef`'s `colors` and `floats` maps into the 4 × Vec4
+/// uniform buffer.
+///
+/// Packing order (both maps sorted alphabetically by key):
+/// - Colors are packed first, one color per Vec4 slot (params_0, params_1, …)
+/// - Floats fill remaining slots, 4 floats per Vec4
+///
+/// Example — 1 color + 4 floats:
+/// ```
+/// params_0 = color_a.rgba      ← 1st color
+/// params_1 = (f0, f1, f2, f3)  ← 4 floats
+/// params_2 = (0,  0,  0,  0)
+/// params_3 = (0,  0,  0,  0)
+/// ```
+fn pack_custom_uniforms(def: &crate::schema::material::CustomMaterialDef) -> CustomMaterialUniforms {
+    let mut params = [Vec4::ZERO; 4];
+    let mut next_vec4 = 0usize;
+
+    // Colors first (sorted alphabetically)
+    let mut color_keys: Vec<&String> = def.colors.keys().collect();
+    color_keys.sort();
+    for key in &color_keys {
+        if next_vec4 >= 4 { break; }
+        let c = def.colors[*key];
+        params[next_vec4] = Vec4::new(c.r, c.g, c.b, c.a);
+        next_vec4 += 1;
+    }
+
+    // Floats fill remaining component slots (sorted alphabetically)
+    let mut float_keys: Vec<&String> = def.floats.keys().collect();
+    float_keys.sort();
+    let mut component = next_vec4 * 4; // start after the color Vec4s
+    for key in &float_keys {
+        if component >= 16 { break; }
+        let vec_idx = component / 4;
+        let comp_idx = component % 4;
+        let v = def.floats[*key];
+        match comp_idx {
+            0 => params[vec_idx].x = v,
+            1 => params[vec_idx].y = v,
+            2 => params[vec_idx].z = v,
+            3 => params[vec_idx].w = v,
+            _ => unreachable!(),
+        }
+        component += 1;
+    }
+
+    CustomMaterialUniforms {
+        params_0: params[0],
+        params_1: params[1],
+        params_2: params[2],
+        params_3: params[3],
+    }
+}
 
 fn to_bevy_color(c: ColorDef) -> Color {
     Color::srgba(c.r, c.g, c.b, c.a)
