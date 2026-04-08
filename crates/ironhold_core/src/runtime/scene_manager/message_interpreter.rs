@@ -124,20 +124,17 @@ pub fn fsm_interpreter_system(
 
             info!("FSM transition: \"{}\" -> \"{}\" on \"{}\"", from_name, to_name, event_name);
 
-            // ActionQueue is LIFO (pop from end), so push entry actions first —
-            // they will sit below exit actions in the stack and execute last,
-            // giving the correct semantic order: exit → entry.
-            if let Some(to_def) = fsm.states.iter().find(|s| s.name == to_name) {
-                for action in &to_def.entry_actions {
-                    info!("FSM entry [{}]: {:?}", to_name, action);
+            // ActionQueue is FIFO — push in desired execution order: exit first, then entry.
+            if let Some(from_def) = fsm.states.iter().find(|s| s.name == from_name) {
+                for action in &from_def.exit_actions {
+                    info!("FSM exit [{}]: {:?}", from_name, action);
                     action_queue.push(action.clone());
                 }
             }
 
-            // Exit actions are pushed last so they are popped (executed) first.
-            if let Some(from_def) = fsm.states.iter().find(|s| s.name == from_name) {
-                for action in &from_def.exit_actions {
-                    info!("FSM exit [{}]: {:?}", from_name, action);
+            if let Some(to_def) = fsm.states.iter().find(|s| s.name == to_name) {
+                for action in &to_def.entry_actions {
+                    info!("FSM entry [{}]: {:?}", to_name, action);
                     action_queue.push(action.clone());
                 }
             }

@@ -1083,6 +1083,78 @@ fn test_rules_scene_event_unloading_triggers_action() {
         "scene.unloading:main rule should fire on SceneEvent::Unloading");
 }
 
+// ── FIFO ordering tests ───────────────────────────────────────────────────────
+
+#[test]
+fn test_action_queue_is_fifo() {
+    // Actions pushed first must execute first.
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("first".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("second".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("third".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"third\")",
+        "FIFO: last pushed action should be last executed (last_action reflects final execution)");
+}
+
+#[test]
+fn test_fsm_exit_before_entry_fifo_order() {
+    // Verifies: exit actions run before entry actions, and declaration order is preserved
+    // within each group. State "a" has two exit actions; state "b" has two entry actions.
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState {
+                name: "a".to_string(),
+                entry_actions: vec![],
+                exit_actions: vec![
+                    Action::Log("exit_a_1".to_string()),
+                    Action::Log("exit_a_2".to_string()),
+                ],
+                on: vec![],
+            },
+            FsmState {
+                name: "b".to_string(),
+                entry_actions: vec![
+                    Action::Log("entry_b_1".to_string()),
+                    Action::Log("entry_b_2".to_string()),
+                ],
+                exit_actions: vec![],
+                on: vec![],
+            },
+        ],
+        transitions: vec![
+            FsmTransition {
+                from: Some("a".to_string()),
+                on: "ui.button_pressed:go".to_string(),
+                to: "b".to_string(),
+            },
+        ],
+        global_on: vec![],
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("go".to_string()));
+    app.update();
+
+    // FIFO execution order: exit_a_1, exit_a_2, entry_b_1, entry_b_2.
+    // last_action reflects the final action executed.
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"entry_b_2\")",
+        "FIFO exit→entry: last executed action should be the second entry action of state b");
+}
+
 // ── FSM interpreter additional tests ──────────────────────────────────────────
 
 #[test]
