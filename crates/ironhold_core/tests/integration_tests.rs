@@ -1017,6 +1017,72 @@ fn test_rules_scene_event_ready_triggers_action() {
         "scene.ready:main rule should fire on SceneEvent::Ready for main scene");
 }
 
+#[test]
+fn test_rules_scene_event_loaded_triggers_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "scene.loaded:main".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("scene_loaded_fired".to_string())],
+        },
+    ]));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Loaded("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_loaded_fired\")",
+        "scene.loaded:main rule should fire on SceneEvent::Loaded before entities are spawned");
+}
+
+#[test]
+fn test_rules_scene_event_requested_triggers_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "scene.requested:main".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("scene_requested_fired".to_string())],
+        },
+    ]));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Requested("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_requested_fired\")",
+        "scene.requested:main rule should fire on SceneEvent::Requested");
+}
+
+#[test]
+fn test_rules_scene_event_unloading_triggers_action() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedRules(vec![
+        LogicRule {
+            on: "scene.unloading:main".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("scene_unloading_fired".to_string())],
+        },
+    ]));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Unloading("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_unloading_fired\")",
+        "scene.unloading:main rule should fire on SceneEvent::Unloading");
+}
+
 // ── FSM interpreter additional tests ──────────────────────────────────────────
 
 #[test]
@@ -1112,6 +1178,29 @@ fn test_fsm_scene_event_triggers_in_state_on_binding() {
     let debug = app.world().resource::<ironhold_core::DebugState>();
     assert_eq!(debug.last_action, "Log(\"scene_ready_in_state_a\")",
         "SceneEvent should trigger an in-state on binding when in the matching state");
+}
+
+#[test]
+fn test_fsm_scene_event_loaded_triggers_transition() {
+    let mut fsm = make_test_fsm();
+    fsm.transitions.push(FsmTransition {
+        from: None,
+        on: "scene.loaded:main".to_string(),
+        to: "b".to_string(),
+    });
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Loaded("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b", "SceneEvent::Loaded should trigger an FSM transition");
 }
 
 #[test]

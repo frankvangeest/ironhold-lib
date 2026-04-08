@@ -19,15 +19,10 @@ pub fn message_interpreter_system(
 
     for event in scene_events.read() {
         let event_name = match event {
-            SceneEvent::Ready(path) => {
-                let stem = scene_path_stem(&path);
-                format!("scene.ready:{}", stem)
-            }
-            SceneEvent::Unloading(path) => {
-                let stem = scene_path_stem(&path);
-                format!("scene.unloading:{}", stem)
-            }
-            _ => continue,
+            SceneEvent::Requested(path) => format!("scene.requested:{}", scene_path_stem(path)),
+            SceneEvent::Loaded(path)    => format!("scene.loaded:{}",    scene_path_stem(path)),
+            SceneEvent::Ready(path)     => format!("scene.ready:{}",     scene_path_stem(path)),
+            SceneEvent::Unloading(path) => format!("scene.unloading:{}", scene_path_stem(path)),
         };
         match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
     }
@@ -82,9 +77,10 @@ pub fn fsm_interpreter_system(
     }
     for event in scene_events.read() {
         let name = match event {
-            SceneEvent::Ready(path) => format!("scene.ready:{}", scene_path_stem(path)),
+            SceneEvent::Requested(path) => format!("scene.requested:{}", scene_path_stem(path)),
+            SceneEvent::Loaded(path)    => format!("scene.loaded:{}",    scene_path_stem(path)),
+            SceneEvent::Ready(path)     => format!("scene.ready:{}",     scene_path_stem(path)),
             SceneEvent::Unloading(path) => format!("scene.unloading:{}", scene_path_stem(path)),
-            _ => continue,
         };
         events.push(name);
     }

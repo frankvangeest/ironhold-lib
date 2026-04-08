@@ -504,7 +504,17 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 )
 ```
 
-**Event name format:** `"<domain>.<event_type>:<payload>"`. UI button events are always `"ui.button_pressed:<trigger>"` where `<trigger>` is the button's `action` field with the `"ui."` prefix stripped.
+**Event name format:** `"<domain>.<event_type>:<payload>"`. Available event names:
+
+| Event name | Source |
+|-----------|--------|
+| `ui.button_pressed:<trigger>` | UI button; `<trigger>` is the button's `action` field with the `"ui."` prefix stripped |
+| `scene.requested:<stem>` | Scene load initiated |
+| `scene.loaded:<stem>` | RON asset deserialized; entities not yet spawned |
+| `scene.ready:<stem>` | All entities spawned |
+| `scene.unloading:<stem>` | Before a full scene replace |
+
+`<stem>` is the filename without `.scene.ron` (e.g. `"main"` for `scenes/main.scene.ron`).
 
 **Available actions:**
 

@@ -78,12 +78,18 @@ UI interactions and higher-level UI events:
 **Why:** keep UI wiring declarative; bind UI events to gameplay actions.
 
 #### 3) SceneEvent ✅
-Scene lifecycle:
-- `scene.requested` (path/name)
-- `scene.loaded`
-- `scene.ready`
+Scene lifecycle events fire in this order:
 
-**Why:** data-defined flows (menus → loading → gameplay) need stable hooks.
+| Event name | When it fires | Use for |
+|-----------|---------------|---------|
+| `scene.requested:<stem>` | Load has been requested (asset not yet read) | Show a loading indicator |
+| `scene.loaded:<stem>` | RON asset deserialized; entities **not yet spawned** | Pre-spawn setup (e.g. set state, queue audio) |
+| `scene.ready:<stem>` | All entities spawned and ready | Start gameplay logic, trigger transitions |
+| `scene.unloading:<stem>` | Before a full scene replace (not overlays) | Teardown (e.g. stop music, save state) |
+
+`<stem>` is the filename without `.scene.ron` (e.g. `"main"` for `scenes/main.scene.ron`).
+
+**Why:** data-defined flows (menus → loading → gameplay) need stable hooks at each stage.
 
 #### 4) Trigger / Collision 🧭
 Spatial interactions:

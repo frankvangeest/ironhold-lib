@@ -7,6 +7,13 @@
             event: "ui.button_pressed:quit",
             do_actions: [Quit],
         ),
+        // scene.loaded fires after the RON is parsed but before terrain mesh generation
+        // completes. scene.ready fires once all entities (including the terrain) are spawned.
+        // This gap is noticeable on large terrains — use scene.loaded for early setup.
+        (
+            event: "scene.loaded:terrain",
+            do_actions: [Log("Terrain assets loaded, generating mesh...")],
+        ),
     ],
 
     states: [
