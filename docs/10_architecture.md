@@ -64,6 +64,42 @@ Why:
 - Decouples features (UI doesn’t hardcode scene management).
 - Prepares the engine for deterministic simulation and multiplayer later.
 
+## Material and Shader Pipeline ✅
+
+Three material types are available. Choose the simplest one that fits:
+
+| Type | Use when | Shader |
+|------|----------|--------|
+| `Standard` | PBR mesh with texture maps and no custom logic | Bevy built-in |
+| `Terrain` | Heightmap terrain with 3-layer splatmap blending | `assets/shared/shaders/terrain.wgsl` |
+| `Custom` | Any effect not achievable with Standard (procedural, unlit, rim, etc.) | Designer-supplied `.wgsl` |
+
+### Custom WGSL shader pipeline ✅
+
+`CustomMaterial` is the WGSL extension point. It is fully data-driven:
+
+1. Author a `.wgsl` fragment shader in `assets/shared/shaders/` (or a project subfolder).
+2. Declare the material in `assets.ron` — set `shader`, `colors`, `floats`, and `textures`.
+3. Reference the material key from a prefab definition (`material: Some("key")`).
+4. The engine packs uniforms, loads the shader via the asset server, and creates the GPU pipeline automatically.
+
+Each unique shader handle produces a separate GPU render pipeline (Bevy's material specialisation). Materials sharing the same shader share the same pipeline.
+
+**Fragment-only today.** `CustomMaterial::specialize()` overrides the forward fragment pass only. Vertex shader override and compute shaders are planned extensions.
+
+See `docs/25_custom_shaders.md` for the full authoring guide, binding contract, and uniform packing rules.
+
+### Why WGSL ✅
+
+WGSL is the native language of WebGPU. Using it directly means:
+- No shader transpilation cost at runtime.
+- Identical GPU output on desktop (wgpu) and browser (WebGPU).
+- No LUT-texture dependencies — all shaders in this engine work without look-up tables, which is required for consistent web performance.
+
+This aligns with the rendering philosophy: web builds are the performance baseline; all platforms render identically.
+
+---
+
 ## Layering
 ### App-level flow (global)
 Use Bevy app States for lifecycle:

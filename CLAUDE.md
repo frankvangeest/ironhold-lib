@@ -86,6 +86,21 @@ Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`. Test da
 
 ### WebGPU 16-byte alignment
 Custom GPU-bound structs (e.g., `TerrainMaterial`) **must** use 16-byte aligned uniform buffer layouts. Violating this causes `BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED` panics in web builds. Verify `AsBindGroup` mappings distinguish Uniform vs. Storage buffers per Bevy 0.18 expectations.
+- Use `Vec4` (16 bytes) for all uniform fields; never bind a bare `f32`, `Vec2`, or `Vec3`.
+- `CustomMaterialUniforms` (4 × Vec4 = 64 bytes) and `TerrainMaterial.uv_scale` (Vec4 padded) already comply — keep them that way.
+
+### WGSL is the first-class shader language
+All shaders in this project are authored in WGSL. WGSL is the native language of WebGPU and runs identically on desktop (wgpu) and browser (WebGPU) — zero transpilation cost and consistent output on all platforms.
+
+**When writing or reviewing shader code:**
+- Shared (reusable) shaders → `assets/shared/shaders/`, named `custom_*.wgsl`.
+- Project-specific shaders → `assets/projects/{name}/shaders/`.
+- All custom fragment shaders must declare the full `CustomMaterial` binding contract (see `docs/25_custom_shaders.md`). Missing bindings cause WebGPU validation errors, not panics.
+- `TonyMcMapface` and `BlenderFilmic` tonemapping are excluded because they require a LUT texture. Do not add LUT-dependent shaders.
+- `CustomMaterial` currently overrides the **fragment shader only**. Vertex shader override is planned but not yet implemented — do not attempt to swap the vertex shader via `specialize()`.
+- Always test WGSL changes in a web build (`python test_web.py`). WebGPU validates binding interfaces strictly; native wgpu is more permissive and will not catch all errors.
+
+See `docs/25_custom_shaders.md` for the full shader authoring guide.
 
 ### Physics & movement must use `FixedUpdate`
 All player movement, physics processing, and camera-follow logic must run in `FixedUpdate`. Using `Update` for physics-driven movement causes stuttering.
@@ -147,4 +162,5 @@ This is written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironh
 
 - **Bevy 0.18** — always use 0.18 API; `AsBindGroup` behaviors and resource initialization changed significantly in this version.
 - **RON** — all game data files use Rusty Object Notation (`.ron`). Schema versioning is enforced via `schema_version` fields; see `docs/20_data_formats.md`.
+- **WGSL** — all shaders are WGSL (WebGPU Shading Language). Fragment shaders are loaded from `assets/shared/shaders/` and wired up via the `CustomMaterial` system in `assets.ron`. See `docs/25_custom_shaders.md`.
 - **Bevy app states**: `LoadingProject → LoadingScene → InGame` (with optional Paused/Error).
