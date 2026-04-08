@@ -234,11 +234,16 @@ pub fn spawn_scene_v2(
             }
         }
 
+        let tonemapping = scene.tonemapping.to_bevy();
+
         // Spawn player (delayed if terrain present), flycam, or fallback camera.
         if let Some(pc) = player_config {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
-                commands.spawn(crate::runtime::scene_manager::PendingPlayerConfig(pc));
+                commands.spawn((
+                    crate::runtime::scene_manager::PendingPlayerConfig(pc),
+                    crate::runtime::scene_manager::PendingTonemapping(tonemapping),
+                ));
             } else {
                 spawn_player_entity(
                     &mut commands,
@@ -247,6 +252,7 @@ pub fn spawn_scene_v2(
                     &model_spawner,
                     &pc,
                     &params.project_root.0,
+                    tonemapping,
                 );
             }
         } else if let Some(fc_transform) = flycam_start {
@@ -262,18 +268,7 @@ pub fn spawn_scene_v2(
             commands.spawn((
                 Name::new("FlyCamera"),
                 Camera3d::default(),
-                // Avoid HDR and bloom for web compatibility
-                // And choose a high performance tonemapping option
-                // Tonemapping Options:
-                // Option 	                        Style	                    Performance	        Best For...
-                // TonyMcMapface	                Balanced, Modern	        Medium (Needs LUT)  The Default. Great for almost any style without looking "over-processed".
-                // AcesFitted	                    Cinematic, Contrast-heavy	High	            High-end 3D games looking for a filmic, "industry standard" aesthetic.
-                // Reinhard	                        Smooth, Muted	            High	            Simple scenes where you want to avoid "blown out" highlights, though it can look "washed out".
-                // ReinhardLuminance	            Detail-focused	            High	            Similar to Reinhard but preserves colors better in high-contrast areas.
-                // BlenderFilmic	                Realistic, Natural	        Medium (Needs LUT)	Photorealistic renders that need a wide dynamic range similar to Blender's default.
-                // SomewhatBoringDisplayTransform	Neutral, Simple	            High	            When you need a predictable, standard transform with minimal artistic "flavor."
-                // None	                            Raw, Linear	                Fastest	            Non-HDR scenes or specific stylized looks where you want colors to "clip" naturally.
-                bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted,
+                tonemapping,
                 fc_transform,
                 LevelEntity,
                 crate::capabilities::flycam::FlyCamera { pitch, yaw, ..Default::default() },
@@ -283,6 +278,7 @@ pub fn spawn_scene_v2(
             commands.spawn((
                 Name::new("Default Camera"),
                 Camera3d::default(),
+                tonemapping,
                 Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
                 LevelEntity,
             ));

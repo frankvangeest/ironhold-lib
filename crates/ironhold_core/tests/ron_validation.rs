@@ -515,6 +515,27 @@ fn test_game_scene_v2_unknown_field_is_error() {
     assert!(result.is_err(), "unknown fields should be rejected");
 }
 
+#[test]
+fn test_game_scene_v2_tonemapping_defaults_to_aces_fitted() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [])"#;
+    let scene: GameSceneV2 = from_str(ron_str).unwrap();
+    assert_eq!(
+        scene.tonemapping,
+        ironhold_core::schema::scene_v2::TonemappingOption::AcesFitted,
+        "omitting tonemapping should default to AcesFitted",
+    );
+}
+
+#[test]
+fn test_game_scene_v2_excluded_tonemapping_variants_are_rejected() {
+    // TonyMcMapface and BlenderFilmic require a LUT and are intentionally excluded.
+    for variant in &["TonyMcMapface", "BlenderFilmic"] {
+        let ron_str = format!(r#"(schema_version: 2, entities: [], ui: [], tonemapping: {})"#, variant);
+        let result: Result<GameSceneV2, _> = from_str(&ron_str);
+        assert!(result.is_err(), "{} should be rejected as an unsupported tonemapping option", variant);
+    }
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]

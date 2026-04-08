@@ -13,7 +13,7 @@ use crate::capabilities::animation_resolver::{
 };
 use bevy_rapier3d::prelude::*;
 use super::{
-    MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig,
+    MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
     resolve_project_path,
 };
 
@@ -89,7 +89,7 @@ pub fn animation_policy_loader_system(
 pub fn spawn_player_when_terrain_ready(
     mut commands: Commands,
     terrain_query: Query<Entity, Added<crate::capabilities::terrain::TerrainReady>>,
-    pending_query: Query<(Entity, &PendingPlayerConfig)>,
+    pending_query: Query<(Entity, &PendingPlayerConfig, Option<&PendingTonemapping>)>,
     asset_server: Res<AssetServer>,
     model_spawner: Res<ModelSpawner>,
     merged_fixes: Res<MergedModelFixes>,
@@ -99,8 +99,11 @@ pub fn spawn_player_when_terrain_ready(
         return;
     }
 
-    for (pending_entity, pending) in &pending_query {
+    for (pending_entity, pending, pending_tm) in &pending_query {
         info!("Terrain is ready. Spawning player...");
+        let tonemapping = pending_tm
+            .map(|pt| pt.0)
+            .unwrap_or(bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted);
         spawn_player_entity(
             &mut commands,
             &asset_server,
@@ -108,6 +111,7 @@ pub fn spawn_player_when_terrain_ready(
             &model_spawner,
             &pending.0,
             &project_root.0,
+            tonemapping,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -120,6 +124,7 @@ pub(crate) fn spawn_player_entity(
     model_spawner: &ModelSpawner,
     player_config: &PlayerConfig,
     project_root: &str,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
 ) {
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
@@ -176,6 +181,7 @@ pub(crate) fn spawn_player_entity(
     commands.spawn((
         Name::new("Orbit Camera"),
         Camera3d::default(),
+        tonemapping,
         Transform::from_translation(start_pos)
             .looking_at(Vec3::from(player_config.initial_position), Vec3::Y),
         LevelEntity,

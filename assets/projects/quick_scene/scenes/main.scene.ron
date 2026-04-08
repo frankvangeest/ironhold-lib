@@ -2,12 +2,19 @@
   schema_version: 2,
   name: "main",
 
+  // AcesFitted: cinematic, high-performance tonemapper. No LUT required.
+  tonemapping: AcesFitted,
+
   lighting: Some((
-    ambient: Some((0.35, 0.35, 0.4)),
+    // Cool sky fill — low enough to let directional shadows read clearly.
+    ambient: Some((0.18, 0.22, 0.35)),
+    ambient_brightness: Some(80.0),
     directional: Some((
-      color: (1.0, 0.98, 0.92),
-      intensity: 12000.0,
-      rotation_euler_deg: (-45.0, 35.0, 0.0),
+      // Warm midday sun from a shallow south-west angle for long shadow definition.
+      color: (1.0, 0.92, 0.75),
+      intensity: 28000.0,
+      rotation_euler_deg: (-40.0, 30.0, 0.0),
+      shadows_enabled: true,
     )),
   )),
 

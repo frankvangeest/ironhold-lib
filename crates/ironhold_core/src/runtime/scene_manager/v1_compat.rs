@@ -183,6 +183,7 @@ pub fn spawn_level(
                         &model_spawner,
                         player_config,
                         &project_root.0,
+                        bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted,
                     );
                 }
             } else {

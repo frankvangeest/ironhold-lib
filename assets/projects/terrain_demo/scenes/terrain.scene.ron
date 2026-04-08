@@ -2,12 +2,19 @@
   schema_version: 2,
   name: "terrain",
 
+  // AcesFitted: cinematic, high-performance tonemapper. No LUT required.
+  tonemapping: AcesFitted,
+
   lighting: Some((
-    ambient: Some((0.8, 0.85, 1.0)),
+    // Cool sky fill — low enough to keep the primitive shapes well-contrasted.
+    ambient: Some((0.20, 0.24, 0.38)),
+    ambient_brightness: Some(90.0),
     directional: Some((
-      color: (1.0, 0.95, 0.85),
-      intensity: 15000.0,
-      rotation_euler_deg: (-45.0, 35.0, 0.0),
+      // Bright sun from a side angle to catch the geometry of all seven primitives.
+      color: (1.0, 0.94, 0.80),
+      intensity: 32000.0,
+      rotation_euler_deg: (-35.0, 45.0, 0.0),
+      shadows_enabled: true,
     )),
   )),
 

@@ -22,7 +22,7 @@ pub const CUSTOM_MATERIAL_FALLBACK_HANDLE: Handle<Shader> =
 /// - `floats` entries (packed 4 per `vec4`) fill the remaining slots
 ///
 /// Example with 1 color ("base_color") + 3 floats ("roughness", "tiling", "x"):
-/// ```
+/// ```text
 /// params_0 = base_color.rgba
 /// params_1 = (roughness, tiling, x, 0.0)
 /// params_2 = (0, 0, 0, 0)

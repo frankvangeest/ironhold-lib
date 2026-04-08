@@ -106,6 +106,12 @@ pub struct SpawnId(pub String);
 #[derive(Component)]
 pub struct PendingPlayerConfig(pub PlayerConfig);
 
+/// Stores the scene's tonemapping alongside `PendingPlayerConfig` for the terrain-delayed
+/// player spawn path. `spawn_player_when_terrain_ready` reads this to apply the correct
+/// tonemapping to the orbit camera once terrain generation is complete.
+#[derive(Component)]
+pub struct PendingTonemapping(pub bevy::core_pipeline::tonemapping::Tonemapping);
+
 /// Holds a handle to an AnimationPolicy asset that is still loading.
 /// Replaced by AnimationPolicyComponent once the asset resolves.
 #[derive(Component)]

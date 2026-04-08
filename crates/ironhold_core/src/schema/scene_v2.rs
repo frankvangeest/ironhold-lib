@@ -4,6 +4,43 @@ use std::collections::HashMap;
 
 pub const GAME_SCENE_V2_SCHEMA_VERSION: u32 = 2;
 
+/// Tonemapping algorithm applied to all cameras in a scene.
+///
+/// `TonyMcMapface` and `BlenderFilmic` are intentionally excluded — they require a
+/// LUT texture lookup that reduces performance and breaks consistency across platforms.
+/// HDR and bloom are not supported for the same reason: performant web builds are
+/// the baseline, and the engine prioritises a consistent look on all platforms over
+/// native-only visual upgrades.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TonemappingOption {
+    /// Cinematic, high-contrast filmic tonemapper. High performance (no LUT).
+    /// Good default for most 3D scenes.
+    #[default]
+    AcesFitted,
+    /// No tonemapping. Raw linear output; colours clip at 1.0.
+    /// Useful for stylised looks or purely flat scenes.
+    None,
+    /// Smooth, muted tonemapper. Can appear "washed out" at high exposures.
+    Reinhard,
+    /// Like Reinhard but preserves colour hue better in high-contrast areas.
+    ReinhardLuminance,
+    /// Neutral, predictable transform with minimal artistic flavour.
+    SomewhatBoringDisplayTransform,
+}
+
+impl TonemappingOption {
+    pub fn to_bevy(self) -> bevy::core_pipeline::tonemapping::Tonemapping {
+        use bevy::core_pipeline::tonemapping::Tonemapping;
+        match self {
+            Self::AcesFitted => Tonemapping::AcesFitted,
+            Self::None => Tonemapping::None,
+            Self::Reinhard => Tonemapping::Reinhard,
+            Self::ReinhardLuminance => Tonemapping::ReinhardLuminance,
+            Self::SomewhatBoringDisplayTransform => Tonemapping::SomewhatBoringDisplayTransform,
+        }
+    }
+}
+
 /// Scene file format version 2.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +62,11 @@ pub struct GameSceneV2 {
     /// using absolute positioning. `position` on each element is ignored in this mode.
     #[serde(default)]
     pub ui_panel: Option<UiPanelDef>,
+    /// Tonemapping applied to all cameras spawned for this scene.
+    /// Defaults to `AcesFitted` when omitted.
+    /// `TonyMcMapface` and `BlenderFilmic` are not available — see `TonemappingOption`.
+    #[serde(default)]
+    pub tonemapping: TonemappingOption,
 }
 
 impl GameSceneV2 {

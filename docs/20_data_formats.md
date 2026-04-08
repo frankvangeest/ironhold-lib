@@ -12,6 +12,25 @@
 
 ---
 
+## Rendering philosophy
+
+The runtime prioritises **consistent, performant rendering across all supported platforms** over per-platform visual quality upgrades.
+
+- **Web builds are the performance baseline.** Every rendering feature must work acceptably in a WebGPU WASM build. If a feature cannot meet that bar it is not enabled on any platform.
+- **All platforms look the same.** There are no native-only graphics options. A scene authored once should render identically on desktop and in the browser.
+- **Performance over visual fidelity.** When a trade-off must be made the engine chooses the faster option. Developers can push visual quality within the allowed feature set, but cannot opt in to slower paths.
+
+**Excluded features and why:**
+
+| Feature | Why excluded |
+|---------|--------------|
+| `TonyMcMapface` tonemapper | Requires a LUT texture lookup — additional bandwidth, slower, and web-unfriendly |
+| `BlenderFilmic` tonemapper | Same as above |
+| HDR | Adds memory and bandwidth overhead; consistent non-HDR output avoids per-platform clip differences |
+| Bloom | Post-processing pass; not worth the GPU cost at the web performance baseline |
+
+---
+
 ## Versioning ✅
 
 All top-level data files include `schema_version: <u32>`. The runtime validates this on load and rejects unsupported versions. Both v1 and v2 are accepted where noted.
@@ -111,6 +130,7 @@ File extension must be `.scene.ron`.
 |-------|------|-------------|
 | `schema_version` | `u32` | Must be `2` |
 | `name` | `String` | Scene identifier (used in `SceneEvent::Ready`) |
+| `tonemapping` | `TonemappingOption` | Tonemapping for all cameras in this scene. Defaults to `AcesFitted`. See below. |
 | `lighting` | `Option<SceneLightingV2>` | Ambient + directional light config |
 | `terrain` | `Option<TerrainConfigV2>` | Heightmap-based terrain |
 | `spawn_points` | `Map<String, (f32,f32,f32)>` | Named world-space positions |
@@ -177,6 +197,20 @@ File extension must be `.scene.ron`.
   ],
 )
 ```
+
+### Tonemapping (`TonemappingOption`)
+
+Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fallback camera). Omit the field to get the default.
+
+| Value | Style | Notes |
+|-------|-------|-------|
+| `AcesFitted` *(default)* | Cinematic, high-contrast | No LUT. Good for most 3D scenes. |
+| `None` | Raw linear | Colours clip at 1.0. For flat / stylised scenes. |
+| `Reinhard` | Smooth, muted | Can look washed out at high exposures. |
+| `ReinhardLuminance` | Detail-focused | Preserves hue better than plain Reinhard. |
+| `SomewhatBoringDisplayTransform` | Neutral, predictable | Minimal artistic flavour. |
+
+`TonyMcMapface` and `BlenderFilmic` are not available — they require a LUT texture which reduces performance and is not compatible with the web baseline. See [Rendering philosophy](#rendering-philosophy).
 
 ### Lighting (`SceneLightingV2`)
 

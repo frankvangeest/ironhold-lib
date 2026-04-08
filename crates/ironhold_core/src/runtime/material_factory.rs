@@ -230,7 +230,7 @@ pub fn apply_material_overrides(
 /// - Floats fill remaining slots, 4 floats per Vec4
 ///
 /// Example — 1 color + 4 floats:
-/// ```
+/// ```text
 /// params_0 = color_a.rgba      ← 1st color
 /// params_1 = (f0, f1, f2, f3)  ← 4 floats
 /// params_2 = (0,  0,  0,  0)
