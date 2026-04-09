@@ -268,18 +268,24 @@
     <script type="module">
         // This assumes wasm-pack build --target web --out-dir pkg
         // import init from './pkg/ironhold_web.js';
-        let init;
+        let ironhold;
         try {
             // Primary source (local)
-            init = await import('./pkg/ironhold_web.js');
+            ironhold = await import('./pkg/ironhold_web.js');
         } catch (err) {
             console.warn('Primary local import failed, trying GitHub Pages fallback...');
             // Fallback source (GitHub Pages)
-            init = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
+            ironhold = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
         }
+        console.warn(ironhold);
+        console.warn(ironhold.init);
 
         async function run() {
-            await init();
+            // Dynamic import() returns the module namespace object.
+            // wasm-pack --target web exports init as the default export only,
+            // so use .default — not .init — when loading via import().
+            const initFn = ironhold.default ?? ironhold.init;
+            await initFn();
         }
 
         run();
