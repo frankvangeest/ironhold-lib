@@ -11,7 +11,11 @@ The `ironhold_core` crate is organized into modular sub-modules to maintain sepa
 - **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameLevel`).
 - **`runtime/`**: Core engine logic, including the Message/Action interpreter and the `SceneManager`.
 - **`capabilities/`**: Reusable gameplay systems (e.g., `CharacterController`, `OrbitCamera`, `FlyCamera`).
-- **`utils.rs`**: Shared utility functions like asset folder discovery.
+- **`utils.rs`**: Shared utility functions, including asset folder discovery.
+
+### Assets folder discovery
+
+The runtime expects an `assets/` directory relative to the executable's working directory. `utils.rs` walks up parent directories until it finds an `assets/` folder, so running from the workspace root (`cargo run`) always works even when the compiled binary lives in a nested `target/` path. The WASM runner serves assets from the same origin as the page — no walking needed in the browser.
 
 ### DebugState resource
 `DebugState` (defined in `lib.rs`) is a plain resource updated every `PostUpdate` frame by `update_debug_state`:

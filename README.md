@@ -1,353 +1,203 @@
-# Ironhold-lib (Bevy 0.18) — Data‑Driven, Cross‑Platform Game Runtime (Native + Web/WASM)
+# Ironhold-lib
 
-**Ironhold-lib** is a **cross-platform** (Windows/Linux + WebAssembly) game runtime built on **Bevy 0.18**.  
-Games are defined by **data files** (`.ron`) and assets (models, textures, audio). Game creators can build new projects and scenes **without recompiling** the engine.
+Data-driven, cross-platform game runtime built on **Bevy 0.18**. Games are authored in **RON files** — no recompiling required for most content changes.
 
-> **Core idea:** the engine ships “capability building blocks” (controller, camera, animation, UI, etc.) and the **project + scene data** decides what gets used.
+## Play it live
 
----
-
-## ✨ What you can do today
-
-- Load a **project** from `assets/project.ron`
-- Load a **scene** from `assets/scenes/*.ron`
-- Spawn **models** from `.glb`
-- Render **terrain** from heightmaps and splatmaps (WebGPU compatible)
-- Configure **HDR lighting** (Ambient, Directional sun, IBL Environment Maps)
-- Optional **player** with:
-  - configurable input mapping (WASD etc.)
-  - orbit camera
-  - configurable animation mapping
-- UI **Button** that triggers `LoadScene(...)`
+**Project Gallery:** https://frankvangeest.github.io/ironhold-lib/index.html
 
 ---
 
-## Repository Layout
+## What you can build today — without recompiling
 
-```
-ironhold-lib/
-├─ assets/
-│  ├─ project.ron
-│  ├─ scenes/
-│  │  ├─ start-menu.ron
-│  │  └─ main.ron
-│  └─ models/
-│     ├─ character-01.glb
-│     ├─ anvil.glb
-│     └─ treasure-chest-*.glb
-├─ crates/
-│  ├─ ironhold_core/    # shared engine runtime + data schemas
-│  ├─ ironhold_native/  # desktop runner
-│  └─ ironhold_web/     # wasm runner
-├─ index.html           # project gallery (landing page)
-└─ play.html            # WASM game runner (loads ?project=<name>)
-```
+Everything below is controlled by `.ron` files and assets. You write data, the runtime does the rest.
+
+### Project & scene setup
+- Define a project entry point, initial scene, and global key bindings in `{name}.project.ron`
+- Each scene is a `{name}.scene.ron` that spawns entities, configures lighting, and declares UI
+- Reference all assets (models, textures, audio, materials) by key from a central `assets.ron` catalog
+- Define reusable entity templates (prefabs) in `prefabs/prefabs.ron`
+
+### Entities
+- Spawn **GLB models** by asset catalog key, with full transform (position, rotation, scale)
+- Spawn **primitive shapes** (Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum) — no models required
+- Build **composite objects** from multiple primitives using child prefabs: trees, houses, fences, lamps
+- Add **static physics colliders** to any primitive prefab with `physics: true`
+- Define named **spawn points** in the scene for scripted placement
+
+### Players & cameras
+- Add a **3rd-person player** by tagging a capsule prefab with `"player"`:
+  - Physics-based character controller (WASD + orbit camera)
+  - Walk speed, run speed, rotation speed configurable per prefab
+  - Animation policy: map semantic clip IDs to your glTF animation names
+- Add a **free-flying camera** by tagging any prefab with `"flycam"` (WASD + mouse look, no model needed)
+
+### Terrain
+- Heightmap-based terrain from a greyscale PNG
+- Splatmap material blending across up to 4 texture layers
+- Chunk size and world scale configurable per scene
+
+### Lighting
+- Per-scene **ambient light** (color + brightness)
+- Per-scene **directional sun** (color, intensity, rotation, shadow toggle)
+- **Tonemapping** per scene: `AcesFitted` (default), `Reinhard`, `ReinhardLuminance`, `None`, `SomewhatBoringDisplayTransform`
+- Project-level **fallback environment**: procedural gradient sky or HDR cubemap (`.ktx2`)
+
+### UI
+- **Buttons** — position, size, label, and action trigger; all data-driven
+- **Labels** — static or dynamically updated (e.g. the `flycam_position` label updates every frame)
+- **Panels** — centered layouts with background color, padding, gap, and width for menus and overlays
+
+### Game logic — no Rust required
+
+**FSM workflow** (`logic/state_machine.ron`) — recommended for any multi-scene game:
+- Declare named states: `menu`, `playing`, `paused`, etc.
+- Each state has `entry_actions`, `exit_actions`, and in-state event bindings
+- `transitions` list drives state changes (any-state or from a specific state)
+
+**Rules workflow** (`logic/rules.ron`) — simpler projects or a single scene:
+- Map events directly to action sequences
+- Optional `when:` guard restricts a rule to a named logic state
+
+**Events you can react to:**
+
+| Event | When it fires |
+|-------|--------------|
+| `ui.button_pressed:<id>` | A UI button is clicked |
+| `scene.ready:<name>` | Scene fully spawned |
+| `scene.requested:<name>` | Load initiated |
+| `scene.loaded:<name>` | RON deserialized, before entity spawn |
+| `scene.unloading:<name>` | Before a scene is replaced |
+| Any key in `global_key_bindings` | Key pressed (e.g. `"Escape": "toggle_pause"`) |
+
+**Actions you can trigger:**
+
+| Action | Effect |
+|--------|--------|
+| `LoadScene("scenes/main.scene.ron")` | Replace the current scene |
+| `LoadSceneOverlay("scenes/pause.scene.ron")` | Open an overlay (pause menus) |
+| `UnloadOverlay` | Close the active overlay |
+| `PlayAnimation("dance")` | Play a named animation on the player |
+| `PlaySound("click")` | Fire-and-forget audio by catalog key |
+| `PlayMusicLoop("bg_music")` | Start a looping background track |
+| `StopMusic` | Stop the background track |
+| `SetVolume(75)` | Set global volume (0–100) |
+| `Spawn { prefab: "barrel", id: "barrel_01" }` | Spawn a prefab at runtime |
+| `Despawn("barrel_01")` | Remove a spawned entity |
+| `Preload("scenes/next.scene.ron")` | Warm the asset cache in advance |
+| `Quit` | Exit the application |
+| `Log("message")` | Emit an info log line |
+
+### Materials & shaders
+- **Standard PBR** — base color, texture maps, metallic, roughness; embedded in your GLB or overridden per-prefab
+- **Custom WGSL shaders** — author a `.wgsl` fragment shader, declare uniforms in `assets.ron`, reference it from a prefab; the engine handles the rest
+- **Per-model transform corrections** — `overrides/model_fixes.ron` fixes pivot offsets, axis rotations, or scale mismatches without touching the asset file
 
 ---
 
-## 🚀 Quick Start
+## Example projects
 
-### 1) Native (Windows / Linux / macOS)
+| Project | What it shows |
+|---------|---------------|
+| `quick_scene` | Minimal starting point: GLB model, start-menu, single scene load |
+| `3rd_person_game_demo` | Animated 3D character, full FSM (menu → playing → paused), orbit camera |
+| `terrain_demo` | Heightmap terrain, splatmap texture blending, fly camera |
+| `custom_materials` | Custom WGSL shaders on primitive shapes via `assets.ron` |
+| `primitive_world` | Entire world from geometric primitives: trees, cottages, fences, a pond, a village |
+
+---
+
+## Quick Start
+
+### Native (Windows / Linux / macOS)
 
 ```bash
+# Default project (quick_scene)
 cargo run -p ironhold_native
+
+# Specific project
+cargo run -p ironhold_native -- --project primitive_world
+
+# With Bevy inspector overlay
+cargo run -p ironhold_native --all-features -- --project 3rd_person_game_demo
 ```
 
-or with inspector enabled
+### Web / WASM
+
+Prerequisites: `wasm-pack`, `rustup target add wasm32-unknown-unknown`
 
 ```bash
-cargo run -p ironhold_native --all-features
-```
-
-
-This runs the Bevy app using the shared runtime in `ironhold_core` and loads:
-- `assets/project.ron`
-- the configured initial scene (e.g. `assets/scenes/start-menu.ron`)
-
-#### Custom Project Config
-You can specify a custom project file as a command-line argument:
-
-```bash
-cargo run -p ironhold_native -- project_02.ron
-```
-
-> `project_02.ron` should be in the `assets` directory.
-
-Or a combination:
-
-```bash
-cargo run -p ironhold_native --all-features -- terrain_demo.ron
-```
-
----
-
-### 2) Web / WASM
-
-#### Prerequisites
-- Rust toolchain installed
-- `wasm-pack` installed
-- WASM target installed
-
-```bash
-rustup target add wasm32-unknown-unknown
-```
-
-#### Build
-```bash
+# Build
 wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
+
+# Serve (no-cache, port 8000)
+python serve.py
 ```
 
-#### Serve (any static server)
-From the repo root:
+Open `http://localhost:8000` for the gallery, or `http://localhost:8000/play.html?project=primitive_world` to run a specific project.
+
+Or skip the build and **[play live on GitHub Pages](https://frankvangeest.github.io/ironhold-lib/index.html)**.
+
+### Tests
 
 ```bash
-python -m http.server 8000
-```
-
-Open:
-- `http://localhost:8000` — project gallery
-- `http://localhost:8000/play.html?project=quick_scene` — run a specific project
-
-> `index.html` is the project gallery. `play.html` loads the WASM package and starts the engine.
-> The `?project=<name>` param selects which project folder under `assets/projects/` to load.
-
----
-
-## 🎮 Creating a Game (Data‑Driven)
-
-### Project file: `assets/project.ron`
-
-Minimal project config selects the initial scene and defines global rules:
-
-```ron
-(
-  schema_version: 1,
-  initial_scene: "scenes/start-menu.ron",
-  // Optional: Global per-asset corrections
-  model_fixes: {
-    "models/character-01.glb#Scene0": (
-      pivot_offset: (0.0, -0.9, 0.0),
-      rotation_deg: (0.0, 180.0, 0.0),
-      scale: (0.1, 0.1, 0.1),
-    ),
-  },
-  // Optional: Map events (e.g. UI triggers) to engine actions
-  rules: [
-    (
-      on: "ui.button_pressed:start_game",
-      do_actions: [ Log("Starting Game"), LoadScene("scenes/main.ron") ],
-    ),
-    (
-      on: "ui.button_pressed:quit",
-      do_actions: [ Quit ],
-    ),
-  ],
-)
-```
-
-### Scene files: `assets/scenes/*.ron`
-
-A scene defines:
-- `models`: list of `.glb` models to spawn
-- `ui`: UI elements (e.g. buttons)
-- `lighting`: optional HDR ambient, directional, and environment map lighting
-- `player`: optional player config (model + camera + inputs + animation policy)
-
-Example:
-
-```ron
-(
-  schema_version: 1,
-  models: [
-    (path: "models/anvil.glb#Scene0", position: (2.0, 0.0, 0.0)),
-  ],
-  ui: [
-    Button(
-      text: "Start Game", 
-      action: Trigger("start_game"),
-      position: Some((100.0, 100.0)), // Optional (absolute px)
-      width: Some(200.0),             // Optional (px)
-      height: Some(80.0),             // Optional (px)
-      font_size: Some(40.0),          // Optional
-      background_color: Some((0.2, 0.2, 0.2, 0.8)), // Optional RGBA
-      text_color: Some((1.0, 1.0, 1.0, 1.0)),       // Optional RGBA
-    ),
-  ],
-  lighting: Some((
-    ambient: Some((
-      color: (1.0, 1.0, 1.0),
-      brightness: 200.0,
-    )),
-    directional: Some((
-      color: (1.0, 0.95, 0.85),
-      illuminance: 30000.0,
-      direction: (0.3, -1.0, 0.2),
-      shadows: true,
-    )),
-    environment: Some((
-      asset_path: Some("textures/skybox.ktx2"),
-      fallback: Some((
-        intensity: 2500.0,
-        sun_direction: (0.3, -1.0, 0.2),
-      )),
-    )),
-  )),
-  player: Some((
-    model_path: "models/character-01.glb#Scene0",
-    initial_position: (0.0, 0.0, 2.0),
-    inputs: (
-      forward: "KeyW",
-      backward: "KeyS",
-      left: "KeyA",
-      right: "KeyD",
-      strafe_left: "KeyQ",
-      strafe_right: "KeyE",
-      jump: "Space",
-      run: "ShiftLeft", // Optional, defaults to "ShiftLeft"
-    ),
-    camera: (
-      offset: (0.0, 2.0, 5.0),
-      look_at_offset: (0.0, 1.0, 0.0),
-      orbit_speed: 0.01,
-      zoom_speed: 0.2,
-      min_radius: 2.0,
-      max_radius: 8.0,
-    ),
-    animation_policy: (
-      base: (
-        idle: "Idle",
-        walk: "Walk",
-        run: "Run",
-      ),
-      // Optional: semantic aliases
-      clips: {
-        "dance": "Dance_Loop",
-      },
-      // Optional: one-shot or looping overrides
-      overrides: [
-        (id: "dance", clip: "Dance_Loop", looping: true, cancel_on_move: true),
-      ],
-      default_transition_ms: Some(250),
-    ),
-  )),
-)
-```
-
----
-
-## 🧪 Testing
-
-We have integration tests to verify the UI flow and RON validation tests for configuration files.
-
-### Running all tests
-```bash
+# All unit + integration tests
 cargo test -p ironhold_core
-```
 
-> [!TIP]
-> To see clean execution logs for the interaction tests, run with a single thread:
-> `cargo test -p ironhold_core -- --test-threads=1`
+# Full browser test suite (builds WASM, starts server, runs headless Chromium)
+python test_web.py
 
-### Running Integration Tests
-```bash
-cargo test -p ironhold_core --test integration_tests
-```
-
-### Running RON Validation Tests
-```bash
-cargo test -p ironhold_core --test ron_validation
+# Re-test without rebuilding WASM
+python test_web.py --skip-build
 ```
 
 ---
 
-## 🧠 Architecture Direction (Why + Where We’re Going)
+## Creating a new project
 
-Ironhold-lib is moving toward a stable runtime model that supports:
-- global logic (menus, flow, quests)
-- per-entity logic (interactables, NPC behaviors)
-- future multiplayer (server-authoritative and/or rollback)
+Minimum file structure:
 
-### Target runtime structure
-**Messages (events) → Interpreter (data logic) → Actions → Executors**
+```
+assets/projects/{name}/
+  {name}.project.ron          ← entry point (schema v2 or v3)
+  assets.ron                  ← model / texture / audio / material catalog
+  prefabs/prefabs.ron         ← named entity templates
+  scenes/{scene}.scene.ron    ← one file per scene
+  logic/state_machine.ron     ← FSM game logic  (or logic/rules.ron for simpler projects)
+  overrides/model_fixes.ron   ← optional GLB transform corrections
+```
 
-- Capability systems emit messages (input, UI, triggers…)
-- Data-defined logic interprets messages and outputs actions
-- Capability executors apply actions (move, play animation, load scene…)
-
-This keeps the engine generic and lets creators define behavior purely in `.ron`.
-
----
-
-## 📚 Documentation
-
-We are adding a docs folder to make architecture + decisions part of the repo:
-
-- `docs/00_overview.md` — overview
-- `docs/10_architecture.md` — architecture + reasoning
-- `docs/20_data_formats.md` — project/scene schema guidance
-- `docs/30_runtime_events_and_logic.md` — messages/actions + FSM plan
-- `docs/40_determinism_and_networking.md` — determinism + multiplayer strategy
-- `docs/50_roadmap_and_milestones.md` — beta milestones + implementation order
-- `docs/60_contributing.md` — contributing guidelines
-
-(See `plan.md` for current notes; these docs will become the canonical plan.)
+Full schema reference: [`docs/20_data_formats.md`](docs/20_data_formats.md)
 
 ---
 
-## 🧭 Roadmap & Beta Milestones (Stable Foundations First)
+## Documentation
 
-We’re planning stable beta milestones that “freeze the foundations” before adding lots of new features:
-
-- **Beta 0.1 — Baseline Runtime**  
-  Current functionality stabilized + documented (native + web parity).
-- **Beta 0.2 — Event/Action Bus**  
-  Decouple systems via messages + actions (refactor, no behavior change).
-- **Beta 0.3 — Global Logic (FSM v1)**  
-  Project-level state machine in data (menus/flow).
-- **Beta 0.4 — Entity Logic (FSM v1)**  
-  Per-entity behaviors in data (triggers/interactions).
-- **Beta 0.5 — Deterministic Tick + Replay**  
-  Fixed tick core, deterministic RNG, input capture/replay.
-- **Beta 0.6 — Networking Prototype**  
-  Minimal multiplayer proving the architecture.
-
-Full details live in `docs/50_roadmap_and_milestones.md`.
+| File | Contents |
+|------|----------|
+| [`docs/20_data_formats.md`](docs/20_data_formats.md) | Full RON schema reference — the main authoring guide |
+| [`docs/25_custom_shaders.md`](docs/25_custom_shaders.md) | Custom WGSL shaders: authoring, bindings, uniform packing |
+| [`docs/30_runtime_events_and_logic.md`](docs/30_runtime_events_and_logic.md) | Events, actions, FSM semantics |
+| [`docs/10_architecture.md`](docs/10_architecture.md) | Crate structure, runtime pipeline, asset discovery |
+| [`docs/00_overview.md`](docs/00_overview.md) | Goals and vision |
+| [`docs/40_determinism_and_networking.md`](docs/40_determinism_and_networking.md) | Future: determinism + multiplayer |
+| [`docs/50_roadmap_and_milestones.md`](docs/50_roadmap_and_milestones.md) | Milestones and roadmap |
+| [`docs/STATUS.md`](docs/STATUS.md) | Implementation status matrix |
+| [`docs/browser_tests.md`](docs/browser_tests.md) | Browser test suite |
+| [`docs/60_contributing.md`](docs/60_contributing.md) | Contributing guidelines |
 
 ---
 
-## 🛠 Development Notes
+## Contributing
 
-### Assets folder discovery
-The runtime expects an `assets/` directory at or near the executable working directory.
-The engine includes logic to locate the assets folder (including walking up parent folders),
-so running from workspace root is usually fine.
+Contributions welcome — especially around documentation, new example projects, new event/action types, and capability systems. Please keep behaviors data-driven, capabilities modular, and web/native parity in mind.
 
-### Data validation (planned)
-We will add stricter schema validation (and schema versioning) so that
-invalid scene/project configs produce actionable errors.
-
-### Logging
-Always use `bevy::log::info!`, `warn!`, or `error!` macros. Do not use `println!`.
-This ensures logs are captured by the engine and displayed correctly in the browser console (WASM).
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome — especially around:
-- documentation improvements
-- data schema validation & tooling
-- event/action interpreter foundations
-- deterministic tick foundations
-- examples and test scenes
-
-Please see `docs/60_contributing.md` (coming) and keep:
-- behaviors data-driven
-- capabilities modular
-- cross-platform parity in mind
+See [`docs/60_contributing.md`](docs/60_contributing.md).
 
 ---
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see `LICENSE-MIT.txt`.
+Apache 2.0 — see `LICENSE-APACHE.txt`.
+CC0 — see `LICENSE-ASSETS-CC0.txt`.
