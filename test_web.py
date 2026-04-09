@@ -13,7 +13,12 @@ Usage:
 Options:
     --skip-build        Skip wasm-pack build (use existing pkg/)
     --update-baselines  Overwrite stored baseline screenshots
-    --screenshot-dir    Where to store screenshots  [default: screenshots]
+    --screenshot-dir    Where to store current screenshots  [default: screenshots]
+
+Screenshot layout:
+    screenshot_baselines/scenes/      ← committed to git; scene baselines used in gallery
+    screenshot_baselines/pause_nav/   ← committed to git; navigation step baselines
+    screenshots/                      ← gitignored; current/comparison files written here
 
 Requirements:
     pip install playwright pillow
@@ -43,6 +48,12 @@ PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_mater
 
 # Root of the asset tree, relative to the working directory where this script runs.
 ASSETS_ROOT = Path("assets/projects")
+
+# Committed baseline screenshots.  Two sub-dirs:
+#   scenes/     — one PNG per scene (used by the gallery)
+#   pause_nav/  — one PNG per navigation step
+# Current/comparison screenshots go in the --screenshot-dir (gitignored).
+BASELINE_DIR = Path("screenshot_baselines")
 
 # Seconds to wait for <canvas> / InGame state
 CANVAS_TIMEOUT = 180
@@ -161,7 +172,7 @@ async def open_project(
     page.on("console", on_console)
     page.on("pageerror", lambda e: errors.append(f"[page error] {e}"))
 
-    url = f"{BASE_URL}/?project={project}" if project else BASE_URL
+    url = f"{BASE_URL}/play.html?project={project}&testing=1" if project else f"{BASE_URL}/play.html?testing=1"
     if scene:
         url += f"&scene={scene}"
     await page.goto(url, wait_until="networkidle")
@@ -303,7 +314,7 @@ async def test_screenshot_scene_baseline(
         await wait_for_scene_ready(page)
 
         key = scene_baseline_key(project, scene)
-        baselines_dir = screenshot_dir / "scene_baselines"
+        baselines_dir = BASELINE_DIR / "scenes"
         current_path = screenshot_dir / f"{key}_current.png"
         baseline_path = baselines_dir / f"{key}.png"
 
@@ -363,7 +374,7 @@ async def test_pause_menu_navigation(
         """Capture a step screenshot and diff against its baseline (or create one)."""
         await asyncio.sleep(0.6)   # let one rendered frame settle
         current = steps_dir / f"{name}_current.png"
-        baseline = steps_dir / "baselines" / f"{name}.png"
+        baseline = BASELINE_DIR / "pause_nav" / f"{name}.png"
         await page.screenshot(path=str(current))
         if update or not baseline.exists():
             baseline.parent.mkdir(parents=True, exist_ok=True)

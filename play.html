@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ironhold — Play</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bar-bg: rgba(10, 10, 15, 0.72);
+            --bar-border: rgba(255, 255, 255, 0.06);
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.25);
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        canvas { display: block; }
+
+        /* ── Floating top bar ── */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0 1.25rem;
+            height: 44px;
+            background: var(--bar-bg);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--bar-border);
+            /* Start visible, fade out after delay */
+            opacity: 1;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            pointer-events: auto;
+        }
+
+        .top-bar.dimmed {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+
+        /* Children can't intercept clicks when bar is invisible */
+        .top-bar.dimmed > * {
+            pointer-events: none;
+        }
+
+        .top-bar:hover {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .top-bar:hover > * {
+            pointer-events: auto;
+        }
+
+        /* Fully hidden in test mode */
+        .top-bar.testing-mode,
+        .loading-overlay.testing-mode {
+            display: none !important;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding: 0.3rem 0.7rem 0.3rem 0.5rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: color var(--transition), background var(--transition), border-color var(--transition);
+        }
+
+        .back-link:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .back-link svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex-shrink: 0;
+        }
+
+        .bar-separator {
+            width: 1px;
+            height: 18px;
+            background: var(--bar-border);
+            flex-shrink: 0;
+        }
+
+        .project-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .project-name .accent-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            margin-right: 0.45rem;
+            box-shadow: 0 0 8px var(--accent-glow);
+            vertical-align: middle;
+        }
+
+        /* ── Loading overlay ── */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            display: grid;
+            place-items: center;
+            background: var(--bg-primary);
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(139, 92, 246, 0.15);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Floating top bar — overlays on top of Canvas, auto-hides after 3 seconds -->
+<nav class="top-bar" id="top-bar">
+    <a href="index.html" class="back-link" id="back-link">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Gallery
+    </a>
+    <div class="bar-separator"></div>
+    <span class="project-name" id="project-name">
+        <span class="accent-dot"></span>
+        <span id="project-label">Loading…</span>
+    </span>
+</nav>
+
+<!-- Loading indicator shown until canvas appears -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Initializing engine…</div>
+    </div>
+</div>
+
+<!-- Populated each frame by the WASM runtime for browser testing -->
+<div id="debug-state" style="display:none"></div>
+
+<script>
+(function () {
+    const params = new URLSearchParams(window.location.search);
+
+    // In testing mode, hide all UI overlays so they don't interfere with canvas clicks
+    if (params.get('testing') === '1') {
+        document.getElementById('top-bar').classList.add('testing-mode');
+        document.getElementById('loading-overlay').classList.add('testing-mode');
+    }
+
+    // Show project name from URL
+    const project = params.get('project');
+    const label = document.getElementById('project-label');
+    if (project) {
+        // "3rd_person_game_demo" → "3rd Person Game Demo"
+        label.textContent = project.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        document.title = `Ironhold — ${label.textContent}`;
+    } else {
+        label.textContent = 'Default Project';
+    }
+
+    // Hide loading overlay once a <canvas> appears
+    const observer = new MutationObserver(() => {
+        if (document.querySelector('canvas')) {
+            observer.disconnect();
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Auto-dim the top bar after 3 seconds so it doesn't block gameplay
+    let dimTimer = setTimeout(() => {
+        document.getElementById('top-bar').classList.add('dimmed');
+    }, 3000);
+
+    // Reset the dim timer when mouse enters the bar area
+    const bar = document.getElementById('top-bar');
+    bar.addEventListener('mouseenter', () => {
+        clearTimeout(dimTimer);
+        bar.classList.remove('dimmed');
+    });
+    bar.addEventListener('mouseleave', () => {
+        dimTimer = setTimeout(() => bar.classList.add('dimmed'), 2000);
+    });
+})();
+</script>
+
+<script type="module">
+    // This assumes wasm-pack build --target web --out-dir pkg
+    import init from './pkg/ironhold_web.js';
+
+    async function run() {
+        await init();
+    }
+
+    run();
+</script>
+</body>
+</html>

@@ -39,7 +39,8 @@ ironhold-lib/
 │  ├─ ironhold_core/    # shared engine runtime + data schemas
 │  ├─ ironhold_native/  # desktop runner
 │  └─ ironhold_web/     # wasm runner
-└─ index.html           # simple web bootstrap
+├─ index.html           # project gallery (landing page)
+└─ play.html            # WASM game runner (loads ?project=<name>)
 ```
 
 ---
@@ -104,9 +105,11 @@ python -m http.server 8000
 ```
 
 Open:
-- `http://localhost:8000`
+- `http://localhost:8000` — project gallery
+- `http://localhost:8000/play.html?project=quick_scene` — run a specific project
 
-> `index.html` loads the generated WASM package and starts the engine.
+> `index.html` is the project gallery. `play.html` loads the WASM package and starts the engine.
+> The `?project=<name>` param selects which project folder under `assets/projects/` to load.
 
 ---
 

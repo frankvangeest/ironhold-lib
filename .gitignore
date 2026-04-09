@@ -23,7 +23,7 @@ target
 # Project dump
 project_dump.txt
 
-# Screenshots
-screenshots/*
+# Screenshots — only current/comparison files; baselines live in screenshot_baselines/ (tracked)
+screenshots/
 .well-known/appspecific/com.chrome.devtools.json
 __pycache__/test_web.cpython-312.pyc

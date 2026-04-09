@@ -156,7 +156,7 @@ This is written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironh
 
 **Canvas coordinate clicks** — Bevy UI renders inside the WebGPU canvas, not as DOM elements. Button clicks in tests must use `page.mouse.click(x, y)` with coordinates derived from the scene's `position` + `size/2` fields.
 
-**Baseline screenshots** live in `screenshots/baselines/` (project baselines) and `screenshots/pause_nav/baselines/` (navigation step baselines), both gitignored. Run `--update-baselines` after any intentional rendering change.
+**Baseline screenshots** live in `screenshot_baselines/scenes/` (scene baselines, used in gallery) and `screenshot_baselines/pause_nav/` (navigation step baselines). Both are committed to git. Current/comparison files are written to `screenshots/` (gitignored). Run `--update-baselines` after any intentional rendering change.
 
 ## Technology Notes
 

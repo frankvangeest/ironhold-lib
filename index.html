@@ -3,24 +3,564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ironhold Lib</title>
+    <title>Ironhold — Project Gallery</title>
+    <meta name="description" content="Ironhold game engine project gallery. Browse and launch demo scenes built with Bevy and Rust.">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background-color: black; }
-        canvas { display: block; }
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-card: #12121a;
+            --bg-card-hover: #1a1a26;
+            --border-card: rgba(255, 255, 255, 0.06);
+            --border-card-hover: rgba(139, 92, 246, 0.4);
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.25);
+            --accent-secondary: #6d28d9;
+            --surface-glass: rgba(255, 255, 255, 0.03);
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+            --shadow-card-hover: 0 8px 40px rgba(139, 92, 246, 0.15), 0 4px 24px rgba(0, 0, 0, 0.5);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Ambient background glow ── */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -40%;
+            left: -20%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(ellipse, rgba(139, 92, 246, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -30%;
+            right: -10%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Header ── */
+        header {
+            position: relative;
+            z-index: 1;
+            padding: 3rem 2rem 1rem;
+            text-align: center;
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-size: 1rem;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            letter-spacing: 0.01em;
+        }
+
+        /* ── Grid ── */
+        main {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 2rem 4rem;
+        }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* ── Card ── */
+        .project-card {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition:
+                transform var(--transition),
+                border-color var(--transition),
+                box-shadow var(--transition),
+                background var(--transition);
+            box-shadow: var(--shadow-card);
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .project-card:hover {
+            transform: translateY(-6px) scale(1.015);
+            border-color: var(--border-card-hover);
+            box-shadow: var(--shadow-card-hover);
+            background: var(--bg-card-hover);
+        }
+
+        /* Glow border effect on hover */
+        .project-card::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: var(--radius);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), transparent 50%);
+            opacity: 0;
+            transition: opacity var(--transition);
+            z-index: -1;
+        }
+        .project-card:hover::before {
+            opacity: 1;
+        }
+
+        /* ── Thumbnail ── */
+        .card-thumbnail {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            overflow: hidden;
+            background: var(--surface-glass);
+        }
+
+        .card-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .project-card:hover .card-thumbnail img {
+            transform: scale(1.06);
+        }
+
+        /* Gradient overlay on image */
+        .card-thumbnail::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(10, 10, 15, 0.7) 100%
+            );
+            pointer-events: none;
+        }
+
+        /* Play icon overlay */
+        .play-overlay {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity var(--transition);
+        }
+
+        .project-card:hover .play-overlay {
+            opacity: 1;
+        }
+
+        .play-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(139, 92, 246, 0.85);
+            backdrop-filter: blur(8px);
+            display: grid;
+            place-items: center;
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+            transition: transform 0.2s ease;
+        }
+
+        .project-card:hover .play-btn {
+            transform: scale(1.1);
+        }
+
+        .play-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+            margin-left: 2px;
+        }
+
+        /* ── Card body ── */
+        .card-body {
+            padding: 1.15rem 1.25rem 1.35rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .card-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .card-description {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        .card-tag {
+            margin-top: auto;
+            padding-top: 0.6rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.25em 0.65em;
+            border-radius: 6px;
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+        }
+
+        .tag.blue {
+            background: rgba(59, 130, 246, 0.12);
+            color: #60a5fa;
+            border-color: rgba(59, 130, 246, 0.15);
+        }
+
+        .tag.green {
+            background: rgba(34, 197, 94, 0.12);
+            color: #4ade80;
+            border-color: rgba(34, 197, 94, 0.15);
+        }
+
+        .tag.amber {
+            background: rgba(245, 158, 11, 0.12);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.15);
+        }
+
+        /* ── Search ── */
+        .search-wrapper {
+            position: relative;
+            max-width: 420px;
+            margin: 1.25rem auto 0;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--text-muted);
+            pointer-events: none;
+            transition: color var(--transition);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.7rem 1rem 0.7rem 2.75rem;
+            font-family: inherit;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-sm);
+            outline: none;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-input:focus {
+            border-color: var(--border-card-hover);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .search-input:focus ~ .search-icon {
+            color: var(--accent);
+        }
+
+        .no-results {
+            display: none;
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .no-results.visible {
+            display: block;
+        }
+
+        .project-card.hidden {
+            display: none;
+        }
+
+        /* ── Footer ── */
+        footer {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 1rem 2rem 2.5rem;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            letter-spacing: 0.02em;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: color var(--transition);
+        }
+
+        footer a:hover {
+            color: var(--text-primary);
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            header { padding: 2rem 1.25rem 0.75rem; }
+            main { padding: 1.5rem 1.25rem 3rem; }
+            .project-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+            h1 { font-size: 1.4rem; }
+        }
+
+        /* ── Entrance animations ── */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .project-card {
+            animation: fadeInUp 0.5s ease both;
+        }
+        .project-card:nth-child(1) { animation-delay: 0.05s; }
+        .project-card:nth-child(2) { animation-delay: 0.12s; }
+        .project-card:nth-child(3) { animation-delay: 0.19s; }
+        .project-card:nth-child(4) { animation-delay: 0.26s; }
+
+        header {
+            animation: fadeInUp 0.45s ease both;
+        }
     </style>
 </head>
 <body>
-    <!-- Populated each frame by the WASM runtime for browser testing -->
-    <div id="debug-state" style="display:none"></div>
-    <script type="module">
-        // This assumes wasm-pack build --target web --out-dir pkg
-        import init from './pkg/ironhold_web.js';
-        
-        async function run() {
-            await init();
-        }
-        
-        run();
-    </script>
+
+<header>
+    <div class="logo-row">
+        <div class="logo-icon">⚔</div>
+        <h1>Ironhold</h1>
+    </div>
+    <p class="subtitle">Project Gallery — Select a demo to launch</p>
+    <div class="search-wrapper">
+        <input type="text" id="search-input" class="search-input" placeholder="Filter projects — try &quot;shaders&quot;, &quot;3rd person&quot;, &quot;demo&quot;…" autocomplete="off">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+</header>
+
+<main>
+    <div class="project-grid" id="project-grid">
+
+        <a class="project-card" id="card-3rd-person" href="play.html?project=3rd_person_game_demo"
+           data-keywords="3rd person game demo third person camera start menu pause player character">
+            <div class="card-thumbnail">
+                <img src="screenshots/scene_baselines/3rd_person_game_demo_main.png"
+                     alt="3rd Person Game Demo screenshot" loading="lazy">
+                <div class="play-overlay">
+                    <div class="play-btn">
+                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="card-title">3rd Person Game Demo</div>
+                <div class="card-description">
+                    Full game loop with a start menu, pause system, and third-person camera following a player character.
+                </div>
+                <div class="card-tag">
+                    <span class="tag">game</span>
+                    <span class="tag blue">3rd person</span>
+                </div>
+            </div>
+        </a>
+
+        <a class="project-card" id="card-terrain" href="play.html?project=terrain_demo"
+           data-keywords="terrain demo procedural heightmap mesh texture splatting environment lighting generation">
+            <div class="card-thumbnail">
+                <img src="screenshots/scene_baselines/terrain_demo_terrain.png"
+                     alt="Terrain Demo screenshot" loading="lazy">
+                <div class="play-overlay">
+                    <div class="play-btn">
+                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="card-title">Terrain Demo</div>
+                <div class="card-description">
+                    Procedurally generated terrain with heightmap-driven mesh, texture splatting, and environment lighting.
+                </div>
+                <div class="card-tag">
+                    <span class="tag green">terrain</span>
+                    <span class="tag blue">procedural</span>
+                </div>
+            </div>
+        </a>
+
+        <a class="project-card" id="card-materials" href="play.html?project=custom_materials"
+           data-keywords="custom materials demo shaders texture pipelines rendering advanced">
+            <div class="card-thumbnail">
+                <img src="screenshots/scene_baselines/custom_materials_main.png"
+                     alt="Custom Materials Demo screenshot" loading="lazy">
+                <div class="play-overlay">
+                    <div class="play-btn">
+                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="card-title">Custom Materials Demo</div>
+                <div class="card-description">
+                    Showcase of custom shader materials, texture pipelines, and advanced rendering features.
+                </div>
+                <div class="card-tag">
+                    <span class="tag amber">shaders</span>
+                    <span class="tag">materials</span>
+                </div>
+            </div>
+        </a>
+
+        <a class="project-card" id="card-quick" href="play.html?project=quick_scene"
+           data-keywords="quick scene sandbox minimal testing primitives lighting rapid">
+            <div class="card-thumbnail">
+                <img src="screenshots/scene_baselines/quick_scene_main.png"
+                     alt="Quick Scene screenshot" loading="lazy">
+                <div class="play-overlay">
+                    <div class="play-btn">
+                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="card-title">Quick Scene</div>
+                <div class="card-description">
+                    Minimal scene for rapid testing — a lightweight sandbox with basic primitives and lighting.
+                </div>
+                <div class="card-tag">
+                    <span class="tag blue">sandbox</span>
+                </div>
+            </div>
+        </a>
+
+        <div class="no-results" id="no-results">No projects match your search.</div>
+
+    </div>
+</main>
+
+<footer>
+    Built with <a href="https://bevyengine.org" target="_blank" rel="noopener">Bevy</a> &amp; Rust
+    &nbsp;·&nbsp; Ironhold Engine
+</footer>
+
+<script>
+(function () {
+    const input = document.getElementById('search-input');
+    const grid = document.getElementById('project-grid');
+    const cards = grid.querySelectorAll('.project-card');
+    const noResults = document.getElementById('no-results');
+
+    input.addEventListener('input', () => {
+        const query = input.value.toLowerCase().trim();
+        let visible = 0;
+
+        cards.forEach(card => {
+            const title = card.querySelector('.card-title').textContent.toLowerCase();
+            const desc = card.querySelector('.card-description').textContent.toLowerCase();
+            const tags = Array.from(card.querySelectorAll('.tag')).map(t => t.textContent.toLowerCase()).join(' ');
+            const keywords = (card.dataset.keywords || '').toLowerCase();
+            const haystack = `${title} ${desc} ${tags} ${keywords}`;
+
+            const match = !query || query.split(/\s+/).every(word => haystack.includes(word));
+            card.classList.toggle('hidden', !match);
+            if (match) visible++;
+        });
+
+        noResults.classList.toggle('visible', visible === 0);
+    });
+})();
+</script>
+
 </body>
 </html>

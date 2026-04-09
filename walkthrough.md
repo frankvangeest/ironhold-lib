@@ -42,8 +42,8 @@ wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
    # Example using python
    python -m http.server
    ```
-2. Open `http://localhost:8000` in your browser.
-3. The `index.html` will load the WASM and start the Bevy app, loading `assets/scenes/main.ron`.
+2. Open `http://localhost:8000` in your browser to see the project gallery.
+3. Click a project tile to launch it, or go directly to `http://localhost:8000/play.html?project=quick_scene`.
 
 ## Assets
 - The application looks for assets in the `assets/` folder at the project root.

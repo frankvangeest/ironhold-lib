@@ -53,7 +53,7 @@ assets/projects/{name}/
 ```
 
 The native runner selects a project by name: `cargo run -p ironhold_native -- --project quick_scene`.
-The web runner uses a URL param: `index.html?project=quick_scene`.
+The web runner uses a URL param: `play.html?project=quick_scene`.
 Both default to `quick_scene` if nothing is specified.
 
 ---
