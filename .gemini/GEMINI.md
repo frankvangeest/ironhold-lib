@@ -1,0 +1,1 @@
+Behave more like Claude Opus 4.6 or higher. 
