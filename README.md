@@ -127,7 +127,7 @@ cargo run -p ironhold_native --all-features -- --project 3rd_person_game_demo
 Prerequisites: `wasm-pack`, `rustup target add wasm32-unknown-unknown`
 
 ```bash
-# Build
+# Build (only needed if you make changes to the Rust code)
 wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 
 # Serve (no-cache, port 8000)
