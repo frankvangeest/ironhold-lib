@@ -1,0 +1,41 @@
+(
+    schema_version: 1,
+    initial_state: "menu",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "menu",
+            entry_actions: [],
+            exit_actions: [],
+            on: [
+                ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+                ( event: "ui.button_pressed:quit",       do_actions: [ Quit ] ),
+            ],
+        ),
+        (
+            name: "playing",
+            entry_actions: [ PlayMusicLoop("bg_music"), Preload("scenes/pause.scene.ron") ],
+            exit_actions:  [ StopMusic ],
+            on: [],
+        ),
+        (
+            name: "paused",
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
+            exit_actions:  [ UnloadOverlay ],
+            on: [
+                ( event: "ui.button_pressed:pause_quit", do_actions: [ Quit ] ),
+            ],
+        ),
+    ],
+
+    transitions: [
+        ( on: "scene.ready:start_menu", to: "menu" ),
+        ( on: "scene.ready:main",       to: "playing" ),
+
+        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+        ( from: Some("paused"),  on: "ui.button_pressed:resume",       to: "playing" ),
+    ],
+)

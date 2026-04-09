@@ -1,16 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ironhold — Project Gallery</title>
-    <meta name="description" content="Ironhold game engine project gallery. Browse and launch demo scenes built with Bevy and Rust.">
+    <meta name="description"
+        content="Ironhold game engine project gallery. Browse and launch demo scenes built with Bevy and Rust.">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after {
+        *,
+        *::before,
+        *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -56,6 +60,7 @@
             pointer-events: none;
             z-index: 0;
         }
+
         body::after {
             content: '';
             position: fixed;
@@ -165,6 +170,7 @@
             transition: opacity var(--transition);
             z-index: -1;
         }
+
         .project-card:hover::before {
             opacity: 1;
         }
@@ -194,11 +200,9 @@
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(
-                to bottom,
-                transparent 50%,
-                rgba(10, 10, 15, 0.7) 100%
-            );
+            background: linear-gradient(to bottom,
+                    transparent 50%,
+                    rgba(10, 10, 15, 0.7) 100%);
             pointer-events: none;
         }
 
@@ -341,7 +345,7 @@
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
-        .search-input:focus ~ .search-icon {
+        .search-input:focus~.search-icon {
             color: var(--accent);
         }
 
@@ -385,10 +389,22 @@
 
         /* ── Responsive ── */
         @media (max-width: 640px) {
-            header { padding: 2rem 1.25rem 0.75rem; }
-            main { padding: 1.5rem 1.25rem 3rem; }
-            .project-grid { grid-template-columns: 1fr; gap: 1.25rem; }
-            h1 { font-size: 1.4rem; }
+            header {
+                padding: 2rem 1.25rem 0.75rem;
+            }
+
+            main {
+                padding: 1.5rem 1.25rem 3rem;
+            }
+
+            .project-grid {
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
+            }
+
+            h1 {
+                font-size: 1.4rem;
+            }
         }
 
         /* ── Entrance animations ── */
@@ -397,6 +413,7 @@
                 opacity: 0;
                 transform: translateY(24px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -406,161 +423,217 @@
         .project-card {
             animation: fadeInUp 0.5s ease both;
         }
-        .project-card:nth-child(1) { animation-delay: 0.05s; }
-        .project-card:nth-child(2) { animation-delay: 0.12s; }
-        .project-card:nth-child(3) { animation-delay: 0.19s; }
-        .project-card:nth-child(4) { animation-delay: 0.26s; }
+
+        .project-card:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .project-card:nth-child(2) {
+            animation-delay: 0.12s;
+        }
+
+        .project-card:nth-child(3) {
+            animation-delay: 0.19s;
+        }
+
+        .project-card:nth-child(4) {
+            animation-delay: 0.26s;
+        }
 
         header {
             animation: fadeInUp 0.45s ease both;
         }
     </style>
 </head>
+
 <body>
 
-<header>
-    <div class="logo-row">
-        <div class="logo-icon">⚔</div>
-        <h1>Ironhold</h1>
-    </div>
-    <p class="subtitle">Project Gallery — Select a demo to launch</p>
-    <div class="search-wrapper">
-        <input type="text" id="search-input" class="search-input" placeholder="Filter projects — try &quot;shaders&quot;, &quot;3rd person&quot;, &quot;demo&quot;…" autocomplete="off">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    </div>
-</header>
+    <header>
+        <div class="logo-row">
+            <div class="logo-icon">⚔</div>
+            <h1>Ironhold</h1>
+        </div>
+        <p class="subtitle">Project Gallery — Select a demo to launch</p>
+        <div class="search-wrapper">
+            <input type="text" id="search-input" class="search-input"
+                placeholder="Filter projects — try &quot;shaders&quot;, &quot;3rd person&quot;, &quot;demo&quot;…"
+                autocomplete="off">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+        </div>
+    </header>
 
-<main>
-    <div class="project-grid" id="project-grid">
+    <main>
+        <div class="project-grid" id="project-grid">
 
-        <a class="project-card" id="card-3rd-person" href="play.html?project=3rd_person_game_demo"
-           data-keywords="3rd person game demo third person camera start menu pause player character">
-            <div class="card-thumbnail">
-                <img src="screenshots/scene_baselines/3rd_person_game_demo_main.png"
-                     alt="3rd Person Game Demo screenshot" loading="lazy">
-                <div class="play-overlay">
-                    <div class="play-btn">
-                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+            <a class="project-card" id="card-3rd-person" href="play.html?project=3rd_person_game_demo"
+                data-keywords="3rd person game demo third person camera start menu pause player character">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/3rd_person_game_demo_main.png"
+                        alt="3rd Person Game Demo screenshot" loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="card-title">3rd Person Game Demo</div>
-                <div class="card-description">
-                    Full game loop with a start menu, pause system, and third-person camera following a player character.
-                </div>
-                <div class="card-tag">
-                    <span class="tag">game</span>
-                    <span class="tag blue">3rd person</span>
-                </div>
-            </div>
-        </a>
-
-        <a class="project-card" id="card-terrain" href="play.html?project=terrain_demo"
-           data-keywords="terrain demo procedural heightmap mesh texture splatting environment lighting generation">
-            <div class="card-thumbnail">
-                <img src="screenshots/scene_baselines/terrain_demo_terrain.png"
-                     alt="Terrain Demo screenshot" loading="lazy">
-                <div class="play-overlay">
-                    <div class="play-btn">
-                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                <div class="card-body">
+                    <div class="card-title">3rd Person Game Demo</div>
+                    <div class="card-description">
+                        Full game loop with a start menu, pause system, and third-person camera following a player
+                        character.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag">game</span>
+                        <span class="tag blue">3rd person</span>
                     </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="card-title">Terrain Demo</div>
-                <div class="card-description">
-                    Procedurally generated terrain with heightmap-driven mesh, texture splatting, and environment lighting.
-                </div>
-                <div class="card-tag">
-                    <span class="tag green">terrain</span>
-                    <span class="tag blue">procedural</span>
-                </div>
-            </div>
-        </a>
+            </a>
 
-        <a class="project-card" id="card-materials" href="play.html?project=custom_materials"
-           data-keywords="custom materials demo shaders texture pipelines rendering advanced">
-            <div class="card-thumbnail">
-                <img src="screenshots/scene_baselines/custom_materials_main.png"
-                     alt="Custom Materials Demo screenshot" loading="lazy">
-                <div class="play-overlay">
-                    <div class="play-btn">
-                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+            <a class="project-card" id="card-terrain" href="play.html?project=terrain_demo"
+                data-keywords="terrain demo procedural heightmap mesh texture splatting environment lighting generation">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/terrain_demo_terrain.png" alt="Terrain Demo screenshot"
+                        loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="card-title">Custom Materials Demo</div>
-                <div class="card-description">
-                    Showcase of custom shader materials, texture pipelines, and advanced rendering features.
-                </div>
-                <div class="card-tag">
-                    <span class="tag amber">shaders</span>
-                    <span class="tag">materials</span>
-                </div>
-            </div>
-        </a>
-
-        <a class="project-card" id="card-quick" href="play.html?project=quick_scene"
-           data-keywords="quick scene sandbox minimal testing primitives lighting rapid">
-            <div class="card-thumbnail">
-                <img src="screenshots/scene_baselines/quick_scene_main.png"
-                     alt="Quick Scene screenshot" loading="lazy">
-                <div class="play-overlay">
-                    <div class="play-btn">
-                        <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+                <div class="card-body">
+                    <div class="card-title">Terrain Demo</div>
+                    <div class="card-description">
+                        Procedurally generated terrain with heightmap-driven mesh, texture splatting, and environment
+                        lighting.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag green">terrain</span>
+                        <span class="tag blue">procedural</span>
                     </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="card-title">Quick Scene</div>
-                <div class="card-description">
-                    Minimal scene for rapid testing — a lightweight sandbox with basic primitives and lighting.
+            </a>
+
+            <a class="project-card" id="card-materials" href="play.html?project=custom_materials"
+                data-keywords="custom materials demo shaders texture pipelines rendering advanced">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/custom_materials_main.png"
+                        alt="Custom Materials Demo screenshot" loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-tag">
-                    <span class="tag blue">sandbox</span>
+                <div class="card-body">
+                    <div class="card-title">Custom Materials Demo</div>
+                    <div class="card-description">
+                        Showcase of custom shader materials, texture pipelines, and advanced rendering features.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag amber">shaders</span>
+                        <span class="tag">materials</span>
+                    </div>
                 </div>
-            </div>
-        </a>
+            </a>
 
-        <div class="no-results" id="no-results">No projects match your search.</div>
+            <a class="project-card" id="card-quick" href="play.html?project=quick_scene"
+                data-keywords="quick scene sandbox minimal testing primitives lighting rapid">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/quick_scene_main.png" alt="Quick Scene screenshot"
+                        loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card-title">Quick Scene</div>
+                    <div class="card-description">
+                        Minimal scene for rapid testing — a lightweight sandbox with basic primitives and lighting.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag blue">sandbox</span>
+                    </div>
+                </div>
+            </a>
 
-    </div>
-</main>
+            <a class="project-card" id="card-quick" href="play.html?project=primitive_world"
+                data-keywords="primitive world sandbox minimal testing compisite primitives">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/primitive_world_main.png" alt="Primitive World screenshot"
+                        loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card-title">Primitive World</div>
+                    <div class="card-description">
+                        A world made of primitives. Uses multiple primitives in prefabs to create objects like trees,
+                        houses, and more.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag blue">sandbox</span>
+                        <span class="tag blue">3rd person</span>
+                    </div>
+                </div>
+            </a>
 
-<footer>
-    Built with <a href="https://bevyengine.org" target="_blank" rel="noopener">Bevy</a> &amp; Rust
-    &nbsp;·&nbsp; Ironhold Engine
-</footer>
+            <div class="no-results" id="no-results">No projects match your search.</div>
 
-<script>
-(function () {
-    const input = document.getElementById('search-input');
-    const grid = document.getElementById('project-grid');
-    const cards = grid.querySelectorAll('.project-card');
-    const noResults = document.getElementById('no-results');
+        </div>
+    </main>
 
-    input.addEventListener('input', () => {
-        const query = input.value.toLowerCase().trim();
-        let visible = 0;
+    <footer>
+        Built with <a href="https://bevyengine.org" target="_blank" rel="noopener">Bevy</a> &amp; Rust
+        &nbsp;·&nbsp; Ironhold Engine
+    </footer>
 
-        cards.forEach(card => {
-            const title = card.querySelector('.card-title').textContent.toLowerCase();
-            const desc = card.querySelector('.card-description').textContent.toLowerCase();
-            const tags = Array.from(card.querySelectorAll('.tag')).map(t => t.textContent.toLowerCase()).join(' ');
-            const keywords = (card.dataset.keywords || '').toLowerCase();
-            const haystack = `${title} ${desc} ${tags} ${keywords}`;
+    <script>
+        (function () {
+            const input = document.getElementById('search-input');
+            const grid = document.getElementById('project-grid');
+            const cards = grid.querySelectorAll('.project-card');
+            const noResults = document.getElementById('no-results');
 
-            const match = !query || query.split(/\s+/).every(word => haystack.includes(word));
-            card.classList.toggle('hidden', !match);
-            if (match) visible++;
-        });
+            input.addEventListener('input', () => {
+                const query = input.value.toLowerCase().trim();
+                let visible = 0;
 
-        noResults.classList.toggle('visible', visible === 0);
-    });
-})();
-</script>
+                cards.forEach(card => {
+                    const title = card.querySelector('.card-title').textContent.toLowerCase();
+                    const desc = card.querySelector('.card-description').textContent.toLowerCase();
+                    const tags = Array.from(card.querySelectorAll('.tag')).map(t => t.textContent.toLowerCase()).join(' ');
+                    const keywords = (card.dataset.keywords || '').toLowerCase();
+                    const haystack = `${title} ${desc} ${tags} ${keywords}`;
+
+                    const match = !query || query.split(/\s+/).every(word => haystack.includes(word));
+                    card.classList.toggle('hidden', !match);
+                    if (match) visible++;
+                });
+
+                noResults.classList.toggle('visible', visible === 0);
+            });
+        })();
+    </script>
 
 </body>
+
 </html>

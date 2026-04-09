@@ -1,0 +1,432 @@
+(
+  schema_version: 1,
+  prefabs: {
+
+    // ── Player ─────────────────────────────────────────────────────────────────
+    // Capsule3d with `tags: ["player"]` is detected by the runtime and spawned
+    // with a CharacterController, Rapier physics, and an OrbitCamera.
+    "player_capsule": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["player"],
+      ),
+      primitive: Some((
+        radius: Some(0.4),
+        height: Some(0.5),
+        color: Some((0.22, 0.52, 0.88)),
+        roughness: Some(0.3),
+        metallic: Some(0.15),
+      )),
+    ),
+
+    // ── Ground ─────────────────────────────────────────────────────────────────
+    // Large flat Cuboid with physics: true gives the player a surface to walk on.
+    "ground_plane": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((80.0, 1.0, 80.0)),
+        color: Some((0.32, 0.52, 0.22)),
+        roughness: Some(0.95),
+        physics: true,
+      )),
+    ),
+
+    // ── Path stone ─────────────────────────────────────────────────────────────
+    "path_stone": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((2.0, 0.06, 2.0)),
+        color: Some((0.65, 0.60, 0.50)),
+        roughness: Some(0.98),
+      )),
+    ),
+
+    // ── Rocks ──────────────────────────────────────────────────────────────────
+    "rock_small": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(0.3),
+        color: Some((0.52, 0.50, 0.48)),
+        roughness: Some(0.95),
+      )),
+    ),
+
+    "rock_medium": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(0.55),
+        color: Some((0.50, 0.48, 0.46)),
+        roughness: Some(0.95),
+      )),
+    ),
+
+    // ── Barrel ─────────────────────────────────────────────────────────────────
+    // Half-length = 0.5 → total height = 1.0 + 2*0.3 = 1.6 doesn't apply here.
+    // Cylinder height param is full height. Place center at y = height/2 in scene.
+    "barrel": (
+      kind: "primitive",
+      model: "Cylinder",
+      components: (),
+      primitive: Some((
+        radius: Some(0.28),
+        height: Some(0.9),
+        color: Some((0.38, 0.24, 0.12)),
+        roughness: Some(0.88),
+      )),
+    ),
+
+    // ── Fence elements ─────────────────────────────────────────────────────────
+    "fence_post": (
+      kind: "primitive",
+      model: "Cylinder",
+      components: (),
+      primitive: Some((
+        radius: Some(0.08),
+        height: Some(1.5),
+        color: Some((0.62, 0.46, 0.26)),
+        roughness: Some(0.92),
+      )),
+    ),
+
+    // X-aligned plank; rotate 90° Y in the scene to make it Z-facing.
+    "fence_rail": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((2.0, 0.1, 0.1)),
+        color: Some((0.62, 0.46, 0.26)),
+        roughness: Some(0.92),
+      )),
+    ),
+
+    // ── Pond ───────────────────────────────────────────────────────────────────
+    "pond": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((7.0, 0.3, 12.0)),
+        color: Some((0.14, 0.38, 0.65)),
+        roughness: Some(0.05),
+        metallic: Some(0.1),
+      )),
+    ),
+
+    // ── Bridge deck ────────────────────────────────────────────────────────────
+    "bridge_deck": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((7.0, 0.35, 12.0)),
+        color: Some((0.54, 0.50, 0.46)),
+        roughness: Some(0.90),
+      )),
+    ),
+
+    // ── Floating decorations ───────────────────────────────────────────────────
+    "deco_orb_gold": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(0.55),
+        color: Some((0.95, 0.78, 0.15)),
+        roughness: Some(0.15),
+        metallic: Some(0.85),
+      )),
+    ),
+
+    "deco_orb_violet": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      primitive: Some((
+        radius: Some(0.45),
+        color: Some((0.60, 0.15, 0.90)),
+        roughness: Some(0.20),
+        metallic: Some(0.60),
+      )),
+    ),
+
+    "deco_torus_copper": (
+      kind: "primitive",
+      model: "Torus",
+      components: (),
+      primitive: Some((
+        radius: Some(1.2),
+        radius_top: Some(0.22),
+        color: Some((0.80, 0.42, 0.18)),
+        roughness: Some(0.25),
+        metallic: Some(0.75),
+      )),
+    ),
+
+    // ── Composite prefabs ──────────────────────────────────────────────────────
+    //
+    // All children use offsets relative to the parent entity's origin (base of object).
+    // Geometry notes:
+    //   Cylinder(h): center at 0 → bottom = -h/2, top = +h/2
+    //   Cone(h):     base at -h/2, apex at +h/2 (apex pointing up)
+    //   Cuboid(y):   center at 0 → bottom = -y/2, top = +y/2
+    //   ConicalFrustum(h): center at 0 → bottom = -h/2, top = +h/2
+    //   Sphere(r):   center at 0, bottom = -r, top = +r
+
+    // ── Pine tree (cylinder trunk + cone canopy) ────────────────────────────
+    "tree_pine": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.22),
+            height: Some(3.0),
+            color: Some((0.36, 0.22, 0.10)),
+            roughness: Some(0.95),
+          ),
+          // h=3 → center at 1.5 so bottom sits at y=0
+          offset: (0.0, 1.5, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cone",
+          primitive: (
+            radius: Some(1.30),
+            height: Some(4.0),
+            color: Some((0.14, 0.44, 0.14)),
+            roughness: Some(0.90),
+          ),
+          // h=4 → base at y=-2; to sit on trunk top (y=3): center at 3+2 = 5
+          offset: (0.0, 5.0, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Round tree (cylinder trunk + sphere canopy) ─────────────────────────
+    "tree_round": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.25),
+            height: Some(2.5),
+            color: Some((0.36, 0.22, 0.10)),
+            roughness: Some(0.95),
+          ),
+          offset: (0.0, 1.25, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(1.40),
+            color: Some((0.20, 0.52, 0.18)),
+            roughness: Some(0.90),
+          ),
+          // Trunk top at y=2.5; sphere bottom = y-r → center at 2.5+1.4 = 3.9
+          offset: (0.0, 3.9, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Cottage house (cuboid body + conical-frustum roof + cylinder chimney) ─
+    "house_cottage": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cuboid",
+          primitive: (
+            size: Some((5.0, 4.0, 6.0)),
+            color: Some((0.86, 0.76, 0.62)),
+            roughness: Some(0.85),
+          ),
+          // h=4 → center at 2.0 so bottom sits at y=0
+          offset: (0.0, 2.0, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "ConicalFrustum",
+          primitive: (
+            radius: Some(3.2),
+            radius_top: Some(0.3),
+            height: Some(2.5),
+            color: Some((0.64, 0.24, 0.20)),
+            roughness: Some(0.80),
+          ),
+          // Body top at y=4; frustum h=2.5 → center at 4+1.25 = 5.25
+          offset: (0.0, 5.25, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.24),
+            height: Some(1.4),
+            color: Some((0.34, 0.30, 0.28)),
+            roughness: Some(0.90),
+          ),
+          // Protrudes from the roof slope near the ridge
+          offset: (1.2, 6.1, 1.4),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Small house (cuboid body + cone roof) ───────────────────────────────
+    "house_small": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cuboid",
+          primitive: (
+            size: Some((4.0, 3.0, 4.0)),
+            color: Some((0.76, 0.82, 0.88)),
+            roughness: Some(0.85),
+          ),
+          offset: (0.0, 1.5, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "ConicalFrustum",
+          primitive: (
+            radius: Some(2.6),
+            radius_top: Some(0.2),
+            height: Some(2.0),
+            color: Some((0.28, 0.54, 0.34)),
+            roughness: Some(0.80),
+          ),
+          // Body top at y=3; frustum center at 3+1 = 4.0
+          offset: (0.0, 4.0, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Well (cylinder base + two pillars + crossbeam) ─────────────────────
+    "well": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.70),
+            height: Some(0.80),
+            color: Some((0.58, 0.54, 0.50)),
+            roughness: Some(0.92),
+          ),
+          // Base: h=0.8 → center at 0.4
+          offset: (0.0, 0.4, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.10),
+            height: Some(1.80),
+            color: Some((0.58, 0.54, 0.50)),
+            roughness: Some(0.90),
+          ),
+          // Pillar left: bottom at y=0.8, h=1.8 → center at 0.8+0.9 = 1.7
+          offset: (-0.55, 1.7, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.10),
+            height: Some(1.80),
+            color: Some((0.58, 0.54, 0.50)),
+            roughness: Some(0.90),
+          ),
+          // Pillar right
+          offset: (0.55, 1.7, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cuboid",
+          primitive: (
+            size: Some((1.20, 0.12, 0.14)),
+            color: Some((0.48, 0.34, 0.18)),
+            roughness: Some(0.88),
+          ),
+          // Crossbeam at top of pillars: y = 0.8+1.8+0.06 = 2.66
+          offset: (0.0, 2.66, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Lamp post (thin cylinder post + glowing sphere orb) ────────────────
+    "lamp_post": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.07),
+            height: Some(3.5),
+            color: Some((0.24, 0.24, 0.26)),
+            roughness: Some(0.50),
+            metallic: Some(0.60),
+          ),
+          // h=3.5 → center at 1.75
+          offset: (0.0, 1.75, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.22),
+            color: Some((1.0, 0.92, 0.55)),
+            roughness: Some(0.0),
+            metallic: Some(0.0),
+          ),
+          // Post top at y=3.5; sphere center at 3.5+0.22 = 3.72
+          offset: (0.0, 3.72, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+  }
+)

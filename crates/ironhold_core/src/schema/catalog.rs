@@ -109,6 +109,11 @@ pub struct PrefabDef {
     /// when omitted so minimal RON is still valid.
     #[serde(default)]
     pub primitive: Option<PrimitiveParams>,
+    /// For `kind: "primitive"` only — child meshes composing this prefab.
+    /// When non-empty, `model` and `primitive` at the top level are ignored for mesh
+    /// building; each child is spawned as a mesh entity under a shared parent anchor.
+    #[serde(default)]
+    pub children: Vec<ChildPrimitiveDef>,
 }
 
 /// Runtime-relevant prefab component data.
@@ -148,4 +153,33 @@ pub struct PrimitiveParams {
     pub roughness: Option<f32>,
     #[serde(default)]
     pub metallic: Option<f32>,
+    /// When `true`, a static `RigidBody::Fixed` Rapier collider is spawned alongside
+    /// this mesh. Supported shapes: `Cuboid`, `Sphere`, `Cylinder`.
+    /// Other shapes emit a warning and skip the collider.
+    #[serde(default)]
+    pub physics: bool,
 }
+
+/// One mesh component within a composite `kind: "primitive"` prefab.
+/// All fields except `shape` are optional and default to zero/identity/grey.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ChildPrimitiveDef {
+    /// Shape name — same vocabulary as the top-level `model` field for single primitives:
+    /// `"Cuboid"`, `"Sphere"`, `"Cylinder"`, `"Capsule3d"`, `"Cone"`, `"Torus"`, `"ConicalFrustum"`.
+    pub shape: String,
+    /// Appearance overrides for this child. All sub-fields are optional.
+    #[serde(default)]
+    pub primitive: PrimitiveParams,
+    /// Translation offset from the parent prefab's origin. Default: `(0, 0, 0)`.
+    #[serde(default)]
+    pub offset: (f32, f32, f32),
+    /// Euler rotation in degrees (XYZ order) for this child. Default: `(0, 0, 0)`.
+    #[serde(default)]
+    pub rotation_euler_deg: (f32, f32, f32),
+    /// Scale applied to this child. Default: `(1, 1, 1)`.
+    #[serde(default = "one_vec3_child")]
+    pub scale: (f32, f32, f32),
+}
+
+fn one_vec3_child() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }

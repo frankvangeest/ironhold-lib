@@ -1,9 +1,15 @@
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::{
+    Collider, RigidBody, LockedAxes, Damping, Velocity, ExternalImpulse,
+};
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::player::PlayerConfig;
 use crate::runtime::messages::*;
 use crate::runtime::material_factory::MaterialFactory;
+use crate::capabilities::player::CharacterController;
+use crate::capabilities::camera::OrbitCamera;
+use crate::capabilities::animation_resolver::{AnimationRequests, LocomotionState, ActiveOverride};
 use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
@@ -103,6 +109,8 @@ pub fn spawn_scene_v2(
 
         // Spawn entities from prefabs
         let mut player_config: Option<PlayerConfig> = None;
+        // A primitive prefab with tags: ["player"]: shape + params + spawn position.
+        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3)> = None;
         let mut flycam_start: Option<Transform> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -135,18 +143,64 @@ pub fn spawn_scene_v2(
             }
 
             if prefab.kind == "primitive" {
-                // `model` field repurposed as shape name (e.g. "Sphere", "Torus").
-                // No catalog lookup — mesh is generated procedurally.
+                // ── Primitive player: collect and defer; camera spawned after entity loop ──
+                if is_player {
+                    let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
+                    primitive_player = Some((prefab.model.clone(), p, translation));
+                    continue;
+                }
+
+                // ── Composite prefab: non-empty `children` list ───────────────────────────
+                if !prefab.children.is_empty() {
+                    let parent = commands.spawn((
+                        Name::new(entity_def.id.clone()),
+                        transform,
+                        Visibility::default(),
+                        LevelEntity,
+                    )).id();
+                    for child_def in &prefab.children {
+                        let child_rot = Quat::from_euler(
+                            EulerRot::XYZ,
+                            child_def.rotation_euler_deg.0.to_radians(),
+                            child_def.rotation_euler_deg.1.to_radians(),
+                            child_def.rotation_euler_deg.2.to_radians(),
+                        );
+                        let child_tf = Transform {
+                            translation: Vec3::from(child_def.offset),
+                            rotation: child_rot,
+                            scale: Vec3::from(child_def.scale),
+                        };
+                        if let Some(child_mesh) = build_primitive_mesh(&child_def.shape, &child_def.primitive) {
+                            let child_mesh_h = mats.meshes.add(child_mesh);
+                            let child_mat_h = mats.standard.add(
+                                primitive_material(&child_def.primitive, project.primitive_default_color)
+                            );
+                            let child_entity = commands.spawn((
+                                Name::new(child_def.shape.clone()),
+                                Mesh3d(child_mesh_h),
+                                MeshMaterial3d(child_mat_h),
+                                child_tf,
+                            )).id();
+                            commands.entity(parent).add_child(child_entity);
+                        } else {
+                            warn!(
+                                "Unknown shape '{}' in composite prefab '{}', skipping child",
+                                child_def.shape, entity_def.id
+                            );
+                        }
+                    }
+                    continue;
+                }
+
+                // ── Single primitive mesh ─────────────────────────────────────────────────
                 let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
                 match build_primitive_mesh(&prefab.model, &p) {
                     Some(mesh) => {
                         let mesh_handle = mats.meshes.add(mesh);
-
-                        // Check for a catalog material override on this prefab.
                         let built_mat = prefab.material.as_ref()
                             .and_then(|key| mats.built.0.get(key));
 
-                        match built_mat {
+                        let spawned = match built_mat {
                             Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
                                 commands.spawn((
                                     Name::new(entity_def.id.clone()),
@@ -154,7 +208,7 @@ pub fn spawn_scene_v2(
                                     MeshMaterial3d(h.clone()),
                                     transform,
                                     LevelEntity,
-                                ));
+                                )).id()
                             }
                             Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
                                 commands.spawn((
@@ -163,7 +217,7 @@ pub fn spawn_scene_v2(
                                     MeshMaterial3d(h.clone()),
                                     transform,
                                     LevelEntity,
-                                ));
+                                )).id()
                             }
                             Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
                                 commands.spawn((
@@ -172,17 +226,31 @@ pub fn spawn_scene_v2(
                                     MeshMaterial3d(h.clone()),
                                     transform,
                                     LevelEntity,
-                                ));
+                                )).id()
                             }
                             None => {
-                                let mat_handle = mats.standard.add(primitive_material(&p, project.primitive_default_color));
+                                let mat_handle = mats.standard.add(
+                                    primitive_material(&p, project.primitive_default_color)
+                                );
                                 commands.spawn((
                                     Name::new(entity_def.id.clone()),
                                     Mesh3d(mesh_handle),
                                     MeshMaterial3d(mat_handle),
                                     transform,
                                     LevelEntity,
-                                ));
+                                )).id()
+                            }
+                        };
+
+                        // Optional static physics collider
+                        if p.physics {
+                            if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
+                                commands.entity(spawned).insert((RigidBody::Fixed, collider));
+                            } else {
+                                warn!(
+                                    "physics: true on shape '{}' (entity '{}') — no collider builder, skipping",
+                                    prefab.model, entity_def.id
+                                );
                             }
                         }
                     }
@@ -236,8 +304,71 @@ pub fn spawn_scene_v2(
 
         let tonemapping = scene.tonemapping.to_bevy();
 
+        // ── Primitive player ─────────────────────────────────────────────────────────
+        if let Some((shape, params, position)) = primitive_player {
+            let cap_radius = params.radius.unwrap_or(0.4);
+            let cap_half   = params.height.unwrap_or(0.5);
+            let mesh = build_primitive_mesh(&shape, &params)
+                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build());
+            let mesh_handle = mats.meshes.add(mesh);
+            let mat_handle  = mats.standard.add(primitive_material(&params, project.primitive_default_color));
+
+            let player_entity = commands.spawn((
+                (
+                    Name::new("Player"),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(mat_handle),
+                    Transform::from_translation(position),
+                    Visibility::default(),
+                    LevelEntity,
+                ),
+                (
+                    CharacterController {
+                        walk_speed: 3.0,
+                        run_speed:  6.0,
+                        rot_speed:  3.0,
+                        inputs: default_input_map(),
+                        is_running: false,
+                    },
+                    LocomotionState::default(),
+                    AnimationRequests::default(),
+                    ActiveOverride::default(),
+                ),
+                (
+                    RigidBody::Dynamic,
+                    Collider::capsule_y(cap_half, cap_radius),
+                    LockedAxes::ROTATION_LOCKED,
+                    Damping { linear_damping: 0.5, angular_damping: 0.5 },
+                    Velocity::default(),
+                    ExternalImpulse::default(),
+                ),
+            )).id();
+
+            let cam = default_camera_config();
+            let cam_offset = Vec3::from(cam.offset);
+            commands.spawn((
+                Name::new("Orbit Camera"),
+                Camera3d::default(),
+                tonemapping,
+                Transform::from_translation(position + cam_offset)
+                    .looking_at(position + Vec3::from(cam.look_at_offset), Vec3::Y),
+                LevelEntity,
+                OrbitCamera {
+                    target:          player_entity,
+                    radius:          cam_offset.length(),
+                    offset:          cam_offset,
+                    zoom_speed:      cam.zoom_speed,
+                    orbit_speed:     cam.orbit_speed,
+                    min_radius:      cam.min_radius,
+                    max_radius:      cam.max_radius,
+                    pitch:           0.5,
+                    yaw:             0.0,
+                    look_at_offset:  Vec3::from(cam.look_at_offset),
+                },
+            ));
+        }
         // Spawn player (delayed if terrain present), flycam, or fallback camera.
-        if let Some(pc) = player_config {
+        else if let Some(pc) = player_config {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
                 commands.spawn((
@@ -570,6 +701,22 @@ fn build_primitive_mesh(shape: &str, p: &crate::schema::catalog::PrimitiveParams
         }.mesh().build(),
         _ => return None,
     })
+}
+
+/// Returns a Rapier3D static collider matching the given shape, or `None` for unsupported shapes.
+fn build_primitive_collider(shape: &str, p: &crate::schema::catalog::PrimitiveParams) -> Option<Collider> {
+    match shape {
+        "Cuboid" => {
+            let (x, y, z) = p.size.unwrap_or((3.0, 3.0, 3.0));
+            Some(Collider::cuboid(x / 2.0, y / 2.0, z / 2.0))
+        }
+        "Sphere" => Some(Collider::ball(p.radius.unwrap_or(2.0))),
+        "Cylinder" => Some(Collider::cylinder(
+            p.height.unwrap_or(4.0) / 2.0,
+            p.radius.unwrap_or(1.5),
+        )),
+        _ => None,
+    }
 }
 
 /// Builds a `StandardMaterial` for a primitive shape.

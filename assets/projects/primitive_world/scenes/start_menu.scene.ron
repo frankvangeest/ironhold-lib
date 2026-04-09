@@ -1,0 +1,100 @@
+(
+  schema_version: 2,
+  name: "start_menu",
+
+  tonemapping: AcesFitted,
+
+  lighting: Some((
+    ambient: Some((0.15, 0.18, 0.28)),
+    ambient_brightness: Some(60.0),
+    directional: Some((
+      color: (1.0, 0.90, 0.75),
+      intensity: 12000.0,
+      rotation_euler_deg: (-35.0, 40.0, 0.0),
+      shadows_enabled: false,
+    )),
+  )),
+
+  // Decorative primitives — no player, no terrain.
+  entities: [
+    // Large backdrop sphere
+    (
+      id: "backdrop_sphere",
+      prefab: "deco_orb_gold",
+      transform: (
+        translation: (0.0, 2.0, -12.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (5.0, 5.0, 5.0),
+      ),
+    ),
+    // Floating copper torus left
+    (
+      id: "deco_torus_l",
+      prefab: "deco_torus_copper",
+      transform: (
+        translation: (-6.0, 3.0, -8.0),
+        rotation_euler_deg: (30.0, 0.0, 20.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    // Floating violet orb right
+    (
+      id: "deco_orb_r",
+      prefab: "deco_orb_violet",
+      transform: (
+        translation: (6.0, 4.0, -9.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.5, 1.5, 1.5),
+      ),
+    ),
+    // Small rock cluster on the ground
+    (
+      id: "rock_l",
+      prefab: "rock_small",
+      transform: (
+        translation: (-3.0, 0.3, -4.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "rock_r",
+      prefab: "rock_medium",
+      transform: (
+        translation: (3.5, 0.55, -4.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+  ],
+
+  ui_panel: Some((
+    background_color: (0.04, 0.04, 0.08, 0.88),
+    padding: 36.0,
+    gap: 18.0,
+    width: Some(340.0),
+  )),
+
+  ui: [
+    (
+      kind: "label",
+      id: "title_label",
+      text: "Primitive World",
+      size: (300.0, 55.0),
+    ),
+    (
+      kind: "button",
+      id: "start_game_button",
+      text: "Play",
+      action: "ui.start_game",
+      size: (300.0, 65.0),
+    ),
+    (
+      kind: "button",
+      id: "quit_button",
+      text: "Quit",
+      action: "ui.quit",
+      size: (300.0, 65.0),
+    ),
+  ],
+)
