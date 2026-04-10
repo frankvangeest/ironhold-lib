@@ -1574,3 +1574,139 @@ fn test_preload_non_scene_path_does_not_panic() {
     assert_eq!(preloaded.0.len(), 0,
         "Non-.scene.ron path should not be added to PreloadedScenes");
 }
+
+// ── Animation clip validation ─────────────────────────────────────────────────
+
+#[test]
+fn test_animation_graph_only_includes_present_clips() {
+    // When an AnimationPolicy declares clips that don't exist in the GLB,
+    // the graph still initialises and node_indices contains only the clips
+    // that were actually present in the GLTF (the missing ones are warned
+    // about but never added).
+    let mut app = setup_test_app();
+    app.init_asset::<bevy::animation::AnimationClip>();
+    app.update();
+
+    // Build a Gltf asset that only has "Walk_Loop" in named_animations.
+    let gltf = Gltf {
+        scenes: vec![],
+        named_scenes: Default::default(),
+        meshes: vec![],
+        named_meshes: Default::default(),
+        materials: vec![],
+        named_materials: Default::default(),
+        nodes: vec![],
+        named_nodes: Default::default(),
+        skins: vec![],
+        named_skins: Default::default(),
+        default_scene: None,
+        animations: vec![],
+        named_animations: Default::default(),
+        source: None,
+    };
+    let gltf_handle = app.world_mut().resource_mut::<Assets<Gltf>>().add(gltf);
+
+    let walk_clip = app.world_mut()
+        .resource_mut::<Assets<bevy::animation::AnimationClip>>()
+        .add(bevy::animation::AnimationClip::default());
+    app.world_mut()
+        .resource_mut::<Assets<Gltf>>()
+        .get_mut(&gltf_handle)
+        .unwrap()
+        .named_animations
+        .insert("Walk_Loop".into(), walk_clip);
+
+    // Policy declares four clips — only "Walk_Loop" exists in the Gltf.
+    let policy = AnimationPolicy {
+        base: BaseAnimations {
+            idle: "Idle_Loop".to_string(),
+            walk: "Walk_Loop".to_string(),
+            run: "Run_Loop".to_string(),
+            jump_loop: "Jump_Loop".to_string(),
+        },
+        clips: HashMap::new(),
+        overrides: vec![],
+        default_transition_ms: None,
+    };
+
+    // Spawn with AnimationPlayer on the same entity so find_player_entity_recursive
+    // locates it without needing a child hierarchy.
+    let entity = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        AnimationPolicyComponent(policy),
+        AnimationController {
+            current: "Walk_Loop".to_string(),
+            last_played: String::new(),
+            gltf_path: "test.glb".to_string(),
+            gltf_handle,
+            node_indices: Default::default(),
+            graph_initialized: false,
+            transition_ms: 0,
+            should_loop: true,
+        },
+        bevy::animation::AnimationPlayer::default(),
+    )).id();
+
+    app.update();
+    app.update();
+
+    let controller = app.world().entity(entity).get::<AnimationController>().unwrap();
+
+    assert!(controller.graph_initialized,
+        "Graph should be initialized even when some policy clips are missing from the GLTF");
+
+    assert!(controller.node_indices.contains_key("Walk_Loop"),
+        "Walk_Loop is in the GLTF and must be in node_indices");
+    assert!(!controller.node_indices.contains_key("Idle_Loop"),
+        "Idle_Loop is not in the GLTF and must not be in node_indices");
+    assert!(!controller.node_indices.contains_key("Run_Loop"),
+        "Run_Loop is not in the GLTF and must not be in node_indices");
+    assert!(!controller.node_indices.contains_key("Jump_Loop"),
+        "Jump_Loop is not in the GLTF and must not be in node_indices");
+}
+
+#[test]
+fn test_animation_missing_clip_stops_retrying() {
+    // When animation_playback_system can't find the requested clip in node_indices,
+    // it must update last_played so it doesn't re-warn every frame.
+    let mut app = setup_test_app();
+    app.update();
+
+    // graph_initialized=true with an empty node_indices simulates the case where
+    // the graph was built but the requested clip was not in the GLTF.
+    let entity = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        AnimationPolicyComponent(AnimationPolicy {
+            base: BaseAnimations {
+                idle: "Idle_Loop".to_string(),
+                walk: "Walk_Loop".to_string(),
+                run: "Run_Loop".to_string(),
+                jump_loop: "Jump_Loop".to_string(),
+            },
+            clips: HashMap::new(),
+            overrides: vec![],
+            default_transition_ms: None,
+        }),
+        AnimationController {
+            current: "missing_clip".to_string(),
+            last_played: String::new(),
+            gltf_path: String::new(),
+            gltf_handle: Default::default(),
+            node_indices: Default::default(),
+            graph_initialized: true,
+            transition_ms: 0,
+            should_loop: true,
+        },
+        bevy::animation::AnimationPlayer::default(),
+    )).id();
+
+    app.update();
+
+    let controller = app.world().entity(entity).get::<AnimationController>().unwrap();
+    assert_eq!(
+        controller.last_played, "missing_clip",
+        "last_played must equal current after a missing-clip warn so the system stops retrying"
+    );
+}

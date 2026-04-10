@@ -55,11 +55,31 @@ pub fn animation_playback_system(
                 }
 
                 // Add each named clip into the graph (if present in GLTF).
-                for name in clip_names {
-                    if let Some(clip) = gltf.named_animations.get(&*name) {
+                for name in &clip_names {
+                    if let Some(clip) = gltf.named_animations.get(name.as_str()) {
                         let index = graph.add_clip(clip.clone(), 1.0, graph.root);
-                        indices.insert(name, index);
+                        indices.insert(name.clone(), index);
                     }
+                }
+
+                // Warn about clips declared in the policy that don't exist in the GLB.
+                let mut missing: Vec<&str> = clip_names
+                    .iter()
+                    .filter(|n| !indices.contains_key(n.as_str()))
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    missing.sort();
+                    let mut available: Vec<&str> =
+                        gltf.named_animations.keys().map(|s| s.as_ref()).collect();
+                    available.sort();
+                    warn!(
+                        "AnimationPolicy: {} clip(s) not found in \"{}\": [{}]. Available clips: [{}]",
+                        missing.len(),
+                        controller.gltf_path,
+                        missing.join(", "),
+                        available.join(", ")
+                    );
                 }
 
                 let graph_handle = graphs.add(graph);
@@ -97,6 +117,8 @@ pub fn animation_playback_system(
                         }
                     } else {
                         warn!("No node index for requested animation: {}", controller.current);
+                        // Avoid retrying every frame for a clip that will never exist.
+                        controller.last_played = controller.current.clone();
                     }
                 }
             }
