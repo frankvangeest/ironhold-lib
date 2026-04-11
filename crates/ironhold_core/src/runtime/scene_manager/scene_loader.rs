@@ -89,16 +89,18 @@ pub fn spawn_scene_v2(
         spawn_registry.entities.clear();
         spawn_registry.counter = 0;
 
+        let mut load_errors: Vec<String> = Vec::new();
+
         // Rebuild effective key bindings: project base + scene-level overrides.
         // This ensures bindings from a previous scene never bleed into the next one.
         {
             let mut effective = project_key_bindings.0.clone();
             for (key_name, trigger) in &scene.scene_key_bindings {
                 if InputMap::parse_key(key_name).is_none() {
-                    warn!(
+                    load_errors.push(format!(
                         "scene_key_bindings: unrecognised key name {:?} — binding will have no effect",
                         key_name
-                    );
+                    ));
                 }
                 effective.insert(key_name.clone(), trigger.clone());
             }
@@ -133,10 +135,10 @@ pub fn spawn_scene_v2(
         let mut flycam_start: Option<Transform> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
-                warn!(
-                    "Prefab '{}' not found in catalog, skipping entity '{}'",
-                    entity_def.prefab, entity_def.id
-                );
+                load_errors.push(format!(
+                    "entity '{}': prefab '{}' not found in catalog, entity skipped",
+                    entity_def.id, entity_def.prefab
+                ));
                 continue;
             };
 
@@ -202,10 +204,10 @@ pub fn spawn_scene_v2(
                             )).id();
                             commands.entity(parent).add_child(child_entity);
                         } else {
-                            warn!(
-                                "Unknown shape '{}' in composite prefab '{}', skipping child",
-                                child_def.shape, entity_def.id
-                            );
+                            load_errors.push(format!(
+                                "entity '{}': unknown shape '{}' in composite prefab, child skipped",
+                                entity_def.id, child_def.shape
+                            ));
                         }
                     }
                     continue;
@@ -266,17 +268,17 @@ pub fn spawn_scene_v2(
                             if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
                                 commands.entity(spawned).insert((RigidBody::Fixed, collider));
                             } else {
-                                warn!(
-                                    "physics: true on shape '{}' (entity '{}') — no collider builder, skipping",
-                                    prefab.model, entity_def.id
-                                );
+                                load_errors.push(format!(
+                                    "entity '{}': physics: true on shape '{}' — no collider builder, physics skipped",
+                                    entity_def.id, prefab.model
+                                ));
                             }
                         }
                     }
-                    None => warn!(
-                        "Unknown primitive shape '{}' for entity '{}', skipping",
-                        prefab.model, entity_def.id,
-                    ),
+                    None => load_errors.push(format!(
+                        "entity '{}': unknown primitive shape '{}', entity skipped",
+                        entity_def.id, prefab.model
+                    )),
                 }
                 continue;
             }
@@ -286,10 +288,10 @@ pub fn spawn_scene_v2(
             {
                 catalog_entry.path.clone()
             } else {
-                warn!(
-                    "Model key '{}' not found in asset catalog, skipping entity '{}'",
-                    prefab.model, entity_def.id
-                );
+                load_errors.push(format!(
+                    "entity '{}': model key '{}' not found in asset catalog, entity skipped",
+                    entity_def.id, prefab.model
+                ));
                 continue;
             };
 
@@ -319,6 +321,15 @@ pub fn spawn_scene_v2(
                 );
                 commands.entity(parent).insert(LevelEntity);
             }
+        }
+
+        if !load_errors.is_empty() {
+            error!(
+                "Scene '{}' — {} problem(s) found during load:\n  - {}",
+                scene.name,
+                load_errors.len(),
+                load_errors.join("\n  - ")
+            );
         }
 
         let tonemapping = scene.tonemapping.to_bevy();
