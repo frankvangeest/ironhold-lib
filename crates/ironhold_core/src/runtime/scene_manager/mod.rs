@@ -19,14 +19,12 @@ pub mod scene_loader;
 pub mod entity_spawner;
 pub mod message_interpreter;
 pub mod action_executor;
-pub mod v1_compat;
 
 pub use project_loader::*;
 pub use scene_loader::*;
 pub use entity_spawner::*;
 pub use message_interpreter::*;
 pub use action_executor::*;
-pub use v1_compat::*;
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
@@ -104,6 +102,12 @@ pub struct SpawnRegistry {
 }
 
 // ─── Components ───────────────────────────────────────────────────────────────
+
+/// Marks every entity that belongs to the currently loaded scene.
+/// On a full `LoadScene` all `LevelEntity` entities are despawned before new ones are spawned.
+/// Overlay entities use `OverlayEntity` instead.
+#[derive(Component)]
+pub struct LevelEntity;
 
 /// Stable handle attached to every entity spawned via `Action::Spawn`.
 /// Used by `Action::Despawn` to locate and remove the entity.
@@ -203,7 +207,7 @@ pub fn resolve_project_path(project_root: &str, path: &str) -> String {
 
 /// Generates a minimal 1×1 cubemap `Image` from top/bottom gradient colours.
 /// Used as a fallback environment map when no `.ktx2` assets are provided.
-pub(crate) fn generate_cubemap(config: &crate::schema::level::GeneratedEnvironmentMapLight) -> Image {
+pub(crate) fn generate_cubemap(config: &crate::schema::GeneratedEnvironmentMapLight) -> Image {
     let top = [
         (config.top_color.0 * 255.0) as u8,
         (config.top_color.1 * 255.0) as u8,

@@ -226,13 +226,8 @@ pub fn check_project_loaded(
         config.schema_version, scene_path
     );
 
-    if scene_path.ends_with(".scene.ron") {
-        let scene_handle: Handle<GameSceneV2> = asset_server.load(scene_path.clone());
-        commands.insert_resource(SceneHandleV2(scene_handle));
-    } else {
-        let scene_handle = asset_server.load(scene_path.clone());
-        commands.insert_resource(LevelHandle(scene_handle));
-    }
+    let scene_handle: Handle<GameSceneV2> = asset_server.load(scene_path.clone());
+    commands.insert_resource(SceneHandleV2(scene_handle));
     scene_events.write(SceneEvent::Requested(scene_path));
     next_state.set(AppState::LoadingScene);
 }

@@ -82,7 +82,6 @@ impl Plugin for GamePlugin {
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
             .add_message::<AppExit>()
-            .add_plugins(RonAssetPlugin::<GameLevel>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
             .add_plugins(RonAssetPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
@@ -98,7 +97,6 @@ impl Plugin for GamePlugin {
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input
             .add_systems(Update, (
-                spawn_level,
                 // spawn_scene_v2 must run BEFORE the message/action pipeline each frame.
                 // The action executor sets load_mode (ResMut, immediate) but updates
                 // SceneHandleV2 via commands (deferred). If spawn_scene_v2 ran after the

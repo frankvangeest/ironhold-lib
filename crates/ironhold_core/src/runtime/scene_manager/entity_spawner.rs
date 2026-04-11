@@ -13,7 +13,7 @@ use crate::capabilities::animation_resolver::{
 };
 use bevy_rapier3d::prelude::*;
 use super::{
-    MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
+    LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
     resolve_project_path,
 };
 

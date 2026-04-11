@@ -437,7 +437,6 @@ pub fn spawn_scene_v2(
         // Spawn Terrain
         if let Some(terrain_v2) = &scene.terrain {
             info!("Spawning V2 Terrain...");
-            use crate::schema::level::TerrainConfig;
             let terrain_config = TerrainConfig {
                 heightmap_path: terrain_v2.heightmap.clone(),
                 splatmap_path: terrain_v2.splatmap.clone(),

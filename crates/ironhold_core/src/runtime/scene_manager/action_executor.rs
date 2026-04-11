@@ -39,13 +39,8 @@ pub fn action_executor_system(
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
-                if resolved.ends_with(".scene.ron") {
-                    let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
-                    commands.insert_resource(SceneHandleV2(handle));
-                } else {
-                    let handle = asset_server.load(resolved.clone());
-                    commands.insert_resource(LevelHandle(handle));
-                }
+                let handle: Handle<GameSceneV2> = asset_server.load(resolved.clone());
+                commands.insert_resource(SceneHandleV2(handle));
                 scene_events.write(SceneEvent::Requested(resolved));
                 next_state.set(AppState::LoadingScene);
             }

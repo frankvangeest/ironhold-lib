@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes};
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -36,7 +36,6 @@ fn setup_test_app() -> App {
        .init_asset::<Scene>()
        .init_asset::<Gltf>()
        .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::GameLevel>()
        .init_asset::<ironhold_core::schema::player::AnimationPolicy>()
        .init_asset::<ironhold_core::schema::project::LogicRulesAsset>()
        .init_asset::<ironhold_core::schema::project::StateMachineAsset>()
@@ -60,12 +59,12 @@ fn test_ui_button_to_load_scene_action() {
             LogicRule {
                 on: "ui.button_pressed:test_load".to_string(),
                 when: None,
-                do_actions: vec![Action::LoadScene("scenes/tests/test_scene.ron".to_string())],
+                do_actions: vec![Action::LoadScene("scenes/tests/test_scene.scene.ron".to_string())],
             }
         ];
         let config_handle = configs.add(ProjectConfig {
             schema_version: 1,
-            initial_scene: "scenes/tests/test_scene.ron".to_string(),
+            initial_scene: "scenes/tests/test_scene.scene.ron".to_string(),
             rules: rules.clone(),
             ..Default::default()
         });
@@ -83,8 +82,8 @@ fn test_ui_button_to_load_scene_action() {
     app.update();
     
     // 5. Verify side effects
-    // The executor should have inserted a LevelHandle resource
-    assert!(app.world().contains_resource::<ironhold_core::schema::LevelHandle>());
+    // The executor should have inserted a SceneHandleV2 resource
+    assert!(app.world().contains_resource::<SceneHandleV2>());
     
     // And state should be LoadingScene
     let state = app.world().resource::<State<AppState>>();
@@ -363,185 +362,6 @@ fn model_fixup_persists_reset() {
     }
     
     app.update(); // Flush commands from system_once
-}
-
-#[test]
-fn test_ui_button_positioning() {
-    let mut app = setup_test_app();
-    
-    app.update();
-    
-    // 1. Setup a level with a positioned button
-    let level_handle = {
-        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
-        let config_handle = configs.add(ProjectConfig {
-            schema_version: 1,
-            initial_scene: "scenes/tests/test_scene.ron".to_string(),
-            rules: vec![],
-            rules_path: None,
-            state_machine_path: None,
-            model_fixes: HashMap::new(),
-            model_fixes_path: None,
-            project_id: None,
-            display_name: None,
-            asset_catalog: None,
-            prefab_catalog: None,
-            ..Default::default()
-        });
-        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-
-        let mut levels = app.world_mut().resource_mut::<Assets<ironhold_core::schema::GameLevel>>();
-        levels.add(ironhold_core::schema::GameLevel {
-            schema_version: 1,
-            models: vec![],
-            ui: vec![
-                ironhold_core::schema::UiElement::Button {
-                    text: "Positioned".to_string(),
-                    action: ironhold_core::schema::UiAction::Trigger("test".to_string()),
-                    position: Some((123.0, 456.0)),
-                    width: None,
-                    height: None,
-                    font_size: None,
-                    border_color: None,
-                    background_color: None,
-                    text_color: None,
-                }
-            ],
-            player: None,
-            terrain: None,
-            lighting: None,
-        })
-    };
-    
-    app.world_mut().insert_resource(ironhold_core::schema::LevelHandle(level_handle));
-    
-    // 2. Transition to LoadingScene and then InGame to trigger spawn_level
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
-    app.update();
-    app.update();
-    
-    // 3. Verify the spawned button's Node configuration
-    let mut query = app.world_mut().query::<(&Button, &Node)>();
-    let mut found = false;
-    for (_button, node) in query.iter(app.world()) {
-        if node.position_type == PositionType::Absolute {
-            assert_eq!(node.left, Val::Px(123.0));
-            assert_eq!(node.top, Val::Px(456.0));
-            found = true;
-        }
-    }
-    assert!(found, "Should have found a button with absolute positioning");
-}
-#[test]
-fn test_entity_names() {
-    let mut app = setup_test_app();
-    
-    app.update();
-    
-    // 1. Setup a level with a player and a button
-    let level_handle = {
-        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
-        let config_handle = configs.add(ProjectConfig {
-            schema_version: 1,
-            initial_scene: "scenes/tests/test_scene.ron".to_string(),
-            rules: vec![],
-            rules_path: None,
-            state_machine_path: None,
-            model_fixes: HashMap::new(),
-            model_fixes_path: None,
-            project_id: None,
-            display_name: None,
-            asset_catalog: None,
-            prefab_catalog: None,
-            ..Default::default()
-        });
-        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-
-        let mut levels = app.world_mut().resource_mut::<Assets<ironhold_core::schema::GameLevel>>();
-        levels.add(ironhold_core::schema::GameLevel {
-            schema_version: 1,
-            models: vec![
-                ironhold_core::schema::level::ModelInfo {
-                    path: "models/cube.glb".to_string(),
-                    position: (0.0, 0.0, 0.0),
-                }
-            ],
-            ui: vec![
-                ironhold_core::schema::UiElement::Button {
-                    text: "Start".to_string(),
-                    action: ironhold_core::schema::UiAction::Trigger("start".to_string()),
-                    position: None,
-                    width: None,
-                    height: None,
-                    font_size: None,
-                    border_color: None,
-                    background_color: None,
-                    text_color: None,
-                }
-            ],
-            player: Some(ironhold_core::schema::player::PlayerConfig {
-                model_path: "models/player.glb".to_string(),
-                initial_position: (0.0, 0.0, 0.0),
-                inputs: ironhold_core::schema::player::InputMap {
-                    forward: "KeyW".to_string(),
-                    backward: "KeyS".to_string(),
-                    left: "KeyA".to_string(),
-                    right: "KeyD".to_string(),
-                    strafe_left: "KeyQ".to_string(),
-                    strafe_right: "KeyE".to_string(),
-                    jump: "Space".to_string(),
-                    run: "ShiftLeft".to_string(),
-                },
-                camera: ironhold_core::schema::player::CameraConfig {
-                    offset: (0.0, 5.0, 10.0),
-                    zoom_speed: 1.0,
-                    orbit_speed: 1.0,
-                    min_radius: 1.0,
-                    max_radius: 20.0,
-                    look_at_offset: (0.0, 1.0, 0.0),
-                },
-                animation_policy: "prefabs/animation/player_policy.ron".to_string(),
-            }),
-            terrain: None,
-            lighting: Some(ironhold_core::schema::level::LightingConfig {
-                ambient: Some(ironhold_core::schema::level::AmbientLightConfig {
-                    color: (1.0, 1.0, 1.0),
-                    brightness: 100.0,
-                }),
-                directional: Some(ironhold_core::schema::level::DirectionalLightConfig {
-                    color: (1.0, 1.0, 1.0),
-                    illuminance: 10000.0,
-                    direction: (0.0, -1.0, 0.0),
-                    shadows_enabled: true,
-                }),
-                environment: None,
-            }),
-        })
-    };
-    
-    app.world_mut().insert_resource(ironhold_core::schema::LevelHandle(level_handle));
-    
-    // 2. Trigger spawn
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
-    app.update();
-    app.update();
-    
-    // 3. Verify names
-    let mut names = app.world_mut().query::<&Name>();
-    let name_list: Vec<String> = names.iter(app.world()).map(|n| n.as_str().to_string()).collect();
-    
-    println!("Spawned names: {:?}", name_list);
-    
-    assert!(name_list.contains(&"Ambient Light".to_string()));
-    assert!(name_list.contains(&"Directional Light".to_string()));
-    assert!(name_list.contains(&"Persistent Overlay Camera".to_string()));
-    assert!(name_list.contains(&"UI Root".to_string()));
-    assert!(name_list.contains(&"Button: Start".to_string()));
-    assert!(name_list.contains(&"Text: Start".to_string()));
-    assert!(name_list.contains(&"Player".to_string()));
-    assert!(name_list.contains(&"Orbit Camera".to_string()));
-    assert!(name_list.contains(&"cube.glb".to_string()));
-    assert!(name_list.contains(&"Model Scene Root".to_string()));
 }
 
 #[test]

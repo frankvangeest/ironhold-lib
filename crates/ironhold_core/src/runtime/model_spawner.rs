@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::schema::project::TransformFix;
-use crate::schema::level::LevelEntity;
+use super::scene_manager::LevelEntity;
 
 pub struct SpawnedModel { pub parent: Entity, pub child: Entity }
 

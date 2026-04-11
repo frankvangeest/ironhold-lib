@@ -3,7 +3,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy_mesh::Indices;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use futures_lite::future;
-use crate::schema::level::TerrainConfig;
+use crate::schema::TerrainConfig;
 use crate::capabilities::terrain_material::TerrainMaterial;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;

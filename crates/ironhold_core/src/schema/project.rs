@@ -188,7 +188,7 @@ pub struct ProjectConfig {
     pub prefab_catalog: Option<String>,
 
     #[serde(default)]
-    pub global_environment: Option<crate::schema::level::EnvironmentMapConfig>,
+    pub global_environment: Option<EnvironmentMapConfig>,
 
     /// Global key → event trigger mappings, applied regardless of which scene is active.
     /// Key names use the same string format as InputMap (e.g. "Escape", "Tab", "F1").
@@ -246,4 +246,50 @@ impl Default for TransformFix {
     fn default() -> Self {
         Self { pivot_offset: (0.0, 0.0, 0.0), rotation_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) }
     }
+}
+
+// ─── Terrain ──────────────────────────────────────────────────────────────────
+
+/// Terrain mesh parameters. Placed as a `Component` on a spawned entity; the
+/// `TerrainPlugin` systems detect it and kick off async mesh generation.
+#[derive(Deserialize, Debug, Clone, Component)]
+#[serde(deny_unknown_fields)]
+pub struct TerrainConfig {
+    pub heightmap_path: String,
+    pub splatmap_path: String,
+    #[serde(default = "default_height_scale")]
+    pub height_scale: f32,
+    #[serde(default = "default_horizontal_scale")]
+    pub horizontal_scale: f32,
+    #[serde(default = "default_terrain_position")]
+    pub position: (f32, f32, f32),
+    #[serde(default = "default_terrain_chunk_size")]
+    pub chunk_size: u32,
+    pub material_paths: Vec<String>,
+}
+
+fn default_height_scale() -> f32 { 100.0 }
+fn default_horizontal_scale() -> f32 { 1.0 }
+fn default_terrain_position() -> (f32, f32, f32) { (0.0, 0.0, 0.0) }
+fn default_terrain_chunk_size() -> u32 { 64 }
+
+// ─── Environment map ──────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentMapConfig {
+    #[serde(default)]
+    pub diffuse_path: Option<String>,
+    #[serde(default)]
+    pub specular_path: Option<String>,
+    pub intensity: f32,
+    #[serde(default)]
+    pub fallback: Option<GeneratedEnvironmentMapLight>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GeneratedEnvironmentMapLight {
+    pub top_color: (f32, f32, f32),
+    pub bottom_color: (f32, f32, f32),
 }

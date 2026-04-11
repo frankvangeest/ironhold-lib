@@ -1,4 +1,4 @@
-use ironhold_core::schema::{GameLevel, ProjectConfig, StateMachineAsset};
+use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
@@ -87,17 +87,10 @@ fn regression_schema_version_in_assets() {
             .and_then(|n| n.to_str())
             .unwrap_or("");
         if file_name.ends_with(".scene.ron") {
-            // Scene v2 format
             let scene: GameSceneV2 = from_str(&contents)
                 .unwrap_or_else(|e| panic!("GameSceneV2 failed to parse {}: {}", file.display(), e));
             scene.validate()
                 .unwrap_or_else(|e| panic!("GameSceneV2 failed validation {}: {}", file.display(), e));
-        } else {
-            // Scene v1 format (GameLevel)
-            let level: GameLevel = from_str(&contents)
-                .unwrap_or_else(|e| panic!("GameLevel failed to parse {}: {}", file.display(), e));
-            level.validate()
-                .unwrap_or_else(|e| panic!("GameLevel failed validation {}: {}", file.display(), e));
         }
     }
 
