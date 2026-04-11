@@ -68,6 +68,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
             .init_resource::<crate::runtime::scene_manager::LoadedRules>()
             .init_resource::<crate::runtime::scene_manager::LoadedStateMachine>()
+            .init_resource::<crate::runtime::scene_manager::ProjectKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()

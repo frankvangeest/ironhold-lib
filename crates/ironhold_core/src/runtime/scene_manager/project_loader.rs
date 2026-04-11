@@ -7,7 +7,7 @@ use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
-    MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings,
+    MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings, ProjectKeyBindings,
     LoadedAssetCatalog, LoadedPrefabCatalog, PendingProjectLoads, SceneHandleV2,
     LogicState, resolve_project_path,
 };
@@ -93,6 +93,7 @@ pub fn check_project_loaded(
                     );
                 }
             }
+            commands.insert_resource(ProjectKeyBindings(key_bindings.clone()));
             commands.insert_resource(LoadedKeyBindings(key_bindings));
         }
         commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
@@ -191,6 +192,7 @@ pub fn check_project_loaded(
                 );
             }
         }
+        commands.insert_resource(ProjectKeyBindings(key_bindings.clone()));
         commands.insert_resource(LoadedKeyBindings(key_bindings));
 
         let asset_catalog = if let Some(h) = &pending.asset_catalog {

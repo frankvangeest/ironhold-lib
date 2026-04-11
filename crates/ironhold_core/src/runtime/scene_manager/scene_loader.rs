@@ -14,6 +14,7 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
+    ProjectKeyBindings, LoadedKeyBindings,
 };
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
@@ -34,6 +35,8 @@ pub fn spawn_scene_v2(
     mut mats: SceneMaterialParams,
     mut spawn_registry: ResMut<SpawnRegistry>,
     mut load_mode: ResMut<PendingSceneLoadMode>,
+    project_key_bindings: Res<ProjectKeyBindings>,
+    mut loaded_key_bindings: ResMut<LoadedKeyBindings>,
 ) {
     let Some(scene_handle) = params.scene_handle.as_ref() else { return; };
     let Some(project) = params.configs.get(&params.config_handle.0) else { return; };
@@ -85,6 +88,22 @@ pub fn spawn_scene_v2(
         commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
         spawn_registry.entities.clear();
         spawn_registry.counter = 0;
+
+        // Rebuild effective key bindings: project base + scene-level overrides.
+        // This ensures bindings from a previous scene never bleed into the next one.
+        {
+            let mut effective = project_key_bindings.0.clone();
+            for (key_name, trigger) in &scene.scene_key_bindings {
+                if InputMap::parse_key(key_name).is_none() {
+                    warn!(
+                        "scene_key_bindings: unrecognised key name {:?} — binding will have no effect",
+                        key_name
+                    );
+                }
+                effective.insert(key_name.clone(), trigger.clone());
+            }
+            *loaded_key_bindings = LoadedKeyBindings(effective);
+        }
 
         for entity in level_entities.iter() {
             commands.entity(entity).despawn();
@@ -461,6 +480,7 @@ pub fn spawn_scene_v2(
             let padding = panel_def.padding;
             let gap = panel_def.gap;
             let panel_width = panel_def.width.map(Val::Px).unwrap_or(Val::Auto);
+            let panel_height = panel_def.height.map(Val::Px).unwrap_or(Val::Auto);
             let ui_elements = scene.ui.clone();
             root_cmd.with_children(|parent| {
                 parent
@@ -473,18 +493,32 @@ pub fn spawn_scene_v2(
                             padding: UiRect::all(Val::Px(padding)),
                             row_gap: Val::Px(gap),
                             width: panel_width,
+                            height: panel_height,
+                            overflow: Overflow::clip(),
+                            position_type: PositionType::Relative,
                             ..default()
                         },
                         BackgroundColor(Color::srgba(pr, pg, pb, pa)),
                     ))
                     .with_children(|parent| {
                         for el in &ui_elements {
-                            let node = Node {
-                                width: Val::Px(el.size.0),
-                                height: Val::Px(el.size.1),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                ..default()
+                            let node = if el.absolute {
+                                Node {
+                                    width: Val::Px(el.size.0),
+                                    height: Val::Px(el.size.1),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(el.position.0),
+                                    top: Val::Px(el.position.1),
+                                    ..default()
+                                }
+                            } else {
+                                Node {
+                                    width: Val::Px(el.size.0),
+                                    height: Val::Px(el.size.1),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                }
                             };
                             spawn_ui_element_node(parent, el, node);
                         }
@@ -542,6 +576,17 @@ fn spawn_ui_element_node(
     el: &crate::schema::scene_v2::UiElementDefV2,
     node: Node,
 ) {
+    if el.kind == "rect" {
+        // Non-interactive colored rectangle — no border, no text, no interaction.
+        let (r, g, b, a) = el.color;
+        parent.spawn((
+            Name::new(format!("Rect: {}", el.id)),
+            node,
+            BackgroundColor(Color::srgba(r, g, b, a)),
+        ));
+        return;
+    }
+
     if el.kind == "label" {
         let el_id = el.id.clone();
         parent
@@ -558,6 +603,8 @@ fn spawn_ui_element_node(
                 }
             });
     } else {
+        let (r, g, b, a) = el.color;
+        let bg_color = Color::srgba(r, g, b, a);
         let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
         let mut btn_node = node;
         btn_node.border = UiRect::all(Val::Px(5.0));
@@ -567,7 +614,7 @@ fn spawn_ui_element_node(
                 Button,
                 btn_node,
                 BorderColor::from(Color::BLACK),
-                BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                BackgroundColor(bg_color),
                 UiAction::Trigger(trigger),
             ))
             .with_children(|parent| {

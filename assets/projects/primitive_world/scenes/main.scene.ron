@@ -4,6 +4,10 @@
 
   tonemapping: AcesFitted,
 
+  scene_key_bindings: {
+    "KeyM": "toggle_map",
+  },
+
   lighting: Some((
     ambient: Some((0.22, 0.28, 0.38)),
     ambient_brightness: Some(100.0),

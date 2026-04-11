@@ -52,7 +52,14 @@ pub struct LoadedStateMachine(pub Option<crate::schema::project::StateMachineAss
 #[derive(Resource, Default, Clone)]
 pub struct LogicState(pub String);
 
-/// Global key bindings loaded from the project config.
+/// Project-level key bindings, set once at project load and never modified.
+/// Used by `spawn_scene_v2` to rebuild `LoadedKeyBindings` as the base layer each time
+/// a new scene loads, so per-scene overrides don't bleed across scene transitions.
+#[derive(Resource, Default, Clone)]
+pub struct ProjectKeyBindings(pub HashMap<String, String>);
+
+/// Active key bindings used by `global_input_system`.
+/// On each Replace-mode scene load this is rebuilt as: project bindings + scene overrides.
 /// Maps key name strings (e.g. "Escape") to event trigger names (e.g. "toggle_pause").
 #[derive(Resource, Default, Clone)]
 pub struct LoadedKeyBindings(pub HashMap<String, String>);

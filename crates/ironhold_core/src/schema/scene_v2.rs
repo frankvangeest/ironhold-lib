@@ -67,6 +67,12 @@ pub struct GameSceneV2 {
     /// `TonyMcMapface` and `BlenderFilmic` are not available — see `TonemappingOption`.
     #[serde(default)]
     pub tonemapping: TonemappingOption,
+    /// Per-scene key bindings. Keys present here override `global_key_bindings` from the
+    /// project config for this scene. Cleared and rebuilt from the project config each time
+    /// a new scene loads, so a later scene cannot accidentally inherit bindings from an earlier one.
+    /// Same key-name format as `global_key_bindings` (e.g. `"Escape"`, `"Space"`, `"KeyP"`).
+    #[serde(default)]
+    pub scene_key_bindings: HashMap<String, String>,
 }
 
 impl GameSceneV2 {
@@ -94,9 +100,9 @@ impl GameSceneV2 {
             if !ui_ids.insert(elem.id.as_str()) {
                 return Err(format!("Duplicate UI element id: \"{}\"", elem.id));
             }
-            if elem.kind != "button" && elem.kind != "label" {
+            if elem.kind != "button" && elem.kind != "label" && elem.kind != "rect" {
                 return Err(format!(
-                    "UI element \"{}\" has unknown kind \"{}\" (expected \"button\" or \"label\")",
+                    "UI element \"{}\" has unknown kind \"{}\" (expected \"button\", \"label\", or \"rect\")",
                     elem.id, elem.kind
                 ));
             }
@@ -200,18 +206,35 @@ fn one_vec3() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct UiElementDefV2 {
-    /// "button" renders an interactive button; "label" renders non-interactive text.
+    /// "button" renders an interactive button; "label" renders non-interactive text;
+    /// "rect" renders a non-interactive colored rectangle (no text, no interaction).
     pub kind: String,
     pub id: String,
+    #[serde(default)]
     pub text: String,
     /// Action trigger for kind="button". "ui." prefix is stripped when firing.
     /// May be omitted (defaults to empty) for kind="label".
     #[serde(default)]
     pub action: String,
-    /// Absolute position in pixels. Ignored when `ui_panel` is set on the scene.
+    /// Absolute position in pixels.
+    /// In non-panel mode: position relative to the screen root.
+    /// In panel mode: ignored unless `absolute: true`, in which case position is
+    /// relative to the panel's top-left corner.
     #[serde(default)]
     pub position: (f32, f32),
     pub size: (f32, f32),
+    /// Fill color as linear RGBA (0.0–1.0).
+    /// For `kind: "rect"`: the fill color. Defaults to dark grey if omitted.
+    /// For `kind: "button"`: the background color. Defaults to dark grey `(0.15, 0.15, 0.15, 1.0)`.
+    /// Has no effect on `kind: "label"`.
+    #[serde(default = "default_ui_element_color")]
+    pub color: (f32, f32, f32, f32),
+    /// When `true` inside a `ui_panel` scene, this element is positioned absolutely
+    /// relative to the panel's top-left corner using its `position` field, instead of
+    /// being placed in the vertical flex flow. Use this for precisely placed map
+    /// elements or decorative overlays within a fixed-size panel.
+    #[serde(default)]
+    pub absolute: bool,
 }
 
 /// When present on a scene, UI elements are laid out in a centered panel box
@@ -230,7 +253,13 @@ pub struct UiPanelDef {
     /// Optional fixed width of the panel in pixels. Auto-sized if omitted.
     #[serde(default)]
     pub width: Option<f32>,
+    /// Optional fixed height of the panel in pixels. Auto-sized if omitted.
+    /// Set this when the panel contains absolutely-positioned children (e.g. a map),
+    /// so the panel has a known size to contain them.
+    #[serde(default)]
+    pub height: Option<f32>,
 }
 
 fn default_panel_padding() -> f32 { 20.0 }
 fn default_panel_gap() -> f32 { 12.0 }
+fn default_ui_element_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
