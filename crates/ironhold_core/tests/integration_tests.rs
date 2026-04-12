@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
+use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
@@ -1528,5 +1528,383 @@ fn test_animation_missing_clip_stops_retrying() {
     assert_eq!(
         controller.last_played, "missing_clip",
         "last_played must equal current after a missing-clip warn so the system stops retrying"
+    );
+}
+
+// ── Scene load cleanup tests ──────────────────────────────────────────────────
+
+/// Drive a Replace-mode scene load through `spawn_scene_v2`.
+/// Inserts a minimal ProjectConfig override and a synthetic empty scene, then
+/// transitions state to LoadingScene and runs enough updates for the system to
+/// fire and its despawn commands to flush.
+fn drive_replace_load(app: &mut App) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 =
+        ron::de::from_str("(schema_version: 2, entities: [], ui: [])").unwrap();
+    let scene_handle = app
+        .world_mut()
+        .resource_mut::<Assets<GameSceneV2>>()
+        .add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update(); // state transitions to LoadingScene
+    app.update(); // spawn_scene_v2 fires, despawn commands queued
+    app.update(); // commands flushed
+}
+
+#[test]
+fn test_level_entity_despawned_on_replace_load() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Pre-spawn entities that belong to the "previous" scene.
+    let old_a = app.world_mut().spawn(LevelEntity).id();
+    let old_b = app.world_mut().spawn(LevelEntity).id();
+
+    drive_replace_load(&mut app);
+
+    assert!(
+        app.world().get_entity(old_a).is_err(),
+        "LevelEntity 'old_a' must be despawned on Replace-mode scene load"
+    );
+    assert!(
+        app.world().get_entity(old_b).is_err(),
+        "LevelEntity 'old_b' must be despawned on Replace-mode scene load"
+    );
+}
+
+#[test]
+fn test_overlay_entities_despawned_on_replace_load() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Pre-spawn overlay entities (e.g. from a previously open pause menu).
+    let overlay_a = app.world_mut().spawn(OverlayEntity).id();
+    let overlay_b = app.world_mut().spawn(OverlayEntity).id();
+
+    drive_replace_load(&mut app);
+
+    assert!(
+        app.world().get_entity(overlay_a).is_err(),
+        "OverlayEntity 'overlay_a' must be despawned on Replace-mode scene load"
+    );
+    assert!(
+        app.world().get_entity(overlay_b).is_err(),
+        "OverlayEntity 'overlay_b' must be despawned on Replace-mode scene load"
+    );
+}
+
+#[test]
+fn test_key_bindings_do_not_bleed_across_scenes() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Simulate a binding left over from a previous scene.
+    app.world_mut().insert_resource(LoadedKeyBindings(HashMap::from([
+        ("KeyX".to_string(), "previous_scene_action".to_string()),
+    ])));
+    // Project-level bindings do NOT include "KeyX".
+    app.world_mut()
+        .insert_resource(ProjectKeyBindings(HashMap::new()));
+
+    drive_replace_load(&mut app);
+
+    // Replace-mode load must rebuild LoadedKeyBindings from ProjectKeyBindings only.
+    // "KeyX" must not survive the scene transition.
+    let bindings = app.world().resource::<LoadedKeyBindings>();
+    assert!(
+        !bindings.0.contains_key("KeyX"),
+        "LoadedKeyBindings must not carry 'KeyX' forward from a previous scene — no bleed allowed"
+    );
+}
+
+// ── Spawn/despawn registry tests ──────────────────────────────────────────────
+
+#[test]
+fn test_spawn_id_collision_orphans_old_entity() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("box".to_string(), ModelCatalogEntry {
+                path: "shared/models/box.glb#Scene0".to_string(),
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("crate".to_string(), PrefabDef {
+                kind: "prop".to_string(),
+                model: "box".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    // First spawn with explicit ID "crate_1".
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()) },
+    );
+    app.update();
+
+    // Second spawn with the same ID — silently overwrites the registry entry.
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()) },
+    );
+    app.update();
+
+    // Both entities carry SpawnId("crate_1"); registry tracks only the latest one.
+    let id_count = app
+        .world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .filter(|s| s.0 == "crate_1")
+        .count();
+    assert_eq!(id_count, 2,
+        "Both spawns should produce a SpawnId('crate_1') — the first entity is now orphaned");
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert_eq!(registry.entities.len(), 1,
+        "Registry must track only one entity under 'crate_1' after the collision");
+
+    // Despawn by ID removes the registry entry but leaves the orphaned entity alive.
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::Despawn("crate_1".to_string()));
+    app.update(); // executor issues despawn command
+    app.update(); // command flushed
+
+    let remaining = app
+        .world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .filter(|s| s.0 == "crate_1")
+        .count();
+    assert_eq!(remaining, 1,
+        "After despawn the orphaned entity (not tracked by registry) must still exist");
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert!(
+        !registry.entities.contains_key("crate_1"),
+        "Registry must be empty for 'crate_1' after the despawn"
+    );
+}
+
+// ── FSM correctness tests ─────────────────────────────────────────────────────
+
+#[test]
+fn test_fsm_only_first_matching_transition_fires() {
+    // Two transitions on the same event from state "a": first → "b", second → "c".
+    // The FSM interpreter uses `.find()` so only the first match executes.
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState { name: "a".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "b".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "c".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+        ],
+        transitions: vec![
+            FsmTransition {
+                from: Some("a".to_string()),
+                on: "ui.button_pressed:go".to_string(),
+                to: "b".to_string(),
+            },
+            FsmTransition {
+                from: Some("a".to_string()),
+                on: "ui.button_pressed:go".to_string(),
+                to: "c".to_string(),
+            },
+        ],
+        global_on: vec![],
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut()
+        .resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("go".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b",
+        "Only the first matching transition should fire; second transition to 'c' must be ignored");
+}
+
+#[test]
+fn test_fsm_state_advance_visible_in_same_frame() {
+    // Two events arrive in the same frame.
+    // Event 1 "go_b" fires the a→b transition and advances logic_state to "b" immediately.
+    // Event 2 "go_c" fires the b→c transition because the interpreter already sees state "b".
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState { name: "a".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "b".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "c".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+        ],
+        transitions: vec![
+            FsmTransition {
+                from: Some("a".to_string()),
+                on: "ui.button_pressed:go_b".to_string(),
+                to: "b".to_string(),
+            },
+            FsmTransition {
+                from: Some("b".to_string()),
+                on: "ui.button_pressed:go_c".to_string(),
+                to: "c".to_string(),
+            },
+        ],
+        global_on: vec![],
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    // Both events in the same frame — first advances state so second can fire.
+    app.world_mut()
+        .resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("go_b".to_string()));
+    app.world_mut()
+        .resource_mut::<Messages<UiMessage>>()
+        .write(UiMessage::ButtonPressed("go_c".to_string()));
+    app.update();
+
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "c",
+        "State advance from first transition must be visible to second event in the same frame");
+}
+
+// ── Model fixes merge tests ───────────────────────────────────────────────────
+
+#[test]
+fn test_model_fixes_external_overrides_inline() {
+    // Mirrors the merge logic in project_loader.rs:
+    //   merged = config.model_fixes  (inline)
+    //   merged.extend(fixes_asset.model_fixes)  (external file)
+    // When the same key exists in both sources, the external file wins.
+    let inline_fix = TransformFix {
+        pivot_offset: (1.0, 0.0, 0.0),
+        rotation_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+    };
+    let external_fix = TransformFix {
+        pivot_offset: (99.0, 0.0, 0.0),
+        rotation_deg: (0.0, 0.0, 0.0),
+        scale: (2.0, 2.0, 2.0),
+    };
+
+    // Start with inline fixes.
+    let mut merged: HashMap<String, TransformFix> = HashMap::from([
+        ("models/hero.glb".to_string(), inline_fix.clone()),
+    ]);
+
+    // Extend with external file — same key present in both.
+    let external: HashMap<String, TransformFix> = HashMap::from([
+        ("models/hero.glb".to_string(), external_fix.clone()),
+        ("models/prop.glb".to_string(), inline_fix.clone()), // key only in external
+    ]);
+    merged.extend(external.into_iter());
+
+    assert_eq!(
+        merged["models/hero.glb"].pivot_offset.0, 99.0,
+        "External model fix must override the inline fix for shared keys"
+    );
+    assert_eq!(
+        merged["models/hero.glb"].scale.0, 2.0,
+        "External scale must override inline scale"
+    );
+    assert!(
+        merged.contains_key("models/prop.glb"),
+        "External-only key must be present in the merged output"
+    );
+    assert_eq!(
+        merged.len(), 2,
+        "Merged map should contain exactly the two unique keys"
+    );
+}
+
+#[test]
+fn test_model_fixes_base_path_fallback() {
+    // spawn_instance looks up the fix first by the full fragment path
+    // ("models/hero.glb#Scene0"), then by the base path ("models/hero.glb").
+    // When the fix is stored under the base path only, it must still apply.
+    let mut app = setup_test_app();
+    app.update();
+
+    let base_path = "shared/models/hero.glb".to_string();
+    let fragment_path = "shared/models/hero.glb#Scene0".to_string();
+    let fix = TransformFix {
+        pivot_offset: (5.0, 0.0, 0.0),
+        rotation_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+    };
+
+    // Store fix under the BASE path only — no fragment path entry.
+    {
+        let mut merged = app
+            .world_mut()
+            .resource_mut::<ironhold_core::runtime::MergedModelFixes>();
+        merged.0.insert(base_path.clone(), fix.clone());
+        assert!(!merged.0.contains_key(&fragment_path),
+            "Precondition: fragment path must not be in fixes");
+    }
+
+    // Spawn using the FRAGMENT path — base path fallback should apply the fix.
+    let (_, child) = app
+        .world_mut()
+        .run_system_once(move |
+            mut commands: Commands,
+            spawner: Res<ModelSpawner>,
+            asset_server: Res<AssetServer>,
+            merged_fixes: Res<ironhold_core::runtime::MergedModelFixes>,
+        | {
+            let spawned = spawner.spawn_instance(
+                &mut commands,
+                &asset_server,
+                &merged_fixes.0,
+                fragment_path.clone(),
+                Transform::IDENTITY,
+            );
+            (spawned.parent, spawned.child)
+        })
+        .unwrap();
+
+    app.update(); // flush spawn commands
+
+    let child_transform = app
+        .world()
+        .get::<Transform>(child)
+        .expect("Child entity must exist after spawn");
+
+    assert_eq!(
+        child_transform.translation,
+        Vec3::new(5.0, 0.0, 0.0),
+        "Base path fallback must apply the fix stored under 'hero.glb' when spawning 'hero.glb#Scene0'"
     );
 }
