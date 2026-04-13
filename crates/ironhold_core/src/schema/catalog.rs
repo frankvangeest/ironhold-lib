@@ -119,11 +119,67 @@ pub struct PrefabDef {
 /// Runtime-relevant prefab component data.
 /// Additional design-time fields (health, ai, etc.) are silently ignored.
 /// NOTE: deny_unknown_fields is intentionally absent — designer-only fields like
-/// `health`, `ai`, `movement` are valid here and silently dropped at runtime.
+/// `health`, `ai`, `dialogue` are valid here and silently dropped at runtime.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct PrefabComponents {
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub movement: MovementConfig,
+}
+
+/// Movement parameters that can be set on any primitive prefab with the "player" tag.
+/// All fields are optional; omitting a field keeps the runtime default.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MovementConfig {
+    /// Walking speed in m/s. Default: 3.0.
+    #[serde(default = "default_walk_speed")]
+    pub walk_speed: f32,
+    /// Running speed in m/s. Default: 6.0.
+    #[serde(default = "default_run_speed")]
+    pub run_speed: f32,
+    /// Jump height. Default: `RelativeToHeight` with `percent: 100` (player's own height).
+    #[serde(default)]
+    pub jump: Option<JumpConfig>,
+    /// Enable a second jump while airborne. Default: false.
+    #[serde(default)]
+    pub double_jump: bool,
+    /// Height for the second jump. If omitted, uses the same height as `jump`.
+    #[serde(default)]
+    pub double_jump_height: Option<JumpConfig>,
+}
+
+impl Default for MovementConfig {
+    fn default() -> Self {
+        Self {
+            walk_speed: default_walk_speed(),
+            run_speed: default_run_speed(),
+            jump: None,
+            double_jump: false,
+            double_jump_height: None,
+        }
+    }
+}
+
+fn default_walk_speed() -> f32 { 5.0 }
+fn default_run_speed() -> f32 { 10.0 }
+
+/// Jump height expressed either as an absolute world-space value or as a fraction
+/// of the entity's own height.
+///
+/// RON requires an explicit `Some(...)` wrapper because the field type is `Option<JumpConfig>`.
+/// Struct variant fields go directly inside the variant's parentheses (no extra nesting):
+/// ```ron
+/// jump: Some(Fixed(height: 2.5))
+/// jump: Some(RelativeToHeight(percent: 100.0))
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+pub enum JumpConfig {
+    /// Jump to exactly `height` metres above the current position.
+    Fixed { height: f32 },
+    /// Jump to `percent / 100 × entity_height` metres. `100` = one full entity height.
+    RelativeToHeight { percent: f32 },
 }
 
 /// Dimension and appearance overrides for `kind: "primitive"` prefabs.
@@ -132,7 +188,7 @@ pub struct PrefabComponents {
 /// - `size`       → Cuboid (x, y, z)
 /// - `radius`     → Sphere radius | Cylinder/Capsule/Cone radius | Torus outer radius | ConicalFrustum bottom radius
 /// - `radius_top` → ConicalFrustum top radius | Torus inner radius
-/// - `height`     → Cylinder height | Capsule half_length | Cone height | ConicalFrustum height
+/// - `height`     → total visual height for all shapes (Cylinder, Capsule3d, Cone, ConicalFrustum)
 /// - `color`      → base color as linear sRGB (r, g, b) in the 0.0–1.0 range
 /// - `roughness`  → perceptual roughness (0 = mirror, 1 = fully rough; default 0.5)
 /// - `metallic`   → metallic factor (0 = dielectric, 1 = full metal; default 0.0)

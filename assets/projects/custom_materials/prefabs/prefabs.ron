@@ -72,7 +72,7 @@
       components: (),
       primitive: Some((
         radius: Some(2.5),
-        height: Some(4.0),
+        height: Some(13.0),
       )),
     ),
 

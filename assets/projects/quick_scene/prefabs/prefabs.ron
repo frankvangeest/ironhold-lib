@@ -6,7 +6,7 @@
       model: "hero",
       components: (
         health: (max: 100, current: 100),
-        movement: (speed: 5.0, run_speed: 8.5),
+        movement: (walk_speed: 5.0, run_speed: 8.5),
         tags: ["player"],
       ),
       animation_policy: Some("prefabs/animation/player_policy.ron"),

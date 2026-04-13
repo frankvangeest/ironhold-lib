@@ -1,6 +1,6 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
 use ironhold_core::schema::scene_v2::GameSceneV2;
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ron::de::from_str;
 
@@ -515,4 +515,78 @@ fn test_logic_rules_asset_missing_schema_version_is_error() {
     "#;
     let result: Result<LogicRulesAsset, _> = from_str(ron_str);
     assert!(result.is_err(), "schema_version must be present");
+}
+
+// ── MovementConfig / JumpConfig deserialization ───────────────────────────────
+
+#[test]
+fn test_movement_config_all_defaults() {
+    let config: MovementConfig = from_str("()").unwrap();
+    assert_eq!(config.walk_speed, MovementConfig::default().walk_speed);
+    assert_eq!(config.run_speed, MovementConfig::default().run_speed);
+    assert!(config.jump.is_none());
+    assert!(!config.double_jump);
+}
+
+#[test]
+fn test_movement_config_speeds() {
+    let config: MovementConfig = from_str("(walk_speed: 5.5, run_speed: 10.0)").unwrap();
+    assert_eq!(config.walk_speed, 5.5);
+    assert_eq!(config.run_speed, 10.0);
+}
+
+#[test]
+fn test_jump_config_fixed() {
+    // RON 0.11 requires explicit Some(...) for Option<T> — no implicit Some for enums.
+    let config: MovementConfig = from_str("(jump: Some(Fixed(height: 2.5)))").unwrap();
+    assert!(matches!(config.jump, Some(JumpConfig::Fixed { height }) if (height - 2.5).abs() < 0.001));
+}
+
+#[test]
+fn test_jump_config_relative_to_height() {
+    let config: MovementConfig = from_str("(jump: Some(RelativeToHeight(percent: 120.0)))").unwrap();
+    assert!(matches!(config.jump, Some(JumpConfig::RelativeToHeight { percent }) if (percent - 120.0).abs() < 0.001));
+}
+
+#[test]
+fn test_movement_config_double_jump() {
+    let config: MovementConfig =
+        from_str("(double_jump: true, double_jump_height: Some(Fixed(height: 3.0)))").unwrap();
+    assert!(config.double_jump);
+    assert!(matches!(config.double_jump_height, Some(JumpConfig::Fixed { height }) if (height - 3.0).abs() < 0.001));
+}
+
+#[test]
+fn test_movement_config_unknown_field_is_error() {
+    let result: Result<MovementConfig, _> = from_str("(wlak_speed: 3.5)");
+    assert!(result.is_err(), "typos in MovementConfig should be rejected (deny_unknown_fields)");
+}
+
+#[test]
+fn test_prefab_catalog_with_player_movement_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    components: (
+                        tags: ["player"],
+                        movement: (
+                            walk_speed: 5.5,
+                            run_speed: 10.0,
+                            jump: Some(Fixed(height: 2.5)),
+                            double_jump: true,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabCatalog with movement should parse");
+    let player = &catalog.prefabs["player"];
+    assert_eq!(player.components.movement.walk_speed, 5.5);
+    assert!(player.components.movement.double_jump);
+    assert!(matches!(player.components.movement.jump, Some(JumpConfig::Fixed { .. })));
 }

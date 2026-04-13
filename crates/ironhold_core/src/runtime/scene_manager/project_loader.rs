@@ -132,8 +132,11 @@ pub fn check_project_loaded(
         if let Some(h) = &pending.asset_catalog {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(_) => {
-                    warn!("asset catalog failed to load — models/materials will be missing");
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    panic!("Asset catalog failed to load: {} — {}", path, e);
                 }
                 _ => { return; }
             }
@@ -141,8 +144,11 @@ pub fn check_project_loaded(
         if let Some(h) = &pending.prefab_catalog {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(_) => {
-                    warn!("prefab catalog failed to load — entities will not spawn");
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    panic!("Prefab catalog failed to load: {} — {}", path, e);
                 }
                 _ => { return; }
             }

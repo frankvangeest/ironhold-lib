@@ -13,6 +13,21 @@ pub struct CharacterController {
     pub rot_speed: f32,
     pub inputs: InputMap,
     pub is_running: bool,
+    /// Pre-computed initial Y velocity for a normal jump.
+    pub jump_velocity: f32,
+    /// Whether a second jump in mid-air is permitted.
+    pub double_jump_enabled: bool,
+    /// Pre-computed initial Y velocity for the second jump.
+    pub double_jump_velocity: f32,
+    /// Number of jumps already used in the current airborne period (reset on landing).
+    pub jumps_used: u8,
+    /// Maximum jumps per airborne period: 1 = normal, 2 = double jump.
+    pub max_jumps: u8,
+    /// Distance from the player's center to the bottom of the capsule plus a small
+    /// tolerance (~0.2 m). Used as the ground-detection ray length so that
+    /// `is_grounded` goes false within 2–3 frames of a jump instead of persisting
+    /// for ~8 frames with a hardcoded 1.5 m value.
+    pub ground_cast_length: f32,
 }
 
 pub fn player_movement_system(
@@ -48,13 +63,11 @@ pub fn player_movement_system(
         if let Some(ref context) = rapier_context {
             let ray_pos = global_transform.translation();
             let ray_dir = -Vec3::Y;
-            let max_toi = 1.5;
-            
             loco.is_grounded = context.cast_ray(
-                ray_pos, 
-                ray_dir, 
-                max_toi, 
-                true, 
+                ray_pos,
+                ray_dir,
+                controller.ground_cast_length,
+                true,
                 QueryFilter::new().exclude_rigid_body(entity)
             ).is_some();
         } else {
@@ -65,6 +78,7 @@ pub fn player_movement_system(
         // Detect landing
         if !was_grounded && loco.is_grounded {
             requests.queue.push_back("jump_exit".to_string());
+            controller.jumps_used = 0;
         }
 
         if let Some(entity_actions) = actions.get(&entity) {
@@ -117,10 +131,23 @@ pub fn player_movement_system(
             loco.running = false;
         }
 
-        // Simple Jump logic
-        if jumping && loco.is_grounded {
-            info!("Jump triggered! Set velocity and push jump_enter");
-            velocity.linvel.y = 5.0; 
+        // Jump logic — grounded first jump, or double jump in air.
+        // `jumps_used == 0` ensures we can't re-trigger while still in the
+        // grounded-ray window immediately after jumping.
+        let can_jump = if loco.is_grounded {
+            controller.jumps_used == 0
+        } else {
+            controller.double_jump_enabled && controller.jumps_used < controller.max_jumps
+        };
+        if jumping && can_jump {
+            let vel = if controller.jumps_used > 0 {
+                controller.double_jump_velocity
+            } else {
+                controller.jump_velocity
+            };
+            info!("Jump triggered (jumps_used={})! velocity_y={:.2}", controller.jumps_used, vel);
+            velocity.linvel.y = vel;
+            controller.jumps_used += 1;
             requests.queue.push_back("jump_enter".to_string());
         }
     }

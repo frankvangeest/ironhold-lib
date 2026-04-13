@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{
     Collider, RigidBody, LockedAxes, Damping, Velocity, ExternalImpulse,
+    Friction, CoefficientCombineRule,
 };
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
@@ -130,8 +131,8 @@ pub fn spawn_scene_v2(
 
         // Spawn entities from prefabs
         let mut player_config: Option<PlayerConfig> = None;
-        // A primitive prefab with tags: ["player"]: shape + params + spawn position.
-        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3)> = None;
+        // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
+        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents)> = None;
         let mut flycam_start: Option<Transform> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -167,7 +168,7 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((prefab.model.clone(), p, translation));
+                    primitive_player = Some((prefab.model.clone(), p, translation, prefab.components.clone()));
                     continue;
                 }
 
@@ -335,11 +336,26 @@ pub fn spawn_scene_v2(
         let tonemapping = scene.tonemapping.to_bevy();
 
         // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((shape, params, position)) = primitive_player {
+        if let Some((shape, params, position, components)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
-            let cap_half   = params.height.unwrap_or(0.5);
+            // `height` always means total visual height (cylindrical body + two hemispheres).
+            let player_height = params.height.unwrap_or(1.8);
+            let cap_half = (player_height / 2.0 - cap_radius).max(0.0);
+
+            let mv = &components.movement;
+            let walk_speed = mv.walk_speed;
+            let run_speed  = mv.run_speed;
+            let double_jump_enabled = mv.double_jump;
+            let max_jumps: u8 = if double_jump_enabled { 2 } else { 1 };
+            let jump_velocity = resolve_jump_velocity(mv.jump.as_ref(), player_height);
+            let double_jump_velocity = if double_jump_enabled {
+                resolve_jump_velocity(mv.double_jump_height.as_ref(), player_height)
+            } else {
+                jump_velocity
+            };
+
             let mesh = build_primitive_mesh(&shape, &params)
-                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build());
+                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build()); // cap_half already derived from total height
             let mesh_handle = mats.meshes.add(mesh);
             let mat_handle  = mats.standard.add(primitive_material(&params, project.primitive_default_color));
 
@@ -354,11 +370,21 @@ pub fn spawn_scene_v2(
                 ),
                 (
                     CharacterController {
-                        walk_speed: 3.0,
-                        run_speed:  6.0,
-                        rot_speed:  3.0,
+                        walk_speed,
+                        run_speed,
+                        rot_speed: 3.0,
                         inputs: default_input_map(),
                         is_running: false,
+                        jump_velocity,
+                        double_jump_enabled,
+                        double_jump_velocity,
+                        jumps_used: 0,
+                        max_jumps,
+                        // Ray from center to just past feet (cap_half + cap_radius) plus a
+                        // 0.2 m tolerance for uneven terrain.  Keeping this tight ensures
+                        // is_grounded goes false within ~2 frames of a jump so the landing
+                        // transition resets jumps_used correctly.
+                        ground_cast_length: cap_half + cap_radius + 0.2,
                     },
                     LocomotionState::default(),
                     AnimationRequests::default(),
@@ -371,6 +397,9 @@ pub fn spawn_scene_v2(
                     Damping { linear_damping: 0.5, angular_damping: 0.5 },
                     Velocity::default(),
                     ExternalImpulse::default(),
+                    // Zero friction prevents the capsule from catching on cube edges
+                    // and having its jump velocity killed mid-air.
+                    Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                 ),
             )).id();
 
@@ -726,6 +755,23 @@ fn apply_lighting_v2(
     }
 }
 
+// ─── Jump velocity helper ─────────────────────────────────────────────────────
+
+/// Standard gravitational acceleration (m/s²), matching Rapier's default.
+const GRAVITY: f32 = 9.81;
+
+/// Convert a `JumpConfig` (or `None` → jump own height) to an initial Y velocity.
+/// Uses kinematic relation: v = √(2 · g · h).
+fn resolve_jump_velocity(config: Option<&crate::schema::catalog::JumpConfig>, player_height: f32) -> f32 {
+    use crate::schema::catalog::JumpConfig;
+    let h = match config {
+        None => player_height,
+        Some(JumpConfig::Fixed { height }) => *height,
+        Some(JumpConfig::RelativeToHeight { percent }) => player_height * percent / 100.0,
+    };
+    (2.0 * GRAVITY * h).sqrt()
+}
+
 // ─── Primitive shape helpers ───────────────────────────────────────────────────
 
 fn build_primitive_mesh(shape: &str, p: &crate::schema::catalog::PrimitiveParams) -> Option<Mesh> {
@@ -739,10 +785,12 @@ fn build_primitive_mesh(shape: &str, p: &crate::schema::catalog::PrimitiveParams
             p.radius.unwrap_or(1.5),
             p.height.unwrap_or(4.0),
         ).mesh().build(),
-        "Capsule3d" => Capsule3d {
-            radius: p.radius.unwrap_or(1.5),
-            half_length: p.height.unwrap_or(4.0),
-        }.mesh().build(),
+        "Capsule3d" => {
+            let radius = p.radius.unwrap_or(1.5);
+            let total_height = p.height.unwrap_or(4.0);
+            let half_length = (total_height / 2.0 - radius).max(0.0);
+            Capsule3d { radius, half_length }.mesh().build()
+        }
         "Cone" => Cone {
             radius: p.radius.unwrap_or(2.0),
             height: p.height.unwrap_or(4.0),

@@ -142,6 +142,8 @@ pub(crate) fn spawn_player_entity(
     );
 
     let player_entity = spawned.parent;
+    // Default jump height: 1.8 m (typical capsule: half_length=0.5, radius=0.4).
+    let default_jump_vel = (2.0_f32 * 9.81 * 1.8).sqrt();
     commands.entity(player_entity).insert((
         Name::new("Player"),
         LevelEntity,
@@ -151,6 +153,13 @@ pub(crate) fn spawn_player_entity(
             rot_speed: 3.0,
             inputs: player_config.inputs.clone(),
             is_running: false,
+            jump_velocity: default_jump_vel,
+            double_jump_enabled: false,
+            double_jump_velocity: default_jump_vel,
+            jumps_used: 0,
+            max_jumps: 1,
+            // Typical capsule: half_length=0.5, radius=0.4 → center-to-feet = 0.9 + 0.2 tolerance.
+            ground_cast_length: 1.1,
         },
         LocomotionState::default(),
         AnimationRequests::default(),

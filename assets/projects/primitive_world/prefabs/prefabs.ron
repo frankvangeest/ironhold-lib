@@ -10,13 +10,34 @@
       model: "Capsule3d",
       components: (
         tags: ["player"],
+        movement: (
+          walk_speed: 5.5,
+          run_speed: 10.0,
+          //jump: Some(Fixed(height: 1.8)),
+          jump: Some(RelativeToHeight(percent: 100.0)),
+          double_jump: true,
+        ),
       ),
       primitive: Some((
         radius: Some(0.4),
-        height: Some(0.5),
+        height: Some(1.8),
         color: Some((0.22, 0.52, 0.88)),
         roughness: Some(0.3),
         metallic: Some(0.15),
+      )),
+    ),
+
+    // ── Block of player hight ─────────────────────────────────────────────────────────────────
+    // For testing jumping
+    "block_of_player_hight": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: Some((
+        size: Some((2.0, 1.6, 2.0)),
+        color: Some((0.65, 0.60, 0.50)),
+        roughness: Some(0.98),
+        physics: true,
       )),
     ),
 
