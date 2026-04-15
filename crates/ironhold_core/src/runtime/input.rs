@@ -30,6 +30,7 @@ pub fn global_input_system(
 
 pub fn input_translator_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mouse_input: Res<ButtonInput<MouseButton>>,
     query: Query<(Entity, &CharacterController)>,
     mut input_events: MessageWriter<InputActionMessage>,
     #[cfg(feature = "inspector")]
@@ -42,22 +43,28 @@ pub fn input_translator_system(
         }
     }
 
+    // Left mouse button held: A/D strafe instead of rotate.
+    let strafe_mode = mouse_input.pressed(MouseButton::Left);
+
     for (entity, controller) in &query {
         let mut move_vec = Vec2::ZERO;
-        
+
         if let Some(key) = controller.inputs.key("forward") {
             if keyboard_input.pressed(key) { move_vec.y += 1.0; }
         }
         if let Some(key) = controller.inputs.key("backward") {
             if keyboard_input.pressed(key) { move_vec.y -= 1.0; }
         }
-        if let Some(key) = controller.inputs.key("right") {
-            if keyboard_input.pressed(key) { move_vec.x += 1.0; }
+        // A/D strafe only when left mouse is held.
+        if strafe_mode {
+            if let Some(key) = controller.inputs.key("right") {
+                if keyboard_input.pressed(key) { move_vec.x += 1.0; }
+            }
+            if let Some(key) = controller.inputs.key("left") {
+                if keyboard_input.pressed(key) { move_vec.x -= 1.0; }
+            }
         }
-        if let Some(key) = controller.inputs.key("left") {
-            if keyboard_input.pressed(key) { move_vec.x -= 1.0; }
-        }
-        
+
         // info!("move_vec = {:?}", move_vec);
         if move_vec != Vec2::ZERO {
             input_events.write(InputActionMessage {
@@ -66,19 +73,22 @@ pub fn input_translator_system(
             });
         }
 
-        let mut turn = 0.0;
-        if let Some(key) = controller.inputs.key("left") {
-            if keyboard_input.pressed(key) { turn += 1.0; }
-        }
-        if let Some(key) = controller.inputs.key("right") {
-            if keyboard_input.pressed(key) { turn -= 1.0; }
-        }
+        // A/D rotate only when left mouse is NOT held.
+        if !strafe_mode {
+            let mut turn = 0.0;
+            if let Some(key) = controller.inputs.key("left") {
+                if keyboard_input.pressed(key) { turn += 1.0; }
+            }
+            if let Some(key) = controller.inputs.key("right") {
+                if keyboard_input.pressed(key) { turn -= 1.0; }
+            }
 
-        if turn != 0.0 {
-            input_events.write(InputActionMessage {
-                entity,
-                action: InputAction::Turn(turn),
-            });
+            if turn != 0.0 {
+                input_events.write(InputActionMessage {
+                    entity,
+                    action: InputAction::Turn(turn),
+                });
+            }
         }
 
         if let Some(key) = controller.inputs.key("jump") {
