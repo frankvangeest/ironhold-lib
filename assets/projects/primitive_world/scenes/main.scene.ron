@@ -20,14 +20,14 @@
   )),
 
   spawn_points: {
-    "player_start": (0.0, 1.1, 8.0),
+    "player_start": (0.0, 0.5, 8.0),
   },
 
   entities: [
 
     // ── Ground ────────────────────────────────────────────────────────────────
     // physics: true → static Rapier collider. Cuboid(80,1,80) centered at y=-0.5
-    // puts the top surface at y=0.  Player spawns at y=1.1 and settles to ~y=0.9.
+    // puts the top surface at y=0.  Player spawn position is feet height above ground.
     (
       id: "ground",
       prefab: "ground_plane",
@@ -39,11 +39,12 @@
     ),
 
     // ── Player ────────────────────────────────────────────────────────────────
+    // translation is the feet / ground-contact point. Physics settles to y=0.
     (
       id: "player_01",
       prefab: "player_capsule",
       transform: (
-        translation: (0.0, 1.1, 8.0),
+        translation: (0.0, 0.5, 8.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),

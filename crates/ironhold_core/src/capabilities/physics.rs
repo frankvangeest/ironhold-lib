@@ -10,11 +10,14 @@ impl Plugin for PhysicsPlugin {
         app.add_message::<CollisionEvent>();
         #[cfg(not(test))]
         app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default());
-        
-        // Configure gravity (default is -9.81 on Y, which is fine)
-        // app.insert_resource(RapierConfiguration {
-        //     gravity: Vec3::Y * -9.81,
-        //     ..default()
-        // });
+
+        // Physics collider overlay — starts disabled; toggle with F9 when the
+        // inspector feature is enabled. Gated by not(test) for the same reason
+        // as RapierPhysicsPlugin: the resource won't exist in headless tests.
+        #[cfg(all(not(test), feature = "inspector"))]
+        app.add_plugins(bevy_rapier3d::render::RapierDebugRenderPlugin {
+            enabled: false,
+            ..default()
+        });
     }
 }

@@ -38,6 +38,21 @@ fn setup_inspector_camera(mut commands: Commands) {
     ));
 }
 
+/// Toggles physics collider wireframes on F9.
+/// Uses `Option<ResMut>` so it silently no-ops in headless tests where the
+/// `RapierDebugRenderPlugin` (and its `DebugRenderContext` resource) is absent.
+#[cfg(feature = "inspector")]
+fn toggle_physics_debug_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    debug_ctx: Option<ResMut<bevy_rapier3d::render::DebugRenderContext>>,
+) {
+    let Some(mut ctx) = debug_ctx else { return };
+    if keys.just_pressed(KeyCode::F9) {
+        ctx.enabled = !ctx.enabled;
+        info!("PhysicsDebug = {}", ctx.enabled);
+    }
+}
+
 /// Toggles the inspector on key press (native: F12, web: Backquote, or Escape to close).
 #[cfg(feature = "inspector")]
 fn toggle_inspector_key(
@@ -111,11 +126,9 @@ fn world_inspector_system(
 pub fn add_inspector_plugins(app: &mut App) {
     app.init_resource::<InspectorEnabled>()
         .add_systems(Startup, setup_inspector_camera)
-        // Make sure this runs every frame to catch key presses
         .add_systems(Update, toggle_inspector_key)
-        // Use default plugin config to avoid struct-field breakage across versions
+        .add_systems(Update, toggle_physics_debug_key)
         .add_plugins(EguiPlugin::default())
-        // Draw inspector when enabled
         .add_systems(Update, world_inspector_system);
 }
 

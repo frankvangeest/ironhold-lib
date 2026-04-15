@@ -44,7 +44,7 @@
       id: "player_01",
       prefab: "player_warrior",
       transform: (
-        translation: (0.0, 0.0, 0.0),
+        translation: (0.0, 4.0, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),

@@ -389,15 +389,18 @@ pub fn spawn_scene_v2(
             };
 
             let mesh = build_primitive_mesh(&shape, &params)
-                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build()); // cap_half already derived from total height
+                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build());
             let mesh_handle = mats.meshes.add(mesh);
             let mat_handle  = mats.standard.add(primitive_material(&params, project.primitive_default_color));
+
+            // `body_y` is the offset from the entity origin (feet) to the capsule centre.
+            // Both the visual mesh and the physics collider are children at this offset,
+            // so the capsule bottom sits exactly at the entity origin (ground-contact point).
+            let body_y = cap_half + cap_radius;
 
             let player_entity = commands.spawn((
                 (
                     Name::new("Player"),
-                    Mesh3d(mesh_handle),
-                    MeshMaterial3d(mat_handle),
                     Transform::from_translation(position),
                     Visibility::default(),
                     LevelEntity,
@@ -414,11 +417,10 @@ pub fn spawn_scene_v2(
                         double_jump_velocity,
                         jumps_used: 0,
                         max_jumps,
-                        // Ray from center to just past feet (cap_half + cap_radius) plus a
-                        // 0.2 m tolerance for uneven terrain.  Keeping this tight ensures
-                        // is_grounded goes false within ~2 frames of a jump so the landing
-                        // transition resets jumps_used correctly.
-                        ground_cast_length: cap_half + cap_radius + 0.2,
+                        collider_radius: cap_radius,
+                        // Entity origin is the feet / ground-contact point. The sphere
+                        // cast starts at feet; 0.3 m covers rough and sloped terrain.
+                        ground_cast_length: 0.3,
                         jump_sound: components.sounds.get("jump").cloned(),
                     },
                     LocomotionState::default(),
@@ -426,19 +428,38 @@ pub fn spawn_scene_v2(
                     ActiveOverride::default(),
                 ),
                 (
+                    // Compound collider: capsule centre offset up by body_y so its bottom
+                    // coincides with entity origin (feet). Collider stays on the main entity
+                    // so CollisionEvent reports the entity that has CharacterController.
                     RigidBody::Dynamic,
-                    Collider::capsule_y(cap_half, cap_radius),
+                    Collider::compound(vec![(
+                        Vec3::new(0.0, body_y, 0.0),
+                        Quat::IDENTITY,
+                        Collider::capsule_y(cap_half, cap_radius),
+                    )]),
                     LockedAxes::ROTATION_LOCKED,
                     Damping { linear_damping: 0.5, angular_damping: 0.5 },
                     Velocity::default(),
                     ExternalImpulse::default(),
-                    // Zero friction prevents the capsule from catching on cube edges
-                    // and having its jump velocity killed mid-air.
+                    // Zero friction prevents the capsule from catching on cube edges.
                     Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                 ),
             )).id();
 
+            // Visual body child — mesh centred at body_y above the feet so it aligns
+            // with the compound collider above.
+            let mesh_child = commands.spawn((
+                Name::new("Player Body"),
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(mat_handle),
+                Transform::from_xyz(0.0, body_y, 0.0),
+                Visibility::default(),
+            )).id();
+            commands.entity(player_entity).add_child(mesh_child);
+
             // Spawn cosmetic children (cap, eyes, nose, etc.) defined in the prefab.
+            // Offsets in the prefab are relative to the entity origin (feet), matching
+            // the convention used by all other prefabs.
             for child_def in &player_children {
                 let child_rot = Quat::from_euler(
                     EulerRot::XYZ,

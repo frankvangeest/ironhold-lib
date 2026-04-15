@@ -6,8 +6,8 @@
     // Capsule3d with `tags: ["player"]` is detected by the runtime and spawned
     // with a CharacterController, Rapier physics, and an OrbitCamera.
     // Children add a cap and face features so the front is clearly visible.
-    // All child offsets are relative to the capsule centre (y=0).
-    // Capsule: radius=0.4, height=1.8 → extends from y=-0.9 to y=+0.9.
+    // All child offsets are relative to the entity origin = feet = ground contact (y=0).
+    // Capsule: radius=0.4, height=1.8 → extends from y=0 (feet) to y=1.8 (top).
     "player_capsule": (
       kind: "primitive",
       model: "Capsule3d",
@@ -32,35 +32,9 @@
         metallic: Some(0.15),
       )),
       children: [
-        // ── Cap brim (flat disc just above head top at y=0.9) ─────────────
-        (
-          shape: "Cylinder",
-          primitive: (
-            radius: Some(0.52),
-            height: Some(0.07),
-            color: Some((0.08, 0.12, 0.55)),
-            roughness: Some(0.70),
-          ),
-          // Brim centre: 0.9 + 0.035 = 0.935
-          offset: (0.0, 0.94, 0.0),
-          rotation_euler_deg: (0.0, 0.0, 0.0),
-          scale: (1.0, 1.0, 1.0),
-        ),
-        // ── Cap crown (cylinder sitting on the brim) ──────────────────────
-        (
-          shape: "Cylinder",
-          primitive: (
-            radius: Some(0.36),
-            height: Some(0.45),
-            color: Some((0.08, 0.12, 0.55)),
-            roughness: Some(0.70),
-          ),
-          // Brim top: 0.94+0.035=0.975; crown centre: 0.975+0.225=1.20
-          offset: (0.0, 1.20, 0.0),
-          rotation_euler_deg: (0.0, 0.0, 0.0),
-          scale: (1.0, 1.0, 1.0),
-        ),
+
         // ── Left eye (player faces −Z, so front is negative Z) ───────────
+        // Eye level at y=0.68 above capsule centre → y=0.68+0.9=1.58 above feet.
         (
           shape: "Sphere",
           primitive: (
@@ -69,7 +43,7 @@
             roughness: Some(0.20),
             metallic: Some(0.10),
           ),
-          offset: (-0.18, 0.68, -0.37),
+          offset: (-0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
@@ -82,11 +56,12 @@
             roughness: Some(0.20),
             metallic: Some(0.10),
           ),
-          offset: (0.18, 0.68, -0.37),
+          offset: (0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
         // ── Nose ─────────────────────────────────────────────────────────
+        // Nose at y=0.59 above capsule centre → y=0.59+0.9=1.49 above feet.
         (
           shape: "Sphere",
           primitive: (
@@ -94,7 +69,7 @@
             color: Some((0.95, 0.58, 0.42)),
             roughness: Some(0.40),
           ),
-          offset: (0.0, 0.59, -0.40),
+          offset: (0.0, 1.49, -0.40),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),

@@ -142,24 +142,28 @@ pub(crate) fn spawn_player_entity(
     );
 
     let player_entity = spawned.parent;
-    // Default jump height: 1.8 m (typical capsule: half_length=0.5, radius=0.4).
+    // Default jump height: 1.8 m (typical capsule: half_length=0.8, radius=0.4).
     let default_jump_vel = (2.0_f32 * 9.81 * 1.8).sqrt();
+    let cap_half: f32 = 0.8;
+    let cap_radius: f32 = 0.4;
     commands.entity(player_entity).insert((
         Name::new("Player"),
         LevelEntity,
         CharacterController {
-            walk_speed: 3.0,
-            run_speed: 6.0,
+            walk_speed: 5.0,
+            run_speed: 10.0,
             rot_speed: 3.0,
             inputs: player_config.inputs.clone(),
             is_running: false,
             jump_velocity: default_jump_vel,
-            double_jump_enabled: false,
+            double_jump_enabled: true,
             double_jump_velocity: default_jump_vel,
             jumps_used: 0,
-            max_jumps: 1,
-            // Typical capsule: half_length=0.5, radius=0.4 → center-to-feet = 0.9 + 0.2 tolerance.
-            ground_cast_length: 1.1,
+            max_jumps: 2,
+            // Entity origin is the feet / ground-contact point. The sphere cast starts
+            // at the feet and only needs a short distance to detect the ground below.
+            collider_radius: cap_radius,
+            ground_cast_length: 0.3,
             jump_sound: None,
         },
         LocomotionState::default(),
@@ -176,9 +180,15 @@ pub(crate) fn spawn_player_entity(
             transition_ms: 0,
             should_loop: true,
         },
-        // Physics
+        // Compound collider: the capsule centre is offset up by body_y so its bottom
+        // coincides with the entity origin (feet). Keeping the collider on the main
+        // entity means CollisionEvent always reports the entity with CharacterController.
         RigidBody::Dynamic,
-        Collider::capsule_y(0.8, 0.4),
+        Collider::compound(vec![(
+            Vec3::new(0.0, cap_half + cap_radius, 0.0),
+            Quat::IDENTITY,
+            Collider::capsule_y(cap_half, cap_radius),
+        )]),
         LockedAxes::ROTATION_LOCKED,
         Damping { linear_damping: 0.5, angular_damping: 0.5 },
         Velocity::default(),

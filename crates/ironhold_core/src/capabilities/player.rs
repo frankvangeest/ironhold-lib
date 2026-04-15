@@ -25,10 +25,13 @@ pub struct CharacterController {
     pub jumps_used: u8,
     /// Maximum jumps per airborne period: 1 = normal, 2 = double jump.
     pub max_jumps: u8,
-    /// Distance from the player's center to the bottom of the capsule plus a small
-    /// tolerance (~0.2 m). Used as the ground-detection ray length so that
-    /// `is_grounded` goes false within 2–3 frames of a jump instead of persisting
-    /// for ~8 frames with a hardcoded 1.5 m value.
+    /// Radius of the ground-detection sphere cast (= capsule radius).
+    /// The cast sweeps a ball of this size downward from the entity origin (feet),
+    /// matching the capsule's bottom hemisphere footprint for slope-robust detection.
+    pub collider_radius: f32,
+    /// How far below the feet the ground-detection sphere is swept each frame.
+    /// Large enough to handle rough/sloped terrain; small enough that `is_grounded`
+    /// goes false quickly after a jump.
     pub ground_cast_length: f32,
     /// Asset-catalog audio key to play when the player jumps (e.g. `"jump"`).
     /// `None` = silent. Resolved through `Action::PlaySound` → catalog lookup.
@@ -67,14 +70,26 @@ pub fn player_movement_system(
         let was_grounded = loco.is_grounded;
         
         if let Some(ref context) = rapier_context {
-            let ray_pos = global_transform.translation();
-            let ray_dir = -Vec3::Y;
-            loco.is_grounded = context.cast_ray(
-                ray_pos,
-                ray_dir,
-                controller.ground_cast_length,
-                true,
-                QueryFilter::new().exclude_rigid_body(entity)
+            // Sphere cast from the entity origin (feet) downward.
+            // Using a ball equal to the capsule radius rather than a point ray means
+            // the detection covers the full bottom-hemisphere footprint, so sloped and
+            // rough terrain is handled correctly — matching how Unity's CharacterController
+            // and Godot's CharacterBody3D sweep the capsule shape for floor detection.
+            let feet_pos = global_transform.translation();
+            // Build a sphere matching the capsule's bottom hemisphere and sweep it
+            // downward. Passing the raw parry shape is required; bevy_rapier3d's
+            // Collider wrapper does not implement the parry Shape trait directly.
+            let ground_ball = Collider::ball(controller.collider_radius);
+            loco.is_grounded = context.cast_shape(
+                feet_pos,
+                Quat::IDENTITY,
+                Vec3::NEG_Y,
+                ground_ball.raw.as_ref(),
+                ShapeCastOptions {
+                    max_time_of_impact: controller.ground_cast_length,
+                    ..default()
+                },
+                QueryFilter::new().exclude_rigid_body(entity),
             ).is_some();
         } else {
             // Default to grounded if no physics (for basic testing)

@@ -29,7 +29,10 @@
       "Bash(cargo doc:*)",
       "Bash(python -c \"import playwright; print\\('ok'\\)\")",
       "Bash(python -c \"from PIL import Image; print\\('pillow ok'\\)\")",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
