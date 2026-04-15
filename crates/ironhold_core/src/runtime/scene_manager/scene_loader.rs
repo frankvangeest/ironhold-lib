@@ -19,6 +19,7 @@ use super::{
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
+use crate::capabilities::npc::{NpcAgent, NpcState};
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
 };
@@ -213,6 +214,68 @@ pub fn spawn_scene_v2(
                             ));
                         }
                     }
+
+                    // Register composite entities in the spawn registry so that
+                    // Action::Despawn can locate them by id — same as single-mesh entities.
+                    commands.entity(parent).insert(SpawnId(entity_def.id.clone()));
+                    spawn_registry.entities.insert(entity_def.id.clone(), parent);
+
+                    // ── NPC agent ────────────────────────────────────────────────────────
+                    // Composite prefabs with an `npc` config get a dynamic physics body
+                    // and an NpcAgent component so the behaviour system can drive them.
+                    if let Some(npc_def) = &prefab.components.npc {
+                        let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
+                        let cap_radius = p.radius.unwrap_or(0.4);
+                        let npc_height = p.height.unwrap_or(1.8);
+                        let cap_half = (npc_height / 2.0 - cap_radius).max(0.0);
+                        let body_y = cap_half + cap_radius;
+
+                        let waypoints: Vec<Vec3> = npc_def.patrol_waypoints.iter()
+                            .map(|(x, y, z)| translation + Vec3::new(*x, *y, *z))
+                            .collect();
+
+                        let fov_cos = npc_def.fov_degrees
+                            .map(|deg| (deg.to_radians() / 2.0).cos())
+                            .unwrap_or(-1.0);
+
+                        let initial_state = if waypoints.is_empty() {
+                            NpcState::Idle
+                        } else {
+                            NpcState::Patrol
+                        };
+
+                        commands.entity(parent).insert((
+                            NpcAgent {
+                                npc_id: entity_def.id.clone(),
+                                faction: npc_def.faction.clone(),
+                                on_player_near: npc_def.on_player_near.clone(),
+                                detection_radius: npc_def.detection_radius,
+                                chase_radius: npc_def.chase_radius,
+                                fov_cos,
+                                requires_los: npc_def.requires_los,
+                                approach_distance: npc_def.approach_distance,
+                                patrol_speed: npc_def.patrol_speed,
+                                chase_speed: npc_def.chase_speed,
+                                waypoints,
+                                current_waypoint: 0,
+                                state: initial_state,
+                                target: None,
+                                state_timer: 0.0,
+                                origin: translation,
+                            },
+                            RigidBody::Dynamic,
+                            Collider::compound(vec![(
+                                Vec3::new(0.0, body_y, 0.0),
+                                Quat::IDENTITY,
+                                Collider::capsule_y(cap_half, cap_radius),
+                            )]),
+                            LockedAxes::ROTATION_LOCKED,
+                            Damping { linear_damping: 0.5, angular_damping: 0.5 },
+                            Velocity::default(),
+                            Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
+                        ));
+                    }
+
                     continue;
                 }
 
@@ -308,6 +371,61 @@ pub fn spawn_scene_v2(
                                 bob: motion_def.bob,
                                 bob_origin_y: Some(translation.y),
                             });
+                        }
+
+                        // ── NPC agent (single-mesh variant) ──────────────────────────────────
+                        // Applies to single-mesh primitives that carry an `npc` config.
+                        // (Composite NPC prefabs — those with `children` — are handled above.)
+                        if let Some(npc_def) = &prefab.components.npc {
+                            let cap_radius = p.radius.unwrap_or(0.4);
+                            let npc_height = p.height.unwrap_or(1.8);
+                            let cap_half = (npc_height / 2.0 - cap_radius).max(0.0);
+                            let body_y = cap_half + cap_radius;
+
+                            let waypoints: Vec<Vec3> = npc_def.patrol_waypoints.iter()
+                                .map(|(x, y, z)| translation + Vec3::new(*x, *y, *z))
+                                .collect();
+
+                            let fov_cos = npc_def.fov_degrees
+                                .map(|deg| (deg.to_radians() / 2.0).cos())
+                                .unwrap_or(-1.0);
+
+                            let initial_state = if waypoints.is_empty() {
+                                NpcState::Idle
+                            } else {
+                                NpcState::Patrol
+                            };
+
+                            commands.entity(spawned).insert((
+                                NpcAgent {
+                                    npc_id: entity_def.id.clone(),
+                                    faction: npc_def.faction.clone(),
+                                    on_player_near: npc_def.on_player_near.clone(),
+                                    detection_radius: npc_def.detection_radius,
+                                    chase_radius: npc_def.chase_radius,
+                                    fov_cos,
+                                    requires_los: npc_def.requires_los,
+                                    approach_distance: npc_def.approach_distance,
+                                    patrol_speed: npc_def.patrol_speed,
+                                    chase_speed: npc_def.chase_speed,
+                                    waypoints,
+                                    current_waypoint: 0,
+                                    state: initial_state,
+                                    target: None,
+                                    state_timer: 0.0,
+                                    origin: translation,
+                                },
+                                RigidBody::Dynamic,
+                                Collider::compound(vec![(
+                                    Vec3::new(0.0, body_y, 0.0),
+                                    Quat::IDENTITY,
+                                    Collider::capsule_y(cap_half, cap_radius),
+                                )]),
+                                LockedAxes::ROTATION_LOCKED,
+                                Damping { linear_damping: 0.5, angular_damping: 0.5 },
+                                Velocity::default(),
+                                Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
+                            ));
                         }
                     }
                     None => load_errors.push(format!(

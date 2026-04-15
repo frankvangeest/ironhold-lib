@@ -76,6 +76,255 @@
       ],
     ),
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // NPC capsule archetypes
+    //
+    // All NPC prefabs follow the same structure as the player capsule:
+    //   • top-level `primitive` defines body shape (capsule radius + height) —
+    //     these params drive the physics collider in the spawner.
+    //   • `children` adds visual face features (eyes, nose) so the front is
+    //     clearly visible even without a 3-D model.
+    //   • `components.npc` configures the AI behaviour loaded at spawn time.
+    //
+    // Events emitted into the rules pipeline:
+    //   "npc.player_spotted:{id}"  — player entered detection zone
+    //   "npc.player_reached:{id}"  — NPC closed to approach_distance
+    //   "npc.player_lost:{id}"     — NPC gave up chasing
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // ── Friendly Villager ───────────────────────────────────────────────────
+    // Patrols two waypoints near the village area. Approaches the player
+    // with a 120° forward-cone detection (can be sneaked from behind).
+    // Greets the player with a sound when approached.
+    "npc_villager": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["npc"],
+        sounds: {
+          "spotted": "npc_greet",
+          "reached": "npc_greet",
+        },
+        npc: Some((
+          faction: Friendly,
+          on_player_near: Interact,
+          detection_radius: 6.0,
+          chase_radius: 10.0,
+          fov_degrees: Some(120.0),
+          requires_los: false,
+          approach_distance: 2.5,
+          patrol_speed: 1.8,
+          chase_speed: 2.8,
+          patrol_waypoints: [
+            (-5.0, 0.0, 0.0),
+            (5.0,  0.0, 0.0),
+          ],
+        )),
+      ),
+      primitive: Some((
+        radius: Some(0.4),
+        height: Some(1.8),
+        color: Some((0.85, 0.65, 0.40)),
+        roughness: Some(0.65),
+        metallic: Some(0.0),
+      )),
+      children: [
+        // Body — capsule centred at body_y=0.9 so its bottom aligns with the
+        // entity origin (feet at y=0).  All face-feature offsets below are also
+        // measured from the feet origin, consistent with the player prefab.
+        (
+          shape: "Capsule3d",
+          primitive: (
+            radius: Some(0.4),
+            height: Some(1.8),
+            color: Some((0.85, 0.65, 0.40)),
+            roughness: Some(0.65),
+            metallic: Some(0.0),
+          ),
+          offset: (0.0, 0.9, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Left eye
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.07), color: Some((0.08, 0.06, 0.05)), roughness: Some(0.2) ),
+          offset: (-0.18, 1.58, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Right eye
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.07), color: Some((0.08, 0.06, 0.05)), roughness: Some(0.2) ),
+          offset: (0.18, 1.58, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Nose
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.06), color: Some((0.95, 0.60, 0.42)), roughness: Some(0.5) ),
+          offset: (0.0, 1.50, -0.40),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Hostile Goblin Guard ─────────────────────────────────────────────────
+    // Patrols a small area. Chases aggressively; requires LOS (walls block
+    // detection). 200° wide arc — nearly all-around but still has a small
+    // rear blind spot. Emits a growl when it spots or reaches the player.
+    "npc_goblin_guard": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["npc"],
+        sounds: {
+          "spotted": "goblin_growl",
+          "reached": "goblin_growl",
+        },
+        npc: Some((
+          faction: Hostile,
+          on_player_near: Chase,
+          detection_radius: 8.0,
+          chase_radius: 20.0,
+          fov_degrees: Some(200.0),
+          requires_los: true,
+          approach_distance: 1.5,
+          patrol_speed: 2.2,
+          chase_speed: 5.5,
+          patrol_waypoints: [
+            (-4.0, 0.0,  0.0),
+            ( 4.0, 0.0,  0.0),
+            ( 0.0, 0.0, -4.0),
+          ],
+        )),
+      ),
+      primitive: Some((
+        radius: Some(0.38),
+        height: Some(1.6),
+        color: Some((0.55, 0.22, 0.18)),
+        roughness: Some(0.7),
+        metallic: Some(0.05),
+      )),
+      children: [
+        // Body — centred at body_y=0.8 (radius=0.38, cap_half=0.42).
+        (
+          shape: "Capsule3d",
+          primitive: (
+            radius: Some(0.38),
+            height: Some(1.6),
+            color: Some((0.55, 0.22, 0.18)),
+            roughness: Some(0.7),
+            metallic: Some(0.05),
+          ),
+          offset: (0.0, 0.8, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Left eye — slanted inward for an angry look
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.07), color: Some((0.80, 0.10, 0.05)), roughness: Some(0.1), metallic: Some(0.1) ),
+          offset: (-0.16, 1.42, -0.33),
+          rotation_euler_deg: (0.0, 0.0, 15.0),
+          scale: (1.0, 1.4, 1.0),
+        ),
+        // Right eye — mirrored
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.07), color: Some((0.80, 0.10, 0.05)), roughness: Some(0.1), metallic: Some(0.1) ),
+          offset: (0.16, 1.42, -0.33),
+          rotation_euler_deg: (0.0, 0.0, -15.0),
+          scale: (1.0, 1.4, 1.0),
+        ),
+        // Snout
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.08), color: Some((0.42, 0.18, 0.14)), roughness: Some(0.8) ),
+          offset: (0.0, 1.32, -0.38),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 0.7, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Neutral Merchant ─────────────────────────────────────────────────────
+    // Stands still; reacts only when the player walks directly in front
+    // (narrow 60° FOV). Does not move — just acknowledges the player.
+    // Emits a greeting sound when spotted.
+    "npc_merchant": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["npc"],
+        sounds: {
+          "spotted": "npc_greet",
+        },
+        npc: Some((
+          faction: Neutral,
+          on_player_near: Alert,
+          detection_radius: 4.0,
+          chase_radius: 6.0,
+          fov_degrees: Some(60.0),
+          requires_los: false,
+          approach_distance: 2.0,
+          patrol_speed: 1.0,
+          chase_speed: 1.0,
+          patrol_waypoints: [],
+        )),
+      ),
+      primitive: Some((
+        radius: Some(0.42),
+        height: Some(1.85),
+        color: Some((0.40, 0.25, 0.60)),
+        roughness: Some(0.4),
+        metallic: Some(0.1),
+      )),
+      children: [
+        // Body — centred at body_y=0.925 (radius=0.42, cap_half=0.505).
+        (
+          shape: "Capsule3d",
+          primitive: (
+            radius: Some(0.42),
+            height: Some(1.85),
+            color: Some((0.40, 0.25, 0.60)),
+            roughness: Some(0.4),
+            metallic: Some(0.1),
+          ),
+          offset: (0.0, 0.925, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Left eye — wide & round, friendly look
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.08), color: Some((0.05, 0.05, 0.08)), roughness: Some(0.15) ),
+          offset: (-0.19, 1.62, -0.38),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Right eye
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.08), color: Some((0.05, 0.05, 0.08)), roughness: Some(0.15) ),
+          offset: (0.19, 1.62, -0.38),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Nose
+        (
+          shape: "Sphere",
+          primitive: ( radius: Some(0.06), color: Some((0.85, 0.55, 0.38)), roughness: Some(0.45) ),
+          offset: (0.0, 1.52, -0.42),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
     // ── Block of player hight ─────────────────────────────────────────────────────────────────
     // For testing jumping
     "block_of_player_hight": (

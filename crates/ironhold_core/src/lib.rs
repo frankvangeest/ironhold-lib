@@ -125,6 +125,7 @@ impl Plugin for GamePlugin {
                 input_translator_system,
                 player_movement_system,
                 collectible_system,
+                npc_behavior_system,
             ).chain())
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (

@@ -9,6 +9,7 @@ pub mod custom_material;
 pub mod physics;
 pub mod collectible;
 pub mod motion;
+pub mod npc;
 
 pub use player::*;
 pub use camera::*;
@@ -21,4 +22,5 @@ pub use custom_material::*;
 pub use physics::*;
 pub use collectible::*;
 pub use motion::*;
+pub use npc::*;
 

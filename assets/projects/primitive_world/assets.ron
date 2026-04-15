@@ -7,7 +7,9 @@
   audio: {
     "bg_music":     "shared/audio/bg-music-balance.mp3",
     "click":        "shared/audio/menu-button-click.wav",
-    "collect_coin": "shared/audio/collect-coin.wav",
+    "collect_coin": "shared/audio/game-pickup-01.wav",
     "jump":         "shared/audio/jump.wav",
+    "npc_greet":    "shared/audio/child-hello.wav",
+    "goblin_growl": "shared/audio/growl.wav",
   },
 )

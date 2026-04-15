@@ -17,7 +17,11 @@ assets:
   - https://opengameart.org/sounds
   - bg-music-balance.mp3
     - https://opengameart.org/content/balance-0
-  - collect-coin.wav
-    - https://freesound.org/people/bradwesson/sounds/135936/
+  - game-pickup-01.wav & game-pickup-02.wav
+    - https://freesound.org/people/IENBA/sounds/698768/
   - jump.wav
     - https://freesound.org/people/cartchaos/sounds/678839/
+  - growl.wav
+    - https://freesound.org/people/jvmyka@gmail.com/sounds/580771/
+  - child-hello.wav
+    - https://freesound.org/people/rabban625/sounds/436471/

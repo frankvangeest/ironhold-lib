@@ -361,6 +361,55 @@
       ),
     ),
 
+    // ── NPCs ─────────────────────────────────────────────────────────────────
+    // Villager: patrols east-west beside the cobblestone path (right side).
+    // Player spawns at (0, 0.5, 8) heading north — villager is visible on
+    // the right after a few steps.  Waypoints are spawn-relative offsets,
+    // stored as world-space in NpcAgent at runtime.
+    (
+      id: "villager_01",
+      prefab: "npc_villager",
+      transform: (
+        translation: (7.0, 0.9, 0.0),
+        rotation_euler_deg: (0.0, 180.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Goblin guard: patrols a triangle near the far end of the path.
+    // Has LOS blocking enabled — hiding behind the well or barrels breaks
+    // detection.  Chase speed is noticeably faster than walk speed.
+    (
+      id: "goblin_01",
+      prefab: "npc_goblin_guard",
+      transform: (
+        translation: (-9.0, 0.9, -10.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "goblin_02",
+      prefab: "npc_goblin_guard",
+      transform: (
+        translation: (9.0, 0.9, -18.0),
+        rotation_euler_deg: (0.0, 270.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Merchant: stands near the bridge at the south end of the path.
+    // Only reacts if the player walks directly in front (60° narrow FOV).
+    (
+      id: "merchant_01",
+      prefab: "npc_merchant",
+      transform: (
+        translation: (3.5, 0.9, -15.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
   ],
 
   ui: [

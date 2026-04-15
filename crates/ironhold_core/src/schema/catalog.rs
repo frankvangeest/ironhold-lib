@@ -135,6 +135,65 @@ pub struct MotionDef {
     pub bob: Option<(f32, f32)>,
 }
 
+/// NPC faction — determines intent and which events fire.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum NpcFaction {
+    Friendly,
+    Hostile,
+    Neutral,
+}
+
+/// What the NPC does once it has detected the player.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum NpcOnPlayerNear {
+    /// Move toward the player; emits `npc.player_reached:{id}` when in range.
+    Chase,
+    /// Approach the player with friendly intent; emits `npc.player_reached:{id}`.
+    Interact,
+    /// Run away from the player.
+    Flee,
+    /// Stop and face the player; does not move.
+    Alert,
+}
+
+/// Data-driven NPC behaviour configuration.
+/// Place this in `PrefabComponents.npc` in `prefabs.ron` to give an entity NPC AI.
+#[derive(Deserialize, Debug, Clone)]
+pub struct NpcDef {
+    pub faction: NpcFaction,
+    /// What the NPC does upon detecting the player.
+    pub on_player_near: NpcOnPlayerNear,
+    /// Metres — NPC enters Alerted state when player is inside this radius.
+    pub detection_radius: f32,
+    /// Metres — NPC gives up chasing and returns to patrol beyond this radius.
+    pub chase_radius: f32,
+    /// Forward FOV in degrees. `None` = 360° awareness (no blind spot).
+    /// Example: `Some(120.0)` — player must be within a 120° forward cone.
+    #[serde(default)]
+    pub fov_degrees: Option<f32>,
+    /// When `true`, a Rapier ray cast from the NPC's eye to the player must
+    /// succeed before detection triggers (walls/obstacles block sight).
+    #[serde(default)]
+    pub requires_los: bool,
+    /// Stop approaching at this distance — interact / attack range.
+    #[serde(default = "default_approach_distance")]
+    pub approach_distance: f32,
+    /// m/s while walking the patrol route.
+    #[serde(default = "default_patrol_speed")]
+    pub patrol_speed: f32,
+    /// m/s while chasing or fleeing.
+    #[serde(default = "default_chase_speed")]
+    pub chase_speed: f32,
+    /// Patrol waypoints as offsets relative to the NPC's spawn position.
+    /// Empty → NPC idles in place.
+    #[serde(default)]
+    pub patrol_waypoints: Vec<(f32, f32, f32)>,
+}
+
+fn default_approach_distance() -> f32 { 2.0 }
+fn default_patrol_speed() -> f32 { 2.0 }
+fn default_chase_speed() -> f32 { 4.5 }
+
 /// Runtime-relevant prefab component data.
 /// Additional design-time fields (health, ai, etc.) are silently ignored.
 /// NOTE: deny_unknown_fields is intentionally absent — designer-only fields like
@@ -150,6 +209,10 @@ pub struct PrefabComponents {
     /// Example: `{ "collect": "collect_coin", "jump": "jump" }`
     #[serde(default)]
     pub sounds: HashMap<String, String>,
+    /// NPC behaviour definition. When set, the runtime attaches an `NpcAgent`
+    /// component and a dynamic physics body to the spawned entity.
+    #[serde(default)]
+    pub npc: Option<NpcDef>,
 }
 
 /// Movement parameters that can be set on any primitive prefab with the "player" tag.
