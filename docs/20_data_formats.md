@@ -392,6 +392,8 @@ When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates 
 | `color` | `Option<(f32,f32,f32)>` | project default | Linear sRGB. Priority: this field → `primitive_default_color` in project → grey `(0.7,0.7,0.7)` |
 | `roughness` | `Option<f32>` | `0.5` | PBR perceptual roughness (0 = mirror, 1 = fully rough) |
 | `metallic` | `Option<f32>` | `0.0` | PBR metallic factor (0 = dielectric, 1 = full metal) |
+| `physics` | `bool` | `false` | Spawn a static `RigidBody::Fixed` Rapier collider (supported: Cuboid, Sphere, Cylinder) |
+| `sensor` | `bool` | `false` | Spawn a ghost `Sensor` collider that fires `GameEvent::Trigger` on overlap (takes precedence over `physics`; supported: same shapes) |
 
 **Example:**
 ```ron
@@ -508,13 +510,16 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 
 | Event name | Source |
 |-----------|--------|
-| `ui.button_pressed:<trigger>` | UI button; `<trigger>` is the button's `action` field with the `"ui."` prefix stripped |
+| `ui.button_pressed:<trigger>` | `UiEvent` — UI button or key binding; `<trigger>` is the button's `action` field with the `"ui."` prefix stripped |
+| `<name>` (as-is) | `GameEvent::Trigger(name)` — gameplay capability (e.g. `"entity.collected:coin_01"`); the string is the full rule key, no prefix added |
 | `scene.requested:<stem>` | Scene load initiated |
 | `scene.loaded:<stem>` | RON asset deserialized; entities not yet spawned |
 | `scene.ready:<stem>` | All entities spawned |
 | `scene.unloading:<stem>` | Before a full scene replace |
 
 `<stem>` is the filename without `.scene.ron` (e.g. `"main"` for `scenes/main.scene.ron`).
+
+`GameEvent` naming convention: `"<category>.<verb>:<id>"` — e.g. `"entity.collected:coin_01"`, `"zone.entered:checkpoint_1"`.
 
 **Available actions:**
 
@@ -526,6 +531,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `PlaySound("key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format |
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
+| `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
+| `AddScore(i32)` | Add (or subtract if negative) to the score counter |
 
 ---
 

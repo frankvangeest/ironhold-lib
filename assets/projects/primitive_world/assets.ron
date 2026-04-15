@@ -5,7 +5,9 @@
   textures: {},
 
   audio: {
-    "bg_music": "shared/audio/bg-music-balance.mp3",
-    "click":    "shared/audio/menu-button-click.wav",
+    "bg_music":     "shared/audio/bg-music-balance.mp3",
+    "click":        "shared/audio/menu-button-click.wav",
+    "collect_coin": "shared/audio/collect-coin.wav",
+    "jump":         "shared/audio/jump.wav",
   },
 )

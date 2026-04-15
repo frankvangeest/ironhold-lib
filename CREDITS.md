@@ -15,5 +15,9 @@ assets:
 - sounds:
   - https://freesound.org/
   - https://opengameart.org/sounds
-    - bg-music-balance.mp3
-      - https://opengameart.org/content/balance-0
+  - bg-music-balance.mp3
+    - https://opengameart.org/content/balance-0
+  - collect-coin.wav
+    - https://freesound.org/people/bradwesson/sounds/135936/
+  - jump.wav
+    - https://freesound.org/people/cartchaos/sounds/678839/

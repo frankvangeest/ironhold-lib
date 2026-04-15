@@ -59,6 +59,36 @@
       ),
     ),
 
+    // ── Collectible coins (hover 1.2 m above the path) ───────────────────────
+    // rotation_euler_deg: (90,0,0) stands the cylinder on its edge (flat face
+    // pointing ±Z).  motion.rotate spins around world Y → classic coin spin.
+    // Each entity id matches what Action::Despawn uses to remove it on collection.
+    (
+      id: "coin_01",
+      prefab: "coin_collectible",
+      transform: ( translation: (0.0, 1.2, 6.0), rotation_euler_deg: (90.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "coin_02",
+      prefab: "coin_collectible",
+      transform: ( translation: (0.0, 1.2, 2.0), rotation_euler_deg: (90.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "coin_03",
+      prefab: "coin_collectible",
+      transform: ( translation: (0.0, 1.2, -2.0), rotation_euler_deg: (90.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "coin_04",
+      prefab: "coin_collectible",
+      transform: ( translation: (0.0, 1.2, -6.0), rotation_euler_deg: (90.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "coin_05",
+      prefab: "coin_collectible",
+      transform: ( translation: (3.0, 1.2, -10.0), rotation_euler_deg: (90.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
     // ── Cobblestone path (north toward the village) ───────────────────────────
     (
       id: "path_01",

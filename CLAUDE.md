@@ -61,7 +61,7 @@ Three-crate workspace:
 
 The engine uses a **Message → Interpreter → Action → Executor** pipeline:
 
-1. Capabilities emit `UiMessage`, `InputActionMessage`, or `SceneEvent` events.
+1. Capabilities emit `UiEvent`, `GameEvent`, `InputActionMessage`, or `SceneEvent` events.
 2. `message_interpreter_system` reads those events plus the data-defined `LogicRules` (from `logic/rules.ron`) to produce `Action` values placed on the `ActionQueue` resource.
 3. `action_executor_system` dispatches each `Action` (e.g., `LoadScene`, `Spawn`, `PlayAnimation`) to the appropriate capability systems.
 
@@ -83,6 +83,9 @@ assets/projects/{name}/
 Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`. Test data lives in `assets/projects/integration_tests/`.
 
 ## Critical Rules
+
+### After changes
+When ever you make changes in the code, give the summery of the changes in a nice git commit message format.
 
 ### Web Performance
 When making new features, performance and compatibility with WASM web builds must be considered. Avoid using features not supported in web builds. Test web builds frequently (`python test_web.py`).

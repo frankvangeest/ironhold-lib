@@ -39,4 +39,7 @@ pub enum Action {
     /// Rules with a matching `when` field become active; rules in other states are suppressed.
     /// Use an empty string `""` to return to the stateless (always-fire) default.
     EnterState(String),
+    /// Add (or subtract if negative) to the global score counter.
+    /// Example: `AddScore(10)` awards 10 points; `AddScore(-5)` deducts 5.
+    AddScore(i32),
 }

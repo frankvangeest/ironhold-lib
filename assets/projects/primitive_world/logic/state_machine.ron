@@ -20,6 +20,15 @@
             exit_actions:  [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:toggle_map", do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
+
+                // Coin collectibles — each fires Despawn + sound + score via the rules pipeline.
+                // GameEvent::Trigger names pass through the interpreter unchanged,
+                // so the namespaced string here matches exactly what the capability emits.
+                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound("collect_coin"), AddScore(10) ] ),
+                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound("collect_coin"), AddScore(10) ] ),
+                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound("collect_coin"), AddScore(10) ] ),
+                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound("collect_coin"), AddScore(10) ] ),
+                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound("collect_coin"), AddScore(10) ] ),
             ],
         ),
         (

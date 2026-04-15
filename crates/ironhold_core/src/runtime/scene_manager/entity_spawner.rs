@@ -160,6 +160,7 @@ pub(crate) fn spawn_player_entity(
             max_jumps: 1,
             // Typical capsule: half_length=0.5, radius=0.4 → center-to-feet = 0.9 + 0.2 tolerance.
             ground_cast_length: 1.1,
+            jump_sound: None,
         },
         LocomotionState::default(),
         AnimationRequests::default(),

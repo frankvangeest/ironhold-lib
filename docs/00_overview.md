@@ -59,10 +59,10 @@ Ironhold-lib is a cross-platform (native + web/WASM) game runtime built on **Bev
 - An action executor applies actions in a controlled, testable way. ✅
 
 **Implementation snapshot (today):**
-- ✅ Standardized message types: `UiMessage`, `InputActionMessage`, `SceneEvent`.
-- ✅ Project-level logic rules map messages to actions in `ProjectConfig`.
-- ✅ An action executor handles `LoadScene`, `Quit`, `Log`, `Spawn`, and `PlayAnimation`.
-- ✅ UI buttons emit `UiMessage::ButtonPressed(String)` which triggers rules.
+- ✅ Standardized event/message types: `UiEvent`, `GameEvent`, `SceneEvent`, `InputActionMessage`.
+- ✅ Project-level logic rules map events to actions via `logic/rules.ron` or `logic/state_machine.ron`.
+- ✅ An action executor handles `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `AddScore`, and more.
+- ✅ UI buttons emit `UiEvent::ButtonPressed(String)`; gameplay sensors emit `GameEvent::Trigger(String)` — both flow into the rules pipeline.
 
 ## Repository layout
 

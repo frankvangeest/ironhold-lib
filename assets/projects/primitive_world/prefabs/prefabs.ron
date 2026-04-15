@@ -5,11 +5,17 @@
     // ── Player ─────────────────────────────────────────────────────────────────
     // Capsule3d with `tags: ["player"]` is detected by the runtime and spawned
     // with a CharacterController, Rapier physics, and an OrbitCamera.
+    // Children add a cap and face features so the front is clearly visible.
+    // All child offsets are relative to the capsule centre (y=0).
+    // Capsule: radius=0.4, height=1.8 → extends from y=-0.9 to y=+0.9.
     "player_capsule": (
       kind: "primitive",
       model: "Capsule3d",
       components: (
         tags: ["player"],
+        sounds: {
+          "jump": "jump",
+        },
         movement: (
           walk_speed: 5.5,
           run_speed: 10.0,
@@ -25,6 +31,74 @@
         roughness: Some(0.3),
         metallic: Some(0.15),
       )),
+      children: [
+        // ── Cap brim (flat disc just above head top at y=0.9) ─────────────
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.52),
+            height: Some(0.07),
+            color: Some((0.08, 0.12, 0.55)),
+            roughness: Some(0.70),
+          ),
+          // Brim centre: 0.9 + 0.035 = 0.935
+          offset: (0.0, 0.94, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // ── Cap crown (cylinder sitting on the brim) ──────────────────────
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.36),
+            height: Some(0.45),
+            color: Some((0.08, 0.12, 0.55)),
+            roughness: Some(0.70),
+          ),
+          // Brim top: 0.94+0.035=0.975; crown centre: 0.975+0.225=1.20
+          offset: (0.0, 1.20, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // ── Left eye (player faces −Z, so front is negative Z) ───────────
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.03, 0.03, 0.05)),
+            roughness: Some(0.20),
+            metallic: Some(0.10),
+          ),
+          offset: (-0.18, 0.68, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // ── Right eye ────────────────────────────────────────────────────
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.03, 0.03, 0.05)),
+            roughness: Some(0.20),
+            metallic: Some(0.10),
+          ),
+          offset: (0.18, 0.68, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // ── Nose ─────────────────────────────────────────────────────────
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.95, 0.58, 0.42)),
+            roughness: Some(0.40),
+          ),
+          offset: (0.0, 0.59, -0.40),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
     ),
 
     // ── Block of player hight ─────────────────────────────────────────────────────────────────
@@ -152,6 +226,32 @@
         size: Some((7.0, 0.35, 12.0)),
         color: Some((0.54, 0.50, 0.46)),
         roughness: Some(0.90),
+      )),
+    ),
+
+    // ── Collectible coin ──────────────────────────────────────────────────────
+    // Flat gold Cylinder placed upright (rotation_euler_deg: (90,0,0) in the
+    // scene).  motion.rotate spins it around world Y for the classic coin look.
+    // sensor: true → ghost collider; sounds.collect → catalog key for pickup SFX.
+    "coin_collectible": (
+      kind: "primitive",
+      model: "Cylinder",
+      components: (
+        tags: ["collectable"],
+        sounds: {
+          "collect": "collect_coin",
+        },
+      ),
+      primitive: Some((
+        radius: Some(0.42),
+        height: Some(0.12),
+        color: Some((1.0, 0.82, 0.10)),
+        roughness: Some(0.05),
+        metallic: Some(0.92),
+        sensor: true,
+      )),
+      motion: Some((
+        rotate: Some((0.0, 1.5, 0.0)),
       )),
     ),
 

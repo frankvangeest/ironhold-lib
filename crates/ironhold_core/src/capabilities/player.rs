@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::schema::player::InputMap;
+use crate::schema::Action;
 use crate::runtime::messages::*;
+use crate::runtime::actions::ActionQueue;
 use std::collections::HashMap;
 
 use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
@@ -28,21 +30,25 @@ pub struct CharacterController {
     /// `is_grounded` goes false within 2–3 frames of a jump instead of persisting
     /// for ~8 frames with a hardcoded 1.5 m value.
     pub ground_cast_length: f32,
+    /// Asset-catalog audio key to play when the player jumps (e.g. `"jump"`).
+    /// `None` = silent. Resolved through `Action::PlaySound` → catalog lookup.
+    pub jump_sound: Option<String>,
 }
 
 pub fn player_movement_system(
     time: Res<Time>,
     mut input_events: MessageReader<InputActionMessage>,
     mut query: Query<(
-        Entity, 
-        &mut Transform, 
+        Entity,
+        &mut Transform,
         &GlobalTransform,
-        &mut CharacterController, 
+        &mut CharacterController,
         &mut LocomotionState,
         &mut Velocity,
         &mut AnimationRequests,
     )>,
     rapier_context: Option<ReadRapierContext>,
+    mut action_queue: ResMut<ActionQueue>,
 ) {
     let mut actions = HashMap::new();
     for event in input_events.read() {
@@ -149,6 +155,9 @@ pub fn player_movement_system(
             velocity.linvel.y = vel;
             controller.jumps_used += 1;
             requests.queue.push_back("jump_enter".to_string());
+            if let Some(key) = &controller.jump_sound {
+                action_queue.push(Action::PlaySound(key.clone()));
+            }
         }
     }
 }

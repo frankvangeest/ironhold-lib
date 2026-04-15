@@ -35,11 +35,12 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, and more.
-- ✅ UI messages exist (`UiMessage`) and are emitted by UI button interaction; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiMessage::ButtonPressed("dance")`).
-- ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, `AddScore`, and more.
+- ✅ UI events exist (`UiEvent`) and are emitted by UI button interaction and key bindings; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiEvent::ButtonPressed("dance")`).
+- ✅ Gameplay events exist (`GameEvent::Trigger(String)`) and are emitted by capabilities (physics sensors, etc.); the trigger name is used as-is in the rules pipeline.
+- ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic (point-to-point, not through the pipeline).
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
-- ✅ A message interpreter maps UI messages and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
+- ✅ A message interpreter maps UI events, game events, and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
 - ✅ Rules support an optional `when` guard: rules with `when: Some("state_name")` only fire while the interpreter is in that named state; rules with `when: None` (or omitted) fire in any state.
 - ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. Replaces `rules.ron` for FSM projects. States declare `entry_actions`, `exit_actions`, and in-state `on` bindings; `transitions` drive state changes; `global_on` fires from any state.
 - ✅ An action executor applies actions; notably:
@@ -54,7 +55,7 @@ This section is factual and reflects what exists right now.
   - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
 - ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed. FSM transitions update it directly in the interpreter.
-- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, and `logic_state` for observability and browser-based testing.
+- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, and `score` for observability and browser-based testing.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -91,13 +92,14 @@ Scene lifecycle events fire in this order:
 
 **Why:** data-defined flows (menus → loading → gameplay) need stable hooks at each stage.
 
-#### 4) Trigger / Collision 🧭
-Spatial interactions:
-- `trigger.enter` (entity_a, entity_b, trigger_id)
-- `trigger.exit` (…)
-- `collision.hit` (…)
+#### 4) GameEvent / Trigger 🟡
+Physics sensors and gameplay capabilities emit named triggers via `GameEvent::Trigger(String)`.
+The name is used as-is in the rules pipeline — the caller is responsible for namespacing:
+- `"entity.collected:<id>"` — collectible sensor overlap ✅
+- `"zone.entered:<id>"` — trigger zone entry 🧭
+- `"collision.hit:<id>"` — impact event 🧭
 
-**Why:** drive scripted logic without bespoke code.
+**Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 
 #### 5) AnimationMarker 🧭
 Animation timeline markers:
@@ -134,6 +136,7 @@ Actions represent explicit operations the runtime can execute.
 
 #### State/variables actions
 - `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default
+- `AddScore(i32)` ✅ — adds (or subtracts if negative) to `DebugState.score`; exposed in the WASM DOM bridge
 - `SetVar(key, value)` 🧭
 - `IncVar(key, delta)` 🧭
 
@@ -196,19 +199,21 @@ Applies actions to the world. Key design points:
 ## Milestone mapping (suggested)
 
 - **Milestone 0.1 + 0.2 (implemented)** ✅
-  - ✅ `UiMessage::ButtonPressed` emitted by UI buttons; mapped to actions via data-defined rules
-  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`
+  - ✅ `UiEvent::ButtonPressed` emitted by UI buttons; mapped to actions via data-defined rules
+  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `AddScore`
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
-  - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready}`
-  - ✅ Data-defined `logic/rules.ron` wired to interpreter + executor
-  - ✅ `DebugState` resource for runtime observability
+  - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready, Unloading}`
+  - ✅ Data-defined `logic/rules.ron` and `logic/state_machine.ron` wired to interpreter + executor
+  - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`)
+  - ✅ `GameEvent::Trigger(String)` for physics sensors and gameplay capabilities
 
 - **Milestone: Rule bindings v2** 🧭
   - Conditions/filters on rules (entity tags, state variables, scene)
   - Parameter flow from event payload into actions
 
-- **Milestone: Trigger / Collision events** 🧭
-  - Spatial trigger events (`trigger.enter`, `trigger.exit`)
+- **Milestone: Trigger / Collision events** 🟡
+  - `GameEvent::Trigger` and collectible sensors implemented ✅
+  - Zone enter/exit events (`zone.entered:<id>`) 🧭
 
 - **Milestone: Deterministic core hooks** 🧭
   - Fixed tick loop for gameplay
@@ -221,10 +226,11 @@ Applies actions to the world. Key design points:
 ## Appendix: Implemented subset (today)
 
 ### Messages ✅
-- `UiMessage::ButtonPressed(String)` — emitted when a UI button is pressed; trigger is the button's `action` field with `"ui."` prefix stripped
-- `SceneEvent::{Requested(String), Loaded(String), Ready(String)}` — scene lifecycle
-- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}` — abstract input
-- `InputActionMessage { entity: Entity, action: InputAction }` — input bound to an entity
+- `UiEvent::ButtonPressed(String)` — emitted by UI buttons and key bindings; flows into the pipeline as `"ui.button_pressed:{trigger}"`
+- `GameEvent::Trigger(String)` — emitted by gameplay capabilities (physics sensors, etc.); name is used as-is in the pipeline (e.g. `"entity.collected:coin_01"`)
+- `SceneEvent::{Requested(String), Loaded(String), Ready(String), Unloading(String)}` — scene lifecycle
+- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}` — abstract input (point-to-point, not pipeline)
+- `InputActionMessage { entity: Entity, action: InputAction }` — input bound to a specific entity (point-to-point, not pipeline)
 
 ### Actions ✅
 - `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`
@@ -242,9 +248,10 @@ Applies actions to the world. Key design points:
 - `SetVolume(u32)` — sets global audio volume 0–100
 - `Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
+- `AddScore(i32)` — adds (or subtracts if negative) to `DebugState.score`; exposed in the WASM DOM bridge
 
 ### Infrastructure ✅
-- `ActionQueue` — LIFO stack processed each frame by `action_executor_system` (push order determines execution order)
+- `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
 - `LogicState` resource — tracks the current named state (default `""`); checked by both interpreters
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
 - Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support optional `when: Option<String>` state guard

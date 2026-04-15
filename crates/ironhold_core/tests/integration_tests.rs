@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
-use ironhold_core::runtime::{UiMessage, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
+use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -21,7 +21,7 @@ fn setup_test_app() -> App {
        .add_message::<bevy::input::mouse::MouseWheel>()
        .init_resource::<ButtonInput<KeyCode>>()
        .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Messages<UiMessage>>()
+       .init_resource::<Messages<UiEvent>>()
        .init_resource::<Messages<SceneEvent>>()
        .init_resource::<Messages<InputActionMessage>>()
        .init_resource::<Messages<AppExit>>()
@@ -73,7 +73,7 @@ fn test_ui_button_to_load_scene_action() {
     }
 
     // 2. Simulate Button Press Message
-    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("test_load".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>().write(UiEvent::ButtonPressed("test_load".to_string()));
     
     // 3. Run systems (Interpreter + Executor will run)
     app.update();
@@ -141,6 +141,7 @@ fn test_input_abstraction_flow() {
             jumps_used: 0,
             max_jumps: 1,
             ground_cast_length: 1.1,
+            jump_sound: None,
         },
         LocomotionState::default(),
         AnimationRequests::default(),
@@ -249,7 +250,7 @@ fn test_ui_button_to_quit_action() {
     }
 
     // 2. Simulate Quit Message
-    app.world_mut().resource_mut::<Messages<UiMessage>>().write(UiMessage::ButtonPressed("test_quit".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>().write(UiEvent::ButtonPressed("test_quit".to_string()));
     
     // 3. Run systems (Interpreter + Executor will run)
     app.update();
@@ -612,8 +613,8 @@ fn test_state_gated_rule_only_fires_in_matching_state() {
     ]));
 
     // Fire event while in the wrong state ("") — rule must be suppressed.
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("do_thing".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("do_thing".to_string()));
     app.update();
     {
         let state = app.world().resource::<LogicState>();
@@ -625,8 +626,8 @@ fn test_state_gated_rule_only_fires_in_matching_state() {
         .push(Action::EnterState("active".to_string()));
     app.update();
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("do_thing".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("do_thing".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -683,8 +684,8 @@ fn test_fsm_in_state_on_binding_fires() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("in_state_a".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
     app.update();
 
     let debug = app.world().resource::<ironhold_core::DebugState>();
@@ -701,8 +702,8 @@ fn test_fsm_in_state_on_binding_suppressed_in_wrong_state() {
     // Start in "b" — the "in_state_a" binding belongs to "a".
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("in_state_a".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -721,8 +722,8 @@ fn test_fsm_transition_fires_exit_enter_and_advances_state() {
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
     // Trigger the transition a → b.
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go_b".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
 
     // State must have advanced to "b".
@@ -744,8 +745,8 @@ fn test_fsm_transition_does_not_fire_from_wrong_state() {
     // Start in "b" — transition is from "a" only.
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go_b".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -769,8 +770,8 @@ fn test_fsm_any_state_transition_fires_from_any_state() {
     // Start in "b" — the any-state transition should still fire.
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("anywhere_go_b".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("anywhere_go_b".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -785,8 +786,8 @@ fn test_fsm_global_on_fires_regardless_of_state() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("global_action".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("global_action".to_string()));
     app.update();
 
     // State must not change; global_on fires only the declared action.
@@ -812,8 +813,8 @@ fn test_rules_no_match_does_not_queue_action() {
         },
     ]));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("unmatched_event".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("unmatched_event".to_string()));
     app.update();
 
     let queue = app.world().resource::<ActionQueue>();
@@ -970,8 +971,8 @@ fn test_fsm_exit_before_entry_fifo_order() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go".to_string()));
     app.update();
 
     // FIFO execution order: exit_a_1, exit_a_2, entry_b_1, entry_b_2.
@@ -1019,8 +1020,8 @@ fn test_fsm_exit_action_fires_on_transition() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -1109,8 +1110,8 @@ fn test_fsm_no_loaded_state_machine_is_noop() {
     // Explicit None — no FSM loaded.
     app.world_mut().insert_resource(LoadedStateMachine(None));
 
-    app.world_mut().resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("any_event".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("any_event".to_string()));
     app.update(); // must not panic
 
     let queue = app.world().resource::<ActionQueue>();
@@ -1749,8 +1750,8 @@ fn test_fsm_only_first_matching_transition_fires() {
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
     app.world_mut()
-        .resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go".to_string()));
+        .resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
@@ -1794,11 +1795,11 @@ fn test_fsm_state_advance_visible_in_same_frame() {
 
     // Both events in the same frame — first advances state so second can fire.
     app.world_mut()
-        .resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go_b".to_string()));
+        .resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.world_mut()
-        .resource_mut::<Messages<UiMessage>>()
-        .write(UiMessage::ButtonPressed("go_c".to_string()));
+        .resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_c".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();

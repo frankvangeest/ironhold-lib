@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{
     Collider, RigidBody, LockedAxes, Damping, Velocity, ExternalImpulse,
-    Friction, CoefficientCombineRule,
+    Friction, CoefficientCombineRule, Sensor, ActiveEvents,
 };
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
@@ -15,8 +15,10 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings,
+    ProjectKeyBindings, LoadedKeyBindings, SpawnId,
 };
+use crate::capabilities::collectible::Collectable;
+use crate::capabilities::motion::Motion;
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
 };
@@ -132,7 +134,7 @@ pub fn spawn_scene_v2(
         // Spawn entities from prefabs
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents)> = None;
+        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
         let mut flycam_start: Option<Transform> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -168,7 +170,7 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((prefab.model.clone(), p, translation, prefab.components.clone()));
+                    primitive_player = Some((prefab.model.clone(), p, translation, prefab.components.clone(), prefab.children.clone()));
                     continue;
                 }
 
@@ -264,8 +266,17 @@ pub fn spawn_scene_v2(
                             }
                         };
 
-                        // Optional static physics collider
-                        if p.physics {
+                        // Sensor takes precedence; otherwise check for static physics collider.
+                        if p.sensor {
+                            if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
+                                commands.entity(spawned).insert((Sensor, collider, ActiveEvents::COLLISION_EVENTS));
+                            } else {
+                                load_errors.push(format!(
+                                    "entity '{}': sensor: true on shape '{}' — no collider builder, sensor skipped",
+                                    entity_def.id, prefab.model
+                                ));
+                            }
+                        } else if p.physics {
                             if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
                                 commands.entity(spawned).insert((RigidBody::Fixed, collider));
                             } else {
@@ -274,6 +285,29 @@ pub fn spawn_scene_v2(
                                     entity_def.id, prefab.model
                                 ));
                             }
+                        }
+
+                        // Give every single-primitive scene entity a stable SpawnId so that
+                        // Action::Despawn can locate it by the scene entity id.
+                        commands.entity(spawned).insert(SpawnId(entity_def.id.clone()));
+                        spawn_registry.entities.insert(entity_def.id.clone(), spawned);
+
+                        // Collectable marker: collision triggers GameEvent into the rules pipeline.
+                        // What happens on collection (Despawn, PlaySound, AddScore, etc.)
+                        // is defined in state_machine.ron — not hardcoded here.
+                        if prefab.components.tags.contains(&"collectable".to_string()) {
+                            commands.entity(spawned).insert(Collectable);
+                        }
+                        // Motion: continuous world-space rotation and/or vertical bob.
+                        if let Some(motion_def) = &prefab.motion {
+                            let rotate = motion_def.rotate
+                                .map(|(x, y, z)| Vec3::new(x, y, z))
+                                .unwrap_or(Vec3::ZERO);
+                            commands.entity(spawned).insert(Motion {
+                                rotate,
+                                bob: motion_def.bob,
+                                bob_origin_y: Some(translation.y),
+                            });
                         }
                     }
                     None => load_errors.push(format!(
@@ -336,7 +370,7 @@ pub fn spawn_scene_v2(
         let tonemapping = scene.tonemapping.to_bevy();
 
         // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((shape, params, position, components)) = primitive_player {
+        if let Some((shape, params, position, components, player_children)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
             // `height` always means total visual height (cylindrical body + two hemispheres).
             let player_height = params.height.unwrap_or(1.8);
@@ -385,6 +419,7 @@ pub fn spawn_scene_v2(
                         // is_grounded goes false within ~2 frames of a jump so the landing
                         // transition resets jumps_used correctly.
                         ground_cast_length: cap_half + cap_radius + 0.2,
+                        jump_sound: components.sounds.get("jump").cloned(),
                     },
                     LocomotionState::default(),
                     AnimationRequests::default(),
@@ -402,6 +437,34 @@ pub fn spawn_scene_v2(
                     Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                 ),
             )).id();
+
+            // Spawn cosmetic children (cap, eyes, nose, etc.) defined in the prefab.
+            for child_def in &player_children {
+                let child_rot = Quat::from_euler(
+                    EulerRot::XYZ,
+                    child_def.rotation_euler_deg.0.to_radians(),
+                    child_def.rotation_euler_deg.1.to_radians(),
+                    child_def.rotation_euler_deg.2.to_radians(),
+                );
+                let child_tf = Transform {
+                    translation: Vec3::from(child_def.offset),
+                    rotation: child_rot,
+                    scale: Vec3::from(child_def.scale),
+                };
+                if let Some(child_mesh) = build_primitive_mesh(&child_def.shape, &child_def.primitive) {
+                    let child_mesh_h = mats.meshes.add(child_mesh);
+                    let child_mat_h = mats.standard.add(
+                        primitive_material(&child_def.primitive, project.primitive_default_color)
+                    );
+                    let child_entity = commands.spawn((
+                        Name::new(child_def.shape.clone()),
+                        Mesh3d(child_mesh_h),
+                        MeshMaterial3d(child_mat_h),
+                        child_tf,
+                    )).id();
+                    commands.entity(player_entity).add_child(child_entity);
+                }
+            }
 
             let cam = default_camera_config();
             let cam_offset = Vec3::from(cam.offset);

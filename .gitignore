@@ -27,3 +27,4 @@ project_dump.txt
 screenshots/
 .well-known/appspecific/com.chrome.devtools.json
 __pycache__/test_web.cpython-312.pyc
+.claude/scheduled_tasks.lock

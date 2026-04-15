@@ -28,7 +28,8 @@
       "Bash(powershell -Command \"Get-ChildItem 'C:\\\\git\\\\rust\\\\ironhold-lib\\\\assets\\\\shared\\\\textures' | Select-Object Name, Length\")",
       "Bash(cargo doc:*)",
       "Bash(python -c \"import playwright; print\\('ok'\\)\")",
-      "Bash(python -c \"from PIL import Image; print\\('pillow ok'\\)\")"
+      "Bash(python -c \"from PIL import Image; print\\('pillow ok'\\)\")",
+      "Bash(xargs cat:*)"
     ]
   }
 }

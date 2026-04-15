@@ -5,6 +5,9 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
+        // Always register CollisionEvent so MessageReader<CollisionEvent> is safe in all
+        // contexts, including headless tests where RapierPhysicsPlugin is skipped.
+        app.add_message::<CollisionEvent>();
         #[cfg(not(test))]
         app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default());
         

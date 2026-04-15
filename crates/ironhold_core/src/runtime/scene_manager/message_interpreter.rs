@@ -4,7 +4,8 @@ use crate::runtime::actions::ActionQueue;
 use super::{LoadedRules, LoadedStateMachine, LogicState};
 
 pub fn message_interpreter_system(
-    mut ui_events: MessageReader<UiMessage>,
+    mut ui_events: MessageReader<UiEvent>,
+    mut game_events: MessageReader<GameEvent>,
     mut scene_events: MessageReader<SceneEvent>,
     mut action_queue: ResMut<ActionQueue>,
     loaded_rules: Res<LoadedRules>,
@@ -12,7 +13,16 @@ pub fn message_interpreter_system(
 ) {
     for event in ui_events.read() {
         let event_name = match event {
-            UiMessage::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
+            UiEvent::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
+        };
+        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
+    }
+
+    for event in game_events.read() {
+        let event_name = match event {
+            // The trigger name is used as-is; the caller is responsible for namespacing
+            // (e.g. "entity.collected:coin_01", "zone.entered:checkpoint_1").
+            GameEvent::Trigger(name) => name.clone(),
         };
         match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
     }
@@ -61,7 +71,8 @@ fn scene_path_stem(path: &str) -> &str {
 /// queuing entry/exit actions.  Runs alongside `message_interpreter_system`; only one of
 /// the two will have data to act on for any given project (rules vs. FSM).
 pub fn fsm_interpreter_system(
-    mut ui_events: MessageReader<UiMessage>,
+    mut ui_events: MessageReader<UiEvent>,
+    mut game_events: MessageReader<GameEvent>,
     mut scene_events: MessageReader<SceneEvent>,
     mut action_queue: ResMut<ActionQueue>,
     loaded_fsm: Res<LoadedStateMachine>,
@@ -72,8 +83,13 @@ pub fn fsm_interpreter_system(
     // Collect all events for this frame before mutating state.
     let mut events: Vec<String> = Vec::new();
     for event in ui_events.read() {
-        let UiMessage::ButtonPressed(trigger) = event;
+        let UiEvent::ButtonPressed(trigger) = event;
         events.push(format!("ui.button_pressed:{}", trigger));
+    }
+    for event in game_events.read() {
+        let GameEvent::Trigger(name) = event;
+        // Trigger names are used as-is; caller namespaces them (e.g. "entity.collected:coin_01").
+        events.push(name.clone());
     }
     for event in scene_events.read() {
         let name = match event {

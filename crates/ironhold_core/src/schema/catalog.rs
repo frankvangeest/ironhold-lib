@@ -114,6 +114,25 @@ pub struct PrefabDef {
     /// building; each child is spawned as a mesh entity under a shared parent anchor.
     #[serde(default)]
     pub children: Vec<ChildPrimitiveDef>,
+    /// Optional continuous transform animation applied to this entity at runtime.
+    /// Supports world-space rotation and sinusoidal vertical bob.
+    #[serde(default)]
+    pub motion: Option<MotionDef>,
+}
+
+/// Continuous transform animation for a prefab entity.
+/// Converted to a `Motion` Bevy component at spawn time.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MotionDef {
+    /// World-space continuous rotation in radians per second (x, y, z).
+    /// Example: `(0.0, 1.5, 0.0)` spins around world Y at ~14 RPM.
+    #[serde(default)]
+    pub rotate: Option<(f32, f32, f32)>,
+    /// Sinusoidal vertical bob: `(amplitude_meters, frequency_hz)`.
+    /// Example: `(0.15, 0.8)` = ±15 cm at 0.8 Hz.
+    #[serde(default)]
+    pub bob: Option<(f32, f32)>,
 }
 
 /// Runtime-relevant prefab component data.
@@ -126,6 +145,11 @@ pub struct PrefabComponents {
     pub tags: Vec<String>,
     #[serde(default)]
     pub movement: MovementConfig,
+    /// Maps event names to asset catalog audio keys.
+    /// Used by systems to look up what sound to play for a given event.
+    /// Example: `{ "collect": "collect_coin", "jump": "jump" }`
+    #[serde(default)]
+    pub sounds: HashMap<String, String>,
 }
 
 /// Movement parameters that can be set on any primitive prefab with the "player" tag.
@@ -214,6 +238,12 @@ pub struct PrimitiveParams {
     /// Other shapes emit a warning and skip the collider.
     #[serde(default)]
     pub physics: bool,
+    /// When `true`, a ghost Rapier `Sensor` collider is spawned. The entity has no
+    /// physical presence but generates `CollisionEvent`s when overlapped by other
+    /// colliders. `sensor` takes precedence over `physics` if both are set.
+    /// Supported shapes: same as `physics`.
+    #[serde(default)]
+    pub sensor: bool,
 }
 
 /// One mesh component within a composite `kind: "primitive"` prefab.

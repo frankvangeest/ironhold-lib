@@ -104,7 +104,7 @@ This keeps rollback and deterministic networking options open without freezing f
    - `Action` enum + `ActionQueue` resource
    - start with `Action::LoadScene(String)`
 5. Convert UI button handling:
-   - UI system emits `UiMessage`
+   - UI system emits `UiEvent`
    - Scene manager interprets to `Action::LoadScene`
    - Scene manager executes the action
 
@@ -116,7 +116,7 @@ This keeps rollback and deterministic networking options open without freezing f
 **Goal:** decouple subsystems; enforce stable internal contracts.
 
 6. Standardize message types:
-   - `UiMessage`
+   - `UiEvent`
    - `SceneRequestMessage`, `SceneLoadedMessage`, `SceneReadyMessage`
    - `InputActionMessage`
 7. Add validation:
@@ -137,7 +137,7 @@ This keeps rollback and deterministic networking options open without freezing f
    - updates global machine state
    - emits actions
 10. Move menu flow into global FSM:
-   - start-menu button triggers UiMessage
+   - start-menu button triggers UiEvent
    - FSM decides to LoadScene
 
 ---
@@ -189,7 +189,7 @@ We want stable beta releases before adding lots of new capabilities.
 - Docs added
 
 ### Beta 0.2 — Event/Action Bus
-- UI emits UiMessage (no direct scene load)
+- UI emits UiEvent (no direct scene load)
 - Scene manager consumes messages and executes actions
 - Actions documented as “engine ABI”
 - No functional behavior changes from 0.1 (refactor-only)

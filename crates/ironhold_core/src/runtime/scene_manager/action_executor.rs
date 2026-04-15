@@ -236,6 +236,11 @@ pub fn action_executor_system(
                 info!("Action::EnterState: \"{}\" -> \"{}\"", scene_state.logic_state.0, state);
                 scene_state.logic_state.0 = state;
             }
+            Action::AddScore(delta) => {
+                debug.score += delta;
+                let total = debug.score;
+                info!("Action::AddScore: {} (total: {})", delta, total);
+            }
         }
     }
 }

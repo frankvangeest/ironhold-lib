@@ -7,6 +7,8 @@ pub mod terrain;
 pub mod terrain_material;
 pub mod custom_material;
 pub mod physics;
+pub mod collectible;
+pub mod motion;
 
 pub use player::*;
 pub use camera::*;
@@ -17,4 +19,6 @@ pub use terrain::*;
 pub use terrain_material::*;
 pub use custom_material::*;
 pub use physics::*;
+pub use collectible::*;
+pub use motion::*;
 

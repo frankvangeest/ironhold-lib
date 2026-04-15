@@ -45,6 +45,8 @@ pub struct DebugState {
     pub scene: String,
     /// Current named logic state set by `Action::EnterState`. Empty string means no active state.
     pub logic_state: String,
+    /// Running score total. Modified by `Action::AddScore(delta)`.
+    pub score: i32,
 }
 
 pub struct GamePlugin;
@@ -78,7 +80,8 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
-            .add_message::<UiMessage>()
+            .add_message::<UiEvent>()
+            .add_message::<GameEvent>()
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
             .add_message::<AppExit>()
@@ -121,6 +124,7 @@ impl Plugin for GamePlugin {
             .add_systems(FixedUpdate, (
                 input_translator_system,
                 player_movement_system,
+                collectible_system,
             ).chain())
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (
@@ -129,6 +133,7 @@ impl Plugin for GamePlugin {
                 fly_camera_system,
                 animation_playback_system,
             ).chain())
+            .add_systems(Update, motion_system)
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(PostUpdate, update_debug_state);
@@ -171,7 +176,7 @@ fn button_system(
         (&Interaction, &mut BackgroundColor, &UiAction),
         (Changed<Interaction>, With<Button>),
     >,
-    mut ui_events: MessageWriter<UiMessage>,
+    mut ui_events: MessageWriter<UiEvent>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -189,8 +194,8 @@ fn button_system(
                 *color = BackgroundColor(Color::srgb(0.35, 0.75, 0.35));
                 match action {
                     UiAction::Trigger(trigger) => {
-                        info!("Button Pressed! Emitting UiMessage: {}", trigger);
-                        ui_events.write(UiMessage::ButtonPressed(trigger.clone()));
+                        info!("Button Pressed! Emitting UiEvent: {}", trigger);
+                        ui_events.write(UiEvent::ButtonPressed(trigger.clone()));
                     }
                 }
             }
@@ -226,12 +231,13 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     let Some(document) = window.document() else { return };
     let Some(el) = document.get_element_by_id("debug-state") else { return };
     let json = format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}"}}"#,
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{}}}"#,
         debug.frame,
         debug.app_state,
         debug.last_action.replace('"', "\\\""),
         debug.scene.replace('"', "\\\""),
         debug.logic_state.replace('"', "\\\""),
+        debug.score,
     );
     el.set_inner_html(&json);
 }

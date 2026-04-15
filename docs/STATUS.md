@@ -27,12 +27,12 @@ _Last updated: 2026‑04‑05_
 ### Runtime & Logic
 | Area                          | Status | Notes |
 |-------------------------------|:------:|-------|
-| UI → logic trigger            |   ✅   | Button press → `UiMessage` → Project Rule matched → Action(s) queued. |
+| UI → logic trigger            |   ✅   | Button press → `UiEvent` → Project Rule matched → Action(s) queued. |
 | Logic → Action execution      |   ✅   | `ActionQueue` processed by `action_executor_system`. |
 | Action infrastructure         |   ✅   | interpreter & executor wired. |
 | State-gated rules             |   ✅   | `LogicRule.when` field gates rules to a named logic state; `EnterState` action transitions between states. |
 | FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; replaces `rules.ron` for FSM projects. |
-| Live event domains            |   ✅   | `UiMessage`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
+| Live event domains            |   ✅   | `UiEvent`, `GameEvent`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
 | Planned event domains         |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
 | Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready/Unloading` types exist; full lifecycle choreography is WIP. |
 
@@ -68,10 +68,11 @@ _Last updated: 2026‑04‑05_
 ## Engine ABI (today)
 
 ### Messages
-- `UiMessage::ButtonPressed(String)`
-- `SceneEvent::{Requested(String), Loaded(String), Ready(String)}`
-- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}`
-- `InputActionMessage { entity, action: InputAction }`
+- `UiEvent::ButtonPressed(String)` — emitted by UI buttons and key bindings; flows into the rules pipeline as `"ui.button_pressed:{trigger}"`
+- `GameEvent::Trigger(String)` — emitted by gameplay capabilities (physics sensors, etc.); flows into the rules pipeline as-is (the name is already namespaced, e.g. `"entity.collected:coin_01"`)
+- `SceneEvent::{Requested(String), Loaded(String), Ready(String), Unloading(String)}` — scene lifecycle
+- `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}` — abstract input (point-to-point, not pipeline)
+- `InputActionMessage { entity, action: InputAction }` — input bound to a specific entity (point-to-point, not pipeline)
 
 ### Actions
 - `Action::LoadScene(String)` — loads a `.scene.ron`, replaces current scene
@@ -89,14 +90,15 @@ _Last updated: 2026‑04‑05_
 - `Action::SetVolume(u32)` — sets global volume 0–100
 - `Action::Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `Action::EnterState(String)` — transitions the interpreter to a named logic state; empty string returns to stateless (always-fire) default
+- `Action::AddScore(i32)` — adds (or subtracts if negative) to `DebugState.score`; visible in DOM on WASM
 
 > New Messages/Actions **must** update this table and include examples + tests.
 
 ### Debug / Test Surface
-- `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`.
+- `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`.
 - On WASM, `DebugState` is serialised as JSON into `<div id="debug-state">` by `sync_debug_state_to_dom`, making it readable by browser automation tools.
   ```json
-  {"frame": 42, "app_state": "InGame", "last_action": "EnterState(\"playing\")", "scene": "...", "logic_state": "playing"}
+  {"frame": 42, "app_state": "InGame", "last_action": "EnterState(\"playing\")", "scene": "...", "logic_state": "playing", "score": 0}
   ```
 
 ---

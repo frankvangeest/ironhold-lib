@@ -23,7 +23,7 @@ Deliverables:
 
 ### Beta 0.2 — “Event/Action Bus”
 Goal: decouple systems via Messages + Actions (no direct coupling).
-- UI system emits UiMessage
+- UI system emits UiEvent
 - Scene manager listens and emits Scene events
 - Actions exist as stable “engine ABI”
 Deliverables:
