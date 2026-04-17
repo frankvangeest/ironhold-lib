@@ -206,6 +206,32 @@ All shaders live in `assets/shared/shaders/`.
 
 ---
 
+## Emissive and glow effects ✅
+
+HDR camera mode and bloom are **not enabled** in this engine (see [Rendering philosophy in `docs/20_data_formats.md`](20_data_formats.md#rendering-philosophy)). This has one important consequence for shader authors: **fragment output values above 1.0 clip — they do not produce a bloom halo.**
+
+To achieve a self-illuminated or glowing look without HDR:
+
+- Set `unlit: true` on the material. This bypasses the lighting pipeline entirely; the shader output is the final pixel colour.
+- Use `alpha_mode: Add` for additive blending. Dark parts of the surface become transparent; bright parts add on top of what is behind them. This is the standard approach for energy fields, particle-like meshes, and holographic overlays.
+- Use `alpha_mode: Blend` when you need a solid-but-translucent surface (e.g. a glass shield) rather than a purely additive glow.
+
+**Minimal emissive material in RON:**
+```ron
+"mat_glow": (
+  kind: Custom((
+    shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+    colors: { "color": (r: 0.2, g: 0.8, b: 1.0, a: 0.7) },
+  )),
+  alpha_mode: Add,
+  unlit: true,
+),
+```
+
+Keep colour values in the `[0, 1]` range. Values above 1.0 offer no visual benefit without HDR and will simply clip to white.
+
+---
+
 ## Current limitations 🧭
 
 ### Fragment-only ✅ / Vertex shader 🧭

@@ -57,7 +57,7 @@ _Last updated: 2026‑04‑17_
 | Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
-| HDR Lighting (IBL)          |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. |
+| IBL / Environment Lighting  |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. HDR camera mode and bloom are excluded — see `docs/20_data_formats.md`. |
 | Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |
 
 ### Platforms
