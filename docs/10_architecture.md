@@ -2,15 +2,15 @@
 # Architecture
 
 ## Current state (today)
-- `ironhold_core`: core Bevy plugin(s), RON asset types, scene spawning, player controller, orbit camera, animation mapping, UI button → scene load.
+- `ironhold_core`: RON-driven scene pipeline, player controller, orbit camera, fly camera, animation, animation resolver, NPC AI, collectible triggers, motion (rotate/bob), custom WGSL material, terrain mesh + material, physics (Rapier3D), FSM-based and rules-based logic interpreters, full Message → Interpreter → Action → Executor pipeline.
 - `ironhold_native`: desktop runner calling `ironhold_core::start_app()`; selects project via `--project <name>` CLI arg.
 - `ironhold_web`: WASM runner exposing `start()` via wasm-bindgen; reads `?project=<name>` from the page URL and passes it to `start_app`.
 
 ## Internal Structure
 The `ironhold_core` crate is organized into modular sub-modules to maintain separation of concerns:
-- **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameLevel`).
+- **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameSceneV2`, `AssetCatalog`).
 - **`runtime/`**: Core engine logic, including the Message/Action interpreter and the `SceneManager`.
-- **`capabilities/`**: Reusable gameplay systems (e.g., `CharacterController`, `OrbitCamera`, `FlyCamera`).
+- **`capabilities/`**: Reusable gameplay systems: `player`, `camera` (orbit), `flycam`, `animation`, `animation_resolver`, `npc`, `collectible`, `motion`, `custom_material`, `terrain`, `terrain_material`, `physics`, `spin`.
 - **`utils.rs`**: Shared utility functions, including asset folder discovery.
 
 ### Assets folder discovery
@@ -31,14 +31,12 @@ The runtime expects an `assets/` directory relative to the executable's working 
 
 On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
 
-Assets:
-- `assets/project.ron`: selects initial scene.
-- `assets/scenes/*.ron`: describe the scene contents (models, player config, UI).
+Assets are organized per-project under `assets/projects/{name}/`. See root `CLAUDE.md` for the full layout.
 
 ## Target architecture (planned) 🧭
 - 🧭 Deterministic simulation core (fixed tick)
-- 🧭 Event bus with stable message schema
-- 🧪 Action executor (exists, limited set of actions)
+- ✅ Event bus with stable message schema
+- ✅ Action executor (fully wired; see Engine ABI in `docs/STATUS.md` for the complete action set)
 
 ### Scene Lifecycle (Sequence)
 The transitions between states and the messages emitted are visualized below:

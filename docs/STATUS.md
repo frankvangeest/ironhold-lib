@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑04‑05_
+_Last updated: 2026‑04‑17_
 
 ## Legend
 - ✅ Implemented
@@ -51,6 +51,10 @@ _Last updated: 2026‑04‑05_
 | Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
 | Fly camera                  |   ✅   | Free-flying camera; spawned via `"flycam"` tag on prefab. LMB/RMB hold to look, WASD move, Shift fast mode. Optional `flycam_position` UI label. |
+| NPC AI                      |   ✅   | `NpcAgent` component; states: Idle → Patrol → Alerted → Chase/Flee/Interact → Return. FOV + optional Rapier line-of-sight check. Emits `"npc.player_spotted:{id}"`, `"npc.player_reached:{id}"`, `"npc.player_lost:{id}"` triggers. |
+| Collectible triggers        |   ✅   | `Collectable` component on Rapier sensor; on player overlap emits `GameEvent::Trigger("entity.collected:{spawn_id}")`. Response (Despawn, AddScore, etc.) is configured in RON. |
+| Motion (rotate/bob)         |   ✅   | `Motion` component; world-space continuous rotation (per-axis rad/s) and sinusoidal vertical bob (amplitude, frequency). Runs in `Update`; purely visual. |
+| Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
 | HDR Lighting (IBL)          |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. |
@@ -87,7 +91,7 @@ _Last updated: 2026‑04‑05_
 - `Action::PlaySound(String)` — fire-and-forget sound by audio catalog key; warns for unsupported formats or missing keys
 - `Action::PlayMusicLoop(String)` — starts a looping background music track by audio catalog key
 - `Action::StopMusic` — stops the current background music track
-- `Action::SetVolume(u32)` — sets global volume 0–100
+- `Action::SetVolume(u8)` — sets global volume 0–100
 - `Action::Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `Action::EnterState(String)` — transitions the interpreter to a named logic state; empty string returns to stateless (always-fire) default
 - `Action::AddScore(i32)` — adds (or subtracts if negative) to `DebugState.score`; visible in DOM on WASM

@@ -55,7 +55,7 @@ Three-crate workspace:
 
 - **`schema/`** — RON-serializable data types (`ProjectConfig`, `GameSceneV2`, `AssetCatalog`, `PrefabCatalog`, `Action`, etc.). These are the source of truth for all data-driven content.
 - **`runtime/`** — systems that run at engine boot/update: scene loading (`scene_manager`), model spawning, material creation, input translation, message interpreter, action executor.
-- **`capabilities/`** — modular gameplay systems: player controller, orbit camera, animation, animation resolver, terrain mesh generation, terrain material, physics (Rapier3D).
+- **`capabilities/`** — modular gameplay systems: player controller, orbit camera, flycam, animation, animation resolver, NPC AI, collectible triggers, motion (rotate/bob), custom material, terrain mesh generation, terrain material, physics (Rapier3D).
 
 ### Data-driven game loop
 
@@ -71,16 +71,19 @@ This means game behavior can be authored entirely in RON without recompiling the
 
 ```
 assets/projects/{name}/
-  {name}.project.ron        ← ProjectConfig (entry point, initial scene ref)
-  scenes/{name}.scene.ron   ← GameSceneV2 (models, UI, lighting, player)
-  logic/rules.ron           ← event → action rules
-  overrides/model_fixes.ron ← per-model transform corrections
-  prefabs/prefabs.ron       ← reusable component definitions
-  prefabs/animation/*.ron   ← AnimationPolicy per character
-  assets.ron                ← AssetCatalog
+  {name}.project.ron          ← ProjectConfig (entry point, initial scene ref)
+  scenes/*.scene.ron          ← GameSceneV2 files (models, UI, lighting, player); projects can have multiple scenes
+  logic/rules.ron             ← event → action rules (simple projects)
+  logic/state_machine.ron     ← FSM-based logic (used by projects with multiple states/scenes)
+  overrides/model_fixes.ron   ← per-model transform corrections
+  prefabs/prefabs.ron         ← reusable component definitions
+  prefabs/animation/*.ron     ← AnimationPolicy per character
+  assets.ron                  ← AssetCatalog
 ```
 
-Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`. Test data lives in `assets/projects/integration_tests/`.
+Note: projects may have `rules.ron`, `state_machine.ron`, or both. Simple projects use only `rules.ron`; projects with multiple scenes/states use `state_machine.ron` (sometimes alongside `rules.ron`). See the interpreter notes in `crates/ironhold_core/src/CLAUDE.md`.
+
+Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`, `custom_materials`, `primitive_world`. Test data lives in `assets/projects/integration_tests/`.
 
 ## Critical Rules
 

@@ -9,7 +9,7 @@ use crate::runtime::scene_manager::SpawnId;
 /// so Rapier generates `CollisionEvent`s on overlap.
 ///
 /// On overlap, `collectible_system` emits:
-///   `UiEvent::ButtonPressed("entity.collected:{spawn_id}")`
+///   `GameEvent::Trigger("entity.collected:{spawn_id}")`
 ///
 /// This fires into the normal Message → Interpreter → Action → Executor pipeline.
 /// What actually happens on collection (Despawn, PlaySound, AddScore, etc.) is defined
