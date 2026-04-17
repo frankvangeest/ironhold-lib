@@ -329,6 +329,11 @@ pub struct ChildPrimitiveDef {
     /// Scale applied to this child. Default: `(1, 1, 1)`.
     #[serde(default = "one_vec3_child")]
     pub scale: (f32, f32, f32),
+    /// Optional key into `AssetCatalog.materials` to override the default PBR material
+    /// for this child mesh. When set, the built material is used instead of the colour
+    /// and roughness values in `primitive`. Omit to keep the default behaviour.
+    #[serde(default)]
+    pub material: Option<String>,
 }
 
 fn one_vec3_child() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }

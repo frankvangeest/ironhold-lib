@@ -18,7 +18,7 @@
       material: Some("mat_floor"),
       components: (),
       primitive: Some((
-        size: Some((260.0, 2.0, 160.0)),
+        size: Some((260.0, 2.0, 300.0)),
       )),
     ),
 
@@ -179,6 +179,34 @@
       material: Some("mat_pbr_water"),
       components: (),
       primitive: Some((radius: Some(4.0))),
+    ),
+
+    // ── Emissive / transparent ────────────────────────────────────────────────
+    "sphere_emissive_shield": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_emissive_shield"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_emissive_orb_orange": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_emissive_orb_orange"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "torus_emissive_plain": (
+      kind: "primitive",
+      model: "Torus",
+      material: Some("mat_emissive_plain"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+        radius_top: Some(1.0),
+      )),
     ),
   }
 )

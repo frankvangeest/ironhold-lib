@@ -12,4 +12,55 @@
     "npc_greet":    "shared/audio/child-hello.wav",
     "goblin_growl": "shared/audio/growl.wav",
   },
+
+  materials: {
+    // Lamp orb — warm glass glow. Blend mode: centre is semi-transparent,
+    // rim is opaque warm white, giving a lantern-glass effect.
+    "mat_lamp_orb": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        colors: {
+          "base_color": (r:0.90, g:0.80, b:0.30, a:0.50),
+          "rim_color":  (r:1.00, g:0.95, b:0.70, a:1.00),
+        },
+        floats: {
+          "rim_power": 2.0,
+        },
+      )),
+      alpha_mode: Blend,
+      unlit: true,
+    ),
+
+    // Gold deco orb — additive golden energy, invisible centre fades to bright rim.
+    "mat_deco_orb_gold": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        colors: {
+          "base_color": (r:0.60, g:0.40, b:0.00, a:0.10),
+          "rim_color":  (r:1.00, g:0.80, b:0.15, a:1.00),
+        },
+        floats: {
+          "rim_power": 2.5,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+
+    // Violet deco orb — additive violet energy.
+    "mat_deco_orb_violet": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        colors: {
+          "base_color": (r:0.20, g:0.00, b:0.40, a:0.10),
+          "rim_color":  (r:0.80, g:0.30, b:1.00, a:1.00),
+        },
+        floats: {
+          "rim_power": 2.5,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+  },
 )

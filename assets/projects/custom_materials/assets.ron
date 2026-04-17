@@ -220,5 +220,59 @@
         },
       )),
     ),
+
+    // ── Emissive / transparent effects ────────────────────────────────────────
+    // These require `unlit: true` — see docs/25_custom_shaders.md for the
+    // no-HDR / no-bloom constraint and the reasoning behind this approach.
+
+    // Emissive fresnel (Blend) — translucent glass-orb shield.
+    // Dark, near-transparent centre; bright electric-blue rim.
+    // alpha_mode: Blend makes the surface partially see-through.
+    "mat_emissive_shield": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        colors: {
+          "base_color": (r:0.05, g:0.10, b:0.30, a:0.10),
+          "rim_color":  (r:0.20, g:0.60, b:1.00, a:0.90),
+        },
+        floats: {
+          "rim_power": 2.5,
+        },
+      )),
+      alpha_mode: Blend,
+      unlit: true,
+    ),
+
+    // Emissive fresnel (Add) — hot orange energy orb.
+    // Invisible centre; rim adds orange light on top of whatever is behind it.
+    // alpha_mode: Add avoids depth-sorting issues for overlapping transparent meshes.
+    "mat_emissive_orb_orange": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        colors: {
+          "base_color": (r:0.50, g:0.20, b:0.00, a:0.00),
+          "rim_color":  (r:1.00, g:0.55, b:0.10, a:1.00),
+        },
+        floats: {
+          "rim_power": 3.0,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+
+    // Plain additive unlit — cool blue-white haze.
+    // Shows that alpha_mode: Add + unlit: true works with the existing
+    // custom_unlit_color.wgsl — no new shader required for the simple case.
+    "mat_emissive_plain": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        colors: {
+          "color_a": (r:0.50, g:0.75, b:1.00, a:0.60),
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
   },
 )

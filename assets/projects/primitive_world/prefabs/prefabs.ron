@@ -483,24 +483,20 @@
     "deco_orb_gold": (
       kind: "primitive",
       model: "Sphere",
+      material: Some("mat_deco_orb_gold"),
       components: (),
       primitive: Some((
         radius: Some(0.55),
-        color: Some((0.95, 0.78, 0.15)),
-        roughness: Some(0.15),
-        metallic: Some(0.85),
       )),
     ),
 
     "deco_orb_violet": (
       kind: "primitive",
       model: "Sphere",
+      material: Some("mat_deco_orb_violet"),
       components: (),
       primitive: Some((
         radius: Some(0.45),
-        color: Some((0.60, 0.15, 0.90)),
-        roughness: Some(0.20),
-        metallic: Some(0.60),
       )),
     ),
 
@@ -759,11 +755,9 @@
         ),
         (
           shape: "Sphere",
+          material: Some("mat_lamp_orb"),
           primitive: (
             radius: Some(0.22),
-            color: Some((1.0, 0.92, 0.55)),
-            roughness: Some(0.0),
-            metallic: Some(0.0),
           ),
           // Post top at y=3.5; sphere center at 3.5+0.22 = 3.72
           offset: (0.0, 3.72, 0.0),

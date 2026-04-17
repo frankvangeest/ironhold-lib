@@ -321,6 +321,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime tags; other component fields are design-time only |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
+| `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -423,6 +424,23 @@ When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates 
   }
 )
 ```
+
+### Composite prefabs (`children`) ✅
+
+A primitive prefab with a non-empty `children` list spawns multiple child meshes under a single parent entity. Each child is a `ChildPrimitiveDef`:
+
+**`ChildPrimitiveDef` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `shape` | `String` | required | Shape name — same vocabulary as `model` for single primitives |
+| `primitive` | `PrimitiveParams` | defaults | Shape dimensions and colour for this child |
+| `offset` | `(f32,f32,f32)` | `(0,0,0)` | Translation offset from the parent entity's origin |
+| `rotation_euler_deg` | `(f32,f32,f32)` | `(0,0,0)` | Euler rotation in degrees (XYZ order) |
+| `scale` | `(f32,f32,f32)` | `(1,1,1)` | Scale for this child |
+| `material` | `Option<String>` | `None` | Key into `AssetCatalog.materials` to override the child's PBR material. When set, `primitive.color`/`roughness`/`metallic` are ignored. |
+
+The `material` field on a child accepts the same custom/standard/terrain material keys as the top-level prefab `material` field, including `Custom` materials with WGSL shaders (e.g. `custom_emissive_fresnel.wgsl` for glowing orbs).
 
 ---
 

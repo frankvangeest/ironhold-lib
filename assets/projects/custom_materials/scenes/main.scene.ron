@@ -156,6 +156,24 @@
       prefab: "sphere_pbr_water",
       transform: (translation: (75.0, 0.0, -120.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
     ),
+
+    // ── Row 5 (Z = -160): emissive / transparent effects ─────────────────────
+    // Placed in front of the floor slab so back-faces show the transparency.
+    (
+      id: "sphere_emissive_shield",
+      prefab: "sphere_emissive_shield",
+      transform: (translation: (-60.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "sphere_emissive_orb_orange",
+      prefab: "sphere_emissive_orb_orange",
+      transform: (translation: (-10.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "torus_emissive_plain",
+      prefab: "torus_emissive_plain",
+      transform: (translation: (40.0, 4.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
   ],
 
   ui: [

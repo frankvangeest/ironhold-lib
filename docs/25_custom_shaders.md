@@ -167,6 +167,7 @@ All shaders live in `assets/shared/shaders/`.
 | `custom_fresnel.wgsl` | Fresnel rim lighting | `params_0` = rim_color; `params_1` = base_color; `params_2.x` = rim_power |
 | `custom_world_stripes.wgsl` | World-space horizontal stripes | `params_0` = color_a; `params_1` = color_b; `params_2.x` = frequency |
 | `custom_normal_vis.wgsl` | World-space normal visualisation | No uniforms |
+| `custom_emissive_fresnel.wgsl` | Transparent emissive fresnel (glass-orb or energy-field) | `params_0` = base_color; `params_1` = rim_color; `params_2.x` = rim_power |
 | `custom_material_default.wgsl` | **Fallback** — magenta | None (compiled in; do not reference in RON) |
 
 `terrain.wgsl` is used exclusively by `TerrainMaterial` and is not available for custom materials.

@@ -197,15 +197,45 @@ pub fn spawn_scene_v2(
                         };
                         if let Some(child_mesh) = build_primitive_mesh(&child_def.shape, &child_def.primitive) {
                             let child_mesh_h = mats.meshes.add(child_mesh);
-                            let child_mat_h = mats.standard.add(
-                                primitive_material(&child_def.primitive, project.primitive_default_color)
-                            );
-                            let child_entity = commands.spawn((
-                                Name::new(child_def.shape.clone()),
-                                Mesh3d(child_mesh_h),
-                                MeshMaterial3d(child_mat_h),
-                                child_tf,
-                            )).id();
+                            let built_mat = child_def.material.as_ref()
+                                .and_then(|key| mats.built.0.get(key));
+                            let child_entity = match built_mat {
+                                Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
+                                    commands.spawn((
+                                        Name::new(child_def.shape.clone()),
+                                        Mesh3d(child_mesh_h),
+                                        MeshMaterial3d(h.clone()),
+                                        child_tf,
+                                    )).id()
+                                }
+                                Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
+                                    commands.spawn((
+                                        Name::new(child_def.shape.clone()),
+                                        Mesh3d(child_mesh_h),
+                                        MeshMaterial3d(h.clone()),
+                                        child_tf,
+                                    )).id()
+                                }
+                                Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
+                                    commands.spawn((
+                                        Name::new(child_def.shape.clone()),
+                                        Mesh3d(child_mesh_h),
+                                        MeshMaterial3d(h.clone()),
+                                        child_tf,
+                                    )).id()
+                                }
+                                None => {
+                                    let mat_h = mats.standard.add(
+                                        primitive_material(&child_def.primitive, project.primitive_default_color)
+                                    );
+                                    commands.spawn((
+                                        Name::new(child_def.shape.clone()),
+                                        Mesh3d(child_mesh_h),
+                                        MeshMaterial3d(mat_h),
+                                        child_tf,
+                                    )).id()
+                                }
+                            };
                             commands.entity(parent).add_child(child_entity);
                         } else {
                             load_errors.push(format!(
@@ -592,15 +622,45 @@ pub fn spawn_scene_v2(
                 };
                 if let Some(child_mesh) = build_primitive_mesh(&child_def.shape, &child_def.primitive) {
                     let child_mesh_h = mats.meshes.add(child_mesh);
-                    let child_mat_h = mats.standard.add(
-                        primitive_material(&child_def.primitive, project.primitive_default_color)
-                    );
-                    let child_entity = commands.spawn((
-                        Name::new(child_def.shape.clone()),
-                        Mesh3d(child_mesh_h),
-                        MeshMaterial3d(child_mat_h),
-                        child_tf,
-                    )).id();
+                    let built_mat = child_def.material.as_ref()
+                        .and_then(|key| mats.built.0.get(key));
+                    let child_entity = match built_mat {
+                        Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
+                            commands.spawn((
+                                Name::new(child_def.shape.clone()),
+                                Mesh3d(child_mesh_h),
+                                MeshMaterial3d(h.clone()),
+                                child_tf,
+                            )).id()
+                        }
+                        Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
+                            commands.spawn((
+                                Name::new(child_def.shape.clone()),
+                                Mesh3d(child_mesh_h),
+                                MeshMaterial3d(h.clone()),
+                                child_tf,
+                            )).id()
+                        }
+                        Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
+                            commands.spawn((
+                                Name::new(child_def.shape.clone()),
+                                Mesh3d(child_mesh_h),
+                                MeshMaterial3d(h.clone()),
+                                child_tf,
+                            )).id()
+                        }
+                        None => {
+                            let mat_h = mats.standard.add(
+                                primitive_material(&child_def.primitive, project.primitive_default_color)
+                            );
+                            commands.spawn((
+                                Name::new(child_def.shape.clone()),
+                                Mesh3d(child_mesh_h),
+                                MeshMaterial3d(mat_h),
+                                child_tf,
+                            )).id()
+                        }
+                    };
                     commands.entity(player_entity).add_child(child_entity);
                 }
             }
