@@ -32,8 +32,11 @@ pub fn animation_playback_system(
     player_marker_query: Query<(), With<AnimationPlayer>>,
     mut player_query: Query<(&mut AnimationPlayer, Option<&mut AnimationTransitions>)>,
     children_query: Query<&Children>,
+    names: Query<&Name>,
 ) {
     for (entity, mut controller, policy_comp) in &mut controller_query {
+        let entity_name = names.get(entity).map(|n| n.as_str()).unwrap_or("<unnamed>");
+
         // 1. Initialize Graph if not done and GLTF is ready
         if !controller.graph_initialized {
             if let Some(gltf) = gltfs.get(&controller.gltf_handle) {
@@ -74,7 +77,8 @@ pub fn animation_playback_system(
                         gltf.named_animations.keys().map(|s| s.as_ref()).collect();
                     available.sort();
                     warn!(
-                        "AnimationPolicy: {} clip(s) not found in \"{}\": [{}]. Available clips: [{}]",
+                        "[{}] AnimationPolicy: {} clip(s) not found in \"{}\": [{}]. Available: [{}]",
+                        entity_name,
                         missing.len(),
                         controller.gltf_path,
                         missing.join(", "),
@@ -84,12 +88,32 @@ pub fn animation_playback_system(
 
                 let graph_handle = graphs.add(graph);
 
-                // Find entity with AnimationPlayer to insert Graph handle
-                if let Some(player_ent) = find_player_entity_recursive(entity, &player_marker_query, &children_query) {
-                    commands.entity(player_ent).insert((AnimationGraphHandle(graph_handle), AnimationTransitions::new()));
-                    controller.node_indices = indices;
-                    controller.graph_initialized = true;
-                    info!("Animation Graph Initialized!");
+                // Find entity with AnimationPlayer to insert Graph handle.
+                // Returns None if the GLTF scene children haven't been spawned yet
+                // (SpawnScene runs after Update — retry next frame).
+                match find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+                    Some(player_ent) => {
+                        commands.entity(player_ent).insert((
+                            AnimationGraphHandle(graph_handle),
+                            AnimationTransitions::new(),
+                        ));
+                        controller.node_indices = indices;
+                        controller.graph_initialized = true;
+                        info!(
+                            "[{}] Animation graph ready: {} clip(s) mapped, starting clip: {:?}",
+                            entity_name,
+                            controller.node_indices.len(),
+                            controller.current,
+                        );
+                    }
+                    None => {
+                        // GLTF scene hierarchy not yet spawned (SpawnScene runs after Update).
+                        // graph_handle drops here — graph is rebuilt on the next successful attempt.
+                        debug!(
+                            "[{}] Graph init deferred: AnimationPlayer not yet in hierarchy (GLTF: {})",
+                            entity_name, controller.gltf_path
+                        );
+                    }
                 }
             }
         }
@@ -114,13 +138,27 @@ pub fn animation_playback_system(
                         } else {
                             // AnimationTransitions not yet applied (deferred command still pending).
                             // Don't update last_played — retry next frame when transitions exist.
+                            debug!("[{}] Waiting for AnimationTransitions (deferred — retrying next frame)", entity_name);
                         }
                     } else {
-                        warn!("No node index for requested animation: {}", controller.current);
-                        // Avoid retrying every frame for a clip that will never exist.
+                        // Clip name is not in node_indices: either missing from the GLTF or an
+                        // unexpected override was pushed. Setting last_played stops the per-frame warn.
+                        let available_keys: Vec<&str> = controller.node_indices.keys().map(|s| s.as_str()).collect();
+                        warn!(
+                            "[{}] No node index for animation {:?} — available: [{}]",
+                            entity_name,
+                            controller.current,
+                            available_keys.join(", ")
+                        );
                         controller.last_played = controller.current.clone();
                     }
                 }
+            } else if controller.graph_initialized {
+                // AnimationPlayer entity disappeared after graph init (e.g., scene reload).
+                warn!(
+                    "[{}] AnimationPlayer entity lost after graph init — animation stalled",
+                    entity_name
+                );
             }
         }
     }

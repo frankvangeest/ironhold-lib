@@ -635,6 +635,7 @@ pub fn spawn_scene_v2(
                 commands.spawn((
                     crate::runtime::scene_manager::PendingPlayerConfig(pc),
                     crate::runtime::scene_manager::PendingTonemapping(tonemapping),
+                    LevelEntity,
                 ));
             } else {
                 spawn_player_entity(
