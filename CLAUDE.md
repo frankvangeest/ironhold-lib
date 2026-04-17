@@ -93,6 +93,13 @@ When ever you make changes in the code, give the summery of the changes in a nic
 ### Web Performance
 When making new features, performance and compatibility with WASM web builds must be considered. Avoid using features not supported in web builds. Test web builds frequently (`python test_web.py`).
 
+### Updating documentation
+When asked to update or audit documentation, check **all** of the following — not just CLAUDE.md files:
+- `CLAUDE.md` (root)
+- `crates/ironhold_core/src/CLAUDE.md`
+- `crates/ironhold_core/tests/CLAUDE.md`
+- Every `.md` file in `docs/` (`00_overview.md`, `10_architecture.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `browser_tests.md`, `STATUS.md`)
+
 > Rust-specific rules (GPU/WGSL alignment, physics, terrain, inspector) live in
 > `crates/ironhold_core/src/CLAUDE.md`.
 > Integration test setup rules live in `crates/ironhold_core/tests/CLAUDE.md`.
