@@ -457,9 +457,12 @@
     // Flat gold Cylinder placed upright (rotation_euler_deg: (90,0,0) in the
     // scene).  motion.rotate spins it around world Y for the classic coin look.
     // sensor: true → ghost collider; sounds.collect → catalog key for pickup SFX.
+    // mat_coin_pulse adds an additive gold pulse so the coin glows and breathes,
+    // making it easier to spot from a distance.
     "coin_collectible": (
       kind: "primitive",
       model: "Cylinder",
+      material: Some("mat_coin_pulse"),
       components: (
         tags: ["collectable"],
         sounds: {
@@ -469,9 +472,6 @@
       primitive: Some((
         radius: Some(0.42),
         height: Some(0.12),
-        color: Some((1.0, 0.82, 0.10)),
-        roughness: Some(0.05),
-        metallic: Some(0.92),
         sensor: true,
       )),
       motion: Some((

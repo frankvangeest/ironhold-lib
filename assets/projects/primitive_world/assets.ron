@@ -47,6 +47,23 @@
       unlit: true,
     ),
 
+    // Collectible coin — warm gold pulse. min_alpha: 0.25 so the coin never
+    // goes fully dark; the steady glow helps the player spot it.
+    "mat_coin_pulse": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        colors: {
+          "color": (r:1.00, g:0.85, b:0.10, a:1.00),
+        },
+        floats: {
+          "min_alpha": 0.25,
+          "speed": 1.5,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+
     // Violet deco orb — additive violet energy.
     "mat_deco_orb_violet": (
       kind: Custom((

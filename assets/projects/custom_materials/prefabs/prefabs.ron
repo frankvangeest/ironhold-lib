@@ -18,7 +18,7 @@
       material: Some("mat_floor"),
       components: (),
       primitive: Some((
-        size: Some((260.0, 2.0, 300.0)),
+        size: Some((260.0, 2.0, 400.0)),
       )),
     ),
 
@@ -207,6 +207,52 @@
         radius: Some(4.0),
         radius_top: Some(1.0),
       )),
+    ),
+
+    // ── Pulse ────────────────────────────────────────────────────────────────
+    "sphere_pulse_cyan": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_pulse_cyan"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "torus_pulse_gold": (
+      kind: "primitive",
+      model: "Torus",
+      material: Some("mat_pulse_gold"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+        radius_top: Some(1.0),
+      )),
+    ),
+
+    // ── Texture tint ─────────────────────────────────────────────────────────
+    "cuboid_crate_tint_red": (
+      kind: "primitive",
+      model: "Cuboid",
+      material: Some("mat_crate_tint_red"),
+      components: (),
+      primitive: Some((size: Some((6.0, 6.0, 6.0)))),
+    ),
+
+    "cuboid_crate_tint_blue": (
+      kind: "primitive",
+      model: "Cuboid",
+      material: Some("mat_crate_tint_blue"),
+      components: (),
+      primitive: Some((size: Some((6.0, 6.0, 6.0)))),
+    ),
+
+    // ── Dissolve ─────────────────────────────────────────────────────────────
+    "sphere_dissolve_fire": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_dissolve_fire"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
     ),
   }
 )

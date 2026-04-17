@@ -274,5 +274,88 @@
       alpha_mode: Add,
       unlit: true,
     ),
+
+    // ── Pulse ─────────────────────────────────────────────────────────────────
+    // Cyan emissive that breathes at 1.2 pulses/sec. min_alpha: 0.05 so it
+    // nearly vanishes at the bottom of each pulse.
+    "mat_pulse_cyan": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        colors: {
+          "color": (r:0.10, g:0.90, b:1.00, a:1.00),
+        },
+        floats: {
+          "min_alpha": 0.05,
+          "speed": 1.2,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+
+    // Slower warm-gold pulse. min_alpha: 0.3 — never goes fully dark, which
+    // looks better for a collectible or power indicator.
+    "mat_pulse_gold": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        colors: {
+          "color": (r:1.00, g:0.82, b:0.10, a:1.00),
+        },
+        floats: {
+          "min_alpha": 0.30,
+          "speed": 0.8,
+        },
+      )),
+      alpha_mode: Add,
+      unlit: true,
+    ),
+
+    // ── Texture tint ──────────────────────────────────────────────────────────
+    // Wood crate albedo tinted with a warm orange-red.
+    // Demonstrates texture_0 sampling — change the tint to reuse the same
+    // texture with a completely different colour scheme.
+    "mat_crate_tint_red": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/wood_crate_albedo.png",
+        },
+        colors: {
+          "tint": (r:1.00, g:0.35, b:0.15, a:1.00),
+        },
+      )),
+    ),
+
+    // Same texture, cool blue tint — same shader, different colour, zero extra cost.
+    "mat_crate_tint_blue": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/wood_crate_albedo.png",
+        },
+        colors: {
+          "tint": (r:0.30, g:0.55, b:1.00, a:1.00),
+        },
+      )),
+    ),
+
+    // ── Dissolve ──────────────────────────────────────────────────────────────
+    // 40% dissolved, orange-fire edge glow on a dark charred base.
+    // alpha_mode: Mask(0.5) discards cut fragments without transparency sorting.
+    "mat_dissolve_fire": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_dissolve.wgsl"),
+        colors: {
+          "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
+          "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
+        },
+        floats: {
+          "edge_width": 0.12,
+          "threshold":  0.40,
+          "tiling":     6.0,
+        },
+      )),
+      alpha_mode: Mask(0.5),
+    ),
   },
 )

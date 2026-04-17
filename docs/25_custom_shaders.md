@@ -168,6 +168,9 @@ All shaders live in `assets/shared/shaders/`.
 | `custom_world_stripes.wgsl` | World-space horizontal stripes | `params_0` = color_a; `params_1` = color_b; `params_2.x` = frequency |
 | `custom_normal_vis.wgsl` | World-space normal visualisation | No uniforms |
 | `custom_emissive_fresnel.wgsl` | Transparent emissive fresnel (glass-orb or energy-field) | `params_0` = base_color; `params_1` = rim_color; `params_2.x` = rim_power |
+| `custom_pulse.wgsl` | Pulsing emissive — breathes in/out over time | `params_0` = color; `params_1.x` = min_alpha; `params_1.y` = speed (pulses/sec) |
+| `custom_texture_tint.wgsl` | Texture with a colour tint multiplied on top | `texture_0` = albedo texture; `params_0` = tint (r,g,b,a) |
+| `custom_dissolve.wgsl` | Procedural noise cutout with glowing edge | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling |
 | `custom_material_default.wgsl` | **Fallback** — magenta | None (compiled in; do not reference in RON) |
 
 `terrain.wgsl` is used exclusively by `TerrainMaterial` and is not available for custom materials.
