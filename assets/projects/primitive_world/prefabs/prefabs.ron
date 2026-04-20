@@ -145,6 +145,19 @@
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
+        // hat
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: Some(0.28),
+            height: Some(0.2),
+            color: Some((0.38, 0.24, 0.12)),
+            roughness: Some(0.88),
+          ),
+          offset: (0.0, 1.8, 0.1),
+          rotation_euler_deg: (10.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
         // Left eye
         (
           shape: "Sphere",
@@ -222,6 +235,20 @@
           ),
           offset: (0.0, 0.8, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // shoulders
+        (
+          shape: "Capsule3d",
+          primitive: (
+            radius: Some(0.36),
+            height: Some(1.2),
+            color: Some((0.55, 0.22, 0.18)),
+            roughness: Some(0.7),
+            metallic: Some(0.05),
+          ),
+          offset: (0.0, 0.9, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 90.0),
           scale: (1.0, 1.0, 1.0),
         ),
         // Left eye — slanted inward for an angry look

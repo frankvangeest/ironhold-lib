@@ -12,6 +12,7 @@ assets:
   - https://texturehaven.com/
   - https://publicdomaintextures.com/
   - https://3dtextures.me/
+  - https://3dtextures.me/2018/04/13/cobblestone-001/
 - sounds:
   - https://freesound.org/
   - https://opengameart.org/sounds
@@ -25,3 +26,23 @@ assets:
     - https://freesound.org/people/jvmyka@gmail.com/sounds/580771/
   - child-hello.wav
     - https://freesound.org/people/rabban625/sounds/436471/
+  - footsteps-grass
+    - https://freesound.org/people/Ali_6868/packs/21607/
+  - footsteps-stone
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - footsteps-bush
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - footsteps-leaves
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - footsteps-gravel
+    - https://freesound.org/people/Ali_6868/packs/21608/
+  - footsteps-snow
+    - https://freesound.org/people/cabled_mess/packs/21581/
+  - fire
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - boulder
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - pressure plate
+    - https://freesound.org/people/Wdomino/packs/28452/
+  - footsteps-water
+    - https://freesound.org/people/RomanKolachnik/packs/37492/

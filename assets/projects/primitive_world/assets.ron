@@ -9,8 +9,8 @@
     "click":        "shared/audio/menu-button-click.wav",
     "collect_coin": "shared/audio/game-pickup-01.wav",
     "jump":         "shared/audio/jump.wav",
-    "npc_greet":    "shared/audio/child-hello.wav",
-    "goblin_growl": "shared/audio/growl.wav",
+    "npc_greet":    "projects/primitive_world/audio/child-hello.wav",
+    "goblin_growl": "projects/primitive_world/audio/growl.wav",
   },
 
   materials: {
