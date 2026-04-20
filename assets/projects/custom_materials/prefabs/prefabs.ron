@@ -254,5 +254,46 @@
       components: (),
       primitive: Some((radius: Some(4.0))),
     ),
+
+    // ── Noise textures ────────────────────────────────────────────────────────
+    "sphere_noise_perlin": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_noise_perlin"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_noise_voronoi": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_noise_voronoi"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_noise_value": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_noise_value"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_noise_gabor": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_noise_gabor"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_noise_blue": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_noise_blue"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
   }
 )

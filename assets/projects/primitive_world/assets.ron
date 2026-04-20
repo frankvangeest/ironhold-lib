@@ -14,7 +14,120 @@
   },
 
   materials: {
-    // Lamp orb — warm glass glow. Blend mode: centre is semi-transparent,
+
+    // ── Scenery surface textures ───────────────────────────────────────────────
+    // All use custom_texture_tint.wgsl; tint (1,1,1,1) = no tint (show texture
+    // as-is). Swap texture_0 path or adjust tint to recolour without a new shader.
+
+    "mat_bark": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_wood_planks": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_basecolor.jpg",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_stone_floor": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_stone_mossy": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_stone_bricks": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_wall_plaster": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_roof_tiles": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_thatched_roof": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_basecolor.png",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    "mat_cliff_rock": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
+        },
+        colors: {
+          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
+        },
+      )),
+    ),
+
+    // ── Lamp orb — warm glass glow. Blend mode: centre is semi-transparent,
     // rim is opaque warm white, giving a lantern-glass effect.
     "mat_lamp_orb": (
       kind: Custom((

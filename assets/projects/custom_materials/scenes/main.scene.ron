@@ -59,13 +59,14 @@
 
     // ── Floor ────────────────────────────────────────────────────────────────
     // Large thin slab — receives shadows from all objects.
+    // Depth 480 covers rows 1–7 (Z = 0 to Z = -240) with margin.
     (
       id: "floor",
       prefab: "floor_slab",
       transform: (
-        translation: (0.0, -5.0, -60.0),
+        translation: (0.0, -5.0, -80.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
+        scale: (1.0, 1.0, 1.6),
       ),
     ),
 
@@ -201,6 +202,33 @@
       prefab: "sphere_dissolve_fire",
       transform: (translation: (90.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
     ),
+
+    // ── Row 7 (Z = -240): noise textures ──────────────────────────────────────
+    (
+      id: "sphere_noise_perlin",
+      prefab: "sphere_noise_perlin",
+      transform: (translation: (-80.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "sphere_noise_voronoi",
+      prefab: "sphere_noise_voronoi",
+      transform: (translation: (-40.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "sphere_noise_value",
+      prefab: "sphere_noise_value",
+      transform: (translation: (0.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "sphere_noise_gabor",
+      prefab: "sphere_noise_gabor",
+      transform: (translation: (40.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
+    (
+      id: "sphere_noise_blue",
+      prefab: "sphere_noise_blue",
+      transform: (translation: (80.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+    ),
   ],
 
   ui: [
@@ -214,7 +242,7 @@
     (
       kind: "label",
       id: "title_label",
-      text: "Custom Materials Demo — WASD + mouse to fly",
+      text: "Custom Materials Demo — WASD + mouse to fly | 7 rows: unlit, gradient, fresnel, PBR, emissive, pulse/tint/dissolve, noise",
       position: (16.0, 56.0),
       size: (480.0, 32.0),
     ),

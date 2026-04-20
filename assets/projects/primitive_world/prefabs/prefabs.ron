@@ -384,11 +384,10 @@
     "path_stone": (
       kind: "primitive",
       model: "Cuboid",
+      material: Some("mat_stone_floor"),
       components: (),
       primitive: Some((
         size: Some((2.0, 0.06, 2.0)),
-        color: Some((0.65, 0.60, 0.50)),
-        roughness: Some(0.98),
       )),
     ),
 
@@ -396,22 +395,20 @@
     "rock_small": (
       kind: "primitive",
       model: "Sphere",
+      material: Some("mat_cliff_rock"),
       components: (),
       primitive: Some((
         radius: Some(0.3),
-        color: Some((0.52, 0.50, 0.48)),
-        roughness: Some(0.95),
       )),
     ),
 
     "rock_medium": (
       kind: "primitive",
       model: "Sphere",
+      material: Some("mat_cliff_rock"),
       components: (),
       primitive: Some((
         radius: Some(0.55),
-        color: Some((0.50, 0.48, 0.46)),
-        roughness: Some(0.95),
       )),
     ),
 
@@ -421,12 +418,11 @@
     "barrel": (
       kind: "primitive",
       model: "Cylinder",
+      material: Some("mat_wood_planks"),
       components: (),
       primitive: Some((
         radius: Some(0.28),
         height: Some(0.9),
-        color: Some((0.38, 0.24, 0.12)),
-        roughness: Some(0.88),
       )),
     ),
 
@@ -434,12 +430,11 @@
     "fence_post": (
       kind: "primitive",
       model: "Cylinder",
+      material: Some("mat_wood_planks"),
       components: (),
       primitive: Some((
         radius: Some(0.08),
         height: Some(1.5),
-        color: Some((0.62, 0.46, 0.26)),
-        roughness: Some(0.92),
       )),
     ),
 
@@ -447,11 +442,10 @@
     "fence_rail": (
       kind: "primitive",
       model: "Cuboid",
+      material: Some("mat_wood_planks"),
       components: (),
       primitive: Some((
         size: Some((2.0, 0.1, 0.1)),
-        color: Some((0.62, 0.46, 0.26)),
-        roughness: Some(0.92),
       )),
     ),
 
@@ -472,11 +466,10 @@
     "bridge_deck": (
       kind: "primitive",
       model: "Cuboid",
+      material: Some("mat_stone_mossy"),
       components: (),
       primitive: Some((
         size: Some((7.0, 0.35, 12.0)),
-        color: Some((0.54, 0.50, 0.46)),
-        roughness: Some(0.90),
       )),
     ),
 
@@ -558,11 +551,10 @@
       children: [
         (
           shape: "Cylinder",
+          material: Some("mat_bark"),
           primitive: (
             radius: Some(0.22),
             height: Some(3.0),
-            color: Some((0.36, 0.22, 0.10)),
-            roughness: Some(0.95),
           ),
           // h=3 → center at 1.5 so bottom sits at y=0
           offset: (0.0, 1.5, 0.0),
@@ -593,11 +585,10 @@
       children: [
         (
           shape: "Cylinder",
+          material: Some("mat_bark"),
           primitive: (
             radius: Some(0.25),
             height: Some(2.5),
-            color: Some((0.36, 0.22, 0.10)),
-            roughness: Some(0.95),
           ),
           offset: (0.0, 1.25, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -626,10 +617,9 @@
       children: [
         (
           shape: "Cuboid",
+          material: Some("mat_wall_plaster"),
           primitive: (
             size: Some((5.0, 4.0, 6.0)),
-            color: Some((0.86, 0.76, 0.62)),
-            roughness: Some(0.85),
           ),
           // h=4 → center at 2.0 so bottom sits at y=0
           offset: (0.0, 2.0, 0.0),
@@ -638,12 +628,11 @@
         ),
         (
           shape: "ConicalFrustum",
+          material: Some("mat_roof_tiles"),
           primitive: (
             radius: Some(3.2),
             radius_top: Some(0.3),
             height: Some(2.5),
-            color: Some((0.64, 0.24, 0.20)),
-            roughness: Some(0.80),
           ),
           // Body top at y=4; frustum h=2.5 → center at 4+1.25 = 5.25
           offset: (0.0, 5.25, 0.0),
@@ -652,11 +641,10 @@
         ),
         (
           shape: "Cylinder",
+          material: Some("mat_stone_bricks"),
           primitive: (
             radius: Some(0.24),
             height: Some(1.4),
-            color: Some((0.34, 0.30, 0.28)),
-            roughness: Some(0.90),
           ),
           // Protrudes from the roof slope near the ridge
           offset: (1.2, 6.1, 1.4),
@@ -674,10 +662,9 @@
       children: [
         (
           shape: "Cuboid",
+          material: Some("mat_wall_plaster"),
           primitive: (
             size: Some((4.0, 3.0, 4.0)),
-            color: Some((0.76, 0.82, 0.88)),
-            roughness: Some(0.85),
           ),
           offset: (0.0, 1.5, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -685,12 +672,11 @@
         ),
         (
           shape: "ConicalFrustum",
+          material: Some("mat_thatched_roof"),
           primitive: (
             radius: Some(2.6),
             radius_top: Some(0.2),
             height: Some(2.0),
-            color: Some((0.28, 0.54, 0.34)),
-            roughness: Some(0.80),
           ),
           // Body top at y=3; frustum center at 3+1 = 4.0
           offset: (0.0, 4.0, 0.0),
@@ -708,11 +694,10 @@
       children: [
         (
           shape: "Cylinder",
+          material: Some("mat_stone_bricks"),
           primitive: (
             radius: Some(0.70),
             height: Some(0.80),
-            color: Some((0.58, 0.54, 0.50)),
-            roughness: Some(0.92),
           ),
           // Base: h=0.8 → center at 0.4
           offset: (0.0, 0.4, 0.0),
@@ -721,11 +706,10 @@
         ),
         (
           shape: "Cylinder",
+          material: Some("mat_stone_bricks"),
           primitive: (
             radius: Some(0.10),
             height: Some(1.80),
-            color: Some((0.58, 0.54, 0.50)),
-            roughness: Some(0.90),
           ),
           // Pillar left: bottom at y=0.8, h=1.8 → center at 0.8+0.9 = 1.7
           offset: (-0.55, 1.7, 0.0),
@@ -734,11 +718,10 @@
         ),
         (
           shape: "Cylinder",
+          material: Some("mat_stone_bricks"),
           primitive: (
             radius: Some(0.10),
             height: Some(1.80),
-            color: Some((0.58, 0.54, 0.50)),
-            roughness: Some(0.90),
           ),
           // Pillar right
           offset: (0.55, 1.7, 0.0),
@@ -747,10 +730,9 @@
         ),
         (
           shape: "Cuboid",
+          material: Some("mat_wood_planks"),
           primitive: (
             size: Some((1.20, 0.12, 0.14)),
-            color: Some((0.48, 0.34, 0.18)),
-            roughness: Some(0.88),
           ),
           // Crossbeam at top of pillars: y = 0.8+1.8+0.06 = 2.66
           offset: (0.0, 2.66, 0.0),
