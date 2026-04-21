@@ -169,7 +169,8 @@ All shaders live in `assets/shared/shaders/`.
 | `custom_normal_vis.wgsl` | World-space normal visualisation | No uniforms |
 | `custom_emissive_fresnel.wgsl` | Transparent emissive fresnel (glass-orb or energy-field) | `params_0` = base_color; `params_1` = rim_color; `params_2.x` = rim_power |
 | `custom_pulse.wgsl` | Pulsing emissive — breathes in/out over time | `params_0` = color; `params_1.x` = min_alpha; `params_1.y` = speed (pulses/sec) |
-| `custom_texture_tint.wgsl` | Texture with a colour tint multiplied on top | `texture_0` = albedo texture; `params_0` = tint (r,g,b,a) |
+| `custom_texture_tint.wgsl` | Texture with a colour tint multiplied on top (UV-based; avoid on spheres/cylinders) | `texture_0` = albedo texture; `params_0` = tint (r,g,b,a) |
+| `custom_texture_triplanar.wgsl` | Triplanar world-space texture — no UV seams on any geometry | `texture_0` = texture; `params_0` = tint; `params_1.x` = blend_sharpness (4=soft, 8=sharp); `params_1.y` = tiling (repeats/unit) |
 | `custom_dissolve.wgsl` | Procedural noise cutout with glowing edge | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling |
 | `custom_material_default.wgsl` | **Fallback** — magenta | None (compiled in; do not reference in RON) |
 

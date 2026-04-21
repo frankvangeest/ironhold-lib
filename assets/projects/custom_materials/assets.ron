@@ -363,55 +363,55 @@
     // White tint (1,1,1,1) shows the raw noise pattern.
     // Useful as masks, roughness sources, dissolve inputs, or UV offsets.
 
+    // Noise textures use triplanar projection so the pattern wraps cleanly across
+    // the sphere surface with no meridian seam or pole pinch.
+    // tiling: 0.2 → ~1.6 repeats across an r=4 sphere diameter (shows the full pattern).
+
     // Perlin noise — smooth organic variation; good for terrain height, fog, water ripples.
     "mat_noise_perlin": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
           "texture_0": "shared/textures/noise/seamless-perlin-noise-512x512-8-cells.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
       )),
     ),
 
     // Voronoi noise — cellular/cracked pattern; good for scales, cracks, skin, rock faces.
     "mat_noise_voronoi": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
           "texture_0": "shared/textures/noise/seamless-voronoi-noise-512x512-12-cells.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
       )),
     ),
 
     // Value noise — blocky low-frequency variation; good for roughness maps, smoke, clouds.
     "mat_noise_value": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
           "texture_0": "shared/textures/noise/seamless-value-noise-512x512-16-cells.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
       )),
     ),
 
     // Gabor noise — directional grain/fibre pattern; good for wood grain, brushed metal, fabric.
     "mat_noise_gabor": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
           "texture_0": "shared/textures/noise/seamless-gabor-512_size-3000_kernels-0.08_f-60.0_degrees-12_sigma.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
       )),
     ),
 
@@ -419,13 +419,12 @@
     // shadow sample jitter, and alpha stippling.
     "mat_noise_blue": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
           "texture_0": "shared/textures/noise/seamless-blue-noise-128.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
       )),
     ),
   },
