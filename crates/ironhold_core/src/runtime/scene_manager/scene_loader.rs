@@ -363,6 +363,14 @@ pub fn spawn_scene_v2(
                             }
                         };
 
+                        // Unlit custom materials are outside the lighting system — they must
+                        // not cast shadows either, since shadow maps are a lighting concept.
+                        if let Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) = built_mat {
+                            if mats.custom.get(h).map(|m| m.unlit).unwrap_or(false) {
+                                commands.entity(spawned).insert(bevy::light::NotShadowCaster);
+                            }
+                        }
+
                         // Sensor takes precedence; otherwise check for static physics collider.
                         if p.sensor {
                             if let Some(collider) = build_primitive_collider(&prefab.model, &p) {

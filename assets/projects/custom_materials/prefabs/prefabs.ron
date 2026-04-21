@@ -332,6 +332,17 @@
       primitive: Some((radius: Some(4.0))),
     ),
 
+    // ── Sky dome ─────────────────────────────────────────────────────────────
+    "sky_sphere": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_sky_gradient"),
+      components: (),
+      primitive: Some((
+        radius: Some(500.0),
+      )),
+    ),
+
     // ── Triplanar surface textures ────────────────────────────────────────────
     "sphere_triplanar_bricks": (
       kind: "primitive",

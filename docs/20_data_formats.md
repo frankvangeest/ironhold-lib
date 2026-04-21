@@ -277,6 +277,17 @@ Named registry of all assets available to prefabs and scenes.
 )
 ```
 
+**MaterialDef top-level fields** (apply to all kinds):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `kind` | `MaterialKind` | — | Required. `Standard(…)`, `Terrain(…)`, or `Custom(…)` |
+| `alpha_mode` | `AlphaModeDef` | `Opaque` | `Opaque`, `Mask(f32)`, `Blend`, `Premultiplied`, `Add`, `Multiply` |
+| `double_sided` | `bool` | `false` | Disables back-face culling. Use for geometry that must be visible from the inside (sky spheres, double-sided leaves, portals). Creates a separate GPU pipeline from the single-sided variant. |
+| `unlit` | `bool` | `false` | Bypasses the lighting pipeline entirely — output colour is the raw shader result. Automatically adds `NotShadowCaster` to the entity so it cannot cast shadows. Required for additive emissive effects. |
+| `uv_transform` | `Option<UvTransformDef>` | `None` | Offset, scale, and rotation applied to UVs before sampling |
+| `tags` | `Vec<String>` | `[]` | Arbitrary string tags for runtime filtering |
+
 **MaterialDef kinds:**
 - `Standard(StandardMaterialDef)` — PBR material (base colour, textures, metallic, roughness, etc.)
 - `Terrain(TerrainMaterialDef)` — splatmap + layer textures (WebGPU 16-byte alignment required)

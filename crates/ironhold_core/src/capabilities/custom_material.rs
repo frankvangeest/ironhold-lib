@@ -42,15 +42,17 @@ pub struct CustomMaterialUniforms {
 
 /// Pipeline key that identifies which shader a `CustomMaterial` instance uses.
 /// Two materials with the same shader share a GPU pipeline; different shaders
-/// get separate pipelines.
+/// get separate pipelines. `double_sided` is included because it changes the
+/// pipeline's cull_mode, requiring a distinct compiled pipeline.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct CustomMaterialKey {
     pub shader: Handle<Shader>,
+    pub double_sided: bool,
 }
 
 impl From<&CustomMaterial> for CustomMaterialKey {
     fn from(mat: &CustomMaterial) -> Self {
-        Self { shader: mat.shader.clone() }
+        Self { shader: mat.shader.clone(), double_sided: mat.double_sided }
     }
 }
 
@@ -173,6 +175,9 @@ impl Material for CustomMaterial {
                     frag.shader = key.bind_group_data.shader.clone();
                 }
             }
+        }
+        if key.bind_group_data.double_sided {
+            descriptor.primitive.cull_mode = None;
         }
         Ok(())
     }

@@ -68,6 +68,19 @@
       ),
     ),
 
+    // ── Sky sphere ───────────────────────────────────────────────────────────
+    // Centred on the scene floor mid-point. Radius 500 safely contains the whole
+    // showcase area. No label — background element.
+    (
+      id: "sky_sphere",
+      prefab: "sky_sphere",
+      transform: (
+        translation: (0.0, 0.0, -80.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // ── Row 1 (Z = 0): unlit + checker effects ────────────────────────────────
     (
       id: "sphere_unlit_pink",

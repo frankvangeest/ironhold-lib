@@ -221,7 +221,7 @@ HDR camera mode and bloom are **not enabled** in this engine (see [Rendering phi
 
 To achieve a self-illuminated or glowing look without HDR:
 
-- Set `unlit: true` on the material. This bypasses the lighting pipeline entirely; the shader output is the final pixel colour.
+- Set `unlit: true` on the material. This bypasses the lighting pipeline entirely; the shader output is the final pixel colour. **`unlit: true` also automatically adds `NotShadowCaster` to the entity** — an object that ignores lighting has no business casting shadows.
 - Use `alpha_mode: Add` for additive blending. Dark parts of the surface become transparent; bright parts add on top of what is behind them. This is the standard approach for energy fields, particle-like meshes, and holographic overlays.
 - Use `alpha_mode: Blend` when you need a solid-but-translucent surface (e.g. a glass shield) rather than a purely additive glow.
 
@@ -238,6 +238,43 @@ To achieve a self-illuminated or glowing look without HDR:
 ```
 
 Keep colour values in the `[0, 1]` range. Values above 1.0 offer no visual benefit without HDR and will simply clip to white.
+
+---
+
+## Double-sided and interior rendering ✅
+
+By default, meshes are rendered with back-face culling enabled — fragments on the inside surface of a mesh are discarded. Set `double_sided: true` to disable culling and render both faces:
+
+```ron
+"mat_sky": (
+  kind: Custom((
+    shader: Some("shared/shaders/custom_gradient.wgsl"),
+    colors: {
+      "color_a": (r: 0.52, g: 0.70, b: 0.88, a: 1.0),  // horizon
+      "color_b": (r: 0.03, g: 0.10, b: 0.48, a: 1.0),  // zenith
+    },
+  )),
+  double_sided: true,
+  unlit: true,
+),
+```
+
+**Sky sphere pattern:** Spawn a large sphere (radius ~500) at the scene centre and apply a `double_sided: true, unlit: true` gradient material. The camera is always inside the sphere, so it sees the inner faces. Because `unlit: true` also suppresses shadow casting, the sky sphere does not project a shadow onto the scene.
+
+```ron
+// prefabs.ron
+"sky_sphere": (
+  kind: "primitive",
+  model: "Sphere",
+  material: Some("mat_sky"),
+  components: (),
+  primitive: Some((radius: Some(500.0))),
+),
+```
+
+**Implementation note:** `double_sided: true` creates a distinct GPU pipeline (separate `CustomMaterialKey`) from the default single-sided pipeline, so mixing both variants in a scene has no overhead beyond the extra pipeline compile at startup.
+
+**Other use cases:** double-sided leaves/grass billboards, two-sided decals, portal surfaces, thin cloth.
 
 ---
 

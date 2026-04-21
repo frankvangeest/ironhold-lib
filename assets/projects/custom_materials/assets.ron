@@ -499,6 +499,23 @@
       )),
     ),
 
+    // ── Sky dome ─────────────────────────────────────────────────────────────
+    // Gradient viewed from inside a large sphere. double_sided: true disables
+    // back-face culling so the interior faces are visible. unlit: true keeps the
+    // sky constant regardless of scene lighting.
+    // color_a → params_0 = horizon/bottom colour; color_b → params_1 = zenith colour.
+    "mat_sky_gradient": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        colors: {
+          "color_a": (r:0.52, g:0.70, b:0.88, a:1.0),   // horizon — pale sky blue
+          "color_b": (r:0.03, g:0.10, b:0.48, a:1.0),   // zenith — deep blue
+        },
+      )),
+      double_sided: true,
+      unlit: true,
+    ),
+
     // ── Triplanar surface textures ────────────────────────────────────────────
     // These contrast with the noise row above: same triplanar shader, but now
     // applied to real stylised surface textures to show it as a surfacing tool.
