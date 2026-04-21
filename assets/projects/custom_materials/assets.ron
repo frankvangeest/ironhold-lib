@@ -24,10 +24,27 @@
       unlit: true,
     ),
 
-    // Checkerboard: black & white, 6 tiles
-    "mat_checker_bw": (
+    // Checkerboard: black & white on a sphere — uses world-space variant so the
+    // pattern wraps seamlessly with no meridian seam or pole distortion.
+    // tiling = 0.75 → ~6 cells across the r=4 sphere diameter (0.75 × 8 = 6).
+    "mat_checker_bw_world": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker.wgsl"),
+        shader: Some("shared/shaders/custom_checker_world.wgsl"),
+        colors: {
+          "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
+          "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
+        },
+        floats: {
+          "tiling": 0.75,
+        },
+      )),
+    ),
+
+    // UV-space checker: same black & white on a sphere — meridian seam visible.
+    // Compare side-by-side with mat_checker_bw_world (world-space, seamless).
+    "mat_checker_bw_uv": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_checker_uv.wgsl"),
         colors: {
           "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
           "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
@@ -38,10 +55,27 @@
       )),
     ),
 
-    // Checkerboard: orange & navy, 4 tiles
+    // Local (object-space) checker: same B&W, pattern anchored to each object's
+    // own coordinate frame. tiling = 0.75 matches mat_checker_bw_world — compare the
+    // three spheres side-by-side: UV seam, world grid offset, local centered.
+    "mat_checker_bw_local": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_checker_local.wgsl"),
+        colors: {
+          "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
+          "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
+        },
+        floats: {
+          "tiling": 0.75,
+        },
+      )),
+    ),
+
+    // Checkerboard: orange & navy on a cuboid — uses UV-space variant so tiles
+    // align cleanly with the box faces. tiling = 4 → 4 checks per UV [0,1] range.
     "mat_checker_color": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker.wgsl"),
+        shader: Some("shared/shaders/custom_checker_uv.wgsl"),
         colors: {
           "color_a": (r:0.9, g:0.45, b:0.05, a:1.0),
           "color_b": (r:0.05, g:0.1,  b:0.45, a:1.0),
@@ -342,9 +376,46 @@
     // ── Dissolve ──────────────────────────────────────────────────────────────
     // 40% dissolved, orange-fire edge glow on a dark charred base.
     // alpha_mode: Mask(0.5) discards cut fragments without transparency sorting.
+    // World-space variant — sphere mesh has no clean UV seam; tiling in world units.
     "mat_dissolve_fire": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_dissolve.wgsl"),
+        shader: Some("shared/shaders/custom_dissolve_world.wgsl"),
+        colors: {
+          "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
+          "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
+        },
+        floats: {
+          "edge_width": 0.12,
+          "threshold":  0.40,
+          "tiling":     0.75,
+        },
+      )),
+      alpha_mode: Mask(0.5),
+    ),
+
+    // Local (object-space) dissolve — same fire colours, pattern anchored to each
+    // object. Completes the UV / World / Local trio alongside the checker set.
+    "mat_dissolve_fire_local": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_dissolve_local.wgsl"),
+        colors: {
+          "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
+          "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
+        },
+        floats: {
+          "edge_width": 0.12,
+          "threshold":  0.40,
+          "tiling":     0.75,
+        },
+      )),
+      alpha_mode: Mask(0.5),
+    ),
+
+    // UV-space dissolve — visible meridian seam on spheres. Compare side-by-side
+    // with mat_dissolve_fire (world-space) to show when the world variant is needed.
+    "mat_dissolve_fire_uv": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_dissolve_uv.wgsl"),
         colors: {
           "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
           "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
@@ -425,6 +496,50 @@
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
+      )),
+    ),
+
+    // ── Triplanar surface textures ────────────────────────────────────────────
+    // These contrast with the noise row above: same triplanar shader, but now
+    // applied to real stylised surface textures to show it as a surfacing tool.
+    // A sphere with UV mapping would show pole pinch and a meridian seam on all
+    // three — triplanar projection eliminates both artefacts automatically.
+
+    // Stylised bricks — geometric pattern makes the seam-free join obvious.
+    "mat_triplanar_bricks": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
+        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.1 },
+      )),
+    ),
+
+    // Stylised cliff rock — organic surface, shows how triplanar handles
+    // irregular shapes with no visible axis-aligned projection seams.
+    "mat_triplanar_rock": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
+        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "tiling": 0.25 },
+      )),
+    ),
+
+    // Stylised bark — strong directional grain exposes the blend region between
+    // projection axes; blend_sharpness: 6 tightens the transition.
+    "mat_triplanar_bark": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
+        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 6.0, "tiling": 0.2 },
       )),
     ),
   },

@@ -44,10 +44,30 @@
     ),
 
     // ── Procedural checkerboard ───────────────────────────────────────────────
-    "sphere_checker_bw": (
+    "sphere_checker_bw_world": (
       kind: "primitive",
       model: "Sphere",
-      material: Some("mat_checker_bw"),
+      material: Some("mat_checker_bw_world"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    "sphere_checker_bw_uv": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_checker_bw_uv"),
+      components: (),
+      primitive: Some((
+        radius: Some(4.0),
+      )),
+    ),
+
+    "sphere_checker_bw_local": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_checker_bw_local"),
       components: (),
       primitive: Some((
         radius: Some(4.0),
@@ -247,10 +267,26 @@
     ),
 
     // ── Dissolve ─────────────────────────────────────────────────────────────
+    "sphere_dissolve_fire_uv": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_dissolve_fire_uv"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
     "sphere_dissolve_fire": (
       kind: "primitive",
       model: "Sphere",
       material: Some("mat_dissolve_fire"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_dissolve_fire_local": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_dissolve_fire_local"),
       components: (),
       primitive: Some((radius: Some(4.0))),
     ),
@@ -292,6 +328,31 @@
       kind: "primitive",
       model: "Sphere",
       material: Some("mat_noise_blue"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    // ── Triplanar surface textures ────────────────────────────────────────────
+    "sphere_triplanar_bricks": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_triplanar_bricks"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_triplanar_rock": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_triplanar_rock"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
+
+    "sphere_triplanar_bark": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_triplanar_bark"),
       components: (),
       primitive: Some((radius: Some(4.0))),
     ),

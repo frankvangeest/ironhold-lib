@@ -15,7 +15,7 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings, SpawnId,
+    ProjectKeyBindings, LoadedKeyBindings, SpawnId, WorldLabel,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
@@ -133,6 +133,7 @@ pub fn spawn_scene_v2(
         }
 
         // Spawn entities from prefabs
+        let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
         let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
@@ -306,6 +307,9 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
+                    if let Some(label_def) = &entity_def.label {
+                        pending_labels.push((parent, label_def.clone()));
+                    }
                     continue;
                 }
 
@@ -457,6 +461,10 @@ pub fn spawn_scene_v2(
                                 Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                             ));
                         }
+
+                        if let Some(label_def) = &entity_def.label {
+                            pending_labels.push((spawned, label_def.clone()));
+                        }
                     }
                     None => load_errors.push(format!(
                         "entity '{}': unknown primitive shape '{}', entity skipped",
@@ -503,6 +511,9 @@ pub fn spawn_scene_v2(
                     &entity_def.id,
                 );
                 commands.entity(parent).insert(LevelEntity);
+                if let Some(label_def) = &entity_def.label {
+                    pending_labels.push((parent, label_def.clone()));
+                }
             }
         }
 
@@ -750,6 +761,42 @@ pub fn spawn_scene_v2(
                 material_paths: terrain_v2.material_paths.clone(),
             };
             commands.spawn((Name::new("Terrain"), LevelEntity, terrain_config));
+        }
+
+        // Spawn world-label annotations (fixed positions).
+        for label in &scene.world_labels {
+            let (r, g, b, a) = label.color;
+            commands.spawn((
+                Name::new(format!("WorldLabel: {}", label.id)),
+                Text2d::new(label.text.clone()),
+                TextFont { font_size: label.font_size, ..default() },
+                TextColor(Color::srgba(r, g, b, a)),
+                Transform::from_xyz(0.0, 0.0, 1.0),
+                WorldLabel {
+                    world_pos: Vec3::from(label.translation),
+                    tracked_entity: None,
+                    offset: Vec3::ZERO,
+                },
+                LevelEntity,
+            ));
+        }
+
+        // Spawn per-entity labels collected during the entity loop above.
+        for (tracked, label_def) in pending_labels {
+            let (r, g, b, a) = label_def.color;
+            commands.spawn((
+                Name::new(format!("EntityLabel: {}", label_def.text)),
+                Text2d::new(label_def.text.clone()),
+                TextFont { font_size: label_def.font_size, ..default() },
+                TextColor(Color::srgba(r, g, b, a)),
+                Transform::from_xyz(0.0, 0.0, 1.0),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(tracked),
+                    offset: Vec3::from(label_def.offset),
+                },
+                LevelEntity,
+            ));
         }
 
         // Apply lighting

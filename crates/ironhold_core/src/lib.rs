@@ -135,6 +135,7 @@ impl Plugin for GamePlugin {
                 animation_playback_system,
             ).chain())
             .add_systems(Update, motion_system)
+            .add_systems(Update, world_label_screen_pos_system)
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(PostUpdate, update_debug_state);
@@ -158,7 +159,7 @@ fn setup(
         Camera2d,
         // bevy::ui::IsDefaultUiCamera,
         bevy::prelude::Camera {
-            order: 1000, 
+            order: 1000,
             clear_color: ClearColorConfig::None,
             ..default()
         },
@@ -205,6 +206,47 @@ fn button_system(
             }
             Interaction::None => {
                 *color = BackgroundColor(Color::srgb(0.15, 0.15, 0.15));
+            }
+        }
+    }
+}
+
+/// Projects each [`WorldLabel`]'s 3-D world position through the active
+/// `Camera3d` and repositions the entity in `Camera2d` screen space so
+/// `Camera2d` renders the `Text2d` at the correct on-screen location.
+///
+/// Text2d is rendered by `Camera2d` (not `Camera3d`), so this is the correct
+/// way to show text that appears to float over a 3-D world position.
+fn world_label_screen_pos_system(
+    camera_q: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut label_q: Query<(&crate::runtime::scene_manager::WorldLabel, &mut Transform, &mut Visibility)>,
+    tracked_q: Query<&GlobalTransform, Without<crate::runtime::scene_manager::WorldLabel>>,
+) {
+    let Ok((camera, cam_global)) = camera_q.single() else { return };
+    let Ok(window) = window_q.single() else { return };
+    let half_w = window.width() / 2.0;
+    let half_h = window.height() / 2.0;
+
+    for (label, mut t, mut vis) in label_q.iter_mut() {
+        let world_pos = if let Some(tracked) = label.tracked_entity {
+            let Ok(gt) = tracked_q.get(tracked) else {
+                *vis = Visibility::Hidden;
+                continue;
+            };
+            gt.translation() + label.offset
+        } else {
+            label.world_pos
+        };
+
+        match camera.world_to_viewport(cam_global, world_pos) {
+            Ok(vp) => {
+                t.translation.x = vp.x - half_w;
+                t.translation.y = half_h - vp.y;
+                *vis = Visibility::Visible;
+            }
+            Err(_) => {
+                *vis = Visibility::Hidden;
             }
         }
     }

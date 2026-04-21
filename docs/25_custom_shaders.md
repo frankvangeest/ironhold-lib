@@ -162,16 +162,20 @@ All shaders live in `assets/shared/shaders/`.
 |------|--------|-------------|
 | `custom_unlit_color.wgsl` | Solid unlit colour | `params_0` = RGBA colour |
 | `custom_pbr.wgsl` | Full Bevy PBR pipeline | `params_0` = base_color; `params_1.x` = metallic; `params_1.y` = roughness |
-| `custom_checker.wgsl` | Procedural checkerboard | `params_0` = color_a; `params_1` = color_b; `params_2.x` = tiling |
-| `custom_gradient.wgsl` | UV gradient (bottom→top) | `params_0` = bottom_color; `params_1` = top_color |
-| `custom_fresnel.wgsl` | Fresnel rim lighting | `params_0` = rim_color; `params_1` = base_color; `params_2.x` = rim_power |
+| `custom_checker_uv.wgsl` | Procedural UV-space checkerboard — clean on cuboids/planes; seam visible on spheres | `params_0` = color_a; `params_1` = color_b; `params_2.x` = tiling (UV repetitions) |
+| `custom_checker_world.wgsl` | Procedural 3-D world-space checkerboard — seamless on any geometry; pattern shared across the world grid | `params_0` = color_a; `params_1` = color_b; `params_2.x` = tiling (cells/world-unit) |
+| `custom_checker_local.wgsl` | Procedural 3-D local (object-space) checkerboard — seamless, pattern centered on each object independently | `params_0` = color_a; `params_1` = color_b; `params_2.x` = tiling (cells/local-unit) |
+| `custom_gradient.wgsl` | UV V-axis gradient (bottom→top); correct on upright meshes | `params_0` = bottom_color; `params_1` = top_color |
+| `custom_fresnel.wgsl` | Fresnel rim — true N·V dot product; rim sits at silhouette edges regardless of camera angle | `params_0` = color_a (rim); `params_1` = color_b (face); `params_2.x` = rim_power (2=wide, 5=tight) |
 | `custom_world_stripes.wgsl` | World-space horizontal stripes | `params_0` = color_a; `params_1` = color_b; `params_2.x` = frequency |
 | `custom_normal_vis.wgsl` | World-space normal visualisation | No uniforms |
 | `custom_emissive_fresnel.wgsl` | Transparent emissive fresnel (glass-orb or energy-field) | `params_0` = base_color; `params_1` = rim_color; `params_2.x` = rim_power |
 | `custom_pulse.wgsl` | Pulsing emissive — breathes in/out over time | `params_0` = color; `params_1.x` = min_alpha; `params_1.y` = speed (pulses/sec) |
 | `custom_texture_tint.wgsl` | Texture with a colour tint multiplied on top (UV-based; avoid on spheres/cylinders) | `texture_0` = albedo texture; `params_0` = tint (r,g,b,a) |
 | `custom_texture_triplanar.wgsl` | Triplanar world-space texture — no UV seams on any geometry | `texture_0` = texture; `params_0` = tint; `params_1.x` = blend_sharpness (4=soft, 8=sharp); `params_1.y` = tiling (repeats/unit) |
-| `custom_dissolve.wgsl` | Procedural noise cutout with glowing edge | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling |
+| `custom_dissolve_uv.wgsl` | Procedural noise cutout with glowing edge — UV-space; clean on flat/box geometry | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling (UV scale) |
+| `custom_dissolve_world.wgsl` | Procedural noise cutout with glowing edge — world-space XZ; seamless on any geometry | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling (world-units) |
+| `custom_dissolve_local.wgsl` | Procedural noise cutout with glowing edge — local (object-space) XZ; seamless, pattern centred on each object | `params_0` = base_color; `params_1` = edge_color; `params_2.x` = edge_width; `params_2.y` = threshold; `params_2.z` = tiling (local-units) |
 | `custom_material_default.wgsl` | **Fallback** — magenta | None (compiled in; do not reference in RON) |
 
 `terrain.wgsl` is used exclusively by `TerrainMaterial` and is not available for custom materials.

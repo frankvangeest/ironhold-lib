@@ -9,8 +9,12 @@ struct CustomMaterialUniforms {
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: CustomMaterialUniforms;
 
-// Procedural dissolve — cuts away the surface based on fractal noise.
-// No texture required; the pattern is generated entirely on the GPU.
+// Procedural dissolve — UV-space variant.
+//
+// Uses the mesh UV coordinates for the noise input so the dissolve pattern
+// follows the surface's texture layout. Clean on cuboids and flat planes.
+// On spheres or cylinders the UV seam will show as a sharp discontinuity;
+// use custom_dissolve_world.wgsl for those shapes.
 //
 // Use with `alpha_mode: Mask(0.5)`. The shader outputs alpha=1 for visible
 // fragments and alpha=0 for cut fragments; Bevy discards anything below 0.5.
@@ -21,9 +25,9 @@ struct CustomMaterialUniforms {
 //     "base_color"   → params_0  (r,g,b,a)  — visible surface colour
 //     "edge_color"   → params_1  (r,g,b,a)  — glow colour at the dissolve edge
 //   floats (3 entries):
-//     "edge_width"   → params_2.x            — size of the glowing rim (try 0.05–0.2)
-//     "threshold"    → params_2.y            — cut position 0 = fully visible, 1 = fully dissolved
-//     "tiling"       → params_2.z            — noise scale (try 4–12; higher = finer grain)
+//     "edge_width"   → params_2.x            — glowing rim width (try 0.05–0.2)
+//     "threshold"    → params_2.y            — cut position: 0 = fully visible, 1 = fully dissolved
+//     "tiling"       → params_2.z            — UV noise scale (4–12; higher = finer grain)
 
 // ── Noise helpers ─────────────────────────────────────────────────────────────
 
@@ -36,7 +40,7 @@ fn hash2(p: vec2<f32>) -> f32 {
 fn value_noise(uv: vec2<f32>) -> f32 {
     let i = floor(uv);
     let f = fract(uv);
-    let u = f * f * (3.0 - 2.0 * f);  // smoothstep curve
+    let u = f * f * (3.0 - 2.0 * f);
     return mix(
         mix(hash2(i + vec2<f32>(0.0, 0.0)), hash2(i + vec2<f32>(1.0, 0.0)), u.x),
         mix(hash2(i + vec2<f32>(0.0, 1.0)), hash2(i + vec2<f32>(1.0, 1.0)), u.x),
@@ -44,7 +48,6 @@ fn value_noise(uv: vec2<f32>) -> f32 {
     );
 }
 
-// Four-octave fractal brownian motion for a natural, layered dissolve pattern.
 fn fbm(uv: vec2<f32>) -> f32 {
     var value     = 0.0;
     var amplitude = 0.5;
@@ -52,7 +55,7 @@ fn fbm(uv: vec2<f32>) -> f32 {
     for (var i = 0; i < 4; i++) {
         value     += amplitude * value_noise(uv * freq);
         amplitude *= 0.5;
-        freq      *= 2.1;  // slight non-power-of-2 avoids visible repetition
+        freq      *= 2.1;
     }
     return value;
 }
@@ -69,14 +72,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let noise = fbm(in.uv * tiling);
 
-    // `above` is positive in the visible region, negative in the cut region.
     let above   = noise - threshold;
-    let visible = step(0.0, above);     // 1.0 = keep, 0.0 = discard
+    let visible = step(0.0, above);
 
-    // Blend toward edge_color near the cut boundary.
     let edge_t = smoothstep(0.0, edge_width, above) * visible;
     let color  = mix(edge_color.rgb, base_color.rgb, edge_t);
 
-    // Alpha is binary (1 or 0) so alpha_mode: Mask(0.5) discards cut fragments.
     return vec4<f32>(color, visible);
 }

@@ -109,6 +109,24 @@ pub struct SpawnRegistry {
 #[derive(Component)]
 pub struct LevelEntity;
 
+/// A screen-space annotation rendered by Camera2d but anchored to a 3D position.
+///
+/// Each frame `world_label_screen_pos_system` determines the world position:
+/// - `tracked_entity = Some(e)`: uses that entity's `GlobalTransform` translation + `offset`.
+/// - `tracked_entity = None`: uses the fixed `world_pos` directly.
+///
+/// The resulting world position is projected through Camera3d and the label's
+/// Transform is repositioned in Camera2d screen space.
+#[derive(Component)]
+pub struct WorldLabel {
+    /// Fixed world position (used when `tracked_entity` is None).
+    pub world_pos: Vec3,
+    /// Entity whose world position this label follows (per-entity labels).
+    pub tracked_entity: Option<Entity>,
+    /// Offset added to the tracked entity's position (or to `world_pos` — not used for fixed labels).
+    pub offset: Vec3,
+}
+
 /// Stable handle attached to every entity spawned via `Action::Spawn`.
 /// Used by `Action::Despawn` to locate and remove the entity.
 #[derive(Component, Debug, Clone)]

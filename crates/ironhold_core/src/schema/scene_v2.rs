@@ -73,6 +73,11 @@ pub struct GameSceneV2 {
     /// Same key-name format as `global_key_bindings` (e.g. `"Escape"`, `"Space"`, `"KeyP"`).
     #[serde(default)]
     pub scene_key_bindings: HashMap<String, String>,
+    /// World-space billboard text labels. Each label is placed at a 3D position and
+    /// automatically rotates to face the active camera. Use for row headers, area names,
+    /// or any annotation that should exist in the 3D world rather than the screen overlay.
+    #[serde(default)]
+    pub world_labels: Vec<WorldLabelDef>,
 }
 
 impl GameSceneV2 {
@@ -105,6 +110,15 @@ impl GameSceneV2 {
                     "UI element \"{}\" has unknown kind \"{}\" (expected \"button\", \"label\", or \"rect\")",
                     elem.id, elem.kind
                 ));
+            }
+        }
+        let mut wl_ids = std::collections::HashSet::new();
+        for label in &self.world_labels {
+            if label.id.is_empty() {
+                return Err("World label has empty id".to_string());
+            }
+            if !wl_ids.insert(label.id.as_str()) {
+                return Err(format!("Duplicate world label id: \"{}\"", label.id));
             }
         }
         Ok(())
@@ -188,7 +202,31 @@ pub struct SceneEntityDef {
     pub id: String,
     pub prefab: String,
     pub transform: SceneTransformV2,
+    /// Optional text annotation that follows this entity as it moves.
+    /// The label floats `offset` world units above the entity's origin.
+    #[serde(default)]
+    pub label: Option<EntityLabelDef>,
 }
+
+/// A text annotation attached to a scene entity.
+/// Rendered in Camera2d screen space, projected from the entity's world position
+/// plus `offset` each frame — so it appears to float above the object.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EntityLabelDef {
+    pub text: String,
+    /// Offset from the entity's world origin in world units. Default: 7 units up.
+    #[serde(default = "default_label_offset")]
+    pub offset: (f32, f32, f32),
+    /// Font size in screen pixels. Default: 18.
+    #[serde(default = "default_wl_font_size")]
+    pub font_size: f32,
+    /// Label colour as linear RGBA (0.0–1.0). Default: near-white.
+    #[serde(default = "default_wl_color")]
+    pub color: (f32, f32, f32, f32),
+}
+
+fn default_label_offset() -> (f32, f32, f32) { (0.0, 7.0, 0.0) }
 
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
@@ -263,3 +301,25 @@ pub struct UiPanelDef {
 fn default_panel_padding() -> f32 { 20.0 }
 fn default_panel_gap() -> f32 { 12.0 }
 fn default_ui_element_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
+
+/// A text annotation anchored to a 3-D world position.
+/// The engine projects `translation` through the active Camera3d each frame
+/// and repositions the label in Camera2d screen space, so it appears to float
+/// above that world point at a fixed readable size regardless of camera distance.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct WorldLabelDef {
+    pub id: String,
+    pub text: String,
+    /// 3-D world position the label tracks (typically above the object of interest).
+    pub translation: (f32, f32, f32),
+    /// Font size in screen pixels. Default: 18.
+    #[serde(default = "default_wl_font_size")]
+    pub font_size: f32,
+    /// Label colour as linear RGBA (0.0–1.0). Default: near-white.
+    #[serde(default = "default_wl_color")]
+    pub color: (f32, f32, f32, f32),
+}
+
+fn default_wl_font_size() -> f32 { 18.0 }
+fn default_wl_color() -> (f32, f32, f32, f32) { (0.95, 0.95, 0.95, 1.0) }
