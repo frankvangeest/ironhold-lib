@@ -274,6 +274,30 @@ By default, meshes are rendered with back-face culling enabled — fragments on 
 
 **Implementation note:** `double_sided: true` creates a distinct GPU pipeline (separate `CustomMaterialKey`) from the default single-sided pipeline, so mixing both variants in a scene has no overhead beyond the extra pipeline compile at startup.
 
+**Normal flipping — per-shader compatibility:** `double_sided` works at the rasterizer stage, not the shader stage. When a back face is rendered, `in.world_normal` still points in the same direction as the front face — WGSL does not automatically flip normals for back faces. Shaders that do not use normals are fully compatible; shaders that depend on normals will produce incorrect results when viewed from the inside:
+
+| Shader | Safe with `double_sided`? | Reason |
+|--------|--------------------------|--------|
+| `custom_gradient.wgsl` | ✅ | UV-only — normals unused |
+| `custom_checker_*.wgsl` | ✅ | Position/UV-only |
+| `custom_texture_*.wgsl` | ✅ | UV/position-only |
+| `custom_unlit_color.wgsl` | ✅ | No normals |
+| `custom_dissolve_*.wgsl` | ✅ | Noise + position-only |
+| `custom_fresnel.wgsl` | ❌ | `dot(N, V)` is negative for back faces — rim migrates from silhouette to face centre |
+| `custom_emissive_fresnel.wgsl` | ❌ | Same N·V dependency |
+| `custom_pbr.wgsl` | ❌ | Full lighting breaks with inverted normals |
+| `custom_normal_vis.wgsl` | ❌ | Displays outward normals regardless of face |
+
+If you need a normal-dependent shader on a double-sided surface, read `@builtin(front_facing)` in WGSL and negate the normal for back faces:
+
+```wgsl
+@fragment
+fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> @location(0) vec4<f32> {
+    let n = normalize(select(-in.world_normal, in.world_normal, is_front));
+    // use n instead of in.world_normal
+}
+```
+
 **Other use cases:** double-sided leaves/grass billboards, two-sided decals, portal surfaces, thin cloth.
 
 ---
