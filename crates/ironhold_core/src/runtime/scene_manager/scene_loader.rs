@@ -1028,7 +1028,7 @@ fn apply_lighting_v2(
                 dl.rotation_euler_deg.1.to_radians(),
                 dl.rotation_euler_deg.2.to_radians(),
             );
-            commands.spawn((
+            let mut dir_light = commands.spawn((
                 Name::new("Directional Light"),
                 DirectionalLight {
                     color: Color::srgba(dl.color.0, dl.color.1, dl.color.2, 1.0),
@@ -1039,6 +1039,15 @@ fn apply_lighting_v2(
                 Transform::from_rotation(rot),
                 LevelEntity,
             ));
+            if let Some(dist) = dl.shadow_distance {
+                dir_light.insert(
+                    bevy::light::CascadeShadowConfigBuilder {
+                        maximum_distance: dist,
+                        ..default()
+                    }
+                    .build(),
+                );
+            }
         }
     }
 

@@ -149,6 +149,11 @@ pub struct DirectionalLightDefV2 {
     pub rotation_euler_deg: (f32, f32, f32),
     #[serde(default = "default_true")]
     pub shadows_enabled: bool,
+    /// Maximum distance in world units at which shadow cascades are rendered.
+    /// Omit to use Bevy's default (~1000 units native, ~100 units WebGL).
+    /// Tune downward for sharper cascades on a smaller scene.
+    #[serde(default)]
+    pub shadow_distance: Option<f32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -12,6 +12,8 @@
       intensity: 30000.0,
       rotation_euler_deg: (-45.0, 25.0, 0.0),
       shadows_enabled: true,
+      // Scene spans ~400 units (camera Z=120 → last row Z=-280); set cascades to match.
+      shadow_distance: Some(400.0),
     )),
 
     // Accent point lights — one warm fill, one cool fill, one above each row.
@@ -22,6 +24,7 @@
         color: (1.0, 0.85, 0.6),
         intensity: 200000.0,
         range: 80.0,
+        shadows_enabled: true,
       ),
       // Cool fill light over procedural row
       (
