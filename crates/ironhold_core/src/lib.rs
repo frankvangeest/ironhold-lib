@@ -220,15 +220,21 @@ fn button_system(
 fn world_label_screen_pos_system(
     camera_q: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut label_q: Query<(&crate::runtime::scene_manager::WorldLabel, &mut Transform, &mut Visibility)>,
+    mut label_q: Query<(
+        &crate::runtime::scene_manager::WorldLabel,
+        &mut Transform,
+        &mut Visibility,
+        &mut TextFont,
+    )>,
     tracked_q: Query<&GlobalTransform, Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
     let Ok((camera, cam_global)) = camera_q.single() else { return };
     let Ok(window) = window_q.single() else { return };
     let half_w = window.width() / 2.0;
     let half_h = window.height() / 2.0;
+    let cam_pos = cam_global.translation();
 
-    for (label, mut t, mut vis) in label_q.iter_mut() {
+    for (label, mut t, mut vis, mut text_font) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
             let Ok(gt) = tracked_q.get(tracked) else {
                 *vis = Visibility::Hidden;
@@ -238,6 +244,16 @@ fn world_label_screen_pos_system(
         } else {
             label.world_pos
         };
+
+        // Depth-based font size: scale = ref_dist / camera_distance, capped at 1.0
+        // so labels never grow larger than their authored size when the camera is close.
+        if let Some((ref_dist, min_floor)) = label.depth_scale {
+            let dist = (world_pos - cam_pos).length().max(0.001);
+            let scale = (ref_dist / dist).min(1.0).max(min_floor);
+            text_font.font_size = label.base_font_size * scale;
+        } else {
+            text_font.font_size = label.base_font_size;
+        }
 
         match camera.world_to_viewport(cam_global, world_pos) {
             Ok(vp) => {

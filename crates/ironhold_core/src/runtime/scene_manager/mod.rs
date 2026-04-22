@@ -125,6 +125,13 @@ pub struct WorldLabel {
     pub tracked_entity: Option<Entity>,
     /// Offset added to the tracked entity's position (or to `world_pos` — not used for fixed labels).
     pub offset: Vec3,
+    /// Authored font size. Stored here so the projection system can recompute
+    /// the displayed size each frame without drifting from the original value.
+    pub base_font_size: f32,
+    /// Resolved depth-scale config: `Some((reference_distance, min_scale_floor))`.
+    /// `None` means no depth scaling — font size is always `base_font_size`.
+    /// `min_scale_floor` is 0.0 when the designer omitted `min_scale`.
+    pub depth_scale: Option<(f32, f32)>,
 }
 
 /// Stable handle attached to every entity spawned via `Action::Spawn`.

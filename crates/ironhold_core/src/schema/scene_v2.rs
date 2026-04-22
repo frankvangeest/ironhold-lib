@@ -78,6 +78,11 @@ pub struct GameSceneV2 {
     /// or any annotation that should exist in the 3D world rather than the screen overlay.
     #[serde(default)]
     pub world_labels: Vec<WorldLabelDef>,
+    /// Depth-based label scaling for all labels in this scene.
+    /// When set, labels shrink as the camera moves away from them.
+    /// Individual labels can opt out via `depth_scale: Some(false)`.
+    #[serde(default)]
+    pub label_depth_scale: Option<LabelDepthScaleDef>,
 }
 
 impl GameSceneV2 {
@@ -154,6 +159,12 @@ pub struct DirectionalLightDefV2 {
     /// Tune downward for sharper cascades on a smaller scene.
     #[serde(default)]
     pub shadow_distance: Option<f32>,
+    /// Fraction of each cascade's range that overlaps with the next cascade,
+    /// used to blend the transition zone so the seam is invisible.
+    /// Range 0.0–1.0. Bevy's built-in default is 0.2; 0.5 eliminates most
+    /// visible seams on large flat surfaces. Omit to use Bevy's default.
+    #[serde(default)]
+    pub cascade_overlap: Option<f32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -229,6 +240,12 @@ pub struct EntityLabelDef {
     /// Label colour as linear RGBA (0.0–1.0). Default: near-white.
     #[serde(default = "default_wl_color")]
     pub color: (f32, f32, f32, f32),
+    /// Per-label depth-scale override.
+    /// `Some(false)` pins this label at its authored size regardless of the scene setting.
+    /// `Some(true)` forces scaling on even if the scene has no `label_depth_scale` block.
+    /// `None` (default) inherits the scene's `label_depth_scale` setting.
+    #[serde(default)]
+    pub depth_scale: Option<bool>,
 }
 
 fn default_label_offset() -> (f32, f32, f32) { (0.0, 7.0, 0.0) }
@@ -324,7 +341,31 @@ pub struct WorldLabelDef {
     /// Label colour as linear RGBA (0.0–1.0). Default: near-white.
     #[serde(default = "default_wl_color")]
     pub color: (f32, f32, f32, f32),
+    /// Per-label depth-scale override.
+    /// `Some(false)` pins this label at its authored size regardless of the scene setting.
+    /// `Some(true)` forces scaling on even if the scene has no `label_depth_scale` block.
+    /// `None` (default) inherits the scene's `label_depth_scale` setting.
+    #[serde(default)]
+    pub depth_scale: Option<bool>,
 }
+
+/// Scene-level depth-scale configuration for all labels.
+/// Labels shrink as camera distance increases; `font_size` is the size at `reference_distance`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LabelDepthScaleDef {
+    /// Camera distance at which labels render at their authored `font_size` (1:1).
+    /// Labels further away shrink proportionally; labels closer stay at 1:1.
+    #[serde(default = "default_label_ref_distance")]
+    pub reference_distance: f32,
+    /// Minimum scale floor as a fraction of `font_size` (0.0–1.0).
+    /// `Some(0.3)` means labels never shrink below 30% of their authored size.
+    /// `None` means no floor — labels scale toward zero at extreme distances.
+    #[serde(default)]
+    pub min_scale: Option<f32>,
+}
+
+fn default_label_ref_distance() -> f32 { 50.0 }
 
 fn default_wl_font_size() -> f32 { 18.0 }
 fn default_wl_color() -> (f32, f32, f32, f32) { (0.95, 0.95, 0.95, 1.0) }

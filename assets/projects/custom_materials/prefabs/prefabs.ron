@@ -367,5 +367,13 @@
       components: (),
       primitive: Some((radius: Some(4.0))),
     ),
+    
+    "sphere_triplanar_marbel": (
+      kind: "primitive",
+      model: "Sphere",
+      material: Some("mat_triplanar_marbel"),
+      components: (),
+      primitive: Some((radius: Some(4.0))),
+    ),
   }
 )

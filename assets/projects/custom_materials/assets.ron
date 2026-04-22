@@ -523,40 +523,66 @@
     // three — triplanar projection eliminates both artefacts automatically.
 
     // Stylised bricks — geometric pattern makes the seam-free join obvious.
+    // Full PBR: normal map adds depth to mortar lines; roughness distinguishes
+    // smooth brick faces from rough mortar joints.
     "mat_triplanar_bricks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_normal.png",
+          "texture_2": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_roughness.png",
+          "texture_3": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_ambientOcclusion.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
-        floats: { "blend_sharpness": 4.0, "tiling": 0.1 },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.0, "tiling": 0.1 },
       )),
     ),
 
-    // Stylised cliff rock — organic surface, shows how triplanar handles
-    // irregular shapes with no visible axis-aligned projection seams.
+    // Stylised cliff rock — organic surface with full PBR. Normal map restores
+    // the fine surface relief lost in the basecolor-only version.
     "mat_triplanar_rock": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
+          "texture_1": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_normal.jpg",
+          "texture_2": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_roughness.jpg",
+          "texture_3": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_ambientOcclusion.jpg",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
-        floats: { "blend_sharpness": 4.0, "tiling": 0.25 },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.0, "tiling": 0.25 },
       )),
     ),
 
-    // Stylised bark — strong directional grain exposes the blend region between
-    // projection axes; blend_sharpness: 6 tightens the transition.
+    // Stylised bark — strong directional grain; normal_strength: 1.2 slightly
+    // exaggerates the ridge detail so it reads on the curved sphere surface.
     "mat_triplanar_bark": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_normal.png",
+          "texture_2": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_roughness.png",
+          "texture_3": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_ambientOcclusion.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
-        floats: { "blend_sharpness": 6.0, "tiling": 0.2 },
+        floats: { "blend_sharpness": 6.0, "metallic": 0.0, "normal_strength": 1.2, "tiling": 0.2 },
+      )),
+    ),
+
+    // Stylised marbel
+    "mat_triplanar_marbel": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/White_Marble_006_SD/White_Marble_006_basecolor.png",
+          "texture_1": "shared/textures/White_Marble_006_SD/White_Marble_006_normal.png",
+          "texture_2": "shared/textures/White_Marble_006_SD/White_Marble_006_roughness.png",
+          "texture_3": "shared/textures/White_Marble_006_SD/White_Marble_006_ambientOcclusion.png",
+        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.0, "tiling": 0.05 },
       )),
     ),
   },

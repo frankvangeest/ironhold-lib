@@ -784,6 +784,11 @@ pub fn spawn_scene_v2(
                     world_pos: Vec3::from(label.translation),
                     tracked_entity: None,
                     offset: Vec3::ZERO,
+                    base_font_size: label.font_size,
+                    depth_scale: resolve_label_depth_scale(
+                        scene.label_depth_scale.as_ref(),
+                        label.depth_scale,
+                    ),
                 },
                 LevelEntity,
             ));
@@ -802,6 +807,11 @@ pub fn spawn_scene_v2(
                     world_pos: Vec3::ZERO,
                     tracked_entity: Some(tracked),
                     offset: Vec3::from(label_def.offset),
+                    base_font_size: label_def.font_size,
+                    depth_scale: resolve_label_depth_scale(
+                        scene.label_depth_scale.as_ref(),
+                        label_def.depth_scale,
+                    ),
                 },
                 LevelEntity,
             ));
@@ -1039,14 +1049,15 @@ fn apply_lighting_v2(
                 Transform::from_rotation(rot),
                 LevelEntity,
             ));
-            if let Some(dist) = dl.shadow_distance {
-                dir_light.insert(
-                    bevy::light::CascadeShadowConfigBuilder {
-                        maximum_distance: dist,
-                        ..default()
-                    }
-                    .build(),
-                );
+            if dl.shadow_distance.is_some() || dl.cascade_overlap.is_some() {
+                let mut builder = bevy::light::CascadeShadowConfigBuilder::default();
+                if let Some(dist) = dl.shadow_distance {
+                    builder.maximum_distance = dist;
+                }
+                if let Some(overlap) = dl.cascade_overlap {
+                    builder.overlap_proportion = overlap;
+                }
+                dir_light.insert(builder.build());
             }
         }
     }
@@ -1080,6 +1091,34 @@ fn apply_lighting_v2(
             ));
         }
     }
+}
+
+// ─── Label depth scale helper ─────────────────────────────────────────────────
+
+/// Resolves the effective depth-scale config for a single label.
+/// Returns `Some((reference_distance, min_scale_floor))` when scaling is active,
+/// or `None` when the label should always render at its authored font size.
+///
+/// Resolution order:
+///   - `per_label = Some(false)` → always disabled, regardless of scene config.
+///   - `per_label = Some(true)`  → always enabled; uses scene params or fallback defaults.
+///   - `per_label = None`        → inherits scene config (enabled iff scene has a block).
+fn resolve_label_depth_scale(
+    scene: Option<&crate::schema::scene_v2::LabelDepthScaleDef>,
+    per_label: Option<bool>,
+) -> Option<(f32, f32)> {
+    let enabled = match per_label {
+        Some(b) => b,
+        None => scene.is_some(),
+    };
+    if !enabled {
+        return None;
+    }
+    let (ref_dist, min_floor) = match scene {
+        Some(cfg) => (cfg.reference_distance, cfg.min_scale.unwrap_or(0.0)),
+        None => (50.0, 0.0),
+    };
+    Some((ref_dist, min_floor))
 }
 
 // ─── Jump velocity helper ─────────────────────────────────────────────────────

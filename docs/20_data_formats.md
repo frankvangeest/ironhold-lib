@@ -131,11 +131,15 @@ File extension must be `.scene.ron`.
 | `schema_version` | `u32` | Must be `2` |
 | `name` | `String` | Scene identifier (used in `SceneEvent::Ready`) |
 | `tonemapping` | `TonemappingOption` | Tonemapping for all cameras in this scene. Defaults to `AcesFitted`. See below. |
-| `lighting` | `Option<SceneLightingV2>` | Ambient + directional light config |
+| `lighting` | `Option<SceneLightingV2>` | Ambient, directional, and point light config. See below. |
 | `terrain` | `Option<TerrainConfigV2>` | Heightmap-based terrain |
 | `spawn_points` | `Map<String, (f32,f32,f32)>` | Named world-space positions |
 | `entities` | `Vec<SceneEntityDef>` | Prefab instances to spawn |
-| `ui` | `Vec<UiButtonDefV2>` | Buttons to show in this scene |
+| `ui` | `Vec<UiElementDefV2>` | UI elements (buttons, labels, rects) to show in this scene |
+| `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
+| `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
+| `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
+| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: Some(false/true)`. |
 
 **Example:**
 ```ron
@@ -214,8 +218,87 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 ### Lighting (`SceneLightingV2`)
 
-- `ambient: Option<(f32, f32, f32)>` — linear RGB colour (intensity is set project-wide)
-- `directional`: colour `(f32,f32,f32)`, `intensity: f32` (lux), `rotation_euler_deg: (f32,f32,f32)`, `shadows_enabled: bool` (default `true`)
+**`SceneLightingV2` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ambient` | `Option<(f32,f32,f32)>` | engine default | Ambient light colour as linear RGB |
+| `ambient_brightness` | `Option<f32>` | `150.0` | Ambient brightness in lux. Without HDR colours clip at 1.0, so keep this low (50–300 is typical). |
+| `directional` | `Option<DirectionalLightDefV2>` | none | A single directional (sun) light |
+| `point_lights` | `Vec<PointLightDefV2>` | `[]` | Point (omnidirectional) lights |
+
+**`DirectionalLightDefV2` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `color` | `(f32,f32,f32)` | required | Linear RGB colour |
+| `intensity` | `f32` | required | Illuminance in lux |
+| `rotation_euler_deg` | `(f32,f32,f32)` | required | Euler angles in degrees (XYZ order) |
+| `shadows_enabled` | `bool` | `true` | Whether this light casts shadows |
+| `shadow_distance` | `Option<f32>` | engine default | Maximum world-unit distance at which shadow cascades are rendered. Tune downward for sharper shadows on a small scene; set to the full scene depth on large showcases. |
+| `cascade_overlap` | `Option<f32>` | `0.2` | Fraction of each cascade's range that overlaps the next cascade (0.0–1.0). A wider overlap blends the transition zone so the seam between cascades is invisible. `0.5` eliminates most visible seam bands on large flat surfaces. |
+
+**`PointLightDefV2` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `position` | `(f32,f32,f32)` | required | World-space position |
+| `color` | `(f32,f32,f32)` | `(1,1,1)` | Linear RGB colour |
+| `intensity` | `f32` | `800.0` | Luminous power in lumens (≈ a bright 60 W bulb) |
+| `radius` | `f32` | `0.0` | Sphere radius for specular highlights |
+| `range` | `f32` | `20.0` | Maximum reach in world units |
+| `shadows_enabled` | `bool` | `false` | Whether this light casts shadows (expensive — use sparingly) |
+
+**Example (full lighting block):**
+```ron
+lighting: Some((
+  ambient: Some((0.25, 0.30, 0.45)),
+  ambient_brightness: Some(15.0),
+
+  directional: Some((
+    color: (1.0, 0.95, 0.85),
+    intensity: 30000.0,
+    rotation_euler_deg: (-45.0, 25.0, 0.0),
+    shadows_enabled: true,
+    shadow_distance: Some(450.0),
+    cascade_overlap: Some(0.5),
+  )),
+
+  point_lights: [
+    (
+      position: (0.0, 15.0, -40.0),
+      color: (0.5, 0.7, 1.0),
+      intensity: 80000.0,
+      range: 60.0,
+    ),
+  ],
+)),
+```
+
+### Label depth scaling (`LabelDepthScaleDef`)
+
+Controls how labels scale with camera distance. Set at scene level; individual labels can opt out.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `reference_distance` | `f32` | `50.0` | Camera distance at which labels render at their authored `font_size` (1:1). Labels further away shrink proportionally; labels closer stay at 1:1 (never grow larger). |
+| `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of `font_size` (0.0–1.0). `Some(0.25)` means labels never shrink below 25% of their authored size. `None` means no floor — labels scale toward zero at extreme distances. |
+
+**Per-label override** — both `WorldLabelDef` and `EntityLabelDef` accept a `depth_scale: Option<bool>` field:
+- `depth_scale: Some(false)` — pin this label at its authored size regardless of scene setting
+- `depth_scale: Some(true)` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
+- `depth_scale` omitted — inherits the scene setting (default)
+
+**Example:**
+```ron
+label_depth_scale: Some((
+  reference_distance: 80.0,
+  min_scale: Some(0.25),
+)),
+
+// In entities — a nearby header pinned at full size:
+label: Some((text: "Header", depth_scale: Some(false))),
+```
 
 ### Terrain (`TerrainConfigV2`)
 
@@ -230,18 +313,20 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 Terrain generation runs on `AsyncComputeTaskPool` — do not block the main thread.
 
-### UI Buttons (`UiButtonDefV2`) ✅
+### UI Elements (`UiElementDefV2`) ✅
 
-Buttons are rendered by Bevy UI inside the WebGPU canvas. They are **not** DOM elements — clicks in browser automation must use canvas pixel coordinates.
+UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** DOM elements — clicks in browser automation must use canvas pixel coordinates.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `kind` | `String` | Must be `"button"` |
-| `id` | `String` | Unique identifier within the scene |
-| `text` | `String` | Label displayed on the button |
-| `action` | `String` | Trigger string; `"ui."` prefix is stripped before firing (e.g. `"ui.dance"` → trigger `"dance"`) |
-| `position` | `(f32, f32)` | Top-left corner in pixels `(x, y)` |
-| `size` | `(f32, f32)` | Width and height in pixels |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `kind` | `String` | required | `"button"` — interactive; `"label"` — non-interactive text; `"rect"` — non-interactive coloured rectangle |
+| `id` | `String` | required | Unique identifier within the scene |
+| `text` | `String` | `""` | Display text (ignored for `kind: "rect"`) |
+| `action` | `String` | `""` | For `kind: "button"`: trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `size` | `(f32, f32)` | required | Width and height in pixels |
+| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill/background colour as linear RGBA. No effect on `kind: "label"`. |
+| `absolute` | `bool` | `false` | In panel mode: position this element absolutely relative to the panel's top-left instead of flowing in the column |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
 

@@ -33,7 +33,8 @@
       "WebSearch",
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:github.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

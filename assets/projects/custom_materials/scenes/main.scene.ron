@@ -3,17 +3,21 @@
   name: "custom_materials_main",
 
   lighting: Some((
-    // Low ambient — tonemapping handles contrast; high ambient washes everything out.
+    // Ambient kept low so directional shadows read clearly on the white marble floor.
+    // Too-high ambient washes out the vein contrast in the albedo.
     ambient: Some((0.25, 0.30, 0.45)),
-    ambient_brightness: Some(60.0),
+    ambient_brightness: Some(15.0),
 
     directional: Some((
       color: (1.0, 0.95, 0.85),
       intensity: 30000.0,
       rotation_euler_deg: (-45.0, 25.0, 0.0),
       shadows_enabled: true,
-      // Scene spans ~400 units (camera Z=120 → last row Z=-280); set cascades to match.
-      shadow_distance: Some(400.0),
+      // Scene spans ~440 units (camera Z=120 → last row Z=-320); set cascades to match.
+      shadow_distance: Some(450.0),
+      // Wider cascade overlap softens the transition between shadow cascade levels,
+      // reducing the risk of a visible band on large flat surfaces.
+      // cascade_overlap: Some(0.5),
     )),
 
     // Accent point lights — one warm fill, one cool fill, one above each row.
@@ -43,6 +47,13 @@
     ],
   )),
 
+  // Labels shrink with depth so distant row labels don't compete for attention.
+  // At 80 units they're at authored size; they don't go below 25% of that.
+  label_depth_scale: Some((
+    reference_distance: 80.0,
+    min_scale: Some(0.25),
+  )),
+
   spawn_points: {
     "overview": (-10.0, 40.0, 120.0),
   },
@@ -65,9 +76,9 @@
       id: "floor",
       prefab: "floor_slab",
       transform: (
-        translation: (0.0, -5.0, -80.0),
+        translation: (0.0, -5.0, -160.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.6),
+        scale: (1.0, 1.0, 2.0),
       ),
     ),
 
@@ -78,88 +89,90 @@
       id: "sky_sphere",
       prefab: "sky_sphere",
       transform: (
-        translation: (0.0, 0.0, -80.0),
+        translation: (0.0, 0.0, -160.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
     ),
 
-    // ── Row 1 (Z = 0): unlit + checker effects ────────────────────────────────
+    // ── Row 1 (Z = 0): unlit + checker family ────────────────────────────────
+    // 7 objects at 25-unit spacing (±75). Checker Color joins the trio here so all
+    // four checker variants live together.
     (
       id: "sphere_unlit_pink",
       prefab: "sphere_unlit_pink",
-      transform: (translation: (-100.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-75.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Unlit Pink")),
     ),
     (
       id: "sphere_unlit_teal",
       prefab: "sphere_unlit_teal",
-      transform: (translation: (-60.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-50.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Unlit Teal")),
     ),
-    // Checker trio: UV-space (seam visible) · World-space (seamless, world-grid) · Local-space (seamless, object-centered).
+    // Checker quartet: UV-space (seam visible) · World-space · Local-space · Color.
     (
       id: "sphere_checker_bw_uv",
       prefab: "sphere_checker_bw_uv",
-      transform: (translation: (-20.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-25.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Checker UV")),
     ),
     (
       id: "sphere_checker_bw_world",
       prefab: "sphere_checker_bw_world",
-      transform: (translation: (20.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (0.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Checker World")),
     ),
     (
       id: "sphere_checker_bw_local",
       prefab: "sphere_checker_bw_local",
-      transform: (translation: (60.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (25.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Checker Local")),
+    ),
+    (
+      id: "cuboid_checker_color",
+      prefab: "cuboid_checker_color",
+      transform: (translation: (50.0, 0.0, 0.0), rotation_euler_deg: (0.0, 30.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      label: Some((text: "Checker Color")),
     ),
     (
       id: "sphere_normals",
       prefab: "sphere_normals",
-      transform: (translation: (100.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (75.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Normals")),
     ),
 
-    // ── Row 2 (Z = -40): gradient effects + checker cube ─────────────────────
+    // ── Row 2 (Z = -40): gradient effects ─────────────────────────────────────
     (
       id: "capsule_gradient_sky",
       prefab: "capsule_gradient_sky",
-      transform: (translation: (-50.0, 0.0, -40.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-25.0, 0.0, -40.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Gradient Sky")),
     ),
     (
       id: "cylinder_gradient_ember",
       prefab: "cylinder_gradient_ember",
-      transform: (translation: (0.0, 0.0, -40.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (25.0, 0.0, -40.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Gradient Ember")),
-    ),
-    (
-      id: "cuboid_checker_color",
-      prefab: "cuboid_checker_color",
-      transform: (translation: (50.0, 0.0, -40.0), rotation_euler_deg: (0.0, 30.0, 0.0), scale: (1.0, 1.0, 1.0)),
-      label: Some((text: "Checker Color")),
     ),
 
     // ── Row 3 (Z = -80): fresnel + stripes ────────────────────────────────────
     (
       id: "sphere_fresnel_blue",
       prefab: "sphere_fresnel_blue",
-      transform: (translation: (-60.0, 0.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-50.0, 0.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Fresnel Blue")),
     ),
     (
       id: "torus_fresnel_green",
       prefab: "torus_fresnel_green",
-      transform: (translation: (-10.0, 4.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (0.0, 4.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Fresnel Green")),
     ),
     (
       id: "cone_stripes",
       prefab: "cone_stripes",
-      transform: (translation: (40.0, 0.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (50.0, 0.0, -80.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "World Stripes")),
     ),
 
@@ -205,120 +218,128 @@
     (
       id: "sphere_emissive_shield",
       prefab: "sphere_emissive_shield",
-      transform: (translation: (-60.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-50.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Emissive Fresnel")),
     ),
     (
       id: "sphere_emissive_orb_orange",
       prefab: "sphere_emissive_orb_orange",
-      transform: (translation: (-10.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (0.0, 0.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Emissive Orb")),
     ),
     (
       id: "torus_emissive_plain",
       prefab: "torus_emissive_plain",
-      transform: (translation: (40.0, 4.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (50.0, 4.0, -160.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Emissive Plain")),
     ),
 
-    // ── Row 6 (Z = -200): pulse, texture tint, dissolve trio ─────────────────
-    // Dissolve trio: UV-space (seam) · World-space (seamless, world grid) · Local-space (seamless, object-centred).
+    // ── Row 6 (Z = -200): pulse + texture tint ────────────────────────────────
     (
       id: "sphere_pulse_cyan",
       prefab: "sphere_pulse_cyan",
-      transform: (translation: (-100.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-45.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Pulse Cyan")),
     ),
     (
       id: "torus_pulse_gold",
       prefab: "torus_pulse_gold",
-      transform: (translation: (-60.0, 4.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-15.0, 4.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Pulse Gold")),
     ),
     (
       id: "cuboid_crate_tint_red",
       prefab: "cuboid_crate_tint_red",
-      transform: (translation: (-20.0, 0.0, -200.0), rotation_euler_deg: (0.0, 20.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (15.0, 0.0, -200.0), rotation_euler_deg: (0.0, 20.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Tint Red")),
     ),
     (
       id: "cuboid_crate_tint_blue",
       prefab: "cuboid_crate_tint_blue",
-      transform: (translation: (20.0, 0.0, -200.0), rotation_euler_deg: (0.0, -15.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (45.0, 0.0, -200.0), rotation_euler_deg: (0.0, -15.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Tint Blue")),
     ),
+
+    // ── Row 7 (Z = -240): dissolve trio ───────────────────────────────────────
+    // UV-space (seam visible) · World-space (seamless, world grid) · Local-space (seamless, object-centred).
     (
       id: "sphere_dissolve_fire_uv",
       prefab: "sphere_dissolve_fire_uv",
-      transform: (translation: (50.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-50.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Dissolve UV")),
     ),
     (
       id: "sphere_dissolve_fire",
       prefab: "sphere_dissolve_fire",
-      transform: (translation: (80.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (0.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Dissolve World")),
     ),
     (
       id: "sphere_dissolve_fire_local",
       prefab: "sphere_dissolve_fire_local",
-      transform: (translation: (110.0, 0.0, -200.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (50.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Dissolve Local")),
     ),
 
-    // ── Row 7 (Z = -240): noise textures (triplanar as a noise viewer) ───────
+    // ── Row 8 (Z = -280): noise textures ──────────────────────────────────────
     (
       id: "sphere_noise_perlin",
       prefab: "sphere_noise_perlin",
-      transform: (translation: (-80.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-80.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Perlin")),
     ),
     (
       id: "sphere_noise_voronoi",
       prefab: "sphere_noise_voronoi",
-      transform: (translation: (-40.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-40.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Voronoi")),
     ),
     (
       id: "sphere_noise_value",
       prefab: "sphere_noise_value",
-      transform: (translation: (0.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (0.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Value Noise")),
     ),
     (
       id: "sphere_noise_gabor",
       prefab: "sphere_noise_gabor",
-      transform: (translation: (40.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (40.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Gabor")),
     ),
     (
       id: "sphere_noise_blue",
       prefab: "sphere_noise_blue",
-      transform: (translation: (80.0, 0.0, -240.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (80.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Blue Noise")),
     ),
 
-    // ── Row 8 (Z = -280): triplanar as a surfacing tool ──────────────────────
-    // Same shader as Row 7 but applied to real stylised surface textures.
-    // A UV-mapped sphere would show pole pinch and a meridian seam on all three;
+    // ── Row 9 (Z = -320): triplanar surfacing ─────────────────────────────────
+    // Triplanar projection eliminates UV seams and pole pinch on rounded shapes.
+    // A UV-mapped sphere would show a meridian seam and pole pinch on all four;
     // triplanar projection eliminates both artefacts cleanly.
     (
       id: "sphere_triplanar_bricks",
       prefab: "sphere_triplanar_bricks",
-      transform: (translation: (-50.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-60.0, 0.0, -320.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Triplanar Bricks")),
     ),
     (
       id: "sphere_triplanar_rock",
       prefab: "sphere_triplanar_rock",
-      transform: (translation: (0.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (-20.0, 0.0, -320.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Triplanar Rock")),
     ),
     (
       id: "sphere_triplanar_bark",
       prefab: "sphere_triplanar_bark",
-      transform: (translation: (50.0, 0.0, -280.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      transform: (translation: (20.0, 0.0, -320.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
       label: Some((text: "Triplanar Bark")),
+    ),
+    (
+      id: "sphere_triplanar_marbel",
+      prefab: "sphere_triplanar_marbel",
+      transform: (translation: (60.0, 0.0, -320.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)),
+      label: Some((text: "Triplanar Marbel")),
     ),
   ],
 

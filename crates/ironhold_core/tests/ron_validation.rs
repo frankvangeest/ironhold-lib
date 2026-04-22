@@ -370,6 +370,98 @@ fn test_game_scene_v2_excluded_tonemapping_variants_are_rejected() {
     }
 }
 
+#[test]
+fn test_game_scene_v2_label_depth_scale_full() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            label_depth_scale: Some((
+                reference_distance: 80.0,
+                min_scale: Some(0.25),
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("label_depth_scale should parse");
+    let cfg = scene.label_depth_scale.expect("label_depth_scale should be Some");
+    assert_eq!(cfg.reference_distance, 80.0);
+    assert_eq!(cfg.min_scale, Some(0.25));
+}
+
+#[test]
+fn test_game_scene_v2_label_depth_scale_defaults() {
+    // Only reference_distance is required; min_scale defaults to None.
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            label_depth_scale: Some(()),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("label_depth_scale with defaults should parse");
+    let cfg = scene.label_depth_scale.expect("label_depth_scale should be Some");
+    assert_eq!(cfg.reference_distance, 50.0, "reference_distance should default to 50.0");
+    assert_eq!(cfg.min_scale, None, "min_scale should default to None");
+}
+
+#[test]
+fn test_game_scene_v2_label_depth_scale_omitted() {
+    // Existing scenes without the field must still deserialize cleanly.
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [])"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("scene without label_depth_scale should parse");
+    assert!(scene.label_depth_scale.is_none());
+}
+
+#[test]
+fn test_game_scene_v2_entity_label_depth_scale_override() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [
+                (
+                    id: "obj",
+                    prefab: "some_prefab",
+                    transform: (),
+                    label: Some((
+                        text: "Header",
+                        depth_scale: Some(false),
+                    )),
+                ),
+            ],
+            ui: [],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("entity label with depth_scale override should parse");
+    let label = scene.entities[0].label.as_ref().expect("label should be Some");
+    assert_eq!(label.depth_scale, Some(false));
+}
+
+#[test]
+fn test_game_scene_v2_directional_light_cascade_options() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            lighting: Some((
+                directional: Some((
+                    color: (1.0, 1.0, 1.0),
+                    intensity: 10000.0,
+                    rotation_euler_deg: (-45.0, 0.0, 0.0),
+                    shadow_distance: Some(400.0),
+                    cascade_overlap: Some(0.5),
+                )),
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("directional light with cascade options should parse");
+    let dl = scene.lighting.unwrap().directional.unwrap();
+    assert_eq!(dl.shadow_distance, Some(400.0));
+    assert_eq!(dl.cascade_overlap, Some(0.5));
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]
