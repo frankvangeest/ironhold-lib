@@ -69,6 +69,19 @@ Deliverables:
 - latency/jitter test harness
 - multiplayer demo scene
 
+### Beta 0.7 — “Loading & Preloading”
+Goal: eliminate frozen-screen loading and enable pre-warming of scenes.
+- Engine-level loading overlay during `LoadingScene` / `LoadingProject` states
+- `scene.loading_progress:{0-100}` milestone events from loader and terrain task
+- `loading_scene` field in `ProjectConfig` for custom splash scenes
+- `preload_poll_system`: watch `PreloadedScenes` handles, emit `scene.preloaded:{name}`
+- `LoadScene` fast-path when handle is already in `PreloadedScenes`
+Deliverables:
+- loading overlay visible from first frame of loading until `InGame`
+- custom splash scene support
+- preload action documented and tested
+Design: `planning/features/loading_screen.md`, `planning/features/scene_preloading.md`
+
 ## Release gates (must pass before bumping beta)
 - schema versioning rules enforced
 - docs updated

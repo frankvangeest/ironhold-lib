@@ -81,3 +81,23 @@ Terrain mesh generation is compute-heavy. Always use Bevy's `AsyncComputeTaskPoo
 
 ## Inspector isolation
 `bevy_egui` inspector and game UI are strictly separated. The inspector renders on its own camera/layer; never mix it with the main game UI camera. Data structs that should be visible in the inspector must be conditionally exposed using `#[cfg_attr(feature = "inspector", ...)]` attributes — see existing components for the pattern.
+
+## Frame pacing and performance
+
+**Native frame cap:** `bevy_framepace` (native only, `#[cfg(not(target_arch = "wasm32"))]`) caps the render loop at 60 fps to prevent vsync busy-wait inflating GPU utilisation numbers. Web builds are capped by `requestAnimationFrame` naturally.
+
+**Unfocused throttle:** `WinitSettings` drops the focused mode to `Reactive { wait: 100ms }` (~10 fps) when the window loses focus, reducing GPU load in the background.
+
+**Pipeline warmup:** `pipeline_warmup_system` adds `NoFrustumCulling` to all `Mesh3d` entities for 4 frames after each scene load (`PipelineWarmup(4)` inserted by `spawn_scene_v2`). On WASM, WebGPU pipeline compilation is synchronous and lazy — without warmup, moving the camera to reveal previously-culled entities triggers 300–2000 ms frame stalls.
+
+**Change-detection discipline:** Systems that update render-affecting components every frame (font sizes, colours, visibility) must guard writes so Bevy's change detection only fires when the value actually changes. Unconditional writes to `Mut<T>` fields mark the component as changed every frame, which re-triggers downstream render work (text layout, glyph atlas uploads, material rebind). Pattern:
+```rust
+// BAD — triggers change detection even when value is identical
+text_font.font_size = new_size;
+
+// GOOD — only fires change detection when the value meaningfully differs
+if (text_font.font_size - new_size).abs() >= 0.5 {
+    text_font.font_size = new_size;
+}
+```
+The same applies to `Visibility`, `Transform`, and any component read by the render pipeline.

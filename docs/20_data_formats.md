@@ -226,6 +226,8 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 | `ambient_brightness` | `Option<f32>` | `150.0` | Ambient brightness in lux. Without HDR colours clip at 1.0, so keep this low (50–300 is typical). |
 | `directional` | `Option<DirectionalLightDefV2>` | none | A single directional (sun) light |
 | `point_lights` | `Vec<PointLightDefV2>` | `[]` | Point (omnidirectional) lights |
+| `shadow_map_size` | `Option<u32>` | `2048` | Texel resolution of the directional-light shadow atlas. Must be a power of two. Lower values (`512`, `1024`) improve GPU performance; higher values (`4096`) give sharper shadows on large scenes. |
+| `point_shadow_map_size` | `Option<u32>` | `1024` | Texel resolution of each point-light shadow cube face. Same power-of-two rule applies. Only relevant when a point light has `shadows_enabled: true`. |
 
 **`DirectionalLightDefV2` fields:**
 
@@ -237,6 +239,7 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 | `shadows_enabled` | `bool` | `true` | Whether this light casts shadows |
 | `shadow_distance` | `Option<f32>` | engine default | Maximum world-unit distance at which shadow cascades are rendered. Tune downward for sharper shadows on a small scene; set to the full scene depth on large showcases. |
 | `cascade_overlap` | `Option<f32>` | `0.2` | Fraction of each cascade's range that overlaps the next cascade (0.0–1.0). A wider overlap blends the transition zone so the seam between cascades is invisible. `0.5` eliminates most visible seam bands on large flat surfaces. |
+| `num_cascades` | `Option<u32>` | `4` | Number of shadow cascade splits. Fewer cascades (`1`–`2`) reduce the GPU shadow pass cost significantly; more cascades give better shadow resolution over large distances. |
 
 **`PointLightDefV2` fields:**
 
