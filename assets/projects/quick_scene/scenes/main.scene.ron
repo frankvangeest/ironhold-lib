@@ -19,7 +19,7 @@
   )),
 
   terrain: Some((
-    heightmap: "shared/terrain/heightmap.png",
+    heightmap: "projects/quick_scene/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
     // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
     // 128×128 heightmap × 4 = ~508×508 unit terrain; max elevation 30 units.

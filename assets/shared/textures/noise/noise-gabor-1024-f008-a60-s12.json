@@ -1,0 +1,13 @@
+{
+  "type": "gabor",
+  "size": 1024,
+  "res": 8,
+  "cells": 12,
+  "kernels": 3000,
+  "freq": 0.08,
+  "angle": 60.0,
+  "sigma": 12.0,
+  "seed": 1318896421,
+  "output": "assets\\shared\\textures\\noise\\noise-gabor-1024-f008-a60-s12.png",
+  "generated": "2026-04-24T19:12:04.891164+00:00"
+}

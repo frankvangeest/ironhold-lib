@@ -8,7 +8,7 @@
       path: "shared/models/creatures/orc.glb#Scene0",
     ),
     "terrain_demo": (
-      path: "terrain/heightmap.png",
+      path: "projects/integration_tests/terrain/heightmap.png",
     ),
   },
 

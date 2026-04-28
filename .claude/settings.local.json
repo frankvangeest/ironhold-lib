@@ -34,7 +34,14 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:github.com)",
       "Bash(find:*)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(ls assets/shared/models*)",
+      "Bash(python tools/glb_inspector/inspect_glb.py:*)",
+      "Bash(python tools/texture_gen/generate.py:*)",
+      "Bash(python tools/avif2png/convert.py:*)",
+      "Bash(python tools/asset_checker/check.py:*)",
+      "Bash(python tools/glb_preview/preview.py:*)",
+      "Bash(git -C C:\\git\\rust\\ironhold-lib rev-parse --short HEAD)"
     ]
   }
 }

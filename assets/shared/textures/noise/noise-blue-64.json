@@ -1,0 +1,13 @@
+{
+  "type": "blue",
+  "size": 64,
+  "res": 8,
+  "cells": 12,
+  "kernels": 2000,
+  "freq": 0.08,
+  "angle": 45.0,
+  "sigma": 1.9,
+  "seed": 2135139528,
+  "output": "assets\\shared\\textures\\noise\\noise-blue-64.png",
+  "generated": "2026-04-24T19:12:09.828956+00:00"
+}

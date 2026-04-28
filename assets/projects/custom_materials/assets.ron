@@ -443,7 +443,7 @@
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
-          "texture_0": "shared/textures/noise/seamless-perlin-noise-512x512-8-cells.png",
+          "texture_0": "shared/textures/noise/noise-perlin-512-r8.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
@@ -455,7 +455,7 @@
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
-          "texture_0": "shared/textures/noise/seamless-voronoi-noise-512x512-12-cells.png",
+          "texture_0": "shared/textures/noise/noise-voronoi-512-c12.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
@@ -467,7 +467,7 @@
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
-          "texture_0": "shared/textures/noise/seamless-value-noise-512x512-16-cells.png",
+          "texture_0": "shared/textures/noise/noise-value-512-r16.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
@@ -479,7 +479,7 @@
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
-          "texture_0": "shared/textures/noise/seamless-gabor-512_size-3000_kernels-0.08_f-60.0_degrees-12_sigma.png",
+          "texture_0": "shared/textures/noise/noise-gabor-512-f008-a60-s12.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },
@@ -492,7 +492,7 @@
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
         textures: {
-          "texture_0": "shared/textures/noise/seamless-blue-noise-128.png",
+          "texture_0": "shared/textures/noise/noise-blue-128.png",
         },
         colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
         floats: { "blend_sharpness": 4.0, "tiling": 0.2 },

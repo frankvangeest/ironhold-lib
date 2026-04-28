@@ -1,6 +1,13 @@
 #[allow(unused_imports)]
 use bevy::prelude::*;
+use bevy::winit::{UpdateMode, WinitSettings};
 use bevy_common_assets::ron::RonAssetPlugin;
+use std::time::Duration;
+
+use bevy::camera::visibility::NoFrustumCulling;
+
+#[cfg(not(target_arch = "wasm32"))]
+use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
 
 pub mod schema;
 pub mod runtime;
@@ -31,6 +38,12 @@ pub struct InitialSceneOverride(pub String);
 /// Empty string means the project file is at the assets root.
 #[derive(Resource, Clone, Default)]
 pub struct ProjectRoot(pub String);
+
+/// Counts down after each scene spawn, keeping NoFrustumCulling on all mesh entities
+/// for a few frames so every pipeline compiles before the user starts interacting.
+/// Set to a non-zero value by spawn_scene_v2; decremented each frame by pipeline_warmup_system.
+#[derive(Resource, Default)]
+pub(crate) struct PipelineWarmup(pub u8);
 
 /// Live game state exposed to the DOM (WASM) and available to tests.
 /// Updated every frame by `update_debug_state`.
@@ -65,6 +78,7 @@ impl Plugin for GamePlugin {
 
         app.init_state::<AppState>()
             .init_resource::<DebugState>()
+            .init_resource::<PipelineWarmup>()
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
@@ -135,6 +149,7 @@ impl Plugin for GamePlugin {
                 animation_playback_system,
             ).chain())
             .add_systems(Update, motion_system)
+            .add_systems(Update, pipeline_warmup_system)
             .add_systems(Update, world_label_screen_pos_system)
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
@@ -145,8 +160,33 @@ impl Plugin for GamePlugin {
     }
 }
 
+fn pipeline_warmup_system(
+    mut warmup: ResMut<PipelineWarmup>,
+    mut commands: Commands,
+    mesh_entities: Query<Entity, With<Mesh3d>>,
+    nfc_entities: Query<Entity, With<NoFrustumCulling>>,
+) {
+    if warmup.0 == 0 {
+        return;
+    }
+    warmup.0 -= 1;
+    if warmup.0 > 0 {
+        for entity in mesh_entities.iter() {
+            commands.entity(entity).insert(NoFrustumCulling);
+        }
+    } else {
+        let mesh_count = nfc_entities.iter().count();
+        for entity in nfc_entities.iter() {
+            commands.entity(entity).remove::<NoFrustumCulling>();
+        }
+        info!(
+            "Pipeline warmup complete — {mesh_count} mesh(es) warmed up, frustum culling restored."
+        );
+    }
+}
+
 fn setup(
-    mut commands: Commands, 
+    mut commands: Commands,
     asset_server: Res<AssetServer>, 
     mut next_state: ResMut<NextState<AppState>>,
     config_path: Res<ProjectConfigPath>,
@@ -237,7 +277,7 @@ fn world_label_screen_pos_system(
     for (label, mut t, mut vis, mut text_font) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
             let Ok(gt) = tracked_q.get(tracked) else {
-                *vis = Visibility::Hidden;
+                if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 continue;
             };
             gt.translation() + label.offset
@@ -245,24 +285,30 @@ fn world_label_screen_pos_system(
             label.world_pos
         };
 
-        // Depth-based font size: scale = ref_dist / camera_distance, capped at 1.0
-        // so labels never grow larger than their authored size when the camera is close.
-        if let Some((ref_dist, min_floor)) = label.depth_scale {
+        // Depth-based font size: quantise to the nearest integer pixel so that
+        // sub-pixel drift from continuous camera movement does not mark TextFont
+        // as changed every frame. Bevy's text layout re-runs (and the glyph atlas
+        // re-rasterises) whenever TextFont is mutably accessed, so writing the same
+        // float value each frame is enough to cause 35× atlas uploads per frame.
+        let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
             let dist = (world_pos - cam_pos).length().max(0.001);
             let scale = (ref_dist / dist).min(1.0).max(min_floor);
-            text_font.font_size = label.base_font_size * scale;
+            (label.base_font_size * scale).round()
         } else {
-            text_font.font_size = label.base_font_size;
+            label.base_font_size
+        };
+        if (text_font.font_size - new_size).abs() >= 0.5 {
+            text_font.font_size = new_size;
         }
 
         match camera.world_to_viewport(cam_global, world_pos) {
             Ok(vp) => {
                 t.translation.x = vp.x - half_w;
                 t.translation.y = half_h - vp.y;
-                *vis = Visibility::Visible;
+                if *vis != Visibility::Visible { *vis = Visibility::Visible; }
             }
             Err(_) => {
-                *vis = Visibility::Hidden;
+                if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
             }
         }
     }
@@ -330,11 +376,25 @@ pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
         ..default()
     }))
     .insert_resource(ProjectConfigPath(config_path))
-    .insert_resource(ProjectRoot(project_root));
+    .insert_resource(ProjectRoot(project_root))
+    .insert_resource(WinitSettings {
+        focused_mode: UpdateMode::Continuous,
+        unfocused_mode: UpdateMode::Reactive {
+            wait: Duration::from_millis(100),
+            react_to_device_events: false,
+            react_to_user_events: true,
+            react_to_window_events: true,
+        },
+    });
 
     if let Some(scene) = scene_override {
         app.insert_resource(InitialSceneOverride(scene));
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_plugins(FramepacePlugin).insert_resource(FramepaceSettings {
+        limiter: Limiter::from_framerate(60.0),
+    });
 
     app.add_plugins(GamePlugin).run();
 }

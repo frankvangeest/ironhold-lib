@@ -20,6 +20,7 @@ use super::{
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
 use crate::capabilities::npc::{NpcAgent, NpcState};
+use crate::PipelineWarmup;
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
 };
@@ -820,6 +821,12 @@ pub fn spawn_scene_v2(
         // Apply lighting
         apply_lighting_v2(&mut commands, scene, project, &asset_server, &mut mats.images);
 
+        // Force all mesh pipelines to compile before the player interacts.
+        // pipeline_warmup_system adds NoFrustumCulling for the first N frames so every
+        // material pipeline compiles while meshes are "always visible", preventing
+        // per-entity stalls as the camera moves and new objects enter the frustum.
+        commands.insert_resource(PipelineWarmup(4));
+
         next_state.set(AppState::InGame);
     } // end if !is_overlay
 
@@ -1003,6 +1010,13 @@ fn apply_lighting_v2(
     images: &mut Assets<Image>,
 ) {
     if let Some(lighting) = &scene.lighting {
+        if let Some(size) = lighting.shadow_map_size {
+            commands.insert_resource(bevy::light::DirectionalLightShadowMap { size: size as usize });
+        }
+        if let Some(size) = lighting.point_shadow_map_size {
+            commands.insert_resource(bevy::light::PointLightShadowMap { size: size as usize });
+        }
+
         if let Some((r, g, b)) = lighting.ambient {
             commands.spawn((
                 Name::new("Ambient Light"),
@@ -1049,13 +1063,16 @@ fn apply_lighting_v2(
                 Transform::from_rotation(rot),
                 LevelEntity,
             ));
-            if dl.shadow_distance.is_some() || dl.cascade_overlap.is_some() {
+            if dl.shadow_distance.is_some() || dl.cascade_overlap.is_some() || dl.num_cascades.is_some() {
                 let mut builder = bevy::light::CascadeShadowConfigBuilder::default();
                 if let Some(dist) = dl.shadow_distance {
                     builder.maximum_distance = dist;
                 }
                 if let Some(overlap) = dl.cascade_overlap {
                     builder.overlap_proportion = overlap;
+                }
+                if let Some(n) = dl.num_cascades {
+                    builder.num_cascades = n as usize;
                 }
                 dir_light.insert(builder.build());
             }

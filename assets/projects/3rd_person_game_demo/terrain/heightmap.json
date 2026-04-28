@@ -1,0 +1,18 @@
+{
+  "type": "fbm",
+  "size": 512,
+  "res": 2,
+  "cells": 12,
+  "kernels": 2000,
+  "freq": 0.08,
+  "angle": 45.0,
+  "sigma": 12.0,
+  "octaves": 8,
+  "persistence": 0.55,
+  "lacunarity": 2.0,
+  "normal_map": false,
+  "strength": 4.0,
+  "seed": 3755477065,
+  "output": "assets\\projects\\3rd_person_game_demo\\terrain\\heightmap.png",
+  "generated": "2026-04-27T21:16:51.505714+00:00"
+}

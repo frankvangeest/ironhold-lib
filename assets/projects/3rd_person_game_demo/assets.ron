@@ -8,19 +8,19 @@
       path: "shared/models/creatures/orc.glb#Scene0",
     ),
     "chest_01": (
-      path: "shared/models/treasure-chest-01.glb#Scene0",
+      path: "shared/models/props/treasure-chest-01.glb#Scene0",
     ),
     "chest_02": (
-      path: "shared/models/treasure-chest-02.glb#Scene0",
+      path: "shared/models/props/treasure-chest-02.glb#Scene0",
     ),
     "anvil": (
-      path: "shared/models/anvil.glb#Scene0",
+      path: "shared/models/props/anvil.glb#Scene0",
     ),
     "alpaking": (
       path: "shared/models/creatures/alpaking.glb#Scene0",
     ),
     "terrain_demo": (
-      path: "terrain/heightmap.png",
+      path: "projects/3rd_person_game_demo/terrain/heightmap.png",
     ),
   },
 

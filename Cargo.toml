@@ -11,6 +11,7 @@ bevy = { version = "0.18.0", features = ["serialize", "wav", "vorbis", "mp3", "j
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.11"
 bevy_common_assets = { git = "https://github.com/NiklasEi/bevy_common_assets", branch = "main" }
+bevy_framepace = "0.21"
 wasm-bindgen = "0.2"
 
 [profile.test]

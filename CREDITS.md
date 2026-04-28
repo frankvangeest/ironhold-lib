@@ -4,6 +4,7 @@ code:
 
 assets:
 - models:
+  - https://www.thebasemesh.com/model-library
   - https://poly.pizza/bundle/Ultimate-Monsters-Bundle-5oyGWAmOB6
 - textures:
   - https://polyhaven.com/textures

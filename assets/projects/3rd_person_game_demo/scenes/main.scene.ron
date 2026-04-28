@@ -19,11 +19,11 @@
   )),
 
   terrain: Some((
-    heightmap: "shared/terrain/heightmap.png",
+    heightmap: "projects/3rd_person_game_demo/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
     // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
-    // 128×128 heightmap × 4 = ~508×508 unit terrain; max elevation 30 units.
-    scale: (4.0, 30.0, 4.0),
+    // 1024×1024 heightmap × 0.5 = ~512×512 unit terrain; max elevation 30 units.
+    scale: (0.5, 30.0, 0.5),
     // Offset the terrain down so the player spawn at (0, 4, 0) sits above the surface.
     position: Some((0.0, -20.0, 0.0)),
     material_paths: [

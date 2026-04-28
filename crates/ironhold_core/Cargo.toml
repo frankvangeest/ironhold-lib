@@ -21,5 +21,8 @@ futures-lite = "2.3"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Document", "Element"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bevy_framepace = { workspace = true }
+
 [features]
 inspector = ["dep:bevy_inspector_egui"]

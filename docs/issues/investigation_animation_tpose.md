@@ -156,3 +156,6 @@ Static analysis was inconclusive. The permanent trap is the mechanism, but what 
    ```
 
 4. **Once root cause confirmed**, fix the upstream push of the bad clip name (either in `animation_resolver.rs`, `player.rs`, or the RON rules file).
+
+-- Notes --
+Sometimes when I run the quick_scene project, the player character is T-posed. This is not always the case, but it happens frequently. I have not yet investigated this issue.

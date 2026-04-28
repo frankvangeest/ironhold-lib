@@ -16,6 +16,7 @@ assets/
   shared/                 ← reusable across all projects
     shaders/              ← custom WGSL shaders (prefix: custom_*)
     textures/             ← tileable PBR and stylized texture sets + noise utilities
+    terrain/              ← shared terrain layers (grass, rock, dirt, snow, splatmap)
     audio/                ← music, UI sounds, footstep packs, ambient effects
     models/               ← shared GLB models (creatures, props)
   projects/{name}/        ← project-specific assets; not shared
@@ -24,6 +25,7 @@ assets/
     assets.ron
     prefabs/
     logic/
+    terrain/              ← project-specific heightmap (heightmap.png + heightmap.json manifest)
 ```
 
 ## Shared vs project-specific
@@ -33,6 +35,22 @@ Put an asset in `shared/` only if it is genuinely reusable across unrelated proj
 ## Texture descriptions
 
 Visual descriptions of all shared textures live in `shared/textures/texture-descriptions.md`. Update it when adding or removing textures.
+
+## Tools
+
+**After editing any `assets.ron` or moving/renaming files**, run the asset checker to catch broken references:
+
+```bash
+python tools/asset_checker/check.py
+```
+
+**Noise textures and terrain heightmaps** are generated with the texture tool — see `tools/texture_gen/CLAUDE.md` for noise types and heightmap parameters. Each project's heightmap lives at `projects/{name}/terrain/heightmap.png` and must have a `.json` manifest alongside it.
+
+**AVIF preview images** in `assets/shared/models/avif/` can be converted to PNG with:
+
+```bash
+python tools/avif2png/convert.py assets/shared/models/avif/
+```
 
 ## Shader authoring
 

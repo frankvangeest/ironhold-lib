@@ -144,6 +144,17 @@ pub struct SceneLightingV2 {
     pub directional: Option<DirectionalLightDefV2>,
     #[serde(default)]
     pub point_lights: Vec<PointLightDefV2>,
+    /// Resolution of the directional-light shadow map texture (width = height).
+    /// Applies globally to all directional lights in the scene.
+    /// Must be a power of two. Bevy default: 2048. Use 1024 or 512 for better
+    /// performance on small scenes; use 4096 for crisp shadows on large terrain.
+    #[serde(default)]
+    pub shadow_map_size: Option<u32>,
+    /// Resolution of each cube-face of point-light shadow maps.
+    /// Applies globally to all shadow-casting point lights in the scene.
+    /// Must be a power of two. Bevy default: 512. Use 256 for cheaper point shadows.
+    #[serde(default)]
+    pub point_shadow_map_size: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -165,6 +176,11 @@ pub struct DirectionalLightDefV2 {
     /// visible seams on large flat surfaces. Omit to use Bevy's default.
     #[serde(default)]
     pub cascade_overlap: Option<f32>,
+    /// Number of shadow cascade levels. Bevy default: 4.
+    /// Fewer cascades mean fewer depth passes per frame — 2 is usually enough for
+    /// small or medium scenes. Only meaningful when `shadows_enabled: true`.
+    #[serde(default)]
+    pub num_cascades: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
