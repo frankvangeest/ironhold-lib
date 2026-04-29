@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
-use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot};
+use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup};
 use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::CharacterController;
@@ -1915,4 +1915,38 @@ fn test_model_fixes_base_path_fallback() {
         Vec3::new(5.0, 0.0, 0.0),
         "Base path fallback must apply the fix stored under 'hero.glb' when spawning 'hero.glb#Scene0'"
     );
+}
+
+// ── PipelineWarmup ────────────────────────────────────────────────────────────
+
+#[test]
+fn test_pipeline_warmup_decrements_to_zero() {
+    let mut app = setup_test_app();
+    app.update(); // Startup
+
+    app.world_mut().insert_resource(PipelineWarmup(4));
+
+    // pipeline_warmup_system runs each Update frame; 4 ticks should drain the counter.
+    for _ in 0..4 {
+        app.update();
+    }
+
+    let warmup = app.world().resource::<PipelineWarmup>();
+    assert_eq!(warmup.0, 0, "PipelineWarmup should reach 0 after 4 frames");
+}
+
+#[test]
+fn test_pipeline_warmup_stops_at_zero() {
+    let mut app = setup_test_app();
+    app.update(); // Startup
+
+    app.world_mut().insert_resource(PipelineWarmup(2));
+
+    // Run more frames than the initial count — should not underflow.
+    for _ in 0..10 {
+        app.update();
+    }
+
+    let warmup = app.world().resource::<PipelineWarmup>();
+    assert_eq!(warmup.0, 0, "PipelineWarmup must not go below 0");
 }

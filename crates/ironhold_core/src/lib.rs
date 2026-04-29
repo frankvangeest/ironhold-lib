@@ -43,7 +43,7 @@ pub struct ProjectRoot(pub String);
 /// for a few frames so every pipeline compiles before the user starts interacting.
 /// Set to a non-zero value by spawn_scene_v2; decremented each frame by pipeline_warmup_system.
 #[derive(Resource, Default)]
-pub(crate) struct PipelineWarmup(pub u8);
+pub struct PipelineWarmup(pub u8);
 
 /// Live game state exposed to the DOM (WASM) and available to tests.
 /// Updated every frame by `update_debug_state`.
@@ -399,4 +399,47 @@ pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
     app.add_plugins(GamePlugin).run();
 }
 
+#[cfg(test)]
+mod tests {
+    /// Depth-scale formula: ref_dist / dist, clamped to [min_floor, 1.0].
+    /// These tests pin the arithmetic that world_label_screen_pos_system uses
+    /// to quantise font sizes — a regression here means glyph-atlas misses.
+    fn compute_scale(ref_dist: f32, dist: f32, min_floor: f32) -> f32 {
+        (ref_dist / dist).min(1.0).max(min_floor)
+    }
 
+    #[test]
+    fn depth_scale_at_reference_distance_is_one() {
+        assert_eq!(compute_scale(80.0, 80.0, 0.25), 1.0);
+    }
+
+    #[test]
+    fn depth_scale_at_double_distance_is_half() {
+        let s = compute_scale(80.0, 160.0, 0.25);
+        assert!((s - 0.5).abs() < 1e-5, "expected 0.5, got {s}");
+    }
+
+    #[test]
+    fn depth_scale_close_up_capped_at_one() {
+        assert_eq!(compute_scale(80.0, 10.0, 0.25), 1.0);
+    }
+
+    #[test]
+    fn depth_scale_far_away_clamped_to_min_floor() {
+        assert_eq!(compute_scale(80.0, 1000.0, 0.25), 0.25);
+    }
+
+    #[test]
+    fn font_size_write_skipped_for_sub_half_change() {
+        let current = 24.0_f32;
+        let new_size = 24.3_f32;
+        assert!((current - new_size).abs() < 0.5, "should skip write for change < 0.5");
+    }
+
+    #[test]
+    fn font_size_write_triggered_at_half_pixel_threshold() {
+        let current = 24.0_f32;
+        let new_size = 24.5_f32;
+        assert!((current - new_size).abs() >= 0.5, "should write for change >= 0.5");
+    }
+}

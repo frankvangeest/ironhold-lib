@@ -462,6 +462,77 @@ fn test_game_scene_v2_directional_light_cascade_options() {
     assert_eq!(dl.cascade_overlap, Some(0.5));
 }
 
+#[test]
+fn test_game_scene_v2_shadow_map_sizes_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            lighting: Some((
+                shadow_map_size: Some(1024),
+                point_shadow_map_size: Some(512),
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("shadow_map_size and point_shadow_map_size should parse");
+    let lighting = scene.lighting.unwrap();
+    assert_eq!(lighting.shadow_map_size, Some(1024));
+    assert_eq!(lighting.point_shadow_map_size, Some(512));
+}
+
+#[test]
+fn test_game_scene_v2_shadow_map_sizes_default_to_none() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [], lighting: Some(()))"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("lighting with all defaults should parse");
+    let lighting = scene.lighting.unwrap();
+    assert_eq!(lighting.shadow_map_size, None, "shadow_map_size should default to None");
+    assert_eq!(lighting.point_shadow_map_size, None, "point_shadow_map_size should default to None");
+}
+
+#[test]
+fn test_game_scene_v2_directional_light_num_cascades_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            lighting: Some((
+                directional: Some((
+                    color: (1.0, 1.0, 1.0),
+                    intensity: 5000.0,
+                    rotation_euler_deg: (-45.0, 0.0, 0.0),
+                    num_cascades: Some(2),
+                )),
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("num_cascades should parse");
+    let dl = scene.lighting.unwrap().directional.unwrap();
+    assert_eq!(dl.num_cascades, Some(2));
+}
+
+#[test]
+fn test_game_scene_v2_directional_light_num_cascades_defaults_to_none() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            lighting: Some((
+                directional: Some((
+                    color: (1.0, 1.0, 1.0),
+                    intensity: 5000.0,
+                    rotation_euler_deg: (-45.0, 0.0, 0.0),
+                )),
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("directional light without num_cascades should parse");
+    let dl = scene.lighting.unwrap().directional.unwrap();
+    assert_eq!(dl.num_cascades, None, "num_cascades should default to None");
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]
