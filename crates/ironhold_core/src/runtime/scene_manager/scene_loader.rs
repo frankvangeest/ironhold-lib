@@ -16,6 +16,7 @@ use super::{
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, SpawnId, WorldLabel,
+    LoadedAudioHandles, LoadedAssetCatalog,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
@@ -1225,6 +1226,29 @@ pub(crate) fn primitive_material(
         perceptual_roughness: p.roughness.unwrap_or(0.5),
         metallic: p.metallic.unwrap_or(0.0),
         ..default()
+    }
+}
+
+/// Warms the asset server cache for all audio files in the current project's catalog.
+/// Runs once per scene load (triggered by `SceneEvent::Ready`) so audio handles are live
+/// before the player can interact, eliminating the first-play I/O delay.
+pub fn preload_audio_system(
+    mut events: MessageReader<SceneEvent>,
+    asset_catalog: Res<LoadedAssetCatalog>,
+    asset_server: Res<AssetServer>,
+    mut audio_handles: ResMut<LoadedAudioHandles>,
+) {
+    for event in events.read() {
+        if matches!(event, SceneEvent::Ready(_)) {
+            audio_handles.0.clear();
+            for path in asset_catalog.0.audio.values() {
+                let handle: Handle<bevy::audio::AudioSource> = asset_server.load(path.clone());
+                audio_handles.0.push(handle);
+            }
+            if !audio_handles.0.is_empty() {
+                info!("Audio preload: {} file(s) warmed up", audio_handles.0.len());
+            }
+        }
     }
 }
 

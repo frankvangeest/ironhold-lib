@@ -92,6 +92,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
             .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
+            .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -121,6 +122,7 @@ impl Plugin for GamePlugin {
                 // SceneHandleV2, triggering a spurious spawn and resetting load_mode to
                 // Replace before the correct handle is ever visible.
                 spawn_scene_v2.before(message_interpreter_system),
+                preload_audio_system,
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
                 apply_material_overrides,

@@ -67,6 +67,13 @@ pub struct LoadedKeyBindings(pub HashMap<String, String>);
 #[derive(Resource, Default)]
 pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
 
+/// Holds pre-loaded audio asset handles so the asset server cache is warm before first play.
+/// Populated by `preload_audio_system` on each `SceneEvent::Ready`. Keeping these handles alive
+/// prevents the asset server from evicting audio between scene loads, eliminating first-play I/O
+/// latency (the main cause of audible delay on both native and web).
+#[derive(Resource, Default)]
+pub struct LoadedAudioHandles(pub Vec<Handle<bevy::audio::AudioSource>>);
+
 #[derive(Resource)]
 pub struct SceneHandleV2(pub Handle<GameSceneV2>);
 

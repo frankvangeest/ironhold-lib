@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup};
-use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
+use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::capabilities::animation::AnimationController;
@@ -1101,6 +1101,52 @@ fn test_fsm_scene_event_loaded_triggers_transition() {
 
     let state = app.world().resource::<LogicState>();
     assert_eq!(state.0, "b", "SceneEvent::Loaded should trigger an FSM transition");
+}
+
+// ── Audio preload tests ───────────────────────────────────────────────────────
+
+#[test]
+fn test_preload_audio_populates_handles_on_scene_ready() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
+    catalog.audio.insert("jump".to_string(),         "shared/audio/jump.wav".to_string());
+    catalog.audio.insert("collect_coin".to_string(), "shared/audio/coin.wav".to_string());
+    app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/main.scene.ron".to_string()));
+    app.update();
+
+    let handles = app.world().resource::<LoadedAudioHandles>();
+    assert_eq!(handles.0.len(), 2,
+        "preload_audio_system should create one handle per catalog audio entry");
+}
+
+#[test]
+fn test_preload_audio_clears_on_scene_transition() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
+    catalog.audio.insert("jump".to_string(),         "shared/audio/jump.wav".to_string());
+    catalog.audio.insert("collect_coin".to_string(), "shared/audio/coin.wav".to_string());
+    app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
+
+    // First scene load.
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/scene_a.scene.ron".to_string()));
+    app.update();
+
+    // Second scene load (transition) — handles must not accumulate.
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/scene_b.scene.ron".to_string()));
+    app.update();
+
+    let handles = app.world().resource::<LoadedAudioHandles>();
+    assert_eq!(handles.0.len(), 2,
+        "preload_audio_system must clear and repopulate on each Ready, not accumulate");
 }
 
 #[test]
