@@ -197,6 +197,26 @@
       unlit: true,
     ),
 
+    // Animated stylised water — Fresnel deep/shallow blend with procedural sine-wave ripples.
+    // flow_speed: wave animation rate. tiling: ripple density. wave_strength: normal perturbation.
+    "mat_water": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_water_stylized.wgsl"),
+        colors: {
+          "deep_color":    (r:0.12, g:0.35, b:0.70, a:0.85),
+          "shallow_color": (r:0.60, g:0.88, b:1.00, a:0.95),
+        },
+        floats: {
+          "flow_speed":    0.5,
+          "fresnel_power": 2.5,
+          "tiling":        0.5,
+          "wave_strength": 0.20,
+        },
+      )),
+      alpha_mode: Blend,
+      unlit: true,
+    ),
+
     // Violet deco orb — additive violet energy.
     "mat_deco_orb_violet": (
       kind: Custom((

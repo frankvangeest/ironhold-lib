@@ -129,6 +129,7 @@ pub fn add_inspector_plugins(app: &mut App) {
         .add_systems(Update, toggle_inspector_key)
         .add_systems(Update, toggle_physics_debug_key)
         .add_plugins(EguiPlugin::default())
+        .add_plugins(bevy_inspector_egui::DefaultInspectorConfigPlugin)
         .add_systems(Update, world_inspector_system);
 }
 

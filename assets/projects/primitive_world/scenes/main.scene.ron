@@ -338,24 +338,14 @@
       transform: ( translation: (9.0, 0.3, -3.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
     ),
 
-    // ── Pond and bridge ───────────────────────────────────────────────────────
-    // Pond: top face sits 5 cm above y=0 to avoid Z-fighting with the ground plane
-    // whose top face is also at y=0. Center = top_face_y - half_height = 0.05 - 0.15 = -0.10.
+    // ── Pond ─────────────────────────────────────────────────────────────────
+    // Composite basin: stone floor + 4 border beams + animated water surface.
+    // Origin at y=0; the prefab positions all children relative to ground.
     (
       id: "pond_01",
       prefab: "pond",
       transform: (
-        translation: (0.0, -0.10, -28.0),
-        rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-    // Bridge deck spans the pond. Cuboid(7,0.35,12), center at y=0.175 → top at ~0.35.
-    (
-      id: "bridge_01",
-      prefab: "bridge_deck",
-      transform: (
-        translation: (0.0, 0.175, -28.0),
+        translation: (0.0, 0.0, -28.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),

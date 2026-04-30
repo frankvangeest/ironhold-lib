@@ -450,27 +450,77 @@
     ),
 
     // ── Pond ───────────────────────────────────────────────────────────────────
+    // Stone basin: floor slab + 4 border beams + animated water surface.
+    // Entity origin at y=0 (ground level).
+    // Outer footprint: 7.0 × 12.0.  Beam width: 0.5.  Inner water: 6.0 × 11.0.
+    // Beams extend to y=0.35; water surface sits at y=0.27 (below the rim).
     "pond": (
       kind: "primitive",
-      model: "Cuboid",
+      model: "",
       components: (),
-      primitive: Some((
-        size: Some((7.0, 0.3, 12.0)),
-        color: Some((0.35, 0.62, 0.92)),
-        roughness: Some(0.80),
-        metallic: Some(0.0),
-      )),
-    ),
+      children: [
 
-    // ── Bridge deck ────────────────────────────────────────────────────────────
-    "bridge_deck": (
-      kind: "primitive",
-      model: "Cuboid",
-      material: Some("mat_stone_mossy"),
-      components: (),
-      primitive: Some((
-        size: Some((7.0, 0.35, 12.0)),
-      )),
+        // Stone floor inside the basin (slightly above ground to avoid z-fighting)
+        (
+          shape: "Cuboid",
+          material: Some("mat_stone_mossy"),
+          primitive: ( size: Some((6.0, 0.06, 11.0)) ),
+          offset: (0.0, 0.03, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // North border beam — full outer width
+        (
+          shape: "Cuboid",
+          material: Some("mat_stone_bricks"),
+          primitive: ( size: Some((7.0, 0.35, 0.5)) ),
+          offset: (0.0, 0.175, 5.75),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // South border beam — full outer width
+        (
+          shape: "Cuboid",
+          material: Some("mat_stone_bricks"),
+          primitive: ( size: Some((7.0, 0.35, 0.5)) ),
+          offset: (0.0, 0.175, -5.75),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // East border beam — inner length (fits between north/south beams, no corner overlap)
+        (
+          shape: "Cuboid",
+          material: Some("mat_stone_bricks"),
+          primitive: ( size: Some((0.5, 0.35, 11.0)) ),
+          offset: (3.25, 0.175, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // West border beam — inner length
+        (
+          shape: "Cuboid",
+          material: Some("mat_stone_bricks"),
+          primitive: ( size: Some((0.5, 0.35, 11.0)) ),
+          offset: (-3.25, 0.175, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // Animated water surface — sits inside the beams
+        (
+          shape: "Cuboid",
+          material: Some("mat_water"),
+          primitive: ( size: Some((6.0, 0.04, 11.0)) ),
+          offset: (0.0, 0.27, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+      ],
     ),
 
     // ── Collectible coin ──────────────────────────────────────────────────────
@@ -736,6 +786,34 @@
           ),
           // Crossbeam at top of pillars: y = 0.8+1.8+0.06 = 2.66
           offset: (0.0, 2.66, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // Stone rim ring — outer edge (r=0.65+0.05=0.70) aligns with the cylinder wall.
+        // Thinner tube (0.05) widens the inner opening to 0.60.
+        (
+          shape: "Torus",
+          material: Some("mat_stone_bricks"),
+          primitive: (
+            radius: Some(0.7),
+            radius_top: Some(0.4),
+          ),
+          // Slightly above stone cylinder top (y=0.80) to avoid z-fighting.
+          offset: (0.0, 0.82, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+
+        // Water surface — fits inside torus inner opening (0.65−0.05=0.60).
+        (
+          shape: "Cylinder",
+          material: Some("mat_water"),
+          primitive: (
+            radius: Some(0.58),
+            height: Some(0.03),
+          ),
+          offset: (0.0, 0.82, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
