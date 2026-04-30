@@ -456,9 +456,9 @@
       components: (),
       primitive: Some((
         size: Some((7.0, 0.3, 12.0)),
-        color: Some((0.14, 0.38, 0.65)),
-        roughness: Some(0.05),
-        metallic: Some(0.1),
+        color: Some((0.35, 0.62, 0.92)),
+        roughness: Some(0.80),
+        metallic: Some(0.0),
       )),
     ),
 

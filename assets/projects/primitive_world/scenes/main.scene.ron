@@ -4,13 +4,18 @@
 
   tonemapping: AcesFitted,
 
+  label_depth_scale: Some((
+    reference_distance: 25.0,
+    min_scale: Some(0.4),
+  )),
+
   scene_key_bindings: {
     "KeyM": "toggle_map",
   },
 
   lighting: Some((
     ambient: Some((0.22, 0.28, 0.38)),
-    ambient_brightness: Some(100.0),
+    ambient_brightness: Some(280.0),
     directional: Some((
       color: (1.0, 0.95, 0.80),
       intensity: 32000.0,
@@ -22,6 +27,30 @@
   spawn_points: {
     "player_start": (0.0, 0.5, 8.0),
   },
+
+  world_labels: [
+    (
+      id: "area_village",
+      text: "Village",
+      translation: (1.0, 5.0, -12.0),
+      font_size: 22.0,
+      color: (0.95, 0.88, 0.55, 0.85),
+    ),
+    (
+      id: "area_danger",
+      text: "Goblin Territory",
+      translation: (0.0, 4.5, -14.5),
+      font_size: 20.0,
+      color: (1.0, 0.35, 0.2, 0.85),
+    ),
+    (
+      id: "area_pond",
+      text: "The Pond",
+      translation: (0.0, 2.5, -28.0),
+      font_size: 18.0,
+      color: (0.5, 0.82, 1.0, 0.85),
+    ),
+  ],
 
   entities: [
 
@@ -310,13 +339,13 @@
     ),
 
     // ── Pond and bridge ───────────────────────────────────────────────────────
-    // Pond: Cuboid(7,0.3,12) placed so top surface is flush with ground (y=0).
-    // Center at y = -(0.3/2 + epsilon) = -0.15 — slightly below ground.
+    // Pond: top face sits 5 cm above y=0 to avoid Z-fighting with the ground plane
+    // whose top face is also at y=0. Center = top_face_y - half_height = 0.05 - 0.15 = -0.10.
     (
       id: "pond_01",
       prefab: "pond",
       transform: (
-        translation: (0.0, -0.15, -28.0),
+        translation: (0.0, -0.10, -28.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -374,6 +403,7 @@
         rotation_euler_deg: (0.0, 180.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: Some((text: "Villager", offset: (0.0, 2.5, 0.0), color: (0.65, 1.0, 0.65, 1.0))),
     ),
 
     // Goblin guard: patrols a triangle near the far end of the path.
@@ -387,6 +417,7 @@
         rotation_euler_deg: (0.0, 90.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: Some((text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0))),
     ),
     (
       id: "goblin_02",
@@ -396,6 +427,7 @@
         rotation_euler_deg: (0.0, 270.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: Some((text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0))),
     ),
 
     // Merchant: stands near the bridge at the south end of the path.
@@ -408,6 +440,7 @@
         rotation_euler_deg: (0.0, 90.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: Some((text: "Merchant", offset: (0.0, 2.5, 0.0), color: (0.85, 0.65, 1.0, 1.0))),
     ),
 
   ],
@@ -418,8 +451,26 @@
       id: "pause_button",
       text: "Menu",
       action: "ui.toggle_pause",
-      position: (20.0, 20.0),
-      size: (120.0, 44.0),
+      position: (16.0, 16.0),
+      size: (80.0, 36.0),
+    ),
+    (
+      kind: "label",
+      id: "health_label",
+      text: "HP  100",
+      bind: Some("health"),
+      format: Some("HP  {}"),
+      position: (16.0, 62.0),
+      size: (180.0, 32.0),
+    ),
+    (
+      kind: "label",
+      id: "score_label",
+      text: "Score  0",
+      bind: Some("score"),
+      format: Some("Score  {}"),
+      position: (16.0, 98.0),
+      size: (180.0, 32.0),
     ),
   ],
 )

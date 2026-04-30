@@ -15,115 +15,135 @@
 
   materials: {
 
-    // ── Scenery surface textures ───────────────────────────────────────────────
-    // All use custom_texture_tint.wgsl; tint (1,1,1,1) = no tint (show texture
-    // as-is). Swap texture_0 path or adjust tint to recolour without a new shader.
+    // ── Scenery surface textures — full PBR triplanar ─────────────────────────
+    // All use custom_texture_triplanar_pbr.wgsl with basecolor + normal +
+    // roughness + AO. Triplanar projection drives UVs from world-space position
+    // so there are no UV seams or pole pinch on cylinders, spheres, and cones.
+    // tiling = repeats per world unit; tune per object scale.
 
     "mat_bark": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_normal.png",
+          "texture_2": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_roughness.png",
+          "texture_3": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.2, "tiling": 0.5 },
       )),
     ),
 
     "mat_wood_planks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_basecolor.jpg",
+          "texture_1": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_normal.jpg",
+          "texture_2": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_roughness.jpg",
+          "texture_3": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_ambientOcclusion.jpg",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.0, "tiling": 0.6 },
       )),
     ),
 
     "mat_stone_floor": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_normal.png",
+          "texture_2": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_roughness.png",
+          "texture_3": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 6.0, "metallic": 0.0, "normal_strength": 0.7, "tiling": 0.5 },
       )),
     ),
 
     "mat_stone_mossy": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_normal.png",
+          "texture_2": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_roughness.png",
+          "texture_3": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.2, g:1.2, b:1.2, a:1.0) },
+        floats: { "blend_sharpness": 5.0, "metallic": 0.0, "normal_strength": 0.4, "tiling": 0.15 },
       )),
     ),
 
     "mat_stone_bricks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_normal.png",
+          "texture_2": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_roughness.png",
+          "texture_3": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 6.0, "metallic": 0.0, "normal_strength": 0.9, "tiling": 0.5 },
       )),
     ),
 
     "mat_wall_plaster": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_normal.png",
+          "texture_2": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_roughness.png",
+          "texture_3": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 0.7, "tiling": 0.2 },
       )),
     ),
 
     "mat_roof_tiles": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_normal.png",
+          "texture_2": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_roughness.png",
+          "texture_3": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 5.0, "metallic": 0.0, "normal_strength": 1.2, "tiling": 0.35 },
       )),
     ),
 
     "mat_thatched_roof": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_basecolor.png",
+          "texture_1": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_normal.png",
+          "texture_2": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_roughness.png",
+          "texture_3": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_ambientOcclusion.png",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.3, "tiling": 0.35 },
       )),
     ),
 
     "mat_cliff_rock": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
         textures: {
           "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
+          "texture_1": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_normal.jpg",
+          "texture_2": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_roughness.jpg",
+          "texture_3": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_ambientOcclusion.jpg",
         },
-        colors: {
-          "tint": (r:1.0, g:1.0, b:1.0, a:1.0),
-        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 4.0, "metallic": 0.0, "normal_strength": 1.0, "tiling": 0.8 },
       )),
     ),
 
