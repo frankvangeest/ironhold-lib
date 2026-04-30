@@ -440,6 +440,14 @@
             animation-delay: 0.26s;
         }
 
+        .project-card:nth-child(5) {
+            animation-delay: 0.33s;
+        }
+
+        .project-card:nth-child(6) {
+            animation-delay: 0.40s;
+        }
+
         header {
             animation: fadeInUp 0.45s ease both;
         }
@@ -592,6 +600,32 @@
                     <div class="card-tag">
                         <span class="tag blue">sandbox</span>
                         <span class="tag blue">3rd person</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="project-card" id="card-entity-logic" href="play.html?project=entity_logic_demo"
+                data-keywords="entity logic demo fsm finite state machine interactable trigger zone collectible behavior">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/entity_logic_demo_main.png"
+                        alt="Entity Logic Demo screenshot" loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card-title">Entity Logic Demo</div>
+                    <div class="card-description">
+                        Per-entity finite state machines driven by RON behavior files. Collect boxes with F, walk
+                        through trigger zones, and watch the score update live.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag green">entity FSM</span>
+                        <span class="tag blue">interactive</span>
                     </div>
                 </div>
             </a>

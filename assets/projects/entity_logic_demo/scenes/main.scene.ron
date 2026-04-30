@@ -1,0 +1,114 @@
+(
+  schema_version: 2,
+  name: "main",
+
+  tonemapping: AcesFitted,
+
+  lighting: Some((
+    ambient: Some((0.22, 0.28, 0.38)),
+    ambient_brightness: Some(100.0),
+    directional: Some((
+      color: (1.0, 0.95, 0.80),
+      intensity: 32000.0,
+      rotation_euler_deg: (-45.0, 25.0, 0.0),
+      shadows_enabled: true,
+    )),
+  )),
+
+  spawn_points: {
+    "player_start": (0.0, 0.5, 10.0),
+  },
+
+  entities: [
+
+    // ── Ground ────────────────────────────────────────────────────────────────
+    (
+      id: "ground",
+      prefab: "ground",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Player ────────────────────────────────────────────────────────────────
+    (
+      id: "player_01",
+      prefab: "player",
+      transform: (
+        translation: (0.0, 0.5, 10.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Collectible boxes (press F to collect) ─────────────────────────────
+    // Each has its own entity FSM driven by collectible_box.behavior.ron.
+    (
+      id: "box_01",
+      prefab: "collectible_box",
+      transform: (
+        translation: (-3.0, 0.4, 3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+    ),
+    (
+      id: "box_02",
+      prefab: "collectible_box",
+      transform: (
+        translation: (3.0, 0.4, 3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+    ),
+    (
+      id: "box_03",
+      prefab: "collectible_box",
+      transform: (
+        translation: (0.0, 0.4, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+    ),
+
+    // ── Score trigger zone ─────────────────────────────────────────────────
+    // A small visible marker (0.05 m sphere) at the zone centre.
+    // The actual sensor radius (2.0 m) comes from the TriggerZoneDef in prefabs.ron.
+    (
+      id: "score_zone_01",
+      prefab: "score_zone",
+      transform: (
+        translation: (0.0, 0.05, -8.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: Some(( text: "Score Zone\n+10 points\n2m radius", offset: (0.0, 1.5, 0.0) )),
+    ),
+  ],
+
+  ui: [
+    (
+      kind: "label",
+      id: "score",
+      text: "Score: 0",
+      position: (16.0, 16.0),
+      size: (200.0, 32.0),
+      align: Left,
+      bind: Some("score"),
+      format: Some("Score: {}"),
+    ),
+    (
+      kind: "label",
+      id: "hint",
+      text: "Walk to the score zone for points",
+      position: (16.0, 52.0),
+      size: (600.0, 28.0),
+      align: Left,
+    ),
+  ],
+)

@@ -58,8 +58,24 @@ pub struct DebugState {
     pub scene: String,
     /// Current named logic state set by `Action::EnterState`. Empty string means no active state.
     pub logic_state: String,
-    /// Running score total. Modified by `Action::AddScore(delta)`.
+    /// Running score total. Derived from `GameVariables["score"]` each frame.
     pub score: i32,
+}
+
+/// Runtime-writable named values exposed to data-bound UI labels.
+/// Keys are arbitrary strings; any action executor can write here.
+/// UI labels with `bind: Some("key")` read from this map every frame.
+#[derive(Resource, Default)]
+pub struct GameVariables(pub std::collections::HashMap<String, String>);
+
+/// Placed on a UI `Text` entity by `scene_loader` when the label definition has a
+/// `bind` field. Every frame `update_dynamic_labels_system` writes the current value
+/// of `GameVariables[key]` into the text, formatted with the optional `format` template
+/// (`"{}"` is replaced by the value; defaults to the raw value when omitted).
+#[derive(Component)]
+pub struct DynamicLabel {
+    pub key: String,
+    pub format: Option<String>,
 }
 
 pub struct GamePlugin;
@@ -93,6 +109,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
+            .init_resource::<GameVariables>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -125,6 +142,7 @@ impl Plugin for GamePlugin {
                 preload_audio_system,
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
+                resolve_pending_behaviors_system,
                 apply_material_overrides,
                 button_system,
             ))
@@ -134,6 +152,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 message_interpreter_system,
                 fsm_interpreter_system,
+                entity_fsm_interpreter_system,
                 action_executor_system,
             ).chain())
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
@@ -141,8 +160,12 @@ impl Plugin for GamePlugin {
                 input_translator_system,
                 player_movement_system,
                 collectible_system,
+                trigger_zone_system,
                 npc_behavior_system,
             ).chain())
+            // Interactable input runs before all interpreters so all three readers
+            // see the emitted GameEvent in the same frame.
+            .add_systems(Update, interactable_system.before(message_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (
                 animation_resolver_system,
@@ -155,10 +178,27 @@ impl Plugin for GamePlugin {
             .add_systems(Update, world_label_screen_pos_system)
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
+            .add_systems(Update, update_dynamic_labels_system)
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]
         app.add_systems(PostUpdate, sync_debug_state_to_dom.after(update_debug_state));
+    }
+}
+
+fn update_dynamic_labels_system(
+    vars: Res<GameVariables>,
+    mut label_query: Query<(&mut Text, &DynamicLabel)>,
+) {
+    for (mut text, label) in &mut label_query {
+        let value = vars.0.get(&label.key).map(String::as_str).unwrap_or("");
+        let new_text = match &label.format {
+            Some(fmt) => fmt.replace("{}", value),
+            None => value.to_string(),
+        };
+        if text.0 != new_text {
+            *text = Text::new(new_text);
+        }
     }
 }
 
@@ -321,10 +361,12 @@ fn update_debug_state(
     state: Res<State<AppState>>,
     mut scene_events: MessageReader<SceneEvent>,
     logic_state: Res<crate::runtime::scene_manager::LogicState>,
+    game_vars: Res<GameVariables>,
 ) {
     debug.frame += 1;
     debug.app_state = format!("{:?}", state.get());
     debug.logic_state = logic_state.0.clone();
+    debug.score = game_vars.0.get("score").and_then(|s| s.parse().ok()).unwrap_or(0);
     for event in scene_events.read() {
         if let SceneEvent::Ready(path) = event {
             debug.scene = path.clone();

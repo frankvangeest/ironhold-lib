@@ -10,6 +10,8 @@ pub mod physics;
 pub mod collectible;
 pub mod motion;
 pub mod npc;
+pub mod trigger_zone;
+pub mod interactable;
 
 pub use player::*;
 pub use camera::*;
@@ -23,4 +25,6 @@ pub use physics::*;
 pub use collectible::*;
 pub use motion::*;
 pub use npc::*;
+pub use trigger_zone::*;
+pub use interactable::*;
 

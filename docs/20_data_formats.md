@@ -330,6 +330,9 @@ UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** D
 | `size` | `(f32, f32)` | required | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill/background colour as linear RGBA. No effect on `kind: "label"`. |
 | `absolute` | `bool` | `false` | In panel mode: position this element absolutely relative to the panel's top-left instead of flowing in the column |
+| `align` | `UiTextAlign` | `Center` | Horizontal text alignment for `kind: "label"`. Values: `Left`, `Center`, `Right`. Ignored for buttons and rects. |
+| `bind` | `Option<String>` | `None` | For `kind: "label"`: name of a `GameVariables` key. When set, the label text is replaced every frame with the variable's current value. |
+| `format` | `Option<String>` | `None` | Template used with `bind`. `"{}"` is replaced by the variable value (e.g. `"Score: {}"`). Defaults to the raw value when omitted. |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
 
@@ -649,7 +652,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
 | `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
-| `AddScore(i32)` | Add (or subtract if negative) to the score counter |
+| `SetVariable("key", "value")` | Write a named string variable into `GameVariables`; readable by data-bound UI labels |
+| `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |
 
 ---
 

@@ -7,7 +7,7 @@ use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
 use super::{
     BackgroundMusic, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
-    SceneHandleV2, SceneStateParams, SpawnParams, resolve_project_path,
+    SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, resolve_project_path,
 };
 
 pub fn action_executor_system(
@@ -17,7 +17,7 @@ pub fn action_executor_system(
     mut next_state: ResMut<NextState<AppState>>,
     mut exit: MessageWriter<AppExit>,
     mut scene_events: MessageWriter<SceneEvent>,
-    mut animation_requests: Query<&mut AnimationRequests>,
+    mut animation_requests: Query<(&mut AnimationRequests, Option<&SpawnId>)>,
     project_root: Res<ProjectRoot>,
     asset_catalog: Res<LoadedAssetCatalog>,
     mut spawn_params: SpawnParams,
@@ -26,6 +26,7 @@ pub fn action_executor_system(
     bg_music_query: Query<Entity, With<BackgroundMusic>>,
     overlay_entities: Query<Entity, With<OverlayEntity>>,
     mut scene_state: SceneStateParams,
+    mut game_events: MessageWriter<GameEvent>,
 ) {
     while let Some(action) = action_queue.pop() {
         debug.last_action = format!("{:?}", action);
@@ -142,9 +143,26 @@ pub fn action_executor_system(
             }
             Action::PlayAnimation(anim) => {
                 info!("Executing Action::PlayAnimation: {}", anim);
-                for mut req in &mut animation_requests {
+                for (mut req, _) in &mut animation_requests {
                     req.queue.push_back(anim.clone());
                 }
+            }
+            Action::PlayAnimationOn { target, clip } => {
+                info!("Executing Action::PlayAnimationOn: target={} clip={}", target, clip);
+                let mut found = false;
+                for (mut req, sid) in &mut animation_requests {
+                    if sid.map_or(false, |s| s.0 == target) {
+                        req.queue.push_back(clip.clone());
+                        found = true;
+                    }
+                }
+                if !found {
+                    warn!("Action::PlayAnimationOn: no entity with spawn id {:?}", target);
+                }
+            }
+            Action::EmitEvent(event) => {
+                info!("Executing Action::EmitEvent: {}", event);
+                game_events.write(GameEvent::Trigger(event));
             }
             Action::StopMusic => {
                 info!("Executing Action::StopMusic");
@@ -236,10 +254,25 @@ pub fn action_executor_system(
                 info!("Action::EnterState: \"{}\" -> \"{}\"", scene_state.logic_state.0, state);
                 scene_state.logic_state.0 = state;
             }
-            Action::AddScore(delta) => {
-                debug.score += delta;
-                let total = debug.score;
-                info!("Action::AddScore: {} (total: {})", delta, total);
+            Action::SetVariable(key, value) => {
+                info!("Action::SetVariable: \"{}\" = \"{}\"", key, value);
+                scene_state.game_vars.0.insert(key, value);
+            }
+            Action::IncrementVariable(key, delta) => {
+                let raw = scene_state.game_vars.0.get(&key).map(String::as_str).unwrap_or("0");
+                let current: i32 = match raw.parse() {
+                    Ok(n) => n,
+                    Err(_) => {
+                        warn!(
+                            "Action::IncrementVariable: variable \"{}\" has non-numeric value \"{}\", treating as 0",
+                            key, raw
+                        );
+                        0
+                    }
+                };
+                let next = current + delta;
+                info!("Action::IncrementVariable: \"{}\" {} -> {}", key, delta, next);
+                scene_state.game_vars.0.insert(key, next.to_string());
             }
         }
     }

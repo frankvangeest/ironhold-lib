@@ -533,6 +533,39 @@ fn test_game_scene_v2_directional_light_num_cascades_defaults_to_none() {
     assert_eq!(dl.num_cascades, None, "num_cascades should default to None");
 }
 
+// ── UiTextAlign ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_ui_label_align_defaults_to_center() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+        ( kind: "label", id: "lbl", text: "hi", size: (100.0, 30.0) )
+    ])"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("label without align should parse");
+    assert_eq!(
+        scene.ui[0].align,
+        ironhold_core::schema::scene_v2::UiTextAlign::Center,
+        "omitting align should default to Center",
+    );
+}
+
+#[test]
+fn test_ui_label_align_explicit_variants() {
+    for (variant, expected) in &[
+        ("Left",   ironhold_core::schema::scene_v2::UiTextAlign::Left),
+        ("Center", ironhold_core::schema::scene_v2::UiTextAlign::Center),
+        ("Right",  ironhold_core::schema::scene_v2::UiTextAlign::Right),
+    ] {
+        let ron_str = format!(
+            r#"(schema_version: 2, entities: [], ui: [
+                ( kind: "label", id: "lbl", text: "hi", size: (100.0, 30.0), align: {variant} )
+            ])"#,
+        );
+        let scene: GameSceneV2 = from_str(&ron_str)
+            .unwrap_or_else(|e| panic!("align: {variant} failed to parse: {e}"));
+        assert_eq!(&scene.ui[0].align, expected, "align: {variant} should deserialize correctly");
+    }
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]
@@ -650,6 +683,22 @@ fn test_logic_rules_asset_validates_ok() {
             schema_version: 2,
             rules: [
                 ( on: "ui.button_pressed:start", do_actions: [ Quit ] ),
+            ],
+        )
+    "#;
+    let rules: LogicRulesAsset = from_str(ron_str).unwrap();
+    assert!(rules.validate().is_ok());
+}
+
+#[test]
+fn test_logic_rules_set_variable_and_increment_variable_parse() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            rules: [
+                ( on: "scene.ready:main", do_actions: [ SetVariable("level", "1") ] ),
+                ( on: "entity.collected:coin_01", do_actions: [ IncrementVariable("score", 10) ] ),
+                ( on: "npc.player_reached:goblin_01", do_actions: [ IncrementVariable("score", -5) ] ),
             ],
         )
     "#;

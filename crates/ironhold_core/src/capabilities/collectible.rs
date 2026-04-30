@@ -12,7 +12,7 @@ use crate::runtime::scene_manager::SpawnId;
 ///   `GameEvent::Trigger("entity.collected:{spawn_id}")`
 ///
 /// This fires into the normal Message → Interpreter → Action → Executor pipeline.
-/// What actually happens on collection (Despawn, PlaySound, AddScore, etc.) is defined
+/// What actually happens on collection (Despawn, PlaySound, IncrementVariable, etc.) is defined
 /// entirely in `state_machine.ron` — no recompile needed to change collectible behaviour.
 #[derive(Component)]
 pub struct Collectable;

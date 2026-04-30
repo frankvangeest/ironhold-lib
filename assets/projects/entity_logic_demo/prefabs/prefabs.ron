@@ -1,0 +1,114 @@
+(
+  schema_version: 1,
+  prefabs: {
+
+    // ── Player ─────────────────────────────────────────────────────────────────
+    // Capsule with eyes and nose so the front (-Z) is clearly visible.
+    "player": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["player"],
+        movement: (
+          walk_speed: 5.5,
+          run_speed: 10.0,
+          jump: Some(RelativeToHeight(percent: 100.0)),
+        ),
+      ),
+      primitive: Some((
+        radius: Some(0.4),
+        height: Some(1.8),
+        color: Some((0.22, 0.52, 0.88)),
+        roughness: Some(0.3),
+        metallic: Some(0.15),
+      )),
+      children: [
+        // Left eye
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.03, 0.03, 0.05)),
+            roughness: Some(0.20),
+            metallic: Some(0.10),
+          ),
+          offset: (-0.18, 1.58, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Right eye
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.03, 0.03, 0.05)),
+            roughness: Some(0.20),
+            metallic: Some(0.10),
+          ),
+          offset: (0.18, 1.58, -0.37),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Nose
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: Some(0.07),
+            color: Some((0.95, 0.58, 0.42)),
+            roughness: Some(0.40),
+          ),
+          offset: (0.0, 1.49, -0.40),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Ground plane ───────────────────────────────────────────────────────────
+    "ground": (
+      kind: "primitive",
+      model: "Cuboid",
+      primitive: Some((
+        size: Some((60.0, 1.0, 60.0)),
+        color: Some((0.30, 0.45, 0.25)),
+        roughness: Some(0.9),
+        physics: true,
+      )),
+    ),
+
+    // ── Interactable box ───────────────────────────────────────────────────────
+    // Press F while near it — the entity FSM (collectible_box.behavior.ron)
+    // transitions to "collected" and despawns the box.
+    "collectible_box": (
+      kind: "primitive",
+      model: "Cuboid",
+      behavior: Some("behaviors/collectible_box.behavior.ron"),
+      interactable: Some(( radius: 2.5 )),
+      primitive: Some((
+        size: Some((0.8, 0.8, 0.8)),
+        color: Some((0.90, 0.70, 0.20)),
+        roughness: Some(0.4),
+        metallic: Some(0.3),
+      )),
+      motion: Some((
+        rotate: Some((0.0, 1.0, 0.0)),
+        bob: Some((0.12, 0.8)),
+      )),
+    ),
+
+    // ── Score trigger zone ─────────────────────────────────────────────────────
+    // Invisible sphere sensor. Walking through it fires entity.entered:score_zone_01
+    // which the project rules.ron handles (IncrementVariable("score", 10) + PlaySound).
+    "score_zone": (
+      kind: "primitive",
+      model: "Sphere",
+      trigger_zone: Some(( radius: 2.0 )),
+      primitive: Some((
+        radius: Some(0.05),
+        color: Some((0.20, 0.80, 0.50)),
+        roughness: Some(0.5),
+      )),
+    ),
+
+  },
+)

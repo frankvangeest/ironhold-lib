@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
-use super::{LoadedRules, LoadedStateMachine, LogicState};
+use crate::schema::Action;
+use super::{LoadedRules, LoadedStateMachine, LogicState, BehaviorHandle, EntityFsmState, SpawnId};
 
 pub fn message_interpreter_system(
     mut ui_events: MessageReader<UiEvent>,
@@ -65,6 +66,131 @@ fn scene_path_stem(path: &str) -> &str {
         .unwrap_or(path)
         .trim_end_matches(".scene.ron")
         .trim_end_matches(".ron")
+}
+
+/// Interprets events against per-entity `StateMachineAsset` behaviors.
+///
+/// For each entity that has loaded a behavior (`BehaviorHandle` + `EntityFsmState`),
+/// this system:
+/// 1. Reads all events for this frame (same sources as the global interpreters).
+/// 2. Substitutes `{self}` in every transition `on` pattern with the entity's spawn ID.
+/// 3. Matches events against the entity's FSM (global_on, in-state on, transitions).
+/// 4. On a transition: pushes exit then entry actions (with `{self}` rewritten in those
+///    too) and advances `EntityFsmState::current`.
+///
+/// Runs chained after `fsm_interpreter_system` and before `action_executor_system`.
+pub fn entity_fsm_interpreter_system(
+    mut ui_events: MessageReader<UiEvent>,
+    mut game_events: MessageReader<GameEvent>,
+    mut scene_events: MessageReader<SceneEvent>,
+    mut action_queue: ResMut<ActionQueue>,
+    mut entities: Query<(&BehaviorHandle, &mut EntityFsmState, &SpawnId)>,
+    state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
+) {
+    // Collect all events emitted this frame.
+    let mut events: Vec<String> = Vec::new();
+    for event in ui_events.read() {
+        let UiEvent::ButtonPressed(trigger) = event;
+        events.push(format!("ui.button_pressed:{}", trigger));
+    }
+    for event in game_events.read() {
+        let GameEvent::Trigger(name) = event;
+        events.push(name.clone());
+    }
+    for event in scene_events.read() {
+        let name = match event {
+            SceneEvent::Requested(p) => format!("scene.requested:{}", scene_path_stem(p)),
+            SceneEvent::Loaded(p)    => format!("scene.loaded:{}",    scene_path_stem(p)),
+            SceneEvent::Ready(p)     => format!("scene.ready:{}",     scene_path_stem(p)),
+            SceneEvent::Unloading(p) => format!("scene.unloading:{}", scene_path_stem(p)),
+        };
+        events.push(name);
+    }
+
+    if events.is_empty() { return; }
+
+    for (behavior, mut fsm_state, spawn_id) in &mut entities {
+        let Some(fsm) = state_machines.get(&behavior.0) else { continue };
+        let id = &spawn_id.0;
+
+        for event_name in &events {
+            // global_on — fires from any state without changing state.
+            for binding in &fsm.global_on {
+                let pattern = binding.event.replace("{self}", id);
+                if pattern == *event_name {
+                    for action in &binding.do_actions {
+                        info!("Entity FSM [{}] global_on: {} -> {:?}", id, event_name, action);
+                        action_queue.push(rewrite_self(action.clone(), id));
+                    }
+                }
+            }
+
+            // In-state on bindings — fire while in current state, no state change.
+            let current = fsm_state.current.clone();
+            if let Some(state_def) = fsm.states.iter().find(|s| s.name == current) {
+                for binding in &state_def.on {
+                    let pattern = binding.event.replace("{self}", id);
+                    if pattern == *event_name {
+                        for action in &binding.do_actions {
+                            info!("Entity FSM [{}] in-state on [{}]: {} -> {:?}",
+                                id, current, event_name, action);
+                            action_queue.push(rewrite_self(action.clone(), id));
+                        }
+                    }
+                }
+            }
+
+            // Transitions — first match wins; pushes exit/entry actions and advances state.
+            let transition = fsm.transitions.iter().find(|t| {
+                let from_ok = t.from.as_ref().map_or(true, |f| *f == fsm_state.current);
+                let pattern = t.on.replace("{self}", id);
+                from_ok && pattern == *event_name
+            });
+
+            if let Some(transition) = transition {
+                let from_name = fsm_state.current.clone();
+                let to_name = transition.to.clone();
+
+                info!(
+                    "Entity FSM [{}]: \"{}\" -> \"{}\" on \"{}\"",
+                    id, from_name, to_name, event_name
+                );
+
+                if let Some(from_def) = fsm.states.iter().find(|s| s.name == from_name) {
+                    for action in &from_def.exit_actions {
+                        info!("Entity FSM [{}] exit [{}]: {:?}", id, from_name, action);
+                        action_queue.push(rewrite_self(action.clone(), id));
+                    }
+                }
+                if let Some(to_def) = fsm.states.iter().find(|s| s.name == to_name) {
+                    for action in &to_def.entry_actions {
+                        info!("Entity FSM [{}] entry [{}]: {:?}", id, to_name, action);
+                        action_queue.push(rewrite_self(action.clone(), id));
+                    }
+                }
+
+                fsm_state.current = to_name;
+            }
+        }
+    }
+}
+
+/// Substitutes `{self}` in action fields that can contain entity references.
+/// Called by `entity_fsm_interpreter_system` before pushing actions onto the queue.
+fn rewrite_self(action: Action, spawn_id: &str) -> Action {
+    match action {
+        Action::PlayAnimationOn { target, clip } => Action::PlayAnimationOn {
+            target: target.replace("{self}", spawn_id),
+            clip,
+        },
+        Action::EmitEvent(event) => Action::EmitEvent(event.replace("{self}", spawn_id)),
+        Action::Despawn(id) => Action::Despawn(id.replace("{self}", spawn_id)),
+        Action::Spawn { prefab, id } => Action::Spawn {
+            prefab,
+            id: id.map(|i| i.replace("{self}", spawn_id)),
+        },
+        other => other,
+    }
 }
 
 /// Interprets events against a loaded `StateMachineAsset`, driving state transitions and

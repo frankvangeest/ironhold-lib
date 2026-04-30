@@ -146,6 +146,23 @@ pub struct WorldLabel {
 #[derive(Component, Debug, Clone)]
 pub struct SpawnId(pub String);
 
+/// Temporary component inserted at spawn time when a prefab has a `behavior` path.
+/// Replaced by `BehaviorHandle` + `EntityFsmState` once the asset resolves.
+#[derive(Component)]
+pub struct PendingBehavior(pub Handle<crate::schema::project::StateMachineAsset>);
+
+/// Keeps the loaded `StateMachineAsset` handle alive so the asset server does not
+/// evict the behavior between scene loads. Replaced from `PendingBehavior`.
+#[derive(Component)]
+pub struct BehaviorHandle(pub Handle<crate::schema::project::StateMachineAsset>);
+
+/// Runtime FSM state for an entity with a `BehaviorHandle`.
+/// The current field holds the name of the active state (matches a state in the asset).
+#[derive(Component, Default)]
+pub struct EntityFsmState {
+    pub current: String,
+}
+
 #[derive(Component)]
 pub struct PendingPlayerConfig(pub PlayerConfig);
 
@@ -213,6 +230,7 @@ pub struct SceneStateParams<'w> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
     pub logic_state: ResMut<'w, LogicState>,
+    pub game_vars: ResMut<'w, crate::GameVariables>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

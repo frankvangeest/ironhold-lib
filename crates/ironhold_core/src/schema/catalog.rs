@@ -118,6 +118,18 @@ pub struct PrefabDef {
     /// Supports world-space rotation and sinusoidal vertical bob.
     #[serde(default)]
     pub motion: Option<MotionDef>,
+    /// Path (project-relative) to a `.behavior.ron` (`StateMachineAsset`) that drives
+    /// per-entity FSM logic. Loaded asynchronously; initial state is set once loaded.
+    #[serde(default)]
+    pub behavior: Option<String>,
+    /// When set, the entity emits `entity.interacted:{id}` when the player is within
+    /// `radius` metres and presses the interact key (default: F).
+    #[serde(default)]
+    pub interactable: Option<InteractableDef>,
+    /// When set, a Rapier sensor collider is spawned and the entity emits
+    /// `entity.entered:{id}` / `entity.exited:{id}` on player overlap.
+    #[serde(default)]
+    pub trigger_zone: Option<TriggerZoneDef>,
 }
 
 /// Continuous transform animation for a prefab entity.
@@ -134,6 +146,30 @@ pub struct MotionDef {
     #[serde(default)]
     pub bob: Option<(f32, f32)>,
 }
+
+/// Configuration for the Interactable capability.
+/// Emits `entity.interacted:{id}` when the player is within `radius` metres and presses F.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct InteractableDef {
+    /// Metres — player must be closer than this to interact.
+    pub radius: f32,
+    /// Optional text shown near the entity when the player is in range.
+    #[serde(default)]
+    pub hint_text: Option<String>,
+}
+
+/// Configuration for the TriggerZone capability.
+/// Spawns a Rapier sphere sensor; emits `entity.entered:{id}` / `entity.exited:{id}`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct TriggerZoneDef {
+    /// Radius of the sphere sensor in metres.
+    #[serde(default = "default_trigger_radius")]
+    pub radius: f32,
+}
+
+fn default_trigger_radius() -> f32 { 2.0 }
 
 /// NPC faction — determines intent and which events fire.
 #[derive(Deserialize, Debug, Clone, PartialEq)]

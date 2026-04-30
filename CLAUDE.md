@@ -136,6 +136,27 @@ Planned at: <short commit hash> (<YYYY-MM-DD>)
 ```
 Run `git rev-parse --short HEAD` to get the hash. This creates a stable reference — use `git log <hash>..HEAD` later to see what changed between design and implementation.
 
+## Adding a new asset project
+
+When a new project is added under `assets/projects/{name}/`, three registration steps are required:
+
+1. **`test_web.py`** — append the project name to the `PROJECTS` list at the top of the file.
+
+2. **Baseline screenshot** — generate the project's scene screenshot so it can be used in the gallery:
+   ```bash
+   python test_web.py --project {name} --update-baselines --skip-build
+   ```
+   This writes `screenshot_baselines/scenes/{name}_main.png` (and one file per scene if the project has multiple scenes).
+
+3. **`index.html`** — add a card to the project grid. Copy an existing `<a class="project-card">` block and update:
+   - `id` attribute (`card-{name}`)
+   - `href` → `play.html?project={name}`
+   - `data-keywords` → space-separated search terms
+   - `img src` → `screenshot_baselines/scenes/{name}_main.png`
+   - `img alt`, card title, description, and tags
+
+---
+
 ## Critical Rules
 
 ### After changes

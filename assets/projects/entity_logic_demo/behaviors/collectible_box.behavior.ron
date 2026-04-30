@@ -1,0 +1,32 @@
+// Entity FSM for the interactable collectible box.
+//
+// Walk within 2.5 m and press F → transitions from "idle" to "collected".
+// The "collected" entry actions despawn the entity.
+//
+// {self} is substituted with the entity's spawn ID at runtime, so this
+// behavior file can be reused across multiple box instances.
+(
+  schema_version: 1,
+  initial_state: "idle",
+  global_on: [],
+  states: [
+    (
+      name: "idle",
+      entry_actions: [],
+      exit_actions: [],
+      on: [],
+    ),
+    (
+      name: "collected",
+      entry_actions: [
+        PlaySound("score"),
+        Despawn("{self}"),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+  ],
+  transitions: [
+    ( from: Some("idle"), on: "entity.interacted:{self}", to: "collected" ),
+  ],
+)

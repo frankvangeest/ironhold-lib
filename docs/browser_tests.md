@@ -22,6 +22,7 @@ screenshots/                      ← gitignored; current/comparison files writt
 
 Run `python test_web.py --update-baselines` after any intentional rendering change.
 Run `python test_web.py --update-baseline <name>` to update a single project or `pause_nav`.
+Run `python test_web.py --project <name>` to restrict all test categories to one project (repeatable). Useful when iterating on a single project: `python test_web.py --project entity_logic_demo --update-baselines --skip-build`.
 
 ## `DebugState` resource
 

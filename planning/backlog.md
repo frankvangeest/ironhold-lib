@@ -17,14 +17,6 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Queued
 
-### Beta 0.4 — Entity Logic (FSM v1)
-- [ ] `Behavior` component referencing a `StateMachineAsset` per entity
-- [ ] Trigger zone messages: `entity.entered:{id}` / `entity.exited:{id}` (Rapier sensor)
-- [ ] Interaction message: `entity.interacted:{id}` (player in range + action key)
-- [ ] Example: door open/close driven by entity FSM
-- [ ] Example: NPC idle-wander with simple pickup interaction
-- [ ] Docs + integration tests
-
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] Fixed-tick schedule for gameplay systems (separate from render tick)
 - [ ] Deterministic RNG resource (seeded, replaces any `rand` usage in gameplay)
@@ -57,7 +49,7 @@ _(nothing in flight right now — pick from Queued)_
 ### Engine / Runtime
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
-- [ ] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
+- [x] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
 - [ ] `Condition` expressions in rules (`score >= 10`, `variable == "value"`) — currently only event matching
 - [ ] Hot-reload for `.scene.ron` and `rules.ron` in native debug builds
 
@@ -71,7 +63,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ### UI
 - [ ] UI element types beyond `Button`: `Label`, `Image`, `ProgressBar`, `Panel`
-- [ ] Data-bound UI — bind label text or bar fill to a named variable
+- [x] Data-bound UI labels — `bind`/`format` fields on labels + `GameVariables` resource; `Action::SetVariable` / `Action::IncrementVariable` let designers write arbitrary variables from RON; `DebugState.score` derived from `GameVariables["score"]`
 - [ ] UI layout — stack/flex layout or anchor-based positioning replacing raw pixel coords
 - [ ] Font + theme config per project
 
@@ -80,6 +72,7 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
 
 ### Rendering & Assets
+- [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
 - [ ] LOD (level of detail) for terrain and models — distance-based mesh swap
 - [ ] Decal system — project a texture onto geometry without modifying meshes
 - [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
@@ -105,4 +98,5 @@ _(nothing in flight right now — pick from Queued)_
 - [x] Beta 0.1 — Baseline Runtime
 - [x] Beta 0.2 — Event/Action Bus refactor
 - [x] Beta 0.3 — Global Logic (FSM v1)
+- [x] Beta 0.4 — Entity Logic (FSM v1): per-entity `.behavior.ron`, `{self}` substitution, `TriggerZone`, `Interactable`, `PlayAnimationOn`/`EmitEvent`, `entity_logic_demo` project
 - [x] Three-point warm lighting defaults for GLB preview tool (`--light-strength 0.3`)

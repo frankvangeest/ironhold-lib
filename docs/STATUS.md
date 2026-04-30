@@ -16,7 +16,7 @@ _Last updated: 2026‑04‑17_
 | 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
 | 0.2       | Event/Action Bus refactor         |   ✅   | Message→Interpreter→Action→Executor fully wired with project-level logic rules. |
 | 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states, state-gated rules, `EnterState`, and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` migrated to FSM. |
-| 0.4       | Entity Logic (FSM v1)             |   ⛔   | Not implemented. |
+| 0.4       | Entity Logic (FSM v1)             |   ✅   | Per-entity `StateMachineAsset` behaviors (`.behavior.ron`), `{self}` substitution, `entity_fsm_interpreter_system`, `TriggerZone` and `Interactable` capabilities, `PlayAnimationOn`/`EmitEvent` actions. `entity_logic_demo` example project. |
 | 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
 | 0.6       | Networking Prototype              |   ⛔   | Not implemented. |
 
@@ -32,8 +32,9 @@ _Last updated: 2026‑04‑17_
 | Action infrastructure         |   ✅   | interpreter & executor wired. |
 | State-gated rules             |   ✅   | `LogicRule.when` field gates rules to a named logic state; `EnterState` action transitions between states. |
 | FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; replaces `rules.ron` for FSM projects. |
-| Live event domains            |   ✅   | `UiEvent`, `GameEvent`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. |
-| Planned event domains         |   ⛔   | (AI, interaction, dialogue, networking) are planned. |
+| Live event domains            |   ✅   | `UiEvent`, `GameEvent`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. Entity events (`entity.entered/exited/interacted`) live. |
+| Planned event domains         |   ⛔   | (AI, dialogue, networking) are planned. Interaction events are now live. |
+| Entity FSM (per-entity behavior) |   ✅   | `behavior` field on `PrefabDef`; `.behavior.ron` uses `StateMachineAsset` format; `{self}` substitution; `entity_fsm_interpreter_system` runs alongside global interpreters. |
 | Scene lifecycle events        |   🟡   | `Requested/Loaded/Ready/Unloading` types exist; full lifecycle choreography is WIP. |
 
 ### Data Formats & Validation
@@ -52,7 +53,9 @@ _Last updated: 2026‑04‑17_
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
 | Fly camera                  |   ✅   | Free-flying camera; spawned via `"flycam"` tag on prefab. LMB/RMB hold to look, WASD move, Shift fast mode. Optional `flycam_position` UI label. |
 | NPC AI                      |   ✅   | `NpcAgent` component; states: Idle → Patrol → Alerted → Chase/Flee/Interact → Return. FOV + optional Rapier line-of-sight check. Emits `"npc.player_spotted:{id}"`, `"npc.player_reached:{id}"`, `"npc.player_lost:{id}"` triggers. |
-| Collectible triggers        |   ✅   | `Collectable` component on Rapier sensor; on player overlap emits `GameEvent::Trigger("entity.collected:{spawn_id}")`. Response (Despawn, AddScore, etc.) is configured in RON. |
+| Collectible triggers        |   ✅   | `Collectable` component on Rapier sensor; on player overlap emits `GameEvent::Trigger("entity.collected:{spawn_id}")`. Response (Despawn, IncrementVariable, etc.) is configured in RON. |
+| Trigger zones               |   ✅   | `TriggerZone` component + Rapier sensor; emits `entity.entered:{id}` / `entity.exited:{id}` on player enter/exit. Add via `trigger_zone` field on `PrefabDef`. |
+| Interactable entities       |   ✅   | `Interactable { radius }` component; when player is within `radius` metres and presses F, emits `entity.interacted:{id}`. Add via `interactable` field on `PrefabDef`. |
 | Motion (rotate/bob)         |   ✅   | `Motion` component; world-space continuous rotation (per-axis rad/s) and sinusoidal vertical bob (amplitude, frequency). Runs in `Update`; purely visual. |
 | Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
@@ -94,7 +97,15 @@ _Last updated: 2026‑04‑17_
 - `Action::SetVolume(u8)` — sets global volume 0–100
 - `Action::Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `Action::EnterState(String)` — transitions the interpreter to a named logic state; empty string returns to stateless (always-fire) default
-- `Action::AddScore(i32)` — adds (or subtracts if negative) to `DebugState.score`; visible in DOM on WASM
+- `Action::SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
+- `Action::IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
+- `Action::PlayAnimationOn { target: String, clip: String }` — plays `clip` on the entity with the given spawn ID; use `"{self}"` as target inside `.behavior.ron` files
+- `Action::EmitEvent(String)` — emits a `GameEvent::Trigger`; `{self}` in the string is substituted with the entity's spawn ID when used inside `.behavior.ron` files
+
+### Entity messages (Beta 0.4)
+- `entity.entered:{id}` — emitted by `TriggerZone` when the player enters the sensor collider
+- `entity.exited:{id}` — emitted by `TriggerZone` when the player exits the sensor collider
+- `entity.interacted:{id}` — emitted by `Interactable` when player is within `radius` metres and presses F
 
 > New Messages/Actions **must** update this table and include examples + tests.
 

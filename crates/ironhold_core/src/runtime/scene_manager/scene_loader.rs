@@ -17,10 +17,13 @@ use super::{
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, SpawnId, WorldLabel,
     LoadedAudioHandles, LoadedAssetCatalog,
+    PendingBehavior, resolve_project_path,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
 use crate::capabilities::npc::{NpcAgent, NpcState};
+use crate::capabilities::trigger_zone::TriggerZone;
+use crate::capabilities::interactable::Interactable;
 use crate::PipelineWarmup;
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
@@ -400,7 +403,7 @@ pub fn spawn_scene_v2(
                         spawn_registry.entities.insert(entity_def.id.clone(), spawned);
 
                         // Collectable marker: collision triggers GameEvent into the rules pipeline.
-                        // What happens on collection (Despawn, PlaySound, AddScore, etc.)
+                        // What happens on collection (Despawn, PlaySound, IncrementVariable, etc.)
                         // is defined in state_machine.ron — not hardcoded here.
                         if prefab.components.tags.contains(&"collectable".to_string()) {
                             commands.entity(spawned).insert(Collectable);
@@ -469,6 +472,33 @@ pub fn spawn_scene_v2(
                                 Damping { linear_damping: 0.5, angular_damping: 0.5 },
                                 Velocity::default(),
                                 Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
+                            ));
+                        }
+
+                        // Entity FSM behavior.
+                        if let Some(behavior_path) = &prefab.behavior {
+                            let project_root = params.project_root.0.as_str();
+                            let resolved = resolve_project_path(project_root, behavior_path);
+                            let handle: Handle<crate::schema::project::StateMachineAsset> =
+                                asset_server.load(resolved);
+                            commands.entity(spawned).insert(PendingBehavior(handle));
+                        }
+
+                        // Interactable: proximity + F key → entity.interacted:{id}
+                        if let Some(interactable_def) = &prefab.interactable {
+                            commands.entity(spawned).insert(Interactable {
+                                radius: interactable_def.radius,
+                                hint_text: interactable_def.hint_text.clone(),
+                            });
+                        }
+
+                        // TriggerZone: Rapier sensor → entity.entered/exited:{id}
+                        if let Some(zone_def) = &prefab.trigger_zone {
+                            commands.entity(spawned).insert((
+                                TriggerZone,
+                                bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
+                                Sensor,
+                                ActiveEvents::COLLISION_EVENTS,
                             ));
                         }
 
@@ -877,6 +907,7 @@ pub fn spawn_scene_v2(
                     ))
                     .with_children(|parent| {
                         for el in &ui_elements {
+                            let h_justify = ui_justify(el.align);
                             let node = if el.absolute {
                                 Node {
                                     width: Val::Px(el.size.0),
@@ -884,13 +915,15 @@ pub fn spawn_scene_v2(
                                     position_type: PositionType::Absolute,
                                     left: Val::Px(el.position.0),
                                     top: Val::Px(el.position.1),
+                                    justify_content: h_justify,
+                                    align_items: AlignItems::Center,
                                     ..default()
                                 }
                             } else {
                                 Node {
                                     width: Val::Px(el.size.0),
                                     height: Val::Px(el.size.1),
-                                    justify_content: JustifyContent::Center,
+                                    justify_content: h_justify,
                                     align_items: AlignItems::Center,
                                     ..default()
                                 }
@@ -919,7 +952,7 @@ pub fn spawn_scene_v2(
                     let node = Node {
                         width: Val::Px(el.size.0),
                         height: Val::Px(el.size.1),
-                        justify_content: JustifyContent::Center,
+                        justify_content: ui_justify(el.align),
                         align_items: AlignItems::Center,
                         position_type: PositionType::Absolute,
                         left: Val::Px(el.position.0),
@@ -975,6 +1008,12 @@ fn spawn_ui_element_node(
                 ));
                 if el_id == "flycam_position" {
                     text_cmd.insert(crate::capabilities::flycam::FlyCamPositionLabel);
+                }
+                if let Some(key) = &el.bind {
+                    text_cmd.insert(crate::DynamicLabel {
+                        key: key.clone(),
+                        format: el.format.clone(),
+                    });
                 }
             });
     } else {
@@ -1143,6 +1182,14 @@ fn resolve_label_depth_scale(
 
 /// Standard gravitational acceleration (m/s²), matching Rapier's default.
 const GRAVITY: f32 = 9.81;
+
+fn ui_justify(align: UiTextAlign) -> JustifyContent {
+    match align {
+        UiTextAlign::Left   => JustifyContent::FlexStart,
+        UiTextAlign::Center => JustifyContent::Center,
+        UiTextAlign::Right  => JustifyContent::FlexEnd,
+    }
+}
 
 /// Convert a `JumpConfig` (or `None` → jump own height) to an initial Y velocity.
 /// Uses kinematic relation: v = √(2 · g · h).

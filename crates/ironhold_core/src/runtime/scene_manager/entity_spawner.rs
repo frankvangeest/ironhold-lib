@@ -14,6 +14,7 @@ use crate::capabilities::animation_resolver::{
 use bevy_rapier3d::prelude::*;
 use super::{
     LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
+    PendingBehavior, BehaviorHandle, EntityFsmState,
     resolve_project_path,
 };
 
@@ -41,6 +42,29 @@ pub fn spawn_prefab_instance(
 
     if let Some(mat_key) = &prefab.material {
         ec.insert(PendingMaterialOverride(mat_key.clone()));
+    }
+
+    if let Some(behavior_path) = &prefab.behavior {
+        let resolved = resolve_project_path(project_root, behavior_path);
+        let handle: Handle<crate::schema::project::StateMachineAsset> =
+            asset_server.load(resolved);
+        ec.insert(PendingBehavior(handle));
+    }
+
+    if let Some(interactable_def) = &prefab.interactable {
+        ec.insert(crate::capabilities::interactable::Interactable {
+            radius: interactable_def.radius,
+            hint_text: interactable_def.hint_text.clone(),
+        });
+    }
+
+    if let Some(zone_def) = &prefab.trigger_zone {
+        ec.insert((
+            crate::capabilities::trigger_zone::TriggerZone,
+            bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
+            bevy_rapier3d::prelude::Sensor,
+            bevy_rapier3d::prelude::ActiveEvents::COLLISION_EVENTS,
+        ));
     }
 
     if let Some(policy_path) = &prefab.animation_policy {
@@ -82,6 +106,28 @@ pub fn animation_policy_loader_system(
                 .insert(AnimationPolicyComponent(policy.clone()))
                 .remove::<PendingAnimationPolicy>();
             info!("AnimationPolicy loaded — initial animation: {}", policy.base.idle);
+        }
+    }
+}
+
+/// Polls `PendingBehavior` handles; once the `StateMachineAsset` loads, replaces the
+/// pending component with `BehaviorHandle` + `EntityFsmState` seeded to `initial_state`.
+pub fn resolve_pending_behaviors_system(
+    mut commands: Commands,
+    pending: Query<(Entity, &PendingBehavior)>,
+    state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
+) {
+    for (entity, pending_behavior) in &pending {
+        if let Some(fsm) = state_machines.get(&pending_behavior.0) {
+            let initial = fsm.initial_state.clone();
+            commands
+                .entity(entity)
+                .insert((
+                    BehaviorHandle(pending_behavior.0.clone()),
+                    EntityFsmState { current: initial.clone() },
+                ))
+                .remove::<PendingBehavior>();
+            info!("Behavior loaded — initial state: \"{}\"", initial);
         }
     }
 }

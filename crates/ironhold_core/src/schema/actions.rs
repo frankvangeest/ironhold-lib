@@ -39,7 +39,26 @@ pub enum Action {
     /// Rules with a matching `when` field become active; rules in other states are suppressed.
     /// Use an empty string `""` to return to the stateless (always-fire) default.
     EnterState(String),
-    /// Add (or subtract if negative) to the global score counter.
-    /// Example: `AddScore(10)` awards 10 points; `AddScore(-5)` deducts 5.
-    AddScore(i32),
+    /// Set a named runtime variable to a string value.
+    /// The value is stored in `GameVariables` and readable by data-bound UI labels.
+    /// Example: `SetVariable("level", "2")` or `SetVariable("player_name", "Hero")`.
+    SetVariable(String, String),
+    /// Add (or subtract if negative) a numeric delta to a named variable.
+    /// The variable is parsed as `i32`; missing or unparseable values default to `0`.
+    /// Example: `IncrementVariable("score", 10)` awards 10 points;
+    ///          `IncrementVariable("score", -5)` deducts 5.
+    IncrementVariable(String, i32),
+    /// Play an animation clip on a specific entity identified by its spawn ID.
+    /// Use `target: "{self}"` inside behavior files — the entity FSM interpreter
+    /// substitutes `{self}` with the entity's spawn ID before queuing the action.
+    PlayAnimationOn {
+        /// Spawn ID of the target entity, or `"{self}"` inside behavior files.
+        target: String,
+        /// Name of the animation clip to play.
+        clip: String,
+    },
+    /// Emit a `GameEvent::Trigger` with the given name.
+    /// Inside behavior files, `{self}` in the event name is replaced with the entity's
+    /// spawn ID before the event is written, allowing reusable behavior-driven signals.
+    EmitEvent(String),
 }

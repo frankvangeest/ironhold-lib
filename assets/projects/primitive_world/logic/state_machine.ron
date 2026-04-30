@@ -24,11 +24,11 @@
                 // Coin collectibles — each fires Despawn + sound + score via the rules pipeline.
                 // GameEvent::Trigger names pass through the interpreter unchanged,
                 // so the namespaced string here matches exactly what the capability emits.
-                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound("collect_coin"), AddScore(10) ] ),
-                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound("collect_coin"), AddScore(10) ] ),
-                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound("collect_coin"), AddScore(10) ] ),
-                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound("collect_coin"), AddScore(10) ] ),
-                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound("collect_coin"), AddScore(10) ] ),
+                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound("collect_coin"), IncrementVariable("score", 10) ] ),
+                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound("collect_coin"), IncrementVariable("score", 10) ] ),
+                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound("collect_coin"), IncrementVariable("score", 10) ] ),
+                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound("collect_coin"), IncrementVariable("score", 10) ] ),
+                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound("collect_coin"), IncrementVariable("score", 10) ] ),
 
                 // ── NPC events ──────────────────────────────────────────────────────────
                 // Friendly villager — greets the player when spotted and when reached.
@@ -37,9 +37,9 @@
 
                 // Goblin guards — growl when they spot the player; penalise score on contact.
                 ( event: "npc.player_spotted:goblin_01",   do_actions: [ PlaySound("goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_01",   do_actions: [ PlaySound("goblin_growl"), AddScore(-10) ] ),
+                ( event: "npc.player_reached:goblin_01",   do_actions: [ PlaySound("goblin_growl"), IncrementVariable("score", -10) ] ),
                 ( event: "npc.player_spotted:goblin_02",   do_actions: [ PlaySound("goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_02",   do_actions: [ PlaySound("goblin_growl"), AddScore(-10) ] ),
+                ( event: "npc.player_reached:goblin_02",   do_actions: [ PlaySound("goblin_growl"), IncrementVariable("score", -10) ] ),
 
                 // Merchant — acknowledges the player with a greeting sound.
                 ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound("npc_greet") ] ),

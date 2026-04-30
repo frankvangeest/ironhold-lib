@@ -305,12 +305,32 @@ pub struct UiElementDefV2 {
     /// Has no effect on `kind: "label"`.
     #[serde(default = "default_ui_element_color")]
     pub color: (f32, f32, f32, f32),
-    /// When `true` inside a `ui_panel` scene, this element is positioned absolutely
+        /// When `true` inside a `ui_panel` scene, this element is positioned absolutely
     /// relative to the panel's top-left corner using its `position` field, instead of
     /// being placed in the vertical flex flow. Use this for precisely placed map
     /// elements or decorative overlays within a fixed-size panel.
     #[serde(default)]
     pub absolute: bool,
+    /// Horizontal text alignment for `kind: "label"`. Ignored for buttons and rects.
+    /// Defaults to `Center`.
+    #[serde(default)]
+    pub align: UiTextAlign,
+    /// For `kind: "label"`: name of the `GameVariables` key to read each frame.
+    /// When set, the label text is replaced at runtime with the variable's current value.
+    #[serde(default)]
+    pub bind: Option<String>,
+    /// Format template used with `bind`. `"{}"` is substituted with the variable value.
+    /// Example: `"Score: {}"`. Defaults to the raw value when omitted.
+    #[serde(default)]
+    pub format: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub enum UiTextAlign {
+    Left,
+    #[default]
+    Center,
+    Right,
 }
 
 /// When present on a scene, UI elements are laid out in a centered panel box

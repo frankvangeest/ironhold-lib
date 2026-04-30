@@ -35,7 +35,7 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, `AddScore`, and more.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, `SetVariable`, `IncrementVariable`, and more.
 - ✅ UI events exist (`UiEvent`) and are emitted by UI button interaction and key bindings; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiEvent::ButtonPressed("dance")`).
 - ✅ Gameplay events exist (`GameEvent::Trigger(String)`) and are emitted by capabilities (physics sensors, etc.); the trigger name is used as-is in the rules pipeline.
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic (point-to-point, not through the pipeline).
@@ -43,12 +43,15 @@ This section is factual and reflects what exists right now.
 - ✅ A message interpreter maps UI events, game events, and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
 - ✅ Rules support an optional `when` guard: rules with `when: Some("state_name")` only fire while the interpreter is in that named state; rules with `when: None` (or omitted) fire in any state.
 - ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. Replaces `rules.ron` for FSM projects. States declare `entry_actions`, `exit_actions`, and in-state `on` bindings; `transitions` drive state changes; `global_on` fires from any state.
+- ✅ An **entity FSM interpreter** (`entity_fsm_interpreter_system`) runs the same `StateMachineAsset` format per entity. Entities with a `behavior` path on their `PrefabDef` load an independent FSM; `{self}` in event patterns and action targets is substituted with the entity's spawn ID at runtime, making behavior files reusable across instances. See [Entity FSM section](#entity-fsm-beta-04) below.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
   - `LoadSceneOverlay(path)` / `UnloadOverlay` load/unload overlay scenes (e.g. pause menu).
   - `Quit` requests app exit (writes `AppExit::Success`).
   - `Spawn { prefab, id }` / `Despawn(id)` spawn/remove prefab instances by ID.
   - `PlayAnimation(clip)` plays an animation on available controllers.
+  - `PlayAnimationOn { target, clip }` plays an animation on a specific entity by spawn ID.
+  - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
   - `PlaySound(key)` / `PlayMusicLoop(key)` / `StopMusic` control audio.
   - `SetVolume(pct)` sets global volume (0–100).
   - `Preload(path)` warms the asset cache for a scene before it is needed.
@@ -136,9 +139,8 @@ Actions represent explicit operations the runtime can execute.
 
 #### State/variables actions
 - `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default
-- `AddScore(i32)` ✅ — adds (or subtracts if negative) to `DebugState.score`; exposed in the WASM DOM bridge
-- `SetVar(key, value)` 🧭
-- `IncVar(key, delta)` 🧭
+- `SetVariable(key, value)` ✅ — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
+- `IncrementVariable(key, delta)` ✅ — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 
 #### UI actions 🧭
 - `ShowUi(panel_id)`
@@ -200,7 +202,7 @@ Applies actions to the world. Key design points:
 
 - **Milestone 0.1 + 0.2 (implemented)** ✅
   - ✅ `UiEvent::ButtonPressed` emitted by UI buttons; mapped to actions via data-defined rules
-  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `AddScore`
+  - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `SetVariable`, `IncrementVariable`
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
   - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready, Unloading}`
   - ✅ Data-defined `logic/rules.ron` and `logic/state_machine.ron` wired to interpreter + executor
@@ -248,7 +250,8 @@ Applies actions to the world. Key design points:
 - `SetVolume(u32)` — sets global audio volume 0–100
 - `Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
-- `AddScore(i32)` — adds (or subtracts if negative) to `DebugState.score`; exposed in the WASM DOM bridge
+- `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
+- `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
@@ -302,4 +305,77 @@ Applies actions to the world. Key design points:
 The engine handles this automatically; authors do not write `EnterState` in FSM data.
 
 > New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
+
+---
+
+## Entity FSM (Beta 0.4)
+
+### Overview
+
+Each entity can run its own independent `StateMachineAsset` loaded from a `.behavior.ron` file. The behavior file uses the same format as `logic/state_machine.ron` (states, transitions, entry/exit actions, global_on). The key difference is the `{self}` placeholder, which is substituted with the entity's spawn ID at runtime.
+
+### Authoring
+
+Add `behavior` (and optionally `interactable` or `trigger_zone`) to a `PrefabDef`:
+
+```ron
+// prefabs/prefabs.ron
+"collectible_box": (
+  kind: "primitive",
+  model: "Cuboid",
+  behavior: Some("behaviors/collectible_box.behavior.ron"),
+  interactable: Some(( radius: 2.5 )),
+  primitive: Some(( size: Some((0.8, 0.8, 0.8)), color: Some((0.9, 0.7, 0.2)) )),
+),
+```
+
+The behavior file uses `{self}` as a placeholder for the entity's spawn ID:
+
+```ron
+// behaviors/collectible_box.behavior.ron
+(
+  schema_version: 1,
+  initial_state: "idle",
+  global_on: [],
+  states: [
+    ( name: "idle",      entry_actions: [],                                   exit_actions: [], on: [] ),
+    ( name: "collected", entry_actions: [ PlaySound("score"), Despawn("{self}") ], exit_actions: [], on: [] ),
+  ],
+  transitions: [
+    ( from: Some("idle"), on: "entity.interacted:{self}", to: "collected" ),
+  ],
+)
+```
+
+When two boxes `box_01` and `box_02` share this file, interacting with `box_01` fires `entity.interacted:box_01`, which only matches `box_01`'s transition (pattern `entity.interacted:{self}` → `entity.interacted:box_01`). `box_02` is not affected.
+
+### `{self}` substitution rules
+
+`{self}` is replaced with the entity's spawn ID in:
+- Transition `on` patterns
+- In-state and `global_on` event patterns
+- `Despawn("{self}")` → `Despawn("box_01")`
+- `PlayAnimationOn { target: "{self}", clip: "open" }` → `target: "box_01"`
+- `EmitEvent("door.opened:{self}")` → `"door.opened:box_01"`
+- `Spawn { prefab: "...", id: Some("{self}_debris") }` → id `"box_01_debris"`
+
+### New capabilities
+
+| Capability | PrefabDef field | Emitted event | Notes |
+|---|---|---|---|
+| `TriggerZone` | `trigger_zone: Some(( radius: 2.0 ))` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
+| `Interactable` | `interactable: Some(( radius: 2.5 ))` | `entity.interacted:{id}` | Player within radius + press F; runs in `Update` |
+
+### System ordering
+
+The interpreter chain in `Update` is:
+
+```
+interactable_system  →  message_interpreter_system
+                     →  fsm_interpreter_system
+                     →  entity_fsm_interpreter_system
+                     →  action_executor_system
+```
+
+`trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to all three interpreter systems in the following `Update` tick.
 

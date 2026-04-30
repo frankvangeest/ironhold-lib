@@ -12,7 +12,7 @@ Capability emits Message  →  Interpreter matches rules  →  ActionQueue  → 
 1. **Message** — a capability detects something (collision, button press, scene event) and emits a typed message: `UiEvent::ButtonPressed`, `SceneEvent::Ready`, etc.
 2. **Interpreter** — `fsm_interpreter_system` (or `message_interpreter_system` for rule-file projects) reads messages and matches them against the loaded `state_machine.ron` / `rules.ron`. Matching rules push `Action` values onto `ActionQueue`.
 3. **ActionQueue** — a FIFO `VecDeque<Action>`. Push order equals execution order. Exit actions are pushed before entry actions.
-4. **Executor** — `action_executor_system` drains the queue and dispatches each `Action` (LoadScene, Despawn, PlaySound, AddScore, etc.).
+4. **Executor** — `action_executor_system` drains the queue and dispatches each `Action` (LoadScene, Despawn, PlaySound, SetVariable, IncrementVariable, etc.).
 
 ### Rules for new capabilities
 
@@ -52,6 +52,39 @@ Do not add a general condition system to the interpreter unless the above patter
 ## Before coding
 
 No assets should be hardcoded in the runtime. All assets should be defined in the `assets/projects/{name}/assets.ron` file. Audio catalog keys (not file paths) are passed to `Action::PlaySound`; the executor resolves the path.
+
+---
+
+## Entity FSM (per-entity behavior)
+
+Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. Behavior files live in `assets/projects/{name}/behaviors/` by convention.
+
+**`{self}` substitution** — in behavior files, `{self}` in any event pattern or action target string is replaced at runtime with the entity's spawn ID. This makes behavior files reusable across multiple instances of the same prefab.
+
+**The interpreter chain** (all in `Update`, chained):
+1. `message_interpreter_system` — global rules.ron
+2. `fsm_interpreter_system` — global state_machine.ron
+3. `entity_fsm_interpreter_system` — per-entity .behavior.ron
+4. `action_executor_system`
+
+**Never bypass the pipeline from entity behavior.** Entry/exit actions in `.behavior.ron` push to the global `ActionQueue` — they go through the same executor as all other actions. Do not add `Commands` access to the entity FSM interpreter.
+
+**Supported `{self}` targets in actions:**
+- `Despawn("{self}")` → `Despawn("entity_id")`
+- `PlayAnimationOn { target: "{self}", clip: "..." }` → target becomes the entity's ID
+- `EmitEvent("event:{self}")` → event name with `{self}` filled in
+- `Spawn { prefab: "...", id: Some("{self}_child") }` → id with `{self}` filled in
+
+**New capabilities for entity logic:**
+
+`TriggerZone` — set `trigger_zone: Some((radius: 2.0))` on a `PrefabDef`. A Rapier sphere sensor is spawned. Emits:
+- `GameEvent::Trigger("entity.entered:{id}")` on player enter
+- `GameEvent::Trigger("entity.exited:{id}")` on player exit
+
+`Interactable` — set `interactable: Some((radius: 2.5))` on a `PrefabDef`. No collider needed. Emits:
+- `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses F
+
+`interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
 
 ---
 

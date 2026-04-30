@@ -27,7 +27,7 @@ The runtime expects an `assets/` directory relative to the executable's working 
 | `last_action` | Debug repr of the last `Action` dispatched by `action_executor_system` |
 | `scene` | Asset path of the most recently fully-loaded scene (from `SceneEvent::Ready`) |
 | `logic_state` | Current named logic state set by `Action::EnterState`; empty string means stateless |
-| `score` | Running score total, modified by `Action::AddScore(i32)` |
+| `score` | Running score total, derived from `GameVariables["score"]` each frame |
 
 On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
 

@@ -1,0 +1,23 @@
+// Project-level rules for entity_logic_demo.
+// Entity-specific logic lives in behaviors/*.behavior.ron instead.
+(
+  schema_version: 1,
+  rules: [
+    // Score zone: walk in → +10 points + sound
+    (
+      on: "entity.entered:score_zone_01",
+      do_actions: [
+        IncrementVariable("score", 10),
+        PlaySound("zone_enter"),
+        Log("Score zone entered — +10 points"),
+      ],
+    ),
+    // Score zone: walk out → log only
+    (
+      on: "entity.exited:score_zone_01",
+      do_actions: [
+        Log("Score zone exited"),
+      ],
+    ),
+  ],
+)

@@ -8,11 +8,13 @@ Runs five test categories against a locally served build:
   5. Navigation — multi-step menu flows with per-step screenshots
 
 Usage:
-    python test_web.py [--skip-build] [--update-baselines] [--screenshot-dir DIR]
+    python test_web.py [--skip-build] [--update-baselines] [--project NAME] [--screenshot-dir DIR]
 
 Options:
     --skip-build        Skip wasm-pack build (use existing pkg/)
     --update-baselines  Overwrite stored baseline screenshots
+    --update-baseline   Overwrite baseline for a specific target (repeatable)
+    --project           Limit tests to one project (repeatable, e.g. --project entity_logic_demo)
     --screenshot-dir    Where to store current screenshots  [default: screenshots]
 
 Screenshot layout:
@@ -44,7 +46,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 PORT = 8000
 BASE_URL = f"http://localhost:{PORT}"
 
-PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world"]
+PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo"]
 
 # Root of the asset tree, relative to the working directory where this script runs.
 ASSETS_ROOT = Path("assets/projects")
@@ -471,15 +473,18 @@ async def run_all(
     screenshot_dir: Path,
     update_baselines: bool,
     update_baseline_projects: set[str],
+    filter_projects: set[str],
 ) -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
+    # When --project is given, restrict to those projects; otherwise run all.
+    active_projects = [p for p in PROJECTS if not filter_projects or p in filter_projects]
 
     async with async_playwright() as pw:
         browser: Browser = await pw.chromium.launch(headless=True, args=CHROMIUM_ARGS)
         context: BrowserContext = await browser.new_context(viewport={"width": 1280, "height": 720})
 
         # --- Smoke tests ---
-        for project in PROJECTS:
+        for project in active_projects:
             label = f"smoke:{project}"
             print(f"  [{label}]")
             try:
@@ -490,30 +495,32 @@ async def run_all(
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
 
-        # --- Button → Action ---
-        label = "action:dance_button"
-        print(f"  [{label}]")
-        try:
-            last_action = await test_button_fires_action(context)
-            results.append((label, True, ""))
-            print(f"    PASS  (last_action={last_action})")
-        except TestFailure as e:
-            results.append((label, False, str(e)))
-            print(f"    FAIL: {e}")
+        # --- Button → Action (quick_scene only) ---
+        if not filter_projects or "quick_scene" in filter_projects:
+            label = "action:dance_button"
+            print(f"  [{label}]")
+            try:
+                last_action = await test_button_fires_action(context)
+                results.append((label, True, ""))
+                print(f"    PASS  (last_action={last_action})")
+            except TestFailure as e:
+                results.append((label, False, str(e)))
+                print(f"    FAIL: {e}")
 
-        # --- Scene Transition ---
-        label = "transition:start_game"
-        print(f"  [{label}]")
-        try:
-            before, after = await test_scene_transition(context)
-            results.append((label, True, ""))
-            print(f"    PASS  ({before!r} -> {after!r})")
-        except TestFailure as e:
-            results.append((label, False, str(e)))
-            print(f"    FAIL: {e}")
+        # --- Scene Transition (3rd_person_game_demo only) ---
+        if not filter_projects or "3rd_person_game_demo" in filter_projects:
+            label = "transition:start_game"
+            print(f"  [{label}]")
+            try:
+                before, after = await test_scene_transition(context)
+                results.append((label, True, ""))
+                print(f"    PASS  ({before!r} -> {after!r})")
+            except TestFailure as e:
+                results.append((label, False, str(e)))
+                print(f"    FAIL: {e}")
 
         # --- Scene baselines (one screenshot per .scene.ron per project) ---
-        for project in PROJECTS:
+        for project in active_projects:
             for scene in discover_scenes(project):
                 key = scene_baseline_key(project, scene)
                 label = f"scene_baseline:{key}"
@@ -529,17 +536,18 @@ async def run_all(
                     results.append((label, False, str(e)))
                     print(f"    FAIL: {e}")
 
-        # --- Navigation: pause menu flow ---
-        label = "navigation:pause_menu_flow"
-        print(f"  [{label}]")
-        update_nav = update_baselines or "pause_nav" in update_baseline_projects
-        try:
-            await test_pause_menu_navigation(context, screenshot_dir, update_nav)
-            results.append((label, True, ""))
-            print(f"    PASS")
-        except TestFailure as e:
-            results.append((label, False, str(e)))
-            print(f"    FAIL: {e}")
+        # --- Navigation: pause menu flow (3rd_person_game_demo only) ---
+        if not filter_projects or "3rd_person_game_demo" in filter_projects:
+            label = "navigation:pause_menu_flow"
+            print(f"  [{label}]")
+            update_nav = update_baselines or "pause_nav" in update_baseline_projects
+            try:
+                await test_pause_menu_navigation(context, screenshot_dir, update_nav)
+                results.append((label, True, ""))
+                print(f"    PASS")
+            except TestFailure as e:
+                results.append((label, False, str(e)))
+                print(f"    FAIL: {e}")
 
         await browser.close()
 
@@ -571,12 +579,17 @@ def main() -> None:
                              "Accepted values: a project name (e.g. quick_scene), "
                              "'pause_nav', or a scene key "
                              "(e.g. quick_scene_main, 3rd_person_game_demo_start_menu).")
+    parser.add_argument("--project", metavar="NAME", action="append", default=[],
+                        dest="projects",
+                        help="Limit tests to specific project(s) (repeatable). "
+                             "Omit to run all projects.")
     parser.add_argument("--screenshot-dir", default="screenshots")
     args = parser.parse_args()
 
     screenshot_dir = Path(args.screenshot_dir)
     screenshot_dir.mkdir(exist_ok=True)
     update_baseline_projects: set[str] = set(args.update_baseline_targets)
+    filter_projects: set[str] = set(args.projects)
 
     if not args.skip_build:
         if not build_wasm():
@@ -595,7 +608,7 @@ def main() -> None:
     time.sleep(1)
 
     try:
-        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects))
+        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects))
     finally:
         server.terminate()
         server.wait()
