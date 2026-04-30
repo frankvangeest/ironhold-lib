@@ -55,6 +55,17 @@ No assets should be hardcoded in the runtime. All assets should be defined in th
 
 ---
 
+## Composite and nested prefab spawning
+
+`runtime/scene_manager/scene_loader.rs` contains a free function `spawn_primitive_children` that handles both **inline primitive children** and **nested prefab references** (`ChildPrimitiveDef.prefab`). It takes a `ChildSpawnCtx` struct (split-out asset refs from `SceneMaterialParams`) and recurses into referenced prefabs via the `PrefabCatalog`.
+
+- Cycle detection and depth limit (8 levels) are enforced inside `spawn_primitive_children`.
+- Cycle detection at **load time** is in `PrefabCatalog::validate()` (DFS via `prefab_has_cycle()`).
+- All child-spawning code must go through `spawn_primitive_children` — do **not** duplicate the mesh/material dispatch match arms. The two call sites are: composite non-player prefabs and player cosmetic children.
+- Transform composition is **multiplicative** (standard Bevy hierarchy). Non-uniform scale on parent anchors causes shearing in rotated children — document this in RON comments when relevant.
+
+---
+
 ## Entity FSM (per-entity behavior)
 
 Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. Behavior files live in `assets/projects/{name}/behaviors/` by convention.

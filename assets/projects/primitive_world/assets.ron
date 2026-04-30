@@ -49,6 +49,20 @@
       )),
     ),
 
+    "mat_stone_cobble": (
+      kind: Custom((
+        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        textures: {
+          "texture_0": "shared/textures/Cobblestone_001_SD/Cobblestone_001_COLOR.jpg",
+          "texture_1": "shared/textures/Cobblestone_001_SD/Cobblestone_001_NORM.jpg",
+          "texture_2": "shared/textures/Cobblestone_001_SD/Cobblestone_001_ROUGH.jpg",
+          "texture_3": "shared/textures/Cobblestone_001_SD/Cobblestone_001_OCC.jpg",
+        },
+        colors: { "tint": (r:1.0, g:1.0, b:1.0, a:1.0) },
+        floats: { "blend_sharpness": 6.0, "metallic": 0.0, "normal_strength": 0.8, "tiling": 0.4 },
+      )),
+    ),
+
     "mat_stone_floor": (
       kind: Custom((
         shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use super::material::MaterialDef;
 
 pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
@@ -79,9 +79,70 @@ impl PrefabCatalog {
                     ));
                 }
             }
+            for (i, child) in prefab.children.iter().enumerate() {
+                match (&child.prefab, child.shape.as_str()) {
+                    (Some(_), shape) if !shape.is_empty() => {
+                        return Err(format!(
+                            "Prefab \"{}\", child {}: `shape` and `prefab` are mutually exclusive",
+                            key, i
+                        ));
+                    }
+                    (None, "") => {
+                        return Err(format!(
+                            "Prefab \"{}\", child {}: must set either `shape` or `prefab`",
+                            key, i
+                        ));
+                    }
+                    (Some(nested_key), _) if !self.prefabs.contains_key(nested_key.as_str()) => {
+                        return Err(format!(
+                            "Prefab \"{}\", child {}: nested prefab \"{}\" not found in catalog",
+                            key, i, nested_key
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Cycle detection — DFS to find circular nested-prefab references.
+        let mut visited: HashSet<String> = HashSet::new();
+        for key in self.prefabs.keys() {
+            if !visited.contains(key.as_str()) {
+                let mut visiting: HashSet<String> = HashSet::new();
+                if prefab_has_cycle(key, &self.prefabs, &mut visiting, &mut visited) {
+                    return Err(format!(
+                        "Circular nested-prefab reference detected (cycle includes \"{}\")",
+                        key
+                    ));
+                }
+            }
         }
         Ok(())
     }
+}
+
+/// DFS cycle detection over the nested-prefab graph.
+/// `visiting` = keys currently on the call stack (grey); `visited` = fully explored (black).
+fn prefab_has_cycle(
+    key: &str,
+    prefabs: &HashMap<String, PrefabDef>,
+    visiting: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if visiting.contains(key) { return true; }
+    if visited.contains(key)  { return false; }
+    visiting.insert(key.to_string());
+    if let Some(prefab) = prefabs.get(key) {
+        for child in &prefab.children {
+            if let Some(nested) = &child.prefab {
+                if prefab_has_cycle(nested, prefabs, visiting, visited) {
+                    return true;
+                }
+            }
+        }
+    }
+    visiting.remove(key);
+    visited.insert(key.to_string());
+    false
 }
 
 impl Default for PrefabCatalog {
@@ -345,31 +406,38 @@ pub struct PrimitiveParams {
     pub sensor: bool,
 }
 
-/// One mesh component within a composite `kind: "primitive"` prefab.
-/// All fields except `shape` are optional and default to zero/identity/grey.
+/// One element within a composite `kind: "primitive"` prefab.
+/// Either an inline primitive shape (`shape` set, `prefab` absent) or a nested prefab
+/// reference (`prefab` set, `shape` absent). The transform fields apply to both variants.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ChildPrimitiveDef {
-    /// Shape name — same vocabulary as the top-level `model` field for single primitives:
+    /// Inline primitive shape — same vocabulary as the top-level `model` field:
     /// `"Cuboid"`, `"Sphere"`, `"Cylinder"`, `"Capsule3d"`, `"Cone"`, `"Torus"`, `"ConicalFrustum"`.
+    /// Leave empty (or omit) when `prefab` is set.
+    #[serde(default)]
     pub shape: String,
-    /// Appearance overrides for this child. All sub-fields are optional.
+    /// Appearance overrides for inline primitive children. All sub-fields optional.
     #[serde(default)]
     pub primitive: PrimitiveParams,
     /// Translation offset from the parent prefab's origin. Default: `(0, 0, 0)`.
     #[serde(default)]
     pub offset: (f32, f32, f32),
-    /// Euler rotation in degrees (XYZ order) for this child. Default: `(0, 0, 0)`.
+    /// Euler rotation in degrees (XYZ order). Default: `(0, 0, 0)`.
     #[serde(default)]
     pub rotation_euler_deg: (f32, f32, f32),
     /// Scale applied to this child. Default: `(1, 1, 1)`.
     #[serde(default = "one_vec3_child")]
     pub scale: (f32, f32, f32),
-    /// Optional key into `AssetCatalog.materials` to override the default PBR material
-    /// for this child mesh. When set, the built material is used instead of the colour
-    /// and roughness values in `primitive`. Omit to keep the default behaviour.
+    /// Optional key into `AssetCatalog.materials` to override the default PBR material.
+    /// Only used for inline primitive children; ignored when `prefab` is set.
     #[serde(default)]
     pub material: Option<String>,
+    /// Nested prefab reference — key into `PrefabCatalog.prefabs`.
+    /// Mutually exclusive with `shape`. When set, a Bevy child anchor is spawned at the
+    /// offset/rotation/scale above, and the referenced prefab's children are spawned under it.
+    #[serde(default)]
+    pub prefab: Option<String>,
 }
 
 fn one_vec3_child() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }

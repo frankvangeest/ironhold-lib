@@ -529,20 +529,75 @@ When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates 
 
 ### Composite prefabs (`children`) ✅
 
-A primitive prefab with a non-empty `children` list spawns multiple child meshes under a single parent entity. Each child is a `ChildPrimitiveDef`:
+A primitive prefab with a non-empty `children` list spawns multiple child meshes under a single parent entity. Each child is a `ChildPrimitiveDef`, which is either an **inline primitive shape** or a **nested prefab reference** — set exactly one of `shape` or `prefab` per child.
 
 **`ChildPrimitiveDef` fields:**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `shape` | `String` | required | Shape name — same vocabulary as `model` for single primitives |
-| `primitive` | `PrimitiveParams` | defaults | Shape dimensions and colour for this child |
+| `shape` | `String` | `""` | Inline primitive shape name — same vocabulary as `model` for single primitives. Leave empty when using `prefab`. |
+| `primitive` | `PrimitiveParams` | defaults | Shape dimensions and colour. Only used when `shape` is set. |
 | `offset` | `(f32,f32,f32)` | `(0,0,0)` | Translation offset from the parent entity's origin |
 | `rotation_euler_deg` | `(f32,f32,f32)` | `(0,0,0)` | Euler rotation in degrees (XYZ order) |
 | `scale` | `(f32,f32,f32)` | `(1,1,1)` | Scale for this child |
-| `material` | `Option<String>` | `None` | Key into `AssetCatalog.materials` to override the child's PBR material. When set, `primitive.color`/`roughness`/`metallic` are ignored. |
+| `material` | `Option<String>` | `None` | Key into `AssetCatalog.materials` for the child's material (inline primitives only). |
+| `prefab` | `Option<String>` | `None` | **Nested prefab reference** — key into `PrefabCatalog.prefabs`. Mutually exclusive with `shape`. See below. |
 
-The `material` field on a child accepts the same custom/standard/terrain material keys as the top-level prefab `material` field, including `Custom` materials with WGSL shaders (e.g. `custom_emissive_fresnel.wgsl` for glowing orbs).
+The `material` field accepts the same custom/standard/terrain keys as the top-level `material` field, including `Custom` materials with WGSL shaders.
+
+### Nested prefab references ✅
+
+A child can reference another named prefab by key instead of defining an inline shape. The referenced prefab's subtree is spawned under a Bevy child anchor at the given `offset`/`rotation_euler_deg`/`scale` — transforms compose **multiplicatively** (standard Bevy hierarchy), so rotation and scale inherit correctly at every nesting level.
+
+```ron
+"village": (
+  kind: "primitive",
+  model: "",
+  components: (),
+  children: [
+    // Inline primitive — existing syntax, unchanged
+    (
+      shape: "Cuboid",
+      material: Some("mat_stone_cobble"),
+      primitive: (size: Some((18.0, 0.02, 14.0))),
+      offset: (0.0, 0.01, 0.0),
+    ),
+    // Nested prefab — places a "well" at (5, 0, 0) relative to the village origin
+    (
+      prefab: Some("well"),
+      offset: (5.0, 0.0, 0.0),
+      rotation_euler_deg: (0.0, 45.0, 0.0),
+    ),
+    // Another nested prefab at a different position
+    (
+      prefab: Some("house_cottage"),
+      offset: (-6.0, 0.0, -4.0),
+    ),
+  ],
+),
+```
+
+**Rules and constraints:**
+
+- `shape` and `prefab` are mutually exclusive. Setting both is a validation error.
+- Every child must set exactly one of `shape` or `prefab`. Setting neither is a validation error.
+- The referenced prefab key must exist in the same catalog — forward references are validated when the catalog loads.
+- Circular references (`a → b → a`) are detected at validation time and rejected with an error.
+- Nesting depth is capped at 8 levels in the spawner. Exceeding this logs an error and skips the deep child.
+
+**Transform composition (multiplicative):**
+
+When a `well` prefab at `offset: (5, 0, 0)` has its own children (a cylinder at local `(0, 0.4, 0)` and a torus at `(0, 0.82, 0)`), those children land in the world at:
+- cylinder → `village_origin + (5, 0, 0) + (0, 0.4, 0)` = `(5, 0.4, 0)` relative to village
+- If the village anchor is rotated 45° around Y, all of the above rotates with it — including the well's inner parts.
+
+**Scale inheritance caveat:**  Non-uniform scale on a parent entity (e.g., `scale: (2, 1, 1)`) combined with a rotation on a nested child causes shearing — the same limitation that applies in every 3D scene hierarchy. Keep scale uniform (or leave it at `(1, 1, 1)`) on any prefab that contains nested children.
+
+> **Current limitation — composite `kind: "primitive"` only.**
+> A nested prefab reference only produces visible geometry when the referenced prefab itself uses a
+> `children` list. Nested prefabs with `kind: "actor"` or `kind: "prop"` (GLB meshes), or
+> `kind: "primitive"` prefabs with only a top-level `model` and no `children`, will spawn a bare
+> anchor entity with no mesh. Support for GLB-based nested prefabs is planned.
 
 ---
 

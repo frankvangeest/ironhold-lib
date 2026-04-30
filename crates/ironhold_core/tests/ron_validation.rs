@@ -802,3 +802,137 @@ fn test_prefab_catalog_with_player_movement_parses() {
     assert!(player.components.movement.double_jump);
     assert!(matches!(player.components.movement.jump, Some(JumpConfig::Fixed { .. })));
 }
+
+// ── Nested-prefab children ────────────────────────────────────────────────────
+
+#[test]
+fn test_nested_prefab_child_validates_ok() {
+    // Two-level nesting: "village" → "well". Both keys exist; no cycle.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "well": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( shape: "Cylinder", primitive: (radius: Some(0.7), height: Some(0.8)) ),
+                    ],
+                ),
+                "village": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( prefab: Some("well"), offset: (5.0, 0.0, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("nested prefab catalog should parse");
+    assert!(catalog.validate().is_ok(), "two-level nesting with known keys must validate OK");
+}
+
+#[test]
+fn test_nested_prefab_both_shape_and_prefab_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "well": ( kind: "primitive", model: "", components: () ),
+                "village": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( shape: "Cuboid", prefab: Some("well") ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse but must fail validation");
+    assert!(
+        catalog.validate().is_err(),
+        "setting both shape and prefab on the same child must be rejected"
+    );
+}
+
+#[test]
+fn test_nested_prefab_neither_shape_nor_prefab_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "village": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( offset: (0.0, 0.0, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse but must fail validation");
+    assert!(
+        catalog.validate().is_err(),
+        "a child with neither shape nor prefab must be rejected"
+    );
+}
+
+#[test]
+fn test_nested_prefab_unknown_key_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "village": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( prefab: Some("ghost_prefab") ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse but must fail validation");
+    assert!(
+        catalog.validate().is_err(),
+        "referencing a non-existent prefab key must be rejected"
+    );
+}
+
+#[test]
+fn test_nested_prefab_cycle_is_invalid() {
+    // a → b → a: circular reference must be caught at validation time.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "a": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [ ( prefab: Some("b") ) ],
+                ),
+                "b": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [ ( prefab: Some("a") ) ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("cyclic catalog should parse (RON is just data)");
+    assert!(
+        catalog.validate().is_err(),
+        "a → b → a cycle must be detected by validate()"
+    );
+}

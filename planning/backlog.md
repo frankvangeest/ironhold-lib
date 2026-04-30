@@ -47,6 +47,7 @@ _(nothing in flight right now — pick from Queued)_
 ## Icebox
 
 ### Engine / Runtime
+- [ ] **Nested prefabs — mesh support** — extend `spawn_primitive_children` to dispatch on `kind` so `"actor"`/`"prop"` (GLB) and single-shape `"primitive"` references produce geometry; currently only composite-`children` primitives work; design: `planning/features/nested_prefabs_mesh_support.md`
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
 - [x] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
@@ -95,6 +96,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Done (reference)
 
+- [x] **Nested prefabs** — `children` entries reference named prefabs by key; multiplicative Bevy hierarchy; cycle detection; `village` prefab demo in `primitive_world`; design: `planning/features/nested_prefabs.md`
 - [x] Beta 0.1 — Baseline Runtime
 - [x] Beta 0.2 — Event/Action Bus refactor
 - [x] Beta 0.3 — Global Logic (FSM v1)

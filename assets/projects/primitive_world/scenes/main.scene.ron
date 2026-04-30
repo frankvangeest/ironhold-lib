@@ -216,6 +216,19 @@
       ),
     ),
 
+    // ── Village (nested-prefab demo) ─────────────────────────────────────────
+    // Spawns a cobblestone plaza with a cottage, small house, and well composed
+    // via nested prefab references.  Placed to the west, clear of other entities.
+    (
+      id: "village_01",
+      prefab: "village",
+      transform: (
+        translation: (-22.0, 0.0, -10.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // ── Trees ─────────────────────────────────────────────────────────────────
     (
       id: "tree_01",
