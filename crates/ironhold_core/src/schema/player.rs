@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use crate::schema::catalog::MovementConfig;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PlayerConfig {
@@ -12,6 +13,14 @@ pub struct PlayerConfig {
     /// Path to the animation policy file, relative to the project root.
     /// e.g. "prefabs/animation/player_policy.ron"
     pub animation_policy: String,
+
+    /// Movement tuning read from `prefab.components.movement`.
+    #[serde(default)]
+    pub movement: MovementConfig,
+
+    /// Asset catalog key for the jump sound, read from `prefab.components.sounds["jump"]`.
+    #[serde(default)]
+    pub jump_sound: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

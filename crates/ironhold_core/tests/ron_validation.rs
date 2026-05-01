@@ -746,6 +746,9 @@ fn test_movement_config_all_defaults() {
     assert_eq!(config.run_speed, MovementConfig::default().run_speed);
     assert!(config.jump.is_none());
     assert!(!config.double_jump);
+    assert!(config.rot_speed.is_none());
+    assert!(config.collider_radius.is_none());
+    assert!(config.collider_height.is_none());
 }
 
 #[test]
@@ -756,8 +759,17 @@ fn test_movement_config_speeds() {
 }
 
 #[test]
+fn test_movement_config_glb_player_fields() {
+    let config: MovementConfig =
+        from_str("(rot_speed: 2.5, collider_radius: 0.35, collider_height: 1.75)").unwrap();
+    assert!((config.rot_speed.unwrap() - 2.5).abs() < 0.001);
+    assert!((config.collider_radius.unwrap() - 0.35).abs() < 0.001);
+    assert!((config.collider_height.unwrap() - 1.75).abs() < 0.001);
+}
+
+#[test]
 fn test_jump_config_fixed() {
-    // RON 0.11 requires explicit Some(...) for Option<T> — no implicit Some for enums.
+    // explicit Some(...) always accepted; implicit_some also allows bare enum variant
     let config: MovementConfig = from_str("(jump: Some(Fixed(height: 2.5)))").unwrap();
     assert!(matches!(config.jump, Some(JumpConfig::Fixed { height }) if (height - 2.5).abs() < 0.001));
 }
@@ -766,6 +778,13 @@ fn test_jump_config_fixed() {
 fn test_jump_config_relative_to_height() {
     let config: MovementConfig = from_str("(jump: Some(RelativeToHeight(percent: 120.0)))").unwrap();
     assert!(matches!(config.jump, Some(JumpConfig::RelativeToHeight { percent }) if (percent - 120.0).abs() < 0.001));
+}
+
+#[test]
+fn test_jump_config_bare_variant_implicit_some() {
+    // implicit_some: bare enum variant accepted for Option<JumpConfig>
+    let config: MovementConfig = from_str("(jump: RelativeToHeight(percent: 80.0))").unwrap();
+    assert!(matches!(config.jump, Some(JumpConfig::RelativeToHeight { percent }) if (percent - 80.0).abs() < 0.001));
 }
 
 #[test]
@@ -784,6 +803,7 @@ fn test_movement_config_unknown_field_is_error() {
 
 #[test]
 fn test_prefab_catalog_with_player_movement_parses() {
+    // Primitive player — collider dims come from primitive.radius/height, not movement
     let ron_str = r#"
         (
             schema_version: 1,
@@ -809,6 +829,47 @@ fn test_prefab_catalog_with_player_movement_parses() {
     assert_eq!(player.components.movement.walk_speed, 5.5);
     assert!(player.components.movement.double_jump);
     assert!(matches!(player.components.movement.jump, Some(JumpConfig::Fixed { .. })));
+}
+
+#[test]
+fn test_glb_player_prefab_with_movement_parses() {
+    // GLB player (kind: "actor") — collider_radius/collider_height override capsule shape
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player_warrior": (
+                    kind: "actor",
+                    model: "hero",
+                    animation_policy: "prefabs/animation/player_policy.ron",
+                    components: (
+                        tags: ["player"],
+                        movement: (
+                            walk_speed: 4.0,
+                            run_speed: 8.0,
+                            rot_speed: 2.5,
+                            double_jump: true,
+                            collider_radius: 0.35,
+                            collider_height: 1.75,
+                        ),
+                        sounds: { "jump": "jump_sfx" },
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("GLB player with movement should parse");
+    let mv = &catalog.prefabs["player_warrior"].components.movement;
+    assert_eq!(mv.walk_speed, 4.0);
+    assert_eq!(mv.run_speed, 8.0);
+    assert!((mv.rot_speed.unwrap() - 2.5).abs() < 0.001);
+    assert!(mv.double_jump);
+    assert!((mv.collider_radius.unwrap() - 0.35).abs() < 0.001);
+    assert!((mv.collider_height.unwrap() - 1.75).abs() < 0.001);
+    assert_eq!(
+        catalog.prefabs["player_warrior"].components.sounds.get("jump").map(|s| s.as_str()),
+        Some("jump_sfx"),
+    );
 }
 
 // ── Nested-prefab children ────────────────────────────────────────────────────

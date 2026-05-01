@@ -3,9 +3,15 @@ use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
 use ironhold_core::schema::player::AnimationPolicy;
-use ron::de::from_str;
+use ron::extensions::Extensions;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+fn from_str<'de, T: serde::Deserialize<'de>>(s: &'de str) -> Result<T, ron::error::SpannedError> {
+    ron::Options::default()
+        .with_default_extension(Extensions::IMPLICIT_SOME)
+        .from_str(s)
+}
 
 fn collect_ron_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else { return; };

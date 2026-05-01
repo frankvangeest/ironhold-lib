@@ -16,6 +16,7 @@ use super::{
     LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
     PendingBehavior, BehaviorHandle, EntityFsmState,
     resolve_project_path,
+    scene_loader::resolve_jump_velocity,
 };
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
@@ -209,29 +210,37 @@ pub(crate) fn spawn_player_entity(
     );
 
     let player_entity = spawned.parent;
-    // Default jump height: 1.8 m (typical capsule: half_length=0.8, radius=0.4).
-    let default_jump_vel = (2.0_f32 * 9.81 * 1.8).sqrt();
-    let cap_half: f32 = 0.8;
-    let cap_radius: f32 = 0.4;
+    let mv = &player_config.movement;
+    let cap_radius = mv.collider_radius.unwrap_or(0.4);
+    let player_height = mv.collider_height.unwrap_or(1.8);
+    let cap_half = (player_height / 2.0 - cap_radius).max(0.0);
+    let double_jump_enabled = mv.double_jump;
+    let max_jumps: u8 = if double_jump_enabled { 2 } else { 1 };
+    let jump_velocity = resolve_jump_velocity(mv.jump.as_ref(), player_height);
+    let double_jump_velocity = if double_jump_enabled {
+        resolve_jump_velocity(mv.double_jump_height.as_ref(), player_height)
+    } else {
+        jump_velocity
+    };
     commands.entity(player_entity).insert((
         Name::new("Player"),
         LevelEntity,
         CharacterController {
-            walk_speed: 5.0,
-            run_speed: 10.0,
-            rot_speed: 3.0,
+            walk_speed: mv.walk_speed,
+            run_speed: mv.run_speed,
+            rot_speed: mv.rot_speed.unwrap_or(3.0),
             inputs: player_config.inputs.clone(),
             is_running: false,
-            jump_velocity: default_jump_vel,
-            double_jump_enabled: true,
-            double_jump_velocity: default_jump_vel,
+            jump_velocity,
+            double_jump_enabled,
+            double_jump_velocity,
             jumps_used: 0,
-            max_jumps: 2,
+            max_jumps,
             // Entity origin is the feet / ground-contact point. The sphere cast starts
             // at the feet and only needs a short distance to detect the ground below.
             collider_radius: cap_radius,
             ground_cast_length: 0.3,
-            jump_sound: None,
+            jump_sound: player_config.jump_sound.clone(),
         },
         LocomotionState::default(),
         AnimationRequests::default(),

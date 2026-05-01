@@ -340,17 +340,20 @@ pub struct PrefabComponents {
     pub npc: Option<NpcDef>,
 }
 
-/// Movement parameters that can be set on any primitive prefab with the "player" tag.
+/// Movement parameters for any prefab with the "player" tag (primitive or GLB).
 /// All fields are optional; omitting a field keeps the runtime default.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct MovementConfig {
-    /// Walking speed in m/s. Default: 3.0.
+    /// Walking speed in m/s. Default: 5.0.
     #[serde(default = "default_walk_speed")]
     pub walk_speed: f32,
-    /// Running speed in m/s. Default: 6.0.
+    /// Running speed in m/s. Default: 10.0.
     #[serde(default = "default_run_speed")]
     pub run_speed: f32,
+    /// Yaw rotation speed in rad/s. Default: 3.0.
+    #[serde(default)]
+    pub rot_speed: Option<f32>,
     /// Jump height. Default: `RelativeToHeight` with `percent: 100` (player's own height).
     #[serde(default)]
     pub jump: Option<JumpConfig>,
@@ -360,6 +363,12 @@ pub struct MovementConfig {
     /// Height for the second jump. If omitted, uses the same height as `jump`.
     #[serde(default)]
     pub double_jump_height: Option<JumpConfig>,
+    /// Capsule collider radius (GLB players). Ignored for primitive players (use shape `radius`). Default: 0.4 m.
+    #[serde(default)]
+    pub collider_radius: Option<f32>,
+    /// Capsule total height (GLB players). Ignored for primitive players (use shape `height`). Default: 1.8 m.
+    #[serde(default)]
+    pub collider_height: Option<f32>,
 }
 
 impl Default for MovementConfig {
@@ -367,9 +376,12 @@ impl Default for MovementConfig {
         Self {
             walk_speed: default_walk_speed(),
             run_speed: default_run_speed(),
+            rot_speed: None,
             jump: None,
             double_jump: false,
             double_jump_height: None,
+            collider_radius: None,
+            collider_height: None,
         }
     }
 }

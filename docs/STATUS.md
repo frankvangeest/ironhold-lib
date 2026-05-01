@@ -48,7 +48,7 @@ _Last updated: 2026‑04‑17_
 ### Capabilities
 | Area                        | Status | Notes |
 |-----------------------------|:------:|-------|
-| Player movement             |   ✅   | Data‑configured via scene `player` block. |
+| Player movement             |   ✅   | `MovementConfig` on prefab `components.movement`; works for both primitive and GLB players. Fields: `walk_speed`, `run_speed`, `rot_speed`, `jump`, `double_jump`, `collider_radius` (GLB), `collider_height` (GLB). |
 | Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
 | Fly camera                  |   ✅   | Free-flying camera; spawned via `"flycam"` tag on prefab. LMB/RMB hold to look, WASD move, Shift fast mode. Optional `flycam_position` UI label. |

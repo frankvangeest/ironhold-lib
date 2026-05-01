@@ -396,15 +396,23 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
     "player_warrior": (
       kind: "actor",
       model: "hero",               // key in AssetCatalog.models
-      animation_policy: Some("prefabs/animation/player_policy.ron"),
+      animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
+        movement: (
+          walk_speed: 4.0,
+          run_speed: 8.0,
+          double_jump: true,
+          collider_radius: 0.35,
+          collider_height: 1.75,
+        ),
+        sounds: { "jump": "jump_sfx" },
       ),
     ),
     "prop_anvil": (
       kind: "prop",
       model: "anvil",
-      material: Some("wood_crate"), // overrides embedded material
+      material: "wood_crate",      // overrides embedded material
       components: (
         tags: ["prop"],
       ),
@@ -421,7 +429,9 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `model` | `String` | Key into `AssetCatalog.models`; for `kind: "primitive"` this is the Bevy shape name (see below) |
 | `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root |
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
-| `components.tags` | `Vec<String>` | Runtime tags; other component fields are design-time only |
+| `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
+| `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
+| `components.sounds` | `HashMap<String, String>` | Map from event key to `AssetCatalog` audio key. `"jump"` plays on every player jump. |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
@@ -467,6 +477,32 @@ To display the camera's world position in the UI, add a label element with `id: 
   position: (16.0, 16.0),
   size: (300.0, 24.0),
 ),
+```
+
+### Special tag: `"player"` ✅
+
+A prefab with `components.tags: ["player"]` spawns a third-person character controller with an orbit camera. Works on both `kind: "actor"` (GLB model) and `kind: "primitive"` (capsule shape). Movement is tuned via `components.movement`.
+
+**`MovementConfig` fields** (all optional — defaults apply when omitted):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `walk_speed` | `f32` | `5.0` | Walking speed in m/s |
+| `run_speed` | `f32` | `10.0` | Running speed in m/s (hold Shift) |
+| `rot_speed` | `Option<f32>` | `3.0` | Yaw rotation speed in rad/s |
+| `jump` | `Option<JumpConfig>` | own height | Jump height; see below |
+| `double_jump` | `bool` | `false` | Enable a second jump while airborne |
+| `double_jump_height` | `Option<JumpConfig>` | same as `jump` | Second-jump height |
+| `collider_radius` | `Option<f32>` | `0.4` | Capsule collider radius (**GLB players only** — primitive players use `primitive.radius`) |
+| `collider_height` | `Option<f32>` | `1.8` | Capsule total height (**GLB players only** — primitive players use `primitive.height`) |
+
+**`JumpConfig` variants:**
+- `Fixed(height: <f32>)` — absolute world-space height in metres (e.g. `Fixed(height: 2.5)`)
+- `RelativeToHeight(percent: <f32>)` — fraction of the player's own height (e.g. `RelativeToHeight(percent: 100)`)
+
+**Jump sound** — add `"jump"` to `components.sounds` to play a catalog audio key on every jump:
+```ron
+sounds: { "jump": "sfx_jump" }
 ```
 
 ### Primitive shapes ✅

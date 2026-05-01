@@ -501,6 +501,8 @@ pub fn spawn_scene_v2(
                     camera: default_camera_config(),
                     inputs: default_input_map(),
                     animation_policy,
+                    movement: prefab.components.movement.clone(),
+                    jump_sound: prefab.components.sounds.get("jump").cloned(),
                 });
             } else {
                 let parent = spawn_prefab_instance(
@@ -572,7 +574,7 @@ pub fn spawn_scene_v2(
                     CharacterController {
                         walk_speed,
                         run_speed,
-                        rot_speed: 3.0,
+                        rot_speed: mv.rot_speed.unwrap_or(3.0),
                         inputs: default_input_map(),
                         is_running: false,
                         jump_velocity,
@@ -1119,7 +1121,7 @@ fn ui_justify(align: UiTextAlign) -> JustifyContent {
 
 /// Convert a `JumpConfig` (or `None` → jump own height) to an initial Y velocity.
 /// Uses kinematic relation: v = √(2 · g · h).
-fn resolve_jump_velocity(config: Option<&crate::schema::catalog::JumpConfig>, player_height: f32) -> f32 {
+pub(super) fn resolve_jump_velocity(config: Option<&crate::schema::catalog::JumpConfig>, player_height: f32) -> f32 {
     use crate::schema::catalog::JumpConfig;
     let h = match config {
         None => player_height,
