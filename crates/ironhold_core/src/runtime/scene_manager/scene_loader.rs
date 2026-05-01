@@ -138,8 +138,10 @@ pub fn spawn_scene_v2(
             info!("Built {} material(s) from asset catalog", params.asset_catalog.0.materials.len());
         }
 
-        // Capture prefab catalog reference before the primitive_player destructure shadows `params`.
+        // Capture these refs before the primitive_player destructure shadows `params`.
         let prefab_catalog = &params.prefab_catalog.0;
+        let asset_catalog  = &params.asset_catalog.0;
+        let project_root   = params.project_root.0.as_str();
 
         // Spawn entities from prefabs
         let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
@@ -200,6 +202,11 @@ pub fn spawn_scene_v2(
                             built_mats: &mats.built.0,
                             custom_mats: &mats.custom,
                             primitive_default_color: project.primitive_default_color,
+                            asset_server:  &asset_server,
+                            model_spawner: &model_spawner,
+                            fixes: &merged_fixes.0,
+                            asset_catalog,
+                            project_root,
                         };
                         spawn_primitive_children(
                             &mut commands, parent, &prefab.children,
@@ -622,6 +629,11 @@ pub fn spawn_scene_v2(
                     built_mats: &mats.built.0,
                     custom_mats: &mats.custom,
                     primitive_default_color: project.primitive_default_color,
+                    asset_server:  &asset_server,
+                    model_spawner: &model_spawner,
+                    fixes: &merged_fixes.0,
+                    asset_catalog,
+                    project_root,
                 };
                 spawn_primitive_children(
                     &mut commands, player_entity, &player_children,
@@ -1128,6 +1140,11 @@ struct ChildSpawnCtx<'a> {
     built_mats: &'a std::collections::HashMap<String, crate::runtime::material_factory::BuiltMaterialHandle>,
     custom_mats: &'a Assets<crate::capabilities::custom_material::CustomMaterial>,
     primitive_default_color: Option<(f32, f32, f32)>,
+    asset_server:  &'a AssetServer,
+    model_spawner: &'a crate::runtime::model_spawner::ModelSpawner,
+    fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>,
+    asset_catalog: &'a crate::schema::catalog::AssetCatalog,
+    project_root:  &'a str,
 }
 
 /// Spawns the `children` list of a composite prefab under `parent`, recursing into
@@ -1182,19 +1199,111 @@ fn spawn_primitive_children(
                 continue;
             };
 
-            let anchor = commands.spawn((
-                Name::new(nested_key.clone()),
-                child_tf,
-                Visibility::default(),
-            )).id();
-            commands.entity(parent).add_child(anchor);
+            match nested_prefab.kind.as_str() {
+                "actor" | "prop" => {
+                    // GLB branch: resolve model path and spawn via the shared instance spawner.
+                    let Some(catalog_entry) = ctx.asset_catalog.models.get(&nested_prefab.model) else {
+                        load_errors.push(format!(
+                            "entity '{}': nested prefab '{}' model key '{}' not found in asset catalog, skipped",
+                            entity_id, nested_key, nested_prefab.model
+                        ));
+                        continue;
+                    };
+                    let model_path = catalog_entry.path.clone();
+                    visiting.insert(nested_key.clone());
+                    let model_entity = spawn_prefab_instance(
+                        commands,
+                        ctx.asset_server,
+                        ctx.model_spawner,
+                        ctx.fixes,
+                        ctx.project_root,
+                        nested_prefab,
+                        model_path,
+                        child_tf,
+                        nested_key,
+                    );
+                    commands.entity(parent).add_child(model_entity);
+                    visiting.remove(nested_key.as_str());
+                }
+                _ => {
+                    // "primitive" branch: anchor + children list or single shape.
+                    let anchor = commands.spawn((
+                        Name::new(nested_key.clone()),
+                        child_tf,
+                        Visibility::default(),
+                    )).id();
+                    commands.entity(parent).add_child(anchor);
 
-            visiting.insert(nested_key.clone());
-            spawn_primitive_children(
-                commands, anchor, &nested_prefab.children,
-                prefab_catalog, ctx, load_errors, entity_id, depth + 1, visiting,
-            );
-            visiting.remove(nested_key.as_str());
+                    if !nested_prefab.children.is_empty() {
+                        // Composite primitive: recurse into children.
+                        visiting.insert(nested_key.clone());
+                        spawn_primitive_children(
+                            commands, anchor, &nested_prefab.children,
+                            prefab_catalog, ctx, load_errors, entity_id, depth + 1, visiting,
+                        );
+                        visiting.remove(nested_key.as_str());
+                    } else if !nested_prefab.model.is_empty() {
+                        // Single-shape primitive: build one mesh child under the anchor.
+                        let pparams = nested_prefab.primitive.as_ref().cloned().unwrap_or_default();
+                        match build_primitive_mesh(&nested_prefab.model, &pparams) {
+                            Some(mesh) => {
+                                let mesh_h = ctx.meshes.add(mesh);
+                                let built_mat = nested_prefab.material.as_ref()
+                                    .and_then(|k| ctx.built_mats.get(k));
+                                let mesh_entity = match built_mat {
+                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
+                                        commands.spawn((
+                                            Name::new(nested_prefab.model.clone()),
+                                            Mesh3d(mesh_h),
+                                            MeshMaterial3d(h.clone()),
+                                            Transform::IDENTITY,
+                                        )).id()
+                                    }
+                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
+                                        let e = commands.spawn((
+                                            Name::new(nested_prefab.model.clone()),
+                                            Mesh3d(mesh_h),
+                                            MeshMaterial3d(h.clone()),
+                                            Transform::IDENTITY,
+                                        )).id();
+                                        if ctx.custom_mats.get(h).map(|m| m.unlit).unwrap_or(false) {
+                                            commands.entity(e).insert(bevy::light::NotShadowCaster);
+                                        }
+                                        e
+                                    }
+                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
+                                        commands.spawn((
+                                            Name::new(nested_prefab.model.clone()),
+                                            Mesh3d(mesh_h),
+                                            MeshMaterial3d(h.clone()),
+                                            Transform::IDENTITY,
+                                        )).id()
+                                    }
+                                    None => {
+                                        let mat_h = ctx.standard.add(
+                                            primitive_material(&pparams, ctx.primitive_default_color)
+                                        );
+                                        commands.spawn((
+                                            Name::new(nested_prefab.model.clone()),
+                                            Mesh3d(mesh_h),
+                                            MeshMaterial3d(mat_h),
+                                            Transform::IDENTITY,
+                                        )).id()
+                                    }
+                                };
+                                commands.entity(anchor).add_child(mesh_entity);
+                            }
+                            None => {
+                                load_errors.push(format!(
+                                    "entity '{}': nested prefab '{}' has unknown shape '{}', skipped",
+                                    entity_id, nested_key, nested_prefab.model
+                                ));
+                            }
+                        }
+                    }
+                    // else: primitive with no model and no children — valid empty anchor.
+                }
+            }
             continue;
         }
 
@@ -1252,6 +1361,15 @@ fn spawn_primitive_children(
             }
         };
         commands.entity(parent).add_child(child_entity);
+
+        // Static physics collider: child entity gets the collider shape; parent gets
+        // RigidBody::Fixed so Rapier treats the children as a compound static body.
+        if child_def.primitive.physics {
+            if let Some(collider) = build_primitive_collider(&child_def.shape, &child_def.primitive) {
+                commands.entity(child_entity).insert(collider);
+                commands.entity(parent).insert(RigidBody::Fixed);
+            }
+        }
     }
 }
 

@@ -424,6 +424,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `components.tags` | `Vec<String>` | Runtime tags; other component fields are design-time only |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
+| `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -527,6 +528,59 @@ When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates 
 )
 ```
 
+### GLB prop colliders (`colliders`) ✅
+
+To make a GLB prop solid (so the player can stand on it or bump into it), add a `colliders` list to the prefab. All shapes are combined into a single Rapier compound `RigidBody::Fixed` — one entry for simple props, multiple entries to approximate curved geometry (arches, barrels) or multi-part shapes (chest base + lid). Works identically whether the prefab is a top-level scene entity or nested inside a composite prefab; in either case the prop's collider is an independent static body.
+
+**`ColliderDef` fields** (each entry in the `colliders` list):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `shape` | `String` | — | `"Cuboid"`, `"Sphere"`, or `"Cylinder"` |
+| `size` | `Option<(f32,f32,f32)>` | `(1,1,1)` | Full extents (width, height, depth) for Cuboid |
+| `radius` | `Option<f32>` | `0.5` | Radius for Sphere / Cylinder |
+| `height` | `Option<f32>` | `1.0` | Total height for Cylinder |
+| `offset` | `(f32,f32,f32)` | `(0,0,0)` | Local-space offset of this shape from the entity origin |
+
+```ron
+// Simple single-shape prop
+"barrel": (
+  kind: "prop",
+  model: "barrel",
+  components: (),
+  colliders: [
+    (shape: "Cylinder", radius: Some(0.35), height: Some(0.9)),
+  ],
+),
+
+// Multi-shape prop: chest with separate base and lid colliders
+"chest_01": (
+  kind: "prop",
+  model: "chest_01",
+  components: (tags: ["loot"]),
+  colliders: [
+    (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
+    (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+  ],
+),
+
+// Archway approximated with three boxes
+"archway": (
+  kind: "prop",
+  model: "archway",
+  components: (),
+  colliders: [
+    (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: (-1.5, 1.5, 0.0)),
+    (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: ( 1.5, 1.5, 0.0)),
+    (shape: "Cuboid", size: Some((3.4, 0.4, 0.4)), offset: ( 0.0, 3.2, 0.0)),
+  ],
+),
+```
+
+**For composite primitive prefabs**, child shapes that have `physics: true` in their `PrimitiveParams` automatically add a collider to that child mesh and `RigidBody::Fixed` to the parent anchor — no `colliders` field is needed on the parent `PrefabDef`.
+
+**Nested GLB props inside a composite** use their own `PrefabDef.colliders` field independently. The parent composite anchor gets `RigidBody::Fixed` only from inline primitive children that have `physics: true`; nested GLB props build their own separate static body. In practice both are `Fixed`, so the player interacts with each surface correctly.
+
 ### Composite prefabs (`children`) ✅
 
 A primitive prefab with a non-empty `children` list spawns multiple child meshes under a single parent entity. Each child is a `ChildPrimitiveDef`, which is either an **inline primitive shape** or a **nested prefab reference** — set exactly one of `shape` or `prefab` per child.
@@ -547,7 +601,7 @@ The `material` field accepts the same custom/standard/terrain keys as the top-le
 
 ### Nested prefab references ✅
 
-A child can reference another named prefab by key instead of defining an inline shape. The referenced prefab's subtree is spawned under a Bevy child anchor at the given `offset`/`rotation_euler_deg`/`scale` — transforms compose **multiplicatively** (standard Bevy hierarchy), so rotation and scale inherit correctly at every nesting level.
+A child can reference another named prefab by key instead of defining an inline shape. All three prefab kinds are supported as nested children — `kind: "primitive"` (both composite and single-shape), `kind: "actor"`, and `kind: "prop"` (GLB meshes). Transforms compose **multiplicatively** (standard Bevy hierarchy), so rotation and scale inherit correctly at every nesting level.
 
 ```ron
 "village": (
@@ -562,20 +616,34 @@ A child can reference another named prefab by key instead of defining an inline 
       primitive: (size: Some((18.0, 0.02, 14.0))),
       offset: (0.0, 0.01, 0.0),
     ),
-    // Nested prefab — places a "well" at (5, 0, 0) relative to the village origin
+    // Nested composite prefab (kind: "primitive" with children)
     (
       prefab: Some("well"),
       offset: (5.0, 0.0, 0.0),
       rotation_euler_deg: (0.0, 45.0, 0.0),
     ),
-    // Another nested prefab at a different position
+    // Nested GLB prop (kind: "prop" — loads a .glb file)
     (
-      prefab: Some("house_cottage"),
+      prefab: Some("rock_deco"),
+      offset: (3.0, 0.0, -2.0),
+      rotation_euler_deg: (0.0, 35.0, 0.0),
+    ),
+    // Nested single-shape primitive (kind: "primitive" with no children, just a model)
+    (
+      prefab: Some("beacon"),
       offset: (-6.0, 0.0, -4.0),
     ),
   ],
 ),
 ```
+
+**What spawns for each nested prefab kind:**
+
+| Nested prefab `kind` | Has `children`? | Result |
+|---|---|---|
+| `"primitive"` | yes | Anchor + all children spawned recursively |
+| `"primitive"` | no (single `model`) | Anchor + one mesh child |
+| `"actor"` / `"prop"` | — | GLB loaded via `spawn_prefab_instance`; the GLB root entity sits at the child `offset` |
 
 **Rules and constraints:**
 
@@ -584,6 +652,7 @@ A child can reference another named prefab by key instead of defining an inline 
 - The referenced prefab key must exist in the same catalog — forward references are validated when the catalog loads.
 - Circular references (`a → b → a`) are detected at validation time and rejected with an error.
 - Nesting depth is capped at 8 levels in the spawner. Exceeding this logs an error and skips the deep child.
+- If a nested `"actor"` / `"prop"` prefab's `model` key is missing from the asset catalog, a `load_errors` entry is emitted and the prefab is skipped — no panic.
 
 **Transform composition (multiplicative):**
 
@@ -592,12 +661,6 @@ When a `well` prefab at `offset: (5, 0, 0)` has its own children (a cylinder at 
 - If the village anchor is rotated 45° around Y, all of the above rotates with it — including the well's inner parts.
 
 **Scale inheritance caveat:**  Non-uniform scale on a parent entity (e.g., `scale: (2, 1, 1)`) combined with a rotation on a nested child causes shearing — the same limitation that applies in every 3D scene hierarchy. Keep scale uniform (or leave it at `(1, 1, 1)`) on any prefab that contains nested children.
-
-> **Current limitation — composite `kind: "primitive"` only.**
-> A nested prefab reference only produces visible geometry when the referenced prefab itself uses a
-> `children` list. Nested prefabs with `kind: "actor"` or `kind: "prop"` (GLB meshes), or
-> `kind: "primitive"` prefabs with only a top-level `model` and no `children`, will spawn a bare
-> anchor entity with no mesh. Support for GLB-based nested prefabs is planned.
 
 ---
 

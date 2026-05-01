@@ -47,7 +47,6 @@ _(nothing in flight right now — pick from Queued)_
 ## Icebox
 
 ### Engine / Runtime
-- [ ] **Nested prefabs — mesh support** — extend `spawn_primitive_children` to dispatch on `kind` so `"actor"`/`"prop"` (GLB) and single-shape `"primitive"` references produce geometry; currently only composite-`children` primitives work; design: `planning/features/nested_prefabs_mesh_support.md`
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
 - [x] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
@@ -87,6 +86,9 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Diagnostics HUD — F3 overlay: FPS, frame time, entity count, draw calls, triangles, CPU/RAM (native); design: `planning/features/diagnostics_hud.md`
 - [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
 
+### Designer Experience
+- [ ] **`implicit_some` RON extension** — add `#![enable(implicit_some)]` to all `.ron` asset files so designers write `radius: 0.4` instead of `radius: Some(0.4)`; no Rust changes needed; existing `Some(...)` syntax remains valid so migration can be gradual; eliminates ~671 `Some()` wrappers across project files; pure authoring quality-of-life, zero runtime impact
+
 ### Tools
 - [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)
 - [ ] Live reload server — watch `assets/` and push scene reload to running native build via IPC
@@ -96,6 +98,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Done (reference)
 
+- [x] **Nested prefabs — mesh support** — `spawn_primitive_children` dispatches on `kind`: actor/prop loads GLB via `spawn_prefab_instance`, single-shape primitive builds one mesh; `rock_deco` GLB prop nested in `village` demo; design: `planning/features/nested_prefabs_mesh_support.md`
 - [x] **Nested prefabs** — `children` entries reference named prefabs by key; multiplicative Bevy hierarchy; cycle detection; `village` prefab demo in `primitive_world`; design: `planning/features/nested_prefabs.md`
 - [x] Beta 0.1 — Baseline Runtime
 - [x] Beta 0.2 — Event/Action Bus refactor

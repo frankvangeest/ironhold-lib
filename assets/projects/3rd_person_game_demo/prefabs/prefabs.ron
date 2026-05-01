@@ -24,6 +24,12 @@
       components: (
         tags: ["loot"],
       ),
+      colliders: [
+        // Base body of the chest
+        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
+        // Lid (slightly smaller and offset upward)
+        (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+      ],
     ),
 
     "chest_02": (
@@ -48,6 +54,36 @@
       components: (
         tags: ["creature"],
       ),
+    ),
+
+    // Composite prefab: wooden platform with a GLB chest nested on top.
+    // Demonstrates kind:"prop" nesting inside a kind:"primitive" composite.
+    "loot_display": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      children: [
+        // Wooden platform base — inline Cuboid with a static physics collider
+        (
+          shape: "Cuboid",
+          primitive: (
+            size: Some((3.0, 0.15, 3.0)),
+            color: Some((0.45, 0.28, 0.12)),
+            roughness: Some(0.85),
+            physics: true,
+          ),
+          offset: (0.0, -0.79, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // GLB chest nested on top of the platform
+        (
+          prefab: Some("chest_01"),
+          offset: (0.0, 0.15, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
     ),
   }
 )

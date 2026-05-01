@@ -90,6 +90,27 @@ pub fn spawn_prefab_instance(
         ));
     }
 
+    if !prefab.colliders.is_empty() {
+        let shapes: Vec<(Vec3, Quat, Collider)> = prefab.colliders.iter().filter_map(|cdef| {
+            let shape = match cdef.shape.as_str() {
+                "Cuboid" => {
+                    let (x, y, z) = cdef.size.unwrap_or((1.0, 1.0, 1.0));
+                    Some(Collider::cuboid(x / 2.0, y / 2.0, z / 2.0))
+                }
+                "Sphere" => Some(Collider::ball(cdef.radius.unwrap_or(0.5))),
+                "Cylinder" => Some(Collider::cylinder(
+                    cdef.height.unwrap_or(1.0) / 2.0,
+                    cdef.radius.unwrap_or(0.5),
+                )),
+                _ => None,
+            }?;
+            Some((Vec3::from(cdef.offset), Quat::IDENTITY, shape))
+        }).collect();
+        if !shapes.is_empty() {
+            commands.entity(spawned.parent).insert((RigidBody::Fixed, Collider::compound(shapes)));
+        }
+    }
+
     spawned.parent
 }
 

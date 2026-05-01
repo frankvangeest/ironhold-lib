@@ -1,6 +1,6 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
 use ironhold_core::schema::scene_v2::GameSceneV2;
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ron::de::from_str;
 
@@ -935,4 +935,399 @@ fn test_nested_prefab_cycle_is_invalid() {
         catalog.validate().is_err(),
         "a → b → a cycle must be detected by validate()"
     );
+}
+
+#[test]
+fn test_nested_prop_in_composite_validates_ok() {
+    // A kind:"prop" (GLB) prefab referenced as a nested child of a kind:"primitive" composite
+    // must pass validation — the schema allows all kinds as nested children.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "oak_tree": (
+                    kind: "prop",
+                    model: "some_glb_key",
+                    components: (),
+                ),
+                "clearing": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        (
+                            shape: "Cuboid",
+                            primitive: (size: Some((10.0, 0.1, 10.0))),
+                        ),
+                        ( prefab: Some("oak_tree"), offset: (3.0, 0.0, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(
+        catalog.validate().is_ok(),
+        "kind:\"prop\" nested inside kind:\"primitive\" must validate OK"
+    );
+}
+
+#[test]
+fn test_colliders_field_parses_on_prefab() {
+    // A prefab with colliders: [...] must deserialise cleanly, including multiple entries.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "chest": (
+                    kind: "prop",
+                    model: "chest_key",
+                    components: (),
+                    colliders: [
+                        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
+                        (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    let chest = &catalog.prefabs["chest"];
+    assert_eq!(chest.colliders.len(), 2, "two collider shapes");
+    assert_eq!(chest.colliders[0].shape, "Cuboid");
+    assert_eq!(chest.colliders[0].size, Some((0.70, 0.55, 1.00)));
+    assert_eq!(chest.colliders[1].offset, (0.0, 0.275, 0.0));
+}
+
+#[test]
+fn test_nested_actor_in_composite_validates_ok() {
+    // kind:"actor" (e.g. an NPC) nested inside a composite primitive must pass validation.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "npc_guard": (
+                    kind: "actor",
+                    model: "guard_glb_key",
+                    components: (),
+                ),
+                "guard_post": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( shape: "Cuboid", primitive: (size: Some((2.0, 0.1, 2.0))) ),
+                        ( prefab: Some("npc_guard"), offset: (0.0, 0.1, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(
+        catalog.validate().is_ok(),
+        "kind:\"actor\" nested inside kind:\"primitive\" must validate OK"
+    );
+}
+
+#[test]
+fn test_nested_single_shape_primitive_validates_ok() {
+    // A kind:"primitive" with a top-level model (no children) referenced as a nested child
+    // must pass validation — the spawner will build a single mesh for it.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "beacon": (
+                    kind: "primitive",
+                    model: "Sphere",
+                    components: (),
+                    primitive: Some((radius: Some(0.3))),
+                ),
+                "outpost": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( shape: "Cuboid", primitive: (size: Some((4.0, 0.1, 4.0))) ),
+                        ( prefab: Some("beacon"), offset: (0.0, 1.5, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(
+        catalog.validate().is_ok(),
+        "single-shape primitive nested inside composite must validate OK"
+    );
+}
+
+#[test]
+fn test_colliders_empty_list_is_valid() {
+    // colliders: [] (empty) must parse and validate — it means "no physics collider".
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "ghost_prop": (
+                    kind: "prop",
+                    model: "some_key",
+                    components: (),
+                    colliders: [],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    assert_eq!(catalog.prefabs["ghost_prop"].colliders.len(), 0);
+}
+
+#[test]
+fn test_composite_child_physics_true_validates_ok() {
+    // An inline primitive child with physics: true inside a composite must validate.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "platform": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        (
+                            shape: "Cuboid",
+                            primitive: (
+                                size: Some((4.0, 0.2, 4.0)),
+                                physics: true,
+                            ),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    assert!(catalog.prefabs["platform"].children[0].primitive.physics);
+}
+
+#[test]
+fn test_nested_glb_with_colliders_inside_composite_validates_ok() {
+    // A kind:"prop" with colliders: [...] referenced as a nested child must validate.
+    // This is the intersection of GLB nesting (Feature 1) and colliders (Feature 2).
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "crate": (
+                    kind: "prop",
+                    model: "crate_glb",
+                    components: (),
+                    colliders: [
+                        (shape: "Cuboid", size: Some((0.8, 0.8, 0.8))),
+                    ],
+                ),
+                "storage_room": (
+                    kind: "primitive",
+                    model: "",
+                    components: (),
+                    children: [
+                        ( shape: "Cuboid", primitive: (size: Some((5.0, 0.1, 5.0))), ),
+                        ( prefab: Some("crate"), offset: (1.0, 0.0, 0.0) ),
+                        ( prefab: Some("crate"), offset: (-1.0, 0.0, 0.0) ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(
+        catalog.validate().is_ok(),
+        "GLB prop with colliders nested inside composite must validate OK"
+    );
+    assert_eq!(catalog.prefabs["crate"].colliders.len(), 1);
+}
+
+// ── PrefabComponents ──────────────────────────────────────────────────────────
+
+#[test]
+fn test_sounds_map_parses() {
+    // sounds: { "event": "catalog_key" } must round-trip cleanly.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "hero": (
+                    kind: "actor",
+                    model: "hero_glb",
+                    components: (
+                        sounds: {
+                            "jump":    "jump_sfx",
+                            "collect": "coin_sfx",
+                            "death":   "death_sfx",
+                        },
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    let sounds = &catalog.prefabs["hero"].components.sounds;
+    assert_eq!(sounds.len(), 3);
+    assert_eq!(sounds["jump"], "jump_sfx");
+    assert_eq!(sounds["collect"], "coin_sfx");
+    assert_eq!(sounds["death"], "death_sfx");
+}
+
+#[test]
+fn test_jump_relative_to_height_parses() {
+    // RelativeToHeight is the variant used by most prefabs; only Fixed was previously covered.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    components: (
+                        tags: ["player"],
+                        movement: (
+                            walk_speed: 5.5,
+                            run_speed: 10.0,
+                            jump: Some(RelativeToHeight(percent: 100.0)),
+                            double_jump: true,
+                            double_jump_height: Some(RelativeToHeight(percent: 60.0)),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    let mv = &catalog.prefabs["player"].components.movement;
+    assert!(matches!(mv.jump, Some(JumpConfig::RelativeToHeight { percent }) if percent == 100.0));
+    assert!(matches!(mv.double_jump_height, Some(JumpConfig::RelativeToHeight { percent }) if percent == 60.0));
+}
+
+#[test]
+fn test_npc_def_full_parses() {
+    // Full NpcDef with all fields — round-trip every required and optional field.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "orc_patrol": (
+                    kind: "actor",
+                    model: "orc_glb",
+                    components: (
+                        npc: Some((
+                            faction: Hostile,
+                            on_player_near: Chase,
+                            detection_radius: 8.0,
+                            chase_radius: 20.0,
+                            fov_degrees: Some(110.0),
+                            requires_los: true,
+                            approach_distance: 1.5,
+                            patrol_speed: 2.5,
+                            chase_speed: 5.0,
+                            patrol_waypoints: [
+                                (5.0, 0.0, 0.0),
+                                (5.0, 0.0, 10.0),
+                            ],
+                        )),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    let npc = catalog.prefabs["orc_patrol"].components.npc.as_ref().expect("npc should be Some");
+    assert_eq!(npc.faction, NpcFaction::Hostile);
+    assert_eq!(npc.on_player_near, NpcOnPlayerNear::Chase);
+    assert_eq!(npc.detection_radius, 8.0);
+    assert_eq!(npc.chase_radius, 20.0);
+    assert_eq!(npc.fov_degrees, Some(110.0));
+    assert!(npc.requires_los);
+    assert_eq!(npc.approach_distance, 1.5);
+    assert_eq!(npc.patrol_speed, 2.5);
+    assert_eq!(npc.chase_speed, 5.0);
+    assert_eq!(npc.patrol_waypoints.len(), 2);
+    assert_eq!(npc.patrol_waypoints[0], (5.0, 0.0, 0.0));
+}
+
+#[test]
+fn test_npc_def_minimal_uses_defaults() {
+    // Only required fields set — defaulted fields must resolve to their documented values.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "friendly_npc": (
+                    kind: "actor",
+                    model: "villager_glb",
+                    components: (
+                        npc: Some((
+                            faction: Friendly,
+                            on_player_near: Interact,
+                            detection_radius: 5.0,
+                            chase_radius: 10.0,
+                        )),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok());
+    let npc = catalog.prefabs["friendly_npc"].components.npc.as_ref().unwrap();
+    assert_eq!(npc.faction, NpcFaction::Friendly);
+    assert_eq!(npc.on_player_near, NpcOnPlayerNear::Interact);
+    assert_eq!(npc.fov_degrees, None);       // default: 360° awareness
+    assert!(!npc.requires_los);              // default: no LOS check
+    assert_eq!(npc.approach_distance, 2.0); // default_approach_distance()
+    assert_eq!(npc.patrol_speed, 2.0);      // default_patrol_speed()
+    assert_eq!(npc.chase_speed, 4.5);       // default_chase_speed()
+    assert!(npc.patrol_waypoints.is_empty()); // default: idle
+}
+
+#[test]
+fn test_npc_all_faction_and_behavior_variants_parse() {
+    // Verify every NpcFaction and NpcOnPlayerNear variant deserialises without error.
+    let cases = [
+        ("Friendly", "Interact"),
+        ("Hostile",  "Chase"),
+        ("Neutral",  "Flee"),
+        ("Neutral",  "Alert"),
+    ];
+    for (faction, behavior) in cases {
+        let ron_str = format!(r#"
+            (
+                schema_version: 1,
+                prefabs: {{
+                    "npc": (
+                        kind: "actor",
+                        model: "m",
+                        components: (
+                            npc: Some((
+                                faction: {faction},
+                                on_player_near: {behavior},
+                                detection_radius: 5.0,
+                                chase_radius: 10.0,
+                            )),
+                        ),
+                    ),
+                }},
+            )
+        "#);
+        let catalog: PrefabCatalog = from_str(&ron_str)
+            .unwrap_or_else(|e| panic!("faction={faction} behavior={behavior} failed to parse: {e}"));
+        assert!(catalog.validate().is_ok(),
+            "faction={faction} behavior={behavior} failed validate()");
+    }
 }

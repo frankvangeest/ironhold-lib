@@ -57,7 +57,14 @@ No assets should be hardcoded in the runtime. All assets should be defined in th
 
 ## Composite and nested prefab spawning
 
-`runtime/scene_manager/scene_loader.rs` contains a free function `spawn_primitive_children` that handles both **inline primitive children** and **nested prefab references** (`ChildPrimitiveDef.prefab`). It takes a `ChildSpawnCtx` struct (split-out asset refs from `SceneMaterialParams`) and recurses into referenced prefabs via the `PrefabCatalog`.
+`runtime/scene_manager/scene_loader.rs` contains a free function `spawn_primitive_children` that handles both **inline primitive children** and **nested prefab references** (`ChildPrimitiveDef.prefab`). It takes a `ChildSpawnCtx` struct (split-out asset refs from `SceneMaterialParams` plus the GLB-dispatch refs) and recurses into referenced prefabs via the `PrefabCatalog`.
+
+When a nested prefab reference is resolved, the spawner dispatches on `nested_prefab.kind`:
+- **`"primitive"` with `children`** — spawns an anchor entity, recurses into children (existing path).
+- **`"primitive"` with no `children`** — spawns an anchor + one mesh child using `build_primitive_mesh`.
+- **`"actor"` / `"prop"`** — calls `spawn_prefab_instance` with the resolved GLB model path; the returned entity is parented directly under the composite parent at the child `offset`/`rotation_euler_deg`/`scale`.
+
+**`ChildSpawnCtx<'a>`** fields: `meshes`, `standard`, `built_mats`, `custom_mats`, `primitive_default_color` (material/mesh refs) plus `asset_server`, `model_spawner`, `fixes`, `asset_catalog`, `project_root` (needed for GLB dispatch).
 
 - Cycle detection and depth limit (8 levels) are enforced inside `spawn_primitive_children`.
 - Cycle detection at **load time** is in `PrefabCatalog::validate()` (DFS via `prefab_has_cycle()`).

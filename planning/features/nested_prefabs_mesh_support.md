@@ -1,6 +1,6 @@
 # Feature: Nested Prefabs — Mesh Support
 
-_Status: Draft_
+_Status: Done_
 _Planned at: `a173f8d` (2026-05-01)_
 
 ## What
@@ -75,18 +75,18 @@ typo in the RON.
 
 ## Tasks
 
-- [ ] Extend `ChildSpawnCtx` with the additional refs needed for GLB dispatch
+- [x] Extend `ChildSpawnCtx` with the additional refs needed for GLB dispatch
       (`AssetCatalog`, `AssetServer`, `ModelSpawner`, `MergedModelFixes`, `project_root`)
-- [ ] In `spawn_primitive_children`, after spawning the anchor, dispatch on `nested_prefab.kind`:
-  - [ ] `"primitive"` + no `children` → single-mesh branch
-  - [ ] `"actor"` / `"prop"` → GLB branch via `model_spawner.spawn`
-- [ ] Update both call sites in `spawn_scene_v2` to pass the new context fields
-- [ ] Add a `kind: "prop"` prefab to the `primitive_world` demo (e.g., a shared GLB tree) and
+- [x] In `spawn_primitive_children`, after spawning the anchor, dispatch on `nested_prefab.kind`:
+  - [x] `"primitive"` + no `children` → single-mesh branch
+  - [x] `"actor"` / `"prop"` → GLB branch via `spawn_prefab_instance`
+- [x] Update both call sites in `spawn_scene_v2` to pass the new context fields
+- [x] Add a `kind: "prop"` prefab (`rock_deco`) to the `primitive_world` demo and
       nest it inside `"village"` to exercise the new path end-to-end
-- [ ] Update `docs/20_data_formats.md` — remove the "Current limitation" warning box; update
+- [x] Update `docs/20_data_formats.md` — remove the "Current limitation" warning box; update
       the nested prefab section to document all three kinds
-- [ ] Update `crates/ironhold_core/src/CLAUDE.md` — note GLB dispatch in the spawner helper
-- [ ] Add a `ron_validation.rs` test: a catalog with a `kind: "actor"` prefab referenced as a
+- [x] Update `crates/ironhold_core/src/CLAUDE.md` — note GLB dispatch in the spawner helper
+- [x] Add a `ron_validation.rs` test: a catalog with a `kind: "actor"` prefab referenced as a
       nested child validates OK (schema allows it even before runtime wires it up)
 
 ## Acceptance criteria

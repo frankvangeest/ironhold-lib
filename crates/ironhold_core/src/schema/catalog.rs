@@ -191,6 +191,34 @@ pub struct PrefabDef {
     /// `entity.entered:{id}` / `entity.exited:{id}` on player overlap.
     #[serde(default)]
     pub trigger_zone: Option<TriggerZoneDef>,
+    /// One or more static physics colliders for `kind: "actor"` / `kind: "prop"` prefabs.
+    /// All shapes are combined into a single Rapier compound `RigidBody::Fixed` so the player
+    /// can stand on or collide with the GLB without primitive wrappers. Use multiple entries
+    /// to approximate curved geometry (arches, irregular props) or multi-part shapes (chest lid
+    /// + base). An empty list means no physics collider is attached.
+    #[serde(default)]
+    pub colliders: Vec<ColliderDef>,
+}
+
+/// One physics collider shape in a `PrefabDef.colliders` list.
+/// All geometry fields are optional; reasonable defaults apply.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ColliderDef {
+    /// `"Cuboid"`, `"Sphere"`, or `"Cylinder"`.
+    pub shape: String,
+    /// Half-extents override for Cuboid: `(width, height, depth)` in world units.
+    #[serde(default)]
+    pub size: Option<(f32, f32, f32)>,
+    /// Radius for Sphere / Cylinder.
+    #[serde(default)]
+    pub radius: Option<f32>,
+    /// Total height for Cylinder.
+    #[serde(default)]
+    pub height: Option<f32>,
+    /// Local-space offset of this shape from the entity origin.
+    #[serde(default)]
+    pub offset: (f32, f32, f32),
 }
 
 /// Continuous transform animation for a prefab entity.
