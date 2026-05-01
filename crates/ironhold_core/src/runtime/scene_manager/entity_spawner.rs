@@ -240,7 +240,6 @@ pub(crate) fn spawn_player_entity(
             // at the feet and only needs a short distance to detect the ground below.
             collider_radius: cap_radius,
             ground_cast_length: 0.3,
-            jump_sound: player_config.jump_sound.clone(),
         },
         LocomotionState::default(),
         AnimationRequests::default(),

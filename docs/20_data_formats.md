@@ -406,7 +406,6 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
           collider_radius: 0.35,
           collider_height: 1.75,
         ),
-        sounds: { "jump": "jump_sfx" },
       ),
     ),
     "prop_anvil": (
@@ -431,7 +430,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
 | `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
-| `components.sounds` | `HashMap<String, String>` | Map from event key to `AssetCatalog` audio key. `"jump"` plays on every player jump. |
+| `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound("sfx_jump")`). |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
@@ -500,9 +499,11 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 - `Fixed(height: <f32>)` — absolute world-space height in metres (e.g. `Fixed(height: 2.5)`)
 - `RelativeToHeight(percent: <f32>)` — fraction of the player's own height (e.g. `RelativeToHeight(percent: 100)`)
 
-**Jump sound** — add `"jump"` to `components.sounds` to play a catalog audio key on every jump:
+**Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
-sounds: { "jump": "sfx_jump" }
+on: [
+  (event: "player.jumped", do_actions: [PlaySound("sfx_jump")]),
+]
 ```
 
 ### Primitive shapes ✅

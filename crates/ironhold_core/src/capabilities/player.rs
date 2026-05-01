@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::schema::player::InputMap;
-use crate::schema::Action;
 use crate::runtime::messages::*;
-use crate::runtime::actions::ActionQueue;
 use std::collections::HashMap;
 
 use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
@@ -26,16 +24,9 @@ pub struct CharacterController {
     /// Maximum jumps per airborne period: 1 = normal, 2 = double jump.
     pub max_jumps: u8,
     /// Radius of the ground-detection sphere cast (= capsule radius).
-    /// The cast sweeps a ball of this size downward from the entity origin (feet),
-    /// matching the capsule's bottom hemisphere footprint for slope-robust detection.
     pub collider_radius: f32,
     /// How far below the feet the ground-detection sphere is swept each frame.
-    /// Large enough to handle rough/sloped terrain; small enough that `is_grounded`
-    /// goes false quickly after a jump.
     pub ground_cast_length: f32,
-    /// Asset-catalog audio key to play when the player jumps (e.g. `"jump"`).
-    /// `None` = silent. Resolved through `Action::PlaySound` → catalog lookup.
-    pub jump_sound: Option<String>,
 }
 
 pub fn player_movement_system(
@@ -51,7 +42,7 @@ pub fn player_movement_system(
         &mut AnimationRequests,
     )>,
     rapier_context: Option<ReadRapierContext>,
-    mut action_queue: ResMut<ActionQueue>,
+    mut game_events: MessageWriter<GameEvent>,
 ) {
     let mut actions = HashMap::new();
     for event in input_events.read() {
@@ -166,13 +157,11 @@ pub fn player_movement_system(
             } else {
                 controller.jump_velocity
             };
-            info!("Jump triggered (jumps_used={})! velocity_y={:.2}", controller.jumps_used, vel);
+            debug!("Jump triggered (jumps_used={}) velocity_y={:.2}", controller.jumps_used, vel);
             velocity.linvel.y = vel;
             controller.jumps_used += 1;
             requests.queue.push_back("jump_enter".to_string());
-            if let Some(key) = &controller.jump_sound {
-                action_queue.push(Action::PlaySound(key.clone()));
-            }
+            game_events.write(GameEvent::Trigger("player.jumped".to_string()));
         }
     }
 }

@@ -26,6 +26,7 @@
             exit_actions:  [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:toggle_map", do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
+                ( event: "player.jumped",               do_actions: [ PlaySound("jump") ] ),
 
                 // Coin collectibles — each fires Despawn + sound + score + small health restore.
                 // Picking up coins is the only way to recover health in the field.

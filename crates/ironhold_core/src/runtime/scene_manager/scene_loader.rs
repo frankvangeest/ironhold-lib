@@ -502,7 +502,6 @@ pub fn spawn_scene_v2(
                     inputs: default_input_map(),
                     animation_policy,
                     movement: prefab.components.movement.clone(),
-                    jump_sound: prefab.components.sounds.get("jump").cloned(),
                 });
             } else {
                 let parent = spawn_prefab_instance(
@@ -586,7 +585,6 @@ pub fn spawn_scene_v2(
                         // Entity origin is the feet / ground-contact point. The sphere
                         // cast starts at feet; 0.3 m covers rough and sloped terrain.
                         ground_cast_length: 0.3,
-                        jump_sound: components.sounds.get("jump").cloned(),
                     },
                     LocomotionState::default(),
                     AnimationRequests::default(),

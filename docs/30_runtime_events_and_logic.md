@@ -95,11 +95,17 @@ Scene lifecycle events fire in this order:
 
 **Why:** data-defined flows (menus → loading → gameplay) need stable hooks at each stage.
 
-#### 4) GameEvent / Trigger 🟡
+#### 4) GameEvent / Trigger ✅
 Physics sensors and gameplay capabilities emit named triggers via `GameEvent::Trigger(String)`.
 The name is used as-is in the rules pipeline — the caller is responsible for namespacing:
+- `"player.jumped"` — emitted by `CharacterController` on every successful jump ✅
 - `"entity.collected:<id>"` — collectible sensor overlap ✅
-- `"zone.entered:<id>"` — trigger zone entry 🧭
+- `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
+- `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
+- `"entity.interacted:<id>"` — player within radius + pressed F ✅
+- `"npc.player_spotted:<id>"` — NPC entered alert state after detecting player ✅
+- `"npc.player_reached:<id>"` — NPC reached the player's position ✅
+- `"npc.player_lost:<id>"` — NPC lost sight of player and returned to idle ✅
 - `"collision.hit:<id>"` — impact event 🧭
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
@@ -363,6 +369,7 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 
 | Capability | PrefabDef field | Emitted event | Notes |
 |---|---|---|---|
+| `CharacterController` | `components.movement` | `player.jumped` | Emitted on every jump; bind sound/effect in `state_machine.ron` |
 | `TriggerZone` | `trigger_zone: Some(( radius: 2.0 ))` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
 | `Interactable` | `interactable: Some(( radius: 2.5 ))` | `entity.interacted:{id}` | Player within radius + press F; runs in `Update` |
 

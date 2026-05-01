@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
 use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
-use ironhold_core::capabilities::player::CharacterController;
+use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
@@ -143,7 +143,6 @@ fn test_input_abstraction_flow() {
             max_jumps: 1,
             collider_radius: 0.4,
             ground_cast_length: 0.3,
-            jump_sound: None,
         },
         LocomotionState::default(),
         AnimationRequests::default(),
@@ -2298,4 +2297,101 @@ fn test_increment_variable_on_non_numeric_string_treats_as_zero() {
         Some("5"),
         "IncrementVariable on a non-numeric value must treat the current value as 0"
     );
+}
+
+#[test]
+fn test_player_jump_emits_game_event() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Spawn a minimal player entity; no Rapier context → is_grounded defaults to true each frame.
+    let entity = app.world_mut().spawn((
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        CharacterController {
+            walk_speed: 10.0,
+            run_speed: 20.0,
+            rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(),
+                backward: "KeyS".to_string(),
+                left: "KeyA".to_string(),
+                right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(),
+                strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(),
+                run: "ShiftLeft".to_string(),
+            },
+            is_running: false,
+            jump_velocity: 5.94,
+            double_jump_enabled: false,
+            double_jump_velocity: 5.94,
+            jumps_used: 0,
+            max_jumps: 1,
+            collider_radius: 0.4,
+            ground_cast_length: 0.3,
+        },
+        LocomotionState::default(),
+        AnimationRequests::default(),
+        ActiveOverride::default(),
+        AnimationPolicyComponent(AnimationPolicy {
+            base: BaseAnimations {
+                idle: "idle".to_string(),
+                walk: "walk".to_string(),
+                run: "run".to_string(),
+                jump_loop: "idle".to_string(),
+            },
+            clips: std::collections::HashMap::new(),
+            overrides: vec![],
+            default_transition_ms: None,
+        }),
+        AnimationController {
+            current: "idle".to_string(),
+            last_played: String::new(),
+            gltf_path: String::new(),
+            gltf_handle: Default::default(),
+            node_indices: Default::default(),
+            graph_initialized: false,
+            transition_ms: 0,
+            should_loop: true,
+        },
+        bevy_rapier3d::prelude::RigidBody::Dynamic,
+        bevy_rapier3d::prelude::Velocity::zero(),
+    )).id();
+
+    // RapierPhysicsPlugin runs (even in integration tests, cfg(test) does not apply to lib
+    // dependencies) and spawns a DefaultRapierContext entity.  With no physics simulation
+    // running, cast_shape always returns None → is_grounded=false → no jump.
+    // Remove that entity so player_movement_system falls into its headless else-branch
+    // (is_grounded=true), letting us exercise the jump code path without a physics world.
+    {
+        use bevy_rapier3d::plugin::context::DefaultRapierContext;
+        let rapier_entity = app.world_mut()
+            .query_filtered::<Entity, With<DefaultRapierContext>>()
+            .iter(app.world())
+            .next();
+        if let Some(e) = rapier_entity {
+            app.world_mut().despawn(e);
+        }
+    }
+
+    // Write InputActionMessage directly — bypasses input_translator and FixedUpdate timing.
+    app.world_mut()
+        .resource_mut::<Messages<InputActionMessage>>()
+        .write(InputActionMessage { entity, action: InputAction::Jump(true) });
+
+    // Run player_movement_system with a fresh MessageCursor (sees the Jump message).
+    // GameEvent is written to messages_b synchronously inside the system.
+    app.world_mut().run_system_once(player_movement_system).unwrap();
+
+    // Verify upward velocity was applied.
+    let vel = app.world().entity(entity).get::<bevy_rapier3d::prelude::Velocity>().unwrap();
+    assert!(vel.linvel.y > 0.0, "Expected upward velocity after jump, got {}", vel.linvel.y);
+
+    // Verify GameEvent::Trigger("player.jumped") is in the current-frame buffer.
+    let has_jumped = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "player.jumped"));
+    assert!(has_jumped, "Expected GameEvent::Trigger(\"player.jumped\") in messages after jump");
 }

@@ -17,10 +17,6 @@ pub struct PlayerConfig {
     /// Movement tuning read from `prefab.components.movement`.
     #[serde(default)]
     pub movement: MovementConfig,
-
-    /// Asset catalog key for the jump sound, read from `prefab.components.sounds["jump"]`.
-    #[serde(default)]
-    pub jump_sound: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -833,7 +833,9 @@ fn test_prefab_catalog_with_player_movement_parses() {
 
 #[test]
 fn test_glb_player_prefab_with_movement_parses() {
-    // GLB player (kind: "actor") — collider_radius/collider_height override capsule shape
+    // GLB player (kind: "actor") — collider_radius/collider_height override capsule shape.
+    // sounds map is still valid on PrefabComponents; designers use it in state_machine.ron
+    // to wire player.jumped → PlaySound rather than hardcoding it in Rust.
     let ron_str = r#"
         (
             schema_version: 1,
@@ -852,7 +854,6 @@ fn test_glb_player_prefab_with_movement_parses() {
                             collider_radius: 0.35,
                             collider_height: 1.75,
                         ),
-                        sounds: { "jump": "jump_sfx" },
                     ),
                 ),
             },
@@ -866,10 +867,6 @@ fn test_glb_player_prefab_with_movement_parses() {
     assert!(mv.double_jump);
     assert!((mv.collider_radius.unwrap() - 0.35).abs() < 0.001);
     assert!((mv.collider_height.unwrap() - 1.75).abs() < 0.001);
-    assert_eq!(
-        catalog.prefabs["player_warrior"].components.sounds.get("jump").map(|s| s.as_str()),
-        Some("jump_sfx"),
-    );
 }
 
 // ── Nested-prefab children ────────────────────────────────────────────────────
