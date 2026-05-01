@@ -316,5 +316,6 @@ pub(crate) fn default_input_map() -> InputMap {
         strafe_right: "KeyE".to_string(),
         jump: "Space".to_string(),
         run: "ShiftLeft".to_string(),
+        interact: "KeyF".to_string(),
     }
 }

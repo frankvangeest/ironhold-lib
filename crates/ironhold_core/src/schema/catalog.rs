@@ -184,7 +184,8 @@ pub struct PrefabDef {
     #[serde(default)]
     pub behavior: Option<String>,
     /// When set, the entity emits `entity.interacted:{id}` when the player is within
-    /// `radius` metres and presses the interact key (default: F).
+    /// `radius` metres and presses the interact key (configured via `inputs.interact` in
+    /// the player prefab; default: `"KeyF"`).
     #[serde(default)]
     pub interactable: Option<InteractableDef>,
     /// When set, a Rapier sensor collider is spawned and the entity emits
@@ -237,7 +238,8 @@ pub struct MotionDef {
 }
 
 /// Configuration for the Interactable capability.
-/// Emits `entity.interacted:{id}` when the player is within `radius` metres and presses F.
+/// Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the
+/// interact key (configured via `inputs.interact` in the player prefab; default: `"KeyF"`).
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct InteractableDef {

@@ -100,7 +100,7 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `GameEvent::Trigger("entity.exited:{id}")` on player exit
 
 `Interactable` — set `interactable: Some((radius: 2.5))` on a `PrefabDef`. No collider needed. Emits:
-- `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses F
+- `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses the interact key (configured via `inputs.interact` in the player prefab, default `"KeyF"`)
 
 `interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
 

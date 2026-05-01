@@ -102,7 +102,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"entity.collected:<id>"` — collectible sensor overlap ✅
 - `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
-- `"entity.interacted:<id>"` — player within radius + pressed F ✅
+- `"entity.interacted:<id>"` — player within radius + pressed the interact key (default: `"KeyF"`; override via `inputs.interact` on the player prefab) ✅
 - `"npc.player_spotted:<id>"` — NPC entered alert state after detecting player ✅
 - `"npc.player_reached:<id>"` — NPC reached the player's position ✅
 - `"npc.player_lost:<id>"` — NPC lost sight of player and returned to idle ✅
@@ -371,7 +371,7 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 |---|---|---|---|
 | `CharacterController` | `components.movement` | `player.jumped` | Emitted on every jump; bind sound/effect in `state_machine.ron` |
 | `TriggerZone` | `trigger_zone: Some(( radius: 2.0 ))` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
-| `Interactable` | `interactable: Some(( radius: 2.5 ))` | `entity.interacted:{id}` | Player within radius + press F; runs in `Update` |
+| `Interactable` | `interactable: Some(( radius: 2.5 ))` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
 
 ### System ordering
 

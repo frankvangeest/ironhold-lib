@@ -5,8 +5,8 @@ use crate::runtime::scene_manager::SpawnId;
 
 /// Marks an entity as player-interactable.
 ///
-/// When the player is within `radius` metres and presses the interact key (default: F),
-/// the system emits:
+/// When the player is within `radius` metres and presses the interact key (configured via
+/// `inputs.interact` in the player prefab, default: `"KeyF"`), the system emits:
 ///   `GameEvent::Trigger("entity.interacted:{spawn_id}")`
 ///
 /// The response is configured in RON — either in `rules.ron`, `state_machine.ron`,
@@ -21,20 +21,22 @@ pub struct Interactable {
 }
 
 /// Checks each frame whether the player is within range of any `Interactable` entity
-/// and the interact key (F) was just pressed. Runs in `Update`.
+/// and the interact key was just pressed. The interact key is read from the player's
+/// `InputMap.interact` field (default: `"KeyF"`). Runs in `Update`.
 pub fn interactable_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    player_query: Query<&Transform, With<CharacterController>>,
+    player_query: Query<(&Transform, &CharacterController)>,
     interactables: Query<(&Transform, &SpawnId, &Interactable)>,
     mut game_events: MessageWriter<GameEvent>,
 ) {
-    if !keyboard_input.just_pressed(KeyCode::KeyF) {
+    let Ok((player_transform, controller)) = player_query.single() else { return };
+    let Some(interact_key) = controller.inputs.key("interact") else { return };
+    if !keyboard_input.just_pressed(interact_key) {
         return;
     }
-    let Ok(player_pos) = player_query.single() else { return };
 
     for (transform, spawn_id, interactable) in &interactables {
-        let dist = player_pos.translation.distance(transform.translation);
+        let dist = player_transform.translation.distance(transform.translation);
         if dist <= interactable.radius {
             info!("Interacted with: {}", spawn_id.0);
             game_events.write(GameEvent::Trigger(format!(

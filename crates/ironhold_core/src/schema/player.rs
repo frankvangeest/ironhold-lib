@@ -40,10 +40,16 @@ pub struct InputMap {
     pub jump: String,
     #[serde(default = "default_run_key")]
     pub run: String,
+    #[serde(default = "default_interact_key")]
+    pub interact: String,
 }
 
 fn default_run_key() -> String {
     "ShiftLeft".to_string()
+}
+
+fn default_interact_key() -> String {
+    "KeyF".to_string()
 }
 
 impl InputMap {
@@ -57,6 +63,7 @@ impl InputMap {
             "strafe_right" => &self.strafe_right,
             "jump" => &self.jump,
             "run" => &self.run,
+            "interact" => &self.interact,
             _ => return None,
         };
         Self::parse_key(s)

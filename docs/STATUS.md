@@ -55,7 +55,7 @@ _Last updated: 2026‑04‑17_
 | NPC AI                      |   ✅   | `NpcAgent` component; states: Idle → Patrol → Alerted → Chase/Flee/Interact → Return. FOV + optional Rapier line-of-sight check. Emits `"npc.player_spotted:{id}"`, `"npc.player_reached:{id}"`, `"npc.player_lost:{id}"` triggers. |
 | Collectible triggers        |   ✅   | `Collectable` component on Rapier sensor; on player overlap emits `GameEvent::Trigger("entity.collected:{spawn_id}")`. Response (Despawn, IncrementVariable, etc.) is configured in RON. |
 | Trigger zones               |   ✅   | `TriggerZone` component + Rapier sensor; emits `entity.entered:{id}` / `entity.exited:{id}` on player enter/exit. Add via `trigger_zone` field on `PrefabDef`. |
-| Interactable entities       |   ✅   | `Interactable { radius }` component; when player is within `radius` metres and presses F, emits `entity.interacted:{id}`. Add via `interactable` field on `PrefabDef`. |
+| Interactable entities       |   ✅   | `Interactable { radius }` component; when player is within `radius` metres and presses the interact key (`inputs.interact` on the player prefab, default `"KeyF"`), emits `entity.interacted:{id}`. Add via `interactable` field on `PrefabDef`. |
 | Motion (rotate/bob)         |   ✅   | `Motion` component; world-space continuous rotation (per-axis rad/s) and sinusoidal vertical bob (amplitude, frequency). Runs in `Update`; purely visual. |
 | Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
@@ -105,7 +105,7 @@ _Last updated: 2026‑04‑17_
 ### Entity messages (Beta 0.4)
 - `entity.entered:{id}` — emitted by `TriggerZone` when the player enters the sensor collider
 - `entity.exited:{id}` — emitted by `TriggerZone` when the player exits the sensor collider
-- `entity.interacted:{id}` — emitted by `Interactable` when player is within `radius` metres and presses F
+- `entity.interacted:{id}` — emitted by `Interactable` when player is within `radius` metres and presses the interact key (`inputs.interact` on the player prefab, default `"KeyF"`)
 
 > New Messages/Actions **must** update this table and include examples + tests.
 
