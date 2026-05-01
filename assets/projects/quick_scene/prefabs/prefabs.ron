@@ -9,7 +9,7 @@
         movement: (walk_speed: 5.0, run_speed: 8.5),
         tags: ["player"],
       ),
-      animation_policy: Some("prefabs/animation/player_policy.ron"),
+      animation_policy: "prefabs/animation/player_policy.ron",
     ),
 
     "enemy_orc_melee": (
@@ -46,8 +46,8 @@
     "giant_npc": (
       kind: "actor",
       model: "hero",
-      material: Some("giant_green"),
-      animation_policy: Some("prefabs/animation/giant_npc_policy.ron"),
+      material: "giant_green",
+      animation_policy: "prefabs/animation/giant_npc_policy.ron",
       components: (
         tags: ["npc", "giant"],
       ),
@@ -56,7 +56,7 @@
     "prop_anvil": (
       kind: "prop",
       model: "anvil",
-      material: Some("wood_crate"),
+      material: "wood_crate",
       components: (
         tags: ["prop"],
       ),

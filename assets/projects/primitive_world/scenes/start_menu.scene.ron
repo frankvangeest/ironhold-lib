@@ -4,16 +4,16 @@
 
   tonemapping: AcesFitted,
 
-  lighting: Some((
-    ambient: Some((0.15, 0.18, 0.28)),
-    ambient_brightness: Some(60.0),
-    directional: Some((
+  lighting: (
+    ambient: (0.15, 0.18, 0.28),
+    ambient_brightness: 60.0,
+    directional: (
       color: (1.0, 0.90, 0.75),
       intensity: 12000.0,
       rotation_euler_deg: (-35.0, 40.0, 0.0),
       shadows_enabled: false,
-    )),
-  )),
+    ),
+  ),
 
   // Decorative primitives — no player, no terrain.
   entities: [
@@ -68,12 +68,12 @@
     ),
   ],
 
-  ui_panel: Some((
+  ui_panel: (
     background_color: (0.04, 0.04, 0.08, 0.88),
     padding: 36.0,
     gap: 18.0,
-    width: Some(340.0),
-  )),
+    width: 340.0,
+  ),
 
   ui: [
     (

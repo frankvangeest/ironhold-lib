@@ -1,22 +1,22 @@
 (
     schema_version: 3,
-    project_id: Some("custom_materials"),
-    display_name: Some("Custom Materials Demo"),
+    project_id: "custom_materials",
+    display_name: "Custom Materials Demo",
 
     initial_scene: "scenes/main.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    state_machine_path: Some("logic/state_machine.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 
-    global_environment: Some((
+    global_environment: (
         intensity: 1200.0,
-        fallback: Some((
+        fallback: (
             top_color: (0.18, 0.28, 0.60),
             bottom_color: (0.04, 0.04, 0.08),
-        )),
-    )),
+        ),
+    ),
 
     global_key_bindings: {
         "Escape": "quit",

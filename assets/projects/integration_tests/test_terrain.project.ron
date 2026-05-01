@@ -1,20 +1,20 @@
 (
     schema_version: 2,
-    project_id: Some("test_terrain"),
-    display_name: Some("Test Terrain"),
+    project_id: "test_terrain",
+    display_name: "Test Terrain",
 
     initial_scene: "scenes/terrain_test.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    rules_path: Some("logic/rules.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 
-    global_environment: Some((
+    global_environment: (
         intensity: 400.0,
-        fallback: Some((
+        fallback: (
             top_color: (0.1, 0.2, 0.4),
             bottom_color: (0.01, 0.01, 0.01),
-        )),
-    )),
+        ),
+    ),
 )

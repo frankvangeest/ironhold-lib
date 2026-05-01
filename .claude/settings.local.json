@@ -42,7 +42,8 @@
       "Bash(python tools/asset_checker/check.py:*)",
       "Bash(python tools/glb_preview/preview.py:*)",
       "Bash(git -C C:\\git\\rust\\ironhold-lib rev-parse --short HEAD)",
-      "Bash(git -C C:/git/rust/ironhold-lib rev-parse --short HEAD)"
+      "Bash(git -C C:/git/rust/ironhold-lib rev-parse --short HEAD)",
+      "Bash(python tools/migrate_implicit_some.py)"
     ]
   }
 }

@@ -5,7 +5,7 @@
     // Solid hot-pink unlit — the fallback colour made intentional
     "mat_unlit_pink": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        shader: "shared/shaders/custom_unlit_color.wgsl",
         colors: {
           "color_a": (r:1.0, g:0.08, b:0.58, a:1.0),
         },
@@ -16,7 +16,7 @@
     // Solid teal unlit
     "mat_unlit_teal": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        shader: "shared/shaders/custom_unlit_color.wgsl",
         colors: {
           "color_a": (r:0.0, g:0.85, b:0.75, a:1.0),
         },
@@ -29,7 +29,7 @@
     // tiling = 0.75 → ~6 cells across the r=4 sphere diameter (0.75 × 8 = 6).
     "mat_checker_bw_world": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker_world.wgsl"),
+        shader: "shared/shaders/custom_checker_world.wgsl",
         colors: {
           "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
           "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
@@ -44,7 +44,7 @@
     // Compare side-by-side with mat_checker_bw_world (world-space, seamless).
     "mat_checker_bw_uv": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker_uv.wgsl"),
+        shader: "shared/shaders/custom_checker_uv.wgsl",
         colors: {
           "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
           "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
@@ -60,7 +60,7 @@
     // three spheres side-by-side: UV seam, world grid offset, local centered.
     "mat_checker_bw_local": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker_local.wgsl"),
+        shader: "shared/shaders/custom_checker_local.wgsl",
         colors: {
           "color_a": (r:0.05, g:0.05, b:0.05, a:1.0),
           "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
@@ -75,7 +75,7 @@
     // align cleanly with the box faces. tiling = 4 → 4 checks per UV [0,1] range.
     "mat_checker_color": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_checker_uv.wgsl"),
+        shader: "shared/shaders/custom_checker_uv.wgsl",
         colors: {
           "color_a": (r:0.9, g:0.45, b:0.05, a:1.0),
           "color_b": (r:0.05, g:0.1,  b:0.45, a:1.0),
@@ -89,7 +89,7 @@
     // UV gradient: deep blue → sky
     "mat_gradient_sky": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        shader: "shared/shaders/custom_gradient.wgsl",
         colors: {
           "color_a": (r:0.04, g:0.04, b:0.25, a:1.0),
           "color_b": (r:0.45, g:0.72, b:1.0,  a:1.0),
@@ -100,7 +100,7 @@
     // UV gradient: ember glow
     "mat_gradient_ember": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        shader: "shared/shaders/custom_gradient.wgsl",
         colors: {
           "color_a": (r:0.6, g:0.0, b:0.0, a:1.0),
           "color_b": (r:1.0, g:0.8, b:0.0, a:1.0),
@@ -111,7 +111,7 @@
     // Fresnel rim: electric blue rim on dark base
     "mat_fresnel_blue": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_fresnel.wgsl"),
+        shader: "shared/shaders/custom_fresnel.wgsl",
         colors: {
           "color_a": (r:0.1, g:0.5, b:1.0,  a:1.0),
           "color_b": (r:0.05, g:0.05, b:0.1, a:1.0),
@@ -125,7 +125,7 @@
     // Fresnel rim: green energy on black
     "mat_fresnel_green": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_fresnel.wgsl"),
+        shader: "shared/shaders/custom_fresnel.wgsl",
         colors: {
           "color_a": (r:0.1, g:1.0, b:0.3,  a:1.0),
           "color_b": (r:0.0, g:0.05, b:0.0, a:1.0),
@@ -139,7 +139,7 @@
     // World-space stripes: red & white
     "mat_stripes_rw": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_world_stripes.wgsl"),
+        shader: "shared/shaders/custom_world_stripes.wgsl",
         colors: {
           "color_a": (r:0.9, g:0.1, b:0.1, a:1.0),
           "color_b": (r:0.95, g:0.95, b:0.95, a:1.0),
@@ -153,7 +153,7 @@
     // Normal visualizer — no colors needed
     "mat_normals": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_normal_vis.wgsl"),
+        shader: "shared/shaders/custom_normal_vis.wgsl",
       )),
     ),
 
@@ -174,7 +174,7 @@
     // Red plastic — dielectric, low-medium roughness
     "mat_pbr_plastic_red": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:0.85, g:0.08, b:0.08, a:1.0),
         },
@@ -188,7 +188,7 @@
     // White plastic — dielectric, smooth
     "mat_pbr_plastic_white": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:0.92, g:0.92, b:0.92, a:1.0),
         },
@@ -202,7 +202,7 @@
     // Chrome — fully metallic, near-mirror smooth
     "mat_pbr_metal_chrome": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:0.9, g:0.9, b:0.95, a:1.0),
         },
@@ -216,7 +216,7 @@
     // Brushed steel — fully metallic, rough
     "mat_pbr_metal_rough": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:0.6, g:0.62, b:0.65, a:1.0),
         },
@@ -230,7 +230,7 @@
     // Gold — metallic, warm colour, slight roughness
     "mat_pbr_gold": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:1.0, g:0.78, b:0.1, a:1.0),
         },
@@ -244,7 +244,7 @@
     // Water — dielectric, near-zero roughness, high reflectance
     "mat_pbr_water": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pbr.wgsl"),
+        shader: "shared/shaders/custom_pbr.wgsl",
         colors: {
           "base_color": (r:0.04, g:0.18, b:0.55, a:1.0),
         },
@@ -264,7 +264,7 @@
     // alpha_mode: Blend makes the surface partially see-through.
     "mat_emissive_shield": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        shader: "shared/shaders/custom_emissive_fresnel.wgsl",
         colors: {
           "base_color": (r:0.05, g:0.10, b:0.30, a:0.10),
           "rim_color":  (r:0.20, g:0.60, b:1.00, a:0.90),
@@ -282,7 +282,7 @@
     // alpha_mode: Add avoids depth-sorting issues for overlapping transparent meshes.
     "mat_emissive_orb_orange": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        shader: "shared/shaders/custom_emissive_fresnel.wgsl",
         colors: {
           "base_color": (r:0.50, g:0.20, b:0.00, a:0.00),
           "rim_color":  (r:1.00, g:0.55, b:0.10, a:1.00),
@@ -300,7 +300,7 @@
     // custom_unlit_color.wgsl — no new shader required for the simple case.
     "mat_emissive_plain": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+        shader: "shared/shaders/custom_unlit_color.wgsl",
         colors: {
           "color_a": (r:0.50, g:0.75, b:1.00, a:0.60),
         },
@@ -314,7 +314,7 @@
     // nearly vanishes at the bottom of each pulse.
     "mat_pulse_cyan": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        shader: "shared/shaders/custom_pulse.wgsl",
         colors: {
           "color": (r:0.10, g:0.90, b:1.00, a:1.00),
         },
@@ -331,7 +331,7 @@
     // looks better for a collectible or power indicator.
     "mat_pulse_gold": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        shader: "shared/shaders/custom_pulse.wgsl",
         colors: {
           "color": (r:1.00, g:0.82, b:0.10, a:1.00),
         },
@@ -350,7 +350,7 @@
     // texture with a completely different colour scheme.
     "mat_crate_tint_red": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: "shared/shaders/custom_texture_tint.wgsl",
         textures: {
           "texture_0": "shared/textures/wood_crate_albedo.png",
         },
@@ -363,7 +363,7 @@
     // Same texture, cool blue tint — same shader, different colour, zero extra cost.
     "mat_crate_tint_blue": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_tint.wgsl"),
+        shader: "shared/shaders/custom_texture_tint.wgsl",
         textures: {
           "texture_0": "shared/textures/wood_crate_albedo.png",
         },
@@ -379,7 +379,7 @@
     // World-space variant — sphere mesh has no clean UV seam; tiling in world units.
     "mat_dissolve_fire": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_dissolve_world.wgsl"),
+        shader: "shared/shaders/custom_dissolve_world.wgsl",
         colors: {
           "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
           "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
@@ -397,7 +397,7 @@
     // object. Completes the UV / World / Local trio alongside the checker set.
     "mat_dissolve_fire_local": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_dissolve_local.wgsl"),
+        shader: "shared/shaders/custom_dissolve_local.wgsl",
         colors: {
           "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
           "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
@@ -415,7 +415,7 @@
     // with mat_dissolve_fire (world-space) to show when the world variant is needed.
     "mat_dissolve_fire_uv": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_dissolve_uv.wgsl"),
+        shader: "shared/shaders/custom_dissolve_uv.wgsl",
         colors: {
           "base_color": (r:0.08, g:0.06, b:0.04, a:1.00),
           "edge_color":  (r:1.00, g:0.45, b:0.05, a:1.00),
@@ -441,7 +441,7 @@
     // Perlin noise — smooth organic variation; good for terrain height, fog, water ripples.
     "mat_noise_perlin": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar.wgsl",
         textures: {
           "texture_0": "shared/textures/noise/noise-perlin-512-r8.png",
         },
@@ -453,7 +453,7 @@
     // Voronoi noise — cellular/cracked pattern; good for scales, cracks, skin, rock faces.
     "mat_noise_voronoi": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar.wgsl",
         textures: {
           "texture_0": "shared/textures/noise/noise-voronoi-512-c12.png",
         },
@@ -465,7 +465,7 @@
     // Value noise — blocky low-frequency variation; good for roughness maps, smoke, clouds.
     "mat_noise_value": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar.wgsl",
         textures: {
           "texture_0": "shared/textures/noise/noise-value-512-r16.png",
         },
@@ -477,7 +477,7 @@
     // Gabor noise — directional grain/fibre pattern; good for wood grain, brushed metal, fabric.
     "mat_noise_gabor": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar.wgsl",
         textures: {
           "texture_0": "shared/textures/noise/noise-gabor-512-f008-a60-s12.png",
         },
@@ -490,7 +490,7 @@
     // shadow sample jitter, and alpha stippling.
     "mat_noise_blue": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar.wgsl",
         textures: {
           "texture_0": "shared/textures/noise/noise-blue-128.png",
         },
@@ -506,7 +506,7 @@
     // color_a → params_0 = horizon/bottom colour; color_b → params_1 = zenith colour.
     "mat_sky_gradient": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_gradient.wgsl"),
+        shader: "shared/shaders/custom_gradient.wgsl",
         colors: {
           "color_a": (r:0.52, g:0.70, b:0.88, a:1.0),   // horizon — pale sky blue
           "color_b": (r:0.03, g:0.10, b:0.48, a:1.0),   // zenith — deep blue
@@ -527,7 +527,7 @@
     // smooth brick faces from rough mortar joints.
     "mat_triplanar_bricks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
           "texture_1": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_normal.png",
@@ -543,7 +543,7 @@
     // the fine surface relief lost in the basecolor-only version.
     "mat_triplanar_rock": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
           "texture_1": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_normal.jpg",
@@ -559,7 +559,7 @@
     // exaggerates the ridge detail so it reads on the curved sphere surface.
     "mat_triplanar_bark": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
           "texture_1": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_normal.png",
@@ -574,7 +574,7 @@
     // Stylised marbel
     "mat_triplanar_marbel": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/White_Marble_006_SD/White_Marble_006_basecolor.png",
           "texture_1": "shared/textures/White_Marble_006_SD/White_Marble_006_normal.png",

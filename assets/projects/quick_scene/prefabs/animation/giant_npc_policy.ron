@@ -1,5 +1,5 @@
 (
-    default_transition_ms: Some(200),
+    default_transition_ms: 200,
 
     // All base locomotion clips point to Dance_Loop so the giant is always dancing.
     base: (

@@ -1,22 +1,22 @@
 (
     schema_version: 3,
-    project_id: Some("3rd_person_game_demo"),
-    display_name: Some("3rd Person Game Demo"),
+    project_id: "3rd_person_game_demo",
+    display_name: "3rd Person Game Demo",
 
     initial_scene: "scenes/start_menu.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    state_machine_path: Some("logic/state_machine.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 
-    global_environment: Some((
+    global_environment: (
         intensity: 400.0,
-        fallback: Some((
+        fallback: (
             top_color: (0.1, 0.2, 0.4),
             bottom_color: (0.01, 0.01, 0.01),
-        )),
-    )),
+        ),
+    ),
 
     global_key_bindings: {
         "Escape": "toggle_pause",

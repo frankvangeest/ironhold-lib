@@ -34,8 +34,8 @@
     "wood_crate": (
       kind: Standard((
         base_color: (r: 1.0, g: 1.0, b: 1.0, a: 1.0),
-        base_color_texture: Some("shared/textures/wood_crate_albedo.png"),
-        normal_map_texture: Some("shared/textures/wood_crate_normal.png"),
+        base_color_texture: "shared/textures/wood_crate_albedo.png",
+        normal_map_texture: "shared/textures/wood_crate_normal.png",
         metallic: 0.0,
         perceptual_roughness: 0.85,
         reflectance: 0.3,
@@ -49,7 +49,7 @@
     "foliage_leaves": (
       kind: Standard((
         base_color: (r: 1.0, g: 1.0, b: 1.0, a: 1.0),
-        base_color_texture: Some("shared/textures/leaves_albedo.png"),
+        base_color_texture: "shared/textures/leaves_albedo.png",
         normal_map_texture: None,
         metallic: 0.0,
         perceptual_roughness: 1.0,

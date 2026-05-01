@@ -2,14 +2,14 @@
   schema_version: 2,
   name: "options",
 
-  lighting: Some((
-    ambient: Some((0.3, 0.3, 0.35)),
-    directional: Some((
+  lighting: (
+    ambient: (0.3, 0.3, 0.35),
+    directional: (
       color: (1.0, 0.95, 0.85),
       intensity: 8000.0,
       rotation_euler_deg: (-30.0, 45.0, 0.0),
-    )),
-  )),
+    ),
+  ),
 
   entities: [],
 

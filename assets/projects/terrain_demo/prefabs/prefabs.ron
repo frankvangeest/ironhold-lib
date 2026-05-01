@@ -37,85 +37,85 @@
       kind: "primitive",
       model: "Cuboid",
       components: (),
-      primitive: Some((
-        size: Some((4.0, 4.0, 4.0)),
-        roughness: Some(0.4),
-      )),
+      primitive: (
+        size: (4.0, 4.0, 4.0),
+        roughness: 0.4,
+      ),
     ),
 
     "prim_sphere": (
       kind: "primitive",
       model: "Sphere",
       components: (),
-      primitive: Some((
-        radius: Some(3.0),
-        color: Some((0.9, 0.2, 0.2)),  // red — +X axis
-        roughness: Some(0.2),
-        metallic: Some(0.3),
-      )),
+      primitive: (
+        radius: 3.0,
+        color: (0.9, 0.2, 0.2),  // red — +X axis
+        roughness: 0.2,
+        metallic: 0.3,
+      ),
     ),
 
     "prim_cylinder": (
       kind: "primitive",
       model: "Cylinder",
       components: (),
-      primitive: Some((
-        radius: Some(2.0),
-        height: Some(5.0),
-        color: Some((0.9, 0.55, 0.1)),  // orange — −X axis
-        roughness: Some(0.6),
-      )),
+      primitive: (
+        radius: 2.0,
+        height: 5.0,
+        color: (0.9, 0.55, 0.1),  // orange — −X axis
+        roughness: 0.6,
+      ),
     ),
 
     "prim_capsule": (
       kind: "primitive",
       model: "Capsule3d",
       components: (),
-      primitive: Some((
-        radius: Some(1.5),
-        height: Some(9.0),
-        color: Some((0.2, 0.9, 0.2)),  // green — +Y axis
-        roughness: Some(0.5),
-      )),
+      primitive: (
+        radius: 1.5,
+        height: 9.0,
+        color: (0.2, 0.9, 0.2),  // green — +Y axis
+        roughness: 0.5,
+      ),
     ),
 
     "prim_cone": (
       kind: "primitive",
       model: "Cone",
       components: (),
-      primitive: Some((
-        radius: Some(2.5),
-        height: Some(5.0),
-        color: Some((0.1, 0.45, 0.1)),  // dark green — −Y axis
-        roughness: Some(0.7),
-      )),
+      primitive: (
+        radius: 2.5,
+        height: 5.0,
+        color: (0.1, 0.45, 0.1),  // dark green — −Y axis
+        roughness: 0.7,
+      ),
     ),
 
     "prim_torus": (
       kind: "primitive",
       model: "Torus",
       components: (),
-      primitive: Some((
-        radius: Some(2.5),             // outer radius
-        radius_top: Some(0.6),         // inner radius
-        color: Some((0.2, 0.4, 0.9)),  // blue — +Z axis
-        roughness: Some(0.3),
-        metallic: Some(0.5),
-      )),
+      primitive: (
+        radius: 2.5,             // outer radius
+        radius_top: 0.6,         // inner radius
+        color: (0.2, 0.4, 0.9),  // blue — +Z axis
+        roughness: 0.3,
+        metallic: 0.5,
+      ),
     ),
 
     "prim_frustum": (
       kind: "primitive",
       model: "ConicalFrustum",
       components: (),
-      primitive: Some((
-        radius: Some(2.5),             // bottom radius
-        radius_top: Some(1.0),         // top radius
-        height: Some(5.0),
-        color: Some((0.7, 0.2, 0.9)),  // purple — −Z axis
-        roughness: Some(0.4),
-        metallic: Some(0.2),
-      )),
+      primitive: (
+        radius: 2.5,             // bottom radius
+        radius_top: 1.0,         // top radius
+        height: 5.0,
+        color: (0.7, 0.2, 0.9),  // purple — −Z axis
+        roughness: 0.4,
+        metallic: 0.2,
+      ),
     ),
   }
 )

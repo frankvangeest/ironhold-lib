@@ -5,33 +5,33 @@
   // AcesFitted: cinematic, high-performance tonemapper. No LUT required.
   tonemapping: AcesFitted,
 
-  lighting: Some((
+  lighting: (
     // Cool sky fill — low enough to keep the primitive shapes well-contrasted.
-    ambient: Some((0.20, 0.24, 0.38)),
-    ambient_brightness: Some(90.0),
-    directional: Some((
+    ambient: (0.20, 0.24, 0.38),
+    ambient_brightness: 90.0,
+    directional: (
       // Bright sun from a side angle to catch the geometry of all seven primitives.
       color: (1.0, 0.94, 0.80),
       intensity: 32000.0,
       rotation_euler_deg: (-35.0, 45.0, 0.0),
       shadows_enabled: true,
-    )),
-  )),
+    ),
+  ),
 
-  terrain: Some((
+  terrain: (
     heightmap: "projects/terrain_demo/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
     // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
     // 1024×1024 heightmap × 0.5 = ~512×512 unit terrain; max elevation 30 units.
     scale: (0.5, 30.0, 0.5),
-    position: Some((0.0, -30.0, 0.0)),
+    position: (0.0, -30.0, 0.0),
     material_paths: [
       "shared/terrain/dirt.png",
       "shared/terrain/grass.png",
       "shared/terrain/rock.png",
       "shared/terrain/snow.png",
     ],
-  )),
+  ),
 
   spawn_points: {
     // Elevated diagonal corner giving a clear view of all seven primitive shapes.

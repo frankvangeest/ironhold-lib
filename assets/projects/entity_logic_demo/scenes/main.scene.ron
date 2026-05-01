@@ -4,16 +4,16 @@
 
   tonemapping: AcesFitted,
 
-  lighting: Some((
-    ambient: Some((0.22, 0.28, 0.38)),
-    ambient_brightness: Some(100.0),
-    directional: Some((
+  lighting: (
+    ambient: (0.22, 0.28, 0.38),
+    ambient_brightness: 100.0,
+    directional: (
       color: (1.0, 0.95, 0.80),
       intensity: 32000.0,
       rotation_euler_deg: (-45.0, 25.0, 0.0),
       shadows_enabled: true,
-    )),
-  )),
+    ),
+  ),
 
   spawn_points: {
     "player_start": (0.0, 0.5, 10.0),
@@ -53,7 +53,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+      label: ( text: "Press F", offset: (0.0, 1.5, 0.0) ),
     ),
     (
       id: "box_02",
@@ -63,7 +63,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+      label: ( text: "Press F", offset: (0.0, 1.5, 0.0) ),
     ),
     (
       id: "box_03",
@@ -73,7 +73,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some(( text: "Press F", offset: (0.0, 1.5, 0.0) )),
+      label: ( text: "Press F", offset: (0.0, 1.5, 0.0) ),
     ),
 
     // ── Score trigger zone ─────────────────────────────────────────────────
@@ -87,7 +87,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some(( text: "Score Zone\n+10 points\n2m radius", offset: (0.0, 1.5, 0.0) )),
+      label: ( text: "Score Zone\n+10 points\n2m radius", offset: (0.0, 1.5, 0.0) ),
     ),
   ],
 
@@ -99,8 +99,8 @@
       position: (16.0, 16.0),
       size: (200.0, 32.0),
       align: Left,
-      bind: Some("score"),
-      format: Some("Score: {}"),
+      bind: "score",
+      format: "Score: {}",
     ),
     (
       kind: "label",

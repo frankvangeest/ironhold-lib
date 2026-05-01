@@ -23,7 +23,7 @@
 
     "mat_bark": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png",
           "texture_1": "shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_normal.png",
@@ -37,7 +37,7 @@
 
     "mat_wood_planks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_basecolor.jpg",
           "texture_1": "shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_normal.jpg",
@@ -51,7 +51,7 @@
 
     "mat_stone_cobble": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Cobblestone_001_SD/Cobblestone_001_COLOR.jpg",
           "texture_1": "shared/textures/Cobblestone_001_SD/Cobblestone_001_NORM.jpg",
@@ -65,7 +65,7 @@
 
     "mat_stone_floor": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_basecolor.png",
           "texture_1": "shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_normal.png",
@@ -79,7 +79,7 @@
 
     "mat_stone_mossy": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_basecolor.png",
           "texture_1": "shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_normal.png",
@@ -93,7 +93,7 @@
 
     "mat_stone_bricks": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png",
           "texture_1": "shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_normal.png",
@@ -107,7 +107,7 @@
 
     "mat_wall_plaster": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_basecolor.png",
           "texture_1": "shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_normal.png",
@@ -121,7 +121,7 @@
 
     "mat_roof_tiles": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_basecolor.png",
           "texture_1": "shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_normal.png",
@@ -135,7 +135,7 @@
 
     "mat_thatched_roof": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_basecolor.png",
           "texture_1": "shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_normal.png",
@@ -149,7 +149,7 @@
 
     "mat_cliff_rock": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_texture_triplanar_pbr.wgsl"),
+        shader: "shared/shaders/custom_texture_triplanar_pbr.wgsl",
         textures: {
           "texture_0": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg",
           "texture_1": "shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_normal.jpg",
@@ -165,7 +165,7 @@
     // rim is opaque warm white, giving a lantern-glass effect.
     "mat_lamp_orb": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        shader: "shared/shaders/custom_emissive_fresnel.wgsl",
         colors: {
           "base_color": (r:0.90, g:0.80, b:0.30, a:0.50),
           "rim_color":  (r:1.00, g:0.95, b:0.70, a:1.00),
@@ -181,7 +181,7 @@
     // Gold deco orb — additive golden energy, invisible centre fades to bright rim.
     "mat_deco_orb_gold": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        shader: "shared/shaders/custom_emissive_fresnel.wgsl",
         colors: {
           "base_color": (r:0.60, g:0.40, b:0.00, a:0.10),
           "rim_color":  (r:1.00, g:0.80, b:0.15, a:1.00),
@@ -198,7 +198,7 @@
     // goes fully dark; the steady glow helps the player spot it.
     "mat_coin_pulse": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_pulse.wgsl"),
+        shader: "shared/shaders/custom_pulse.wgsl",
         colors: {
           "color": (r:1.00, g:0.85, b:0.10, a:1.00),
         },
@@ -215,7 +215,7 @@
     // flow_speed: wave animation rate. tiling: ripple density. wave_strength: normal perturbation.
     "mat_water": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_water_stylized.wgsl"),
+        shader: "shared/shaders/custom_water_stylized.wgsl",
         colors: {
           "deep_color":    (r:0.12, g:0.35, b:0.70, a:0.85),
           "shallow_color": (r:0.60, g:0.88, b:1.00, a:0.95),
@@ -234,7 +234,7 @@
     // Violet deco orb — additive violet energy.
     "mat_deco_orb_violet": (
       kind: Custom((
-        shader: Some("shared/shaders/custom_emissive_fresnel.wgsl"),
+        shader: "shared/shaders/custom_emissive_fresnel.wgsl",
         colors: {
           "base_color": (r:0.20, g:0.00, b:0.40, a:0.10),
           "rim_color":  (r:0.80, g:0.30, b:1.00, a:1.00),

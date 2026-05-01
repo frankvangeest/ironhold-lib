@@ -12,25 +12,25 @@
         movement: (
           walk_speed: 5.5,
           run_speed: 10.0,
-          jump: Some(RelativeToHeight(percent: 100.0)),
+          jump: RelativeToHeight(percent: 100.0),
         ),
       ),
-      primitive: Some((
-        radius: Some(0.4),
-        height: Some(1.8),
-        color: Some((0.22, 0.52, 0.88)),
-        roughness: Some(0.3),
-        metallic: Some(0.15),
-      )),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        color: (0.22, 0.52, 0.88),
+        roughness: 0.3,
+        metallic: 0.15,
+      ),
       children: [
         // Left eye
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.03, 0.03, 0.05)),
-            roughness: Some(0.20),
-            metallic: Some(0.10),
+            radius: 0.07,
+            color: (0.03, 0.03, 0.05),
+            roughness: 0.20,
+            metallic: 0.10,
           ),
           offset: (-0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -40,10 +40,10 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.03, 0.03, 0.05)),
-            roughness: Some(0.20),
-            metallic: Some(0.10),
+            radius: 0.07,
+            color: (0.03, 0.03, 0.05),
+            roughness: 0.20,
+            metallic: 0.10,
           ),
           offset: (0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -53,9 +53,9 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.95, 0.58, 0.42)),
-            roughness: Some(0.40),
+            radius: 0.07,
+            color: (0.95, 0.58, 0.42),
+            roughness: 0.40,
           ),
           offset: (0.0, 1.49, -0.40),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -68,12 +68,12 @@
     "ground": (
       kind: "primitive",
       model: "Cuboid",
-      primitive: Some((
-        size: Some((60.0, 1.0, 60.0)),
-        color: Some((0.30, 0.45, 0.25)),
-        roughness: Some(0.9),
+      primitive: (
+        size: (60.0, 1.0, 60.0),
+        color: (0.30, 0.45, 0.25),
+        roughness: 0.9,
         physics: true,
-      )),
+      ),
     ),
 
     // ── Interactable box ───────────────────────────────────────────────────────
@@ -82,18 +82,18 @@
     "collectible_box": (
       kind: "primitive",
       model: "Cuboid",
-      behavior: Some("behaviors/collectible_box.behavior.ron"),
-      interactable: Some(( radius: 2.5 )),
-      primitive: Some((
-        size: Some((0.8, 0.8, 0.8)),
-        color: Some((0.90, 0.70, 0.20)),
-        roughness: Some(0.4),
-        metallic: Some(0.3),
-      )),
-      motion: Some((
-        rotate: Some((0.0, 1.0, 0.0)),
-        bob: Some((0.12, 0.8)),
-      )),
+      behavior: "behaviors/collectible_box.behavior.ron",
+      interactable: ( radius: 2.5 ),
+      primitive: (
+        size: (0.8, 0.8, 0.8),
+        color: (0.90, 0.70, 0.20),
+        roughness: 0.4,
+        metallic: 0.3,
+      ),
+      motion: (
+        rotate: (0.0, 1.0, 0.0),
+        bob: (0.12, 0.8),
+      ),
     ),
 
     // ── Score trigger zone ─────────────────────────────────────────────────────
@@ -102,12 +102,12 @@
     "score_zone": (
       kind: "primitive",
       model: "Sphere",
-      trigger_zone: Some(( radius: 2.0 )),
-      primitive: Some((
-        radius: Some(0.05),
-        color: Some((0.20, 0.80, 0.50)),
-        roughness: Some(0.5),
-      )),
+      trigger_zone: ( radius: 2.0 ),
+      primitive: (
+        radius: 0.05,
+        color: (0.20, 0.80, 0.50),
+        roughness: 0.5,
+      ),
     ),
 
   },

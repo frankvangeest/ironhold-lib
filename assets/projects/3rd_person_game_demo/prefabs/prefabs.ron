@@ -7,7 +7,7 @@
       components: (
         tags: ["player"],
       ),
-      animation_policy: Some("prefabs/animation/player_policy.ron"),
+      animation_policy: "prefabs/animation/player_policy.ron",
     ),
 
     "enemy_orc_melee": (
@@ -26,9 +26,9 @@
       ),
       colliders: [
         // Base body of the chest
-        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
+        (shape: "Cuboid", size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
         // Lid (slightly smaller and offset upward)
-        (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+        (shape: "Cuboid", size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
       ],
     ),
 
@@ -67,9 +67,9 @@
         (
           shape: "Cuboid",
           primitive: (
-            size: Some((3.0, 0.15, 3.0)),
-            color: Some((0.45, 0.28, 0.12)),
-            roughness: Some(0.85),
+            size: (3.0, 0.15, 3.0),
+            color: (0.45, 0.28, 0.12),
+            roughness: 0.85,
             physics: true,
           ),
           offset: (0.0, -0.79, 0.0),
@@ -78,7 +78,7 @@
         ),
         // GLB chest nested on top of the platform
         (
-          prefab: Some("chest_01"),
+          prefab: "chest_01",
           offset: (0.0, 0.15, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),

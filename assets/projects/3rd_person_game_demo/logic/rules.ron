@@ -23,72 +23,72 @@
         // ── "menu" state ───────────────────────────────────────────────
         (
             on: "ui.button_pressed:start_game",
-            when: Some("menu"),
+            when: "menu",
             do_actions: [ Log("LoadScene Triggered"), LoadScene("scenes/main.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:options",
-            when: Some("menu"),
+            when: "menu",
             do_actions: [ Log("Options Triggered"), LoadScene("scenes/options.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:quit",
-            when: Some("menu"),
+            when: "menu",
             do_actions: [ Log("Quit Triggered"), Quit ],
         ),
 
         // ── "options" state ────────────────────────────────────────────
         (
             on: "ui.button_pressed:back_to_start_menu",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Back to Start Menu"), LoadScene("scenes/start_menu.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:set_volume_0",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Volume: Mute"), SetVolume(0) ],
         ),
         (
             on: "ui.button_pressed:set_volume_25",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Volume: 25%"), SetVolume(25) ],
         ),
         (
             on: "ui.button_pressed:set_volume_50",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Volume: 50%"), SetVolume(50) ],
         ),
         (
             on: "ui.button_pressed:set_volume_75",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Volume: 75%"), SetVolume(75) ],
         ),
         (
             on: "ui.button_pressed:set_volume_100",
-            when: Some("options"),
+            when: "options",
             do_actions: [ Log("Volume: 100%"), SetVolume(100) ],
         ),
 
         // ── "playing" state ────────────────────────────────────────────
         (
             on: "ui.button_pressed:start_menu",
-            when: Some("playing"),
+            when: "playing",
             do_actions: [ Log("LoadScene Triggered"), LoadScene("scenes/start_menu.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:dance",
-            when: Some("playing"),
+            when: "playing",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlayAnimation("dance") ],
         ),
         (
             on: "ui.button_pressed:test_actions",
-            when: Some("playing"),
+            when: "playing",
             do_actions: [ Log("Test Action Triggered"), Spawn(prefab: "chest_02") ],
         ),
         // Escape while playing → open pause overlay and enter "paused" state
         (
             on: "ui.button_pressed:toggle_pause",
-            when: Some("playing"),
+            when: "playing",
             do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ],
         ),
 
@@ -96,17 +96,17 @@
         // Escape while paused → close overlay and return to "playing"
         (
             on: "ui.button_pressed:toggle_pause",
-            when: Some("paused"),
+            when: "paused",
             do_actions: [ UnloadOverlay, EnterState("playing") ],
         ),
         (
             on: "ui.button_pressed:resume",
-            when: Some("paused"),
+            when: "paused",
             do_actions: [ UnloadOverlay, EnterState("playing") ],
         ),
         (
             on: "ui.button_pressed:pause_quit",
-            when: Some("paused"),
+            when: "paused",
             do_actions: [ Log("Quit from pause menu"), Quit ],
         ),
     ],

@@ -4,25 +4,25 @@
 
   tonemapping: AcesFitted,
 
-  label_depth_scale: Some((
+  label_depth_scale: (
     reference_distance: 25.0,
-    min_scale: Some(0.4),
-  )),
+    min_scale: 0.4,
+  ),
 
   scene_key_bindings: {
     "KeyM": "toggle_map",
   },
 
-  lighting: Some((
-    ambient: Some((0.22, 0.28, 0.38)),
-    ambient_brightness: Some(280.0),
-    directional: Some((
+  lighting: (
+    ambient: (0.22, 0.28, 0.38),
+    ambient_brightness: 280.0,
+    directional: (
       color: (1.0, 0.95, 0.80),
       intensity: 32000.0,
       rotation_euler_deg: (-45.0, 25.0, 0.0),
       shadows_enabled: true,
-    )),
-  )),
+    ),
+  ),
 
   spawn_points: {
     "player_start": (0.0, 0.5, 8.0),
@@ -406,7 +406,7 @@
         rotation_euler_deg: (0.0, 180.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some((text: "Villager", offset: (0.0, 2.5, 0.0), color: (0.65, 1.0, 0.65, 1.0))),
+      label: (text: "Villager", offset: (0.0, 2.5, 0.0), color: (0.65, 1.0, 0.65, 1.0)),
     ),
 
     // Goblin guard: patrols a triangle near the far end of the path.
@@ -420,7 +420,7 @@
         rotation_euler_deg: (0.0, 90.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some((text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0))),
+      label: (text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0)),
     ),
     (
       id: "goblin_02",
@@ -430,7 +430,7 @@
         rotation_euler_deg: (0.0, 270.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some((text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0))),
+      label: (text: "! Goblin Guard !", offset: (0.0, 2.5, 0.0), color: (1.0, 0.35, 0.2, 1.0)),
     ),
 
     // Merchant: stands near the bridge at the south end of the path.
@@ -443,7 +443,7 @@
         rotation_euler_deg: (0.0, 90.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: Some((text: "Merchant", offset: (0.0, 2.5, 0.0), color: (0.85, 0.65, 1.0, 1.0))),
+      label: (text: "Merchant", offset: (0.0, 2.5, 0.0), color: (0.85, 0.65, 1.0, 1.0)),
     ),
 
   ],
@@ -461,8 +461,8 @@
       kind: "label",
       id: "health_label",
       text: "HP  100",
-      bind: Some("health"),
-      format: Some("HP  {}"),
+      bind: "health",
+      format: "HP  {}",
       position: (16.0, 62.0),
       size: (180.0, 32.0),
     ),
@@ -470,8 +470,8 @@
       kind: "label",
       id: "score_label",
       text: "Score  0",
-      bind: Some("score"),
-      format: Some("Score  {}"),
+      bind: "score",
+      format: "Score  {}",
       position: (16.0, 98.0),
       size: (180.0, 32.0),
     ),

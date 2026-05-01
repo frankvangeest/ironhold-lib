@@ -27,6 +27,6 @@
     ),
   ],
   transitions: [
-    ( from: Some("idle"), on: "entity.interacted:{self}", to: "collected" ),
+    ( from: "idle", on: "entity.interacted:{self}", to: "collected" ),
   ],
 )

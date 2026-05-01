@@ -5,34 +5,34 @@
   // AcesFitted: cinematic, high-performance tonemapper. No LUT required.
   tonemapping: AcesFitted,
 
-  lighting: Some((
+  lighting: (
     // Cool sky fill — low enough to let directional shadows read clearly.
-    ambient: Some((0.18, 0.22, 0.35)),
-    ambient_brightness: Some(80.0),
-    directional: Some((
+    ambient: (0.18, 0.22, 0.35),
+    ambient_brightness: 80.0,
+    directional: (
       // Warm midday sun from a shallow south-west angle for long shadow definition.
       color: (1.0, 0.92, 0.75),
       intensity: 28000.0,
       rotation_euler_deg: (-40.0, 30.0, 0.0),
       shadows_enabled: true,
-    )),
-  )),
+    ),
+  ),
 
-  terrain: Some((
+  terrain: (
     heightmap: "projects/quick_scene/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
     // scale: (horizontal units/pixel, max height in world units, horizontal units/pixel)
     // 128×128 heightmap × 4 = ~508×508 unit terrain; max elevation 30 units.
     scale: (4.0, 30.0, 4.0),
     // Offset the terrain down so the player spawn at (0, 4, 0) sits above the surface.
-    position: Some((0.0, -20.0, 0.0)),
+    position: (0.0, -20.0, 0.0),
     material_paths: [
       "shared/terrain/grass.png",
       "shared/terrain/rock.png",
       "shared/terrain/dirt.png",
       "shared/terrain/snow.png",
     ],
-  )),
+  ),
 
   spawn_points: {
     "player_start": (0.0, 4.0, 0.0),

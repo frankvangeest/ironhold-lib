@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
-use bevy_common_assets::ron::RonAssetPlugin;
+use crate::schema::ImplicitRonPlugin;
 use std::time::Duration;
 
 use bevy::camera::visibility::NoFrustumCulling;
@@ -117,14 +117,14 @@ impl Plugin for GamePlugin {
             .add_message::<SceneEvent>()
             .add_message::<InputActionMessage>()
             .add_message::<AppExit>()
-            .add_plugins(RonAssetPlugin::<ProjectConfig>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::project::StateMachineAsset>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
-            .add_plugins(RonAssetPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<ProjectConfig>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::project::StateMachineAsset>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)

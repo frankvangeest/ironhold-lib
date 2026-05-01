@@ -1,5 +1,5 @@
 (
-    default_transition_ms: Some(150),
+    default_transition_ms: 150,
 
     base: (
         idle:      "Idle_Loop",
@@ -21,7 +21,7 @@
             clip: "Jump_Start",
             priority: 200,
             looping: false,
-            duration: Some(0.4),
+            duration: 0.4,
             cancel_on_move: false,
         ),
         (
@@ -29,9 +29,9 @@
             clip: "Jump_Land",
             priority: 200,
             looping: false,
-            duration: Some(0.4),
+            duration: 0.4,
             cancel_on_move: false,
-            transition_ms: Some(100),
+            transition_ms: 100,
         ),
         (
             id: "dance",
@@ -39,7 +39,7 @@
             priority: 50,
             looping: true,
             cancel_on_move: true,
-            stop_action: Some("stop_dance"),
+            stop_action: "stop_dance",
         ),
         (
             id: "sit",
@@ -47,7 +47,7 @@
             priority: 60,
             looping: true,
             cancel_on_move: true,
-            stop_action: Some("stand"),
+            stop_action: "stand",
         ),
         (
             id: "torch_idle",
@@ -55,14 +55,14 @@
             priority: 40,
             looping: true,
             cancel_on_move: false,
-            stop_action: Some("stop_torch"),
+            stop_action: "stop_torch",
         ),
         (
             id: "attack_light",
             clip: "Sword_Attack",
             priority: 100,
             looping: false,
-            duration: Some(0.6),
+            duration: 0.6,
             cancel_on_move: false,
         ),
     ],

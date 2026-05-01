@@ -4,12 +4,12 @@
 
   entities: [],
 
-  ui_panel: Some((
+  ui_panel: (
     background_color: (0.05, 0.05, 0.1, 0.92),
     padding: 30.0,
     gap: 16.0,
-    width: Some(320.0),
-  )),
+    width: 320.0,
+  ),
 
   ui: [
     (

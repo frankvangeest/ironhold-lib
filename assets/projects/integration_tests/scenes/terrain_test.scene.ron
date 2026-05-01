@@ -2,16 +2,16 @@
   schema_version: 2,
   name: "terrain_test",
 
-  lighting: Some((
-    ambient: Some((0.8, 0.85, 1.0)),
-    directional: Some((
+  lighting: (
+    ambient: (0.8, 0.85, 1.0),
+    directional: (
       color: (1.0, 0.95, 0.85),
       intensity: 15000.0,
       rotation_euler_deg: (-45.0, 35.0, 0.0),
-    )),
-  )),
+    ),
+  ),
 
-  terrain: Some((
+  terrain: (
     heightmap: "projects/integration_tests/terrain/heightmap.png",
     splatmap: "shared/terrain/splatmap.png",
     scale: (1.0, 0.1, 1.0),
@@ -21,7 +21,7 @@
       "shared/terrain/rock.png",
       "shared/terrain/snow.png",
     ],
-  )),
+  ),
 
   spawn_points: {
     "player_start": (0.0, 4.0, 0.0),

@@ -65,8 +65,8 @@
         ( on: "scene.ready:start_menu", to: "menu" ),
         ( on: "scene.ready:main",       to: "playing" ),
 
-        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
-        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
-        ( from: Some("paused"),  on: "ui.button_pressed:resume",       to: "playing" ),
+        ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+        ( from: "paused",  on: "ui.button_pressed:resume",       to: "playing" ),
     ],
 )

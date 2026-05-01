@@ -15,13 +15,13 @@
 
   entities: [],
 
-  ui_panel: Some((
+  ui_panel: (
     background_color: (0.06, 0.05, 0.04, 0.97),
     padding: 0.0,
     gap: 0.0,
-    width: Some(260.0),
-    height: Some(424.0),
-  )),
+    width: 260.0,
+    height: 424.0,
+  ),
 
   ui: [
 

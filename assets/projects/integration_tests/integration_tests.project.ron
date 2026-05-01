@@ -1,20 +1,20 @@
 (
     schema_version: 2,
-    project_id: Some("integration_tests"),
-    display_name: Some("Integration Tests"),
+    project_id: "integration_tests",
+    display_name: "Integration Tests",
 
     initial_scene: "scenes/start_menu.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    rules_path: Some("logic/rules.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 
-    global_environment: Some((
+    global_environment: (
         intensity: 400.0,
-        fallback: Some((
+        fallback: (
             top_color: (0.1, 0.2, 0.4),
             bottom_color: (0.01, 0.01, 0.01),
-        )),
-    )),
+        ),
+    ),
 )

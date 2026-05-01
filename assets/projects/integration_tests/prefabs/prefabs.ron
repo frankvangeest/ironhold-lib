@@ -7,7 +7,7 @@
       components: (
         tags: ["player"],
       ),
-      animation_policy: Some("prefabs/animation/player_policy.ron"),
+      animation_policy: "prefabs/animation/player_policy.ron",
     ),
 
     "enemy_orc_melee": (

@@ -87,7 +87,6 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
 
 ### Designer Experience
-- [ ] **`implicit_some` RON extension** — add `#![enable(implicit_some)]` to all `.ron` asset files so designers write `radius: 0.4` instead of `radius: Some(0.4)`; no Rust changes needed; existing `Some(...)` syntax remains valid so migration can be gradual; eliminates ~671 `Some()` wrappers across project files; pure authoring quality-of-life, zero runtime impact
 
 ### Tools
 - [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)
@@ -98,6 +97,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Done (reference)
 
+- [x] **`implicit_some` RON extension** — `ImplicitRonPlugin` in `schema/ron_loader.rs` enables `implicit_some` globally via `ron::Options`; 671 `Some()` wrappers removed from all project `.ron` files; `tools/migrate_implicit_some.py` one-shot migration script included; no per-file directives needed
 - [x] **Nested prefabs — mesh support** — `spawn_primitive_children` dispatches on `kind`: actor/prop loads GLB via `spawn_prefab_instance`, single-shape primitive builds one mesh; `rock_deco` GLB prop nested in `village` demo; design: `planning/features/nested_prefabs_mesh_support.md`
 - [x] **Nested prefabs** — `children` entries reference named prefabs by key; multiplicative Bevy hierarchy; cycle detection; `village` prefab demo in `primitive_world`; design: `planning/features/nested_prefabs.md`
 - [x] Beta 0.1 — Baseline Runtime

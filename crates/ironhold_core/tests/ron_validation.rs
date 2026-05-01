@@ -2,7 +2,14 @@ use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear};
 use ironhold_core::schema::project::LogicRulesAsset;
-use ron::de::from_str;
+use ron::extensions::Extensions;
+
+/// Deserialize a RON string with `implicit_some` enabled — matches runtime loader behaviour.
+fn from_str<'de, T: serde::Deserialize<'de>>(s: &'de str) -> Result<T, ron::error::SpannedError> {
+    ron::Options::default()
+        .with_default_extension(Extensions::IMPLICIT_SOME)
+        .from_str(s)
+}
 
 // ProjectConfig tests
 #[test]
@@ -153,8 +160,8 @@ fn test_state_machine_asset_deserialization() {
 }
 
 #[test]
-fn test_state_machine_asset_bare_string_from_is_error() {
-    // Regression: `from: "playing"` (no Some wrapper) must fail — it burned us once.
+fn test_state_machine_asset_bare_string_from_is_valid() {
+    // With implicit_some enabled, `from: "playing"` is equivalent to `from: Some("playing")`.
     let ron_str = r#"
         (
             schema_version: 1,
@@ -166,7 +173,8 @@ fn test_state_machine_asset_bare_string_from_is_error() {
         )
     "#;
     let result: Result<StateMachineAsset, _> = from_str(ron_str);
-    assert!(result.is_err(), "bare string for Option<String> must be rejected by RON");
+    let sm = result.expect("implicit_some: bare string for Option<String> must be accepted");
+    assert_eq!(sm.transitions[0].from, Some("playing".to_string()));
 }
 
 // ── StateMachineAsset validation ─────────────────────────────────────────────

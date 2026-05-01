@@ -20,17 +20,17 @@
           walk_speed: 5.5,
           run_speed: 10.0,
           //jump: Some(Fixed(height: 1.8)),
-          jump: Some(RelativeToHeight(percent: 100.0)),
+          jump: RelativeToHeight(percent: 100.0),
           double_jump: true,
         ),
       ),
-      primitive: Some((
-        radius: Some(0.4),
-        height: Some(1.8),
-        color: Some((0.22, 0.52, 0.88)),
-        roughness: Some(0.3),
-        metallic: Some(0.15),
-      )),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        color: (0.22, 0.52, 0.88),
+        roughness: 0.3,
+        metallic: 0.15,
+      ),
       children: [
 
         // ── Left eye (player faces −Z, so front is negative Z) ───────────
@@ -38,10 +38,10 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.03, 0.03, 0.05)),
-            roughness: Some(0.20),
-            metallic: Some(0.10),
+            radius: 0.07,
+            color: (0.03, 0.03, 0.05),
+            roughness: 0.20,
+            metallic: 0.10,
           ),
           offset: (-0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -51,10 +51,10 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.03, 0.03, 0.05)),
-            roughness: Some(0.20),
-            metallic: Some(0.10),
+            radius: 0.07,
+            color: (0.03, 0.03, 0.05),
+            roughness: 0.20,
+            metallic: 0.10,
           ),
           offset: (0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -65,9 +65,9 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(0.07),
-            color: Some((0.95, 0.58, 0.42)),
-            roughness: Some(0.40),
+            radius: 0.07,
+            color: (0.95, 0.58, 0.42),
+            roughness: 0.40,
           ),
           offset: (0.0, 1.49, -0.40),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -105,12 +105,12 @@
           "spotted": "npc_greet",
           "reached": "npc_greet",
         },
-        npc: Some((
+        npc: (
           faction: Friendly,
           on_player_near: Interact,
           detection_radius: 6.0,
           chase_radius: 10.0,
-          fov_degrees: Some(120.0),
+          fov_degrees: 120.0,
           requires_los: false,
           approach_distance: 2.5,
           patrol_speed: 1.8,
@@ -119,15 +119,15 @@
             (-5.0, 0.0, 0.0),
             (5.0,  0.0, 0.0),
           ],
-        )),
+        ),
       ),
-      primitive: Some((
-        radius: Some(0.4),
-        height: Some(1.8),
-        color: Some((0.85, 0.65, 0.40)),
-        roughness: Some(0.65),
-        metallic: Some(0.0),
-      )),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        color: (0.85, 0.65, 0.40),
+        roughness: 0.65,
+        metallic: 0.0,
+      ),
       children: [
         // Body — capsule centred at body_y=0.9 so its bottom aligns with the
         // entity origin (feet at y=0).  All face-feature offsets below are also
@@ -135,11 +135,11 @@
         (
           shape: "Capsule3d",
           primitive: (
-            radius: Some(0.4),
-            height: Some(1.8),
-            color: Some((0.85, 0.65, 0.40)),
-            roughness: Some(0.65),
-            metallic: Some(0.0),
+            radius: 0.4,
+            height: 1.8,
+            color: (0.85, 0.65, 0.40),
+            roughness: 0.65,
+            metallic: 0.0,
           ),
           offset: (0.0, 0.9, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -149,10 +149,10 @@
         (
           shape: "Cylinder",
           primitive: (
-            radius: Some(0.28),
-            height: Some(0.2),
-            color: Some((0.38, 0.24, 0.12)),
-            roughness: Some(0.88),
+            radius: 0.28,
+            height: 0.2,
+            color: (0.38, 0.24, 0.12),
+            roughness: 0.88,
           ),
           offset: (0.0, 1.8, 0.1),
           rotation_euler_deg: (10.0, 0.0, 0.0),
@@ -161,7 +161,7 @@
         // Left eye
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.07), color: Some((0.08, 0.06, 0.05)), roughness: Some(0.2) ),
+          primitive: ( radius: 0.07, color: (0.08, 0.06, 0.05), roughness: 0.2 ),
           offset: (-0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -169,7 +169,7 @@
         // Right eye
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.07), color: Some((0.08, 0.06, 0.05)), roughness: Some(0.2) ),
+          primitive: ( radius: 0.07, color: (0.08, 0.06, 0.05), roughness: 0.2 ),
           offset: (0.18, 1.58, -0.37),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -177,7 +177,7 @@
         // Nose
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.06), color: Some((0.95, 0.60, 0.42)), roughness: Some(0.5) ),
+          primitive: ( radius: 0.06, color: (0.95, 0.60, 0.42), roughness: 0.5 ),
           offset: (0.0, 1.50, -0.40),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -198,12 +198,12 @@
           "spotted": "goblin_growl",
           "reached": "goblin_growl",
         },
-        npc: Some((
+        npc: (
           faction: Hostile,
           on_player_near: Chase,
           detection_radius: 8.0,
           chase_radius: 20.0,
-          fov_degrees: Some(200.0),
+          fov_degrees: 200.0,
           requires_los: true,
           approach_distance: 1.5,
           patrol_speed: 2.2,
@@ -213,25 +213,25 @@
             ( 4.0, 0.0,  0.0),
             ( 0.0, 0.0, -4.0),
           ],
-        )),
+        ),
       ),
-      primitive: Some((
-        radius: Some(0.38),
-        height: Some(1.6),
-        color: Some((0.55, 0.22, 0.18)),
-        roughness: Some(0.7),
-        metallic: Some(0.05),
-      )),
+      primitive: (
+        radius: 0.38,
+        height: 1.6,
+        color: (0.55, 0.22, 0.18),
+        roughness: 0.7,
+        metallic: 0.05,
+      ),
       children: [
         // Body — centred at body_y=0.8 (radius=0.38, cap_half=0.42).
         (
           shape: "Capsule3d",
           primitive: (
-            radius: Some(0.38),
-            height: Some(1.6),
-            color: Some((0.55, 0.22, 0.18)),
-            roughness: Some(0.7),
-            metallic: Some(0.05),
+            radius: 0.38,
+            height: 1.6,
+            color: (0.55, 0.22, 0.18),
+            roughness: 0.7,
+            metallic: 0.05,
           ),
           offset: (0.0, 0.8, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -241,11 +241,11 @@
         (
           shape: "Capsule3d",
           primitive: (
-            radius: Some(0.36),
-            height: Some(1.2),
-            color: Some((0.55, 0.22, 0.18)),
-            roughness: Some(0.7),
-            metallic: Some(0.05),
+            radius: 0.36,
+            height: 1.2,
+            color: (0.55, 0.22, 0.18),
+            roughness: 0.7,
+            metallic: 0.05,
           ),
           offset: (0.0, 0.9, 0.0),
           rotation_euler_deg: (0.0, 0.0, 90.0),
@@ -254,7 +254,7 @@
         // Left eye — slanted inward for an angry look
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.07), color: Some((0.80, 0.10, 0.05)), roughness: Some(0.1), metallic: Some(0.1) ),
+          primitive: ( radius: 0.07, color: (0.80, 0.10, 0.05), roughness: 0.1, metallic: 0.1 ),
           offset: (-0.16, 1.42, -0.33),
           rotation_euler_deg: (0.0, 0.0, 15.0),
           scale: (1.0, 1.4, 1.0),
@@ -262,7 +262,7 @@
         // Right eye — mirrored
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.07), color: Some((0.80, 0.10, 0.05)), roughness: Some(0.1), metallic: Some(0.1) ),
+          primitive: ( radius: 0.07, color: (0.80, 0.10, 0.05), roughness: 0.1, metallic: 0.1 ),
           offset: (0.16, 1.42, -0.33),
           rotation_euler_deg: (0.0, 0.0, -15.0),
           scale: (1.0, 1.4, 1.0),
@@ -270,7 +270,7 @@
         // Snout
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.08), color: Some((0.42, 0.18, 0.14)), roughness: Some(0.8) ),
+          primitive: ( radius: 0.08, color: (0.42, 0.18, 0.14), roughness: 0.8 ),
           offset: (0.0, 1.32, -0.38),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 0.7, 1.0),
@@ -290,36 +290,36 @@
         sounds: {
           "spotted": "npc_greet",
         },
-        npc: Some((
+        npc: (
           faction: Neutral,
           on_player_near: Alert,
           detection_radius: 4.0,
           chase_radius: 6.0,
-          fov_degrees: Some(60.0),
+          fov_degrees: 60.0,
           requires_los: false,
           approach_distance: 2.0,
           patrol_speed: 1.0,
           chase_speed: 1.0,
           patrol_waypoints: [],
-        )),
+        ),
       ),
-      primitive: Some((
-        radius: Some(0.42),
-        height: Some(1.85),
-        color: Some((0.40, 0.25, 0.60)),
-        roughness: Some(0.4),
-        metallic: Some(0.1),
-      )),
+      primitive: (
+        radius: 0.42,
+        height: 1.85,
+        color: (0.40, 0.25, 0.60),
+        roughness: 0.4,
+        metallic: 0.1,
+      ),
       children: [
         // Body — centred at body_y=0.925 (radius=0.42, cap_half=0.505).
         (
           shape: "Capsule3d",
           primitive: (
-            radius: Some(0.42),
-            height: Some(1.85),
-            color: Some((0.40, 0.25, 0.60)),
-            roughness: Some(0.4),
-            metallic: Some(0.1),
+            radius: 0.42,
+            height: 1.85,
+            color: (0.40, 0.25, 0.60),
+            roughness: 0.4,
+            metallic: 0.1,
           ),
           offset: (0.0, 0.925, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -328,7 +328,7 @@
         // Left eye — wide & round, friendly look
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.08), color: Some((0.05, 0.05, 0.08)), roughness: Some(0.15) ),
+          primitive: ( radius: 0.08, color: (0.05, 0.05, 0.08), roughness: 0.15 ),
           offset: (-0.19, 1.62, -0.38),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -336,7 +336,7 @@
         // Right eye
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.08), color: Some((0.05, 0.05, 0.08)), roughness: Some(0.15) ),
+          primitive: ( radius: 0.08, color: (0.05, 0.05, 0.08), roughness: 0.15 ),
           offset: (0.19, 1.62, -0.38),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -344,7 +344,7 @@
         // Nose
         (
           shape: "Sphere",
-          primitive: ( radius: Some(0.06), color: Some((0.85, 0.55, 0.38)), roughness: Some(0.45) ),
+          primitive: ( radius: 0.06, color: (0.85, 0.55, 0.38), roughness: 0.45 ),
           offset: (0.0, 1.52, -0.42),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -358,12 +358,12 @@
       kind: "primitive",
       model: "Cuboid",
       components: (),
-      primitive: Some((
-        size: Some((2.0, 1.6, 2.0)),
-        color: Some((0.65, 0.60, 0.50)),
-        roughness: Some(0.98),
+      primitive: (
+        size: (2.0, 1.6, 2.0),
+        color: (0.65, 0.60, 0.50),
+        roughness: 0.98,
         physics: true,
-      )),
+      ),
     ),
 
     // ── Ground ─────────────────────────────────────────────────────────────────
@@ -372,44 +372,44 @@
       kind: "primitive",
       model: "Cuboid",
       components: (),
-      primitive: Some((
-        size: Some((80.0, 1.0, 80.0)),
-        color: Some((0.32, 0.52, 0.22)),
-        roughness: Some(0.95),
+      primitive: (
+        size: (80.0, 1.0, 80.0),
+        color: (0.32, 0.52, 0.22),
+        roughness: 0.95,
         physics: true,
-      )),
+      ),
     ),
 
     // ── Path stone ─────────────────────────────────────────────────────────────
     "path_stone": (
       kind: "primitive",
       model: "Cuboid",
-      material: Some("mat_stone_floor"),
+      material: "mat_stone_floor",
       components: (),
-      primitive: Some((
-        size: Some((2.0, 0.06, 2.0)),
-      )),
+      primitive: (
+        size: (2.0, 0.06, 2.0),
+      ),
     ),
 
     // ── Rocks ──────────────────────────────────────────────────────────────────
     "rock_small": (
       kind: "primitive",
       model: "Sphere",
-      material: Some("mat_cliff_rock"),
+      material: "mat_cliff_rock",
       components: (),
-      primitive: Some((
-        radius: Some(0.3),
-      )),
+      primitive: (
+        radius: 0.3,
+      ),
     ),
 
     "rock_medium": (
       kind: "primitive",
       model: "Sphere",
-      material: Some("mat_cliff_rock"),
+      material: "mat_cliff_rock",
       components: (),
-      primitive: Some((
-        radius: Some(0.55),
-      )),
+      primitive: (
+        radius: 0.55,
+      ),
     ),
 
     // ── Barrel ─────────────────────────────────────────────────────────────────
@@ -418,35 +418,35 @@
     "barrel": (
       kind: "primitive",
       model: "Cylinder",
-      material: Some("mat_wood_planks"),
+      material: "mat_wood_planks",
       components: (),
-      primitive: Some((
-        radius: Some(0.28),
-        height: Some(0.9),
-      )),
+      primitive: (
+        radius: 0.28,
+        height: 0.9,
+      ),
     ),
 
     // ── Fence elements ─────────────────────────────────────────────────────────
     "fence_post": (
       kind: "primitive",
       model: "Cylinder",
-      material: Some("mat_wood_planks"),
+      material: "mat_wood_planks",
       components: (),
-      primitive: Some((
-        radius: Some(0.08),
-        height: Some(1.5),
-      )),
+      primitive: (
+        radius: 0.08,
+        height: 1.5,
+      ),
     ),
 
     // X-aligned plank; rotate 90° Y in the scene to make it Z-facing.
     "fence_rail": (
       kind: "primitive",
       model: "Cuboid",
-      material: Some("mat_wood_planks"),
+      material: "mat_wood_planks",
       components: (),
-      primitive: Some((
-        size: Some((2.0, 0.1, 0.1)),
-      )),
+      primitive: (
+        size: (2.0, 0.1, 0.1),
+      ),
     ),
 
     // ── Pond ───────────────────────────────────────────────────────────────────
@@ -463,8 +463,8 @@
         // Stone floor inside the basin (slightly above ground to avoid z-fighting)
         (
           shape: "Cuboid",
-          material: Some("mat_stone_mossy"),
-          primitive: ( size: Some((6.0, 0.06, 11.0)) ),
+          material: "mat_stone_mossy",
+          primitive: ( size: (6.0, 0.06, 11.0) ),
           offset: (0.0, 0.03, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -473,8 +473,8 @@
         // North border beam — full outer width
         (
           shape: "Cuboid",
-          material: Some("mat_stone_bricks"),
-          primitive: ( size: Some((7.0, 0.35, 0.5)) ),
+          material: "mat_stone_bricks",
+          primitive: ( size: (7.0, 0.35, 0.5) ),
           offset: (0.0, 0.175, 5.75),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -483,8 +483,8 @@
         // South border beam — full outer width
         (
           shape: "Cuboid",
-          material: Some("mat_stone_bricks"),
-          primitive: ( size: Some((7.0, 0.35, 0.5)) ),
+          material: "mat_stone_bricks",
+          primitive: ( size: (7.0, 0.35, 0.5) ),
           offset: (0.0, 0.175, -5.75),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -493,8 +493,8 @@
         // East border beam — inner length (fits between north/south beams, no corner overlap)
         (
           shape: "Cuboid",
-          material: Some("mat_stone_bricks"),
-          primitive: ( size: Some((0.5, 0.35, 11.0)) ),
+          material: "mat_stone_bricks",
+          primitive: ( size: (0.5, 0.35, 11.0) ),
           offset: (3.25, 0.175, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -503,8 +503,8 @@
         // West border beam — inner length
         (
           shape: "Cuboid",
-          material: Some("mat_stone_bricks"),
-          primitive: ( size: Some((0.5, 0.35, 11.0)) ),
+          material: "mat_stone_bricks",
+          primitive: ( size: (0.5, 0.35, 11.0) ),
           offset: (-3.25, 0.175, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -513,8 +513,8 @@
         // Animated water surface — sits inside the beams
         (
           shape: "Cuboid",
-          material: Some("mat_water"),
-          primitive: ( size: Some((6.0, 0.04, 11.0)) ),
+          material: "mat_water",
+          primitive: ( size: (6.0, 0.04, 11.0) ),
           offset: (0.0, 0.27, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
@@ -532,55 +532,55 @@
     "coin_collectible": (
       kind: "primitive",
       model: "Cylinder",
-      material: Some("mat_coin_pulse"),
+      material: "mat_coin_pulse",
       components: (
         tags: ["collectable"],
         sounds: {
           "collect": "collect_coin",
         },
       ),
-      primitive: Some((
-        radius: Some(0.42),
-        height: Some(0.12),
+      primitive: (
+        radius: 0.42,
+        height: 0.12,
         sensor: true,
-      )),
-      motion: Some((
-        rotate: Some((0.0, 1.5, 0.0)),
-      )),
+      ),
+      motion: (
+        rotate: (0.0, 1.5, 0.0),
+      ),
     ),
 
     // ── Floating decorations ───────────────────────────────────────────────────
     "deco_orb_gold": (
       kind: "primitive",
       model: "Sphere",
-      material: Some("mat_deco_orb_gold"),
+      material: "mat_deco_orb_gold",
       components: (),
-      primitive: Some((
-        radius: Some(0.55),
-      )),
+      primitive: (
+        radius: 0.55,
+      ),
     ),
 
     "deco_orb_violet": (
       kind: "primitive",
       model: "Sphere",
-      material: Some("mat_deco_orb_violet"),
+      material: "mat_deco_orb_violet",
       components: (),
-      primitive: Some((
-        radius: Some(0.45),
-      )),
+      primitive: (
+        radius: 0.45,
+      ),
     ),
 
     "deco_torus_copper": (
       kind: "primitive",
       model: "Torus",
       components: (),
-      primitive: Some((
-        radius: Some(1.2),
-        radius_top: Some(0.22),
-        color: Some((0.80, 0.42, 0.18)),
-        roughness: Some(0.25),
-        metallic: Some(0.75),
-      )),
+      primitive: (
+        radius: 1.2,
+        radius_top: 0.22,
+        color: (0.80, 0.42, 0.18),
+        roughness: 0.25,
+        metallic: 0.75,
+      ),
     ),
 
     // ── Composite prefabs ──────────────────────────────────────────────────────
@@ -601,10 +601,10 @@
       children: [
         (
           shape: "Cylinder",
-          material: Some("mat_bark"),
+          material: "mat_bark",
           primitive: (
-            radius: Some(0.22),
-            height: Some(3.0),
+            radius: 0.22,
+            height: 3.0,
           ),
           // h=3 → center at 1.5 so bottom sits at y=0
           offset: (0.0, 1.5, 0.0),
@@ -614,10 +614,10 @@
         (
           shape: "Cone",
           primitive: (
-            radius: Some(1.30),
-            height: Some(4.0),
-            color: Some((0.14, 0.44, 0.14)),
-            roughness: Some(0.90),
+            radius: 1.30,
+            height: 4.0,
+            color: (0.14, 0.44, 0.14),
+            roughness: 0.90,
           ),
           // h=4 → base at y=-2; to sit on trunk top (y=3): center at 3+2 = 5
           offset: (0.0, 5.0, 0.0),
@@ -635,10 +635,10 @@
       children: [
         (
           shape: "Cylinder",
-          material: Some("mat_bark"),
+          material: "mat_bark",
           primitive: (
-            radius: Some(0.25),
-            height: Some(2.5),
+            radius: 0.25,
+            height: 2.5,
           ),
           offset: (0.0, 1.25, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -647,9 +647,9 @@
         (
           shape: "Sphere",
           primitive: (
-            radius: Some(1.40),
-            color: Some((0.20, 0.52, 0.18)),
-            roughness: Some(0.90),
+            radius: 1.40,
+            color: (0.20, 0.52, 0.18),
+            roughness: 0.90,
           ),
           // Trunk top at y=2.5; sphere bottom = y-r → center at 2.5+1.4 = 3.9
           offset: (0.0, 3.9, 0.0),
@@ -667,9 +667,9 @@
       children: [
         (
           shape: "Cuboid",
-          material: Some("mat_wall_plaster"),
+          material: "mat_wall_plaster",
           primitive: (
-            size: Some((5.0, 4.0, 6.0)),
+            size: (5.0, 4.0, 6.0),
           ),
           // h=4 → center at 2.0 so bottom sits at y=0
           offset: (0.0, 2.0, 0.0),
@@ -678,11 +678,11 @@
         ),
         (
           shape: "ConicalFrustum",
-          material: Some("mat_roof_tiles"),
+          material: "mat_roof_tiles",
           primitive: (
-            radius: Some(3.2),
-            radius_top: Some(0.3),
-            height: Some(2.5),
+            radius: 3.2,
+            radius_top: 0.3,
+            height: 2.5,
           ),
           // Body top at y=4; frustum h=2.5 → center at 4+1.25 = 5.25
           offset: (0.0, 5.25, 0.0),
@@ -691,10 +691,10 @@
         ),
         (
           shape: "Cylinder",
-          material: Some("mat_stone_bricks"),
+          material: "mat_stone_bricks",
           primitive: (
-            radius: Some(0.24),
-            height: Some(1.4),
+            radius: 0.24,
+            height: 1.4,
           ),
           // Protrudes from the roof slope near the ridge
           offset: (1.2, 6.1, 1.4),
@@ -712,9 +712,9 @@
       children: [
         (
           shape: "Cuboid",
-          material: Some("mat_wall_plaster"),
+          material: "mat_wall_plaster",
           primitive: (
-            size: Some((4.0, 3.0, 4.0)),
+            size: (4.0, 3.0, 4.0),
           ),
           offset: (0.0, 1.5, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -722,11 +722,11 @@
         ),
         (
           shape: "ConicalFrustum",
-          material: Some("mat_thatched_roof"),
+          material: "mat_thatched_roof",
           primitive: (
-            radius: Some(2.6),
-            radius_top: Some(0.2),
-            height: Some(2.0),
+            radius: 2.6,
+            radius_top: 0.2,
+            height: 2.0,
           ),
           // Body top at y=3; frustum center at 3+1 = 4.0
           offset: (0.0, 4.0, 0.0),
@@ -744,10 +744,10 @@
       children: [
         (
           shape: "Cylinder",
-          material: Some("mat_stone_bricks"),
+          material: "mat_stone_bricks",
           primitive: (
-            radius: Some(0.70),
-            height: Some(0.80),
+            radius: 0.70,
+            height: 0.80,
           ),
           // Base: h=0.8 → center at 0.4
           offset: (0.0, 0.4, 0.0),
@@ -756,10 +756,10 @@
         ),
         (
           shape: "Cylinder",
-          material: Some("mat_stone_bricks"),
+          material: "mat_stone_bricks",
           primitive: (
-            radius: Some(0.10),
-            height: Some(1.80),
+            radius: 0.10,
+            height: 1.80,
           ),
           // Pillar left: bottom at y=0.8, h=1.8 → center at 0.8+0.9 = 1.7
           offset: (-0.55, 1.7, 0.0),
@@ -768,10 +768,10 @@
         ),
         (
           shape: "Cylinder",
-          material: Some("mat_stone_bricks"),
+          material: "mat_stone_bricks",
           primitive: (
-            radius: Some(0.10),
-            height: Some(1.80),
+            radius: 0.10,
+            height: 1.80,
           ),
           // Pillar right
           offset: (0.55, 1.7, 0.0),
@@ -780,9 +780,9 @@
         ),
         (
           shape: "Cuboid",
-          material: Some("mat_wood_planks"),
+          material: "mat_wood_planks",
           primitive: (
-            size: Some((1.20, 0.12, 0.14)),
+            size: (1.20, 0.12, 0.14),
           ),
           // Crossbeam at top of pillars: y = 0.8+1.8+0.06 = 2.66
           offset: (0.0, 2.66, 0.0),
@@ -794,10 +794,10 @@
         // Thinner tube (0.05) widens the inner opening to 0.60.
         (
           shape: "Torus",
-          material: Some("mat_stone_bricks"),
+          material: "mat_stone_bricks",
           primitive: (
-            radius: Some(0.7),
-            radius_top: Some(0.4),
+            radius: 0.7,
+            radius_top: 0.4,
           ),
           // Slightly above stone cylinder top (y=0.80) to avoid z-fighting.
           offset: (0.0, 0.82, 0.0),
@@ -808,10 +808,10 @@
         // Water surface — fits inside torus inner opening (0.65−0.05=0.60).
         (
           shape: "Cylinder",
-          material: Some("mat_water"),
+          material: "mat_water",
           primitive: (
-            radius: Some(0.58),
-            height: Some(0.03),
+            radius: 0.58,
+            height: 0.03,
           ),
           offset: (0.0, 0.82, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -829,11 +829,11 @@
         (
           shape: "Cylinder",
           primitive: (
-            radius: Some(0.07),
-            height: Some(3.5),
-            color: Some((0.24, 0.24, 0.26)),
-            roughness: Some(0.50),
-            metallic: Some(0.60),
+            radius: 0.07,
+            height: 3.5,
+            color: (0.24, 0.24, 0.26),
+            roughness: 0.50,
+            metallic: 0.60,
           ),
           // h=3.5 → center at 1.75
           offset: (0.0, 1.75, 0.0),
@@ -842,9 +842,9 @@
         ),
         (
           shape: "Sphere",
-          material: Some("mat_lamp_orb"),
+          material: "mat_lamp_orb",
           primitive: (
-            radius: Some(0.22),
+            radius: 0.22,
           ),
           // Post top at y=3.5; sphere center at 3.5+0.22 = 3.72
           offset: (0.0, 3.72, 0.0),
@@ -872,9 +872,9 @@
         // Cobblestone plaza — inline Cuboid, flush with ground
         (
           shape: "Cuboid",
-          material: Some("mat_stone_cobble"),
+          material: "mat_stone_cobble",
           primitive: (
-            size: Some((18.0, 0.02, 14.0)),
+            size: (18.0, 0.02, 14.0),
           ),
           offset: (0.0, 0.01, -1.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -882,21 +882,21 @@
         ),
         // Cottage house — nested prefab reference
         (
-          prefab: Some("house_cottage"),
+          prefab: "house_cottage",
           offset: (-6.0, 0.0, -4.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
         // Small house — nested prefab, rotated 90° around Y
         (
-          prefab: Some("house_small"),
+          prefab: "house_small",
           offset: (6.0, 0.0, -4.0),
           rotation_euler_deg: (0.0, 90.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
         // Well — nested prefab at village centre
         (
-          prefab: Some("well"),
+          prefab: "well",
           offset: (0.0, 0.0, -4.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),

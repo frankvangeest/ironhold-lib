@@ -57,8 +57,8 @@
         ( on: "scene.ready:main",       to: "playing" ),
 
         // State-specific transitions.
-        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
-        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
-        ( from: Some("paused"),  on: "ui.button_pressed:resume",       to: "playing" ),
+        ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+        ( from: "paused",  on: "ui.button_pressed:resume",       to: "playing" ),
     ],
 )
