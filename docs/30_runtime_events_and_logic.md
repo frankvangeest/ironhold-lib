@@ -48,7 +48,7 @@ This section is factual and reflects what exists right now.
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
   - `LoadSceneOverlay(path)` / `UnloadOverlay` load/unload overlay scenes (e.g. pause menu).
   - `Quit` requests app exit (writes `AppExit::Success`).
-  - `Spawn { prefab, id, position, spawn_point }` / `Despawn(id)` spawn/remove prefab instances by ID.
+  - `Spawn { prefab, id, position, spawn_point, yaw_deg }` / `Despawn(id)` spawn/remove prefab instances by ID.
   - `PlayAnimation(clip)` plays an animation on available controllers.
   - `PlayAnimationOn { target, clip }` plays an animation on a specific entity by spawn ID.
   - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
@@ -247,7 +247,7 @@ Applies actions to the world. Key design points:
 - `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
-- `Spawn { prefab, id, position, spawn_point }` — spawns a prefab instance by key; `id` auto-generated if omitted; `position: Some((x,y,z))` sets an explicit world position; `spawn_point: Some("name")` looks up a named point from the scene's `spawn_points` map; defaults to world origin `(0,0,0)` when neither is given
+- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — spawns a prefab instance by key; `id` auto-generated if omitted; `position: Some((x,y,z))` sets an explicit world position; `spawn_point: Some("name")` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: Some(f)` rotates around the Y axis in degrees (0 = model default facing, 90/180/270 = 90°/180°/270° clockwise)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
 - `PlaySound(String)` — fire-and-forget audio by catalog key; warns for unsupported formats or missing keys

@@ -88,7 +88,7 @@ _Last updated: 2026‑04‑17_
 - `Action::ToggleOverlay(String)` — opens overlay if none active, closes if one is active
 - `Action::Quit` — requests app exit
 - `Action::Log(String)` — logs a message (debug/telemetry)
-- `Action::Spawn { prefab, id, position, spawn_point }` — spawns a prefab instance; `id` auto-generated if omitted; `position` (x,y,z) takes precedence over `spawn_point` (scene-defined named point); defaults to world origin if neither is given
+- `Action::Spawn { prefab, id, position, spawn_point, yaw_deg }` — spawns a prefab instance; `id` auto-generated if omitted; `position` (x,y,z) takes precedence over `spawn_point` (scene-defined named point); defaults to world origin if neither is given; `yaw_deg` rotates around the Y axis (0 = model default, 90/180/270 for E/S/W compass directions)
 - `Action::Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `Action::PlayAnimation(String)` — plays a named animation/clip
 - `Action::PlaySound(String)` — fire-and-forget sound by audio catalog key; warns for unsupported formats or missing keys

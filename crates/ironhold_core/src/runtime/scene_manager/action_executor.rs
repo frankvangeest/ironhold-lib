@@ -83,7 +83,7 @@ pub fn action_executor_system(
             Action::Log(msg) => {
                 info!("Action::Log: {}", msg);
             }
-            Action::Spawn { prefab, id, position, spawn_point } => {
+            Action::Spawn { prefab, id, position, spawn_point, yaw_deg } => {
                 let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab) else {
                     warn!("Action::Spawn: prefab {:?} not found in catalog", prefab);
                     continue;
@@ -113,7 +113,9 @@ pub fn action_executor_system(
                 } else {
                     (0.0, 0.0, 0.0)
                 };
-                let transform = Transform::from_xyz(sx, sy, sz);
+                let yaw_rad = yaw_deg.unwrap_or(0.0).to_radians();
+                let transform = Transform::from_xyz(sx, sy, sz)
+                    .with_rotation(Quat::from_rotation_y(yaw_rad));
 
                 info!(
                     "Action::Spawn: spawned '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",

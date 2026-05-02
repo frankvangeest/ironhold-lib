@@ -469,7 +469,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
     // Spawn with an explicit ID
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()), position: None, spawn_point: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()), position: None, spawn_point: None, yaw_deg: None }
     );
     app.update();
 
@@ -512,10 +512,10 @@ fn test_spawn_auto_id_increments_counter() {
 
     // Spawn twice without explicit IDs
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None }
     );
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None }
     );
     app.update();
 
@@ -558,7 +558,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
 
     // Spawn then despawn
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()), position: None, spawn_point: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()), position: None, spawn_point: None, yaw_deg: None }
     );
     app.update();
 
@@ -1715,13 +1715,13 @@ fn test_spawn_id_collision_orphans_old_entity() {
 
     // First spawn with explicit ID "crate_1".
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None },
     );
     app.update();
 
     // Second spawn with the same ID — silently overwrites the registry entry.
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None },
     );
     app.update();
 
@@ -1759,6 +1759,56 @@ fn test_spawn_id_collision_orphans_old_entity() {
     assert!(
         !registry.entities.contains_key("crate_1"),
         "Registry must be empty for 'crate_1' after the despawn"
+    );
+}
+
+#[test]
+fn test_spawn_yaw_deg_sets_transform_rotation() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: HashMap::from([
+            ("box".to_string(), ModelCatalogEntry { path: "shared/models/box.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: HashMap::from([
+            ("crate".to_string(), PrefabDef {
+                kind: "prop".to_string(),
+                model: "box".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn {
+            prefab: "crate".to_string(),
+            id: Some("rotated_crate".to_string()),
+            position: Some((0.0, 0.0, 0.0)),
+            spawn_point: None,
+            yaw_deg: Some(90.0),
+        }
+    );
+    app.update();
+
+    let mut q = app.world_mut().query::<(&SpawnId, &Transform)>();
+    let transform = q
+        .iter(app.world())
+        .find(|(sid, _)| sid.0 == "rotated_crate")
+        .map(|(_, t)| *t)
+        .expect("rotated_crate should have been spawned");
+
+    let expected = Quat::from_rotation_y(90f32.to_radians());
+    assert!(
+        transform.rotation.abs_diff_eq(expected, 1e-5),
+        "yaw_deg: 90 should produce a 90° Y-axis rotation, got {:?}",
+        transform.rotation,
     );
 }
 

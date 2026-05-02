@@ -11,6 +11,8 @@ pub enum Action {
     /// - `position` — explicit world-space position `(x, y, z)`; takes precedence over `spawn_point`.
     /// - `spawn_point` — name of a spawn point defined in the scene's `spawn_points` map.
     ///   If neither `position` nor `spawn_point` is given, the entity spawns at the world origin.
+    /// - `yaw_deg` — optional Y-axis rotation in degrees (0 = model default facing, 90 = 90° clockwise).
+    ///   Covers N/S/E/W compass orientations. Defaults to 0 if omitted.
     Spawn {
         prefab: String,
         #[serde(default)]
@@ -19,6 +21,8 @@ pub enum Action {
         position: Option<(f32, f32, f32)>,
         #[serde(default)]
         spawn_point: Option<String>,
+        #[serde(default)]
+        yaw_deg: Option<f32>,
     },
     /// Despawn a previously spawned entity by the ID used in Spawn.
     Despawn(String),
