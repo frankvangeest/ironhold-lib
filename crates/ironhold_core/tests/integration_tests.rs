@@ -469,7 +469,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
     // Spawn with an explicit ID
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()) }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()), position: None, spawn_point: None }
     );
     app.update();
 
@@ -512,10 +512,10 @@ fn test_spawn_auto_id_increments_counter() {
 
     // Spawn twice without explicit IDs
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None }
     );
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None }
     );
     app.update();
 
@@ -558,7 +558,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
 
     // Spawn then despawn
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()) }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()), position: None, spawn_point: None }
     );
     app.update();
 
@@ -1715,13 +1715,13 @@ fn test_spawn_id_collision_orphans_old_entity() {
 
     // First spawn with explicit ID "crate_1".
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()) },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None },
     );
     app.update();
 
     // Second spawn with the same ID — silently overwrites the registry entry.
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()) },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None },
     );
     app.update();
 

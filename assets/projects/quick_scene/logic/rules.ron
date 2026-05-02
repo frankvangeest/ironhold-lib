@@ -23,7 +23,7 @@
         ),
         (
             on: "ui.button_pressed:spawn_enemy",
-            do_actions: [ Log("Spawning enemy orc"), PlaySound("click"), Spawn(prefab: "enemy_orc_melee") ],
+            do_actions: [ Log("Spawning enemy orc"), PlaySound("click"), Spawn(prefab: "enemy_orc_melee", spawn_point: Some("enemy_wave_a")) ],
         ),
     ],
 )

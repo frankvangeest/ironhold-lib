@@ -1,17 +1,24 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Action {
     LoadScene(String),
     Quit,
     Log(String),
-    /// Spawn a prefab by ID. `id` is an optional stable handle for later Despawn;
-    /// if omitted a unique one is generated automatically.
+    /// Spawn a prefab by ID.
+    /// - `id` — optional stable handle for later `Despawn`; auto-generated if omitted.
+    /// - `position` — explicit world-space position `(x, y, z)`; takes precedence over `spawn_point`.
+    /// - `spawn_point` — name of a spawn point defined in the scene's `spawn_points` map.
+    ///   If neither `position` nor `spawn_point` is given, the entity spawns at the world origin.
     Spawn {
         prefab: String,
         #[serde(default)]
         id: Option<String>,
+        #[serde(default)]
+        position: Option<(f32, f32, f32)>,
+        #[serde(default)]
+        spawn_point: Option<String>,
     },
     /// Despawn a previously spawned entity by the ID used in Spawn.
     Despawn(String),

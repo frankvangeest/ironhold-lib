@@ -185,9 +185,11 @@ fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         },
         Action::EmitEvent(event) => Action::EmitEvent(event.replace("{self}", spawn_id)),
         Action::Despawn(id) => Action::Despawn(id.replace("{self}", spawn_id)),
-        Action::Spawn { prefab, id } => Action::Spawn {
+        Action::Spawn { prefab, id, position, spawn_point } => Action::Spawn {
             prefab,
             id: id.map(|i| i.replace("{self}", spawn_id)),
+            position,
+            spawn_point: spawn_point.map(|s| s.replace("{self}", spawn_id)),
         },
         other => other,
     }

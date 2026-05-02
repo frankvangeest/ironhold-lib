@@ -83,7 +83,7 @@ pub fn action_executor_system(
             Action::Log(msg) => {
                 info!("Action::Log: {}", msg);
             }
-            Action::Spawn { prefab, id } => {
+            Action::Spawn { prefab, id, position, spawn_point } => {
                 let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab) else {
                     warn!("Action::Spawn: prefab {:?} not found in catalog", prefab);
                     continue;
@@ -100,14 +100,20 @@ pub fn action_executor_system(
                     format!("{}_{}", prefab, spawn_params.registry.counter)
                 });
 
-                let (sx, sy, sz) = spawn_params
-                    .spawn_points
-                    .0
-                    .iter()
-                    .find(|(k, _)| !k.starts_with("player"))
-                    .map(|(_, v)| *v)
-                    .unwrap_or((10.0, 2.0, 10.0));
-                let transform = Transform::from_xyz(sx, sy + 1.0, sz);
+                let (sx, sy, sz) = if let Some(pos) = position {
+                    pos
+                } else if let Some(ref name) = spawn_point {
+                    match spawn_params.spawn_points.0.get(name.as_str()) {
+                        Some(&pt) => pt,
+                        None => {
+                            warn!("Action::Spawn: spawn_point {:?} not found in scene, using origin", name);
+                            (0.0, 0.0, 0.0)
+                        }
+                    }
+                } else {
+                    (0.0, 0.0, 0.0)
+                };
+                let transform = Transform::from_xyz(sx, sy, sz);
 
                 info!(
                     "Action::Spawn: spawned '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",
