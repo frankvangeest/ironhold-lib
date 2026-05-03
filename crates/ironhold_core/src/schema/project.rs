@@ -280,6 +280,8 @@ fn default_terrain_uv_scale() -> f32 { 10.0 }
 
 // ─── Environment map ──────────────────────────────────────────────────────────
 
+fn default_env_map_intensity() -> f32 { 1.0 }
+
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentMapConfig {
@@ -287,6 +289,7 @@ pub struct EnvironmentMapConfig {
     pub diffuse_path: Option<String>,
     #[serde(default)]
     pub specular_path: Option<String>,
+    #[serde(default = "default_env_map_intensity")]
     pub intensity: f32,
     #[serde(default)]
     pub fallback: Option<GeneratedEnvironmentMapLight>,

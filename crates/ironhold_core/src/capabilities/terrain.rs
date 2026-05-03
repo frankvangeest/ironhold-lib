@@ -107,9 +107,9 @@ fn poll_terrain_generation_system(
         if let Some(mesh) = future::block_on(future::poll_once(&mut task.0)) {
             info!("Terrain Generation Completed. Applying to entity.");
             
-            let collider = Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh(TriMeshFlags::default())).unwrap();
+            let collider_opt = Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh(TriMeshFlags::default()));
             let mesh_handle = meshes.add(mesh);
-            
+
             // Construct TerrainMaterial using handles from loading
             let terrain_material = TerrainMaterial {
                 uv_scale: Vec4::new(config.uv_scale, 0.0, 0.0, 0.0), // Only .x is used; padded for WebGPU alignment
@@ -129,9 +129,16 @@ fn poll_terrain_generation_system(
                 Transform::from_xyz(px, py, pz),
                 Visibility::default(),
                 TerrainReady,
-                RigidBody::Fixed,
-                collider,
             ));
+
+            match collider_opt {
+                Some(collider) => {
+                    commands.entity(entity).insert((RigidBody::Fixed, collider));
+                }
+                None => {
+                    warn!("Terrain collider build failed — degenerate heightmap? Physics disabled for this terrain.");
+                }
+            }
             
             commands.entity(entity).remove::<TerrainGenerationTask>();
             commands.entity(entity).remove::<TerrainLoading>();
