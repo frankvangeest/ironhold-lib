@@ -105,7 +105,9 @@ pub fn spawn_prefab_instance(
                 )),
                 _ => None,
             }?;
-            Some((Vec3::from(cdef.offset), Quat::IDENTITY, shape))
+            let (rx, ry, rz) = cdef.rotation_euler_deg;
+            let rot = Quat::from_euler(EulerRot::XYZ, rx.to_radians(), ry.to_radians(), rz.to_radians());
+            Some((Vec3::from(cdef.offset), rot, shape))
         }).collect();
         if !shapes.is_empty() {
             commands.entity(spawned.parent).insert((RigidBody::Fixed, Collider::compound(shapes)));

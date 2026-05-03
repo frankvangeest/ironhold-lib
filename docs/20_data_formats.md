@@ -699,6 +699,7 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
 | `radius` | `Option<f32>` | `0.5` | Radius for Sphere / Cylinder |
 | `height` | `Option<f32>` | `1.0` | Total height for Cylinder |
 | `offset` | `(f32,f32,f32)` | `(0,0,0)` | Local-space offset of this shape from the entity origin |
+| `rotation_euler_deg` | `(f32,f32,f32)` | `(0,0,0)` | Euler rotation in degrees (XYZ order) for this shape's local orientation |
 
 ```ron
 // Simple single-shape prop
@@ -722,7 +723,7 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
   ],
 ),
 
-// Archway approximated with three boxes
+// Archway approximated with three boxes — diagonal brace uses rotation_euler_deg
 "archway": (
   kind: "prop",
   model: "archway",
@@ -731,6 +732,7 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
     (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: (-1.5, 1.5, 0.0)),
     (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: ( 1.5, 1.5, 0.0)),
     (shape: "Cuboid", size: Some((3.4, 0.4, 0.4)), offset: ( 0.0, 3.2, 0.0)),
+    (shape: "Cuboid", size: Some((0.3, 2.0, 0.3)), offset: ( 0.0, 1.5, 0.0), rotation_euler_deg: (0.0, 0.0, 45.0)),
   ],
 ),
 ```

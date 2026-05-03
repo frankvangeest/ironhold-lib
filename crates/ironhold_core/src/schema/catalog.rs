@@ -221,6 +221,9 @@ pub struct ColliderDef {
     /// Local-space offset of this shape from the entity origin.
     #[serde(default)]
     pub offset: (f32, f32, f32),
+    /// Euler rotation in degrees (XYZ order) for this shape's local orientation. Default: `(0, 0, 0)`.
+    #[serde(default)]
+    pub rotation_euler_deg: (f32, f32, f32),
 }
 
 /// Continuous transform animation for a prefab entity.

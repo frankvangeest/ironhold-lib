@@ -22,6 +22,10 @@ use super::{
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
+
+const TAG_FLYCAM: &str = "flycam";
+const TAG_PLAYER: &str = "player";
+const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::capabilities::trigger_zone::TriggerZone;
 use crate::capabilities::interactable::Interactable;
@@ -158,8 +162,8 @@ pub fn spawn_scene_v2(
                 continue;
             };
 
-            let is_flycam = prefab.components.tags.contains(&"flycam".to_string());
-            let is_player = prefab.components.tags.contains(&"player".to_string());
+            let is_flycam = prefab.components.tags.contains(&TAG_FLYCAM.to_string());
+            let is_player = prefab.components.tags.contains(&TAG_PLAYER.to_string());
 
             // Build transform early — needed before model lookup so flycam can early-out.
             let t = &entity_def.transform;
@@ -374,7 +378,7 @@ pub fn spawn_scene_v2(
                         // Collectable marker: collision triggers GameEvent into the rules pipeline.
                         // What happens on collection (Despawn, PlaySound, IncrementVariable, etc.)
                         // is defined in state_machine.ron — not hardcoded here.
-                        if prefab.components.tags.contains(&"collectable".to_string()) {
+                        if prefab.components.tags.contains(&TAG_COLLECTABLE.to_string()) {
                             commands.entity(spawned).insert(Collectable);
                         }
                         // Motion: continuous world-space rotation and/or vertical bob.

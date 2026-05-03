@@ -1148,7 +1148,7 @@ fn test_colliders_field_parses_on_prefab() {
                     model: "chest_key",
                     components: (),
                     colliders: [
-                        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
+                        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0), rotation_euler_deg: (0.0, 45.0, 0.0)),
                         (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
                     ],
                 ),
@@ -1161,7 +1161,9 @@ fn test_colliders_field_parses_on_prefab() {
     assert_eq!(chest.colliders.len(), 2, "two collider shapes");
     assert_eq!(chest.colliders[0].shape, "Cuboid");
     assert_eq!(chest.colliders[0].size, Some((0.70, 0.55, 1.00)));
+    assert_eq!(chest.colliders[0].rotation_euler_deg, (0.0, 45.0, 0.0));
     assert_eq!(chest.colliders[1].offset, (0.0, 0.275, 0.0));
+    assert_eq!(chest.colliders[1].rotation_euler_deg, (0.0, 0.0, 0.0), "default rotation is zero");
 }
 
 #[test]
