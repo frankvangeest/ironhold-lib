@@ -52,6 +52,14 @@ pub struct NpcAgent {
     pub state_timer: f32,
     /// World-space spawn origin used by the Return state to home back.
     pub origin: Vec3,
+    /// Eye height above origin for LOS ray casts (metres). From `NpcDef.eye_height`.
+    pub eye_height: f32,
+    /// Seconds to pause in Alerted before acting. From `NpcDef.alerted_duration`.
+    pub alerted_duration: f32,
+    /// Velocity decay multiplier when not actively moving. From `NpcDef.drag`.
+    pub drag: f32,
+    /// Metres from a waypoint to advance to the next. From `NpcDef.waypoint_reach_radius`.
+    pub waypoint_reach_radius: f32,
 }
 
 // ── Visibility helper ─────────────────────────────────────────────────────────
@@ -64,6 +72,7 @@ fn find_nearest_visible_player<'r>(
     npc_forward: Vec3,
     fov_cos: f32,
     requires_los: bool,
+    eye_height: f32,
     players: &[(Entity, Vec3)],
     rapier: Option<&'r RapierContext<'r>>,
 ) -> Option<(Entity, Vec3, f32)> {
@@ -86,7 +95,7 @@ fn find_nearest_visible_player<'r>(
         // ── Line-of-sight ray cast ─────────────────────────────────────────────
         if requires_los {
             if let Some(ctx) = rapier {
-                let eye = npc_pos + Vec3::Y * 0.9; // approximate eye height
+                let eye = npc_pos + Vec3::Y * eye_height;
                 let ray_dir = (to_player / dist).into();
                 let hit = ctx.cast_ray(
                     eye,
@@ -154,6 +163,7 @@ pub fn npc_behavior_system(
             npc_forward,
             npc.fov_cos,
             npc.requires_los,
+            npc.eye_height,
             &players,
             rapier.as_ref(),
         );
@@ -178,7 +188,7 @@ pub fn npc_behavior_system(
 
             NpcState::Alerted => {
                 npc.state_timer += dt;
-                if npc.state_timer >= 0.3 {
+                if npc.state_timer >= npc.alerted_duration {
                     pending_event = Some(format!("npc.player_spotted:{}", npc.npc_id));
                     next_state = Some(match npc.on_player_near {
                         // Alert NPCs just acknowledge and resume — no movement.
@@ -240,30 +250,31 @@ pub fn npc_behavior_system(
         }
 
         // ── Movement & facing ──────────────────────────────────────────────────
+        let drag = npc.drag;
         match npc.state {
             // Standing still states — just face the player if visible.
             NpcState::Idle | NpcState::Interact | NpcState::Alerted => {
                 if let Some((_, player_pos, _)) = visible {
                     face_toward(&mut transform, npc_pos, player_pos);
                 }
-                velocity.linvel.x *= 0.8;
-                velocity.linvel.z *= 0.8;
+                velocity.linvel.x *= drag;
+                velocity.linvel.z *= drag;
             }
 
             NpcState::Patrol => {
                 if npc.waypoints.is_empty() {
-                    velocity.linvel.x *= 0.8;
-                    velocity.linvel.z *= 0.8;
+                    velocity.linvel.x *= drag;
+                    velocity.linvel.z *= drag;
                 } else {
                     let wp = npc.waypoints[npc.current_waypoint];
                     // Advance to next waypoint when close enough.
-                    if npc_pos.distance(wp) < 0.5 {
+                    if npc_pos.distance(wp) < npc.waypoint_reach_radius {
                         npc.current_waypoint =
                             (npc.current_waypoint + 1) % npc.waypoints.len();
                     }
                     let target_wp = npc.waypoints[npc.current_waypoint];
                     let dir = (target_wp - npc_pos).with_y(0.0);
-                    apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed);
+                    apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
                 }
             }
 
@@ -280,12 +291,12 @@ pub fn npc_behavior_system(
                         .map(|(_, p)| (*p - npc_pos).with_y(0.0))
                         .unwrap_or(Vec3::ZERO),
                 };
-                apply_movement(&mut velocity, &mut transform, move_dir, npc.chase_speed);
+                apply_movement(&mut velocity, &mut transform, move_dir, npc.chase_speed, drag);
             }
 
             NpcState::Return => {
                 let dir = (npc.origin - npc_pos).with_y(0.0);
-                apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed);
+                apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
             }
         }
     }
@@ -295,15 +306,15 @@ pub fn npc_behavior_system(
 
 /// Set linear velocity toward `dir` and rotate the entity to face that direction.
 /// Applies drag when `dir` is near-zero.
-fn apply_movement(velocity: &mut Velocity, transform: &mut Transform, dir: Vec3, speed: f32) {
+fn apply_movement(velocity: &mut Velocity, transform: &mut Transform, dir: Vec3, speed: f32, drag: f32) {
     if dir.length_squared() > 0.01 {
         let norm = dir.normalize();
         velocity.linvel.x = norm.x * speed;
         velocity.linvel.z = norm.z * speed;
         transform.look_to(norm, Vec3::Y);
     } else {
-        velocity.linvel.x *= 0.8;
-        velocity.linvel.z *= 0.8;
+        velocity.linvel.x *= drag;
+        velocity.linvel.z *= drag;
     }
 }
 

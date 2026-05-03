@@ -316,11 +316,30 @@ pub struct NpcDef {
     /// Empty → NPC idles in place.
     #[serde(default)]
     pub patrol_waypoints: Vec<(f32, f32, f32)>,
+    /// Eye height above the entity origin used for line-of-sight ray casts.
+    /// Default: 0.9 m (reasonable for a ~1.8 m tall humanoid).
+    #[serde(default = "default_npc_eye_height")]
+    pub eye_height: f32,
+    /// Seconds the NPC pauses in the Alerted state before acting.
+    /// Default: 0.3 s.
+    #[serde(default = "default_npc_alerted_duration")]
+    pub alerted_duration: f32,
+    /// Velocity decay multiplier applied each physics tick when the NPC is not moving.
+    /// Values closer to 1.0 are slippery; closer to 0.0 stop instantly. Default: 0.8.
+    #[serde(default = "default_npc_drag")]
+    pub drag: f32,
+    /// Metres from a waypoint at which the NPC advances to the next one. Default: 0.5 m.
+    #[serde(default = "default_npc_waypoint_reach_radius")]
+    pub waypoint_reach_radius: f32,
 }
 
 fn default_approach_distance() -> f32 { 2.0 }
 fn default_patrol_speed() -> f32 { 2.0 }
 fn default_chase_speed() -> f32 { 4.5 }
+fn default_npc_eye_height() -> f32 { 0.9 }
+fn default_npc_alerted_duration() -> f32 { 0.3 }
+fn default_npc_drag() -> f32 { 0.8 }
+fn default_npc_waypoint_reach_radius() -> f32 { 0.5 }
 
 /// Speed and feel tuning for a prefab with `tags: ["flycam"]`.
 /// All fields are optional — omitting them keeps the compiled-in defaults.

@@ -263,6 +263,10 @@ pub fn spawn_scene_v2(
                                 target: None,
                                 state_timer: 0.0,
                                 origin: translation,
+                                eye_height: npc_def.eye_height,
+                                alerted_duration: npc_def.alerted_duration,
+                                drag: npc_def.drag,
+                                waypoint_reach_radius: npc_def.waypoint_reach_radius,
                             },
                             RigidBody::Dynamic,
                             Collider::compound(vec![(
@@ -426,6 +430,10 @@ pub fn spawn_scene_v2(
                                     target: None,
                                     state_timer: 0.0,
                                     origin: translation,
+                                    eye_height: npc_def.eye_height,
+                                    alerted_duration: npc_def.alerted_duration,
+                                    drag: npc_def.drag,
+                                    waypoint_reach_radius: npc_def.waypoint_reach_radius,
                                 },
                                 RigidBody::Dynamic,
                                 Collider::compound(vec![(

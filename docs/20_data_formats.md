@@ -441,6 +441,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.inputs` | `Option<InputMap>` | Key bindings for the player character. Only read for `"player"` prefabs. Omit to use WASD defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.flycam` | `Option<FlyCamDef>` | Speed and sensitivity tuning for the free-fly camera. Only read for `"flycam"` prefabs. Omit to use defaults. See [Special tag: `"flycam"`](#special-tag-flycam-) below. |
+| `components.npc` | `Option<NpcDef>` | NPC AI configuration. When set, the entity gets a dynamic physics body and an NPC behaviour driver. See [NPC behaviour](#npc-behaviour-componentsnpc-) below. |
 | `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound("sfx_jump")`). |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
@@ -553,6 +554,77 @@ Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Spac
 on: [
   (event: "player.jumped", do_actions: [PlaySound("sfx_jump")]),
 ]
+```
+
+### NPC behaviour (`components.npc`) ✅
+
+Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic Rapier capsule body and runs the behaviour system each physics tick. Events emitted:
+
+- `npc.player_spotted:{id}` — player entered detection range and the alerted pause has elapsed
+- `npc.player_reached:{id}` — NPC is within `approach_distance` of the player
+- `npc.player_lost:{id}` — player left `chase_radius`; NPC enters the Return state
+
+**`NpcDef` fields** (`components.npc`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `faction` | `NpcFaction` | — | `Friendly`, `Hostile`, or `Neutral` |
+| `on_player_near` | `NpcOnPlayerNear` | — | `Chase`, `Interact`, `Flee`, or `Alert` |
+| `detection_radius` | `f32` | — | Metres inside which the NPC enters the Alerted state |
+| `chase_radius` | `f32` | — | Metres beyond which the NPC gives up and returns to patrol |
+| `fov_degrees` | `Option<f32>` | `None` (360°) | Half-angle forward cone in degrees; `None` = no blind spot |
+| `requires_los` | `bool` | `false` | Rapier ray cast must confirm unobstructed line of sight before detecting the player |
+| `approach_distance` | `f32` | `2.0` | Stop approaching at this distance (interact / attack range) |
+| `patrol_speed` | `f32` | `2.0` | m/s while walking the patrol route or returning to origin |
+| `chase_speed` | `f32` | `4.5` | m/s while chasing or fleeing |
+| `patrol_waypoints` | `Vec<(f32,f32,f32)>` | `[]` | Offsets relative to spawn position; empty = idle in place |
+| `eye_height` | `f32` | `0.9` | Metres above the entity origin used for LOS ray origin (tune for short/tall NPCs) |
+| `alerted_duration` | `f32` | `0.3` | Seconds the NPC pauses in the Alerted state before acting |
+| `drag` | `f32` | `0.8` | Velocity decay multiplier per physics tick when not actively moving (0 = instant stop, 1 = no decay) |
+| `waypoint_reach_radius` | `f32` | `0.5` | Metres from a waypoint at which the NPC advances to the next one |
+
+```ron
+// Hostile patrol guard — full configuration
+"orc_guard": (
+  kind: "actor",
+  model: "orc_glb",
+  components: (
+    npc: Some((
+      faction: Hostile,
+      on_player_near: Chase,
+      detection_radius: 8.0,
+      chase_radius: 20.0,
+      fov_degrees: Some(110.0),
+      requires_los: true,
+      approach_distance: 1.5,
+      patrol_speed: 2.5,
+      chase_speed: 5.0,
+      patrol_waypoints: [
+        (5.0, 0.0, 0.0),
+        (5.0, 0.0, 10.0),
+      ],
+      // alerted_duration / drag / waypoint_reach_radius omitted — use defaults
+    )),
+  ),
+),
+
+// Small creature — custom physics feel and tight waypoint radius
+"rat": (
+  kind: "primitive",
+  model: "Capsule3d",
+  primitive: Some(( radius: Some(0.15), height: Some(0.3) )),
+  components: (
+    npc: Some((
+      faction: Neutral,
+      on_player_near: Flee,
+      detection_radius: 3.0,
+      chase_radius: 8.0,
+      eye_height: 0.15,
+      drag: 0.5,
+      waypoint_reach_radius: 0.2,
+    )),
+  ),
+),
 ```
 
 ### Primitive shapes ✅

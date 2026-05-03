@@ -1403,6 +1403,10 @@ fn test_npc_def_full_parses() {
                                 (5.0, 0.0, 0.0),
                                 (5.0, 0.0, 10.0),
                             ],
+                            eye_height: 1.2,
+                            alerted_duration: 0.5,
+                            drag: 0.6,
+                            waypoint_reach_radius: 1.0,
                         )),
                     ),
                 ),
@@ -1423,6 +1427,10 @@ fn test_npc_def_full_parses() {
     assert_eq!(npc.chase_speed, 5.0);
     assert_eq!(npc.patrol_waypoints.len(), 2);
     assert_eq!(npc.patrol_waypoints[0], (5.0, 0.0, 0.0));
+    assert_eq!(npc.eye_height, 1.2);
+    assert_eq!(npc.alerted_duration, 0.5);
+    assert_eq!(npc.drag, 0.6);
+    assert_eq!(npc.waypoint_reach_radius, 1.0);
 }
 
 #[test]
@@ -1458,6 +1466,10 @@ fn test_npc_def_minimal_uses_defaults() {
     assert_eq!(npc.patrol_speed, 2.0);      // default_patrol_speed()
     assert_eq!(npc.chase_speed, 4.5);       // default_chase_speed()
     assert!(npc.patrol_waypoints.is_empty()); // default: idle
+    assert_eq!(npc.eye_height, 0.9);           // default_npc_eye_height()
+    assert_eq!(npc.alerted_duration, 0.3);     // default_npc_alerted_duration()
+    assert_eq!(npc.drag, 0.8);                 // default_npc_drag()
+    assert_eq!(npc.waypoint_reach_radius, 0.5); // default_npc_waypoint_reach_radius()
 }
 
 #[test]
