@@ -31,6 +31,8 @@
       "shared/terrain/rock.png",
       "shared/terrain/snow.png",
     ],
+    // UV tiling scale for the layer textures. Higher = more fine tiling.
+    uv_scale: 10.0,
   ),
 
   spawn_points: {

@@ -725,6 +725,7 @@ pub fn spawn_scene_v2(
                 position: terrain_v2.position.unwrap_or((0.0, 0.0, 0.0)),
                 chunk_size: terrain_v2.chunk_size,
                 material_paths: terrain_v2.material_paths.clone(),
+                uv_scale: terrain_v2.uv_scale,
             };
             commands.spawn((Name::new("Terrain"), LevelEntity, terrain_config));
         }

@@ -1,4 +1,4 @@
-use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
+use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear};
 use ironhold_core::schema::project::LogicRulesAsset;
@@ -395,6 +395,86 @@ fn test_game_scene_v2_label_depth_scale_full() {
     let cfg = scene.label_depth_scale.expect("label_depth_scale should be Some");
     assert_eq!(cfg.reference_distance, 80.0);
     assert_eq!(cfg.min_scale, Some(0.25));
+}
+
+// ── Terrain uv_scale ──────────────────────────────────────────────────────────
+
+#[test]
+fn test_terrain_config_v2_uv_scale_defaults_to_ten() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            terrain: Some((
+                heightmap: "projects/terrain_demo/terrain/heightmap.png",
+                splatmap: "shared/terrain/splatmap.png",
+                scale: (0.5, 30.0, 0.5),
+                material_paths: ["shared/terrain/grass.png"],
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("terrain block should parse");
+    let terrain = scene.terrain.expect("terrain should be Some");
+    assert_eq!(terrain.uv_scale, 10.0, "uv_scale should default to 10.0");
+}
+
+#[test]
+fn test_terrain_config_v2_uv_scale_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [],
+            terrain: Some((
+                heightmap: "projects/terrain_demo/terrain/heightmap.png",
+                splatmap: "shared/terrain/splatmap.png",
+                scale: (0.5, 30.0, 0.5),
+                material_paths: ["shared/terrain/grass.png"],
+                uv_scale: 25.0,
+            )),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("terrain block with uv_scale should parse");
+    let terrain = scene.terrain.expect("terrain should be Some");
+    assert_eq!(terrain.uv_scale, 25.0, "uv_scale should be 25.0 as authored");
+}
+
+#[test]
+fn test_terrain_material_def_uv_scale_defaults_to_ten() {
+    let ron_str = r#"
+        (
+            kind: Terrain((
+                splatmap: "shared/terrain/splatmap.png",
+                layers: ["shared/terrain/grass.png"],
+            )),
+        )
+    "#;
+    let mat: MaterialDef = from_str(ron_str).expect("terrain MaterialDef should parse");
+    if let ironhold_core::schema::MaterialKind::Terrain(terrain_def) = mat.kind {
+        assert_eq!(terrain_def.uv_scale, 10.0, "uv_scale should default to 10.0");
+    } else {
+        panic!("expected MaterialKind::Terrain");
+    }
+}
+
+#[test]
+fn test_terrain_material_def_uv_scale_explicit() {
+    let ron_str = r#"
+        (
+            kind: Terrain((
+                splatmap: "shared/terrain/splatmap.png",
+                layers: ["shared/terrain/grass.png"],
+                uv_scale: 30.0,
+            )),
+        )
+    "#;
+    let mat: MaterialDef = from_str(ron_str).expect("terrain MaterialDef with uv_scale should parse");
+    if let ironhold_core::schema::MaterialKind::Terrain(terrain_def) = mat.kind {
+        assert_eq!(terrain_def.uv_scale, 30.0, "uv_scale should be 30.0 as authored");
+    } else {
+        panic!("expected MaterialKind::Terrain");
+    }
 }
 
 #[test]

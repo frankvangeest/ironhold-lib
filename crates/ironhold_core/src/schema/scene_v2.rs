@@ -224,9 +224,14 @@ pub struct TerrainConfigV2 {
     /// Defaults to the origin `(0, 0, 0)`.
     #[serde(default)]
     pub position: Option<(f32, f32, f32)>,
+    /// UV tiling scale for terrain layer textures. Higher values tile textures more finely.
+    /// Defaults to 10.0.
+    #[serde(default = "default_terrain_uv_scale")]
+    pub uv_scale: f32,
 }
 
 fn default_chunk_size() -> u32 { 64 }
+fn default_terrain_uv_scale() -> f32 { 10.0 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]

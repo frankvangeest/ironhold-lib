@@ -42,12 +42,20 @@ fn terrain_init_system(
 ) {
     for (entity, config) in &query {
         info!("Initializing Terrain: {}", config.heightmap_path);
+        if config.material_paths.len() < 3 {
+            warn!(
+                "Terrain '{}': material_paths has {} layer(s) but the splatmap uses 3 channels (R/G/B). \
+                 Missing layers will render as magenta. Add at least 3 paths to material_paths.",
+                config.heightmap_path,
+                config.material_paths.len()
+            );
+        }
         let heightmap_handle = asset_server.load(config.heightmap_path.clone());
         let splatmap_handle = asset_server.load(config.splatmap_path.clone());
         let material_handles = config.material_paths.iter()
             .map(|path| asset_server.load(path.clone()))
             .collect();
-        
+
         commands.entity(entity).insert(TerrainLoading {
             heightmap_handle,
             splatmap_handle,
@@ -104,7 +112,7 @@ fn poll_terrain_generation_system(
             
             // Construct TerrainMaterial using handles from loading
             let terrain_material = TerrainMaterial {
-                uv_scale: Vec4::new(10.0, 0.0, 0.0, 0.0), // Only .x is used
+                uv_scale: Vec4::new(config.uv_scale, 0.0, 0.0, 0.0), // Only .x is used; padded for WebGPU alignment
                 splatmap: loading.splatmap_handle.clone(),
                 texture_r: loading.material_handles.get(0).cloned().unwrap_or_default(),
                 texture_g: loading.material_handles.get(1).cloned().unwrap_or_default(),

@@ -313,6 +313,7 @@ label: Some((text: "Header", depth_scale: Some(false))),
 | `position` | `Option<(f32,f32,f32)>` | World-space offset for the entire terrain mesh. Defaults to `(0, 0, 0)`. Set a negative Y to sink the terrain so player spawn points sit above the surface. |
 | `material_paths` | `Vec<String>` | Texture paths for up to 4 terrain layers |
 | `chunk_size` | `u32` | Mesh chunk size in vertices (default `64`) |
+| `uv_scale` | `f32` | UV tiling scale for layer textures. Higher values tile textures more finely. Defaults to `10.0`. |
 
 Terrain generation runs on `AsyncComputeTaskPool` — do not block the main thread.
 
@@ -383,6 +384,14 @@ Named registry of all assets available to prefabs and scenes.
 - `Standard(StandardMaterialDef)` — PBR material (base colour, textures, metallic, roughness, etc.)
 - `Terrain(TerrainMaterialDef)` — splatmap + layer textures (WebGPU 16-byte alignment required)
 - `Custom(CustomMaterialDef)` — shader path + arbitrary texture/float/colour uniforms
+
+**`TerrainMaterialDef` fields** (used inside `kind: Terrain(…)`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `splatmap` | `String` | required | Path to RGBA splatmap (one channel per layer) |
+| `layers` | `Vec<String>` | required | Texture paths for up to 4 terrain layers (R, G, B, A channels) |
+| `uv_scale` | `f32` | `10.0` | UV tiling scale for layer textures. Higher values tile textures more finely. |
 
 ---
 

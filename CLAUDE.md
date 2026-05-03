@@ -109,32 +109,24 @@ python tools/asset_checker/check.py --orphans
 
 ## Planning
 
-Feature planning lives in `planning/`. The canonical priority queue is `planning/backlog.md`. Design specs for non-trivial features live in `planning/features/`.
+All work items live in `planning/`. See `planning/CLAUDE.md` for the full folder reference.
 
-### Backlog workflow
-- Items flow: **Icebox → Queued → Active → Done**
-- Move an item to **Active** when work starts; to **Done** when merged.
-- Keep `backlog.md` as the single source of priority — do not duplicate it into GitHub issues.
+### Backlog (`planning/backlog.md`)
+The canonical priority queue — features and bugs in one place. Items flow: **Icebox → Queued → Active → Done**. Do not duplicate items into GitHub issues or `docs/`.
 
-### When to create a feature file
-Create `planning/features/{name}.md` (copy `_template.md`) when a feature needs design discussion before coding: new schema fields, new event/action types, cross-capability changes, or anything where the approach is unclear. Skip the file for simple, self-contained additions.
+### Bugs
+Log known bugs in the `## Bugs` section of `planning/backlog.md` as a one-liner with reproduction and suspected cause. If the bug needs investigation before it can be fixed, also create `planning/investigations/{name}.md` and link to it from the backlog entry.
 
-### Claude suggestions
-While implementing features, if you notice something worth revisiting later — a pattern that could be improved, a latent bug, a follow-up optimisation — add a brief entry to `planning/claude_suggestions.md`. Only add things with a concrete technical basis observed during the current work, not general speculation. Each entry format:
+### Feature files (`planning/features/`)
+Create `planning/features/{name}.md` (copy `_template.md`) when a feature needs design discussion before coding: new schema fields, new event/action types, cross-capability changes, or anything where the approach is unclear. Always fill in `Planned at: <hash> (<YYYY-MM-DD>)` at the top — run `git rev-parse --short HEAD` to get the hash.
 
+### Claude suggestions (`planning/claude_suggestions.md`)
+While implementing features, if you notice something worth revisiting — a latent bug, a pattern that could be improved, a follow-up optimisation — add a brief entry. Format:
 ```
 - **Title** _(observed at `<hash>` <YYYY-MM-DD>)_
   What (one sentence) + Why (one sentence, concrete basis).
 ```
-
-Run `git rev-parse --short HEAD` to get the hash. Frank reviews these periodically and promotes good ones to the backlog.
-
-### Recording context in feature files
-When writing a new feature file, always fill in the `Planned at` metadata at the top:
-```
-Planned at: <short commit hash> (<YYYY-MM-DD>)
-```
-Run `git rev-parse --short HEAD` to get the hash. This creates a stable reference — use `git log <hash>..HEAD` later to see what changed between design and implementation.
+Only add things with a concrete technical basis. Frank reviews these periodically and promotes good ones to the backlog.
 
 ## Adding a new asset project
 

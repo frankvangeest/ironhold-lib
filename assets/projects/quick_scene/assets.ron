@@ -83,6 +83,7 @@
           "shared/terrain/dirt.png",
           "shared/terrain/snow.png",
         ],
+        uv_scale: 50.0,
       )),
       alpha_mode: Opaque,
       double_sided: false,

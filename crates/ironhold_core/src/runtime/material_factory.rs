@@ -57,6 +57,13 @@ impl MaterialFactory {
                 BuiltMaterialHandle::Standard(handle)
             }
             MaterialKind::Terrain(terrain_def) => {
+                if !matches!(def.alpha_mode, AlphaModeDef::Opaque) || def.double_sided || def.unlit {
+                    warn!(
+                        "Material '{}': alpha_mode, double_sided, and unlit are not supported for \
+                         Terrain materials and will be ignored.",
+                        name
+                    );
+                }
                 let fallback = |i: usize| -> String {
                     let defaults = [
                         "shared/terrain/grass.png",
@@ -70,7 +77,7 @@ impl MaterialFactory {
                 };
 
                 let mat = TerrainMaterial {
-                    uv_scale: Vec4::new(50.0, 0.0, 0.0, 0.0),
+                    uv_scale: Vec4::new(terrain_def.uv_scale, 0.0, 0.0, 0.0),
                     splatmap:  asset_server.load(terrain_def.splatmap.clone()),
                     texture_r: asset_server.load(fallback(0)),
                     texture_g: asset_server.load(fallback(1)),
