@@ -30,12 +30,11 @@ pub fn check_project_loaded(
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
 
-    if let Err(e) = config.validate() {
-        panic!("Invalid ProjectConfig: {}", e);
-    }
-
     // Phase 1: kick off all external file loads on the first frame the project config is ready.
     if pending.is_none() {
+        if let Err(e) = config.validate() {
+            error!("Invalid ProjectConfig: {} — scene loading may behave incorrectly", e);
+        }
         let model_fixes_handle = config.model_fixes_path.as_ref().map(|p| {
             let resolved = resolve_project_path(&project_root.0, p);
             info!("Loading external model fixes from: {}", resolved);
@@ -136,7 +135,7 @@ pub fn check_project_loaded(
                     let path = asset_server.get_path(h)
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "<unknown>".to_string());
-                    panic!("Asset catalog failed to load: {} — {}", path, e);
+                    error!("Asset catalog failed to load: {} — {} — proceeding with empty catalog", path, e);
                 }
                 _ => { return; }
             }
@@ -148,7 +147,7 @@ pub fn check_project_loaded(
                     let path = asset_server.get_path(h)
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "<unknown>".to_string());
-                    panic!("Prefab catalog failed to load: {} — {}", path, e);
+                    error!("Prefab catalog failed to load: {} — {} — proceeding with empty catalog", path, e);
                 }
                 _ => { return; }
             }
@@ -177,7 +176,7 @@ pub fn check_project_loaded(
             .cloned();
         if let Some(ref machine) = fsm {
             if let Err(e) = machine.validate() {
-                panic!("Invalid StateMachineAsset: {}", e);
+                error!("Invalid StateMachineAsset: {} — state machine transitions may be unreliable", e);
             }
             info!(
                 "State machine loaded: initial_state=\"{}\", {} states, {} transitions",
@@ -207,7 +206,7 @@ pub fn check_project_loaded(
             AssetCatalog::default()
         };
         if let Err(e) = asset_catalog.validate() {
-            panic!("Invalid AssetCatalog: {}", e);
+            error!("Invalid AssetCatalog: {} — catalog entries may not resolve correctly", e);
         }
         commands.insert_resource(LoadedAssetCatalog(asset_catalog));
 
@@ -217,7 +216,7 @@ pub fn check_project_loaded(
             PrefabCatalog::default()
         };
         if let Err(e) = prefab_catalog.validate() {
-            panic!("Invalid PrefabCatalog: {}", e);
+            error!("Invalid PrefabCatalog: {} — prefab spawning may fail", e);
         }
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
     }
