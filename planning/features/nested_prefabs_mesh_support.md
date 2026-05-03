@@ -19,7 +19,7 @@ It never reads the nested prefab's top-level `kind` or `model` fields, so:
 - `kind: "primitive"` with a top-level `model` but no `children` (single-shape like `"Sphere"`)
   → the shape is silently dropped.
 
-This creates a trap: a designer puts `(prefab: Some("oak_tree"))` in a composite prefab and sees
+This creates a trap: a designer puts `(prefab: "oak_tree")` in a composite prefab and sees
 nothing in-game with no error. Completing this feature closes the trap and makes nested prefabs
 work uniformly across all three kinds.
 
@@ -91,9 +91,9 @@ typo in the RON.
 
 ## Acceptance criteria
 
-- Given `(prefab: Some("oak_tree"))` where `"oak_tree"` is `kind: "prop"` pointing to a GLB,
+- Given `(prefab: "oak_tree")` where `"oak_tree"` is `kind: "prop"` pointing to a GLB,
   when the scene loads, then the GLB mesh appears at the correct world position.
-- Given `(prefab: Some("beacon"))` where `"beacon"` is `kind: "primitive"` with `model: "Sphere"`
+- Given `(prefab: "beacon")` where `"beacon"` is `kind: "primitive"` with `model: "Sphere"`
   and no `children`, when the scene loads, then a sphere mesh appears at the correct position.
 - All existing composite-primitive nested prefabs (`village` → `well`, `house_cottage`, etc.)
   continue to work identically.

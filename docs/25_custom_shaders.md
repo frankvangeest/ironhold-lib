@@ -192,13 +192,13 @@ All shaders live in `assets/shared/shaders/`.
    ```ron
    "my_new_mat": (
      kind: Custom((
-       shader: Some("shared/shaders/my_new.wgsl"),
+       shader: "shared/shaders/my_new.wgsl",
        colors:  { "tint": (r: 1.0, g: 0.5, b: 0.2, a: 1.0) },
        floats:  { "power": 3.0 },
      )),
    ),
    ```
-6. **Reference it in a prefab** via `material: Some("my_new_mat")`.
+6. **Reference it in a prefab** via `material: "my_new_mat"`.
 7. **Test in a web build** — WebGPU is stricter than native wgpu. Run `python test_web.py` or at minimum load the project in a browser.
 
 ---
@@ -229,7 +229,7 @@ To achieve a self-illuminated or glowing look without HDR:
 ```ron
 "mat_glow": (
   kind: Custom((
-    shader: Some("shared/shaders/custom_unlit_color.wgsl"),
+    shader: "shared/shaders/custom_unlit_color.wgsl",
     colors: { "color": (r: 0.2, g: 0.8, b: 1.0, a: 0.7) },
   )),
   alpha_mode: Add,
@@ -248,7 +248,7 @@ By default, meshes are rendered with back-face culling enabled — fragments on 
 ```ron
 "mat_sky": (
   kind: Custom((
-    shader: Some("shared/shaders/custom_gradient.wgsl"),
+    shader: "shared/shaders/custom_gradient.wgsl",
     colors: {
       "color_a": (r: 0.52, g: 0.70, b: 0.88, a: 1.0),  // horizon
       "color_b": (r: 0.03, g: 0.10, b: 0.48, a: 1.0),  // zenith
@@ -266,9 +266,9 @@ By default, meshes are rendered with back-face culling enabled — fragments on 
 "sky_sphere": (
   kind: "primitive",
   model: "Sphere",
-  material: Some("mat_sky"),
+  material: "mat_sky",
   components: (),
-  primitive: Some((radius: Some(500.0))),
+  primitive: (radius: 500.0),
 ),
 ```
 

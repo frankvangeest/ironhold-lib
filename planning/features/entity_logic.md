@@ -46,8 +46,8 @@ Reuse `StateMachineAsset` verbatim — no new schema type needed. Behavior files
       on: [] ),
   ],
   transitions: [
-    ( from: Some("closed"), on: "entity.interacted:{self}", to: "open" ),
-    ( from: Some("open"),   on: "entity.interacted:{self}", to: "closed" ),
+    ( from: "closed", on: "entity.interacted:{self}", to: "open" ),
+    ( from: "open",   on: "entity.interacted:{self}", to: "closed" ),
   ],
 )
 ```
@@ -76,8 +76,8 @@ Follow the same resolve-on-load pattern as `PendingAnimationPolicy` → `Animati
 PrefabDef(
   id: "door",
   model: "models/door.glb",
-  behavior: Some("behaviors/door.behavior.ron"),
-  interactable: Some(InteractableDef( radius: 2.0 )),
+  behavior: "behaviors/door.behavior.ron",
+  interactable: ( radius: 2.0 ),
   // ...
 )
 ```
@@ -209,8 +209,8 @@ shown/hidden via `Visibility` when the player enters/exits range.
 
 ## Acceptance criteria
 
-- Given a prefab with `behavior: Some("behaviors/door.behavior.ron")` and
-  `interactable: Some(InteractableDef(radius: 2.0))`, when the player walks within 2 m and
+- Given a prefab with `behavior: "behaviors/door.behavior.ron"` and
+  `interactable: ( radius: 2.0 )`, when the player walks within 2 m and
   presses the interact key, the door entity transitions from `"closed"` to `"open"` and the
   `"open"` animation plays on the door (not the player).
 - Given a second door entity with the same behavior file but a different spawn ID, interacting

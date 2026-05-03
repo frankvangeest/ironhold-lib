@@ -123,13 +123,13 @@ _Last updated: 2026‑04‑17_
 Two authoring workflows are supported. A project uses one or the other via its `.project.ron`.
 
 ### rules.ron workflow (schema v2)
-- `rules_path: Some("logic/rules.ron")` in project config.
-- Rules with `when` omitted (or `None`) fire in any logic state.
-- Rules with `when: Some("state_name")` only fire while the interpreter is in that named state.
+- `rules_path: "logic/rules.ron"` in project config.
+- Rules with `when` omitted fire in any logic state.
+- Rules with `when: "state_name"` only fire while the interpreter is in that named state.
 - `Action::EnterState(name)` transitions to a named state; `EnterState("")` returns to stateless.
 
 ### state_machine.ron workflow (schema v1) ✅
-- `state_machine_path: Some("logic/state_machine.ron")` in project config.
+- `state_machine_path: "logic/state_machine.ron"` in project config.
 - Declares named states with `entry_actions`, `exit_actions`, and in-state `on` event bindings.
 - `transitions` list drives state changes (`from` optional — omit for any-state transitions).
 - `global_on` list fires regardless of current state without changing state.
@@ -156,8 +156,8 @@ Two authoring workflows are supported. A project uses one or the other via its `
     ],
     transitions: [
       ( on: "scene.ready:main",       to: "playing" ),  // any-state
-      ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
-      ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+      ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
+      ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
     ],
   )
   ```
@@ -170,7 +170,7 @@ Two authoring workflows are supported. A project uses one or the other via its `
     Button(
       text: "Start Game", 
       action: Trigger("start_game"), 
-      position: Some((100.0, 100.0)) // Optional, defaults to None (centered)
+      position: (100.0, 100.0) // Optional, defaults to centered when omitted
     ),
     Button(
       text: "Quit",       

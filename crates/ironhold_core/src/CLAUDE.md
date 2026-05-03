@@ -91,15 +91,15 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `Despawn("{self}")` → `Despawn("entity_id")`
 - `PlayAnimationOn { target: "{self}", clip: "..." }` → target becomes the entity's ID
 - `EmitEvent("event:{self}")` → event name with `{self}` filled in
-- `Spawn { prefab: "...", id: Some("{self}_child") }` → id with `{self}` filled in
+- `Spawn { prefab: "...", id: "{self}_child" }` → id with `{self}` filled in
 
 **New capabilities for entity logic:**
 
-`TriggerZone` — set `trigger_zone: Some((radius: 2.0))` on a `PrefabDef`. A Rapier sphere sensor is spawned. Emits:
+`TriggerZone` — set `trigger_zone: (radius: 2.0)` on a `PrefabDef`. A Rapier sphere sensor is spawned. Emits:
 - `GameEvent::Trigger("entity.entered:{id}")` on player enter
 - `GameEvent::Trigger("entity.exited:{id}")` on player exit
 
-`Interactable` — set `interactable: Some((radius: 2.5))` on a `PrefabDef`. No collider needed. Emits:
+`Interactable` — set `interactable: (radius: 2.5)` on a `PrefabDef`. No collider needed. Emits:
 - `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses the interact key (configured via `inputs.interact` in the player prefab, default `"KeyF"`)
 
 `interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.

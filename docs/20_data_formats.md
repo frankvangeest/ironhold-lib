@@ -85,15 +85,15 @@ Entry point for a project. References all other files.
 ```ron
 (
     schema_version: 2,
-    project_id: Some("quick_scene"),
-    display_name: Some("Quick Scene"),
+    project_id: "quick_scene",
+    display_name: "Quick Scene",
 
     initial_scene: "scenes/main.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    rules_path: Some("logic/rules.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 )
 ```
 
@@ -101,15 +101,15 @@ Entry point for a project. References all other files.
 ```ron
 (
     schema_version: 3,
-    project_id: Some("my_game"),
-    display_name: Some("My Game"),
+    project_id: "my_game",
+    display_name: "My Game",
 
     initial_scene: "scenes/start_menu.scene.ron",
 
-    asset_catalog: Some("assets.ron"),
-    prefab_catalog: Some("prefabs/prefabs.ron"),
-    state_machine_path: Some("logic/state_machine.ron"),
-    model_fixes_path: Some("overrides/model_fixes.ron"),
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
 
     global_key_bindings: {
         "Escape": "toggle_pause",
@@ -139,7 +139,7 @@ File extension must be `.scene.ron`.
 | `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
-| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: Some(false/true)`. |
+| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: false` or `depth_scale: true`. |
 
 **Example:**
 ```ron
@@ -147,14 +147,14 @@ File extension must be `.scene.ron`.
   schema_version: 2,
   name: "main",
 
-  lighting: Some((
-    ambient: Some((0.35, 0.35, 0.4)),
-    directional: Some((
+  lighting: (
+    ambient: (0.35, 0.35, 0.4),
+    directional: (
       color: (1.0, 0.98, 0.92),
       intensity: 12000.0,
       rotation_euler_deg: (-45.0, 35.0, 0.0),
-    )),
-  )),
+    ),
+  ),
 
   spawn_points: {
     "player_start": (0.0, 4.0, 0.0),
@@ -254,18 +254,18 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 **Example (full lighting block):**
 ```ron
-lighting: Some((
-  ambient: Some((0.25, 0.30, 0.45)),
-  ambient_brightness: Some(15.0),
+lighting: (
+  ambient: (0.25, 0.30, 0.45),
+  ambient_brightness: 15.0,
 
-  directional: Some((
+  directional: (
     color: (1.0, 0.95, 0.85),
     intensity: 30000.0,
     rotation_euler_deg: (-45.0, 25.0, 0.0),
     shadows_enabled: true,
-    shadow_distance: Some(450.0),
-    cascade_overlap: Some(0.5),
-  )),
+    shadow_distance: 450.0,
+    cascade_overlap: 0.5,
+  ),
 
   point_lights: [
     (
@@ -275,7 +275,7 @@ lighting: Some((
       range: 60.0,
     ),
   ],
-)),
+),
 ```
 
 ### Label depth scaling (`LabelDepthScaleDef`)
@@ -285,22 +285,22 @@ Controls how labels scale with camera distance. Set at scene level; individual l
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `reference_distance` | `f32` | `50.0` | Camera distance at which labels render at their authored `font_size` (1:1). Labels further away shrink proportionally; labels closer stay at 1:1 (never grow larger). |
-| `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of `font_size` (0.0–1.0). `Some(0.25)` means labels never shrink below 25% of their authored size. `None` means no floor — labels scale toward zero at extreme distances. |
+| `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of `font_size` (0.0–1.0). `0.25` means labels never shrink below 25% of their authored size. Omitting `min_scale` means no floor — labels scale toward zero at extreme distances. |
 
 **Per-label override** — both `WorldLabelDef` and `EntityLabelDef` accept a `depth_scale: Option<bool>` field:
-- `depth_scale: Some(false)` — pin this label at its authored size regardless of scene setting
-- `depth_scale: Some(true)` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
+- `depth_scale: false` — pin this label at its authored size regardless of scene setting
+- `depth_scale: true` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
 - `depth_scale` omitted — inherits the scene setting (default)
 
 **Example:**
 ```ron
-label_depth_scale: Some((
+label_depth_scale: (
   reference_distance: 80.0,
-  min_scale: Some(0.25),
-)),
+  min_scale: 0.25,
+),
 
 // In entities — a nearby header pinned at full size:
-label: Some((text: "Header", depth_scale: Some(false))),
+label: (text: "Header", depth_scale: false),
 ```
 
 ### Terrain (`TerrainConfigV2`)
@@ -358,7 +358,7 @@ Named registry of all assets available to prefabs and scenes.
   materials: {
     "wood_crate": (
       kind: Standard((
-        base_color_texture: Some("shared/textures/wood_crate_albedo.png"),
+        base_color_texture: "shared/textures/wood_crate_albedo.png",
         metallic: 0.0,
         perceptual_roughness: 0.85,
       )),
@@ -589,12 +589,12 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
   kind: "actor",
   model: "orc_glb",
   components: (
-    npc: Some((
+    npc: (
       faction: Hostile,
       on_player_near: Chase,
       detection_radius: 8.0,
       chase_radius: 20.0,
-      fov_degrees: Some(110.0),
+      fov_degrees: 110.0,
       requires_los: true,
       approach_distance: 1.5,
       patrol_speed: 2.5,
@@ -604,7 +604,7 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
         (5.0, 0.0, 10.0),
       ],
       // alerted_duration / drag / waypoint_reach_radius omitted — use defaults
-    )),
+    ),
   ),
 ),
 
@@ -612,9 +612,9 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
 "rat": (
   kind: "primitive",
   model: "Capsule3d",
-  primitive: Some(( radius: Some(0.15), height: Some(0.3) )),
+  primitive: ( radius: 0.15, height: 0.3 ),
   components: (
-    npc: Some((
+    npc: (
       faction: Neutral,
       on_player_near: Flee,
       detection_radius: 3.0,
@@ -622,7 +622,7 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
       eye_height: 0.15,
       drag: 0.5,
       waypoint_reach_radius: 0.2,
-    )),
+    ),
   ),
 ),
 ```
@@ -665,22 +665,22 @@ When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates 
       kind: "primitive",
       model: "Cuboid",
       components: (),
-      primitive: Some((
-        size: Some((2.0, 2.0, 2.0)),
+      primitive: (
+        size: (2.0, 2.0, 2.0),
         // color omitted — uses project primitive_default_color
-        roughness: Some(0.4),
-      )),
+        roughness: 0.4,
+      ),
     ),
     "beacon_sphere": (
       kind: "primitive",
       model: "Sphere",
       components: (),
-      primitive: Some((
-        radius: Some(1.5),
-        color: Some((0.9, 0.2, 0.2)),  // red override
-        roughness: Some(0.2),
-        metallic: Some(0.3),
-      )),
+      primitive: (
+        radius: 1.5,
+        color: (0.9, 0.2, 0.2),  // red override
+        roughness: 0.2,
+        metallic: 0.3,
+      ),
     ),
   }
 )
@@ -708,7 +708,7 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
   model: "barrel",
   components: (),
   colliders: [
-    (shape: "Cylinder", radius: Some(0.35), height: Some(0.9)),
+    (shape: "Cylinder", radius: 0.35, height: 0.9),
   ],
 ),
 
@@ -718,8 +718,8 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
   model: "chest_01",
   components: (tags: ["loot"]),
   colliders: [
-    (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0)),
-    (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+    (shape: "Cuboid", size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
+    (shape: "Cuboid", size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
   ],
 ),
 
@@ -729,10 +729,10 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
   model: "archway",
   components: (),
   colliders: [
-    (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: (-1.5, 1.5, 0.0)),
-    (shape: "Cuboid", size: Some((0.4, 3.0, 0.4)), offset: ( 1.5, 1.5, 0.0)),
-    (shape: "Cuboid", size: Some((3.4, 0.4, 0.4)), offset: ( 0.0, 3.2, 0.0)),
-    (shape: "Cuboid", size: Some((0.3, 2.0, 0.3)), offset: ( 0.0, 1.5, 0.0), rotation_euler_deg: (0.0, 0.0, 45.0)),
+    (shape: "Cuboid", size: (0.4, 3.0, 0.4), offset: (-1.5, 1.5, 0.0)),
+    (shape: "Cuboid", size: (0.4, 3.0, 0.4), offset: ( 1.5, 1.5, 0.0)),
+    (shape: "Cuboid", size: (3.4, 0.4, 0.4), offset: ( 0.0, 3.2, 0.0)),
+    (shape: "Cuboid", size: (0.3, 2.0, 0.3), offset: ( 0.0, 1.5, 0.0), rotation_euler_deg: (0.0, 0.0, 45.0)),
   ],
 ),
 ```
@@ -772,25 +772,25 @@ A child can reference another named prefab by key instead of defining an inline 
     // Inline primitive — existing syntax, unchanged
     (
       shape: "Cuboid",
-      material: Some("mat_stone_cobble"),
-      primitive: (size: Some((18.0, 0.02, 14.0))),
+      material: "mat_stone_cobble",
+      primitive: (size: (18.0, 0.02, 14.0)),
       offset: (0.0, 0.01, 0.0),
     ),
     // Nested composite prefab (kind: "primitive" with children)
     (
-      prefab: Some("well"),
+      prefab: "well",
       offset: (5.0, 0.0, 0.0),
       rotation_euler_deg: (0.0, 45.0, 0.0),
     ),
     // Nested GLB prop (kind: "prop" — loads a .glb file)
     (
-      prefab: Some("rock_deco"),
+      prefab: "rock_deco",
       offset: (3.0, 0.0, -2.0),
       rotation_euler_deg: (0.0, 35.0, 0.0),
     ),
     // Nested single-shape primitive (kind: "primitive" with no children, just a model)
     (
-      prefab: Some("beacon"),
+      prefab: "beacon",
       offset: (-6.0, 0.0, -4.0),
     ),
   ],
@@ -830,7 +830,7 @@ Defines the locomotion clips and override animations for a character type.
 
 ```ron
 (
-    default_transition_ms: Some(150),
+    default_transition_ms: 150,
 
     base: (
         idle:      "Idle_Loop",
@@ -851,14 +851,14 @@ Defines the locomotion clips and override animations for a character type.
             priority: 50,
             looping: true,
             cancel_on_move: true,
-            stop_action: Some("stop_dance"),
+            stop_action: "stop_dance",
         ),
         (
             id: "attack_light",
             clip: "Sword_Attack",
             priority: 100,
             looping: false,
-            duration: Some(0.6),
+            duration: 0.6,
             cancel_on_move: false,
         ),
     ],
@@ -991,7 +991,7 @@ Used when `state_machine_path` is set in the project config (schema v3). Replace
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `from` | `Option<String>` | Source state; `None` matches any current state |
+| `from` | `Option<String>` | Source state; omit to match any current state |
 | `on` | `String` | Event that triggers this transition |
 | `to` | `String` | Target state |
 
@@ -1004,13 +1004,13 @@ Execution order on transition: `exit_actions` of old state → state change → 
 Can be set on `ProjectConfig.global_environment` and overrides per-scene lighting if a scene has no environment block.
 
 ```ron
-global_environment: Some((
+global_environment: (
     intensity: 400.0,
-    fallback: Some((
+    fallback: (
         top_color: (0.1, 0.2, 0.4),
         bottom_color: (0.01, 0.01, 0.01),
-    )),
-)),
+    ),
+),
 ```
 
 - `intensity` — IBL strength

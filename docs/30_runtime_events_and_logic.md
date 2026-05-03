@@ -41,7 +41,7 @@ This section is factual and reflects what exists right now.
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic (point-to-point, not through the pipeline).
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
 - ✅ A message interpreter maps UI events, game events, and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
-- ✅ Rules support an optional `when` guard: rules with `when: Some("state_name")` only fire while the interpreter is in that named state; rules with `when: None` (or omitted) fire in any state.
+- ✅ Rules support an optional `when` guard: rules with `when: "state_name"` only fire while the interpreter is in that named state; rules with `when` omitted fire in any state.
 - ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. Replaces `rules.ron` for FSM projects. States declare `entry_actions`, `exit_actions`, and in-state `on` bindings; `transitions` drive state changes; `global_on` fires from any state.
 - ✅ An **entity FSM interpreter** (`entity_fsm_interpreter_system`) runs the same `StateMachineAsset` format per entity. Entities with a `behavior` path on their `PrefabDef` load an independent FSM; `{self}` in event patterns and action targets is substituted with the entity's spawn ID at runtime, making behavior files reusable across instances. See [Entity FSM section](#entity-fsm-beta-04) below.
 - ✅ An action executor applies actions; notably:
@@ -175,18 +175,18 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
         ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop("bg_music") ] ),
 
         // `when` guard — only fires while in the named state
-        ( on: "ui.button_pressed:start_game", when: Some("menu"), do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
-        ( on: "ui.button_pressed:quit",       when: Some("menu"), do_actions: [ Quit ] ),
+        ( on: "ui.button_pressed:start_game", when: "menu", do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
+        ( on: "ui.button_pressed:quit",       when: "menu", do_actions: [ Quit ] ),
 
-        ( on: "ui.button_pressed:toggle_pause", when: Some("playing"), do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
-        ( on: "ui.button_pressed:toggle_pause", when: Some("paused"),  do_actions: [ UnloadOverlay, EnterState("playing") ] ),
+        ( on: "ui.button_pressed:toggle_pause", when: "playing", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
+        ( on: "ui.button_pressed:toggle_pause", when: "paused",  do_actions: [ UnloadOverlay, EnterState("playing") ] ),
     ],
 )
 ```
 
 Event name format: `"<domain>.<type>:<payload>"`. The interpreter matches the full string against each rule's `on` field. UI button events are always `"ui.button_pressed:<trigger>"` where the trigger is the button's `action` field with the `"ui."` prefix stripped.
 
-The optional `when` field (type `Option<String>`, `#[serde(default)]`) gates a rule to a named logic state. Omitting it is equivalent to `when: None`, which fires in every state.
+The optional `when` field gates a rule to a named logic state. Omitting it fires in every state.
 
 ## Execution model (planned)
 
@@ -247,7 +247,7 @@ Applies actions to the world. Key design points:
 - `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
-- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — spawns a prefab instance by key; `id` auto-generated if omitted; `position: Some((x,y,z))` sets an explicit world position; `spawn_point: Some("name")` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: Some(f)` rotates around the Y axis in degrees (0 = model default facing, 90/180/270 = 90°/180°/270° clockwise)
+- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — spawns a prefab instance by key; `id` auto-generated if omitted; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees (0 = model default facing, 90/180/270 = 90°/180°/270° clockwise)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
 - `PlaySound(String)` — fire-and-forget audio by catalog key; warns for unsupported formats or missing keys
@@ -263,7 +263,7 @@ Applies actions to the world. Key design points:
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
 - `LogicState` resource — tracks the current named state (default `""`); checked by both interpreters
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
-- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support optional `when: Option<String>` state guard
+- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support an optional `when: "state_name"` guard
 - `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; used when `state_machine_path` is set in the project config
 
 ### FSM asset schema (`logic/state_machine.ron`) ✅
@@ -301,8 +301,8 @@ Applies actions to the world. Key design points:
         ( on: "scene.ready:main", to: "playing" ),
 
         // Explicit from/to.
-        ( from: Some("playing"), on: "ui.button_pressed:toggle_pause", to: "paused" ),
-        ( from: Some("paused"),  on: "ui.button_pressed:toggle_pause", to: "playing" ),
+        ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
     ],
 )
 ```
@@ -329,9 +329,9 @@ Add `behavior` (and optionally `interactable` or `trigger_zone`) to a `PrefabDef
 "collectible_box": (
   kind: "primitive",
   model: "Cuboid",
-  behavior: Some("behaviors/collectible_box.behavior.ron"),
-  interactable: Some(( radius: 2.5 )),
-  primitive: Some(( size: Some((0.8, 0.8, 0.8)), color: Some((0.9, 0.7, 0.2)) )),
+  behavior: "behaviors/collectible_box.behavior.ron",
+  interactable: ( radius: 2.5 ),
+  primitive: ( size: (0.8, 0.8, 0.8), color: (0.9, 0.7, 0.2) ),
 ),
 ```
 
@@ -348,7 +348,7 @@ The behavior file uses `{self}` as a placeholder for the entity's spawn ID:
     ( name: "collected", entry_actions: [ PlaySound("score"), Despawn("{self}") ], exit_actions: [], on: [] ),
   ],
   transitions: [
-    ( from: Some("idle"), on: "entity.interacted:{self}", to: "collected" ),
+    ( from: "idle", on: "entity.interacted:{self}", to: "collected" ),
   ],
 )
 ```
@@ -363,15 +363,15 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `Despawn("{self}")` → `Despawn("box_01")`
 - `PlayAnimationOn { target: "{self}", clip: "open" }` → `target: "box_01"`
 - `EmitEvent("door.opened:{self}")` → `"door.opened:box_01"`
-- `Spawn { prefab: "...", id: Some("{self}_debris") }` → id `"box_01_debris"`
+- `Spawn { prefab: "...", id: "{self}_debris" }` → id `"box_01_debris"`
 
 ### New capabilities
 
 | Capability | PrefabDef field | Emitted event | Notes |
 |---|---|---|---|
 | `CharacterController` | `components.movement` | `player.jumped` | Emitted on every jump; bind sound/effect in `state_machine.ron` |
-| `TriggerZone` | `trigger_zone: Some(( radius: 2.0 ))` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
-| `Interactable` | `interactable: Some(( radius: 2.5 ))` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
+| `TriggerZone` | `trigger_zone: ( radius: 2.0 )` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
+| `Interactable` | `interactable: ( radius: 2.5 )` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
 
 ### System ordering
 

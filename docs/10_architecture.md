@@ -84,7 +84,7 @@ Three material types are available. Choose the simplest one that fits:
 
 1. Author a `.wgsl` fragment shader in `assets/shared/shaders/` (or a project subfolder).
 2. Declare the material in `assets.ron` — set `shader`, `colors`, `floats`, and `textures`.
-3. Reference the material key from a prefab definition (`material: Some("key")`).
+3. Reference the material key from a prefab definition (`material: "key"`).
 4. The engine packs uniforms, loads the shader via the asset server, and creates the GPU pipeline automatically.
 
 Each unique shader handle produces a separate GPU render pipeline (Bevy's material specialisation). Materials sharing the same shader share the same pipeline.

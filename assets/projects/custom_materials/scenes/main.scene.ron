@@ -17,7 +17,7 @@
       shadow_distance: 450.0,
       // Wider cascade overlap softens the transition between shadow cascade levels,
       // reducing the risk of a visible band on large flat surfaces.
-      // cascade_overlap: Some(0.5),
+      // cascade_overlap: 0.5,
     ),
 
     // Accent point lights — one warm fill, one cool fill, one above each row.
