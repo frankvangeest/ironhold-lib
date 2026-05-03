@@ -1607,6 +1607,64 @@ fn test_player_prefab_inputs_omitted_backward_compat() {
         "inputs should be None when the field is absent");
 }
 
+// ── PrefabComponents.camera (M-8) ─────────────────────────────────────────────
+
+#[test]
+fn test_player_prefab_camera_full_config_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        camera: (
+                            offset:          (0.0, 3.0, 8.0),
+                            look_at_offset:  (0.0, 1.5, 0.0),
+                            zoom_speed:      5.0,
+                            orbit_speed:     0.3,
+                            min_radius:      3.0,
+                            max_radius:      15.0,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("player with full camera block should parse");
+    assert!(catalog.validate().is_ok());
+    let cam = catalog.prefabs["player"].components.camera.as_ref()
+        .expect("camera should be Some after explicit RON block");
+    assert_eq!(cam.offset,         (0.0, 3.0, 8.0));
+    assert_eq!(cam.look_at_offset, (0.0, 1.5, 0.0));
+    assert_eq!(cam.zoom_speed,     5.0);
+    assert_eq!(cam.orbit_speed,    0.3);
+    assert_eq!(cam.min_radius,     3.0);
+    assert_eq!(cam.max_radius,     15.0);
+}
+
+#[test]
+fn test_player_prefab_camera_omitted_backward_compat() {
+    // Existing player prefabs without a camera block must still parse and default to None.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: ( tags: ["player"] ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("player without camera block should parse");
+    assert!(catalog.prefabs["player"].components.camera.is_none(),
+        "camera should be None when the field is absent");
+}
+
 // ── PrefabComponents.flycam (M-3) ─────────────────────────────────────────────
 
 #[test]

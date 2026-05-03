@@ -441,6 +441,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.inputs` | `Option<InputMap>` | Key bindings for the player character. Only read for `"player"` prefabs. Omit to use WASD defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.flycam` | `Option<FlyCamDef>` | Speed and sensitivity tuning for the free-fly camera. Only read for `"flycam"` prefabs. Omit to use defaults. See [Special tag: `"flycam"`](#special-tag-flycam-) below. |
+| `components.camera` | `Option<CameraConfig>` | Orbit camera settings (offset, zoom, orbit speed, radius limits). Only read for `"player"` prefabs. Omit to use engine defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.npc` | `Option<NpcDef>` | NPC AI configuration. When set, the entity gets a dynamic physics body and an NPC behaviour driver. See [NPC behaviour](#npc-behaviour-componentsnpc-) below. |
 | `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound("sfx_jump")`). |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
@@ -548,6 +549,17 @@ Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Spac
 **`JumpConfig` variants:**
 - `Fixed(height: <f32>)` — absolute world-space height in metres (e.g. `Fixed(height: 2.5)`)
 - `RelativeToHeight(percent: <f32>)` — fraction of the player's own height (e.g. `RelativeToHeight(percent: 100)`)
+
+**`CameraConfig` fields** (`components.camera` — omit the entire block to use engine defaults):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `offset` | `(f32, f32, f32)` | `(0, 5, 10)` | Camera position relative to the player (right, up, back) |
+| `look_at_offset` | `(f32, f32, f32)` | `(0, 2, 0)` | Point the camera looks at, relative to the player origin (use `(0, 1.5, 0)` to look at chest height) |
+| `zoom_speed` | `f32` | `10.0` | Scroll-wheel zoom speed |
+| `orbit_speed` | `f32` | `0.5` | Mouse orbit speed (radians per pixel) |
+| `min_radius` | `f32` | `2.0` | Minimum zoom distance in metres |
+| `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |
 
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron

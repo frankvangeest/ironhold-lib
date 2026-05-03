@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub const GAME_SCENE_V2_SCHEMA_VERSION: u32 = 2;
 
@@ -53,7 +53,7 @@ pub struct GameSceneV2 {
     #[serde(default)]
     pub terrain: Option<TerrainConfigV2>,
     #[serde(default)]
-    pub spawn_points: HashMap<String, (f32, f32, f32)>,
+    pub spawn_points: BTreeMap<String, (f32, f32, f32)>,
     #[serde(default)]
     pub entities: Vec<SceneEntityDef>,
     #[serde(default)]

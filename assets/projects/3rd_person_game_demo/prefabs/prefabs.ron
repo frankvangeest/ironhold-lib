@@ -4,10 +4,19 @@
     "player_warrior": (
       kind: "actor",
       model: "hero",
+      animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
+        // Orbit camera tuning. All fields optional — omit the block to use engine defaults.
+        camera: (
+          offset:         (0.0, 2.5, 8.0),   // camera sits 2.5 m up, 8 m behind
+          look_at_offset: (0.0, 1.0, 0.0),   // look at chest height
+          zoom_speed:     8.0,
+          orbit_speed:    0.4,
+          min_radius:     3.0,
+          max_radius:     18.0,
+        ),
       ),
-      animation_policy: "prefabs/animation/player_policy.ron",
     ),
 
     "enemy_orc_melee": (

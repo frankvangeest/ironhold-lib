@@ -3,7 +3,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::render::render_resource::{
     Extent3d, TextureDimension, TextureFormat, TextureViewDimension, TextureViewDescriptor,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::ProjectRoot;
 use crate::schema::*;
@@ -86,7 +86,7 @@ pub struct LoadedPrefabCatalog(pub PrefabCatalog);
 /// Named spawn points from the most recently loaded scene. Available to `Action::Spawn`
 /// so dynamically spawned entities can use scene-defined positions.
 #[derive(Resource, Default, Clone)]
-pub struct LoadedSpawnPoints(pub HashMap<String, (f32, f32, f32)>);
+pub struct LoadedSpawnPoints(pub BTreeMap<String, (f32, f32, f32)>);
 
 /// Tracks externally-loaded project config files that are still loading.
 /// Inserted by `check_project_loaded` on the first frame the project config is ready,
@@ -105,7 +105,7 @@ pub struct PendingProjectLoads {
 #[derive(Resource, Default)]
 pub struct SpawnRegistry {
     pub counter: u64,
-    pub entities: HashMap<String, Entity>,
+    pub entities: BTreeMap<String, Entity>,
 }
 
 // ─── Components ───────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use super::material::MaterialDef;
-use super::player::InputMap;
+use super::player::{CameraConfig, InputMap};
 
 pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 1;
@@ -401,6 +401,11 @@ pub struct PrefabComponents {
     /// Only read for prefabs with `tags: ["flycam"]`.
     #[serde(default)]
     pub flycam: Option<FlyCamDef>,
+    /// Orbit camera configuration for the player.
+    /// Only read for prefabs with `tags: ["player"]`.
+    /// When omitted, engine defaults apply (offset 10 m behind, 5 m up).
+    #[serde(default)]
+    pub camera: Option<CameraConfig>,
 }
 
 /// Movement parameters for any prefab with the "player" tag (primitive or GLB).

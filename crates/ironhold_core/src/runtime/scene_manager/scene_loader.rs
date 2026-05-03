@@ -511,7 +511,7 @@ pub fn spawn_scene_v2(
                 player_config = Some(PlayerConfig {
                     model_path,
                     initial_position: (translation.x, translation.y, translation.z),
-                    camera: default_camera_config(),
+                    camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
                     inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
                     animation_policy,
                     movement: prefab.components.movement.clone(),
@@ -655,7 +655,7 @@ pub fn spawn_scene_v2(
                 );
             }
 
-            let cam = default_camera_config();
+            let cam = components.camera.clone().unwrap_or_else(default_camera_config);
             let cam_offset = Vec3::from(cam.offset);
             commands.spawn((
                 Name::new("Orbit Camera"),
