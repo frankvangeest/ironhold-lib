@@ -439,6 +439,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
 | `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
+| `components.inputs` | `Option<InputMap>` | Key bindings for the player character. Only read for `"player"` prefabs. Omit to use WASD defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
+| `components.flycam` | `Option<FlyCamDef>` | Speed and sensitivity tuning for the free-fly camera. Only read for `"flycam"` prefabs. Omit to use defaults. See [Special tag: `"flycam"`](#special-tag-flycam-) below. |
 | `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound("sfx_jump")`). |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
@@ -456,14 +458,36 @@ A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying 
 - **LShift / RShift** — fast mode
 - **Hold LMB or RMB + move mouse** — rotate view (mouse is free for UI when no button is held)
 
+**`FlyCamDef` fields** (`components.flycam`, all optional — defaults apply when omitted):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `speed` | `f32` | `100.0` | Normal movement speed in units/second |
+| `fast_speed` | `f32` | `200.0` | Movement speed while Shift is held, in units/second |
+| `sensitivity` | `f32` | `0.002` | Mouse look sensitivity in radians per pixel |
+
 To display the camera's world position in the UI, add a label element with `id: "flycam_position"` to the scene's `ui` array. The engine will update it every frame.
 
 ```ron
-// In prefabs/prefabs.ron
+// In prefabs/prefabs.ron — minimal (all defaults)
 "flycam": (
   kind: "prop",
   model: "",
   components: ( tags: ["flycam"] ),
+),
+
+// In prefabs/prefabs.ron — with custom speed tuning
+"flycam_slow": (
+  kind: "prop",
+  model: "",
+  components: (
+    tags: ["flycam"],
+    flycam: (
+      speed:       20.0,
+      fast_speed:  80.0,
+      sensitivity: 0.001,
+    ),
+  ),
 ),
 
 // In scenes/main.scene.ron — entity
@@ -489,7 +513,23 @@ To display the camera's world position in the UI, add a label element with `id: 
 
 ### Special tag: `"player"` ✅
 
-A prefab with `components.tags: ["player"]` spawns a third-person character controller with an orbit camera. Works on both `kind: "actor"` (GLB model) and `kind: "primitive"` (capsule shape). Movement is tuned via `components.movement`.
+A prefab with `components.tags: ["player"]` spawns a third-person character controller with an orbit camera. Works on both `kind: "actor"` (GLB model) and `kind: "primitive"` (capsule shape). Movement is tuned via `components.movement`; key bindings are tuned via `components.inputs`.
+
+**`InputMap` fields** (`components.inputs` — omit the entire block to use WASD defaults):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `forward` | `String` | `"KeyW"` | Move forward |
+| `backward` | `String` | `"KeyS"` | Move backward |
+| `left` | `String` | `"KeyA"` | Rotate/strafe left |
+| `right` | `String` | `"KeyD"` | Rotate/strafe right |
+| `strafe_left` | `String` | `"KeyQ"` | Strafe left (camera-relative) |
+| `strafe_right` | `String` | `"KeyE"` | Strafe right (camera-relative) |
+| `jump` | `String` | `"Space"` | Jump |
+| `run` | `String` | `"ShiftLeft"` | Hold to run |
+| `interact` | `String` | `"KeyF"` | Interact with nearby `interactable` entities |
+
+Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Space"`, `"ShiftLeft"`, `"KeyF"`, etc. (See `InputMap::parse_key` in `schema/player.rs` for the full accepted set.) Invalid key names produce a warning at load time and the binding has no effect.
 
 **`MovementConfig` fields** (all optional — defaults apply when omitted):
 

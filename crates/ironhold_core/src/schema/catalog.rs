@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use super::material::MaterialDef;
+use super::player::InputMap;
 
 pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 1;
@@ -321,6 +322,36 @@ fn default_approach_distance() -> f32 { 2.0 }
 fn default_patrol_speed() -> f32 { 2.0 }
 fn default_chase_speed() -> f32 { 4.5 }
 
+/// Speed and feel tuning for a prefab with `tags: ["flycam"]`.
+/// All fields are optional — omitting them keeps the compiled-in defaults.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlyCamDef {
+    /// Normal movement speed in units/second. Default: 100.0.
+    #[serde(default = "default_flycam_speed")]
+    pub speed: f32,
+    /// Movement speed when Shift is held, in units/second. Default: 200.0.
+    #[serde(default = "default_flycam_fast_speed")]
+    pub fast_speed: f32,
+    /// Mouse look sensitivity in radians per pixel. Default: 0.002.
+    #[serde(default = "default_flycam_sensitivity")]
+    pub sensitivity: f32,
+}
+
+impl Default for FlyCamDef {
+    fn default() -> Self {
+        Self {
+            speed: default_flycam_speed(),
+            fast_speed: default_flycam_fast_speed(),
+            sensitivity: default_flycam_sensitivity(),
+        }
+    }
+}
+
+fn default_flycam_speed() -> f32 { 100.0 }
+fn default_flycam_fast_speed() -> f32 { 200.0 }
+fn default_flycam_sensitivity() -> f32 { 0.002 }
+
 /// Runtime-relevant prefab component data.
 /// Additional design-time fields (health, ai, etc.) are silently ignored.
 /// NOTE: deny_unknown_fields is intentionally absent — designer-only fields like
@@ -340,6 +371,14 @@ pub struct PrefabComponents {
     /// component and a dynamic physics body to the spawned entity.
     #[serde(default)]
     pub npc: Option<NpcDef>,
+    /// Key bindings for the player character. Falls back to WASD defaults when absent.
+    /// Only read for prefabs with `tags: ["player"]`.
+    #[serde(default)]
+    pub inputs: Option<InputMap>,
+    /// Speed and sensitivity tuning for a free-flying camera.
+    /// Only read for prefabs with `tags: ["flycam"]`.
+    #[serde(default)]
+    pub flycam: Option<FlyCamDef>,
 }
 
 /// Movement parameters for any prefab with the "player" tag (primitive or GLB).

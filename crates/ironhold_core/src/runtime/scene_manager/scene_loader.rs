@@ -148,7 +148,7 @@ pub fn spawn_scene_v2(
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
         let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
-        let mut flycam_start: Option<Transform> = None;
+        let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
                 load_errors.push(format!(
@@ -174,8 +174,9 @@ pub fn spawn_scene_v2(
             let transform = Transform { translation, rotation, scale };
 
             if is_flycam {
-                // No model needed — just record the spawn transform.
-                flycam_start = Some(transform);
+                // No model needed — just record the spawn transform and any tuning.
+                let fc_def = prefab.components.flycam.clone().unwrap_or_default();
+                flycam_start = Some((transform, fc_def));
                 continue;
             }
 
@@ -499,7 +500,7 @@ pub fn spawn_scene_v2(
                     model_path,
                     initial_position: (translation.x, translation.y, translation.z),
                     camera: default_camera_config(),
-                    inputs: default_input_map(),
+                    inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
                     animation_policy,
                     movement: prefab.components.movement.clone(),
                 });
@@ -574,7 +575,7 @@ pub fn spawn_scene_v2(
                         walk_speed,
                         run_speed,
                         rot_speed: mv.rot_speed.unwrap_or(3.0),
-                        inputs: default_input_map(),
+                        inputs: components.inputs.clone().unwrap_or_else(default_input_map),
                         is_running: false,
                         jump_velocity,
                         double_jump_enabled,
@@ -685,7 +686,7 @@ pub fn spawn_scene_v2(
                     tonemapping,
                 );
             }
-        } else if let Some(fc_transform) = flycam_start {
+        } else if let Some((fc_transform, fc_def)) = flycam_start {
             // Extract initial yaw/pitch from the spawn transform so the camera
             // starts oriented correctly and the first mouse move causes no jump.
             let (yaw, pitch, _) = fc_transform.rotation.to_euler(EulerRot::YXZ);
@@ -701,7 +702,13 @@ pub fn spawn_scene_v2(
                 tonemapping,
                 fc_transform,
                 LevelEntity,
-                crate::capabilities::flycam::FlyCamera { pitch, yaw, ..Default::default() },
+                crate::capabilities::flycam::FlyCamera {
+                    speed: fc_def.speed,
+                    fast_speed: fc_def.fast_speed,
+                    sensitivity: fc_def.sensitivity,
+                    pitch,
+                    yaw,
+                },
             ));
         } else {
             info!("No player entity in v2 scene, spawning default camera...");

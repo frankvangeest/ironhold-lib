@@ -1,6 +1,6 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
 use ironhold_core::schema::scene_v2::GameSceneV2;
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ron::extensions::Extensions;
 
@@ -1494,4 +1494,193 @@ fn test_npc_all_faction_and_behavior_variants_parse() {
         assert!(catalog.validate().is_ok(),
             "faction={faction} behavior={behavior} failed validate()");
     }
+}
+
+// ── PrefabComponents.inputs (M-2) ─────────────────────────────────────────────
+
+#[test]
+fn test_player_prefab_inputs_all_keys_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        inputs: (
+                            forward:      "KeyW",
+                            backward:     "KeyS",
+                            left:         "KeyA",
+                            right:        "KeyD",
+                            strafe_left:  "KeyQ",
+                            strafe_right: "KeyE",
+                            jump:         "Space",
+                            run:          "ShiftLeft",
+                            interact:     "KeyF",
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("player with full inputs block should parse");
+    assert!(catalog.validate().is_ok());
+    let inputs = catalog.prefabs["player"].components.inputs.as_ref()
+        .expect("inputs should be Some after explicit RON block");
+    assert_eq!(inputs.forward,      "KeyW");
+    assert_eq!(inputs.backward,     "KeyS");
+    assert_eq!(inputs.left,         "KeyA");
+    assert_eq!(inputs.right,        "KeyD");
+    assert_eq!(inputs.strafe_left,  "KeyQ");
+    assert_eq!(inputs.strafe_right, "KeyE");
+    assert_eq!(inputs.jump,         "Space");
+    assert_eq!(inputs.run,          "ShiftLeft");
+    assert_eq!(inputs.interact,     "KeyF");
+}
+
+#[test]
+fn test_player_prefab_inputs_optional_keys_default() {
+    // `run` and `interact` have serde defaults; omitting them must not fail.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        inputs: (
+                            forward:      "ArrowUp",
+                            backward:     "ArrowDown",
+                            left:         "ArrowLeft",
+                            right:        "ArrowRight",
+                            strafe_left:  "KeyQ",
+                            strafe_right: "KeyE",
+                            jump:         "Space",
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("inputs missing run/interact should parse");
+    let inputs = catalog.prefabs["player"].components.inputs.as_ref().unwrap();
+    assert_eq!(inputs.run,      "ShiftLeft", "run should default to ShiftLeft");
+    assert_eq!(inputs.interact, "KeyF",      "interact should default to KeyF");
+    assert_eq!(inputs.forward,  "ArrowUp");
+}
+
+#[test]
+fn test_player_prefab_inputs_omitted_backward_compat() {
+    // Existing prefabs without an inputs block must still parse cleanly.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: ( tags: ["player"] ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("player without inputs block should parse");
+    assert!(catalog.prefabs["player"].components.inputs.is_none(),
+        "inputs should be None when the field is absent");
+}
+
+// ── PrefabComponents.flycam (M-3) ─────────────────────────────────────────────
+
+#[test]
+fn test_flycam_prefab_full_config_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "cam": (
+                    kind: "prop",
+                    model: "",
+                    components: (
+                        tags: ["flycam"],
+                        flycam: (
+                            speed:       50.0,
+                            fast_speed:  150.0,
+                            sensitivity: 0.001,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("flycam with full config should parse");
+    assert!(catalog.validate().is_ok());
+    let fc = catalog.prefabs["cam"].components.flycam.as_ref()
+        .expect("flycam should be Some after explicit RON block");
+    assert_eq!(fc.speed,       50.0);
+    assert_eq!(fc.fast_speed,  150.0);
+    assert_eq!(fc.sensitivity, 0.001);
+}
+
+#[test]
+fn test_flycam_prefab_partial_config_uses_defaults() {
+    // Any subset of fields may be provided; omitted fields fall back to compiled defaults.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "cam": (
+                    kind: "prop",
+                    model: "",
+                    components: (
+                        tags: ["flycam"],
+                        flycam: ( speed: 40.0 ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("flycam with partial config should parse");
+    let fc = catalog.prefabs["cam"].components.flycam.as_ref().unwrap();
+    assert_eq!(fc.speed,       40.0,  "overridden speed should be 40.0");
+    assert_eq!(fc.fast_speed,  200.0, "fast_speed should default to 200.0");
+    assert_eq!(fc.sensitivity, 0.002, "sensitivity should default to 0.002");
+}
+
+#[test]
+fn test_flycam_prefab_config_omitted_backward_compat() {
+    // Existing flycam prefabs without a flycam block must still parse cleanly.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "cam": (
+                    kind: "prop",
+                    model: "",
+                    components: ( tags: ["flycam"] ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("flycam without config block should parse");
+    assert!(catalog.prefabs["cam"].components.flycam.is_none(),
+        "flycam field should be None when omitted");
+}
+
+#[test]
+fn test_flycam_def_unknown_field_is_error() {
+    // FlyCamDef uses deny_unknown_fields — typos must not silently vanish.
+    let fc: Result<FlyCamDef, _> = from_str("(speeed: 50.0)");
+    assert!(fc.is_err(), "typos in FlyCamDef must be rejected");
+}
+
+#[test]
+fn test_flycam_def_all_defaults() {
+    let fc: FlyCamDef = from_str("()").expect("empty FlyCamDef should use all defaults");
+    assert_eq!(fc.speed,       100.0);
+    assert_eq!(fc.fast_speed,  200.0);
+    assert_eq!(fc.sensitivity, 0.002);
 }
