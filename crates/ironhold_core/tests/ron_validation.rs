@@ -478,6 +478,24 @@ fn test_terrain_material_def_uv_scale_explicit() {
 }
 
 #[test]
+fn test_terrain_material_def_layers_empty_parses_ok() {
+    // Designers may omit layers entirely — schema accepts it; runtime warns at load time.
+    let ron_str = r#"
+        (
+            kind: Terrain((
+                splatmap: "shared/terrain/splatmap.png",
+            )),
+        )
+    "#;
+    let mat: MaterialDef = from_str(ron_str).expect("terrain MaterialDef with no layers should parse");
+    if let ironhold_core::schema::MaterialKind::Terrain(terrain_def) = mat.kind {
+        assert!(terrain_def.layers.is_empty(), "layers should default to empty");
+    } else {
+        panic!("expected MaterialKind::Terrain");
+    }
+}
+
+#[test]
 fn test_game_scene_v2_label_depth_scale_defaults() {
     // Only reference_distance is required; min_scale defaults to None.
     let ron_str = r#"

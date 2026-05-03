@@ -82,6 +82,7 @@ pub struct StandardMaterialDef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerrainMaterialDef {
     pub splatmap: String,
+    #[serde(default)]
     pub layers: Vec<String>,
     /// UV tiling scale for terrain layer textures. Higher values tile textures more finely.
     /// Defaults to 10.0.

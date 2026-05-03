@@ -390,7 +390,7 @@ Named registry of all assets available to prefabs and scenes.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `splatmap` | `String` | required | Path to RGBA splatmap (one channel per layer) |
-| `layers` | `Vec<String>` | required | Texture paths for up to 4 terrain layers (R, G, B, A channels) |
+| `layers` | `Vec<String>` | `[]` | Texture paths for terrain layers (R, G, B channels). Fewer than 3 logs a warning and missing slots render as magenta. A 4th path (A channel) is accepted but unused by the current shader. |
 | `uv_scale` | `f32` | `10.0` | UV tiling scale for layer textures. Higher values tile textures more finely. |
 
 ---

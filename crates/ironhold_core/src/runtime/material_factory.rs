@@ -64,25 +64,29 @@ impl MaterialFactory {
                         name
                     );
                 }
-                let fallback = |i: usize| -> String {
-                    let defaults = [
-                        "shared/terrain/grass.png",
-                        "shared/terrain/rock.png",
-                        "shared/terrain/dirt.png",
-                        "shared/terrain/snow.png",
-                    ];
+                if terrain_def.layers.len() < 3 {
+                    warn!(
+                        "Material '{}': TerrainMaterialDef.layers has {} layer(s) but the splatmap \
+                         uses 3 channels (R/G/B). Missing layers will render as magenta. \
+                         Add at least 3 paths to layers.",
+                        name,
+                        terrain_def.layers.len()
+                    );
+                }
+
+                let layer = |i: usize| -> Handle<Image> {
                     terrain_def.layers.get(i)
-                        .cloned()
-                        .unwrap_or_else(|| defaults[i.min(3)].to_string())
+                        .map(|p| asset_server.load::<Image>(p.clone()))
+                        .unwrap_or_default()
                 };
 
                 let mat = TerrainMaterial {
                     uv_scale: Vec4::new(terrain_def.uv_scale, 0.0, 0.0, 0.0),
                     splatmap:  asset_server.load(terrain_def.splatmap.clone()),
-                    texture_r: asset_server.load(fallback(0)),
-                    texture_g: asset_server.load(fallback(1)),
-                    texture_b: asset_server.load(fallback(2)),
-                    texture_a: asset_server.load(fallback(3)),
+                    texture_r: layer(0),
+                    texture_g: layer(1),
+                    texture_b: layer(2),
+                    texture_a: layer(3),
                 };
                 BuiltMaterialHandle::Terrain(terrain_materials.add(mat))
             }
