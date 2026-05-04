@@ -46,6 +46,11 @@ pub enum Action {
     /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
     /// Takes a project-relative path. Does not spawn or transition; purely warms the cache.
     Preload(String),
+    /// Pre-load a prefab's GLB model so the first `Spawn` of that prefab doesn't block the
+    /// game loop with asset decode on the WASM main thread. Takes a prefab key (as defined in
+    /// `prefabs.ron`). Fire on `scene.ready:{name}` so the GLB is warm before the player
+    /// can trigger a spawn. Does not create any visible entity.
+    PreloadPrefab(String),
     /// Transition the interpreter to a named logic state.
     /// Rules with a matching `when` field become active; rules in other states are suppressed.
     /// Use an empty string `""` to return to the stateless (always-fire) default.

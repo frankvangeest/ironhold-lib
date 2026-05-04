@@ -48,13 +48,15 @@ This section is factual and reflects what exists right now.
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
   - `LoadSceneOverlay(path)` / `UnloadOverlay` load/unload overlay scenes (e.g. pause menu).
   - `Quit` requests app exit (writes `AppExit::Success`).
-  - `Spawn { prefab, id, position, spawn_point, yaw_deg }` / `Despawn(id)` spawn/remove prefab instances by ID.
+  - `Spawn { prefab, id, position, spawn_point, yaw_deg }` / `Despawn(id)` spawn/remove prefab instances by ID; spawn is frame-paced (max 2/frame) to cap WASM pipeline-compile stalls.
+  - `PreloadPrefab(key)` loads a prefab's GLB early (fire on `scene.ready`) to prevent the first-spawn decode stall on WASM.
   - `PlayAnimation(clip)` plays an animation on available controllers.
   - `PlayAnimationOn { target, clip }` plays an animation on a specific entity by spawn ID.
   - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
   - `PlaySound(key)` / `PlayMusicLoop(key)` / `StopMusic` control audio.
   - `SetVolume(pct)` sets global volume (0–100).
-  - `Preload(path)` warms the asset cache for a scene before it is needed.
+  - `Preload(path)` warms the asset cache for a `.scene.ron` before it is needed.
+  - `PreloadPrefab(key)` warms the GLB asset cache for a prefab (see above).
   - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
 - ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed. FSM transitions update it directly in the interpreter.
@@ -247,7 +249,8 @@ Applies actions to the world. Key design points:
 - `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
-- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — spawns a prefab instance by key; `id` auto-generated if omitted; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees (0 = model default facing, 90/180/270 = 90°/180°/270° clockwise)
+- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn (processed max 2/frame by `drain_spawn_queue_system`); `id` auto-generated if omitted; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees
+- `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn (handles cleared on `LoadScene`)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
 - `PlaySound(String)` — fire-and-forget audio by catalog key; warns for unsupported formats or missing keys
@@ -255,6 +258,7 @@ Applies actions to the world. Key design points:
 - `StopMusic` — stops the current background music
 - `SetVolume(u32)` — sets global audio volume 0–100
 - `Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
+- `PreloadPrefab(String)` — see above
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`

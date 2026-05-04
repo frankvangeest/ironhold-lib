@@ -74,6 +74,30 @@ pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
 #[derive(Resource, Default)]
 pub struct LoadedAudioHandles(pub Vec<Handle<bevy::audio::AudioSource>>);
 
+/// Holds pre-loaded GLTF scene handles for prefab models, populated by `Action::PreloadPrefab`.
+/// Keeping handles alive prevents the asset server from evicting the decoded GLB between scene
+/// loads, so the first `Action::Spawn` of that prefab doesn't block the WASM main thread with
+/// HTTP fetch + GLTF decode. Cleared on full `LoadScene`.
+#[derive(Resource, Default)]
+pub struct PreloadedGlbHandles(pub Vec<Handle<bevy::scene::Scene>>);
+
+/// Pre-resolved spawn data waiting to be executed. `Action::Spawn` enqueues here instead of
+/// calling `spawn_prefab_instance` inline. `drain_spawn_queue_system` processes at most
+/// `SPAWNS_PER_FRAME` items per frame, spreading WebGPU pipeline compile stalls across
+/// frames when many prefabs are spawned at once (e.g. a wave spawn).
+#[derive(Resource, Default)]
+pub struct PendingEntitySpawns(pub std::collections::VecDeque<QueuedSpawn>);
+
+/// All data `drain_spawn_queue_system` needs to call `spawn_prefab_instance`.
+/// Resolved upfront by the action executor so the drain system needs no catalog access.
+pub struct QueuedSpawn {
+    pub prefab_def: crate::schema::catalog::PrefabDef,
+    pub model_path: String,
+    pub transform: Transform,
+    pub spawn_id: String,
+    pub project_root: String,
+}
+
 #[derive(Resource)]
 pub struct SceneHandleV2(pub Handle<GameSceneV2>);
 
@@ -210,6 +234,7 @@ pub struct SpawnParams<'w, 's> {
     pub model_spawner: Res<'w, ModelSpawner>,
     pub merged_fixes: Res<'w, MergedModelFixes>,
     pub spawned: Query<'w, 's, (Entity, &'static SpawnId)>,
+    pub pending_spawns: ResMut<'w, PendingEntitySpawns>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.
@@ -229,6 +254,7 @@ pub struct SceneV2Params<'w> {
 pub struct SceneStateParams<'w> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
+    pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
     pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
 }

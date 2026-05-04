@@ -979,11 +979,14 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | Action | Description |
 |--------|-------------|
 | `LoadScene("path")` | Load a `.scene.ron` file relative to the project root |
-| `Spawn("asset/path.glb#Scene0")` | Spawn a model by asset path |
+| `Spawn { prefab, id, position, spawn_point, yaw_deg }` | Enqueue a prefab spawn (max 2/frame); `id` auto-generated if omitted; `spawn_point` looks up a scene-defined named point; `yaw_deg` rotates around Y axis |
+| `PreloadPrefab("key")` | Load a prefab's GLB early and cache the handle; fire on `scene.ready` to eliminate the first-spawn WASM decode stall |
+| `Despawn("id")` | Remove a previously spawned entity by its spawn ID |
 | `PlayAnimation("id")` | Play an animation by semantic ID (see AnimationPolicy) |
 | `PlaySound("key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format |
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
+| `Preload("path")` | Warm the asset cache for a `.scene.ron` before it is needed |
 | `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
 | `SetVariable("key", "value")` | Write a named string variable into `GameVariables`; readable by data-bound UI labels |
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |

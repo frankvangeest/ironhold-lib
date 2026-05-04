@@ -37,6 +37,8 @@ pub fn action_executor_system(
                     scene_events.write(SceneEvent::Unloading(debug.scene.clone()));
                 }
                 scene_state.preloaded.0.clear();
+                scene_state.preloaded_glbs.0.clear();
+                spawn_params.pending_spawns.0.clear();
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
@@ -118,22 +120,16 @@ pub fn action_executor_system(
                     .with_rotation(Quat::from_rotation_y(yaw_rad));
 
                 info!(
-                    "Action::Spawn: spawned '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",
+                    "Action::Spawn: queued '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",
                     spawn_id, prefab, sx, sy, sz
                 );
-                let parent = super::spawn_prefab_instance(
-                    &mut commands,
-                    &asset_server,
-                    &spawn_params.model_spawner,
-                    &spawn_params.merged_fixes.0,
-                    &project_root.0,
-                    &prefab_def,
+                spawn_params.pending_spawns.0.push_back(super::QueuedSpawn {
+                    prefab_def,
                     model_path,
                     transform,
-                    &spawn_id,
-                );
-                commands.entity(parent).insert(super::SpawnId(spawn_id.clone()));
-                spawn_params.registry.entities.insert(spawn_id, parent);
+                    spawn_id,
+                    project_root: project_root.0.clone(),
+                });
             }
             Action::Despawn(target_id) => {
                 let found = spawn_params
@@ -230,6 +226,20 @@ pub fn action_executor_system(
                         resolved
                     );
                 }
+            }
+            Action::PreloadPrefab(prefab_key) => {
+                let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab_key) else {
+                    warn!("Action::PreloadPrefab: prefab {:?} not found in catalog", prefab_key);
+                    continue;
+                };
+                let Some(model_entry) = asset_catalog.0.models.get(&prefab_def.model) else {
+                    warn!("Action::PreloadPrefab: model key {:?} not found in asset catalog", prefab_def.model);
+                    continue;
+                };
+                let model_path = model_entry.path.clone();
+                info!("Action::PreloadPrefab: warming GLB cache for '{}' -> {}", prefab_key, model_path);
+                let handle: Handle<bevy::scene::Scene> = asset_server.load(model_path);
+                scene_state.preloaded_glbs.0.push(handle);
             }
             Action::PlaySound(key) => {
                 if let Some(path) = asset_catalog.0.audio.get(&key) {

@@ -2,6 +2,10 @@
     schema_version: 2,
     rules: [
         (
+            on: "scene.ready:main",
+            do_actions: [ PreloadPrefab("enemy_orc_melee") ],
+        ),
+        (
             on: "ui.button_pressed:start_game",
             do_actions: [ Log("LoadScene Triggered"), PlaySound("click"), LoadScene("scenes/main.scene.ron") ],
         ),

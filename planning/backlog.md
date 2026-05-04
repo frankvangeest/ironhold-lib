@@ -17,7 +17,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Bugs
 
-- [ ] **quick_scene web spawn hang** — pressing "Spawn Enemy" in the browser freezes for ~2s. Likely first-load GLB decode on the WASM main thread when the orc model is not yet cached. Candidate fix: emit `Action::Preload("orc_prefab_key")` on `scene.ready` so the GLB is warm before the button is pressed.
+- [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns. A further phantom-entity warmup approach could eliminate the pipeline-compile stall if that residual freeze proves unacceptable.
 - [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/resolved/animation_tpose.md`.
 
 ---
@@ -88,7 +88,7 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene
 
 ### Performance
-- [ ] Staggered entity spawning — drain a `PendingEntitySpawns` queue at N entities/frame instead of spawning all in one frame; spreads WebGPU pipeline compilations across frames, reducing peak WASM frame time (fixes 1400ms+ INP on scenes with many unique custom shaders)
+- [x] Staggered entity spawning — `PendingEntitySpawns` queue drains at `SPAWNS_PER_FRAME = 2`/frame via `drain_spawn_queue_system`; spreads WebGPU pipeline compilations across frames for wave spawns
 
 ### Profiling & Diagnostics
 - [ ] Diagnostics HUD — F3 overlay: FPS, frame time, entity count, draw calls, triangles, CPU/RAM (native); design: `planning/features/diagnostics_hud.md`

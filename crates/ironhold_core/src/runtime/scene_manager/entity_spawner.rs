@@ -14,7 +14,8 @@ use crate::capabilities::animation_resolver::{
 use bevy_rapier3d::prelude::*;
 use super::{
     LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
-    PendingBehavior, BehaviorHandle, EntityFsmState,
+    PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
+    PendingEntitySpawns,
     resolve_project_path,
     scene_loader::resolve_jump_velocity,
 };
@@ -116,6 +117,49 @@ pub fn spawn_prefab_instance(
     }
 
     spawned.parent
+}
+
+/// Maximum number of queued spawns processed per frame.
+/// Limits how many WebGPU pipeline compiles can be triggered in a single frame when
+/// many prefabs are spawned at once (e.g. a wave spawn). A value of 2 caps the per-frame
+/// stall to ~2 pipeline compiles while keeping batch spawns fast (5 enemies in 3 frames).
+const SPAWNS_PER_FRAME: usize = 2;
+
+/// Drains up to `SPAWNS_PER_FRAME` entries from `PendingEntitySpawns` each frame.
+/// `Action::Spawn` enqueues into that resource instead of calling `spawn_prefab_instance`
+/// directly, so wave spawns spread their pipeline compilation cost across multiple frames
+/// rather than hitting in one frame.
+pub fn drain_spawn_queue_system(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut pending: ResMut<PendingEntitySpawns>,
+    mut registry: ResMut<SpawnRegistry>,
+    model_spawner: Res<ModelSpawner>,
+    fixes: Res<MergedModelFixes>,
+) {
+    for _ in 0..SPAWNS_PER_FRAME {
+        let Some(queued) = pending.0.pop_front() else { break };
+        info!(
+            "Spawning '{}' at ({:.1}, {:.1}, {:.1})",
+            queued.spawn_id,
+            queued.transform.translation.x,
+            queued.transform.translation.y,
+            queued.transform.translation.z,
+        );
+        let parent = spawn_prefab_instance(
+            &mut commands,
+            &asset_server,
+            &model_spawner,
+            &fixes.0,
+            &queued.project_root,
+            &queued.prefab_def,
+            queued.model_path,
+            queued.transform,
+            &queued.spawn_id,
+        );
+        commands.entity(parent).insert(SpawnId(queued.spawn_id.clone()));
+        registry.entities.insert(queued.spawn_id, parent);
+    }
 }
 
 pub fn animation_policy_loader_system(

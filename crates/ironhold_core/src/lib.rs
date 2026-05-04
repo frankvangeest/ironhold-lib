@@ -108,6 +108,8 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
             .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
+            .init_resource::<crate::runtime::scene_manager::PreloadedGlbHandles>()
+            .init_resource::<crate::runtime::scene_manager::PendingEntitySpawns>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
@@ -149,11 +151,14 @@ impl Plugin for GamePlugin {
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
+            // drain_spawn_queue_system runs last: processes items queued by action_executor
+            // this frame at a rate-limited SPAWNS_PER_FRAME to spread pipeline compile stalls.
             .add_systems(Update, (
                 message_interpreter_system,
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
                 action_executor_system,
+                drain_spawn_queue_system,
             ).chain())
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (

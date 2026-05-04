@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
-use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
+use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
@@ -2454,4 +2454,135 @@ fn test_player_jump_emits_game_event() {
         .iter_current_update_messages()
         .any(|e| matches!(e, GameEvent::Trigger(name) if name == "player.jumped"));
     assert!(has_jumped, "Expected GameEvent::Trigger(\"player.jumped\") in messages after jump");
+}
+
+// ─── PreloadPrefab + spawn queue tests ───────────────────────────────────────
+
+fn minimal_orc_catalogs(app: &mut App) {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("enemy_orc_melee".to_string(), PrefabDef {
+                kind: "actor".to_string(),
+                model: "orc".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+}
+
+#[test]
+fn test_preload_prefab_stores_glb_handle() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PreloadPrefab("enemy_orc_melee".to_string()));
+    app.update();
+
+    let handles = app.world().resource::<PreloadedGlbHandles>();
+    assert_eq!(handles.0.len(), 1, "PreloadedGlbHandles should hold one handle after PreloadPrefab");
+}
+
+#[test]
+fn test_preload_prefab_unknown_key_does_not_panic() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // No catalogs inserted — should log a warning and keep going, not panic.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PreloadPrefab("nonexistent_prefab".to_string()));
+    app.update();
+
+    let handles = app.world().resource::<PreloadedGlbHandles>();
+    assert_eq!(handles.0.len(), 0, "No handle should be stored for an unknown prefab key");
+}
+
+#[test]
+fn test_spawn_queue_rate_limits_to_two_per_frame() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    // Queue 3 spawns — only 2 should be processed in the first update.
+    for i in 0..3 {
+        app.world_mut().resource_mut::<ActionQueue>().push(
+            Action::Spawn {
+                prefab: "enemy_orc_melee".to_string(),
+                id: Some(format!("orc_{}", i)),
+                position: None, spawn_point: None, yaw_deg: None,
+            }
+        );
+    }
+    app.update();
+
+    let ids_after_first: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert_eq!(ids_after_first.len(), 2, "Only 2 of 3 queued spawns should process in the first frame");
+
+    let queue_len = app.world().resource::<PendingEntitySpawns>().0.len();
+    assert_eq!(queue_len, 1, "One spawn should remain in the queue after the first frame");
+
+    // Second update drains the remaining spawn.
+    app.update();
+
+    let ids_after_second: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert_eq!(ids_after_second.len(), 3, "All 3 spawns should be present after the second frame");
+
+    let queue_len = app.world().resource::<PendingEntitySpawns>().0.len();
+    assert_eq!(queue_len, 0, "Queue should be empty after all spawns are drained");
+}
+
+#[test]
+fn test_pending_spawns_cleared_on_load_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    // Pre-populate the queue directly (simulates spawns queued in a prior frame).
+    {
+        use ironhold_core::runtime::QueuedSpawn;
+        let mut pending = app.world_mut().resource_mut::<PendingEntitySpawns>();
+        pending.0.push_back(QueuedSpawn {
+            prefab_def: ironhold_core::schema::catalog::PrefabDef {
+                kind: "actor".to_string(),
+                model: "orc".to_string(),
+                ..Default::default()
+            },
+            model_path: "shared/models/creatures/orc.glb#Scene0".to_string(),
+            transform: Transform::default(),
+            spawn_id: "should_be_cancelled".to_string(),
+            project_root: String::new(),
+        });
+    }
+
+    // LoadScene should clear the queue before the drain system runs.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::LoadScene("scenes/dummy.scene.ron".to_string()));
+    app.update();
+
+    let queue_len = app.world().resource::<PendingEntitySpawns>().0.len();
+    assert_eq!(queue_len, 0, "LoadScene should clear PendingEntitySpawns");
+
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert!(!ids.contains(&"should_be_cancelled".to_string()), "Queued spawn should not have been executed after LoadScene");
 }
