@@ -27,6 +27,8 @@ pub struct CharacterController {
     pub collider_radius: f32,
     /// How far below the feet the ground-detection sphere is swept each frame.
     pub ground_cast_length: f32,
+    /// Velocity decay multiplier each physics tick when there is no input. Default: 0.8.
+    pub idle_drag: f32,
 }
 
 pub fn player_movement_system(
@@ -136,9 +138,8 @@ pub fn player_movement_system(
             loco.moving = true;
             loco.running = controller.is_running;
         } else {
-            // Apply drag/friction to stop sliding
-            velocity.linvel.x *= 0.8;
-            velocity.linvel.z *= 0.8;
+            velocity.linvel.x *= controller.idle_drag;
+            velocity.linvel.z *= controller.idle_drag;
             loco.moving = false;
             loco.running = false;
         }

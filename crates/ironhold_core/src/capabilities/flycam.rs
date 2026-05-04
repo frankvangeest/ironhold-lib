@@ -1,20 +1,20 @@
 use bevy::prelude::*;
 use crate::schema::AppState;
 
-/// A free-flying camera that responds to WASD, QE/Space, Shift, and mouse look.
+/// A free-flying camera that responds to configurable keys and mouse look.
 /// No physics — the transform is updated directly each frame.
 ///
 /// Spawned by `scene_loader` for any prefab whose `components.tags` contains `"flycam"`.
 /// Initial pitch and yaw are extracted from the entity's spawn transform so the first
 /// mouse movement never causes a jump.
 ///
-/// Controls (fixed, not configurable via RON):
+/// Default controls (all configurable via `FlyCamDef` in the prefab RON):
 /// - **W/S** — forward / back
 /// - **A/D** — strafe left / right
-/// - **E / Space** — ascend
-/// - **Q / LCtrl** — descend
+/// - **Space** — ascend   (also `E` on legacy QWERTY layout)
+/// - **Q** — descend      (also `LCtrl` on legacy layout)
 /// - **LShift / RShift** — fast mode (`fast_speed`)
-/// - **LMB / RMB + Mouse** — look (hold either mouse button to rotate)
+/// - **LMB / RMB + Mouse** — look (either or both buttons, configurable)
 #[derive(Component)]
 pub struct FlyCamera {
     /// Normal movement speed in units/second.
@@ -27,6 +27,17 @@ pub struct FlyCamera {
     pub pitch: f32,
     /// Current yaw in radians. Initialised from the spawn transform.
     pub yaw: f32,
+    // Key bindings (KeyCode values resolved from FlyCamDef strings at spawn time)
+    pub key_forward: KeyCode,
+    pub key_backward: KeyCode,
+    pub key_left: KeyCode,
+    pub key_right: KeyCode,
+    pub key_up: KeyCode,
+    pub key_down: KeyCode,
+    /// Whether LMB activates look mode.
+    pub look_lmb: bool,
+    /// Whether RMB activates look mode.
+    pub look_rmb: bool,
 }
 
 impl Default for FlyCamera {
@@ -37,6 +48,27 @@ impl Default for FlyCamera {
             sensitivity: 0.002,
             pitch: 0.0,
             yaw: 0.0,
+            key_forward:  KeyCode::KeyW,
+            key_backward: KeyCode::KeyS,
+            key_left:     KeyCode::KeyA,
+            key_right:    KeyCode::KeyD,
+            key_up:       KeyCode::Space,
+            key_down:     KeyCode::KeyQ,
+            look_lmb: true,
+            look_rmb: true,
+        }
+    }
+}
+
+/// Resolve a `FlyCamDef` look_button string to `(lmb, rmb)` flags.
+pub fn parse_flycam_look_button(s: &str) -> (bool, bool) {
+    match s {
+        "Left"   => (true,  false),
+        "Right"  => (false, true),
+        "Either" => (true,  true),
+        _ => {
+            warn!("Unknown flycam look_button {:?} — defaulting to Either", s);
+            (true, true)
         }
     }
 }
@@ -66,9 +98,9 @@ pub fn update_flycam_position_label(
 
 /// Moves and rotates every [`FlyCamera`] entity each frame.
 ///
-/// Reads keyboard directly (WASD + QE/Space/Ctrl + Shift) and mouse motion events
-/// for look. Only runs in [`AppState::InGame`]. Suppressed when the inspector overlay
-/// is active.
+/// Reads keyboard using the bindings stored on the [`FlyCamera`] component and
+/// mouse motion events for look. Only runs in [`AppState::InGame`]. Suppressed
+/// when the inspector overlay is active.
 pub fn fly_camera_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
@@ -90,27 +122,26 @@ pub fn fly_camera_system(
         return;
     }
 
-    // Only rotate the camera while LMB or RMB is held, so the mouse is free
-    // for UI interaction when no button is pressed.
-    let mouse_look_active = mouse_buttons.pressed(MouseButton::Left)
-        || mouse_buttons.pressed(MouseButton::Right);
+    let lmb = mouse_buttons.pressed(MouseButton::Left);
+    let rmb = mouse_buttons.pressed(MouseButton::Right);
 
     let mut mouse_delta = Vec2::ZERO;
     for ev in mouse_motion.read() {
-        if mouse_look_active {
-            mouse_delta += ev.delta;
-        }
+        mouse_delta += ev.delta;
     }
 
     for (mut transform, mut cam) in &mut query {
-        // --- Look (applied every frame even without mouse motion) ---
+        let mouse_look_active = (cam.look_lmb && lmb) || (cam.look_rmb && rmb);
+        if !mouse_look_active {
+            mouse_delta = Vec2::ZERO;
+        }
+
         cam.yaw -= mouse_delta.x * cam.sensitivity;
         cam.pitch -= mouse_delta.y * cam.sensitivity;
         cam.pitch = cam.pitch.clamp(-1.5532, 1.5532); // ±89°
 
         transform.rotation = Quat::from_euler(EulerRot::YXZ, cam.yaw, cam.pitch, 0.0);
 
-        // --- Move ---
         let is_fast = keyboard_input.pressed(KeyCode::ShiftLeft)
             || keyboard_input.pressed(KeyCode::ShiftRight);
         let speed = if is_fast { cam.fast_speed } else { cam.speed };
@@ -120,16 +151,12 @@ pub fn fly_camera_system(
         let right = *transform.right();
 
         let mut vel = Vec3::ZERO;
-        if keyboard_input.pressed(KeyCode::KeyW) { vel += forward; }
-        if keyboard_input.pressed(KeyCode::KeyS) { vel -= forward; }
-        if keyboard_input.pressed(KeyCode::KeyD) { vel += right; }
-        if keyboard_input.pressed(KeyCode::KeyA) { vel -= right; }
-        if keyboard_input.pressed(KeyCode::Space) || keyboard_input.pressed(KeyCode::KeyE) {
-            vel += Vec3::Y;
-        }
-        if keyboard_input.pressed(KeyCode::ControlLeft) || keyboard_input.pressed(KeyCode::KeyQ) {
-            vel -= Vec3::Y;
-        }
+        if keyboard_input.pressed(cam.key_forward)  { vel += forward; }
+        if keyboard_input.pressed(cam.key_backward) { vel -= forward; }
+        if keyboard_input.pressed(cam.key_right)    { vel += right; }
+        if keyboard_input.pressed(cam.key_left)     { vel -= right; }
+        if keyboard_input.pressed(cam.key_up)       { vel += Vec3::Y; }
+        if keyboard_input.pressed(cam.key_down)     { vel -= Vec3::Y; }
 
         if vel.length_squared() > 0.0001 {
             transform.translation += vel.normalize() * speed * dt;

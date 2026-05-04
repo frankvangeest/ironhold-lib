@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::input::mouse::MouseButton;
 use serde::Deserialize;
 use std::collections::HashMap;
 use crate::schema::catalog::MovementConfig;
@@ -12,7 +13,9 @@ pub struct PlayerConfig {
 
     /// Path to the animation policy file, relative to the project root.
     /// e.g. "prefabs/animation/player_policy.ron"
-    pub animation_policy: String,
+    /// When absent, no animation system is attached to the player.
+    #[serde(default)]
+    pub animation_policy: Option<String>,
 
     /// Movement tuning read from `prefab.components.movement`.
     #[serde(default)]
@@ -27,7 +30,32 @@ pub struct CameraConfig {
     pub orbit_speed: f32,
     pub min_radius: f32,
     pub max_radius: f32,
+    /// Minimum pitch in radians (looking up). Default: 0.1.
+    #[serde(default = "default_min_pitch")]
+    pub min_pitch: f32,
+    /// Maximum pitch in radians (looking down). Default: 1.5.
+    #[serde(default = "default_max_pitch")]
+    pub max_pitch: f32,
+    /// Mouse button that orbits the camera. `"Left"`, `"Right"`, or `"Either"`. Default: `"Either"`.
+    #[serde(default = "default_orbit_button")]
+    pub orbit_button: String,
+    /// Mouse button that also rotates the character yaw while orbiting.
+    /// `"Left"`, `"Right"`, or `None`. Default: `"Right"`.
+    #[serde(default = "default_character_rotate_button")]
+    pub character_rotate_button: Option<String>,
+    /// Camera pitch at scene start in radians. Default: 0.5.
+    #[serde(default = "default_initial_pitch")]
+    pub initial_pitch: f32,
+    /// Camera yaw at scene start in radians. Default: 0.0.
+    #[serde(default)]
+    pub initial_yaw: f32,
 }
+
+fn default_min_pitch() -> f32 { 0.1 }
+fn default_max_pitch() -> f32 { 1.5 }
+fn default_orbit_button() -> String { "Either".to_string() }
+fn default_character_rotate_button() -> Option<String> { Some("Right".to_string()) }
+fn default_initial_pitch() -> f32 { 0.5 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct InputMap {
@@ -42,6 +70,11 @@ pub struct InputMap {
     pub run: String,
     #[serde(default = "default_interact_key")]
     pub interact: String,
+    /// Mouse button that enables strafe-mode (A/D strafe instead of rotate).
+    /// `"Left"`, `"Right"`, or `None` to disable mouse-strafe entirely.
+    /// Default: `"Left"` (preserves existing behavior).
+    #[serde(default = "default_strafe_mouse_button")]
+    pub strafe_mouse_button: Option<String>,
 }
 
 fn default_run_key() -> String {
@@ -52,7 +85,18 @@ fn default_interact_key() -> String {
     "KeyF".to_string()
 }
 
+fn default_strafe_mouse_button() -> Option<String> { Some("Left".to_string()) }
+
 impl InputMap {
+    pub fn parse_mouse_button(s: &str) -> Option<MouseButton> {
+        match s {
+            "Left"   => Some(MouseButton::Left),
+            "Right"  => Some(MouseButton::Right),
+            "Middle" => Some(MouseButton::Middle),
+            _        => None,
+        }
+    }
+
     pub fn key(&self, name: &str) -> Option<KeyCode> {
         let s = match name {
             "forward" => &self.forward,

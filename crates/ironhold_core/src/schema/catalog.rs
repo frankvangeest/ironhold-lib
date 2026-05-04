@@ -334,6 +334,21 @@ pub struct NpcDef {
     /// Metres from a waypoint at which the NPC advances to the next one. Default: 0.5 m.
     #[serde(default = "default_npc_waypoint_reach_radius")]
     pub waypoint_reach_radius: f32,
+    /// Multiplier applied to `approach_distance` to define the leave-interact threshold.
+    /// The NPC exits Interact state when `distance > approach_distance * interact_leave_factor`.
+    /// Default: 1.5.
+    #[serde(default = "default_npc_interact_leave_factor")]
+    pub interact_leave_factor: f32,
+    /// Metres from spawn origin at which the NPC considers itself home and ends Return state.
+    /// Default: 0.5.
+    #[serde(default = "default_npc_home_arrival_radius")]
+    pub home_arrival_radius: f32,
+    /// Rapier `linear_damping` on the NPC capsule rigid body. Default: 0.5.
+    #[serde(default = "default_linear_damping")]
+    pub linear_damping: f32,
+    /// Rapier `angular_damping` on the NPC capsule rigid body. Default: 0.5.
+    #[serde(default = "default_angular_damping")]
+    pub angular_damping: f32,
 }
 
 fn default_approach_distance() -> f32 { 2.0 }
@@ -343,8 +358,10 @@ fn default_npc_eye_height() -> f32 { 0.9 }
 fn default_npc_alerted_duration() -> f32 { 0.3 }
 fn default_npc_drag() -> f32 { 0.8 }
 fn default_npc_waypoint_reach_radius() -> f32 { 0.5 }
+fn default_npc_interact_leave_factor() -> f32 { 1.5 }
+fn default_npc_home_arrival_radius() -> f32 { 0.5 }
 
-/// Speed and feel tuning for a prefab with `tags: ["flycam"]`.
+/// Speed, sensitivity, and key-binding tuning for a free-flying camera.
 /// All fields are optional — omitting them keeps the compiled-in defaults.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -358,6 +375,27 @@ pub struct FlyCamDef {
     /// Mouse look sensitivity in radians per pixel. Default: 0.002.
     #[serde(default = "default_flycam_sensitivity")]
     pub sensitivity: f32,
+    /// Key for moving forward. Default: `"KeyW"`.
+    #[serde(default = "default_flycam_forward")]
+    pub forward: String,
+    /// Key for moving backward. Default: `"KeyS"`.
+    #[serde(default = "default_flycam_backward")]
+    pub backward: String,
+    /// Key for strafing left. Default: `"KeyA"`.
+    #[serde(default = "default_flycam_left")]
+    pub left: String,
+    /// Key for strafing right. Default: `"KeyD"`.
+    #[serde(default = "default_flycam_right")]
+    pub right: String,
+    /// Key for ascending. Default: `"Space"`.
+    #[serde(default = "default_flycam_up")]
+    pub up: String,
+    /// Key for descending. Default: `"KeyQ"`.
+    #[serde(default = "default_flycam_down")]
+    pub down: String,
+    /// Mouse button that activates look mode. `"Left"`, `"Right"`, or `"Either"`. Default: `"Either"`.
+    #[serde(default = "default_flycam_look_button")]
+    pub look_button: String,
 }
 
 impl Default for FlyCamDef {
@@ -366,6 +404,13 @@ impl Default for FlyCamDef {
             speed: default_flycam_speed(),
             fast_speed: default_flycam_fast_speed(),
             sensitivity: default_flycam_sensitivity(),
+            forward: default_flycam_forward(),
+            backward: default_flycam_backward(),
+            left: default_flycam_left(),
+            right: default_flycam_right(),
+            up: default_flycam_up(),
+            down: default_flycam_down(),
+            look_button: default_flycam_look_button(),
         }
     }
 }
@@ -373,6 +418,13 @@ impl Default for FlyCamDef {
 fn default_flycam_speed() -> f32 { 100.0 }
 fn default_flycam_fast_speed() -> f32 { 200.0 }
 fn default_flycam_sensitivity() -> f32 { 0.002 }
+fn default_flycam_forward() -> String { "KeyW".to_string() }
+fn default_flycam_backward() -> String { "KeyS".to_string() }
+fn default_flycam_left() -> String { "KeyA".to_string() }
+fn default_flycam_right() -> String { "KeyD".to_string() }
+fn default_flycam_up() -> String { "Space".to_string() }
+fn default_flycam_down() -> String { "KeyQ".to_string() }
+fn default_flycam_look_button() -> String { "Either".to_string() }
 
 /// Runtime-relevant prefab component data.
 /// Additional design-time fields (health, ai, etc.) are silently ignored.
@@ -437,6 +489,20 @@ pub struct MovementConfig {
     /// Capsule total height (GLB players). Ignored for primitive players (use shape `height`). Default: 1.8 m.
     #[serde(default)]
     pub collider_height: Option<f32>,
+    /// Velocity decay multiplier each physics tick when no input is given (XZ plane).
+    /// Lower values stop the player faster; higher values are more slippery. Default: 0.8.
+    #[serde(default = "default_idle_drag")]
+    pub idle_drag: f32,
+    /// Rapier `linear_damping` on the player capsule rigid body. Default: 0.5.
+    #[serde(default = "default_linear_damping")]
+    pub linear_damping: f32,
+    /// Rapier `angular_damping` on the player capsule rigid body. Default: 0.5.
+    #[serde(default = "default_angular_damping")]
+    pub angular_damping: f32,
+    /// Distance (metres) the ground-detection sphere is swept downward each frame.
+    /// Decrease for flat terrain; increase for uneven terrain or fast vertical movement. Default: 0.3.
+    #[serde(default = "default_ground_cast_length")]
+    pub ground_cast_length: f32,
 }
 
 impl Default for MovementConfig {
@@ -450,12 +516,20 @@ impl Default for MovementConfig {
             double_jump_height: None,
             collider_radius: None,
             collider_height: None,
+            idle_drag: default_idle_drag(),
+            linear_damping: default_linear_damping(),
+            angular_damping: default_angular_damping(),
+            ground_cast_length: default_ground_cast_length(),
         }
     }
 }
 
 fn default_walk_speed() -> f32 { 5.0 }
 fn default_run_speed() -> f32 { 10.0 }
+fn default_idle_drag() -> f32 { 0.8 }
+fn default_linear_damping() -> f32 { 0.5 }
+fn default_angular_damping() -> f32 { 0.5 }
+fn default_ground_cast_length() -> f32 { 0.3 }
 
 /// Jump height expressed either as an absolute world-space value or as a fraction
 /// of the entity's own height.

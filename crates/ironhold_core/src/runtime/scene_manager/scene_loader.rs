@@ -271,6 +271,8 @@ pub fn spawn_scene_v2(
                                 alerted_duration: npc_def.alerted_duration,
                                 drag: npc_def.drag,
                                 waypoint_reach_radius: npc_def.waypoint_reach_radius,
+                                interact_leave_factor: npc_def.interact_leave_factor,
+                                home_arrival_radius: npc_def.home_arrival_radius,
                             },
                             RigidBody::Dynamic,
                             Collider::compound(vec![(
@@ -279,7 +281,7 @@ pub fn spawn_scene_v2(
                                 Collider::capsule_y(cap_half, cap_radius),
                             )]),
                             LockedAxes::ROTATION_LOCKED,
-                            Damping { linear_damping: 0.5, angular_damping: 0.5 },
+                            Damping { linear_damping: npc_def.linear_damping, angular_damping: npc_def.angular_damping },
                             Velocity::default(),
                             Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                         ));
@@ -438,6 +440,8 @@ pub fn spawn_scene_v2(
                                     alerted_duration: npc_def.alerted_duration,
                                     drag: npc_def.drag,
                                     waypoint_reach_radius: npc_def.waypoint_reach_radius,
+                                    interact_leave_factor: npc_def.interact_leave_factor,
+                                    home_arrival_radius: npc_def.home_arrival_radius,
                                 },
                                 RigidBody::Dynamic,
                                 Collider::compound(vec![(
@@ -446,7 +450,7 @@ pub fn spawn_scene_v2(
                                     Collider::capsule_y(cap_half, cap_radius),
                                 )]),
                                 LockedAxes::ROTATION_LOCKED,
-                                Damping { linear_damping: 0.5, angular_damping: 0.5 },
+                                Damping { linear_damping: npc_def.linear_damping, angular_damping: npc_def.angular_damping },
                                 Velocity::default(),
                                 Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                             ));
@@ -504,16 +508,19 @@ pub fn spawn_scene_v2(
             };
 
             if is_player {
-                let animation_policy = prefab
-                    .animation_policy
-                    .clone()
-                    .unwrap_or_else(|| "prefabs/animation/player_policy.ron".to_string());
+                if prefab.animation_policy.is_none() {
+                    warn!(
+                        "Player prefab '{}' has no animation_policy — no animations will play. \
+                         Set animation_policy in prefabs.ron to enable locomotion animation.",
+                        entity_def.prefab
+                    );
+                }
                 player_config = Some(PlayerConfig {
                     model_path,
                     initial_position: (translation.x, translation.y, translation.z),
                     camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
                     inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
-                    animation_policy,
+                    animation_policy: prefab.animation_policy.clone(),
                     movement: prefab.components.movement.clone(),
                 });
             } else {
@@ -595,9 +602,8 @@ pub fn spawn_scene_v2(
                         jumps_used: 0,
                         max_jumps,
                         collider_radius: cap_radius,
-                        // Entity origin is the feet / ground-contact point. The sphere
-                        // cast starts at feet; 0.3 m covers rough and sloped terrain.
-                        ground_cast_length: 0.3,
+                        ground_cast_length: mv.ground_cast_length,
+                        idle_drag: mv.idle_drag,
                     },
                     LocomotionState::default(),
                     AnimationRequests::default(),
@@ -664,17 +670,31 @@ pub fn spawn_scene_v2(
                 Transform::from_translation(position + cam_offset)
                     .looking_at(position + Vec3::from(cam.look_at_offset), Vec3::Y),
                 LevelEntity,
-                OrbitCamera {
-                    target:          player_entity,
-                    radius:          cam_offset.length(),
-                    offset:          cam_offset,
-                    zoom_speed:      cam.zoom_speed,
-                    orbit_speed:     cam.orbit_speed,
-                    min_radius:      cam.min_radius,
-                    max_radius:      cam.max_radius,
-                    pitch:           0.5,
-                    yaw:             0.0,
-                    look_at_offset:  Vec3::from(cam.look_at_offset),
+                {
+                    use crate::capabilities::camera::parse_orbit_button;
+                    let (orbit_lmb, orbit_rmb) = parse_orbit_button(&cam.orbit_button);
+                    let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
+                        .as_deref()
+                        .map(parse_orbit_button)
+                        .unwrap_or((false, false));
+                    OrbitCamera {
+                        target:                 player_entity,
+                        radius:                 cam_offset.length(),
+                        offset:                 cam_offset,
+                        zoom_speed:             cam.zoom_speed,
+                        orbit_speed:            cam.orbit_speed,
+                        min_radius:             cam.min_radius,
+                        max_radius:             cam.max_radius,
+                        pitch:                  cam.initial_pitch,
+                        yaw:                    cam.initial_yaw,
+                        look_at_offset:         Vec3::from(cam.look_at_offset),
+                        min_pitch:              cam.min_pitch,
+                        max_pitch:              cam.max_pitch,
+                        orbit_lmb,
+                        orbit_rmb,
+                        character_rotate_lmb:   char_rot_lmb,
+                        character_rotate_rmb:   char_rot_rmb,
+                    }
                 },
             ));
         }
@@ -714,12 +734,25 @@ pub fn spawn_scene_v2(
                 tonemapping,
                 fc_transform,
                 LevelEntity,
-                crate::capabilities::flycam::FlyCamera {
-                    speed: fc_def.speed,
-                    fast_speed: fc_def.fast_speed,
-                    sensitivity: fc_def.sensitivity,
-                    pitch,
-                    yaw,
+                {
+                    use crate::schema::player::InputMap;
+                    use crate::capabilities::flycam::parse_flycam_look_button;
+                    let (look_lmb, look_rmb) = parse_flycam_look_button(&fc_def.look_button);
+                    crate::capabilities::flycam::FlyCamera {
+                        speed: fc_def.speed,
+                        fast_speed: fc_def.fast_speed,
+                        sensitivity: fc_def.sensitivity,
+                        pitch,
+                        yaw,
+                        key_forward:  InputMap::parse_key(&fc_def.forward).unwrap_or(KeyCode::KeyW),
+                        key_backward: InputMap::parse_key(&fc_def.backward).unwrap_or(KeyCode::KeyS),
+                        key_left:     InputMap::parse_key(&fc_def.left).unwrap_or(KeyCode::KeyA),
+                        key_right:    InputMap::parse_key(&fc_def.right).unwrap_or(KeyCode::KeyD),
+                        key_up:       InputMap::parse_key(&fc_def.up).unwrap_or(KeyCode::Space),
+                        key_down:     InputMap::parse_key(&fc_def.down).unwrap_or(KeyCode::KeyQ),
+                        look_lmb,
+                        look_rmb,
+                    }
                 },
             ));
         } else {

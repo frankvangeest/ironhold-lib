@@ -672,6 +672,47 @@ fn test_ui_label_align_explicit_variants() {
     }
 }
 
+// ── UiElementDefV2.size default ──────────────────────────────────────────────
+
+#[test]
+fn test_ui_element_size_defaults_to_120_32() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+        ( kind: "button", id: "btn", text: "Go", action: "start" )
+    ])"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("button without size should parse");
+    assert_eq!(scene.ui[0].size, (120.0, 32.0), "size should default to (120, 32)");
+}
+
+#[test]
+fn test_ui_element_size_explicit() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+        ( kind: "label", id: "lbl", text: "Score", size: (200.0, 50.0) )
+    ])"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("label with explicit size should parse");
+    assert_eq!(scene.ui[0].size, (200.0, 50.0));
+}
+
+// ── UiPanelDef.background_color default ──────────────────────────────────────
+
+#[test]
+fn test_ui_panel_background_color_defaults() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [], ui_panel: Some(()))"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("ui_panel with all defaults should parse");
+    let panel = scene.ui_panel.as_ref().unwrap();
+    assert_eq!(panel.background_color, (0.1, 0.1, 0.1, 0.95));
+    assert_eq!(panel.padding, 20.0);
+    assert_eq!(panel.gap, 12.0);
+}
+
+#[test]
+fn test_ui_panel_background_color_explicit() {
+    let ron_str = r#"(schema_version: 2, entities: [], ui: [], ui_panel: Some((
+        background_color: (0.2, 0.2, 0.2, 1.0),
+    )))"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("ui_panel with explicit color should parse");
+    assert_eq!(scene.ui_panel.unwrap().background_color, (0.2, 0.2, 0.2, 1.0));
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]
@@ -847,6 +888,26 @@ fn test_movement_config_all_defaults() {
     assert!(config.rot_speed.is_none());
     assert!(config.collider_radius.is_none());
     assert!(config.collider_height.is_none());
+}
+
+#[test]
+fn test_movement_config_physics_fields_defaults() {
+    let config: MovementConfig = from_str("()").unwrap();
+    assert_eq!(config.idle_drag, 0.8);
+    assert_eq!(config.linear_damping, 0.5);
+    assert_eq!(config.angular_damping, 0.5);
+    assert_eq!(config.ground_cast_length, 0.3);
+}
+
+#[test]
+fn test_movement_config_physics_fields_explicit() {
+    let config: MovementConfig = from_str(
+        "(idle_drag: 0.6, linear_damping: 0.4, angular_damping: 0.6, ground_cast_length: 0.5)"
+    ).unwrap();
+    assert_eq!(config.idle_drag, 0.6);
+    assert_eq!(config.linear_damping, 0.4);
+    assert_eq!(config.angular_damping, 0.6);
+    assert_eq!(config.ground_cast_length, 0.5);
 }
 
 #[test]
@@ -1472,6 +1533,43 @@ fn test_npc_def_minimal_uses_defaults() {
     assert_eq!(npc.alerted_duration, 0.3);     // default_npc_alerted_duration()
     assert_eq!(npc.drag, 0.8);                 // default_npc_drag()
     assert_eq!(npc.waypoint_reach_radius, 0.5); // default_npc_waypoint_reach_radius()
+    assert_eq!(npc.interact_leave_factor, 1.5); // default_npc_interact_leave_factor()
+    assert_eq!(npc.home_arrival_radius, 0.5);   // default_npc_home_arrival_radius()
+    assert_eq!(npc.linear_damping, 0.5);        // default_linear_damping()
+    assert_eq!(npc.angular_damping, 0.5);       // default_angular_damping()
+}
+
+#[test]
+fn test_npc_def_physics_fields_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "hostile_npc": (
+                    kind: "actor",
+                    model: "orc",
+                    components: (
+                        npc: Some((
+                            faction: Hostile,
+                            on_player_near: Chase,
+                            detection_radius: 8.0,
+                            chase_radius: 20.0,
+                            interact_leave_factor: 2.0,
+                            home_arrival_radius: 1.0,
+                            linear_damping: 0.6,
+                            angular_damping: 0.7,
+                        )),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    let npc = catalog.prefabs["hostile_npc"].components.npc.as_ref().unwrap();
+    assert_eq!(npc.interact_leave_factor, 2.0);
+    assert_eq!(npc.home_arrival_radius, 1.0);
+    assert_eq!(npc.linear_damping, 0.6);
+    assert_eq!(npc.angular_damping, 0.7);
 }
 
 #[test]
@@ -1585,6 +1683,70 @@ fn test_player_prefab_inputs_optional_keys_default() {
     assert_eq!(inputs.run,      "ShiftLeft", "run should default to ShiftLeft");
     assert_eq!(inputs.interact, "KeyF",      "interact should default to KeyF");
     assert_eq!(inputs.forward,  "ArrowUp");
+    assert_eq!(inputs.strafe_mouse_button, Some("Left".to_string()),
+        "strafe_mouse_button should default to Left");
+}
+
+#[test]
+fn test_player_prefab_inputs_strafe_mouse_button_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        inputs: (
+                            forward:      "KeyW",
+                            backward:     "KeyS",
+                            left:         "KeyA",
+                            right:        "KeyD",
+                            strafe_left:  "KeyQ",
+                            strafe_right: "KeyE",
+                            jump:         "Space",
+                            strafe_mouse_button: Some("Right"),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("inputs with strafe_mouse_button should parse");
+    let inputs = catalog.prefabs["player"].components.inputs.as_ref().unwrap();
+    assert_eq!(inputs.strafe_mouse_button, Some("Right".to_string()));
+}
+
+#[test]
+fn test_player_prefab_inputs_strafe_mouse_button_none() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        inputs: (
+                            forward:      "KeyW",
+                            backward:     "KeyS",
+                            left:         "KeyA",
+                            right:        "KeyD",
+                            strafe_left:  "KeyQ",
+                            strafe_right: "KeyE",
+                            jump:         "Space",
+                            strafe_mouse_button: None,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("strafe_mouse_button: None should parse");
+    let inputs = catalog.prefabs["player"].components.inputs.as_ref().unwrap();
+    assert_eq!(inputs.strafe_mouse_button, None);
 }
 
 #[test]
@@ -1643,6 +1805,53 @@ fn test_player_prefab_camera_full_config_parses() {
     assert_eq!(cam.orbit_speed,    0.3);
     assert_eq!(cam.min_radius,     3.0);
     assert_eq!(cam.max_radius,     15.0);
+    // New fields default correctly when not specified
+    assert_eq!(cam.min_pitch, 0.1);
+    assert_eq!(cam.max_pitch, 1.5);
+    assert_eq!(cam.orbit_button, "Either");
+    assert_eq!(cam.character_rotate_button, Some("Right".to_string()));
+    assert_eq!(cam.initial_pitch, 0.5);
+    assert_eq!(cam.initial_yaw, 0.0);
+}
+
+#[test]
+fn test_player_prefab_camera_pitch_and_orbit_explicit() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "player": (
+                    kind: "actor",
+                    model: "hero",
+                    components: (
+                        tags: ["player"],
+                        camera: (
+                            offset:                    (0.0, 3.0, 8.0),
+                            look_at_offset:            (0.0, 1.5, 0.0),
+                            zoom_speed:                5.0,
+                            orbit_speed:               0.3,
+                            min_radius:                3.0,
+                            max_radius:                15.0,
+                            min_pitch:                 0.2,
+                            max_pitch:                 1.8,
+                            orbit_button:              "Right",
+                            character_rotate_button:   Some("Left"),
+                            initial_pitch:             0.75,
+                            initial_yaw:               1.0,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("camera with explicit pitch/orbit should parse");
+    let cam = catalog.prefabs["player"].components.camera.as_ref().unwrap();
+    assert_eq!(cam.min_pitch, 0.2);
+    assert_eq!(cam.max_pitch, 1.8);
+    assert_eq!(cam.orbit_button, "Right");
+    assert_eq!(cam.character_rotate_button, Some("Left".to_string()));
+    assert_eq!(cam.initial_pitch, 0.75);
+    assert_eq!(cam.initial_yaw, 1.0);
 }
 
 #[test]
@@ -1755,4 +1964,32 @@ fn test_flycam_def_all_defaults() {
     assert_eq!(fc.speed,       100.0);
     assert_eq!(fc.fast_speed,  200.0);
     assert_eq!(fc.sensitivity, 0.002);
+    assert_eq!(fc.forward,  "KeyW");
+    assert_eq!(fc.backward, "KeyS");
+    assert_eq!(fc.left,     "KeyA");
+    assert_eq!(fc.right,    "KeyD");
+    assert_eq!(fc.up,       "Space");
+    assert_eq!(fc.down,     "KeyQ");
+    assert_eq!(fc.look_button, "Either");
+}
+
+#[test]
+fn test_flycam_def_movement_keys_explicit() {
+    let ron_str = r#"(
+        forward:     "ArrowUp",
+        backward:    "ArrowDown",
+        left:        "ArrowLeft",
+        right:       "ArrowRight",
+        up:          "KeyE",
+        down:        "KeyC",
+        look_button: "Right"
+    )"#;
+    let fc: FlyCamDef = from_str(ron_str).expect("flycam with custom movement keys should parse");
+    assert_eq!(fc.forward,  "ArrowUp");
+    assert_eq!(fc.backward, "ArrowDown");
+    assert_eq!(fc.left,     "ArrowLeft");
+    assert_eq!(fc.right,    "ArrowRight");
+    assert_eq!(fc.up,       "KeyE");
+    assert_eq!(fc.down,     "KeyC");
+    assert_eq!(fc.look_button, "Right");
 }

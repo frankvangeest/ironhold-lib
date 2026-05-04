@@ -60,6 +60,10 @@ pub struct NpcAgent {
     pub drag: f32,
     /// Metres from a waypoint to advance to the next. From `NpcDef.waypoint_reach_radius`.
     pub waypoint_reach_radius: f32,
+    /// Multiplier on `approach_distance` defining the leave-interact threshold.
+    pub interact_leave_factor: f32,
+    /// Metres from spawn origin at which Return state ends. From `NpcDef.home_arrival_radius`.
+    pub home_arrival_radius: f32,
 }
 
 // ── Visibility helper ─────────────────────────────────────────────────────────
@@ -217,7 +221,7 @@ pub fn npc_behavior_system(
 
             NpcState::Interact => {
                 // Leave interact range → resume patrol / idle.
-                if dist_opt.map(|d| d > npc.approach_distance * 1.5).unwrap_or(true) {
+                if dist_opt.map(|d| d > npc.approach_distance * npc.interact_leave_factor).unwrap_or(true) {
                     next_state = Some(if npc.waypoints.is_empty() {
                         NpcState::Idle
                     } else {
@@ -232,7 +236,7 @@ pub fn npc_behavior_system(
                     if let Some((e, _, _)) = visible { npc.target = Some(e); }
                     npc.state_timer = 0.0;
                     next_state = Some(NpcState::Alerted);
-                } else if npc_pos.distance(npc.origin) < 0.5 {
+                } else if npc_pos.distance(npc.origin) < npc.home_arrival_radius {
                     next_state = Some(if npc.waypoints.is_empty() {
                         NpcState::Idle
                     } else {

@@ -43,10 +43,12 @@ pub fn input_translator_system(
         }
     }
 
-    // Left mouse button held: A/D strafe instead of rotate.
-    let strafe_mode = mouse_input.pressed(MouseButton::Left);
-
     for (entity, controller) in &query {
+        let strafe_mode = controller.inputs.strafe_mouse_button
+            .as_deref()
+            .and_then(InputMap::parse_mouse_button)
+            .map(|btn| mouse_input.pressed(btn))
+            .unwrap_or(false);
         let mut move_vec = Vec2::ZERO;
 
         if let Some(key) = controller.inputs.key("forward") {

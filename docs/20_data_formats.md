@@ -328,7 +328,7 @@ UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** D
 | `text` | `String` | `""` | Display text (ignored for `kind: "rect"`) |
 | `action` | `String` | `""` | For `kind: "button"`: trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
-| `size` | `(f32, f32)` | required | Width and height in pixels |
+| `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill/background colour as linear RGBA. No effect on `kind: "label"`. |
 | `absolute` | `bool` | `false` | In panel mode: position this element absolutely relative to the panel's top-left instead of flowing in the column |
 | `align` | `UiTextAlign` | `Center` | Horizontal text alignment for `kind: "label"`. Values: `Left`, `Center`, `Right`. Ignored for buttons and rects. |
@@ -336,6 +336,27 @@ UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** D
 | `format` | `Option<String>` | `None` | Template used with `bind`. `"{}"` is replaced by the variable value (e.g. `"Score: {}"`). Defaults to the raw value when omitted. |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
+
+### UI Panel (`UiPanelDef`) ✅
+
+When a scene includes a `ui_panel` block, all `ui` elements are arranged in a vertically-flowing centered panel instead of using absolute positioning. Elements with `absolute: true` are still positioned relative to the panel's top-left corner.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `background_color` | `(f32,f32,f32,f32)` | `(0.1,0.1,0.1,0.95)` | Background colour as linear RGBA (0.0–1.0) |
+| `padding` | `f32` | `20.0` | Inner padding around panel contents in pixels |
+| `gap` | `f32` | `12.0` | Vertical gap between child elements in pixels |
+| `width` | `Option<f32>` | `None` | Fixed panel width in pixels; auto-sized when omitted |
+| `height` | `Option<f32>` | `None` | Fixed panel height in pixels; auto-sized when omitted (required for panels with absolutely-positioned children such as maps) |
+
+```ron
+ui_panel: (
+  background_color: (0.08, 0.08, 0.08, 0.95),
+  padding: 24.0,
+  gap: 14.0,
+  width: 380.0,
+),
+```
 
 ---
 
@@ -467,6 +488,13 @@ A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying 
 | `speed` | `f32` | `100.0` | Normal movement speed in units/second |
 | `fast_speed` | `f32` | `200.0` | Movement speed while Shift is held, in units/second |
 | `sensitivity` | `f32` | `0.002` | Mouse look sensitivity in radians per pixel |
+| `forward` | `String` | `"KeyW"` | Key for moving forward |
+| `backward` | `String` | `"KeyS"` | Key for moving backward |
+| `left` | `String` | `"KeyA"` | Key for strafing left |
+| `right` | `String` | `"KeyD"` | Key for strafing right |
+| `up` | `String` | `"Space"` | Key for ascending |
+| `down` | `String` | `"KeyQ"` | Key for descending |
+| `look_button` | `String` | `"Either"` | Mouse button that activates look mode: `"Left"`, `"Right"`, or `"Either"` |
 
 To display the camera's world position in the UI, add a label element with `id: "flycam_position"` to the scene's `ui` array. The engine will update it every frame.
 
@@ -530,6 +558,7 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | `jump` | `String` | `"Space"` | Jump |
 | `run` | `String` | `"ShiftLeft"` | Hold to run |
 | `interact` | `String` | `"KeyF"` | Interact with nearby `interactable` entities |
+| `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 
 Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Space"`, `"ShiftLeft"`, `"KeyF"`, etc. (See `InputMap::parse_key` in `schema/player.rs` for the full accepted set.) Invalid key names produce a warning at load time and the binding has no effect.
 
@@ -545,6 +574,10 @@ Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Spac
 | `double_jump_height` | `Option<JumpConfig>` | same as `jump` | Second-jump height |
 | `collider_radius` | `Option<f32>` | `0.4` | Capsule collider radius (**GLB players only** — primitive players use `primitive.radius`) |
 | `collider_height` | `Option<f32>` | `1.8` | Capsule total height (**GLB players only** — primitive players use `primitive.height`) |
+| `idle_drag` | `f32` | `0.8` | Velocity decay multiplier on the XZ plane per physics tick when no input is given (0 = instant stop, 1 = no friction) |
+| `linear_damping` | `f32` | `0.5` | Rapier `linear_damping` on the player capsule rigid body |
+| `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the player capsule rigid body |
+| `ground_cast_length` | `f32` | `0.3` | Distance (metres) the ground-detection sphere is swept downward each frame — increase for uneven terrain or fast vertical movement |
 
 **`JumpConfig` variants:**
 - `Fixed(height: <f32>)` — absolute world-space height in metres (e.g. `Fixed(height: 2.5)`)
@@ -560,6 +593,12 @@ Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Spac
 | `orbit_speed` | `f32` | `0.5` | Mouse orbit speed (radians per pixel) |
 | `min_radius` | `f32` | `2.0` | Minimum zoom distance in metres |
 | `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |
+| `min_pitch` | `f32` | `0.1` | Minimum pitch in radians (looking up limit) |
+| `max_pitch` | `f32` | `1.5` | Maximum pitch in radians (looking down limit) |
+| `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, or `"Either"` |
+| `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable |
+| `initial_pitch` | `f32` | `0.5` | Camera pitch at scene start in radians |
+| `initial_yaw` | `f32` | `0.0` | Camera yaw at scene start in radians |
 
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
@@ -594,6 +633,10 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
 | `alerted_duration` | `f32` | `0.3` | Seconds the NPC pauses in the Alerted state before acting |
 | `drag` | `f32` | `0.8` | Velocity decay multiplier per physics tick when not actively moving (0 = instant stop, 1 = no decay) |
 | `waypoint_reach_radius` | `f32` | `0.5` | Metres from a waypoint at which the NPC advances to the next one |
+| `interact_leave_factor` | `f32` | `1.5` | Multiplier on `approach_distance` defining the leave-interact threshold (`distance > approach_distance * factor` exits Interact state) |
+| `home_arrival_radius` | `f32` | `0.5` | Metres from spawn origin at which the NPC considers itself home and ends Return state |
+| `linear_damping` | `f32` | `0.5` | Rapier `linear_damping` on the NPC capsule rigid body |
+| `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the NPC capsule rigid body |
 
 ```ron
 // Hostile patrol guard — full configuration

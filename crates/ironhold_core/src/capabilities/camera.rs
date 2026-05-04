@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::capabilities::player::CharacterController;
+use crate::schema::player::InputMap;
 
 #[derive(Component)]
 pub struct OrbitCamera {
@@ -13,6 +14,17 @@ pub struct OrbitCamera {
     pub pitch: f32,
     pub yaw: f32,
     pub look_at_offset: Vec3,
+    /// Minimum pitch in radians. Sourced from `CameraConfig.min_pitch`.
+    pub min_pitch: f32,
+    /// Maximum pitch in radians. Sourced from `CameraConfig.max_pitch`.
+    pub max_pitch: f32,
+    /// Which mouse buttons activate orbit. Parsed from `CameraConfig.orbit_button`.
+    /// `None` = no mouse orbit; `Some(button)` = that specific button; see `orbit_rmb`.
+    pub orbit_lmb: bool,
+    pub orbit_rmb: bool,
+    /// Whether RMB also rotates the character. Sourced from `CameraConfig.character_rotate_button`.
+    pub character_rotate_rmb: bool,
+    pub character_rotate_lmb: bool,
 }
 
 pub fn camera_orbit_system(
@@ -32,7 +44,6 @@ pub fn camera_orbit_system(
         }
     }
 
-    // Collect mouse motion
     let mut mouse_delta = Vec2::ZERO;
     for event in mouse_motion_events.read() {
         mouse_delta += event.delta;
@@ -41,43 +52,55 @@ pub fn camera_orbit_system(
     let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
 
     for (mut cam_transform, mut orbit) in &mut camera_query {
-        // Zoom
         if zoom_delta != 0.0 {
             orbit.radius -= zoom_delta * orbit.zoom_speed * time.delta_secs();
             orbit.radius = orbit.radius.clamp(orbit.min_radius, orbit.max_radius);
         }
 
-        // Orbit Logic
-        let lmb_pressed = mouse_button_input.pressed(MouseButton::Left);
-        let rmb_pressed = mouse_button_input.pressed(MouseButton::Right);
+        let lmb = mouse_button_input.pressed(MouseButton::Left);
+        let rmb = mouse_button_input.pressed(MouseButton::Right);
+        let orbit_active = (orbit.orbit_lmb && lmb) || (orbit.orbit_rmb && rmb);
 
-        if lmb_pressed || rmb_pressed {
-            // Yaw (Left/Right)
+        if orbit_active {
             orbit.yaw -= mouse_delta.x * orbit.orbit_speed * time.delta_secs();
-            
-            // Pitch (Up/Down)
             orbit.pitch -= mouse_delta.y * orbit.orbit_speed * time.delta_secs();
-            // Clamp pitch to avoid flipping
-            orbit.pitch = orbit.pitch.clamp(0.1, 1.5); 
-        }
-        
-        // If RMB pressed, also rotate character if possible
-        if rmb_pressed {
-             if let Ok(mut char_transform) = character_query.get_mut(orbit.target) {
-                 char_transform.rotate_y(-mouse_delta.x * orbit.orbit_speed * time.delta_secs());
-             }
+            orbit.pitch = orbit.pitch.clamp(orbit.min_pitch, orbit.max_pitch);
         }
 
-        // Update Camera Position
+        let char_rotate = (orbit.character_rotate_rmb && rmb)
+            || (orbit.character_rotate_lmb && lmb);
+        if char_rotate {
+            if let Ok(mut char_transform) = character_query.get_mut(orbit.target) {
+                char_transform.rotate_y(-mouse_delta.x * orbit.orbit_speed * time.delta_secs());
+            }
+        }
+
         if let Ok(char_transform) = character_query.get(orbit.target) {
             let target_pos = char_transform.translation + orbit.look_at_offset;
-            
-            // Calculate offset based on yaw/pitch
-            let rot = Quat::from_axis_angle(Vec3::Y, orbit.yaw) * Quat::from_axis_angle(Vec3::X, -orbit.pitch);
+            let rot = Quat::from_axis_angle(Vec3::Y, orbit.yaw)
+                * Quat::from_axis_angle(Vec3::X, -orbit.pitch);
             let offset = rot * Vec3::Z * orbit.radius;
-            
             cam_transform.translation = target_pos + offset;
             cam_transform.look_at(target_pos, Vec3::Y);
         }
     }
+}
+
+/// Parse a `CameraConfig.orbit_button` / `character_rotate_button` string into
+/// `(activate_on_lmb, activate_on_rmb)`.
+pub fn parse_orbit_button(s: &str) -> (bool, bool) {
+    match s {
+        "Left"   => (true,  false),
+        "Right"  => (false, true),
+        "Either" => (true,  true),
+        _        => {
+            warn!("Unknown orbit button value {:?} — defaulting to Either", s);
+            (true, true)
+        }
+    }
+}
+
+/// Parse `InputMap.strafe_mouse_button` to a `MouseButton`.
+pub fn parse_strafe_button(s: &str) -> Option<MouseButton> {
+    InputMap::parse_mouse_button(s)
 }

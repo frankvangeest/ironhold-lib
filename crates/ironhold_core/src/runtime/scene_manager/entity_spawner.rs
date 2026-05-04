@@ -199,9 +199,12 @@ pub(crate) fn spawn_player_entity(
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
 
-    let policy_path = resolve_project_path(project_root, &player_config.animation_policy);
-    let policy_handle: Handle<AnimationPolicy> = asset_server.load(policy_path.clone());
-    info!("Loading AnimationPolicy from: {}", policy_path);
+    let policy_handle_opt: Option<Handle<AnimationPolicy>> =
+        player_config.animation_policy.as_deref().map(|rel| {
+            let path = resolve_project_path(project_root, rel);
+            info!("Loading AnimationPolicy from: {}", path);
+            asset_server.load(path)
+        });
 
     let spawned = model_spawner.spawn_instance(
         commands,
@@ -238,28 +241,13 @@ pub(crate) fn spawn_player_entity(
             double_jump_velocity,
             jumps_used: 0,
             max_jumps,
-            // Entity origin is the feet / ground-contact point. The sphere cast starts
-            // at the feet and only needs a short distance to detect the ground below.
             collider_radius: cap_radius,
-            ground_cast_length: 0.3,
+            ground_cast_length: mv.ground_cast_length,
+            idle_drag: mv.idle_drag,
         },
         LocomotionState::default(),
         AnimationRequests::default(),
         ActiveOverride::default(),
-        PendingAnimationPolicy(policy_handle.clone()),
-        AnimationController {
-            current: String::new(), // will be set once policy loads
-            last_played: String::new(),
-            gltf_path,
-            gltf_handle,
-            node_indices: HashMap::new(),
-            graph_initialized: false,
-            transition_ms: 0,
-            should_loop: true,
-        },
-        // Compound collider: the capsule centre is offset up by body_y so its bottom
-        // coincides with the entity origin (feet). Keeping the collider on the main
-        // entity means CollisionEvent always reports the entity with CharacterController.
         RigidBody::Dynamic,
         Collider::compound(vec![(
             Vec3::new(0.0, cap_half + cap_radius, 0.0),
@@ -267,14 +255,36 @@ pub(crate) fn spawn_player_entity(
             Collider::capsule_y(cap_half, cap_radius),
         )]),
         LockedAxes::ROTATION_LOCKED,
-        Damping { linear_damping: 0.5, angular_damping: 0.5 },
+        Damping { linear_damping: mv.linear_damping, angular_damping: mv.angular_damping },
         Velocity::default(),
         ExternalImpulse::default(),
     ));
 
+    if let Some(policy_handle) = policy_handle_opt {
+        commands.entity(player_entity).insert((
+            PendingAnimationPolicy(policy_handle.clone()),
+            AnimationController {
+                current: String::new(),
+                last_played: String::new(),
+                gltf_path,
+                gltf_handle,
+                node_indices: HashMap::new(),
+                graph_initialized: false,
+                transition_ms: 0,
+                should_loop: true,
+            },
+        ));
+    }
+
     // Spawn Orbit Camera
+    let cam = &player_config.camera;
+    let (orbit_lmb, orbit_rmb) = crate::capabilities::camera::parse_orbit_button(&cam.orbit_button);
+    let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
+        .as_deref()
+        .map(crate::capabilities::camera::parse_orbit_button)
+        .unwrap_or((false, false));
     let start_pos =
-        Vec3::from(player_config.initial_position) + Vec3::from(player_config.camera.offset);
+        Vec3::from(player_config.initial_position) + Vec3::from(cam.offset);
     commands.spawn((
         Name::new("Orbit Camera"),
         Camera3d::default(),
@@ -284,15 +294,21 @@ pub(crate) fn spawn_player_entity(
         LevelEntity,
         OrbitCamera {
             target: player_entity,
-            radius: Vec3::from(player_config.camera.offset).length(),
-            offset: Vec3::from(player_config.camera.offset),
-            zoom_speed: player_config.camera.zoom_speed,
-            orbit_speed: player_config.camera.orbit_speed,
-            min_radius: player_config.camera.min_radius,
-            max_radius: player_config.camera.max_radius,
-            pitch: 0.5,
-            yaw: 0.0,
-            look_at_offset: Vec3::from(player_config.camera.look_at_offset),
+            radius: Vec3::from(cam.offset).length(),
+            offset: Vec3::from(cam.offset),
+            zoom_speed: cam.zoom_speed,
+            orbit_speed: cam.orbit_speed,
+            min_radius: cam.min_radius,
+            max_radius: cam.max_radius,
+            pitch: cam.initial_pitch,
+            yaw: cam.initial_yaw,
+            look_at_offset: Vec3::from(cam.look_at_offset),
+            min_pitch: cam.min_pitch,
+            max_pitch: cam.max_pitch,
+            orbit_lmb,
+            orbit_rmb,
+            character_rotate_lmb: char_rot_lmb,
+            character_rotate_rmb: char_rot_rmb,
         },
     ));
 }
@@ -305,6 +321,12 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         orbit_speed: 0.5,
         min_radius: 2.0,
         max_radius: 20.0,
+        min_pitch: 0.1,
+        max_pitch: 1.5,
+        orbit_button: "Either".to_string(),
+        character_rotate_button: Some("Right".to_string()),
+        initial_pitch: 0.5,
+        initial_yaw: 0.0,
     }
 }
 
@@ -319,5 +341,6 @@ pub(crate) fn default_input_map() -> InputMap {
         jump: "Space".to_string(),
         run: "ShiftLeft".to_string(),
         interact: "KeyF".to_string(),
+        strafe_mouse_button: Some("Left".to_string()),
     }
 }

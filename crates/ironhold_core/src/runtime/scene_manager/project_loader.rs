@@ -99,7 +99,7 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
     } else {
         // Phase 2: wait for all pending loads to complete.
-        let pending = pending.unwrap();
+        let Some(pending) = pending else { return; };
 
         if let Some(h) = &pending.model_fixes {
             match asset_server.load_state(h) {

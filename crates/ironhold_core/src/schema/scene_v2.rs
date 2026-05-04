@@ -160,8 +160,14 @@ pub struct SceneLightingV2 {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct DirectionalLightDefV2 {
+    /// RGB color of the light as linear sRGB 0.0–1.0. Default: white `(1.0, 1.0, 1.0)`.
+    #[serde(default = "default_directional_color")]
     pub color: (f32, f32, f32),
+    /// Illuminance in lux. Default: 10000.0 (bright overcast sky).
+    #[serde(default = "default_directional_intensity")]
     pub intensity: f32,
+    /// Euler angles in degrees (XYZ order) orienting the light direction. Default: `(45, 0, 0)` (sunlight from above).
+    #[serde(default = "default_directional_rotation")]
     pub rotation_euler_deg: (f32, f32, f32),
     #[serde(default = "default_true")]
     pub shadows_enabled: bool,
@@ -206,6 +212,9 @@ fn default_true() -> bool { true }
 fn default_point_color() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 fn default_point_intensity() -> f32 { 800.0 }
 fn default_point_range() -> f32 { 20.0 }
+fn default_directional_color() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
+fn default_directional_intensity() -> f32 { 10000.0 }
+fn default_directional_rotation() -> (f32, f32, f32) { (45.0, 0.0, 0.0) }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -303,6 +312,8 @@ pub struct UiElementDefV2 {
     /// relative to the panel's top-left corner.
     #[serde(default)]
     pub position: (f32, f32),
+    /// Width and height in pixels. Default: `(120.0, 32.0)`.
+    #[serde(default = "default_ui_element_size")]
     pub size: (f32, f32),
     /// Fill color as linear RGBA (0.0–1.0).
     /// For `kind: "rect"`: the fill color. Defaults to dark grey if omitted.
@@ -343,7 +354,8 @@ pub enum UiTextAlign {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct UiPanelDef {
-    /// Background color of the panel box as RGBA (0.0–1.0).
+    /// Background color of the panel box as RGBA (0.0–1.0). Default: near-black `(0.1, 0.1, 0.1, 0.95)`.
+    #[serde(default = "default_panel_bg")]
     pub background_color: (f32, f32, f32, f32),
     /// Inner padding around panel contents in pixels.
     #[serde(default = "default_panel_padding")]
@@ -361,9 +373,11 @@ pub struct UiPanelDef {
     pub height: Option<f32>,
 }
 
+fn default_panel_bg() -> (f32, f32, f32, f32) { (0.1, 0.1, 0.1, 0.95) }
 fn default_panel_padding() -> f32 { 20.0 }
 fn default_panel_gap() -> f32 { 12.0 }
 fn default_ui_element_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
+fn default_ui_element_size() -> (f32, f32) { (120.0, 32.0) }
 
 /// A text annotation anchored to a 3-D world position.
 /// The engine projects `translation` through the active Camera3d each frame
