@@ -31,9 +31,9 @@
   },
 
   audio: {
-    "click": "shared/audio/menu-button-click.wav",
-    "walk": "shared/audio/walk.wav",
-    "run_grass": "shared/audio/run-grass.wav",
-    "bg_music": "shared/audio/bg-music-balance.mp3",
+    "click":     (path: "shared/audio/menu-button-click.wav"),
+    "walk":      (path: "shared/audio/walk.wav"),
+    "run_grass": (path: "shared/audio/run-grass.wav"),
+    "bg_music":  (path: "shared/audio/bg-music-balance.mp3"),
   },
 )

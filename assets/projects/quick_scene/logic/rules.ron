@@ -7,27 +7,27 @@
         ),
         (
             on: "ui.button_pressed:start_game",
-            do_actions: [ Log("LoadScene Triggered"), PlaySound("click"), LoadScene("scenes/main.scene.ron") ],
+            do_actions: [ Log("LoadScene Triggered"), PlaySound(key: "click"), LoadScene("scenes/main.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:quit",
-            do_actions: [ Log("Quit Triggered"), PlaySound("click"), Quit ],
+            do_actions: [ Log("Quit Triggered"), PlaySound(key: "click"), Quit ],
         ),
         (
             on: "ui.button_pressed:test_actions",
-            do_actions: [ Log("Test Action Triggered"), PlaySound("click"), Spawn(prefab: "chest_02") ],
+            do_actions: [ Log("Test Action Triggered"), PlaySound(key: "click"), Spawn(prefab: "chest_02") ],
         ),
         (
             on: "ui.button_pressed:start_menu",
-            do_actions: [ Log("LoadScene Triggered"), PlaySound("click"), LoadScene("scenes/start_menu.scene.ron") ],
+            do_actions: [ Log("LoadScene Triggered"), PlaySound(key: "click"), LoadScene("scenes/start_menu.scene.ron") ],
         ),
         (
             on: "ui.button_pressed:dance",
-            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlaySound("click"), PlayAnimation("dance") ],
+            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlaySound(key: "click"), PlayAnimation("dance") ],
         ),
         (
             on: "ui.button_pressed:spawn_enemy",
-            do_actions: [ Log("Spawning enemy orc"), PlaySound("click"), Spawn(prefab: "enemy_orc_melee", spawn_point: "enemy_wave_a", yaw_deg: 90.0) ],
+            do_actions: [ Log("Spawning enemy orc"), PlaySound(key: "click"), Spawn(prefab: "enemy_orc_melee", spawn_point: "enemy_wave_a", yaw_deg: 90.0) ],
         ),
     ],
 )

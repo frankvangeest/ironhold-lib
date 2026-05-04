@@ -5,12 +5,12 @@
   textures: {},
 
   audio: {
-    "bg_music":     "shared/audio/bg-music-balance.mp3",
-    "click":        "shared/audio/menu-button-click.wav",
-    "collect_coin": "shared/audio/game-pickup-01.wav",
-    "jump":         "shared/audio/jump.wav",
-    "npc_greet":    "projects/primitive_world/audio/child-hello.wav",
-    "goblin_growl": "projects/primitive_world/audio/growl.wav",
+    "bg_music":     (path: "shared/audio/bg-music-balance.mp3", volume: 0.2),
+    "click":        (path: "shared/audio/menu-button-click.wav"),
+    "collect_coin": (path: "shared/audio/game-pickup-01.wav"),
+    "jump":         (path: "shared/audio/jump.wav"),
+    "npc_greet":    (path: "projects/primitive_world/audio/child-hello.wav"),
+    "goblin_growl": (path: "projects/primitive_world/audio/growl.wav", volume: 0.5),
   },
 
   materials: {

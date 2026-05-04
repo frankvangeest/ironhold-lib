@@ -19,7 +19,7 @@
     (
       name: "collected",
       entry_actions: [
-        PlaySound("score"),
+        PlaySound(key: "score"),
         Despawn("{self}"),
       ],
       exit_actions: [],

@@ -27,9 +27,20 @@ pub enum Action {
     /// Despawn a previously spawned entity by the ID used in Spawn.
     Despawn(String),
     PlayAnimation(String),
-    PlaySound(String),
+    /// Play a one-shot sound effect by catalog key.
+    /// `volume` (0.0–1.0) multiplies the entry's catalog volume. Defaults to 1.0 when omitted.
+    PlaySound {
+        key: String,
+        #[serde(default = "default_action_volume")]
+        volume: f32,
+    },
     /// Play an audio file in a loop as background music. Stops any currently playing music.
-    PlayMusicLoop(String),
+    /// `volume` (0.0–1.0) multiplies the entry's catalog volume. Defaults to 1.0 when omitted.
+    PlayMusicLoop {
+        key: String,
+        #[serde(default = "default_action_volume")]
+        volume: f32,
+    },
     /// Stop the currently playing background music.
     StopMusic,
     /// Load a scene on top of the current one without unloading the game world.
@@ -79,3 +90,5 @@ pub enum Action {
     /// spawn ID before the event is written, allowing reusable behavior-driven signals.
     EmitEvent(String),
 }
+
+fn default_action_volume() -> f32 { 1.0 }

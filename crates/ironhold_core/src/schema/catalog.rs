@@ -15,7 +15,7 @@ pub struct AssetCatalog {
     #[serde(default)]
     pub textures: HashMap<String, String>,
     #[serde(default)]
-    pub audio: HashMap<String, String>,
+    pub audio: HashMap<String, AudioEntry>,
     #[serde(default)]
     pub materials: HashMap<String, MaterialDef>,
 }
@@ -54,6 +54,16 @@ impl Default for AssetCatalog {
 pub struct ModelCatalogEntry {
     pub path: String,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct AudioEntry {
+    pub path: String,
+    #[serde(default = "default_audio_volume")]
+    pub volume: f32,
+}
+
+fn default_audio_volume() -> f32 { 1.0 }
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct PrefabCatalog {

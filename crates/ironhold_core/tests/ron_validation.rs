@@ -136,7 +136,7 @@ fn test_state_machine_asset_deserialization() {
                 ),
                 (
                     name: "playing",
-                    entry_actions: [ PlayMusicLoop("bg") ],
+                    entry_actions: [ PlayMusicLoop(key: "bg") ],
                     exit_actions:  [ StopMusic ],
                     on: [],
                 ),

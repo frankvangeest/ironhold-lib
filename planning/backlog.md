@@ -17,6 +17,7 @@ _(nothing in flight right now — pick from Queued)_
 
 ## Bugs
 
+- [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
 - [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns. A further phantom-entity warmup approach could eliminate the pipeline-compile stall if that residual freeze proves unacceptable.
 - [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/resolved/animation_tpose.md`.
 

@@ -3,8 +3,8 @@
     models: {},
     textures: {},
     audio: {
-        "score": "shared/audio/game-pickup-01.wav",
-        "zone_enter": "shared/audio/game-pickup-02.wav",
+        "score":      (path: "shared/audio/game-pickup-01.wav"),
+        "zone_enter": (path: "shared/audio/game-pickup-02.wav"),
     },
     materials: {},
 )

@@ -8,7 +8,7 @@
       on: "entity.entered:score_zone_01",
       do_actions: [
         IncrementVariable("score", 10),
-        PlaySound("zone_enter"),
+        PlaySound(key: "zone_enter"),
         Log("Score zone entered — +10 points"),
       ],
     ),

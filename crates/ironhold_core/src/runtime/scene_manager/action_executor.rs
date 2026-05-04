@@ -174,14 +174,14 @@ pub fn action_executor_system(
                     commands.entity(entity).despawn();
                 }
             }
-            Action::PlayMusicLoop(key) => {
+            Action::PlayMusicLoop { key, volume: action_volume } => {
                 // Stop any currently playing background music.
                 for entity in bg_music_query.iter() {
                     commands.entity(entity).despawn();
                 }
-                if let Some(path) = asset_catalog.0.audio.get(&key) {
+                if let Some(entry) = asset_catalog.0.audio.get(&key) {
                     const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];
-                    let ext = std::path::Path::new(path.as_str())
+                    let ext = std::path::Path::new(entry.path.as_str())
                         .extension()
                         .and_then(|e| e.to_str())
                         .unwrap_or("")
@@ -192,13 +192,17 @@ pub fn action_executor_system(
                             ext, key
                         );
                     } else {
-                        info!("Action::PlayMusicLoop: {} -> {}", key, path);
+                        let combined = (entry.volume * action_volume).clamp(0.0, 1.0);
+                        info!("Action::PlayMusicLoop: {} -> {} (volume {:.2})", key, entry.path, combined);
                         let handle: Handle<bevy::audio::AudioSource> =
-                            asset_server.load(path.clone());
+                            asset_server.load(entry.path.clone());
                         commands.spawn((
                             BackgroundMusic,
                             bevy::audio::AudioPlayer::new(handle),
-                            bevy::audio::PlaybackSettings::LOOP,
+                            bevy::audio::PlaybackSettings {
+                                volume: bevy::audio::Volume::Linear(combined),
+                                ..bevy::audio::PlaybackSettings::LOOP
+                            },
                         ));
                     }
                 } else {
@@ -241,10 +245,10 @@ pub fn action_executor_system(
                 let handle: Handle<bevy::scene::Scene> = asset_server.load(model_path);
                 scene_state.preloaded_glbs.0.push(handle);
             }
-            Action::PlaySound(key) => {
-                if let Some(path) = asset_catalog.0.audio.get(&key) {
+            Action::PlaySound { key, volume: action_volume } => {
+                if let Some(entry) = asset_catalog.0.audio.get(&key) {
                     const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];
-                    let ext = std::path::Path::new(path.as_str())
+                    let ext = std::path::Path::new(entry.path.as_str())
                         .extension()
                         .and_then(|e| e.to_str())
                         .unwrap_or("")
@@ -253,15 +257,19 @@ pub fn action_executor_system(
                         warn!(
                             "Action::PlaySound: unsupported audio format '.{}' for key {:?} \
                              (path: {}). Supported formats: {:?}",
-                            ext, key, path, SUPPORTED
+                            ext, key, entry.path, SUPPORTED
                         );
                     } else {
-                        info!("Executing Action::PlaySound: {} -> {}", key, path);
+                        let combined = (entry.volume * action_volume).clamp(0.0, 1.0);
+                        info!("Executing Action::PlaySound: {} -> {} (volume {:.2})", key, entry.path, combined);
                         let handle: Handle<bevy::audio::AudioSource> =
-                            asset_server.load(path.clone());
+                            asset_server.load(entry.path.clone());
                         commands.spawn((
                             bevy::audio::AudioPlayer::new(handle),
-                            bevy::audio::PlaybackSettings::DESPAWN,
+                            bevy::audio::PlaybackSettings {
+                                volume: bevy::audio::Volume::Linear(combined),
+                                ..bevy::audio::PlaybackSettings::DESPAWN
+                            },
                         ));
                     }
                 } else {

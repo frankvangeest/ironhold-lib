@@ -1511,8 +1511,8 @@ pub fn preload_audio_system(
     for event in events.read() {
         if matches!(event, SceneEvent::Ready(_)) {
             audio_handles.0.clear();
-            for path in asset_catalog.0.audio.values() {
-                let handle: Handle<bevy::audio::AudioSource> = asset_server.load(path.clone());
+            for entry in asset_catalog.0.audio.values() {
+                let handle: Handle<bevy::audio::AudioSource> = asset_server.load(entry.path.clone());
                 audio_handles.0.push(handle);
             }
             if !audio_handles.0.is_empty() {

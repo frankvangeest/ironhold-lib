@@ -374,7 +374,8 @@ Named registry of all assets available to prefabs and scenes.
     "grass": "shared/terrain/grass.png",
   },
   audio: {
-    "click": "shared/audio/menu-button-click.wav",
+    "click": (path: "shared/audio/menu-button-click.wav"),
+    "bg_music": (path: "shared/audio/theme.ogg", volume: 0.6),
   },
   materials: {
     "wood_crate": (
@@ -464,7 +465,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `components.flycam` | `Option<FlyCamDef>` | Speed and sensitivity tuning for the free-fly camera. Only read for `"flycam"` prefabs. Omit to use defaults. See [Special tag: `"flycam"`](#special-tag-flycam-) below. |
 | `components.camera` | `Option<CameraConfig>` | Orbit camera settings (offset, zoom, orbit speed, radius limits). Only read for `"player"` prefabs. Omit to use engine defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.npc` | `Option<NpcDef>` | NPC AI configuration. When set, the entity gets a dynamic physics body and an NPC behaviour driver. See [NPC behaviour](#npc-behaviour-componentsnpc-) below. |
-| `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound("sfx_jump")`). |
+| `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound(key: "sfx_jump")`). |
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
@@ -603,7 +604,7 @@ Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Spac
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
 on: [
-  (event: "player.jumped", do_actions: [PlaySound("sfx_jump")]),
+  (event: "player.jumped", do_actions: [PlaySound(key: "sfx_jump")]),
 ]
 ```
 
@@ -983,7 +984,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `PreloadPrefab("key")` | Load a prefab's GLB early and cache the handle; fire on `scene.ready` to eliminate the first-spawn WASM decode stall |
 | `Despawn("id")` | Remove a previously spawned entity by its spawn ID |
 | `PlayAnimation("id")` | Play an animation by semantic ID (see AnimationPolicy) |
-| `PlaySound("key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format |
+| `PlaySound(key: "key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume |
+| `PlayMusicLoop(key: "key")` | Start a looping background track by audio catalog key; stops any currently playing music; optional `volume: f32` multiplies the per-entry catalog volume |
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
 | `PreloadScene("path")` | Warm the asset cache for a `.scene.ron` before it is needed |

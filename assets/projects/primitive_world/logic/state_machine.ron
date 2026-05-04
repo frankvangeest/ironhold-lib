@@ -19,37 +19,37 @@
             entry_actions: [
                 SetVariable("health", "100"),
                 SetVariable("score", "0"),
-                PlayMusicLoop("bg_music"),
+                PlayMusicLoop(key: "bg_music"),
                 PreloadScene("scenes/pause.scene.ron"),
                 PreloadScene("scenes/map.scene.ron"),
             ],
             exit_actions:  [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:toggle_map", do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
-                ( event: "player.jumped",               do_actions: [ PlaySound("jump") ] ),
+                ( event: "player.jumped",               do_actions: [ PlaySound(key: "jump") ] ),
 
                 // Coin collectibles — each fires Despawn + sound + score + small health restore.
                 // Picking up coins is the only way to recover health in the field.
-                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound("collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound("collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound("collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound("collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound("collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
 
                 // ── NPC events ──────────────────────────────────────────────────────────
                 // Friendly villager — greets the player when spotted and when reached.
-                ( event: "npc.player_spotted:villager_01", do_actions: [ PlaySound("npc_greet") ] ),
-                ( event: "npc.player_reached:villager_01", do_actions: [ PlaySound("npc_greet") ] ),
+                ( event: "npc.player_spotted:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
+                ( event: "npc.player_reached:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
 
                 // Goblin guards — growl when spotted; deal 25 health damage and -10 score on contact.
                 // Four hits from a single goblin would be lethal from full health.
-                ( event: "npc.player_spotted:goblin_01",   do_actions: [ PlaySound("goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_01",   do_actions: [ PlaySound("goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
-                ( event: "npc.player_spotted:goblin_02",   do_actions: [ PlaySound("goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_02",   do_actions: [ PlaySound("goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
+                ( event: "npc.player_spotted:goblin_01",   do_actions: [ PlaySound(key: "goblin_growl") ] ),
+                ( event: "npc.player_reached:goblin_01",   do_actions: [ PlaySound(key: "goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
+                ( event: "npc.player_spotted:goblin_02",   do_actions: [ PlaySound(key: "goblin_growl") ] ),
+                ( event: "npc.player_reached:goblin_02",   do_actions: [ PlaySound(key: "goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
 
                 // Merchant — acknowledges the player with a greeting sound.
-                ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound("npc_greet") ] ),
+                ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
             ],
         ),
         (

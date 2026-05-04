@@ -92,8 +92,8 @@ _Last updated: 2026‑04‑17_
 - `Action::PreloadPrefab(String)` — loads a prefab's GLB model early and stores the `Handle<Scene>` in `PreloadedGlbHandles` to prevent asset-server eviction; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn
 - `Action::Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `Action::PlayAnimation(String)` — plays a named animation/clip
-- `Action::PlaySound(String)` — fire-and-forget sound by audio catalog key; warns for unsupported formats or missing keys
-- `Action::PlayMusicLoop(String)` — starts a looping background music track by audio catalog key
+- `Action::PlaySound { key, volume }` — fire-and-forget sound by audio catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume; warns for unsupported formats or missing keys
+- `Action::PlayMusicLoop { key, volume }` — starts a looping background music track by audio catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `Action::StopMusic` — stops the current background music track
 - `Action::SetVolume(u8)` — sets global volume 0–100
 - `Action::PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed

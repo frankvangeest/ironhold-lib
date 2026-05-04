@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
 use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
+use ironhold_core::schema::catalog::AudioEntry;
 use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
@@ -387,12 +388,12 @@ fn test_play_sound_action_spawns_audio_player() {
     // Provide a catalog with a known audio key
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         audio: std::collections::HashMap::from([
-            ("click".to_string(), "shared/audio/menu-button-click.wav".to_string()),
+            ("click".to_string(), AudioEntry { path: "shared/audio/menu-button-click.wav".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
     }));
 
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("click".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "click".to_string(), volume: 1.0 });
     app.update();
 
     let count = app.world_mut()
@@ -413,12 +414,12 @@ fn test_play_sound_unsupported_format_does_not_panic() {
     // Register a catalog entry with an unsupported file extension
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         audio: std::collections::HashMap::from([
-            ("bad".to_string(), "shared/audio/soundtrack.aac".to_string()),
+            ("bad".to_string(), AudioEntry { path: "shared/audio/soundtrack.aac".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
     }));
 
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("bad".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "bad".to_string(), volume: 1.0 });
     app.update(); // Must not panic
 
     // No AudioPlayer should have been spawned
@@ -435,7 +436,7 @@ fn test_play_sound_missing_key_does_not_panic() {
     app.update();
 
     // No audio entries in the default catalog — should warn and not panic
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound("nonexistent".to_string()));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "nonexistent".to_string(), volume: 1.0 });
     app.update();
 
     let count = app.world_mut()
@@ -443,6 +444,72 @@ fn test_play_sound_missing_key_does_not_panic() {
         .iter(app.world())
         .count();
     assert_eq!(count, 0, "No AudioPlayer should be spawned for an unknown sound key");
+}
+
+#[test]
+fn test_play_sound_combined_volume_applied_to_playback_settings() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // catalog volume 0.5, action volume 0.5 → combined should be 0.25
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 0.5 }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlaySound { key: "click".to_string(), volume: 0.5 });
+    app.update();
+
+    let mut q = app.world_mut()
+        .query::<&bevy::audio::PlaybackSettings>();
+    let settings = q.iter(app.world()).next()
+        .expect("PlaybackSettings component should exist on the spawned AudioPlayer entity");
+    let bevy::audio::Volume::Linear(v) = settings.volume else {
+        panic!("Expected Volume::Linear");
+    };
+    assert!(
+        (v - 0.25).abs() < 1e-5,
+        "Expected combined volume 0.5 * 0.5 = 0.25, got {v}"
+    );
+}
+
+#[test]
+fn test_play_sound_default_volume_is_full() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Both volumes default to 1.0 — PlaybackSettings should have Linear(1.0)
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 1.0 }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlaySound { key: "click".to_string(), volume: 1.0 });
+    app.update();
+
+    let mut q = app.world_mut()
+        .query::<&bevy::audio::PlaybackSettings>();
+    let settings = q.iter(app.world()).next()
+        .expect("PlaybackSettings should exist on spawned entity");
+    let bevy::audio::Volume::Linear(v) = settings.volume else {
+        panic!("Expected Volume::Linear");
+    };
+    assert!(
+        (v - 1.0).abs() < 1e-5,
+        "Default volumes should produce Linear(1.0), got {v}"
+    );
 }
 
 #[test]
@@ -1115,8 +1182,8 @@ fn test_preload_audio_populates_handles_on_scene_ready() {
     app.update();
 
     let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
-    catalog.audio.insert("jump".to_string(),         "shared/audio/jump.wav".to_string());
-    catalog.audio.insert("collect_coin".to_string(), "shared/audio/coin.wav".to_string());
+    catalog.audio.insert("jump".to_string(),         AudioEntry { path: "shared/audio/jump.wav".to_string(), volume: 1.0 });
+    catalog.audio.insert("collect_coin".to_string(), AudioEntry { path: "shared/audio/coin.wav".to_string(), volume: 1.0 });
     app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
 
     app.world_mut().resource_mut::<Messages<SceneEvent>>()
@@ -1134,8 +1201,8 @@ fn test_preload_audio_clears_on_scene_transition() {
     app.update();
 
     let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
-    catalog.audio.insert("jump".to_string(),         "shared/audio/jump.wav".to_string());
-    catalog.audio.insert("collect_coin".to_string(), "shared/audio/coin.wav".to_string());
+    catalog.audio.insert("jump".to_string(),         AudioEntry { path: "shared/audio/jump.wav".to_string(), volume: 1.0 });
+    catalog.audio.insert("collect_coin".to_string(), AudioEntry { path: "shared/audio/coin.wav".to_string(), volume: 1.0 });
     app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
 
     // First scene load.
@@ -1266,13 +1333,13 @@ fn test_play_music_loop_spawns_background_music() {
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         audio: std::collections::HashMap::from([
-            ("bg_music".to_string(), "shared/audio/theme.ogg".to_string()),
+            ("bg_music".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
     }));
 
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop("bg_music".to_string()));
+        .push(Action::PlayMusicLoop { key: "bg_music".to_string(), volume: 1.0 });
     app.update();
 
     let count = app.world_mut()
@@ -1291,21 +1358,21 @@ fn test_play_music_loop_stops_previous_track_and_spawns_new() {
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         audio: std::collections::HashMap::from([
-            ("track_a".to_string(), "shared/audio/track_a.ogg".to_string()),
-            ("track_b".to_string(), "shared/audio/track_b.ogg".to_string()),
+            ("track_a".to_string(), AudioEntry { path: "shared/audio/track_a.ogg".to_string(), volume: 1.0 }),
+            ("track_b".to_string(), AudioEntry { path: "shared/audio/track_b.ogg".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
     }));
 
     // Start first track.
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop("track_a".to_string()));
+        .push(Action::PlayMusicLoop { key: "track_a".to_string(), volume: 1.0 });
     app.update();
     app.update(); // flush despawn commands from any previous music stop
 
     // Start second track — should stop the first and spawn a new one.
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop("track_b".to_string()));
+        .push(Action::PlayMusicLoop { key: "track_b".to_string(), volume: 1.0 });
     app.update();
     app.update(); // flush
 
@@ -1326,13 +1393,13 @@ fn test_play_music_loop_unsupported_format_does_not_panic() {
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         audio: std::collections::HashMap::from([
-            ("bad_music".to_string(), "shared/audio/track.aac".to_string()),
+            ("bad_music".to_string(), AudioEntry { path: "shared/audio/track.aac".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
     }));
 
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop("bad_music".to_string()));
+        .push(Action::PlayMusicLoop { key: "bad_music".to_string(), volume: 1.0 });
     app.update(); // must not panic
 
     let count = app.world_mut()
@@ -1348,7 +1415,7 @@ fn test_play_music_loop_missing_key_does_not_panic() {
     app.update();
 
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop("nonexistent_track".to_string()));
+        .push(Action::PlayMusicLoop { key: "nonexistent_track".to_string(), volume: 1.0 });
     app.update(); // must not panic
 
     let count = app.world_mut()
@@ -1356,6 +1423,38 @@ fn test_play_music_loop_missing_key_does_not_panic() {
         .iter(app.world())
         .count();
     assert_eq!(count, 0, "Missing audio key should not spawn a BackgroundMusic entity");
+}
+
+#[test]
+fn test_play_music_loop_combined_volume_applied_to_playback_settings() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // catalog 0.6 × action 0.5 = 0.3
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        audio: std::collections::HashMap::from([
+            ("bg".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 0.6 }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::PlayMusicLoop { key: "bg".to_string(), volume: 0.5 });
+    app.update();
+
+    let mut q = app.world_mut()
+        .query::<(&BackgroundMusic, &bevy::audio::PlaybackSettings)>();
+    let (_, settings) = q.iter(app.world()).next()
+        .expect("BackgroundMusic entity should have PlaybackSettings");
+    let bevy::audio::Volume::Linear(v) = settings.volume else {
+        panic!("Expected Volume::Linear");
+    };
+    assert!(
+        (v - 0.30).abs() < 1e-5,
+        "Expected combined volume 0.6 * 0.5 = 0.30, got {v}"
+    );
 }
 
 #[test]

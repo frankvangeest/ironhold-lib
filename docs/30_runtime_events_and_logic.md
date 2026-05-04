@@ -53,7 +53,7 @@ This section is factual and reflects what exists right now.
   - `PlayAnimation(clip)` plays an animation on available controllers.
   - `PlayAnimationOn { target, clip }` plays an animation on a specific entity by spawn ID.
   - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
-  - `PlaySound(key)` / `PlayMusicLoop(key)` / `StopMusic` control audio.
+  - `PlaySound(key: k)` / `PlayMusicLoop(key: k)` / `StopMusic` control audio; optional `volume: f32` multiplies the per-entry catalog volume.
   - `SetVolume(pct)` sets global volume (0–100).
   - `PreloadScene(path)` / `PreloadPrefab(key)` warm the asset cache for scenes and prefab GLBs respectively.
   - `EnterState(name)` transitions the interpreter to a named logic state.
@@ -142,7 +142,10 @@ Actions represent explicit operations the runtime can execute.
 
 #### Animation/audio actions
 - `PlayAnimation(clip_id)` ✅ — plays a named animation by semantic ID (see AnimationPolicy)
-- `PlaySound(audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys
+- `PlaySound(key: audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
+- `PlayMusicLoop(key: audio_key)` ✅ — starts a looping background music track by `AssetCatalog` audio key; stops any currently playing music; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
+- `StopMusic` ✅ — stops the current background music
+- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); applied as a master multiplier on top of per-sound volumes
 
 #### State/variables actions
 - `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default
@@ -173,7 +176,7 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
     schema_version: 2,
     rules: [
         // No `when` guard — fires in any state
-        ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop("bg_music") ] ),
+        ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop(key: "bg_music") ] ),
 
         // `when` guard — only fires while in the named state
         ( on: "ui.button_pressed:start_game", when: "menu", do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
@@ -252,8 +255,8 @@ Applies actions to the world. Key design points:
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn (handles cleared on `LoadScene`)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
-- `PlaySound(String)` — fire-and-forget audio by catalog key; warns for unsupported formats or missing keys
-- `PlayMusicLoop(String)` — starts a looping background music track by catalog key
+- `PlaySound { key, volume }` — fire-and-forget audio by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume; warns for unsupported formats or missing keys
+- `PlayMusicLoop { key, volume }` — starts a looping background music track by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` — stops the current background music
 - `SetVolume(u32)` — sets global audio volume 0–100
 - `PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed; use on `scene.ready` so a subsequent `LoadScene` resolves without a loading pause
@@ -284,7 +287,7 @@ Applies actions to the world. Key design points:
     states: [
         (
             name: "playing",
-            entry_actions: [ PlayMusicLoop("bg_music") ],   // queued when entering this state
+            entry_actions: [ PlayMusicLoop(key: "bg_music") ],   // queued when entering this state
             exit_actions:  [ StopMusic ],                    // queued when leaving this state
             on: [
                 // In-state bindings: fire while in "playing", do not change state.
@@ -348,7 +351,7 @@ The behavior file uses `{self}` as a placeholder for the entity's spawn ID:
   global_on: [],
   states: [
     ( name: "idle",      entry_actions: [],                                   exit_actions: [], on: [] ),
-    ( name: "collected", entry_actions: [ PlaySound("score"), Despawn("{self}") ], exit_actions: [], on: [] ),
+    ( name: "collected", entry_actions: [ PlaySound(key: "score"), Despawn("{self}") ], exit_actions: [], on: [] ),
   ],
   transitions: [
     ( from: "idle", on: "entity.interacted:{self}", to: "collected" ),
