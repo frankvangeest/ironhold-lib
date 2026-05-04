@@ -32,7 +32,7 @@
         ),
         (
             name: "playing",
-            entry_actions: [ PlayMusicLoop("bg_music"), Preload("scenes/pause.scene.ron") ],
+            entry_actions: [ PlayMusicLoop("bg_music"), PreloadScene("scenes/pause.scene.ron") ],
             exit_actions:  [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:dance",        do_actions: [ PlayAnimation("dance") ] ),

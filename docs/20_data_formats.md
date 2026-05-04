@@ -986,7 +986,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `PlaySound("key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format |
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
-| `Preload("path")` | Warm the asset cache for a `.scene.ron` before it is needed |
+| `PreloadScene("path")` | Warm the asset cache for a `.scene.ron` before it is needed |
 | `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
 | `SetVariable("key", "value")` | Write a named string variable into `GameVariables`; readable by data-bound UI labels |
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |

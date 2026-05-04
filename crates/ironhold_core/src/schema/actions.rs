@@ -44,8 +44,9 @@ pub enum Action {
     /// Set global audio volume. Value is 0–100 (percent). 0 = mute, 100 = full.
     SetVolume(u8),
     /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
-    /// Takes a project-relative path. Does not spawn or transition; purely warms the cache.
-    Preload(String),
+    /// Takes a project-relative path to a `.scene.ron`. Does not spawn or transition; purely
+    /// warms the cache so a subsequent `LoadScene` resolves instantly.
+    PreloadScene(String),
     /// Pre-load a prefab's GLB model so the first `Spawn` of that prefab doesn't block the
     /// game loop with asset decode on the WASM main thread. Takes a prefab key (as defined in
     /// `prefabs.ron`). Fire on `scene.ready:{name}` so the GLB is warm before the player

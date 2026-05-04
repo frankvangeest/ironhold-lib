@@ -214,15 +214,15 @@ pub fn action_executor_system(
                     warn!("Action::SetVolume: GlobalVolume resource not available");
                 }
             }
-            Action::Preload(path) => {
+            Action::PreloadScene(path) => {
                 let resolved = resolve_project_path(&project_root.0, &path);
-                info!("Action::Preload: warming cache for {}", resolved);
+                info!("Action::PreloadScene: warming cache for {}", resolved);
                 if resolved.ends_with(".scene.ron") {
                     let handle: Handle<GameSceneV2> = asset_server.load(resolved);
                     scene_state.preloaded.0.push(handle);
                 } else {
                     warn!(
-                        "Action::Preload: only .scene.ron paths are supported (got {})",
+                        "Action::PreloadScene: only .scene.ron paths are supported (got {})",
                         resolved
                     );
                 }

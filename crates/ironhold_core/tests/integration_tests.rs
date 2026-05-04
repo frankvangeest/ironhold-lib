@@ -1431,11 +1431,11 @@ fn test_preload_scene_ron_pushes_handle() {
     app.update();
 
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::Preload("scenes/pause.scene.ron".to_string()));
+        .push(Action::PreloadScene("scenes/pause.scene.ron".to_string()));
     app.update();
 
     let preloaded = app.world().resource::<PreloadedScenes>();
-    assert_eq!(preloaded.0.len(), 1, "Preload should store the handle in PreloadedScenes");
+    assert_eq!(preloaded.0.len(), 1, "PreloadScene should store the handle in PreloadedScenes");
 }
 
 #[test]
@@ -1445,7 +1445,7 @@ fn test_preload_non_scene_path_does_not_panic() {
 
     // Non-.scene.ron path — executor should warn, not push a handle.
     app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::Preload("textures/something.png".to_string()));
+        .push(Action::PreloadScene("textures/something.png".to_string()));
     app.update(); // must not panic
 
     let preloaded = app.world().resource::<PreloadedScenes>();

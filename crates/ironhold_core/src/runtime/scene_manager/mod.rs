@@ -63,7 +63,7 @@ pub struct ProjectKeyBindings(pub HashMap<String, String>);
 pub struct LoadedKeyBindings(pub HashMap<String, String>);
 
 /// Holds pre-loaded scene asset handles so they stay cached and are ready instantly when needed.
-/// Populated by `Action::Preload`. Cleared on a full `LoadScene` so stale handles don't linger.
+/// Populated by `Action::PreloadScene`. Cleared on a full `LoadScene` so stale handles don't linger.
 #[derive(Resource, Default)]
 pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
 

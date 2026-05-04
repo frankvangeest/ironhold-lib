@@ -96,7 +96,7 @@ _Last updated: 2026‑04‑17_
 - `Action::PlayMusicLoop(String)` — starts a looping background music track by audio catalog key
 - `Action::StopMusic` — stops the current background music track
 - `Action::SetVolume(u8)` — sets global volume 0–100
-- `Action::Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
+- `Action::PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `Action::EnterState(String)` — transitions the interpreter to a named logic state; empty string returns to stateless (always-fire) default
 - `Action::SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `Action::IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`

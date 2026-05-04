@@ -35,7 +35,7 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `Preload`, `EnterState`, `SetVariable`, `IncrementVariable`, and more.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `PreloadScene`, `EnterState`, `SetVariable`, `IncrementVariable`, and more.
 - ✅ UI events exist (`UiEvent`) and are emitted by UI button interaction and key bindings; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiEvent::ButtonPressed("dance")`).
 - ✅ Gameplay events exist (`GameEvent::Trigger(String)`) and are emitted by capabilities (physics sensors, etc.); the trigger name is used as-is in the rules pipeline.
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic (point-to-point, not through the pipeline).
@@ -55,8 +55,7 @@ This section is factual and reflects what exists right now.
   - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
   - `PlaySound(key)` / `PlayMusicLoop(key)` / `StopMusic` control audio.
   - `SetVolume(pct)` sets global volume (0–100).
-  - `Preload(path)` warms the asset cache for a `.scene.ron` before it is needed.
-  - `PreloadPrefab(key)` warms the GLB asset cache for a prefab (see above).
+  - `PreloadScene(path)` / `PreloadPrefab(key)` warm the asset cache for scenes and prefab GLBs respectively.
   - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
 - ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed. FSM transitions update it directly in the interpreter.
@@ -257,8 +256,8 @@ Applies actions to the world. Key design points:
 - `PlayMusicLoop(String)` — starts a looping background music track by catalog key
 - `StopMusic` — stops the current background music
 - `SetVolume(u32)` — sets global audio volume 0–100
-- `Preload(String)` — warms the asset cache for a `.scene.ron` before it is needed
-- `PreloadPrefab(String)` — see above
+- `PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed; use on `scene.ready` so a subsequent `LoadScene` resolves without a loading pause
+- `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`

@@ -20,8 +20,8 @@
                 SetVariable("health", "100"),
                 SetVariable("score", "0"),
                 PlayMusicLoop("bg_music"),
-                Preload("scenes/pause.scene.ron"),
-                Preload("scenes/map.scene.ron"),
+                PreloadScene("scenes/pause.scene.ron"),
+                PreloadScene("scenes/map.scene.ron"),
             ],
             exit_actions:  [ StopMusic ],
             on: [

@@ -4,7 +4,7 @@ _Status: Ready_
 _Planned at: `91cd464` (2026-04-27)_
 
 ## What
-`Action::Preload(path)` already exists and issues an asset handle in the background.
+`Action::PreloadScene(path)` already exists and issues an asset handle in the background.
 What's missing is the completion signal and the full fast-path when `LoadScene` fires
 on an already-ready handle. This feature closes that loop:
 
@@ -12,12 +12,12 @@ on an already-ready handle. This feature closes that loop:
   when all assets for that scene are fully loaded.
 - `Action::LoadScene` checks `PreloadedScenes` first; if the handle is ready it skips
   re-issuing the load and transitions immediately (no `LoadingScene` state pause).
-- `Action::Preload` also accepts a `warm_assets: true` hint that issues load calls for
+- `Action::PreloadScene` also accepts a `warm_assets: true` hint that issues load calls for
   every GLB and texture referenced in the scene's prefab catalog and assets.ron, not
   just the scene RON itself.
 
 ## Why
-`Action::Preload` was added speculatively but never completed. Without the completion
+`Action::PreloadScene` was added speculatively but never completed. Without the completion
 signal there is no way to know when preloading is done, so authors cannot trigger a
 seamless scene switch. Completing this unblocks:
 - World-streaming: preload the next zone while the player is in the current one.
@@ -41,7 +41,7 @@ and check if `PreloadedScenes` already contains a loaded handle for it. If yes, 
 without waiting for `AssetEvent::LoadedWithDependencies`.
 
 ### Asset warming (`warm_assets`)
-Extend `Action::Preload` to accept `Action::PreloadWarm(path)` (or a flag). The
+Extend `Action::PreloadScene` to accept `Action::PreloadSceneWarm(path)` (or a flag). The
 executor loads the scene RON handle, waits one frame for it to parse, then issues
 `asset_server.load()` for every model path in the scene's asset catalog and prefab
 catalog. These handles are not stored in `PreloadedScenes` (they go into the asset
@@ -68,6 +68,6 @@ Recommendation: ship v1 with RON-only preloading. Add asset warming as a follow-
 - Asset warming (v2): worth a separate feature file or just a follow-up task here?
 
 ## Acceptance criteria
-- Given `Action::Preload("scenes/zone2.scene.ron")` fires while in zone 1, the event `scene.preloaded:zone2` fires when zone 2's assets are fully cached.
+- Given `Action::PreloadScene("scenes/zone2.scene.ron")` fires while in zone 1, the event `scene.preloaded:zone2` fires when zone 2's assets are fully cached.
 - Given `scene.preloaded:zone2` has fired, when `Action::LoadScene("scenes/zone2.scene.ron")` fires, the scene transitions without entering `LoadingScene` state.
 - Given no prior preload, `LoadScene` behaves exactly as before (no regression).
