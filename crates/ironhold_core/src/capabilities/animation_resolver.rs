@@ -166,20 +166,37 @@ pub fn animation_resolver_system(
         }
 
         // 4) Choose final clip + metadata.
-        let (chosen_clip, chosen_looping, chosen_transition_ms) = if let Some(clip) = &active.clip {
+        let (mut chosen_clip, chosen_looping, chosen_transition_ms) = if let Some(clip) = &active.clip {
             (clip.clone(), active.looping, active.transition_ms)
         } else if !loco.is_grounded {
             (policy.base.jump_loop.clone(), true, default_transition_ms)
         } else if loco.moving {
-            let clip = if loco.running { 
-                policy.base.run.clone() 
-            } else { 
-                policy.base.walk.clone() 
+            let clip = if loco.running {
+                policy.base.run.clone()
+            } else {
+                policy.base.walk.clone()
             };
             (clip, true, default_transition_ms)
         } else {
             (policy.base.idle.clone(), true, default_transition_ms)
         };
+
+        // 4b) Validate against the graph. Once graph_initialized=true, node_indices is
+        // populated with only the clips that actually exist in the GLB. If the chosen clip
+        // is absent (e.g. a raw-clip-name override from an unrecognised PlayAnimation
+        // command), clear the bad override and fall back to idle to prevent the playback
+        // system's "permanent trap" from freezing all animations in T-pose.
+        if anim_ctrl.graph_initialized
+            && !anim_ctrl.node_indices.is_empty()
+            && !anim_ctrl.node_indices.contains_key(&chosen_clip)
+        {
+            warn!(
+                "Animation clip {:?} not found in graph ({}) — clearing override, falling back to idle",
+                chosen_clip, anim_ctrl.gltf_path
+            );
+            active.clear();
+            chosen_clip = policy.base.idle.clone();
+        }
 
         // 5) Write current + transition settings (single-writer).
         anim_ctrl.transition_ms = chosen_transition_ms;

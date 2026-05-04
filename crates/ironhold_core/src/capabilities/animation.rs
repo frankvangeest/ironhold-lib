@@ -22,6 +22,9 @@ pub struct AnimationController {
     pub graph_initialized: bool,
     pub transition_ms: u64,
     pub should_loop: bool,
+    /// Entity that held `AnimationPlayer` on the last successful play; used to detect
+    /// hierarchy changes that would silently invalidate the animation graph.
+    pub last_player_entity: Option<Entity>,
 }
 
 pub fn animation_playback_system(
@@ -99,11 +102,13 @@ pub fn animation_playback_system(
                         ));
                         controller.node_indices = indices;
                         controller.graph_initialized = true;
+                        controller.last_player_entity = Some(player_ent);
                         info!(
-                            "[{}] Animation graph ready: {} clip(s) mapped, starting clip: {:?}",
+                            "[{}] Animation graph ready: {} clip(s) mapped, starting clip: {:?}, AnimationPlayer: {:?}",
                             entity_name,
                             controller.node_indices.len(),
                             controller.current,
+                            player_ent,
                         );
                     }
                     None => {
@@ -118,6 +123,45 @@ pub fn animation_playback_system(
             }
         }
 
+        // Entity staleness check — runs every frame once the graph is initialized,
+        // regardless of whether the current clip is changing. This is critical for
+        // entities whose animation never changes (e.g. NPCs always playing "idle"):
+        // the current != last_played guard on step 2 is never true for them, so the
+        // entity change must be caught here instead.
+        //
+        // Bevy's SceneSpawner replaces the GLTF hierarchy when sub-assets finish loading
+        // (common on WASM where textures arrive slightly after the initial scene spawn).
+        // The old AnimationPlayer entity is despawned; a new entity appears in the same
+        // hierarchy position. Our AnimationGraphHandle and AnimationTransitions are on
+        // the OLD entity — the new one has neither. Reset graph_initialized so step 1
+        // re-inserts them on the new entity next frame.
+        if controller.graph_initialized {
+            match find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+                Some(found) if controller.last_player_entity.map_or(false, |prev| prev != found) => {
+                    warn!(
+                        "[{}] AnimationPlayer entity changed {:?} → {:?} — GLTF scene re-spawned. \
+                        Resetting animation graph for re-initialization next frame.",
+                        entity_name, controller.last_player_entity, found
+                    );
+                    controller.graph_initialized = false;
+                    controller.last_player_entity = None;
+                    controller.last_played = String::new();
+                    continue;
+                }
+                None if controller.last_player_entity.is_some() => {
+                    warn!(
+                        "[{}] AnimationPlayer entity lost after graph init — resetting for re-initialization",
+                        entity_name
+                    );
+                    controller.graph_initialized = false;
+                    controller.last_player_entity = None;
+                    controller.last_played = String::new();
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
         // 2. Handle Playback
         if controller.graph_initialized && controller.current != controller.last_played {
             if let Some(player_ent) = find_player_entity_recursive(entity, &player_marker_query, &children_query) {
@@ -125,6 +169,7 @@ pub fn animation_playback_system(
                     if let Some(&index) = controller.node_indices.get(&controller.current) {
                         let duration = if controller.transition_ms == 0 { Duration::ZERO } else { Duration::from_millis(controller.transition_ms) };
                         if let Some(mut transitions) = maybe_transitions {
+                            controller.last_player_entity = Some(player_ent);
                             let active_anim = transitions.play(&mut player, index, duration);
                             if controller.should_loop {
                                 active_anim.repeat();
@@ -136,30 +181,36 @@ pub fn animation_playback_system(
                             // a retry next frame via the transitions path.
                             controller.last_played = controller.current.clone();
                         } else {
-                            // AnimationTransitions not yet applied (deferred command still pending).
-                            // Don't update last_played — retry next frame when transitions exist.
+                            // AnimationTransitions not yet applied (normal 1-frame deferred window
+                            // after graph init). Don't update last_played — retry next frame.
                             debug!("[{}] Waiting for AnimationTransitions (deferred — retrying next frame)", entity_name);
                         }
                     } else {
-                        // Clip name is not in node_indices: either missing from the GLTF or an
-                        // unexpected override was pushed. Setting last_played stops the per-frame warn.
+                        // Clip name is not in node_indices. Log the warning, silence per-frame
+                        // spam by advancing last_played, then reset current to idle so the
+                        // resolver can recover on the next frame. Without the reset, current
+                        // == last_played forever — the "permanent trap" that freezes animations
+                        // in T-pose for the rest of the session.
                         let available_keys: Vec<&str> = controller.node_indices.keys().map(|s| s.as_str()).collect();
                         warn!(
-                            "[{}] No node index for animation {:?} — available: [{}]",
+                            "[{}] No node index for animation {:?} — available: [{}]. Resetting to idle.",
                             entity_name,
                             controller.current,
                             available_keys.join(", ")
                         );
                         controller.last_played = controller.current.clone();
+                        controller.current = policy_comp.0.base.idle.clone();
                     }
+                } else {
+                    warn!(
+                        "[{}] player_query.get_mut({:?}) returned Err — AnimationPlayer entity \
+                        found by hierarchy search is not accessible via the playback query",
+                        entity_name, player_ent
+                    );
                 }
-            } else if controller.graph_initialized {
-                // AnimationPlayer entity disappeared after graph init (e.g., scene reload).
-                warn!(
-                    "[{}] AnimationPlayer entity lost after graph init — animation stalled",
-                    entity_name
-                );
             }
+            // Note: if find_player_entity_recursive returns None here, it was already
+            // caught by the staleness check above and reset on this or the previous frame.
         }
     }
 }

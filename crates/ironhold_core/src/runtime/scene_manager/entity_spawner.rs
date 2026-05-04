@@ -84,6 +84,7 @@ pub fn spawn_prefab_instance(
                 graph_initialized: false,
                 transition_ms: 0,
                 should_loop: true,
+                last_player_entity: None,
             },
             LocomotionState::default(),
             AnimationRequests::default(),
@@ -272,6 +273,7 @@ pub(crate) fn spawn_player_entity(
                 graph_initialized: false,
                 transition_ms: 0,
                 should_loop: true,
+                last_player_entity: None,
             },
         ));
     }

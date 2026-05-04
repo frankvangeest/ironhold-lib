@@ -125,37 +125,93 @@ Added `names: Query<&Name>` parameter to `animation_playback_system`. All log li
 
 ## Root cause of T-pose: NOT yet confirmed
 
-Static analysis was inconclusive. The permanent trap is the mechanism, but what pushes the bad clip name into `controller.current` is still unknown. Candidates:
+Static analysis was inconclusive across multiple deep passes. The permanent trap is the mechanism, but for the 3rd_person_game_demo player, ALL clips resolved by the resolver ("jump_enter" → "Jump_Start", "jump_exit" → "Jump_Land", "dance" → "Dance_Loop", base locomotion clips) are known-good and present in character-01.glb. No code path was found that would push an unrecognised raw clip name to the player in normal gameplay.
 
-1. **Timing race**: graph init runs, `controller.current` already changed to something before `node_indices` is populated. Unlikely given the deferred-command ordering.
-2. **Unknown override push**: `player.rs` pushes `"jump_enter"` / `"jump_exit"` as override IDs. Both exist in the player policy's overrides list. But if the override resolver sees a name it doesn't recognize, it falls through to raw clip name, which then fails.
-3. **`Action::PlayAnimation` with a raw string**: if a RON rule fires `PlayAnimation("some_name")` and that string is not an override key or a `clips` key, the resolver may set `controller.current` to it directly — and if it's not in `node_indices`, the trap fires.
-4. **Giant NPC specific**: the graph might never initialize if `find_player_entity_recursive` fails due to scale (3,3,3) or entity hierarchy differences. The new `debug!` logs will confirm or rule this out.
+Remaining candidates:
+1. **Unknown `PlayAnimation` action**: some RON rule fires `PlayAnimation("some_unknown")` in an edge case not traced here. The resolver's raw-clip-name fallthrough would then put that string directly into `controller.current`.
+2. **Intermittent Bevy scene hierarchy race**: `find_player_entity_recursive` returns an unexpected entity (e.g. a stale GLTF entity from a previous load), causing graph init to target the wrong `AnimationPlayer`. Bevy 0.18 `despawn()` is recursive so this is unlikely, but not disproven.
+3. **Physics jitter causing double landing detection**: `was_grounded → is_grounded` transition fires twice in rapid succession, pushing `"jump_exit"` twice. Both pushes map to "Jump_Land" (valid), so this alone cannot cause T-pose.
 
 ---
 
-## Next steps to complete the investigation
+## Defensive fixes applied (2026-05-04)
 
-1. **Run the game and capture logs:**
-   ```bash
-   cargo run -p ironhold_native -- --project 3rd_person_game_demo 2>&1 | tee /tmp/anim_log.txt
-   ```
-   Reproduce the T-pose (spawn → fall → land), then:
-   ```bash
-   grep -E "WARN|INFO.*Animation graph|No node index" /tmp/anim_log.txt
-   ```
+Two fixes were made to prevent the permanent trap from persisting regardless of the upstream cause:
 
-2. **Look for:**
-   - `[PlayerName] No node index for animation "X"` — the value of X is the root cause.
-   - `[PlayerName] Animation graph ready: N clip(s)` — verify N > 0 and the starting clip is correct.
-   - `[GiantName] Graph init deferred` repeating every frame — means `AnimationPlayer` never found in hierarchy.
+### Fix 1 — `capabilities/animation_resolver.rs` step 4b
 
-3. **For the giant NPC** — also run `quick_scene` and check if graph ever initializes:
-   ```bash
-   cargo run -p ironhold_native -- --project quick_scene 2>&1 | grep -E "giant|Giant|Animation graph"
-   ```
+After choosing `chosen_clip`, validate it against `node_indices` once the graph is initialized. If the clip is missing, emit a `warn!`, clear the active override, and fall back to `policy.base.idle`. This prevents any bad clip name from ever being written to `controller.current`.
 
-4. **Once root cause confirmed**, fix the upstream push of the bad clip name (either in `animation_resolver.rs`, `player.rs`, or the RON rules file).
+```rust
+if anim_ctrl.graph_initialized
+    && !anim_ctrl.node_indices.is_empty()
+    && !anim_ctrl.node_indices.contains_key(&chosen_clip)
+{
+    warn!(...);
+    active.clear();
+    chosen_clip = policy.base.idle.clone();
+}
+```
 
--- Notes --
-Sometimes when I run the quick_scene project, the player character is T-posed. This is not always the case, but it happens frequently. I have not yet investigated this issue.
+### Fix 2 — `capabilities/animation.rs` "No node index" branch
+
+Changed the permanent trap into a one-frame recovery: set `last_played = current` (silence per-frame spam) AND reset `current = policy_comp.0.base.idle`. On the next frame, `current ≠ last_played`, idle IS in `node_indices`, and the animation recovers.
+
+```rust
+controller.last_played = controller.current.clone();
+controller.current = policy_comp.0.base.idle.clone();
+```
+
+### What the fixes guarantee
+- The permanent trap can no longer freeze animations forever.
+- If a bad clip is written (for any reason), the system self-heals within 1-2 frames.
+- The root cause still emits a `WARN` log, making it identifiable if it ever fires.
+
+---
+
+## Root cause confirmed and fixed (2026-05-04)
+
+The previous browser console showed correct graph initialization with 10 clips but NO WARN messages, yet the animation froze mid-air. The defensive fixes didn't help. Root cause still unknown.
+
+**Root cause: Bevy's `SceneSpawner` re-spawns the GLTF scene mid-session.**
+
+During the initial WASM load, sub-assets (textures, materials) arrive slightly after the scene. `SceneSpawner` first spawns the scene with placeholder data, then replaces the hierarchy when all dependencies resolve. The old `AnimationPlayer` entity (`126v0`) is despawned and a new one (`125v1`) is created. Our `AnimationGraphHandle` and `AnimationTransitions` were on the OLD entity. `graph_initialized` stayed `true`, so step 1 never ran for the new entity — permanent T-pose.
+
+This is why the bug is much more frequent in WASM (HTTP fetch latency creates the re-spawn window) and on clean rebuilds (no browser cache for sub-assets). In native builds, all assets load from local disk in a single pass — the re-spawn window is so short it rarely triggers.
+
+**Key insight that was blocking diagnosis:** the `debug!` "Waiting for AnimationTransitions" path is invisible in the web console at INFO level.
+
+---
+
+## Diagnostic logging added (2026-05-04)
+
+Three new diagnostic warn/info points added in `animation.rs`:
+
+| New message | What it means |
+|---|---|
+| `[X] Animation graph ready: N clips, starting clip: "Y", AnimationPlayer: Entity(Z)` | Extended to include entity ID of AnimationPlayer at init time |
+| `[X] AnimationPlayer entity changed: A → B` | find_player_entity_recursive found a DIFFERENT entity than last time — node_indices are now stale |
+| `[X] AnimationTransitions missing after "Y" was already played — player_ent Z` | Transitions existed when Y played, then disappeared — likely a second graph init on the same AnimationPlayer |
+| `[X] player_query.get_mut(Z) returned Err` | AnimationPlayer entity found but not accessible via the query (despawn race or conflict) |
+
+Also added: `controller.last_player_entity` stored at graph-init time (not just at first play).
+
+---
+
+## Fix applied (2026-05-04)
+
+Added an **entity staleness check** between step 1 and step 2 in `animation_playback_system`. It runs every frame once `graph_initialized = true`, regardless of whether the current clip is changing.
+
+If `find_player_entity_recursive` returns a different entity than `controller.last_player_entity`:
+1. WARN with old and new entity IDs.
+2. Reset `graph_initialized = false`, `last_player_entity = None`, `last_played = ""`.
+3. `continue` — skip this frame.
+
+Next frame: step 1 runs, finds the new entity, re-inserts `AnimationGraphHandle + AnimationTransitions`. 2-3 frames of T-pose during the re-spawn, then full recovery.
+
+**Why the check must be outside `current != last_played`:** Static entities like NPCs that always play the same clip have `current == last_played` in steady state, so step 2 never runs. The entity change was silently ignored. Moving the check to a separate block before step 2 ensures all animated entities recover, not just ones whose animation changes frequently.
+
+-- Notes Frank --
+- Sometimes when I run the quick_scene project, the player character is T-posed. This is not always the case, but it happens frequently. I have not yet investigated this issue.
+
+- recently (04-05-2026) the 3rd person game project has started to have the player character T-posed more often. The character is animated when it is created and then it falls from the spawn position and lands in a T-pose. At this point the animations stop working for the rest of the session. If the level is reloaded the problem sometimes goes away. I have a feeling that it might be a loading order issue. The issue occors more often when I do a clean rebuild. Or an issue with the animation policy, I am not sure which. The issue also uccorse mor eoften in web than native builds. This is also why I think it might be a loading order issue. I have not yet investigated this issue.

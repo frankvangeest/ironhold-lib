@@ -170,6 +170,7 @@ fn test_input_abstraction_flow() {
             graph_initialized: false,
             transition_ms: 0,
             should_loop: true,
+            last_player_entity: None,
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),
@@ -1521,6 +1522,7 @@ fn test_animation_graph_only_includes_present_clips() {
             graph_initialized: false,
             transition_ms: 0,
             should_loop: true,
+            last_player_entity: None,
         },
         bevy::animation::AnimationPlayer::default(),
     )).id();
@@ -1575,6 +1577,7 @@ fn test_animation_missing_clip_stops_retrying() {
             graph_initialized: true,
             transition_ms: 0,
             should_loop: true,
+            last_player_entity: None,
         },
         bevy::animation::AnimationPlayer::default(),
     )).id();
@@ -2410,6 +2413,7 @@ fn test_player_jump_emits_game_event() {
             graph_initialized: false,
             transition_ms: 0,
             should_loop: true,
+            last_player_entity: None,
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),
