@@ -248,36 +248,6 @@ impl Default for TransformFix {
     }
 }
 
-// ─── Terrain ──────────────────────────────────────────────────────────────────
-
-/// Terrain mesh parameters. Placed as a `Component` on a spawned entity; the
-/// `TerrainPlugin` systems detect it and kick off async mesh generation.
-#[derive(Deserialize, Debug, Clone, Component)]
-#[serde(deny_unknown_fields)]
-pub struct TerrainConfig {
-    pub heightmap_path: String,
-    pub splatmap_path: String,
-    #[serde(default = "default_height_scale")]
-    pub height_scale: f32,
-    #[serde(default = "default_horizontal_scale")]
-    pub horizontal_scale: f32,
-    #[serde(default = "default_terrain_position")]
-    pub position: (f32, f32, f32),
-    #[serde(default = "default_terrain_chunk_size")]
-    pub chunk_size: u32,
-    pub material_paths: Vec<String>,
-    /// UV tiling scale for terrain layer textures. Higher values tile textures more finely.
-    /// Defaults to 10.0.
-    #[serde(default = "default_terrain_uv_scale")]
-    pub uv_scale: f32,
-}
-
-fn default_height_scale() -> f32 { 100.0 }
-fn default_horizontal_scale() -> f32 { 1.0 }
-fn default_terrain_position() -> (f32, f32, f32) { (0.0, 0.0, 0.0) }
-fn default_terrain_chunk_size() -> u32 { 64 }
-fn default_terrain_uv_scale() -> f32 { 10.0 }
-
 // ─── Environment map ──────────────────────────────────────────────────────────
 
 fn default_env_map_intensity() -> f32 { 1.0 }

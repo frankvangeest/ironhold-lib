@@ -3,7 +3,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy_mesh::Indices;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use futures_lite::future;
-use crate::schema::TerrainConfig;
+use crate::schema::TerrainConfigV2;
 use crate::capabilities::terrain_material::TerrainMaterial;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;
@@ -37,21 +37,21 @@ pub struct TerrainReady;
 
 fn terrain_init_system(
     mut commands: Commands,
-    query: Query<(Entity, &TerrainConfig), (Without<TerrainLoading>, Without<TerrainGenerationTask>, Without<TerrainReady>)>,
+    query: Query<(Entity, &TerrainConfigV2), (Without<TerrainLoading>, Without<TerrainGenerationTask>, Without<TerrainReady>)>,
     asset_server: Res<AssetServer>,
 ) {
     for (entity, config) in &query {
-        info!("Initializing Terrain: {}", config.heightmap_path);
+        info!("Initializing Terrain: {}", config.heightmap);
         if config.material_paths.len() < 3 {
             warn!(
                 "Terrain '{}': material_paths has {} layer(s) but the splatmap uses 3 channels (R/G/B). \
                  Missing layers will render as magenta. Add at least 3 paths to material_paths.",
-                config.heightmap_path,
+                config.heightmap,
                 config.material_paths.len()
             );
         }
-        let heightmap_handle = asset_server.load(config.heightmap_path.clone());
-        let splatmap_handle = asset_server.load(config.splatmap_path.clone());
+        let heightmap_handle = asset_server.load(config.heightmap.clone());
+        let splatmap_handle = asset_server.load(config.splatmap.clone());
         let material_handles = config.material_paths.iter()
             .map(|path| asset_server.load(path.clone()))
             .collect();
@@ -67,7 +67,7 @@ fn terrain_init_system(
 // 1. Detect images loaded -> Spawn Task
 fn start_terrain_generation_system(
     mut commands: Commands,
-    mut query: Query<(Entity, &TerrainConfig, &TerrainLoading), (Without<TerrainGenerationTask>, Without<TerrainReady>)>,
+    mut query: Query<(Entity, &TerrainConfigV2, &TerrainLoading), (Without<TerrainGenerationTask>, Without<TerrainReady>)>,
     images: Res<Assets<Image>>,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
@@ -76,17 +76,18 @@ fn start_terrain_generation_system(
         if let Some(heightmap) = images.get(&loading.heightmap_handle) {
             if let Some(data) = &heightmap.data {
                 info!("Heightmap loaded ({:?}). Starting async generation...", heightmap.texture_descriptor.size);
-                
+
                 // Extract raw data to pass to thread
                 let width = heightmap.texture_descriptor.size.width as usize;
                 let height = heightmap.texture_descriptor.size.height as usize;
-                let data = data.clone(); 
-                let height_scale = config.height_scale;
-                let horizontal_scale = config.horizontal_scale;
+                let data = data.clone();
+                let height_scale = config.scale.1;
+                let scale_x = config.scale.0;
+                let scale_z = config.scale.2;
 
                 let task = thread_pool.spawn(async move {
                     info!("Terrain Task Started on Worker Thread");
-                    generate_terrain_mesh_raw(width, height, &data, height_scale, horizontal_scale)
+                    generate_terrain_mesh_raw(width, height, &data, height_scale, scale_x, scale_z)
                 });
 
                 commands.entity(entity).insert(TerrainGenerationTask(task));
@@ -99,7 +100,7 @@ fn start_terrain_generation_system(
 // 2. Poll Task -> Apply Result
 fn poll_terrain_generation_system(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut TerrainGenerationTask, &TerrainConfig, &TerrainLoading)>,
+    mut query: Query<(Entity, &mut TerrainGenerationTask, &TerrainConfigV2, &TerrainLoading)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
 ) {
@@ -121,7 +122,7 @@ fn poll_terrain_generation_system(
             };
             let material_handle = terrain_materials.add(terrain_material);
 
-            let (px, py, pz) = config.position;
+            let (px, py, pz) = config.position.unwrap_or((0.0, 0.0, 0.0));
 
             commands.entity(entity).insert((
                 Mesh3d(mesh_handle),
@@ -147,14 +148,14 @@ fn poll_terrain_generation_system(
 }
 
 // Pure function, no bevy types except Mesh output
-fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_scale: f32, horizontal_scale: f32) -> Mesh {
+fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_scale: f32, scale_x: f32, scale_z: f32) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
-    
+
     let num_verts = width * height;
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(num_verts);
     let mut normals: Vec<[f32; 3]> = Vec::with_capacity(num_verts);
     let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(num_verts);
-    
+
     let extract_height = |x: usize, z: usize| -> f32 {
         let idx = (z * width + x) * 4; // Assuming RGBA8
         if idx < data.len() {
@@ -165,15 +166,15 @@ fn generate_terrain_mesh_raw(width: usize, height: usize, data: &[u8], height_sc
     };
 
     // Center offset
-    let offset_x = (width - 1) as f32 * horizontal_scale * 0.5;
-    let offset_z = (height - 1) as f32 * horizontal_scale * 0.5;
+    let offset_x = (width - 1) as f32 * scale_x * 0.5;
+    let offset_z = (height - 1) as f32 * scale_z * 0.5;
 
     // 1. Generate Vertices
     for z in 0..height {
         for x in 0..width {
             let y = extract_height(x, z);
-            let vx = x as f32 * horizontal_scale - offset_x;
-            let vz = z as f32 * horizontal_scale - offset_z;
+            let vx = x as f32 * scale_x - offset_x;
+            let vz = z as f32 * scale_z - offset_z;
 
             positions.push([vx, y, vz]);
             normals.push([0.0, 1.0, 0.0]); // Placeholder, compute_smooth_normals will fix this

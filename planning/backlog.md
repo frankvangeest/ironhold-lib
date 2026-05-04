@@ -81,7 +81,7 @@ _(nothing in flight right now — pick from Queued)_
 ### Terrain
 - [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
 - [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
-- [ ] **Terrain path consolidation** — `TerrainConfig` (runtime component) and `TerrainConfigV2` (scene schema) are two parallel structs; consolidate into one and remove the intermediary conversion in `scene_loader.rs`. As part of this, fix the **scale.z bug**: `TerrainConfigV2.scale.2` (Z horizontal) is silently ignored — scene loader maps only `.0` and `.1`, so asymmetric terrain (`scale: (1.0, 30.0, 2.0)`) is distorted.
+- [x] **Terrain path consolidation** — `TerrainConfigV2` is now the single struct (schema + runtime `Component`); `TerrainConfig` removed. Scene loader spawns `terrain_v2.clone()` directly. Fixed **scale.z bug**: `generate_terrain_mesh_raw` now takes separate `scale_x`/`scale_z` so asymmetric terrain is no longer distorted.
 
 ### Rendering & Assets
 - [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`

@@ -216,7 +216,7 @@ fn default_directional_color() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 fn default_directional_intensity() -> f32 { 10000.0 }
 fn default_directional_rotation() -> (f32, f32, f32) { (45.0, 0.0, 0.0) }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Component)]
 #[serde(deny_unknown_fields)]
 pub struct TerrainConfigV2 {
     pub heightmap: String,
