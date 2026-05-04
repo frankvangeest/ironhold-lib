@@ -18,7 +18,7 @@ _(nothing in flight right now — pick from Queued)_
 ## Bugs
 
 - [ ] **quick_scene web spawn hang** — pressing "Spawn Enemy" in the browser freezes for ~2s. Likely first-load GLB decode on the WASM main thread when the orc model is not yet cached. Candidate fix: emit `Action::Preload("orc_prefab_key")` on `scene.ready` so the GLB is warm before the button is pressed.
-- [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/animation_tpose.md`.
+- [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/resolved/animation_tpose.md`.
 
 ---
 
