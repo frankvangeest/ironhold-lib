@@ -84,7 +84,7 @@ Everything below is controlled by `.ron` files and assets. You write data, the r
 | `SetVolume(75)` | Set global volume (0–100) |
 | `Spawn { prefab: "barrel", id: "barrel_01" }` | Spawn a prefab at runtime |
 | `Despawn("barrel_01")` | Remove a spawned entity |
-| `Preload("scenes/next.scene.ron")` | Warm the asset cache in advance |
+| `PreloadScene("scenes/next.scene.ron")` | Warm the asset cache in advance |
 | `Quit` | Exit the application |
 | `Log("message")` | Emit an info log line |
 
