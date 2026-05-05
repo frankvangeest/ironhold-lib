@@ -18,6 +18,10 @@ _(nothing in flight right now — pick from Queued)_
 ## Bugs
 
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
+- [ ] **`PrefabComponents` silently drops unknown fields** — writing `health`, `ai`, `loot_table`, `faction`, or any other unrecognised field inside a prefab's `components` block produces no error or warning; the field is silently ignored. Root cause: `PrefabComponents` does not use `#[serde(deny_unknown_fields)]`. Fix: add the attribute and emit a `warn!` at load time naming the bad field so designers immediately see what was rejected.
+- [ ] **no diagnostic when a rule event is never matched** — a UI button with a typo in its `action:` field, or a `rules.ron` rule that names a nonexistent event, produces zero log output; clicking the button silently does nothing with no indication of which layer (button, rule, or action) is broken. Fix: after each event dispatch, emit a `debug!` or `warn!` if no rule matched.
+- [ ] **`rules.ron` silently ignored when `state_machine_path` is set** — a v3 project that has both `logic/rules.ron` and `logic/state_machine.ron` never warns that `rules.ron` is not read (only `state_machine_path` is loaded). `3rd_person_game_demo` demonstrates this. Fix: emit a `warn!` at project load time if both `rules_path` and `state_machine_path` are populated.
+- [ ] **`Spawn` `position`/`spawn_point` conflict is silent** — when both `position` and `spawn_point` are set on a `Spawn` action, `position` wins with no warning. Fix: emit a `warn!` if both fields are non-default so the designer knows which one was used.
 - [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns. A further phantom-entity warmup approach could eliminate the pipeline-compile stall if that residual freeze proves unacceptable.
 - [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/resolved/animation_tpose.md`.
 
@@ -57,6 +61,9 @@ _(nothing in flight right now — pick from Queued)_
 ### Engine / Runtime
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
+- [ ] **Typed primitive shape field** — split the `model:` field on `kind: "primitive"` prefabs into a separate typed `shape:` field (e.g. `shape: Cuboid`) so it is clearly distinct from the asset catalog key used by `kind: "actor"` and `kind: "prop"`; requires schema version bump; breaking change — needs design doc
+- [ ] **Consistent RON enum casing** — unify quoted magic strings (`kind: "actor"`) and bare enum variants (`kind: Standard(...)`) to a single convention across the schema; requires schema version bump; breaking change — needs design doc
+- [ ] **Consistent `assets.ron` entry shapes** — `models` entries use `(path: "...")`, `textures` are bare strings, `audio` uses `(path: "...", volume: ...)`; unifying the shapes reduces copy-paste errors and parse confusion; requires schema version bump
 - [x] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
 - [ ] `Condition` expressions in rules (`score >= 10`, `variable == "value"`) — currently only event matching
 - [ ] Hot-reload for `.scene.ron` and `rules.ron` in native debug builds
@@ -101,6 +108,9 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
 
 ### Designer Experience
+- [ ] **Blank starter project template** — a minimal `blank_project` under `assets/projects/` containing only the required files (project config, one empty scene, empty prefab catalog, empty asset catalog, empty rules), no terrain, no models, and no dummy fields; the canonical copy-and-rename starting point so new projects do not inherit `quick_scene` noise
+- [ ] **Schema version v2→v3 migration guide** — add a "Migrating from v2 to v3" section in `docs/20_data_formats.md` covering: rename `rules_path` → `state_machine_path`, bump `schema_version` to `3`, convert `rules.ron` to the FSM format, and the warning to expect if both files coexist
+- [ ] **Magic-string event/action validator** — `tools/ron_validator/` CLI that cross-checks event names used in `rules.ron` / `state_machine.ron` against the set emitted by capabilities and reports unknown event keys before runtime; eliminates silent no-ops from typos in event names
 
 ### Tools
 - [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)

@@ -56,6 +56,24 @@ The native runner selects a project by name: `cargo run -p ironhold_native -- --
 The web runner uses a URL param: `play.html?project=quick_scene`.
 Both default to `quick_scene` if nothing is specified.
 
+### File naming conventions
+
+The engine identifies files by their path (as set in the project config) and by extension for a few special types. Here is the full convention:
+
+| File type | Extension | Typical path |
+|---|---|---|
+| Project config | `.project.ron` | `{name}.project.ron` |
+| Scene | `.scene.ron` | `scenes/{name}.scene.ron` |
+| Entity behavior | `.behavior.ron` | `behaviors/{id}.behavior.ron` |
+| Prefab catalog | `.ron` | `prefabs/prefabs.ron` |
+| Animation policy | `.ron` | `prefabs/animation/{name}_policy.ron` |
+| Asset catalog | `.ron` | `assets.ron` |
+| Logic rules | `.ron` | `logic/rules.ron` |
+| State machine | `.ron` | `logic/state_machine.ron` |
+| Model overrides | `.ron` | `overrides/model_fixes.ron` |
+
+`.scene.ron`, `.project.ron`, and `.behavior.ron` use a double extension so the engine can discover them by suffix. All other `.ron` files are found by their exact path, which is set in the project config — the filename itself is not significant to the runtime.
+
 ---
 
 ## `{name}.project.ron` — ProjectConfig ✅
@@ -317,6 +335,27 @@ label: (text: "Header", depth_scale: false),
 
 Terrain generation runs on `AsyncComputeTaskPool` — do not block the main thread.
 
+### Heightmap files
+
+Heightmaps live at `projects/{name}/terrain/` and consist of two files:
+
+| File | Purpose |
+|------|---------|
+| `heightmap.png` | Greyscale PNG — white = maximum elevation, black = sea level. The `scale.y` value in `TerrainConfigV2` maps the full white-to-black range to world units. Any image editor can produce one. |
+| `heightmap.json` | Generation manifest written by `tools/texture_gen/generate.py`. The engine does **not** read this file — it is only used by the tool to regenerate the heightmap with tweaked parameters. Do not edit it by hand. |
+
+**Generating a heightmap with the texture tool:**
+```bash
+python tools/texture_gen/generate.py --project my_game --type fbm --size 128 --seed 42
+```
+Run `python tools/texture_gen/generate.py --help` for all options. `tools/texture_gen/CLAUDE.md` describes every noise type and parameter.
+
+**Using a hand-painted heightmap:** copy your greyscale PNG to `terrain/heightmap.png` and create a minimal manifest next to it so the tool knows where the file lives:
+```json
+{ "type": "custom", "output": "assets/projects/my_game/terrain/heightmap.png" }
+```
+The engine only reads the PNG — the JSON is for tooling only.
+
 ### UI Elements (`UiElementDefV2`) ✅
 
 UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** DOM elements — clicks in browser automation must use canvas pixel coordinates.
@@ -390,6 +429,18 @@ Named registry of all assets available to prefabs and scenes.
   },
 )
 ```
+
+**Audio format recommendations:**
+
+| Format | Use for | Notes |
+|--------|---------|-------|
+| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback |
+| `.ogg` | Music and long ambient loops | Compressed; smaller files, minor decode cost acceptable for long audio |
+| `.mp3` | Music only (avoid for new work) | Worse quality/size ratio than OGG; use OGG instead |
+
+Do not use `.aiff` or `.flac` — these formats are not supported and will produce a warning at load time with no audio playing.
+
+Trim any leading silence from SFX files before exporting — silence baked into the file adds perceived latency on every play.
 
 **MaterialDef top-level fields** (apply to all kinds):
 
@@ -561,7 +612,18 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | `interact` | `String` | `"KeyF"` | Interact with nearby `interactable` entities |
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 
-Key names use Bevy's `KeyCode` string identifiers: `"KeyW"`, `"ArrowUp"`, `"Space"`, `"ShiftLeft"`, `"KeyF"`, etc. (See `InputMap::parse_key` in `schema/player.rs` for the full accepted set.) Invalid key names produce a warning at load time and the binding has no effect.
+**Valid key name strings** — both the canonical form (`"KeyW"`) and the shorthand (`"W"`) are accepted for letters and digits:
+
+| Category | Valid strings |
+|----------|--------------|
+| Letters | `"KeyA"`–`"KeyZ"` (or bare `"A"`–`"Z"`) |
+| Digits | `"Digit0"`–`"Digit9"` (or bare `"0"`–`"9"`) |
+| Function | `"F1"`–`"F12"` |
+| Modifiers | `"ShiftLeft"`, `"ShiftRight"`, `"ControlLeft"`, `"ControlRight"`, `"AltLeft"`, `"AltRight"` |
+| Common | `"Space"`, `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"` |
+| Arrows | `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"` |
+
+Invalid key strings produce a `warn!` at load time and that binding has no effect. Case is significant — `"space"` and `"shiftleft"` are not valid.
 
 **`MovementConfig` fields** (all optional — defaults apply when omitted):
 

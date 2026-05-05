@@ -5,7 +5,6 @@
       kind: "actor",
       model: "hero",
       components: (
-        health: (max: 100, current: 100),
         movement: (walk_speed: 5.0, run_speed: 8.5),
         tags: ["player"],
       ),
@@ -16,9 +15,6 @@
       kind: "actor",
       model: "orc",
       components: (
-        health: (max: 35, current: 35),
-        ai: (behavior: "melee_chase"),
-        faction: "enemy",
         tags: ["enemy"],
       ),
     ),
@@ -27,8 +23,6 @@
       kind: "prop",
       model: "chest_01",
       components: (
-        loot_table: "basic_chest",
-        interactable: true,
         tags: ["loot"],
       ),
     ),
@@ -37,8 +31,6 @@
       kind: "prop",
       model: "chest_02",
       components: (
-        loot_table: "basic_chest",
-        interactable: true,
         tags: ["loot"],
       ),
     ),
