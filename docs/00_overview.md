@@ -126,13 +126,15 @@ Use `schema_version: 3` with `state_machine_path` instead of `rules_path` when y
 ```bash
 cargo run -p ironhold_native -- --project my_game
 ```
-**Web** (one-time build, then live editing):
+**Web** — a prebuilt WASM is included in the `pkg/` folder, so no build step is needed to get started:
 ```bash
-wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 python serve.py
 # Open play.html?project=my_game in the browser
 ```
-After the initial build, RON edits are live — just press F5 to reload without rebuilding Rust.
+RON edits are live — just press F5 to reload without rebuilding Rust. To rebuild the WASM after changing Rust code:
+```bash
+wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
+```
 
 ### 4 — Edit the scene
 
