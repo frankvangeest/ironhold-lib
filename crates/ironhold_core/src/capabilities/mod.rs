@@ -12,6 +12,7 @@ pub mod motion;
 pub mod npc;
 pub mod trigger_zone;
 pub mod interactable;
+pub mod stats;
 
 pub use player::*;
 pub use camera::*;
@@ -27,4 +28,5 @@ pub use motion::*;
 pub use npc::*;
 pub use trigger_zone::*;
 pub use interactable::*;
+pub use stats::{stat_regen_system, stat_threshold_system};
 

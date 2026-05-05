@@ -475,5 +475,14 @@
       position: (16.0, 98.0),
       size: (180.0, 32.0),
     ),
+    (
+      kind: "label",
+      id: "status_label",
+      text: "",
+      bind: "status",
+      format: "{}",
+      position: (16.0, 134.0),
+      size: (220.0, 32.0),
+    ),
   ],
 )

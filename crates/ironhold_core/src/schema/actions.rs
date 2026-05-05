@@ -89,6 +89,19 @@ pub enum Action {
     /// Inside behavior files, `{self}` in the event name is replaced with the entity's
     /// spawn ID before the event is written, allowing reusable behavior-driven signals.
     EmitEvent(String),
+    /// Add `delta` to a named stat (defined in `stats.ron`). Clamps to `[min, max]`.
+    /// Negative delta reduces the stat and resets the regen cooldown.
+    /// Example: `ModifyStat(key: "health", delta: -25.0)`.
+    ModifyStat {
+        key: String,
+        delta: f32,
+    },
+    /// Set a named stat to an absolute value (defined in `stats.ron`). Clamps to `[min, max]`.
+    /// Example: `SetStat(key: "health", value: 100.0)`.
+    SetStat {
+        key: String,
+        value: f32,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }

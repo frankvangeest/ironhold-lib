@@ -11,6 +11,9 @@
     "jump":         (path: "shared/audio/jump.wav"),
     "npc_greet":    (path: "projects/primitive_world/audio/child-hello.wav"),
     "goblin_growl": (path: "projects/primitive_world/audio/growl.wav", volume: 0.5),
+    "goblin_hit":   (path: "shared/audio/combat/punch-01.wav"),
+    "player_pain":  (path: "shared/audio/combat/pain-01.wav", volume: 0.8),
+    "swing_miss":   (path: "shared/audio/combat/heave-male.wav", volume: 0.6),
   },
 
   materials: {

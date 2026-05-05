@@ -50,6 +50,7 @@ assets/projects/{name}/
   scenes/*.scene.ron          ← GameSceneV2   (one file per scene)
   logic/rules.ron             ← LogicRulesAsset (event → action rules)
   overrides/model_fixes.ron   ← ModelFixesAsset (per-asset transform corrections)
+  stats/stats.ron             ← StatCatalog     (named stat definitions; optional)
 ```
 
 The native runner selects a project by name: `cargo run -p ironhold_native -- --project quick_scene`.
@@ -71,6 +72,7 @@ The engine identifies files by their path (as set in the project config) and by 
 | Logic rules | `.ron` | `logic/rules.ron` |
 | State machine | `.ron` | `logic/state_machine.ron` |
 | Model overrides | `.ron` | `overrides/model_fixes.ron` |
+| Stat catalog | `.ron` | `stats/stats.ron` |
 
 `.scene.ron`, `.project.ron`, and `.behavior.ron` use a double extension so the engine can discover them by suffix. All other `.ron` files are found by their exact path, which is set in the project config — the filename itself is not significant to the runtime.
 
@@ -96,6 +98,7 @@ Entry point for a project. References all other files.
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
+| `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
@@ -1118,6 +1121,99 @@ Used when `state_machine_path` is set in the project config (schema v3). Replace
 | `to` | `String` | Target state |
 
 Execution order on transition: `exit_actions` of old state → state change → `entry_actions` of new state.
+
+---
+
+## `stats.ron` — StatCatalog ✅
+
+Named stat definitions for a project. Referenced via `stats_path` in `{name}.project.ron`. Optional — omitting it means no stat system for that project.
+
+Stats persist across scene transitions (the `LoadedStats` resource is not cleared on scene load).
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | `u32` | ✅ | Must be `1` |
+| `stats` | `Map<String, StatDef>` | ✅ | Named stats keyed by stat ID |
+
+**`StatDef` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `base` | `f32` | ✅ | Starting value (must be within `[min, max]`) |
+| `min` | `f32` | `0.0` | Minimum allowed value |
+| `max` | `f32` | ✅ | Maximum allowed value |
+| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active. `0` = no regen |
+| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes |
+| `thresholds` | `Vec<StatThreshold>` | `[]` | Events to emit when a threshold is crossed |
+
+**`StatThreshold` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `when` | `ThresholdCondition` | Condition that triggers the event |
+| `emit` | `String` | Event name emitted as `GameEvent::Trigger` on false→true crossing |
+
+**`ThresholdCondition` variants:**
+
+| Variant | Example | Fires when… |
+|---------|---------|-------------|
+| `BelowOrEqual(f32)` | `BelowOrEqual(0.0)` | `current <= value` |
+| `AboveOrEqual(f32)` | `AboveOrEqual(80.0)` | `current >= value` |
+| `BelowPercent(f32)` | `BelowPercent(0.25)` | `current / max < fraction` |
+| `AtOrAbovePercent(f32)` | `AtOrAbovePercent(1.0)` | `current / max >= fraction` |
+
+Threshold events are **edge-triggered**: they fire once when the condition transitions from false to true. They do not re-fire every frame while the condition remains true.
+
+**Example:**
+```ron
+// stats/stats.ron
+(
+    schema_version: 1,
+    stats: {
+        "health": (
+            base: 100.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: [
+                ( when: BelowOrEqual(0.0),    emit: "stat.health.depleted" ),
+                ( when: BelowPercent(0.25),   emit: "stat.health.low" ),
+                ( when: AtOrAbovePercent(1.0),emit: "stat.health.full" ),
+            ],
+        ),
+        "mana": (
+            base: 50.0,
+            min: 0.0,
+            max: 50.0,
+            regen_rate: 2.0,
+            regen_delay: 3.0,
+            thresholds: [
+                ( when: AtOrAbovePercent(1.0), emit: "stat.mana.full" ),
+            ],
+        ),
+    },
+)
+```
+
+**Project config reference:**
+```ron
+// {name}.project.ron
+(
+    schema_version: 2,
+    ...
+    stats_path: "stats/stats.ron",
+)
+```
+
+**Reacting to threshold events in rules:**
+```ron
+// logic/rules.ron
+( on: "stat.health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
+( on: "stat.health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
+```
 
 ---
 

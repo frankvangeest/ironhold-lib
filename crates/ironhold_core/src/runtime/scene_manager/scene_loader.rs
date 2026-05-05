@@ -287,6 +287,14 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
+                    // Interactable: proximity + F key → entity.interacted:{id}
+                    if let Some(interactable_def) = &prefab.interactable {
+                        commands.entity(parent).insert(Interactable {
+                            radius: interactable_def.radius,
+                            hint_text: interactable_def.hint_text.clone(),
+                        });
+                    }
+
                     if let Some(label_def) = &entity_def.label {
                         pending_labels.push((parent, label_def.clone()));
                     }
@@ -967,13 +975,17 @@ fn spawn_ui_element_node(
     if el.kind == "label" {
         let el_id = el.id.clone();
         parent
-            .spawn((Name::new(format!("Label: {}", el.text)), node))
+            .spawn((
+                Name::new(format!("Label: {}", el.text)),
+                node,
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
+            ))
             .with_children(|parent| {
                 let mut text_cmd = parent.spawn((
                     Name::new(format!("Text: {}", el.text)),
                     Text::new(el.text.clone()),
                     TextFont { font_size: 22.0, ..default() },
-                    TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                    TextColor(Color::WHITE),
                 ));
                 if el_id == "flycam_position" {
                     text_cmd.insert(crate::capabilities::flycam::FlyCamPositionLabel);

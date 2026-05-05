@@ -152,6 +152,14 @@ Actions represent explicit operations the runtime can execute.
 - `SetVariable(key, value)` ✅ — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(key, delta)` ✅ — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 
+#### Stat actions ✅
+- `ModifyStat(key: "health", delta: -25.0)` — adds `delta` to the named stat, clamped to `[min, max]`. Negative delta resets the regen cooldown. Stat must be declared in `stats.ron`.
+- `SetStat(key: "health", value: 100.0)` — sets the named stat to an absolute value, clamped to `[min, max]`. Decreasing the value resets the regen cooldown.
+
+After either action executes, `stat_threshold_system` checks for threshold crossings and emits `GameEvent::Trigger` events for any false→true transitions. Those events are available to the rule interpreter the following frame.
+
+See `docs/20_data_formats.md` — `stats.ron` section for the full schema and `ThresholdCondition` variants.
+
 #### UI actions 🧭
 - `ShowUi(panel_id)`
 - `HideUi(panel_id)`
@@ -264,6 +272,8 @@ Applies actions to the world. Key design points:
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
+- `ModifyStat { key, delta }` — adds `delta` to a named stat (defined in `stats.ron`), clamped to `[min, max]`; negative delta resets regen cooldown; stat not found → warning
+- `SetStat { key, value }` — sets a named stat to an absolute value, clamped to `[min, max]`; decreasing the value resets regen cooldown; stat not found → warning
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)

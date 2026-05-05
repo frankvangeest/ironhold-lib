@@ -35,6 +35,7 @@ pub fn interactable_system(
         return;
     }
 
+    let mut hit_any = false;
     for (transform, spawn_id, interactable) in &interactables {
         let dist = player_transform.translation.distance(transform.translation);
         if dist <= interactable.radius {
@@ -43,6 +44,10 @@ pub fn interactable_system(
                 "entity.interacted:{}",
                 spawn_id.0
             )));
+            hit_any = true;
         }
+    }
+    if !hit_any {
+        game_events.write(GameEvent::Trigger("player.attack_missed".to_string()));
     }
 }

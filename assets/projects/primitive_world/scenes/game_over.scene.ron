@@ -1,0 +1,44 @@
+(
+  schema_version: 2,
+  name: "game_over",
+
+  entities: [],
+
+  ui_panel: (
+    background_color: (0.08, 0.02, 0.02, 0.94),
+    padding: 40.0,
+    gap: 20.0,
+    width: 340.0,
+  ),
+
+  ui: [
+    (
+      kind: "label",
+      id: "game_over_title",
+      text: "YOU DIED",
+      size: (300.0, 60.0),
+    ),
+    (
+      kind: "label",
+      id: "game_over_score",
+      text: "Score  0",
+      bind: "score",
+      format: "Score  {}",
+      size: (300.0, 40.0),
+    ),
+    (
+      kind: "button",
+      id: "retry_button",
+      text: "Try Again",
+      action: "ui.retry",
+      size: (300.0, 60.0),
+    ),
+    (
+      kind: "button",
+      id: "game_over_quit_button",
+      text: "Quit Game",
+      action: "ui.game_over_quit",
+      size: (300.0, 60.0),
+    ),
+  ],
+)

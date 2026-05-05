@@ -4,6 +4,7 @@ use crate::schema::*;
 use crate::schema::project::StateMachineAsset;
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
+use crate::schema::stats::{StatCatalog, LiveStat, LoadedStats};
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
@@ -26,6 +27,7 @@ pub fn check_project_loaded(
     state_machine_assets: Res<Assets<StateMachineAsset>>,
     asset_catalog_assets: Res<Assets<AssetCatalog>>,
     prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
+    stat_catalog_assets: Res<Assets<StatCatalog>>,
     scene_override: Option<Res<crate::InitialSceneOverride>>,
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
@@ -61,17 +63,25 @@ pub fn check_project_loaded(
             asset_server.load::<PrefabCatalog>(resolved)
         });
 
+        let stats_handle = config.stats_path.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading stats catalog from: {}", resolved);
+            asset_server.load::<StatCatalog>(resolved)
+        });
+
         let any_pending = model_fixes_handle.is_some()
             || rules_handle.is_some()
             || state_machine_handle.is_some()
             || asset_catalog_handle.is_some()
-            || prefab_catalog_handle.is_some();
+            || prefab_catalog_handle.is_some()
+            || stats_handle.is_some();
         commands.insert_resource(PendingProjectLoads {
             model_fixes: model_fixes_handle,
             rules: rules_handle,
             state_machine: state_machine_handle,
             asset_catalog: asset_catalog_handle,
             prefab_catalog: prefab_catalog_handle,
+            stats: stats_handle,
         });
 
         if any_pending {
@@ -82,6 +92,7 @@ pub fn check_project_loaded(
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
         commands.insert_resource(LoadedRules(config.rules.clone()));
         commands.insert_resource(LoadedStateMachine(None));
+        commands.insert_resource(LoadedStats::default());
         {
             let key_bindings = config.global_key_bindings.clone();
             for key_name in key_bindings.keys() {
@@ -148,6 +159,18 @@ pub fn check_project_loaded(
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "<unknown>".to_string());
                     error!("Prefab catalog failed to load: {} — {} — proceeding with empty catalog", path, e);
+                }
+                _ => { return; }
+            }
+        }
+        if let Some(h) = &pending.stats {
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    error!("Stats catalog failed to load: {} — {} — proceeding with no stats", path, e);
                 }
                 _ => { return; }
             }
@@ -219,6 +242,24 @@ pub fn check_project_loaded(
             error!("Invalid PrefabCatalog: {} — prefab spawning may fail", e);
         }
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
+
+        let loaded_stats = if let Some(h) = &pending.stats {
+            if let Some(catalog) = stat_catalog_assets.get(h) {
+                if let Err(e) = catalog.validate() {
+                    error!("Invalid StatCatalog: {} — stat system may not behave correctly", e);
+                }
+                let map = catalog.stats.iter()
+                    .map(|(key, def)| (key.clone(), LiveStat::new(def.clone())))
+                    .collect();
+                info!("Stats loaded: {} stat(s) defined", catalog.stats.len());
+                LoadedStats(map)
+            } else {
+                LoadedStats::default()
+            }
+        } else {
+            LoadedStats::default()
+        };
+        commands.insert_resource(loaded_stats);
     }
 
     let initial = scene_override

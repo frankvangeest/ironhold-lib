@@ -17,39 +17,62 @@
         (
             name: "playing",
             entry_actions: [
+                // Reset display variables
                 SetVariable("health", "100"),
                 SetVariable("score", "0"),
+                SetVariable("status", ""),
+                // Reset stats for a fresh run
+                SetStat(key: "player_health",    value: 100.0),
+                SetStat(key: "goblin_01_health", value: 60.0),
+                SetStat(key: "goblin_02_health", value: 60.0),
                 PlayMusicLoop(key: "bg_music"),
                 PreloadScene("scenes/pause.scene.ron"),
                 PreloadScene("scenes/map.scene.ron"),
+                PreloadScene("scenes/game_over.scene.ron"),
             ],
-            exit_actions:  [ StopMusic ],
+            exit_actions: [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:toggle_map", do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
                 ( event: "player.jumped",               do_actions: [ PlaySound(key: "jump") ] ),
 
-                // Coin collectibles — each fires Despawn + sound + score + small health restore.
-                // Picking up coins is the only way to recover health in the field.
-                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
-                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 5) ] ),
+                // ── Coin collectibles ────────────────────────────────────────────────
+                // Each coin: despawn + sound + +10 score + +15 HP (stat + display in lockstep).
+                ( event: "entity.collected:coin_01", do_actions: [ Despawn("coin_01"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
+                ( event: "entity.collected:coin_02", do_actions: [ Despawn("coin_02"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
+                ( event: "entity.collected:coin_03", do_actions: [ Despawn("coin_03"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
+                ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
+                ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
 
-                // ── NPC events ──────────────────────────────────────────────────────────
-                // Friendly villager — greets the player when spotted and when reached.
+                // ── Player attacks goblins (F key near goblin) ───────────────────────
+                // 35 damage per hit; two hits kill a goblin (60 HP → 25 → 0).
+                ( event: "entity.interacted:goblin_01", do_actions: [ PlaySound(key: "goblin_hit"), ModifyStat(key: "goblin_01_health", delta: -35.0), SetVariable("status", "Hit!") ] ),
+                ( event: "entity.interacted:goblin_02", do_actions: [ PlaySound(key: "goblin_hit"), ModifyStat(key: "goblin_02_health", delta: -35.0), SetVariable("status", "Hit!") ] ),
+                // No interactable in range — audible grunt so the player knows the swing registered.
+                ( event: "player.attack_missed",        do_actions: [ PlaySound(key: "swing_miss"), SetVariable("status", "Miss!") ] ),
+
+                // ── Goblin deaths (fired by stat threshold system) ───────────────────
+                ( event: "stat.goblin_01_health.depleted", do_actions: [ Despawn("goblin_01"), PlaySound(key: "collect_coin"), IncrementVariable("score", 50) ] ),
+                ( event: "stat.goblin_02_health.depleted", do_actions: [ Despawn("goblin_02"), PlaySound(key: "collect_coin"), IncrementVariable("score", 50) ] ),
+
+                // ── NPC events ───────────────────────────────────────────────────────
                 ( event: "npc.player_spotted:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
                 ( event: "npc.player_reached:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
 
-                // Goblin guards — growl when spotted; deal 25 health damage and -10 score on contact.
-                // Four hits from a single goblin would be lethal from full health.
-                ( event: "npc.player_spotted:goblin_01",   do_actions: [ PlaySound(key: "goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_01",   do_actions: [ PlaySound(key: "goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
-                ( event: "npc.player_spotted:goblin_02",   do_actions: [ PlaySound(key: "goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_02",   do_actions: [ PlaySound(key: "goblin_growl"), IncrementVariable("score", -10), IncrementVariable("health", -25) ] ),
+                // Goblin contact — 30 HP damage and -10 score per hit (stat + display).
+                ( event: "npc.player_spotted:goblin_01",  do_actions: [ PlaySound(key: "goblin_growl") ] ),
+                ( event: "npc.player_reached:goblin_01",  do_actions: [ PlaySound(key: "goblin_growl"), PlaySound(key: "player_pain"), IncrementVariable("score", -10), IncrementVariable("health", -30), ModifyStat(key: "player_health", delta: -30.0) ] ),
+                ( event: "npc.player_spotted:goblin_02",  do_actions: [ PlaySound(key: "goblin_growl") ] ),
+                ( event: "npc.player_reached:goblin_02",  do_actions: [ PlaySound(key: "goblin_growl"), PlaySound(key: "player_pain"), IncrementVariable("score", -10), IncrementVariable("health", -30), ModifyStat(key: "player_health", delta: -30.0) ] ),
 
-                // Merchant — acknowledges the player with a greeting sound.
                 ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
+
+                // ── Stat threshold feedback ──────────────────────────────────────────
+                // Low health warning (edge-triggered: fires once when HP drops below 25%).
+                ( event: "stat.player_health.low",      do_actions: [ SetVariable("status", "! LOW HEALTH !") ] ),
+                // Correct display on full heal (coin at full HP).
+                ( event: "stat.player_health.full",     do_actions: [ SetVariable("health", "100"), SetVariable("status", "") ] ),
+                // Clamp display to zero on death (avoids negative display from IncrementVariable).
+                ( event: "stat.player_health.depleted", do_actions: [ SetVariable("health", "0") ] ),
             ],
         ),
         (
@@ -58,6 +81,15 @@
             exit_actions:  [ UnloadOverlay ],
             on: [
                 ( event: "ui.button_pressed:pause_quit", do_actions: [ Quit ] ),
+            ],
+        ),
+        (
+            name: "game_over",
+            entry_actions: [ LoadSceneOverlay("scenes/game_over.scene.ron") ],
+            exit_actions:  [ UnloadOverlay ],
+            on: [
+                ( event: "ui.button_pressed:retry",          do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+                ( event: "ui.button_pressed:game_over_quit", do_actions: [ Quit ] ),
             ],
         ),
     ],
@@ -69,5 +101,10 @@
         ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
         ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
         ( from: "paused",  on: "ui.button_pressed:resume",       to: "playing" ),
+
+        // Player health reaches zero → game over overlay.
+        ( from: "playing", on: "stat.player_health.depleted", to: "game_over" ),
+        // Retry reloads main; scene.ready:main transitions back to playing.
+        ( from: "game_over", on: "scene.ready:main", to: "playing" ),
     ],
 )

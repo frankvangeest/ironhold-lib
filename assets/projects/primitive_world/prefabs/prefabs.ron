@@ -276,6 +276,7 @@
           scale: (1.0, 0.7, 1.0),
         ),
       ],
+      interactable: (radius: 2.5, hint_text: "F  Attack!"),
     ),
 
     // ── Neutral Merchant ─────────────────────────────────────────────────────

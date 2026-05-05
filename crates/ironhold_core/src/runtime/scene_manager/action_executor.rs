@@ -300,6 +300,22 @@ pub fn action_executor_system(
                 info!("Action::IncrementVariable: \"{}\" {} -> {}", key, delta, next);
                 scene_state.game_vars.0.insert(key, next.to_string());
             }
+            Action::ModifyStat { key, delta } => {
+                if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
+                    let new_val = stat.apply_delta(delta);
+                    info!("Action::ModifyStat: \"{}\" {:+.2} -> {:.2}", key, delta, new_val);
+                } else {
+                    warn!("Action::ModifyStat: stat {:?} not found in stats catalog", key);
+                }
+            }
+            Action::SetStat { key, value } => {
+                if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
+                    let new_val = stat.set_value(value);
+                    info!("Action::SetStat: \"{}\" = {:.2}", key, new_val);
+                } else {
+                    warn!("Action::SetStat: stat {:?} not found in stats catalog", key);
+                }
+            }
         }
     }
 }

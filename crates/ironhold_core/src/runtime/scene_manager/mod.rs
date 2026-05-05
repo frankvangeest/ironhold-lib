@@ -122,6 +122,7 @@ pub struct PendingProjectLoads {
     pub state_machine: Option<Handle<crate::schema::project::StateMachineAsset>>,
     pub asset_catalog: Option<Handle<AssetCatalog>>,
     pub prefab_catalog: Option<Handle<PrefabCatalog>>,
+    pub stats: Option<Handle<crate::schema::stats::StatCatalog>>,
 }
 
 /// Tracks all dynamically spawned entities by their spawn ID.
@@ -257,6 +258,7 @@ pub struct SceneStateParams<'w> {
     pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
     pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
+    pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

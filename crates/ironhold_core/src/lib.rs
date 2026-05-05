@@ -112,6 +112,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PendingEntitySpawns>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<GameVariables>()
+            .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -127,6 +128,7 @@ impl Plugin for GamePlugin {
             .add_plugins(ImplicitRonPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::stats::StatCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
@@ -150,7 +152,12 @@ impl Plugin for GamePlugin {
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
+            // Stat regen runs before the interpreter chain so regen-triggered threshold
+            // crossings are visible to stat_threshold_system in the same frame.
+            .add_systems(Update, stat_regen_system.before(message_interpreter_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
+            // stat_threshold_system runs after action_executor to detect crossings from
+            // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.
             // drain_spawn_queue_system runs last: processes items queued by action_executor
             // this frame at a rate-limited SPAWNS_PER_FRAME to spread pipeline compile stalls.
             .add_systems(Update, (
@@ -158,6 +165,7 @@ impl Plugin for GamePlugin {
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
                 action_executor_system,
+                stat_threshold_system,
                 drain_spawn_queue_system,
             ).chain())
             // Physics-driven input + movement must run in FixedUpdate for stable simulation

@@ -47,3 +47,28 @@ assets:
     - https://freesound.org/people/Wdomino/packs/28452/
   - footsteps-water
     - https://freesound.org/people/RomanKolachnik/packs/37492/
+  - punch-01
+    - https://freesound.org/people/qubodup/sounds/773737/
+  - pain-01
+    - https://freesound.org/people/DeltaCode/sounds/668352/
+  - pain-02
+    - https://freesound.org/people/DeltaCode/sounds/668351/
+  - pain-03
+    - https://freesound.org/people/DeltaCode/sounds/668356/
+  - shoot-magnum
+    - https://freesound.org/people/DeltaCode/sounds/668354/
+  - shotgun-one-shot
+    - https://freesound.org/people/DeltaCode/sounds/668353/
+  - heavy-machine-gun
+    - https://freesound.org/people/DeltaCode/sounds/668348/
+  - reload-gun
+    - https://freesound.org/people/DeltaCode/sounds/686661/
+  - heave-male
+    - https://freesound.org/people/DeltaCode/sounds/680314/
+  - crunchy-explosion-01
+    - https://freesound.org/people/DeltaCode/sounds/667660/
+  - crunchy-explosion-02
+    - https://freesound.org/people/DeltaCode/sounds/667659/
+  - crunchy-explosion-03
+    - https://freesound.org/people/DeltaCode/sounds/667658/
+  

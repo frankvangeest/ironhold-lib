@@ -202,6 +202,12 @@ pub struct ProjectConfig {
     /// 0.0–1.0 range. When absent, the engine falls back to a neutral grey (0.7, 0.7, 0.7).
     #[serde(default)]
     pub primitive_default_color: Option<(f32, f32, f32)>,
+
+    /// Path to a `stats.ron` file that defines named stats (health, mana, etc.).
+    /// Optional: when absent, the stat system is inactive for this project.
+    /// Example: `"stats/stats.ron"`.
+    #[serde(default)]
+    pub stats_path: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

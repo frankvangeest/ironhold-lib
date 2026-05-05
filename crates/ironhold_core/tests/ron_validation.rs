@@ -2,6 +2,7 @@ use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef};
 use ironhold_core::schema::project::LogicRulesAsset;
+use ironhold_core::schema::stats::StatCatalog;
 use ron::extensions::Extensions;
 
 /// Deserialize a RON string with `implicit_some` enabled — matches runtime loader behaviour.
@@ -1992,4 +1993,167 @@ fn test_flycam_def_movement_keys_explicit() {
     assert_eq!(fc.up,       "KeyE");
     assert_eq!(fc.down,     "KeyC");
     assert_eq!(fc.look_button, "Right");
+}
+
+// ─── StatCatalog tests ────────────────────────────────────────────────────────
+
+#[test]
+fn test_stat_catalog_minimal_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "health": (
+                    base: 100.0,
+                    max: 100.0,
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("minimal stats.ron should parse");
+    assert_eq!(catalog.schema_version, 1);
+    assert!(catalog.stats.contains_key("health"));
+    let hp = &catalog.stats["health"];
+    assert_eq!(hp.base, 100.0);
+    assert_eq!(hp.max, 100.0);
+    assert_eq!(hp.min, 0.0);         // default
+    assert_eq!(hp.regen_rate, 0.0);  // default
+    assert_eq!(hp.regen_delay, 0.0); // default
+    assert!(hp.thresholds.is_empty());
+    assert!(catalog.validate().is_ok());
+}
+
+#[test]
+fn test_stat_catalog_full_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "health": (
+                    base: 100.0,
+                    min: 0.0,
+                    max: 100.0,
+                    regen_rate: 0.0,
+                    regen_delay: 0.0,
+                    thresholds: [
+                        ( when: BelowOrEqual(0.0),    emit: "stat.health.depleted" ),
+                        ( when: BelowPercent(0.25),   emit: "stat.health.low" ),
+                        ( when: AtOrAbovePercent(1.0),emit: "stat.health.full" ),
+                    ],
+                ),
+                "mana": (
+                    base: 50.0,
+                    min: 0.0,
+                    max: 50.0,
+                    regen_rate: 2.0,
+                    regen_delay: 3.0,
+                    thresholds: [
+                        ( when: AtOrAbovePercent(1.0), emit: "stat.mana.full" ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("full stats.ron should parse");
+    assert_eq!(catalog.stats.len(), 2);
+    let hp = &catalog.stats["health"];
+    assert_eq!(hp.thresholds.len(), 3);
+    assert_eq!(hp.thresholds[0].emit, "stat.health.depleted");
+    let mana = &catalog.stats["mana"];
+    assert_eq!(mana.regen_rate, 2.0);
+    assert_eq!(mana.regen_delay, 3.0);
+    assert!(catalog.validate().is_ok());
+}
+
+#[test]
+fn test_stat_catalog_above_or_equal_threshold_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "rage": (
+                    base: 0.0,
+                    min: 0.0,
+                    max: 100.0,
+                    thresholds: [
+                        ( when: AboveOrEqual(80.0), emit: "stat.rage.peaked" ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("AboveOrEqual threshold should parse");
+    assert!(catalog.validate().is_ok());
+}
+
+#[test]
+fn test_stat_catalog_wrong_version_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 99,
+            stats: {},
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("should parse even with bad version");
+    assert!(catalog.validate().is_err());
+}
+
+#[test]
+fn test_stat_catalog_bad_bounds_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "hp": (
+                    base: 50.0,
+                    min: 80.0,
+                    max: 50.0,
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_err(), "min > max should fail validation");
+}
+
+#[test]
+fn test_action_modify_stat_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"ModifyStat(key: "health", delta: -25.0)"#;
+    let action: Action = from_str(ron_str).expect("ModifyStat should parse");
+    assert!(matches!(action, Action::ModifyStat { key, delta } if key == "health" && delta == -25.0));
+}
+
+#[test]
+fn test_action_set_stat_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"SetStat(key: "health", value: 100.0)"#;
+    let action: Action = from_str(ron_str).expect("SetStat should parse");
+    assert!(matches!(action, Action::SetStat { key, value } if key == "health" && value == 100.0));
+}
+
+#[test]
+fn test_project_config_stats_path_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            initial_scene: "scenes/main.ron",
+            stats_path: "stats/stats.ron",
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("project config with stats_path should parse");
+    assert_eq!(config.stats_path.as_deref(), Some("stats/stats.ron"));
+}
+
+#[test]
+fn test_project_config_without_stats_path_is_ok() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            initial_scene: "scenes/main.ron",
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("project config without stats_path should parse");
+    assert!(config.stats_path.is_none());
+    assert!(config.validate().is_ok());
 }
