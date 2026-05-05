@@ -88,11 +88,11 @@ pub fn update_flycam_position_label(
 ) {
     let Ok(transform) = flycam_query.single() else { return };
     let pos = transform.translation;
+    let new_str = format!("X: {:.1}  Y: {:.1}  Z: {:.1}", pos.x, pos.y, pos.z);
     for mut text in &mut label_query {
-        *text = Text::new(format!(
-            "X: {:.1}  Y: {:.1}  Z: {:.1}",
-            pos.x, pos.y, pos.z,
-        ));
+        if text.0 != new_str {
+            *text = Text::new(new_str.clone());
+        }
     }
 }
 
