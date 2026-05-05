@@ -69,6 +69,7 @@ _(nothing in flight right now — pick from Queued)_
 - [ ] Hot-reload for `.scene.ron` and `rules.ron` in native debug builds
 
 ### Gameplay Capabilities
+- [ ] **Game stats — Phase 2a: stat templates** — `stat_templates` on `PrefabDef`; instance stats auto-created as `StatMap` component (not `LoadedStats`); `ModifyStat` routes on dot in key (`"{spawn_id}.{stat_name}"` → component, no dot → `LoadedStats`); `{self}` in emit strings and action keys; goblin guard moves to behavior file; `StatMap` derives `Reflect`+`Clone` for future rollback; design: `planning/features/stat_templates.md`
 - [x] **Game stats — Phase 1: core stat model** — `StatDef` (base/min/max/regen/thresholds), `LoadedStats` resource, `ModifyStat`/`SetStat` actions, threshold events into existing pipeline; design: `planning/features/game_stats_core.md`
 - [ ] **Game stats — Phase 2: buffs and modifiers** — named modifier templates, additive/multiplicative/override kinds, stacking rules, soft_max, `ApplyModifier`/`RemoveModifier` actions; design: `planning/features/game_stats_buffs.md` _(depends on Phase 1)_
 - [ ] **Stat display — health bars and stat spreads** — `StatBar` and `StatSpread` UI node types in scene RON, colour bands, change-detection update; design: `planning/features/game_stats_display.md` _(depends on Phase 1)_

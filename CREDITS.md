@@ -14,6 +14,8 @@ assets:
   - https://publicdomaintextures.com/
   - https://3dtextures.me/
   - https://3dtextures.me/2018/04/13/cobblestone-001/
+- icons: 
+  - https://kenney.nl/assets/input-prompts
 - sounds:
   - https://freesound.org/
   - https://opengameart.org/sounds
@@ -72,3 +74,7 @@ assets:
   - crunchy-explosion-03
     - https://freesound.org/people/DeltaCode/sounds/667658/
   
+
+Starterkits:
+- https://www.kenney.nl/starter-kits
+  kenney.nl offers free assets under the CC0 license, it is a donation-supported platform. Please consider supporting Kenney if you find his work valuable. While the starter kits are primarily for Godot, they are useful for other engines as well.
