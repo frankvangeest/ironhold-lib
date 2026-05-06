@@ -1,0 +1,1919 @@
+[
+  {
+    "name": "child-hello",
+    "path": "projects/primitive_world/audio/child-hello.wav",
+    "dir": "projects/primitive_world/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "growl",
+    "path": "projects/primitive_world/audio/growl.wav",
+    "dir": "projects/primitive_world/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "bg-music-balance",
+    "path": "shared/audio/bg-music-balance.mp3",
+    "dir": "shared/audio",
+    "type": "mp3",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "game-pickup-01",
+    "path": "shared/audio/game-pickup-01.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "game-pickup-02",
+    "path": "shared/audio/game-pickup-02.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "jump",
+    "path": "shared/audio/jump.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "menu-button-click",
+    "path": "shared/audio/menu-button-click.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "run-grass",
+    "path": "shared/audio/run-grass.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "walk",
+    "path": "shared/audio/walk.wav",
+    "dir": "shared/audio",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "boulder-push-loop",
+    "path": "shared/audio/boulder/boulder-push-loop.wav",
+    "dir": "shared/audio/boulder",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "boulder-push1",
+    "path": "shared/audio/boulder/boulder-push1.wav",
+    "dir": "shared/audio/boulder",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "boulder-push2",
+    "path": "shared/audio/boulder/boulder-push2.wav",
+    "dir": "shared/audio/boulder",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "boulder-reset",
+    "path": "shared/audio/boulder/boulder-reset.wav",
+    "dir": "shared/audio/boulder",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "crunchy-explosion-01",
+    "path": "shared/audio/combat/crunchy-explosion-01.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "crunchy-explosion-02",
+    "path": "shared/audio/combat/crunchy-explosion-02.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "crunchy-explosion-03",
+    "path": "shared/audio/combat/crunchy-explosion-03.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "handgun-one-shot",
+    "path": "shared/audio/combat/handgun-one-shot.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "heave-male",
+    "path": "shared/audio/combat/heave-male.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pain-01",
+    "path": "shared/audio/combat/pain-01.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pain-02",
+    "path": "shared/audio/combat/pain-02.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pain-03",
+    "path": "shared/audio/combat/pain-03.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "punch-01",
+    "path": "shared/audio/combat/punch-01.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "reload-gun",
+    "path": "shared/audio/combat/reload-gun.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "shoot-magnum",
+    "path": "shared/audio/combat/shoot-magnum.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "shotgun-one-shot",
+    "path": "shared/audio/combat/shotgun-one-shot.wav",
+    "dir": "shared/audio/combat",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "fire-aggresive",
+    "path": "shared/audio/fire/fire-aggresive.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "fire-crispy-1",
+    "path": "shared/audio/fire/fire-crispy-1.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "fire-crispy-2",
+    "path": "shared/audio/fire/fire-crispy-2.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "fire-ignition",
+    "path": "shared/audio/fire/fire-ignition.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "fire-match",
+    "path": "shared/audio/fire/fire-match.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "light-fire-sound",
+    "path": "shared/audio/fire/light-fire-sound.wav",
+    "dir": "shared/audio/fire",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-bush-01",
+    "path": "shared/audio/footsteps-bush/footstep-bush-01.wav",
+    "dir": "shared/audio/footsteps-bush",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-bush-02",
+    "path": "shared/audio/footsteps-bush/footstep-bush-02.wav",
+    "dir": "shared/audio/footsteps-bush",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-bush-03",
+    "path": "shared/audio/footsteps-bush/footstep-bush-03.wav",
+    "dir": "shared/audio/footsteps-bush",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-bush-04",
+    "path": "shared/audio/footsteps-bush/footstep-bush-04.wav",
+    "dir": "shared/audio/footsteps-bush",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-1",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-1.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-2",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-2.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-3",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-3.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-4",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-4.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-5",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-5.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-grassy-footstep-6",
+    "path": "shared/audio/footsteps-grass/left-grassy-footstep-6.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-1",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-1.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-2",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-2.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-3",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-3.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-4",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-4.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-5",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-5.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-grassy-footstep-6",
+    "path": "shared/audio/footsteps-grass/right-grassy-footstep-6.wav",
+    "dir": "shared/audio/footsteps-grass",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-gravel-footstep-1",
+    "path": "shared/audio/footsteps-gravel/left-gravel-footstep-1.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-gravel-footstep-2",
+    "path": "shared/audio/footsteps-gravel/left-gravel-footstep-2.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-gravel-footstep-3",
+    "path": "shared/audio/footsteps-gravel/left-gravel-footstep-3.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-gravel-footstep-4",
+    "path": "shared/audio/footsteps-gravel/left-gravel-footstep-4.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "left-gravel-footstep-5",
+    "path": "shared/audio/footsteps-gravel/left-gravel-footstep-5.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-gravel-footstep-1",
+    "path": "shared/audio/footsteps-gravel/right-gravel-footstep-1.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-gravel-footstep-2",
+    "path": "shared/audio/footsteps-gravel/right-gravel-footstep-2.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-gravel-footstep-3",
+    "path": "shared/audio/footsteps-gravel/right-gravel-footstep-3.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-gravel-footstep-4",
+    "path": "shared/audio/footsteps-gravel/right-gravel-footstep-4.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "right-gravel-footstep-5",
+    "path": "shared/audio/footsteps-gravel/right-gravel-footstep-5.wav",
+    "dir": "shared/audio/footsteps-gravel",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-01",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-01.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-02",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-02.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-03",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-03.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-04",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-04.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-05",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-05.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-leaves-06",
+    "path": "shared/audio/footsteps-leaves/footstep-leaves-06.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footsteps-leaves-sequence",
+    "path": "shared/audio/footsteps-leaves/footsteps-leaves-sequence.wav",
+    "dir": "shared/audio/footsteps-leaves",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-snow-01",
+    "path": "shared/audio/footsteps-snow/footstep-snow-01.wav",
+    "dir": "shared/audio/footsteps-snow",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-snow-02",
+    "path": "shared/audio/footsteps-snow/footstep-snow-02.wav",
+    "dir": "shared/audio/footsteps-snow",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-snow-03",
+    "path": "shared/audio/footsteps-snow/footstep-snow-03.wav",
+    "dir": "shared/audio/footsteps-snow",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-snow-04",
+    "path": "shared/audio/footsteps-snow/footstep-snow-04.wav",
+    "dir": "shared/audio/footsteps-snow",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-01",
+    "path": "shared/audio/footsteps-stone/footstep-stone-01.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-02",
+    "path": "shared/audio/footsteps-stone/footstep-stone-02.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-03",
+    "path": "shared/audio/footsteps-stone/footstep-stone-03.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-04",
+    "path": "shared/audio/footsteps-stone/footstep-stone-04.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-05",
+    "path": "shared/audio/footsteps-stone/footstep-stone-05.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-06",
+    "path": "shared/audio/footsteps-stone/footstep-stone-06.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-07",
+    "path": "shared/audio/footsteps-stone/footstep-stone-07.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-08",
+    "path": "shared/audio/footsteps-stone/footstep-stone-08.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-09",
+    "path": "shared/audio/footsteps-stone/footstep-stone-09.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-10",
+    "path": "shared/audio/footsteps-stone/footstep-stone-10.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-11",
+    "path": "shared/audio/footsteps-stone/footstep-stone-11.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-stone-12",
+    "path": "shared/audio/footsteps-stone/footstep-stone-12.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footsteps-stone-sequence",
+    "path": "shared/audio/footsteps-stone/footsteps-stone-sequence.wav",
+    "dir": "shared/audio/footsteps-stone",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-01",
+    "path": "shared/audio/footsteps-water/footstep-water-01.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-02",
+    "path": "shared/audio/footsteps-water/footstep-water-02.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-03",
+    "path": "shared/audio/footsteps-water/footstep-water-03.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-04",
+    "path": "shared/audio/footsteps-water/footstep-water-04.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-05",
+    "path": "shared/audio/footsteps-water/footstep-water-05.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-06",
+    "path": "shared/audio/footsteps-water/footstep-water-06.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "footstep-water-07",
+    "path": "shared/audio/footsteps-water/footstep-water-07.wav",
+    "dir": "shared/audio/footsteps-water",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pressure-plate-sequence",
+    "path": "shared/audio/pressure-plate/pressure-plate-sequence.wav",
+    "dir": "shared/audio/pressure-plate",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pressure-plate-thump",
+    "path": "shared/audio/pressure-plate/pressure-plate-thump.wav",
+    "dir": "shared/audio/pressure-plate",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pressure-plate",
+    "path": "shared/audio/pressure-plate/pressure-plate.wav",
+    "dir": "shared/audio/pressure-plate",
+    "type": "wav",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "character-01",
+    "path": "shared/models/character-01.glb",
+    "dir": "shared/models",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/character-01-preview.avif",
+      "assets/shared/models/character-01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "alien-rrlisqbp7r",
+    "path": "shared/models/creatures/alien-rrlisqbp7r.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/alien-rrlisqbp7r-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "alien",
+    "path": "shared/models/creatures/alien.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/alien-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "alpaking-evolved",
+    "path": "shared/models/creatures/alpaking-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/alpaking-evolved-preview.avif",
+      "assets/shared/models/creatures/alpaking-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "alpaking",
+    "path": "shared/models/creatures/alpaking.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/alpaking-preview.avif",
+      "assets/shared/models/creatures/alpaking-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "armabee-evolved",
+    "path": "shared/models/creatures/armabee-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/armabee-evolved-preview.avif",
+      "assets/shared/models/creatures/armabee-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "armabee",
+    "path": "shared/models/creatures/armabee.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/armabee-preview.avif",
+      "assets/shared/models/creatures/armabee-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "birb",
+    "path": "shared/models/creatures/birb.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/birb-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "blue-demon",
+    "path": "shared/models/creatures/blue-demon.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/blue-demon-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "bunny",
+    "path": "shared/models/creatures/bunny.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/bunny-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "cactoro-ign9lhdama",
+    "path": "shared/models/creatures/cactoro-ign9lhdama.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/cactoro-ign9lhdama-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "cactoro",
+    "path": "shared/models/creatures/cactoro.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/cactoro-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "cat",
+    "path": "shared/models/creatures/cat.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/cat-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "chicken",
+    "path": "shared/models/creatures/chicken.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/chicken-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "demon-lnfizikv4o",
+    "path": "shared/models/creatures/demon-lnfizikv4o.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/demon-lnfizikv4o-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "demon",
+    "path": "shared/models/creatures/demon.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/demon-preview.avif",
+      "assets/shared/models/creatures/demon-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dino",
+    "path": "shared/models/creatures/dino.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/dino-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dragon-evolved",
+    "path": "shared/models/creatures/dragon-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/dragon-evolved-preview.avif",
+      "assets/shared/models/creatures/dragon-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dragon",
+    "path": "shared/models/creatures/dragon.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/dragon-preview.avif",
+      "assets/shared/models/creatures/dragon-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "fish-ypeyhcimab",
+    "path": "shared/models/creatures/fish-ypeyhcimab.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/fish-ypeyhcimab-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "fish",
+    "path": "shared/models/creatures/fish.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/fish-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "frog",
+    "path": "shared/models/creatures/frog.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/frog-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "ghost-skull",
+    "path": "shared/models/creatures/ghost-skull.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/ghost-skull-preview.avif",
+      "assets/shared/models/creatures/ghost-skull-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "ghost",
+    "path": "shared/models/creatures/ghost.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/ghost-preview.avif",
+      "assets/shared/models/creatures/ghost-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "glub-evolved",
+    "path": "shared/models/creatures/glub-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/glub-evolved-preview.avif",
+      "assets/shared/models/creatures/glub-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "glub",
+    "path": "shared/models/creatures/glub.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/glub-preview.avif",
+      "assets/shared/models/creatures/glub-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "goleling-evolved",
+    "path": "shared/models/creatures/goleling-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/goleling-evolved-preview.avif",
+      "assets/shared/models/creatures/goleling-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "goleling",
+    "path": "shared/models/creatures/goleling.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/goleling-preview.avif",
+      "assets/shared/models/creatures/goleling-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "green-blob",
+    "path": "shared/models/creatures/green-blob.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/green-blob-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "green-spiky-blob",
+    "path": "shared/models/creatures/green-spiky-blob.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/green-spiky-blob-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "hywirl",
+    "path": "shared/models/creatures/hywirl.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/hywirl-preview.avif",
+      "assets/shared/models/creatures/hywirl-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "monkroose",
+    "path": "shared/models/creatures/monkroose.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/monkroose-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "mushnub-evolved",
+    "path": "shared/models/creatures/mushnub-evolved.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/mushnub-evolved-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "mushnub",
+    "path": "shared/models/creatures/mushnub.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/mushnub-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "mushroom-king",
+    "path": "shared/models/creatures/mushroom-king.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/mushroom-king-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "ninja-xgymedpftu",
+    "path": "shared/models/creatures/ninja-xgymedpftu.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/ninja-xgymedpftu-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "ninja",
+    "path": "shared/models/creatures/ninja.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/ninja-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "orc-enemy",
+    "path": "shared/models/creatures/orc-enemy.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/orc-enemy-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "orc",
+    "path": "shared/models/creatures/orc.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/orc-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "pigeon",
+    "path": "shared/models/creatures/pigeon.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/pigeon-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "pink-blob",
+    "path": "shared/models/creatures/pink-blob.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/pink-blob-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "squidle",
+    "path": "shared/models/creatures/squidle.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/squidle-preview.avif",
+      "assets/shared/models/creatures/squidle-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "tribal",
+    "path": "shared/models/creatures/tribal.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/tribal-preview.avif",
+      "assets/shared/models/creatures/tribal-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "wizard",
+    "path": "shared/models/creatures/wizard.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/wizard-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "yeti-cerhrn8hhe",
+    "path": "shared/models/creatures/yeti-cerhrn8hhe.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/yeti-cerhrn8hhe-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "yeti",
+    "path": "shared/models/creatures/yeti.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/creatures/yeti-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lily_pad_01",
+    "path": "shared/models/plants/lily_pad_01.glb",
+    "dir": "shared/models/plants",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/plants/lily_pad_01-preview.avif",
+      "assets/shared/models/plants/lily_pad_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lily_pad_02",
+    "path": "shared/models/plants/lily_pad_02.glb",
+    "dir": "shared/models/plants",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/plants/lily_pad_02-preview.avif",
+      "assets/shared/models/plants/lily_pad_02-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "anvil",
+    "path": "shared/models/props/anvil.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/anvil-preview.avif",
+      "assets/shared/models/props/anvil-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "firewood_01",
+    "path": "shared/models/props/firewood_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/firewood_01-preview.avif",
+      "assets/shared/models/props/firewood_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "firewood_02",
+    "path": "shared/models/props/firewood_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/firewood_02-preview.avif",
+      "assets/shared/models/props/firewood_02-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "garden_bridge_01",
+    "path": "shared/models/props/garden_bridge_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/garden_bridge_01-preview.avif",
+      "assets/shared/models/props/garden_bridge_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "log_01",
+    "path": "shared/models/props/log_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/log_01-preview.avif",
+      "assets/shared/models/props/log_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "log_02",
+    "path": "shared/models/props/log_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/log_02-preview.avif",
+      "assets/shared/models/props/log_02-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "log_03",
+    "path": "shared/models/props/log_03.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/log_03-preview.avif",
+      "assets/shared/models/props/log_03-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rounded_picket_fence",
+    "path": "shared/models/props/rounded_picket_fence.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/rounded_picket_fence-preview.avif",
+      "assets/shared/models/props/rounded_picket_fence-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "statue_base_01",
+    "path": "shared/models/props/statue_base_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/statue_base_01-preview.avif",
+      "assets/shared/models/props/statue_base_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "tiered_fountain_01",
+    "path": "shared/models/props/tiered_fountain_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/tiered_fountain_01-preview.avif",
+      "assets/shared/models/props/tiered_fountain_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "treasure-chest-01",
+    "path": "shared/models/props/treasure-chest-01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/treasure-chest-01-preview.avif",
+      "assets/shared/models/props/treasure-chest-01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "treasure-chest-02",
+    "path": "shared/models/props/treasure-chest-02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/treasure-chest-02-preview.avif",
+      "assets/shared/models/props/treasure-chest-02-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "walking_trail_fence",
+    "path": "shared/models/props/walking_trail_fence.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/walking_trail_fence-preview.avif",
+      "assets/shared/models/props/walking_trail_fence-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "wooden_gate_01",
+    "path": "shared/models/props/wooden_gate_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/wooden_gate_01-preview.avif",
+      "assets/shared/models/props/wooden_gate_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rock_01",
+    "path": "shared/models/rocks/rock_01.glb",
+    "dir": "shared/models/rocks",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/rocks/rock_01-preview.avif",
+      "assets/shared/models/rocks/rock_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rock_02",
+    "path": "shared/models/rocks/rock_02.glb",
+    "dir": "shared/models/rocks",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/rocks/rock_02-preview.avif",
+      "assets/shared/models/rocks/rock_02-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rock_03",
+    "path": "shared/models/rocks/rock_03.glb",
+    "dir": "shared/models/rocks",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/rocks/rock_03-preview.avif",
+      "assets/shared/models/rocks/rock_03-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rock_04",
+    "path": "shared/models/rocks/rock_04.glb",
+    "dir": "shared/models/rocks",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/rocks/rock_04-preview.avif",
+      "assets/shared/models/rocks/rock_04-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "custom_checker_local",
+    "path": "shared/shaders/custom_checker_local.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_checker_uv",
+    "path": "shared/shaders/custom_checker_uv.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_checker_world",
+    "path": "shared/shaders/custom_checker_world.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_dissolve_local",
+    "path": "shared/shaders/custom_dissolve_local.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_dissolve_uv",
+    "path": "shared/shaders/custom_dissolve_uv.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_dissolve_world",
+    "path": "shared/shaders/custom_dissolve_world.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_emissive_fresnel",
+    "path": "shared/shaders/custom_emissive_fresnel.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_fresnel",
+    "path": "shared/shaders/custom_fresnel.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_gradient",
+    "path": "shared/shaders/custom_gradient.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_material_default",
+    "path": "shared/shaders/custom_material_default.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_normal_vis",
+    "path": "shared/shaders/custom_normal_vis.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_pbr",
+    "path": "shared/shaders/custom_pbr.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_pulse",
+    "path": "shared/shaders/custom_pulse.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_texture_tint",
+    "path": "shared/shaders/custom_texture_tint.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_texture_triplanar",
+    "path": "shared/shaders/custom_texture_triplanar.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_texture_triplanar_pbr",
+    "path": "shared/shaders/custom_texture_triplanar_pbr.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_unlit_color",
+    "path": "shared/shaders/custom_unlit_color.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_water_stylized",
+    "path": "shared/shaders/custom_water_stylized.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "custom_world_stripes",
+    "path": "shared/shaders/custom_world_stripes.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "terrain",
+    "path": "shared/shaders/terrain.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "backgrounds",
+    "path": "shared/textures/backgrounds",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "Cobblestone_001_SD",
+    "path": "shared/textures/Cobblestone_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [],
+    "description": "Tightly packed, rounded-square cobblestones in a photorealistic PBR style. The stones vary from near-white to mid-gray with subtle hints of lilac, separated by dark grout seams. Suitable for stone paths, plazas, and castle courtyards. Full PBR set: COLOR, NORMAL, ROUGHNESS, AO, DISPLACEMENT."
+  },
+  {
+    "name": "Metal_Armor_Pattern_001_SD",
+    "path": "shared/textures/Metal_Armor_Pattern_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Metal_Armor_Pattern_001_SD/Metal_Armor_Pattern_001_basecolor.png"
+    ],
+    "description": "An overlapping fish-scale or dragon-scale pattern in medium gray steel, with rust-brown staining visible at the gaps between scales. The raised scale edges catch light cleanly. Use for armored surfaces, fantasy creature skin overlays, scale-mail armor props, or decorative metal cladding. Full PBR set."
+  },
+  {
+    "name": "Metal_Pattern_010_SD",
+    "path": "shared/textures/Metal_Pattern_010_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Metal_Pattern_010_SD/Metal_Pattern_010_basecolor.png"
+    ],
+    "description": "An isometric cube / rhombus lattice in dark gray steel. The geometric pattern has an Art Deco or modernist architectural feel \u2014 repeating \"3D cube illusion\" diamond shapes outlined by fine dark lines. Includes an opacity map that exposes the lattice frame as a cutout, making it suitable for transparent grate or panel effects. Full PBR set with opacity."
+  },
+  {
+    "name": "noise",
+    "path": "shared/textures/noise",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "Stylized_Bark_003_SD",
+    "path": "shared/textures/Stylized_Bark_003_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Bark_003_SD/Stylized_Bark_003_basecolor.png"
+    ],
+    "description": "A chunky, vertical tree bark texture. It features deep, stylized grooves and wide ridges that look like they were carved with a thick brush. The color palette includes varying shades of brown and ochre, with bright edge-highlights that give the bark a rugged, \"gnarled\" appearance suitable for an enchanted forest."
+  },
+  {
+    "name": "Stylized_Bricks_004_SD",
+    "path": "shared/textures/Stylized_Bricks_004_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Bricks_004_SD/Stylized_Bricks_004_basecolor.png"
+    ],
+    "description": "Irregular, roughly-cut stone bricks in warm gray-brown, heavily colonized by patches of bright green moss growing in and around the mortar joints. More organic and weathered than Bricks 005 \u2014 ideal for ruins, dungeon walls, or outdoor fantasy structures where visible overgrowth adds age. Stylized PBR set."
+  },
+  {
+    "name": "Stylized_Bricks_005_SD",
+    "path": "shared/textures/Stylized_Bricks_005_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Bricks_005_SD/Stylized_Bricks_005_basecolor.png"
+    ],
+    "description": "Classic red-toned fantasy bricks. The bricks are slightly \"wonky\"\u2014not perfectly straight\u2014with thick, light-colored mortar. Each brick has a unique hand-painted highlight to make it look individual."
+  },
+  {
+    "name": "Stylized_Cliff_Rock_001_SD",
+    "path": "shared/textures/Stylized_Cliff_Rock_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Cliff_Rock_001_SD/Stylized_Cliff_Rock_001_basecolor.jpg"
+    ],
+    "description": "A rock face texture defined by flat, \"faceted\" planes. It looks like a painting of a cliffside where the artist used a palette knife\u2014sharp edges, clean color transitions, and deep crevices. It lacks fine-grain noise, making it look very clean and readable for game environments."
+  },
+  {
+    "name": "Stylized_Cliff_Rock_005_SD",
+    "path": "shared/textures/Stylized_Cliff_Rock_005_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Cliff_Rock_005_SD/Stylized_Cliff_Rock_005_basecolor.png"
+    ],
+    "description": "A more vertical rock texture designed for canyon walls. It features heavy horizontal \"sedimentary\" layers that have been simplified into thick, chunky bands with soft color gradients."
+  },
+  {
+    "name": "Stylized_Cliff_Rock_006_SD",
+    "path": "shared/textures/Stylized_Cliff_Rock_006_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Cliff_Rock_006_SD/Stylized_Cliff_Rock_006_basecolor.png"
+    ],
+    "description": "Sharp, angular rock faces with flat planes and jagged edges. The texture uses \"edge highlighting\" to define the silhouette of the rocks, making them look like they were sculpted for a modern 3D platformer."
+  },
+  {
+    "name": "Stylized_Feathers_002_SD",
+    "path": "shared/textures/Stylized_Feathers_002_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Feathers_002_SD/Stylized_Feathers_002_basecolor.png"
+    ],
+    "description": "A soft, organic texture consisting of overlapping bird feathers. The individual barbs of the feathers are simplified into clean lines, creating a plumage effect that looks soft and fluffy rather than hyper-detailed."
+  },
+  {
+    "name": "Stylized_Ground_002_SD",
+    "path": "shared/textures/Stylized_Ground_002_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Ground_002_SD/Stylized_Ground_002_basecolor.png"
+    ],
+    "description": "A soft, earthy floor texture that looks like packed dirt or forest floor. It has a smooth, almost velvety finish with subtle patches of lighter and darker brown. The highlights are very soft, giving it a clean, \"baked\" look without the noise of realistic gravel or pebbles."
+  },
+  {
+    "name": "Stylized_Metal_Pattern_001_SD",
+    "path": "shared/textures/Stylized_Metal_Pattern_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Metal_Pattern_001_SD/Stylized_Metal_Pattern_001_basecolor.png"
+    ],
+    "description": "A decorative metal grate or panel with an embossed geometric pattern. It looks like forged fantasy armor or a dungeon door, featuring deep shadows in the recesses and bright \"metal\" highlights on the raised patterns."
+  },
+  {
+    "name": "Stylized_Metal_Plates_001_SD",
+    "path": "shared/textures/Stylized_Metal_Plates_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Metal_Plates_001_SD/Stylized_Metal_Plates_001_basecolor.png"
+    ],
+    "description": "Heavy, dark iron plates bolted together with oversized rivets. The metal has a soft, painted sheen rather than a realistic metallic reflection, featuring scuffs and scratches that look like brushstrokes."
+  },
+  {
+    "name": "Stylized_Metal_Shingles_001_SD",
+    "path": "shared/textures/Stylized_Metal_Shingles_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Metal_Shingles_001_SD/Stylized_Metal_Shingles_001_basecolor.png"
+    ],
+    "description": "Overlapping metallic tiles, perhaps for a high-end fantasy tower or a steampunk structure. The shingles have a bluish-grey steel tint with bright \"edge-wear\" painted onto the bottom lips."
+  },
+  {
+    "name": "Stylized_Rocks_003_SD",
+    "path": "shared/textures/Stylized_Rocks_003_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Rocks_003_SD/Stylized_Rocks_003_basecolor.png"
+    ],
+    "description": "Individual, chunky boulders and stones embedded in a ground surface. The rocks have a very \"smooth-yet-sharp\" look, with clear directional lighting painted into the texture to define their 3D volume."
+  },
+  {
+    "name": "Stylized_Roof_001_SD",
+    "path": "shared/textures/Stylized_Roof_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Roof_001_SD/Stylized_Roof_001_basecolor.png"
+    ],
+    "description": "A thick, bundled straw or thatch texture. It is arranged in heavy, rounded layers that give the impression of a cozy, rustic roof. The \"strands\" are thick and simplified, resembling painted golden-yellow bundles."
+  },
+  {
+    "name": "Stylized_Roof_Tiles_001_SD",
+    "path": "shared/textures/Stylized_Roof_Tiles_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Roof_Tiles_001_SD/Stylized_Roof_Tiles_001_basecolor.png"
+    ],
+    "description": "Rounded barrel (mission-style) clay roof tiles in warm rust and dark brown, with painted-on weathering \u2014 yellow-green staining and variable color per tile. The rounded profile is clearly stylized. Pairs well with Mediterranean, Spanish colonial, or warm-climate fantasy architecture. Stylized PBR set."
+  },
+  {
+    "name": "Stylized_Stone_Floor_001b_SD",
+    "path": "shared/textures/Stylized_Stone_Floor_001b_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Stone_Floor_001b_SD/Stylized_Stone_Floor_001b_basecolor.png"
+    ],
+    "description": "A variation of the basic stone floor with a lighter, creamier color palette. The stones are tightly packed with very thin grout lines, giving a bright and airy feel to the environment."
+  },
+  {
+    "name": "Stylized_Stone_Floor_007_SD",
+    "path": "shared/textures/Stylized_Stone_Floor_007_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Stone_Floor_007_SD/Stylized_Stone_Floor_007_basecolor.png"
+    ],
+    "description": "Large, rectangular slabs of stone. This texture is more formal and \"built,\" ideal for a castle courtyard or a temple floor. It features very clean lines and minimal weathering."
+  },
+  {
+    "name": "Stylized_Stone_Floor_009_SD",
+    "path": "shared/textures/Stylized_Stone_Floor_009_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Stone_Floor_009_SD/Stylized_Stone_Floor_009_basecolor.png"
+    ],
+    "description": "Similar to 010 but with a more \"cracked\" and weathered appearance. The stones are flatter, and the gaps between them are filled with subtle moss or dirt, giving it an older, more ancient ruin aesthetic."
+  },
+  {
+    "name": "Stylized_Stone_Floor_010_SD",
+    "path": "shared/textures/Stylized_Stone_Floor_010_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Stone_Floor_010_SD/Stylized_Stone_Floor_010_basecolor.png"
+    ],
+    "description": "Large, irregular paving stones set in dark earth or grout. The stones have smooth, rounded tops and \"painterly\" highlights on the edges, creating a clean, walkable path for a fantasy village."
+  },
+  {
+    "name": "Stylized_Terracotta_Tiles_001_SD",
+    "path": "shared/textures/Stylized_Terracotta_Tiles_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Terracotta_Tiles_001_SD/Stylized_Terracotta_Tiles_001_basecolor.png"
+    ],
+    "description": "Bright orange-red clay tiles arranged in a grid or diamond pattern. They have a warm, Mediterranean feel with soft rounded corners and subtle \"baking\" stains painted into the clay."
+  },
+  {
+    "name": "Stylized_Thatched_Roof_003_SD",
+    "path": "shared/textures/Stylized_Thatched_Roof_003_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Thatched_Roof_003_SD/Stylized_Thatched_Roof_003_basecolor.png"
+    ],
+    "description": "Dense golden-yellow thatch composed of tight horizontal bundles of straw, with individual strand detail visible. More naturalistic than the other thatched roof textures \u2014 less cartoon-exaggerated, suitable where a grounded look is needed within a stylized world. Stylized PBR set."
+  },
+  {
+    "name": "Stylized_Wall_002_SD",
+    "path": "shared/textures/Stylized_Wall_002_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wall_002_SD/Stylized_Wall_002_basecolor.png"
+    ],
+    "description": "A plaster or stucco wall texture with a slightly uneven, \"wobbly\" surface. It includes subtle cracks and color variations (warm off-white or beige) that suggest a hand-painted architectural finish common in stylized RPG environments."
+  },
+  {
+    "name": "Stylized_Wooden_Roof_001_SD",
+    "path": "shared/textures/Stylized_Wooden_Roof_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wooden_Roof_001_SD/Stylized_Wooden_Roof_001_basecolor.png"
+    ],
+    "description": "Composed of overlapping wooden shingles that vary slightly in size and rotation. The texture has a weathered but whimsical feel, with visible wood grain and small nicks at the bottom of each shingle, typical of a medieval fantasy cottage."
+  },
+  {
+    "name": "Stylized_Wood_Floor_001_SD",
+    "path": "shared/textures/Stylized_Wood_Floor_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wood_Floor_001_SD/Stylized_Wood_Floor_001_basecolor.png"
+    ],
+    "description": "A polished, interior wooden parquet or plank floor. The finish is smoother than the outdoor versions, with a soft specular glow that suggests a well-maintained tavern or castle room."
+  },
+  {
+    "name": "Stylized_Wood_Planks_001_SD",
+    "path": "shared/textures/Stylized_Wood_Planks_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wood_Planks_001_SD/Stylized_Wood_Planks_001_basecolor.jpg"
+    ],
+    "description": "Classic hand-painted floor or wall planks. These include painted-on nails or rivets at the ends of the boards. The wood grain is simplified into long, sweeping strokes, and the boards vary in tone to create a vibrant, non-uniform surface that feels lived-in and cozy."
+  },
+  {
+    "name": "Stylized_Wood_Planks_003_SD",
+    "path": "shared/textures/Stylized_Wood_Planks_003_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wood_Planks_003_SD/Stylized_Wood_Planks_003_basecolor.png"
+    ],
+    "description": "A clean, \"World of Warcraft\" style flooring. It features wide, horizontal wooden boards with exaggerated grain lines and soft beveled edges. The colors are warm browns with highlights on the edges to give them a \"chunky,\" hand-carved look."
+  },
+  {
+    "name": "Stylized_Wood_Shingles_001_SD",
+    "path": "shared/textures/Stylized_Wood_Shingles_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wood_Shingles_001_SD/Stylized_Wood_Tiles_001_basecolor.jpg"
+    ],
+    "description": "Overlapping wooden roof tiles with a very distinct hand-painted feel. Each shingle has vertical grain lines and slight imperfections, like chips or rounded corners, painted in. The shadows beneath each tile are exaggerated to make the roof layers \"pop\" from a distance."
+  },
+  {
+    "name": "Stylized_Wood_Wall_001_SD",
+    "path": "shared/textures/Stylized_Wood_Wall_001_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/Stylized_Wood_Wall_001_SD/Stylized_Wood_Wall_001_basecolor.png"
+    ],
+    "description": "Vertical wooden planks used for siding. Unlike the floor planks, these are more rustic with larger gaps and prominent \"knots\" in the wood, painted with high-contrast shadows to make the depth pop."
+  },
+  {
+    "name": "White_Marble_006_SD",
+    "path": "shared/textures/White_Marble_006_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [
+      "assets/shared/textures/White_Marble_006_SD/White_Marble_006_basecolor.png"
+    ],
+    "description": "Clean, light white marble with thin diagonal gray-blue veining. The veins are fine and sparse, giving a high-end minimal look. Not stylized \u2014 full PBR fidelity."
+  },
+  {
+    "name": "Wood_plancks_006_handpainted_SD",
+    "path": "shared/textures/Wood_plancks_006_handpainted_SD",
+    "dir": "shared/textures",
+    "type": "texture_set",
+    "previews": [],
+    "description": ""
+  }
+]

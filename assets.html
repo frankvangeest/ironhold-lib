@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ironhold — Asset Browser</title>
+    <meta name="description" content="Ironhold engine asset browser. Browse models, textures, and audio.">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-sidebar: #0f0f16;
+            --bg-card: #12121a;
+            --bg-card-hover: #1a1a26;
+            --border-card: rgba(255, 255, 255, 0.06);
+            --border-card-hover: rgba(139, 92, 246, 0.4);
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.25);
+            --accent-secondary: #6d28d9;
+            --surface-glass: rgba(255, 255, 255, 0.03);
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+            --shadow-card-hover: 0 8px 40px rgba(139, 92, 246, 0.15), 0 4px 24px rgba(0, 0, 0, 0.5);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Background glow ── */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -40%;
+            left: -20%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(ellipse, rgba(139, 92, 246, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Layout ── */
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-card);
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(12px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color var(--transition);
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            font-size: 0.9rem;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .layout-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Sidebar ── */
+        aside {
+            width: 280px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-card);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 1.5rem 1rem;
+        }
+
+        .sidebar-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            padding-left: 0.5rem;
+        }
+
+        .folder-tree {
+            list-style: none;
+        }
+
+        .folder-item {
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2px;
+        }
+
+        .folder-item:hover {
+            background: var(--surface-glass);
+            color: var(--text-primary);
+        }
+
+        .folder-item.active {
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .folder-item.sub {
+            margin-left: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .folder-icon {
+            opacity: 0.6;
+        }
+
+        /* ── Main Content ── */
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .breadcrumb span {
+            color: var(--text-secondary);
+        }
+
+        .breadcrumb-sep {
+            opacity: 0.4;
+        }
+
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* ── Asset Card ── */
+        .asset-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: all var(--transition);
+            box-shadow: var(--shadow-card);
+        }
+
+        .asset-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-card-hover);
+            box-shadow: var(--shadow-card-hover);
+        }
+
+        .asset-preview {
+            aspect-ratio: 1;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            place-items: center;
+        }
+
+        .asset-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .asset-preview.audio-preview {
+            background: linear-gradient(135deg, #1e1e2e, #12121a);
+        }
+
+        .audio-icon {
+            font-size: 3rem;
+            opacity: 0.2;
+        }
+
+        .asset-info {
+            padding: 1.25rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .asset-name {
+            font-weight: 600;
+            font-size: 1rem;
+            word-break: break-all;
+        }
+
+        .asset-type {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent);
+            background: rgba(139, 92, 246, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            align-self: flex-start;
+        }
+
+        .asset-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ── Audio Player ── */
+        .audio-player {
+            width: 100%;
+            height: 32px;
+            margin-top: auto;
+            border-radius: 4px;
+        }
+
+        /* ── Search ── */
+        .search-container {
+            max-width: 300px;
+            width: 100%;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--surface-glass);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 1rem 0.6rem 2.5rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all var(--transition);
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.4;
+        }
+
+        /* ── Modal ── */
+        #modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            place-items: center;
+            padding: 2rem;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card-hover);
+            border-radius: 24px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+
+        .close-modal:hover { opacity: 1; }
+
+        .modal-body h2 { margin-bottom: 1rem; }
+        .modal-body p { line-height: 1.6; color: var(--text-secondary); margin-bottom: 1.5rem; }
+        .modal-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+        .modal-previews img { width: 100%; border-radius: 12px; border: 1px solid var(--border-card); }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-card); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="header-left">
+            <a href="index.html" class="logo-row">
+                <div class="logo-icon">⚔</div>
+                <h1>Ironhold</h1>
+            </a>
+            <nav class="header-nav">
+                <a href="index.html" class="nav-link">Projects</a>
+                <a href="assets.html" class="nav-link active">Assets</a>
+            </nav>
+        </div>
+        <div class="search-container">
+            <input type="text" id="search-input" class="search-input" placeholder="Search assets...">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        </div>
+    </header>
+
+    <div class="layout-container">
+        <aside>
+            <div class="sidebar-title">Categories</div>
+            <ul class="folder-tree" id="folder-tree">
+                <!-- Folders will be injected here -->
+            </ul>
+        </aside>
+
+        <main id="main-content">
+            <div class="breadcrumb" id="breadcrumb">
+                <span>Assets</span>
+            </div>
+            <div class="asset-grid" id="asset-grid">
+                <!-- Assets will be injected here -->
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="modal-content">
+            <div class="close-modal" id="close-modal">✕</div>
+            <div class="modal-body" id="modal-body">
+                <!-- Modal content injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let assets = [];
+        let folders = new Set();
+        let currentFolder = null;
+
+        async function init() {
+            try {
+                const response = await fetch('assets_manifest.json');
+                assets = await response.json();
+                
+                // Extract folders
+                assets.forEach(asset => {
+                    folders.add(asset.dir);
+                });
+
+                renderFolderTree();
+                renderAssets();
+
+                document.getElementById('search-input').addEventListener('input', (e) => {
+                    renderAssets(e.target.value);
+                });
+
+                document.getElementById('close-modal').addEventListener('click', () => {
+                    document.getElementById('modal-overlay').style.display = 'none';
+                });
+            } catch (err) {
+                console.error("Failed to load assets:", err);
+            }
+        }
+
+        function renderFolderTree() {
+            const treeEl = document.getElementById('folder-tree');
+            treeEl.innerHTML = '';
+
+            const sortedFolders = Array.from(folders).sort();
+            
+            // "All Assets" item
+            const allItem = document.createElement('li');
+            allItem.className = 'folder-item' + (!currentFolder ? ' active' : '');
+            allItem.innerHTML = '📁 All Assets';
+            allItem.onclick = () => {
+                currentFolder = null;
+                updateView();
+            };
+            treeEl.appendChild(allItem);
+
+            sortedFolders.forEach(folder => {
+                const item = document.createElement('li');
+                const depth = folder.split('/').length - 1;
+                item.className = 'folder-item' + (currentFolder === folder ? ' active' : '');
+                if (depth > 0) item.classList.add('sub');
+                item.style.paddingLeft = (depth * 1) + 'rem';
+                item.innerHTML = `📁 ${folder.split('/').pop()}`;
+                item.title = folder;
+                item.onclick = () => {
+                    currentFolder = folder;
+                    updateView();
+                };
+                treeEl.appendChild(item);
+            });
+        }
+
+        function updateView() {
+            renderFolderTree();
+            renderAssets();
+            updateBreadcrumb();
+        }
+
+        function updateBreadcrumb() {
+            const bc = document.getElementById('breadcrumb');
+            bc.innerHTML = '<span>Assets</span>';
+            if (currentFolder) {
+                currentFolder.split('/').forEach(part => {
+                    bc.innerHTML += ` <span class="breadcrumb-sep">/</span> <span>${part}</span>`;
+                });
+            }
+        }
+
+        function renderAssets(query = '') {
+            const grid = document.getElementById('asset-grid');
+            grid.innerHTML = '';
+
+            const filtered = assets.filter(asset => {
+                const matchesFolder = !currentFolder || asset.dir === currentFolder;
+                const matchesQuery = !query || asset.name.toLowerCase().includes(query.toLowerCase()) || asset.description.toLowerCase().includes(query.toLowerCase());
+                return matchesFolder && matchesQuery;
+            });
+
+            filtered.forEach(asset => {
+                const card = document.createElement('div');
+                card.className = 'asset-card';
+                
+                let previewHtml = '';
+                if (asset.previews.length > 0) {
+                    previewHtml = `<img src="${asset.previews[0]}" alt="${asset.name}" loading="lazy">`;
+                } else if (asset.type === 'wav' || asset.type === 'mp3') {
+                    previewHtml = `<div class="audio-icon">♪</div>`;
+                    card.classList.add('audio-card');
+                } else {
+                    previewHtml = `<div class="audio-icon" style="opacity: 0.1">?</div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="asset-preview ${asset.type === 'wav' || asset.type === 'mp3' ? 'audio-preview' : ''}">
+                        ${previewHtml}
+                    </div>
+                    <div class="asset-info">
+                        <div class="asset-type">${asset.type}</div>
+                        <div class="asset-name">${asset.name}</div>
+                        <div class="asset-desc">${asset.description || 'No description available.'}</div>
+                        ${(asset.type === 'wav' || asset.type === 'mp3') ? `<audio controls class="audio-player"><source src="assets/${asset.path}" type="audio/${asset.type === 'wav' ? 'wav' : 'mpeg'}"></audio>` : ''}
+                    </div>
+                `;
+
+                card.onclick = (e) => {
+                    if (e.target.tagName !== 'AUDIO') {
+                        showModal(asset);
+                    }
+                };
+                grid.appendChild(card);
+            });
+        }
+
+        function showModal(asset) {
+            const modal = document.getElementById('modal-overlay');
+            const body = document.getElementById('modal-body');
+            
+            let previewsHtml = '';
+            asset.previews.forEach(p => {
+                previewsHtml += `<img src="${p}" alt="Preview">`;
+            });
+
+            body.innerHTML = `
+                <h2>${asset.name}</h2>
+                <div class="asset-type" style="margin-bottom: 1rem">${asset.type}</div>
+                <p>${asset.description || 'No description available.'}</p>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem">Path: assets/${asset.path}</div>
+                <div class="modal-previews">
+                    ${previewsHtml}
+                </div>
+            `;
+
+            modal.style.display = 'grid';
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

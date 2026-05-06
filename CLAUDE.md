@@ -96,6 +96,7 @@ Python CLI tools live in `tools/`. Always run them from the repo root.
 | `tools/avif2png/convert.py` | Batch-convert AVIF preview images to PNG |
 | `tools/glb_inspector/inspect_glb.py` | Inspect a GLB for exact node names, animation clips, and materials before authoring RON |
 | `tools/glb_preview/preview.py` | Render a 3/4-view preview PNG for GLB models using Blender headless |
+| `tools/build_asset_manifest.py` | After adding, removing, or renaming any asset files — regenerates `assets_manifest.json` for the `assets.html` browser |
 
 Each tool has its own `CLAUDE.md` with full usage examples. Run `python <tool> --help` for a quick reference.
 
@@ -105,6 +106,9 @@ python tools/asset_checker/check.py
 
 # Also check for unreferenced files in assets/shared/
 python tools/asset_checker/check.py --orphans
+
+# Regenerate the asset browser manifest after adding/removing asset files
+python tools/build_asset_manifest.py
 ```
 
 ## Planning

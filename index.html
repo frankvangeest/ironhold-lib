@@ -110,6 +110,35 @@
             background-clip: text;
         }
 
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color var(--transition);
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+        }
+
         .subtitle {
             font-size: 0.9rem;
             color: var(--text-secondary);
@@ -457,9 +486,15 @@
 <body>
 
     <header>
-        <div class="logo-row">
-            <div class="logo-icon">⚔</div>
-            <h1>Ironhold</h1>
+        <div class="header-top">
+            <div class="logo-row">
+                <div class="logo-icon">⚔</div>
+                <h1>Ironhold</h1>
+            </div>
+            <nav class="header-nav">
+                <a href="index.html" class="nav-link active">Projects</a>
+                <a href="assets.html" class="nav-link">Assets</a>
+            </nav>
         </div>
         <p class="subtitle">Project Gallery — Select a demo to launch</p>
         <div class="search-wrapper">

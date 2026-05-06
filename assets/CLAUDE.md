@@ -44,6 +44,14 @@ Visual descriptions of all shared textures live in `shared/textures/texture-desc
 python tools/asset_checker/check.py
 ```
 
+**After adding, removing, or renaming any asset files**, regenerate the asset browser manifest so `assets.html` stays current:
+
+```bash
+python tools/build_asset_manifest.py
+```
+
+This writes `assets_manifest.json` at the repo root. The asset browser (`assets.html`) reads this file to populate its model, texture, and audio listings. Commit the updated manifest alongside any asset changes.
+
 **Noise textures and terrain heightmaps** are generated with the texture tool — see `tools/texture_gen/CLAUDE.md` for noise types and heightmap parameters. Each project's heightmap lives at `projects/{name}/terrain/heightmap.png` and must have a `.json` manifest alongside it.
 
 **AVIF preview images** in `assets/shared/models/avif/` can be converted to PNG with:
