@@ -2,6 +2,8 @@
 
 Welcome! If you are an AI assistant or an agent working on this project, please read this document first. It contains critical context, architectural choices, and hard-learned lessons about this codebase.
 
+> **CRITICAL**: For in-depth architectural details, planning workflows, Python tooling, and instructions on adding new projects, you **must** also read the `CLAUDE.md` files (starting with the one in the root).
+
 ## 1. Technology Stack
 - **Language**: Rust
 - **Game Engine**: Bevy `0.18.0` `(CRITICAL: Always rely on 0.18 API changes, such as AsBindGroup behaviors and resource initialization.)`
@@ -9,11 +11,19 @@ Welcome! If you are an AI assistant or an agent working on this project, please 
 - **UI / Debug**: `bevy_egui` for the inspector/editor GUI.
 - **Serialization**: `ron` (Rusty Object Notation) for scenes and configurations.
 
-## 2. Project Architecture (Workspace)
+## 2. Project Architecture & Patterns
 This is a Cargo workspace with the following core crates:
 - `ironhold_core/`: The main library containing game logic, rendering pipelines, terrain generation, and the `scene_manager`. This code must remain platform-agnostic.
 - `ironhold_native/`: The desktop executable runner.
 - `ironhold_web/`: The WebAssembly (WASM) runner.
+
+### Web Architecture (Multi-Page)
+- **`index.html`**: The project gallery and dark-themed selection dashboard.
+- **`play.html`**: The dedicated game runner (accepts `?project=<name>` as a parameter).
+Ensure you do not break this routing when modifying the web build.
+
+### Data-Driven Game Loop
+Game behavior is authored in RON files (`logic/rules.ron`, `logic/state_machine.ron`). Do not hardcode logic in Rust if it belongs in the data schema. The engine uses a strict pipeline: **Message → Interpreter → Action → Executor**.
 
 ## 3. Critical Coding Rules & Quirks
 
