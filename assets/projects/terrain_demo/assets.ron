@@ -19,8 +19,8 @@
   },
 
   audio: {
-    "click": "shared/audio/menu-button-click.wav",
-    "walk": "shared/audio/walk.wav",
-    "run_grass": "shared/audio/run-grass.wav",
+    "click":     (path: "shared/audio/menu-button-click.wav", volume: 1.0),
+    "walk":      (path: "shared/audio/walk.wav",              volume: 1.0),
+    "run_grass": (path: "shared/audio/run-grass.wav",         volume: 1.0),
   },
 )
