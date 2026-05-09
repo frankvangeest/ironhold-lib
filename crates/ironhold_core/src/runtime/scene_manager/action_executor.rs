@@ -102,6 +102,12 @@ pub fn action_executor_system(
                     format!("{}_{}", prefab, spawn_params.registry.counter)
                 });
 
+                if position.is_some() && spawn_point.is_some() {
+                    warn!(
+                        "Action::Spawn '{}': both position and spawn_point are set; position wins",
+                        spawn_id
+                    );
+                }
                 let (sx, sy, sz) = if let Some(pos) = position {
                     pos
                 } else if let Some(ref name) = spawn_point {

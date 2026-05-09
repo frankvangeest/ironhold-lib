@@ -52,6 +52,12 @@ pub fn check_project_loaded(
             info!("Loading state machine from: {}", resolved);
             asset_server.load::<StateMachineAsset>(resolved)
         });
+        if config.rules_path.is_some() && config.state_machine_path.is_some() {
+            warn!(
+                "Project has both rules_path and state_machine_path set; \
+                 rules.ron is NOT loaded when state_machine_path is present — remove rules_path to silence this"
+            );
+        }
         let asset_catalog_handle = config.asset_catalog.as_ref().map(|p| {
             let resolved = resolve_project_path(&project_root.0, p);
             info!("Loading asset catalog from: {}", resolved);

@@ -45,17 +45,25 @@ fn match_rules(
     logic_state: &LogicState,
     action_queue: &mut ActionQueue,
 ) {
+    if loaded_rules.0.is_empty() {
+        return;
+    }
+    let mut matched = false;
     for rule in &loaded_rules.0 {
         let state_matches = match &rule.when {
             None => true,
             Some(required) => required == &logic_state.0,
         };
         if rule.on == event_name && state_matches {
+            matched = true;
             for action in &rule.do_actions {
                 info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
                 action_queue.push(action.clone());
             }
         }
+    }
+    if !matched {
+        debug!("No rule matched event {:?} (state: {:?})", event_name, logic_state.0);
     }
 }
 
