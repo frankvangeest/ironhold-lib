@@ -157,7 +157,7 @@ File extension must be `.scene.ron`.
 | `terrain` | `Option<TerrainConfigV2>` | Heightmap-based terrain |
 | `spawn_points` | `Map<String, (f32,f32,f32)>` | Named world-space positions |
 | `entities` | `Vec<SceneEntityDef>` | Prefab instances to spawn |
-| `ui` | `Vec<UiElementDefV2>` | UI elements (buttons, labels, rects) to show in this scene |
+| `ui` | `Vec<UiNodeDef>` | UI elements (buttons, labels, rects) to show in this scene |
 | `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
@@ -204,22 +204,20 @@ File extension must be `.scene.ron`.
   ],
 
   ui: [
-    (
-      kind: "button",
+    Button((
       id: "dance_button",
       text: "Dance",
       action: "ui.dance",
       position: (20.0, 60.0),
       size: (150.0, 40.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (20.0, 100.0),
       size: (150.0, 40.0),
-    ),
+    )),
   ],
 )
 ```
@@ -360,23 +358,47 @@ Run `python tools/texture_gen/generate.py --help` for all options. `tools/textur
 ```
 The engine only reads the PNG — the JSON is for tooling only.
 
-### UI Elements (`UiElementDefV2`) ✅
+### UI Elements (`UiNodeDef`) ✅
 
 UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** DOM elements — clicks in browser automation must use canvas pixel coordinates.
 
+Each element is a typed RON enum variant. Typos in field names fail at parse time with a clear error message.
+
+#### `Button((...))`
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `kind` | `String` | required | `"button"` — interactive; `"label"` — non-interactive text; `"rect"` — non-interactive coloured rectangle |
 | `id` | `String` | required | Unique identifier within the scene |
-| `text` | `String` | `""` | Display text (ignored for `kind: "rect"`) |
-| `action` | `String` | `""` | For `kind: "button"`: trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
+| `text` | `String` | required | Button label text |
+| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
-| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill/background colour as linear RGBA. No effect on `kind: "label"`. |
-| `absolute` | `bool` | `false` | In panel mode: position this element absolutely relative to the panel's top-left instead of flowing in the column |
-| `align` | `UiTextAlign` | `Center` | Horizontal text alignment for `kind: "label"`. Values: `Left`, `Center`, `Right`. Ignored for buttons and rects. |
-| `bind` | `Option<String>` | `None` | For `kind: "label"`: name of a `GameVariables` key. When set, the label text is replaced every frame with the variable's current value. |
-| `format` | `Option<String>` | `None` | Template used with `bind`. `"{}"` is replaced by the variable value (e.g. `"Score: {}"`). Defaults to the raw value when omitted. |
+| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as linear RGBA |
+| `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+
+#### `Label((...))`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `text` | `String` | `""` | Static display text (overridden at runtime when `bind` is set) |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
+| `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
+| `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value |
+| `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+
+#### `Rect((...))`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
+| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill colour as linear RGBA |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
 

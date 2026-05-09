@@ -57,20 +57,18 @@
   ],
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "flycam_position",
       text: "X: 0.0  Y: 0.0  Z: 0.0",
       position: (16.0, 16.0),
       size: (320.0, 32.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (16.0, 60.0),
       size: (120.0, 40.0),
-    ),
+    )),
   ],
 )

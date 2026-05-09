@@ -12,33 +12,29 @@
   ),
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "game_over_title",
       text: "YOU DIED",
       size: (300.0, 60.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "game_over_score",
       text: "Score  0",
       bind: "score",
       format: "Score  {}",
       size: (300.0, 40.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "retry_button",
       text: "Try Again",
       action: "ui.retry",
       size: (300.0, 60.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "game_over_quit_button",
       text: "Quit Game",
       action: "ui.game_over_quit",
       size: (300.0, 60.0),
-    ),
+    )),
   ],
 )

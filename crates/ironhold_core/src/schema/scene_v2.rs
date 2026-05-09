@@ -57,7 +57,7 @@ pub struct GameSceneV2 {
     #[serde(default)]
     pub entities: Vec<SceneEntityDef>,
     #[serde(default)]
-    pub ui: Vec<UiElementDefV2>,
+    pub ui: Vec<UiNodeDef>,
     /// When set, the UI elements are laid out in a centered panel box instead of
     /// using absolute positioning. `position` on each element is ignored in this mode.
     #[serde(default)]
@@ -104,17 +104,12 @@ impl GameSceneV2 {
         }
         let mut ui_ids = std::collections::HashSet::new();
         for elem in &self.ui {
-            if elem.id.is_empty() {
+            let id = elem.id();
+            if id.is_empty() {
                 return Err("UI element has empty id".to_string());
             }
-            if !ui_ids.insert(elem.id.as_str()) {
-                return Err(format!("Duplicate UI element id: \"{}\"", elem.id));
-            }
-            if elem.kind != "button" && elem.kind != "label" && elem.kind != "rect" {
-                return Err(format!(
-                    "UI element \"{}\" has unknown kind \"{}\" (expected \"button\", \"label\", or \"rect\")",
-                    elem.id, elem.kind
-                ));
+            if !ui_ids.insert(id) {
+                return Err(format!("Duplicate UI element id: \"{}\"", id));
             }
         }
         let mut wl_ids = std::collections::HashSet::new();
@@ -293,52 +288,128 @@ pub struct SceneTransformV2 {
 
 fn one_vec3() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 
+/// A typed UI node definition. The enum variant determines the element type;
+/// each variant only exposes fields that are relevant to that type.
+#[derive(Deserialize, Debug, Clone)]
+pub enum UiNodeDef {
+    Button(ButtonDef),
+    Label(LabelDef),
+    Rect(RectDef),
+}
+
+impl UiNodeDef {
+    pub fn id(&self) -> &str {
+        match self {
+            UiNodeDef::Button(d) => &d.id,
+            UiNodeDef::Label(d) => &d.id,
+            UiNodeDef::Rect(d) => &d.id,
+        }
+    }
+    pub fn size(&self) -> (f32, f32) {
+        match self {
+            UiNodeDef::Button(d) => d.size,
+            UiNodeDef::Label(d) => d.size,
+            UiNodeDef::Rect(d) => d.size,
+        }
+    }
+    pub fn position(&self) -> (f32, f32) {
+        match self {
+            UiNodeDef::Button(d) => d.position,
+            UiNodeDef::Label(d) => d.position,
+            UiNodeDef::Rect(d) => d.position,
+        }
+    }
+    pub fn absolute(&self) -> bool {
+        match self {
+            UiNodeDef::Button(d) => d.absolute,
+            UiNodeDef::Label(d) => d.absolute,
+            UiNodeDef::Rect(d) => d.absolute,
+        }
+    }
+    pub fn align(&self) -> UiTextAlign {
+        match self {
+            UiNodeDef::Button(d) => d.align,
+            UiNodeDef::Label(d) => d.align,
+            UiNodeDef::Rect(_) => UiTextAlign::Center,
+        }
+    }
+}
+
+/// An interactive button that emits a `UiEvent::ButtonPressed` trigger when clicked.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct UiElementDefV2 {
-    /// "button" renders an interactive button; "label" renders non-interactive text;
-    /// "rect" renders a non-interactive colored rectangle (no text, no interaction).
-    pub kind: String,
+pub struct ButtonDef {
     pub id: String,
-    #[serde(default)]
     pub text: String,
-    /// Action trigger for kind="button". "ui." prefix is stripped when firing.
-    /// May be omitted (defaults to empty) for kind="label".
+    /// Trigger string; `"ui."` prefix is stripped when firing (e.g. `"ui.dance"` → `"dance"`).
     #[serde(default)]
     pub action: String,
-    /// Absolute position in pixels.
-    /// In non-panel mode: position relative to the screen root.
-    /// In panel mode: ignored unless `absolute: true`, in which case position is
-    /// relative to the panel's top-left corner.
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
-    #[serde(default = "default_ui_element_size")]
+    #[serde(default = "default_ui_size")]
     pub size: (f32, f32),
-    /// Fill color as linear RGBA (0.0–1.0).
-    /// For `kind: "rect"`: the fill color. Defaults to dark grey if omitted.
-    /// For `kind: "button"`: the background color. Defaults to dark grey `(0.15, 0.15, 0.15, 1.0)`.
-    /// Has no effect on `kind: "label"`.
-    #[serde(default = "default_ui_element_color")]
+    /// Background colour as linear RGBA (0.0–1.0). Default: dark grey.
+    #[serde(default = "default_ui_dark_color")]
     pub color: (f32, f32, f32, f32),
-        /// When `true` inside a `ui_panel` scene, this element is positioned absolutely
-    /// relative to the panel's top-left corner using its `position` field, instead of
-    /// being placed in the vertical flex flow. Use this for precisely placed map
-    /// elements or decorative overlays within a fixed-size panel.
-    #[serde(default)]
-    pub absolute: bool,
-    /// Horizontal text alignment for `kind: "label"`. Ignored for buttons and rects.
-    /// Defaults to `Center`.
+    /// Horizontal text alignment. Default: `Center`.
     #[serde(default)]
     pub align: UiTextAlign,
-    /// For `kind: "label"`: name of the `GameVariables` key to read each frame.
-    /// When set, the label text is replaced at runtime with the variable's current value.
+    /// In panel mode: position this element absolutely relative to the panel's
+    /// top-left corner using its `position` field instead of flowing in the column.
+    #[serde(default)]
+    pub absolute: bool,
+}
+
+/// Non-interactive text display. Can be data-bound to a `GameVariables` key.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LabelDef {
+    pub id: String,
+    #[serde(default)]
+    pub text: String,
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width and height in pixels. Default: `(120.0, 32.0)`.
+    #[serde(default = "default_ui_size")]
+    pub size: (f32, f32),
+    /// Horizontal text alignment. Default: `Center`.
+    #[serde(default)]
+    pub align: UiTextAlign,
+    /// Name of a `GameVariables` key. When set, the label text is replaced every
+    /// frame with the variable's current value.
     #[serde(default)]
     pub bind: Option<String>,
-    /// Format template used with `bind`. `"{}"` is substituted with the variable value.
-    /// Example: `"Score: {}"`. Defaults to the raw value when omitted.
+    /// Template used with `bind`. `"{}"` is replaced by the variable value
+    /// (e.g. `"Score: {}"`). Defaults to the raw value when omitted.
     #[serde(default)]
     pub format: Option<String>,
+    /// In panel mode: position this element absolutely relative to the panel's
+    /// top-left corner using its `position` field instead of flowing in the column.
+    #[serde(default)]
+    pub absolute: bool,
+}
+
+/// Non-interactive coloured rectangle. Used for decorative backgrounds, dividers, and map tiles.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RectDef {
+    pub id: String,
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width and height in pixels. Default: `(120.0, 32.0)`.
+    #[serde(default = "default_ui_size")]
+    pub size: (f32, f32),
+    /// Fill colour as linear RGBA (0.0–1.0). Default: dark grey.
+    #[serde(default = "default_ui_dark_color")]
+    pub color: (f32, f32, f32, f32),
+    /// In panel mode: position this element absolutely relative to the panel's
+    /// top-left corner using its `position` field instead of flowing in the column.
+    #[serde(default)]
+    pub absolute: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
@@ -376,8 +447,8 @@ pub struct UiPanelDef {
 fn default_panel_bg() -> (f32, f32, f32, f32) { (0.1, 0.1, 0.1, 0.95) }
 fn default_panel_padding() -> f32 { 20.0 }
 fn default_panel_gap() -> f32 { 12.0 }
-fn default_ui_element_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
-fn default_ui_element_size() -> (f32, f32) { (120.0, 32.0) }
+fn default_ui_size() -> (f32, f32) { (120.0, 32.0) }
+fn default_ui_dark_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
 
 /// A text annotation anchored to a 3-D world position.
 /// The engine projects `translation` through the active Camera3d each frame

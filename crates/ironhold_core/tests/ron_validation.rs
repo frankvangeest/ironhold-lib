@@ -1,5 +1,5 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
-use ironhold_core::schema::scene_v2::GameSceneV2;
+use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::stats::StatCatalog;
@@ -276,7 +276,7 @@ fn test_game_scene_v2_validates_ok() {
                 ( id: "player", prefab: "player_warrior", transform: () ),
             ],
             ui: [
-                ( kind: "button", id: "quit_btn", text: "Quit", action: "quit", size: (120.0, 40.0) ),
+                Button(( id: "quit_btn", text: "Quit", action: "quit", size: (120.0, 40.0) )),
             ],
         )
     "#;
@@ -320,8 +320,8 @@ fn test_game_scene_v2_duplicate_ui_ids_is_invalid() {
             schema_version: 2,
             entities: [],
             ui: [
-                ( kind: "button", id: "btn", text: "A", size: (100.0, 40.0) ),
-                ( kind: "button", id: "btn", text: "B", size: (100.0, 40.0) ),
+                Button(( id: "btn", text: "A", size: (100.0, 40.0) )),
+                Button(( id: "btn", text: "B", size: (100.0, 40.0) )),
             ],
         )
     "#;
@@ -330,18 +330,18 @@ fn test_game_scene_v2_duplicate_ui_ids_is_invalid() {
 }
 
 #[test]
-fn test_game_scene_v2_unknown_ui_kind_is_invalid() {
+fn test_game_scene_v2_unknown_ui_variant_is_parse_error() {
     let ron_str = r#"
         (
             schema_version: 2,
             entities: [],
             ui: [
-                ( kind: "checkbox", id: "opt", text: "Enable", size: (100.0, 40.0) ),
+                Checkbox(( id: "opt", text: "Enable", size: (100.0, 40.0) )),
             ],
         )
     "#;
-    let scene: GameSceneV2 = from_str(ron_str).unwrap();
-    assert!(scene.validate().is_err());
+    let result: Result<GameSceneV2, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown UI variant should be rejected at parse time");
 }
 
 #[test]
@@ -645,11 +645,12 @@ fn test_game_scene_v2_directional_light_num_cascades_defaults_to_none() {
 #[test]
 fn test_ui_label_align_defaults_to_center() {
     let ron_str = r#"(schema_version: 2, entities: [], ui: [
-        ( kind: "label", id: "lbl", text: "hi", size: (100.0, 30.0) )
+        Label(( id: "lbl", text: "hi", size: (100.0, 30.0) ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("label without align should parse");
+    let UiNodeDef::Label(lbl) = &scene.ui[0] else { panic!("expected Label variant") };
     assert_eq!(
-        scene.ui[0].align,
+        lbl.align,
         ironhold_core::schema::scene_v2::UiTextAlign::Center,
         "omitting align should default to Center",
     );
@@ -664,33 +665,36 @@ fn test_ui_label_align_explicit_variants() {
     ] {
         let ron_str = format!(
             r#"(schema_version: 2, entities: [], ui: [
-                ( kind: "label", id: "lbl", text: "hi", size: (100.0, 30.0), align: {variant} )
+                Label(( id: "lbl", text: "hi", size: (100.0, 30.0), align: {variant} ))
             ])"#,
         );
         let scene: GameSceneV2 = from_str(&ron_str)
             .unwrap_or_else(|e| panic!("align: {variant} failed to parse: {e}"));
-        assert_eq!(&scene.ui[0].align, expected, "align: {variant} should deserialize correctly");
+        let UiNodeDef::Label(lbl) = &scene.ui[0] else { panic!("expected Label") };
+        assert_eq!(&lbl.align, expected, "align: {variant} should deserialize correctly");
     }
 }
 
-// ── UiElementDefV2.size default ──────────────────────────────────────────────
+// ── UiNodeDef.size default ───────────────────────────────────────────────────
 
 #[test]
 fn test_ui_element_size_defaults_to_120_32() {
     let ron_str = r#"(schema_version: 2, entities: [], ui: [
-        ( kind: "button", id: "btn", text: "Go", action: "start" )
+        Button(( id: "btn", text: "Go", action: "start" ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("button without size should parse");
-    assert_eq!(scene.ui[0].size, (120.0, 32.0), "size should default to (120, 32)");
+    let UiNodeDef::Button(btn) = &scene.ui[0] else { panic!("expected Button") };
+    assert_eq!(btn.size, (120.0, 32.0), "size should default to (120, 32)");
 }
 
 #[test]
 fn test_ui_element_size_explicit() {
     let ron_str = r#"(schema_version: 2, entities: [], ui: [
-        ( kind: "label", id: "lbl", text: "Score", size: (200.0, 50.0) )
+        Label(( id: "lbl", text: "Score", size: (200.0, 50.0) ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("label with explicit size should parse");
-    assert_eq!(scene.ui[0].size, (200.0, 50.0));
+    let UiNodeDef::Label(lbl) = &scene.ui[0] else { panic!("expected Label") };
+    assert_eq!(lbl.size, (200.0, 50.0));
 }
 
 // ── UiPanelDef.background_color default ──────────────────────────────────────

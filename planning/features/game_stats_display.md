@@ -23,38 +23,36 @@ Without display primitives, the only way to show stat state is through static `L
 
 ### New UI node types in `GameSceneV2`
 
-The scene's `ui` section gains two new node kinds alongside existing `Panel`, `Label`, `Button`:
+The scene's `ui` section gains two new node variants alongside existing `Rect`, `Label`, `Button`:
 
 #### `StatBar`
 
 A horizontal (or vertical) bar that fills proportionally to `current / max` of a named stat.
 
 ```ron
-(
-    kind: StatBar((
-        stat_key: "health",
-        orientation: Horizontal,       // Horizontal | Vertical
-        width: 200.0,
-        height: 20.0,
-        fill_color:       (r:0.85, g:0.15, b:0.15, a:1.0),  // red
-        background_color: (r:0.25, g:0.10, b:0.10, a:1.0),  // dark red
-        border_color:     (r:1.0,  g:1.0,  b:1.0,  a:0.4),
-        border_width: 1.0,
-        show_label: false,
-        show_value: false,             // "75 / 100" text overlay
-        use_effective_value: true,     // Phase 2: show effective value (with buffs)
-    )),
-    position: Anchor(bottom_left, (x: 20.0, y: 20.0)),
-)
+StatBar((
+    id: "health_bar",
+    stat_key: "health",
+    orientation: Horizontal,           // Horizontal | Vertical
+    position: (20.0, 20.0),
+    size: (200.0, 20.0),
+    fill_color:       (0.85, 0.15, 0.15, 1.0),  // red
+    background_color: (0.25, 0.10, 0.10, 1.0),  // dark red
+    border_color:     (1.0,  1.0,  1.0,  0.4),
+    border_width: 1.0,
+    show_label: false,
+    show_value: false,                 // "75 / 100" text overlay
+    use_effective_value: true,         // Phase 2: show effective value (with buffs)
+))
 ```
 
 Threshold colour bands (optional): the bar automatically shifts fill colour when the stat's effective value crosses designer-specified percentages — no event wiring required:
 
 ```ron
 color_bands: [
-    ( above_percent: 0.5, color: (r:0.85, g:0.15, b:0.15, a:1.0) ),  // red (normal)
-    ( above_percent: 0.25, color: (r:1.0,  g:0.55, b:0.0,  a:1.0) ),  // orange (low)
-    ( above_percent: 0.0,  color: (r:0.6,  g:0.0,  b:0.0,  a:1.0) ),  // dark red (critical)
+    ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),  // red (normal)
+    ( above_percent: 0.25, color: (1.0,  0.55, 0.0,  1.0) ),  // orange (low)
+    ( above_percent: 0.0,  color: (0.6,  0.0,  0.0,  1.0) ),  // dark red (critical)
 ],
 ```
 
@@ -63,30 +61,29 @@ color_bands: [
 A panel listing multiple stats as labelled rows, useful for RPG character screens or debug overlays.
 
 ```ron
-(
-    kind: StatSpread((
-        stats: ["health", "mana", "stamina", "strength", "agility"],
-        layout: Rows,          // Rows | Columns | Radar (future)
-        label_width: 80.0,
-        bar_width: 120.0,
-        row_height: 22.0,
-        row_gap: 4.0,
-        label_color: (r:1.0, g:1.0, b:1.0, a:0.8),
-        bar_fill_color: (r:0.3, g:0.6, b:1.0, a:1.0),
-        bar_background_color: (r:0.1, g:0.1, b:0.25, a:1.0),
-        show_values: true,
-    )),
-    position: Anchor(top_right, (x: -20.0, y: 20.0)),
-)
+StatSpread((
+    id: "stat_panel",
+    stats: ["health", "mana", "stamina", "strength", "agility"],
+    layout: Rows,              // Rows | Columns | Radar (future)
+    position: (16.0, 60.0),
+    label_width: 80.0,
+    bar_width: 120.0,
+    row_height: 22.0,
+    row_gap: 4.0,
+    label_color: (1.0, 1.0, 1.0, 0.8),
+    bar_fill_color: (0.3, 0.6, 1.0, 1.0),
+    bar_background_color: (0.1, 0.1, 0.25, 1.0),
+    show_values: true,
+))
 ```
 
-### Schema types (`schema/scene.rs`)
+### Schema types (`schema/scene_v2.rs`)
 
 ```rust
-pub enum UiNodeKind {
-    Panel(PanelDef),
-    Label(LabelDef),
-    Button(ButtonDef),
+pub enum UiNodeDef {
+    Button(ButtonDef),        // existing
+    Label(LabelDef),          // existing
+    Rect(RectDef),            // existing
     StatBar(StatBarDef),      // new
     StatSpread(StatSpreadDef), // new
 }
@@ -143,7 +140,7 @@ A `StatBar` does not listen to events — it polls `LoadedStats` directly each f
 ## Tasks
 
 - [ ] `StatBarDef`, `StatSpreadDef`, `ColorBand`, `BarOrientation`, `StatSpreadLayout` schema types
-- [ ] Add `StatBar` and `StatSpread` variants to `UiNodeKind`
+- [ ] Add `StatBar` and `StatSpread` variants to `UiNodeDef`
 - [ ] Scene loader: spawn `StatBarComponent` and `StatSpreadComponent` nodes
 - [ ] `stat_bar_update_system` — change-detection poll, width/colour update
 - [ ] `stat_spread_update_system` — rebuild row values on change

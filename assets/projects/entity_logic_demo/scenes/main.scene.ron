@@ -92,8 +92,7 @@
   ],
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "score",
       text: "Score: 0",
       position: (16.0, 16.0),
@@ -101,14 +100,13 @@
       align: Left,
       bind: "score",
       format: "Score: {}",
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "hint",
       text: "Walk to the score zone for points",
       position: (16.0, 52.0),
       size: (600.0, 28.0),
       align: Left,
-    ),
+    )),
   ],
 )

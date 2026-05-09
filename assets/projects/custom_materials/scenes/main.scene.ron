@@ -344,27 +344,24 @@
   ],
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "flycam_position",
       text: "X: 0.0  Y: 0.0  Z: 0.0",
       position: (16.0, 16.0),
       size: (340.0, 32.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "title_label",
       text: "Custom Materials Demo — WASD + mouse to fly",
       position: (16.0, 56.0),
       size: (480.0, 32.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (16.0, 100.0),
       size: (120.0, 40.0),
-    ),
+    )),
   ],
 )

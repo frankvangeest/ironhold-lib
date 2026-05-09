@@ -5,29 +5,26 @@
   entities: [],
 
   ui: [
-    (
-      kind: "button",
+    Button((
       id: "start_game_button",
       text: "Start Game",
       action: "ui.start_game",
       position: (100.0, 100.0),
       size: (300.0, 65.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (100.0, 200.0),
       size: (300.0, 65.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "test_actions_button",
       text: "Test Actions",
       action: "ui.test_actions",
       position: (100.0, 300.0),
       size: (300.0, 65.0),
-    ),
+    )),
   ],
 )

@@ -928,22 +928,22 @@ pub fn spawn_scene_v2(
                     ))
                     .with_children(|parent| {
                         for el in &ui_elements {
-                            let h_justify = ui_justify(el.align);
-                            let node = if el.absolute {
+                            let h_justify = ui_justify(el.align());
+                            let node = if el.absolute() {
                                 Node {
-                                    width: Val::Px(el.size.0),
-                                    height: Val::Px(el.size.1),
+                                    width: Val::Px(el.size().0),
+                                    height: Val::Px(el.size().1),
                                     position_type: PositionType::Absolute,
-                                    left: Val::Px(el.position.0),
-                                    top: Val::Px(el.position.1),
+                                    left: Val::Px(el.position().0),
+                                    top: Val::Px(el.position().1),
                                     justify_content: h_justify,
                                     align_items: AlignItems::Center,
                                     ..default()
                                 }
                             } else {
                                 Node {
-                                    width: Val::Px(el.size.0),
-                                    height: Val::Px(el.size.1),
+                                    width: Val::Px(el.size().0),
+                                    height: Val::Px(el.size().1),
                                     justify_content: h_justify,
                                     align_items: AlignItems::Center,
                                     ..default()
@@ -971,13 +971,13 @@ pub fn spawn_scene_v2(
             root_cmd.with_children(|parent| {
                 for el in &scene.ui {
                     let node = Node {
-                        width: Val::Px(el.size.0),
-                        height: Val::Px(el.size.1),
-                        justify_content: ui_justify(el.align),
+                        width: Val::Px(el.size().0),
+                        height: Val::Px(el.size().1),
+                        justify_content: ui_justify(el.align()),
                         align_items: AlignItems::Center,
                         position_type: PositionType::Absolute,
-                        left: Val::Px(el.position.0),
-                        top: Val::Px(el.position.1),
+                        left: Val::Px(el.position().0),
+                        top: Val::Px(el.position().1),
                         ..default()
                     };
                     spawn_ui_element_node(parent, el, node);
@@ -1002,68 +1002,69 @@ pub fn spawn_scene_v2(
 
 fn spawn_ui_element_node(
     parent: &mut ChildSpawnerCommands,
-    el: &crate::schema::scene_v2::UiElementDefV2,
+    el: &crate::schema::scene_v2::UiNodeDef,
     node: Node,
 ) {
-    if el.kind == "rect" {
-        // Non-interactive colored rectangle — no border, no text, no interaction.
-        let (r, g, b, a) = el.color;
-        parent.spawn((
-            Name::new(format!("Rect: {}", el.id)),
-            node,
-            BackgroundColor(Color::srgba(r, g, b, a)),
-        ));
-        return;
-    }
-
-    if el.kind == "label" {
-        let el_id = el.id.clone();
-        parent
-            .spawn((
-                Name::new(format!("Label: {}", el.text)),
+    use crate::schema::scene_v2::UiNodeDef;
+    match el {
+        UiNodeDef::Rect(rect) => {
+            let (r, g, b, a) = rect.color;
+            parent.spawn((
+                Name::new(format!("Rect: {}", rect.id)),
                 node,
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
-            ))
-            .with_children(|parent| {
-                let mut text_cmd = parent.spawn((
-                    Name::new(format!("Text: {}", el.text)),
-                    Text::new(el.text.clone()),
-                    TextFont { font_size: 22.0, ..default() },
-                    TextColor(Color::WHITE),
-                ));
-                if el_id == "flycam_position" {
-                    text_cmd.insert(crate::capabilities::flycam::FlyCamPositionLabel);
-                }
-                if let Some(key) = &el.bind {
-                    text_cmd.insert(crate::DynamicLabel {
-                        key: key.clone(),
-                        format: el.format.clone(),
-                    });
-                }
-            });
-    } else {
-        let (r, g, b, a) = el.color;
-        let bg_color = Color::srgba(r, g, b, a);
-        let trigger = el.action.strip_prefix("ui.").unwrap_or(&el.action).to_string();
-        let mut btn_node = node;
-        btn_node.border = UiRect::all(Val::Px(5.0));
-        parent
-            .spawn((
-                Name::new(format!("Button: {}", el.text)),
-                Button,
-                btn_node,
-                BorderColor::from(Color::BLACK),
-                BackgroundColor(bg_color),
-                UiAction::Trigger(trigger),
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    Name::new(format!("Text: {}", el.text)),
-                    Text::new(el.text.clone()),
-                    TextFont { font_size: 26.0, ..default() },
-                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                ));
-            });
+                BackgroundColor(Color::srgba(r, g, b, a)),
+            ));
+        }
+        UiNodeDef::Label(label) => {
+            let label_id = label.id.clone();
+            parent
+                .spawn((
+                    Name::new(format!("Label: {}", label.text)),
+                    node,
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
+                ))
+                .with_children(|parent| {
+                    let mut text_cmd = parent.spawn((
+                        Name::new(format!("Text: {}", label.text)),
+                        Text::new(label.text.clone()),
+                        TextFont { font_size: 22.0, ..default() },
+                        TextColor(Color::WHITE),
+                    ));
+                    if label_id == "flycam_position" {
+                        text_cmd.insert(crate::capabilities::flycam::FlyCamPositionLabel);
+                    }
+                    if let Some(key) = &label.bind {
+                        text_cmd.insert(crate::DynamicLabel {
+                            key: key.clone(),
+                            format: label.format.clone(),
+                        });
+                    }
+                });
+        }
+        UiNodeDef::Button(btn) => {
+            let (r, g, b, a) = btn.color;
+            let bg_color = Color::srgba(r, g, b, a);
+            let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action).to_string();
+            let mut btn_node = node;
+            btn_node.border = UiRect::all(Val::Px(5.0));
+            parent
+                .spawn((
+                    Name::new(format!("Button: {}", btn.text)),
+                    Button,
+                    btn_node,
+                    BorderColor::from(Color::BLACK),
+                    BackgroundColor(bg_color),
+                    UiAction::Trigger(trigger),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        Name::new(format!("Text: {}", btn.text)),
+                        Text::new(btn.text.clone()),
+                        TextFont { font_size: 26.0, ..default() },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    ));
+                });
+        }
     }
 }
 

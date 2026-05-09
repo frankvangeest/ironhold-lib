@@ -24,29 +24,26 @@
   ],
 
   ui: [
-    (
-      kind: "button",
+    Button((
       id: "start_game_button",
       text: "Start Game",
       action: "ui.start_game",
       position: (100.0, 100.0),
       size: (300.0, 65.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "options_button",
       text: "Options",
       action: "ui.options",
       position: (100.0, 185.0),
       size: (300.0, 65.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (100.0, 270.0),
       size: (300.0, 65.0),
-    ),
+    )),
   ],
 )

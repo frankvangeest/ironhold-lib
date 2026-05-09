@@ -449,40 +449,36 @@
   ],
 
   ui: [
-    (
-      kind: "button",
+    Button((
       id: "pause_button",
       text: "Menu",
       action: "ui.toggle_pause",
       position: (16.0, 16.0),
       size: (80.0, 36.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "health_label",
       text: "HP  100",
       bind: "health",
       format: "HP  {}",
       position: (16.0, 62.0),
       size: (180.0, 32.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "score_label",
       text: "Score  0",
       bind: "score",
       format: "Score  {}",
       position: (16.0, 98.0),
       size: (180.0, 32.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "status_label",
       text: "",
       bind: "status",
       format: "{}",
       position: (16.0, 134.0),
       size: (220.0, 32.0),
-    ),
+    )),
   ],
 )

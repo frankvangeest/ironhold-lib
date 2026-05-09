@@ -76,25 +76,22 @@
   ),
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "title_label",
       text: "Primitive World",
       size: (300.0, 55.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "start_game_button",
       text: "Play",
       action: "ui.start_game",
       size: (300.0, 65.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       size: (300.0, 65.0),
-    ),
+    )),
   ],
 )

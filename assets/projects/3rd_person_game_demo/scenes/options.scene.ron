@@ -15,99 +15,87 @@
 
   ui: [
     // --- Controls ---
-    (
-      kind: "label",
+    Label((
       id: "controls_heading",
       text: "Controls",
       position: (100.0, 30.0),
       size: (300.0, 35.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "ctrl_move",
       text: "Move:    WASD  /  Left Stick",
       position: (100.0, 70.0),
       size: (400.0, 30.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "ctrl_camera",
       text: "Camera:  Mouse  /  Right Stick",
       position: (100.0, 105.0),
       size: (400.0, 30.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "ctrl_sprint",
       text: "Sprint:  Shift  /  Left Trigger",
       position: (100.0, 140.0),
       size: (400.0, 30.0),
-    ),
-    (
-      kind: "label",
+    )),
+    Label((
       id: "ctrl_dance",
       text: "Dance:   In-game button",
       position: (100.0, 175.0),
       size: (400.0, 30.0),
-    ),
+    )),
 
     // --- Audio ---
-    (
-      kind: "label",
+    Label((
       id: "audio_heading",
       text: "Volume",
       position: (100.0, 230.0),
       size: (300.0, 35.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "vol_mute",
       text: "Mute",
       action: "ui.set_volume_0",
       position: (100.0, 270.0),
       size: (90.0, 50.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "vol_25",
       text: "25%",
       action: "ui.set_volume_25",
       position: (200.0, 270.0),
       size: (90.0, 50.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "vol_50",
       text: "50%",
       action: "ui.set_volume_50",
       position: (300.0, 270.0),
       size: (90.0, 50.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "vol_75",
       text: "75%",
       action: "ui.set_volume_75",
       position: (400.0, 270.0),
       size: (90.0, 50.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "vol_100",
       text: "100%",
       action: "ui.set_volume_100",
       position: (500.0, 270.0),
       size: (90.0, 50.0),
-    ),
+    )),
 
     // --- Navigation ---
-    (
-      kind: "button",
+    Button((
       id: "back_button",
       text: "< Back",
       action: "ui.back_to_start_menu",
       position: (100.0, 360.0),
       size: (300.0, 65.0),
-    ),
+    )),
   ],
 )

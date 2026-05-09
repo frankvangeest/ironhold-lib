@@ -82,37 +82,33 @@
   ],
 
   ui: [
-    (
-      kind: "button",
+    Button((
       id: "pause_button",
       text: "Pause",
       action: "ui.pause",
       position: (20.0, 20.0),
       size: (200.0, 40.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "dance_button",
       text: "Dance",
       action: "ui.dance",
       position: (20.0, 60.0),
       size: (200.0, 40.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "spawn_enemy_button",
       text: "Spawn Enemy",
       action: "ui.spawn_enemy",
       position: (20.0, 100.0),
       size: (200.0, 40.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit",
       action: "ui.quit",
       position: (20.0, 140.0),
       size: (200.0, 40.0),
-    ),
+    )),
   ],
 )

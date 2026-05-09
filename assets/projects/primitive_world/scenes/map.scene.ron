@@ -26,330 +26,296 @@
   ui: [
 
     // ── Title ─────────────────────────────────────────────────────────────────
-    (
-      kind: "label",
+    Label((
       id: "map_title",
       text: "WORLD MAP",
       absolute: true,
       position: (18.0, 10.0),
       size: (224.0, 26.0),
-    ),
+    )),
 
     // ── Decorative divider below title ────────────────────────────────────────
-    (
-      kind: "rect",
+    Rect((
       id: "divider_top",
       absolute: true,
       position: (18.0, 40.0),
       size: (224.0, 2.0),
       color: (0.30, 0.26, 0.18, 1.0),
-    ),
+    )),
 
     // ── Map canvas border (1 px wider/taller than grass, draws as thin frame) ─
-    (
-      kind: "rect",
+    Rect((
       id: "map_border",
       absolute: true,
       position: (17.0, 45.0),
       size: (226.0, 322.0),
       color: (0.32, 0.28, 0.20, 1.0),
-    ),
+    )),
 
     // ── Grass background ──────────────────────────────────────────────────────
-    (
-      kind: "rect",
+    Rect((
       id: "grass",
       absolute: true,
       position: (18.0, 46.0),
       size: (224.0, 320.0),
       color: (0.16, 0.33, 0.11, 1.0),
-    ),
+    )),
 
     // ── Paths ─────────────────────────────────────────────────────────────────
     // North segment: player start (z=8) to village entry (z=-8)
-    (
-      kind: "rect",
+    Rect((
       id: "path_n",
       absolute: true,
       position: (127.0, 54.0),
       size: (6.0, 128.0),
       color: (0.55, 0.50, 0.40, 1.0),
-    ),
+    )),
     // South segment: village entry (z=-8) to pond edge (z=-22)
-    (
-      kind: "rect",
+    Rect((
       id: "path_s",
       absolute: true,
       position: (127.0, 182.0),
       size: (6.0, 112.0),
       color: (0.52, 0.47, 0.38, 1.0),
-    ),
+    )),
 
     // ── Pond ──────────────────────────────────────────────────────────────────
     // World: Cuboid(7, -, 12) centered at (0, -, -28). Z range: -22 to -34, clipped to -31.
-    (
-      kind: "rect",
+    Rect((
       id: "pond",
       absolute: true,
       position: (102.0, 294.0),
       size: (56.0, 72.0),
       color: (0.18, 0.42, 0.78, 1.0),
-    ),
+    )),
 
     // ── Bridge (path over pond) ────────────────────────────────────────────────
-    (
-      kind: "rect",
+    Rect((
       id: "bridge",
       absolute: true,
       position: (127.0, 294.0),
       size: (6.0, 72.0),
       color: (0.60, 0.54, 0.44, 1.0),
-    ),
+    )),
 
     // ── Trees ─────────────────────────────────────────────────────────────────
     // NW pine (-10, z=3)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_nw",
       absolute: true,
       position: (45.0, 89.0),
       size: (10.0, 10.0),
       color: (0.08, 0.44, 0.08, 1.0),
-    ),
+    )),
     // NE pine (10, z=3)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_ne",
       absolute: true,
       position: (205.0, 89.0),
       size: (10.0, 10.0),
       color: (0.08, 0.44, 0.08, 1.0),
-    ),
+    )),
     // W round (-12, z=-6)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_sw",
       absolute: true,
       position: (29.0, 161.0),
       size: (10.0, 10.0),
       color: (0.11, 0.52, 0.11, 1.0),
-    ),
+    )),
     // E pine (13, z=-8)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_se",
       absolute: true,
       position: (229.0, 177.0),
       size: (10.0, 10.0),
       color: (0.08, 0.44, 0.08, 1.0),
-    ),
+    )),
     // Far SW pine (-10, z=-20)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_far_sw",
       absolute: true,
       position: (45.0, 273.0),
       size: (10.0, 10.0),
       color: (0.08, 0.44, 0.08, 1.0),
-    ),
+    )),
     // Far SE pine (10, z=-20)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_far_se",
       absolute: true,
       position: (205.0, 273.0),
       size: (10.0, 10.0),
       color: (0.08, 0.44, 0.08, 1.0),
-    ),
+    )),
     // Pond-edge W round (-2, z=-23)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_pond_w",
       absolute: true,
       position: (109.0, 297.0),
       size: (10.0, 10.0),
       color: (0.11, 0.52, 0.11, 1.0),
-    ),
+    )),
     // Pond-edge E round (3, z=-23)
-    (
-      kind: "rect",
+    Rect((
       id: "tree_pond_e",
       absolute: true,
       position: (149.0, 297.0),
       size: (10.0, 10.0),
       color: (0.11, 0.52, 0.11, 1.0),
-    ),
+    )),
 
     // ── Fence (x=-8, z=-10 to -18) ────────────────────────────────────────────
-    (
-      kind: "rect",
+    Rect((
       id: "fence",
       absolute: true,
       position: (64.0, 198.0),
       size: (4.0, 64.0),
       color: (0.55, 0.43, 0.28, 1.0),
-    ),
+    )),
 
     // ── Buildings ─────────────────────────────────────────────────────────────
     // Cottage (-5, z=-15)
-    (
-      kind: "rect",
+    Rect((
       id: "cottage",
       absolute: true,
       position: (80.0, 228.0),
       size: (20.0, 20.0),
       color: (0.65, 0.58, 0.48, 1.0),
-    ),
+    )),
     // Small house (7, z=-12)
-    (
-      kind: "rect",
+    Rect((
       id: "house_small",
       absolute: true,
       position: (177.0, 205.0),
       size: (18.0, 18.0),
       color: (0.65, 0.58, 0.48, 1.0),
-    ),
+    )),
 
     // ── Small props ───────────────────────────────────────────────────────────
     // Barrels (-3, z=-11.5)
-    (
-      kind: "rect",
+    Rect((
       id: "barrels",
       absolute: true,
       position: (103.0, 207.0),
       size: (6.0, 6.0),
       color: (0.45, 0.28, 0.14, 1.0),
-    ),
+    )),
     // Well (3, z=-7)
-    (
-      kind: "rect",
+    Rect((
       id: "well",
       absolute: true,
       position: (150.0, 170.0),
       size: (8.0, 8.0),
       color: (0.38, 0.35, 0.32, 1.0),
-    ),
+    )),
 
     // ── Rocks ─────────────────────────────────────────────────────────────────
     // (-5, z=4.5)
-    (
-      kind: "rect",
+    Rect((
       id: "rock_nw",
       absolute: true,
       position: (87.0, 79.0),
       size: (6.0, 6.0),
       color: (0.50, 0.48, 0.45, 1.0),
-    ),
+    )),
     // (5, z=3.5)
-    (
-      kind: "rect",
+    Rect((
       id: "rock_ne",
       absolute: true,
       position: (167.0, 87.0),
       size: (6.0, 6.0),
       color: (0.50, 0.48, 0.45, 1.0),
-    ),
+    )),
     // (9, z=-3)
-    (
-      kind: "rect",
+    Rect((
       id: "rock_e",
       absolute: true,
       position: (199.0, 139.0),
       size: (6.0, 6.0),
       color: (0.50, 0.48, 0.45, 1.0),
-    ),
+    )),
 
     // ── Lamp posts (warm yellow dots) ─────────────────────────────────────────
     // (-1.8, z=4)
-    (
-      kind: "rect",
+    Rect((
       id: "lamp_l_01",
       absolute: true,
       position: (114.0, 84.0),
       size: (4.0, 4.0),
       color: (0.95, 0.85, 0.28, 1.0),
-    ),
+    )),
     // (1.8, z=4)
-    (
-      kind: "rect",
+    Rect((
       id: "lamp_r_01",
       absolute: true,
       position: (142.0, 84.0),
       size: (4.0, 4.0),
       color: (0.95, 0.85, 0.28, 1.0),
-    ),
+    )),
     // (-1.8, z=-2)
-    (
-      kind: "rect",
+    Rect((
       id: "lamp_l_02",
       absolute: true,
       position: (114.0, 132.0),
       size: (4.0, 4.0),
       color: (0.95, 0.85, 0.28, 1.0),
-    ),
+    )),
     // (1.8, z=-2)
-    (
-      kind: "rect",
+    Rect((
       id: "lamp_r_02",
       absolute: true,
       position: (142.0, 132.0),
       size: (4.0, 4.0),
       color: (0.95, 0.85, 0.28, 1.0),
-    ),
+    )),
 
     // ── Floating orbs (bright accent dots — they hover above ground in 3D) ────
     // Gold orb (-6, z=-14)
-    (
-      kind: "rect",
+    Rect((
       id: "orb_gold",
       absolute: true,
       position: (78.0, 226.0),
       size: (8.0, 8.0),
       color: (0.92, 0.72, 0.10, 1.0),
-    ),
+    )),
     // Violet orb (8, z=-18)
-    (
-      kind: "rect",
+    Rect((
       id: "orb_violet",
       absolute: true,
       position: (190.0, 258.0),
       size: (8.0, 8.0),
       color: (0.58, 0.10, 0.88, 1.0),
-    ),
+    )),
     // Copper torus (0, z=-20)
-    (
-      kind: "rect",
+    Rect((
       id: "orb_copper",
       absolute: true,
       position: (126.0, 274.0),
       size: (10.0, 10.0),
       color: (0.82, 0.46, 0.20, 1.0),
-    ),
+    )),
 
     // ── Player position marker ────────────────────────────────────────────────
     // Bright yellow dot at spawn point (0, z=8)
-    (
-      kind: "rect",
+    Rect((
       id: "player_dot",
       absolute: true,
       position: (126.0, 50.0),
       size: (8.0, 8.0),
       color: (1.0, 0.90, 0.10, 1.0),
-    ),
+    )),
 
     // ── Bottom divider ────────────────────────────────────────────────────────
-    (
-      kind: "rect",
+    Rect((
       id: "divider_bot",
       absolute: true,
       position: (18.0, 369.0),
       size: (224.0, 2.0),
       color: (0.30, 0.26, 0.18, 1.0),
-    ),
+    )),
 
     // ── Close button ─────────────────────────────────────────────────────────
-    (
-      kind: "button",
+    Button((
       id: "close_map",
       text: "[ M ]  Close Map",
       action: "ui.toggle_map",
@@ -357,7 +323,7 @@
       position: (18.0, 375.0),
       size: (224.0, 38.0),
       color: (0.11, 0.09, 0.07, 1.0),
-    ),
+    )),
 
   ],
 )

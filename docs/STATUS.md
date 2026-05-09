@@ -164,18 +164,24 @@ Two authoring workflows are supported. A project uses one or the other via its `
   ```
 
 ## UI v1 Scope (authoring)
-- Supported element: `Button { text, action: Trigger(String), position: Option<(f32, f32)> }`
+- Supported elements: `Button((...))`, `Label((...))`, `Rect((...))` — typed RON enum variants; unknown variants are rejected at parse time.
 - Example:
   ```ron
   ui: [
-    Button(
-      text: "Start Game", 
-      action: Trigger("start_game"), 
-      position: (100.0, 100.0) // Optional, defaults to centered when omitted
-    ),
-    Button(
-      text: "Quit",       
-      action: Trigger("quit")
-    ),
+    Button((
+      id: "start_button",
+      text: "Start Game",
+      action: "ui.start_game",
+      position: (100.0, 100.0),
+      size: (300.0, 65.0),
+    )),
+    Label((
+      id: "score_label",
+      text: "Score  0",
+      bind: "score",
+      format: "Score  {}",
+      position: (16.0, 16.0),
+      size: (180.0, 32.0),
+    )),
   ]
   ```

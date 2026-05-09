@@ -12,25 +12,22 @@
   ),
 
   ui: [
-    (
-      kind: "label",
+    Label((
       id: "pause_title",
       text: "Paused",
       size: (260.0, 50.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "resume_button",
       text: "Resume",
       action: "ui.resume",
       size: (260.0, 60.0),
-    ),
-    (
-      kind: "button",
+    )),
+    Button((
       id: "quit_button",
       text: "Quit Game",
       action: "ui.pause_quit",
       size: (260.0, 60.0),
-    ),
+    )),
   ],
 )
