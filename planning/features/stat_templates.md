@@ -1,6 +1,6 @@
 # Feature: Stat Templates — Per-Prefab Instance Stats
 
-_Status: Draft_
+_Status: Implemented_
 _Planned at: `270ff7e` (2026-05-05)_
 
 ## What
@@ -350,48 +350,48 @@ behavior file. `state_machine.ron` needs zero goblin-specific rules:
 ## Tasks
 
 ### Schema
-- [ ] Add `stat_templates: Vec<StatTemplateDef>` to `PrefabDef` in `schema/catalog.rs`
-- [ ] Add `StatTemplateDef` to `schema/stats.rs` (or unify fields with `StatDef`)
-- [ ] Add `StatMap` component to `schema/stats.rs` with `Reflect`, `Clone`, `Default`
-- [ ] Register `StatMap` with `app.register_type::<StatMap>()` in `lib.rs`
+- [x] Add `stat_templates: Vec<StatTemplateDef>` to `PrefabDef` in `schema/catalog.rs`
+- [x] Add `StatTemplateDef` to `schema/stats.rs`
+- [x] Add `StatMap` component to `schema/stats.rs` with `Clone`, `Default` (Reflect deferred — IndexMap has no built-in Bevy reflect support; add when bevy_ggrs integration lands)
+- [ ] Register `StatMap` with `app.register_type::<StatMap>()` in `lib.rs` _(deferred with Reflect)_
 
 ### Spawn-time initialisation
-- [ ] Composite prefab path in `scene_loader.rs`: insert `StatMap` if `stat_templates` non-empty
-- [ ] Single-mesh prefab path in `scene_loader.rs`: same
-- [ ] `entity_spawner.rs` / `drain_spawn_queue_system`: same for `Action::Spawn`
+- [x] Composite prefab path in `scene_loader.rs`: insert `StatMap` if `stat_templates` non-empty
+- [x] Single-mesh prefab path in `scene_loader.rs`: same
+- [x] `entity_spawner.rs` / `spawn_prefab_instance`: same for `Action::Spawn` via drain_spawn_queue
 
 ### Executor
-- [ ] `ModifyStat` arm: dot-routing to `StatMap` query or `LoadedStats`
-- [ ] `SetStat` arm: same routing
-- [ ] Add `stat_map_query: Query<&mut StatMap>` field to `SceneStateParams`
-- [ ] Remove `Despawn` prefix-drain (no longer needed — component auto-cleanup)
+- [x] `ModifyStat` arm: dot-routing to `StatMap` query or `LoadedStats`
+- [x] `SetStat` arm: same routing
+- [x] Add `stat_map_query: Query<(&SpawnId, &mut StatMap)>` field to `SceneStateParams`
 
 ### Threshold system
-- [ ] Extract `fire_threshold_crossings` helper from existing loop body
-- [ ] Add `Query<&mut StatMap>` branch to `stat_threshold_system`
+- [x] Extract `fire_threshold_crossings` helper from existing loop body
+- [x] Add `Query<&mut StatMap>` branch to `stat_threshold_system`
+- [x] Add `Query<&mut StatMap>` branch to `stat_regen_system`
 
 ### `{self}` substitution
-- [ ] Extend entity FSM interpreter to substitute `{self}` in `ModifyStat.key` and `SetStat.key`
+- [x] Extend entity FSM interpreter to substitute `{self}` in `ModifyStat.key` and `SetStat.key`
 
 ### primitive_world wiring
-- [ ] Add `stat_templates` to `npc_goblin_guard` prefab; remove goblin entries from `stats.ron`
-- [ ] Author `assets/projects/primitive_world/behaviors/goblin_guard.behavior.ron`
-- [ ] Add `behavior: "behaviors/goblin_guard.behavior.ron"` to goblin prefab def
-- [ ] Remove goblin-specific rules from `state_machine.ron` playing state
-- [ ] Remove `SetStat` goblin reset calls from `state_machine.ron` playing entry_actions
+- [x] Add `stat_templates` to `npc_goblin_guard` prefab; remove goblin entries from `stats.ron`
+- [x] Author `assets/projects/primitive_world/behaviors/goblin_guard.behavior.ron`
+- [x] Add `behavior: "behaviors/goblin_guard.behavior.ron"` to goblin prefab def
+- [x] Remove goblin-specific rules from `state_machine.ron` playing state
+- [x] Remove `SetStat` goblin reset calls from `state_machine.ron` playing entry_actions
 
 ### Tests
-- [ ] RON validation: `stat_templates` field parses on `PrefabDef`
-- [ ] RON validation: `StatTemplateDef` with `{self}` in emit parses correctly
-- [ ] Integration: spawn entity with template → `StatMap` component exists with correct values
-- [ ] Integration: `ModifyStat` with dot key mutates correct entity's `StatMap`
-- [ ] Integration: `ModifyStat` without dot key still mutates `LoadedStats`
-- [ ] Integration: threshold crossing on `StatMap` fires correct `GameEvent::Trigger`
-- [ ] Integration: despawn entity → `StatMap` gone (no explicit cleanup needed)
+- [x] RON validation: `stat_templates` field parses on `PrefabDef`
+- [x] RON validation: `StatTemplateDef` with `{self}` in emit parses correctly
+- [x] Integration: spawn entity with template → `StatMap` component exists with correct values
+- [x] Integration: `ModifyStat` with dot key mutates correct entity's `StatMap`
+- [x] Integration: `ModifyStat` without dot key still mutates `LoadedStats`
+- [x] Integration: threshold crossing on `StatMap` fires correct `GameEvent::Trigger`
+- [x] Integration: despawn entity → `StatMap` gone (no explicit cleanup needed)
 
 ### Docs
-- [ ] `docs/20_data_formats.md`: `stat_templates` field, `StatMap` component, key routing convention
-- [ ] `docs/30_runtime_events_and_logic.md`: behavior file + stat template authoring pattern
+- [x] `docs/20_data_formats.md`: `stat_templates` field, `StatMap` component, key routing convention, instance stats section
+- [x] `docs/30_runtime_events_and_logic.md`: `{self}` substitution for stat keys, dot-routing description
 
 ---
 

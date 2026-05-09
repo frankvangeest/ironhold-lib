@@ -22,31 +22,5 @@
                 ),
             ],
         ),
-        "goblin_01_health": (
-            base: 60.0,
-            min: 0.0,
-            max: 60.0,
-            regen_rate: 0.0,
-            regen_delay: 0.0,
-            thresholds: [
-                (
-                    when: BelowOrEqual(0.0),
-                    emit: "stat.goblin_01_health.depleted",
-                ),
-            ],
-        ),
-        "goblin_02_health": (
-            base: 60.0,
-            min: 0.0,
-            max: 60.0,
-            regen_rate: 0.0,
-            regen_delay: 0.0,
-            thresholds: [
-                (
-                    when: BelowOrEqual(0.0),
-                    emit: "stat.goblin_02_health.depleted",
-                ),
-            ],
-        ),
     },
 )

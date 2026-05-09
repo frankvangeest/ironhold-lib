@@ -153,12 +153,15 @@ Actions represent explicit operations the runtime can execute.
 - `IncrementVariable(key, delta)` ✅ — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 
 #### Stat actions ✅
-- `ModifyStat(key: "health", delta: -25.0)` — adds `delta` to the named stat, clamped to `[min, max]`. Negative delta resets the regen cooldown. Stat must be declared in `stats.ron`.
-- `SetStat(key: "health", value: 100.0)` — sets the named stat to an absolute value, clamped to `[min, max]`. Decreasing the value resets the regen cooldown.
+- `ModifyStat(key: "key", delta: -25.0)` — adds `delta` to a stat, clamped to `[min, max]`. Negative delta resets the regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap` component; a key with no dot targets the global `LoadedStats` resource. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID (e.g. `ModifyStat(key: "{self}.health", delta: -35.0)`).
+- `SetStat(key: "key", value: 100.0)` — sets a stat to an absolute value, clamped to `[min, max]`. Decreasing the value resets the regen cooldown. Same dot-routing and `{self}` substitution as `ModifyStat`.
 
-After either action executes, `stat_threshold_system` checks for threshold crossings and emits `GameEvent::Trigger` events for any false→true transitions. Those events are available to the rule interpreter the following frame.
+After either action executes, `stat_threshold_system` runs in the same frame and emits `GameEvent::Trigger` events for any false→true threshold crossings. Those events are then available to the rule interpreter on the next frame.
 
-See `docs/20_data_formats.md` — `stats.ron` section for the full schema and `ThresholdCondition` variants.
+**Global stats** (defined in `stats.ron`, persisted in `LoadedStats`): addressed without a dot, e.g. `"player_health"`.  
+**Instance stats** (defined in `stat_templates` on a `PrefabDef`, stored in `StatMap` component): addressed with a dot, e.g. `"goblin_01.health"`.
+
+See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_templates)` sections for the full schema and `ThresholdCondition` variants.
 
 #### UI actions 🧭
 - `ShowUi(panel_id)`
@@ -272,8 +275,8 @@ Applies actions to the world. Key design points:
 - `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
-- `ModifyStat { key, delta }` — adds `delta` to a named stat (defined in `stats.ron`), clamped to `[min, max]`; negative delta resets regen cooldown; stat not found → warning
-- `SetStat { key, value }` — sets a named stat to an absolute value, clamped to `[min, max]`; decreasing the value resets regen cooldown; stat not found → warning
+- `ModifyStat { key, delta }` — adds `delta` to a stat, clamped to `[min, max]`; negative delta resets regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` → entity `StatMap`; no dot → global `LoadedStats`. `{self}` in `key` is substituted in behavior contexts.
+- `SetStat { key, value }` — sets a stat to an absolute value, clamped to `[min, max]`; decreasing resets regen cooldown. Same dot-routing and `{self}` substitution as `ModifyStat`.
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
@@ -380,6 +383,8 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `PlayAnimationOn { target: "{self}", clip: "open" }` → `target: "box_01"`
 - `EmitEvent("door.opened:{self}")` → `"door.opened:box_01"`
 - `Spawn { prefab: "...", id: "{self}_debris" }` → id `"box_01_debris"`
+- `ModifyStat(key: "{self}.health", delta: -35.0)` → `key: "box_01.health"` (routes to that entity's `StatMap`)
+- `SetStat(key: "{self}.mana", value: 0.0)` → `key: "box_01.mana"`
 
 ### New capabilities
 

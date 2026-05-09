@@ -1,0 +1,45 @@
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            entry_actions: [],
+            exit_actions: [],
+            on: [
+                // Player attacks this goblin (F key within interactable radius).
+                ( event: "entity.interacted:{self}", do_actions: [
+                    PlaySound(key: "goblin_hit"),
+                    ModifyStat(key: "{self}.health", delta: -35.0),
+                    SetVariable("status", "Hit!"),
+                ]),
+
+                // Goblin spots the player.
+                ( event: "npc.player_spotted:{self}", do_actions: [
+                    PlaySound(key: "goblin_growl"),
+                ]),
+
+                // Goblin closes to melee range — deal damage to player.
+                ( event: "npc.player_reached:{self}", do_actions: [
+                    PlaySound(key: "goblin_growl"),
+                    PlaySound(key: "player_pain"),
+                    IncrementVariable("score", -10),
+                    IncrementVariable("health", -30),
+                    ModifyStat(key: "player_health", delta: -30.0),
+                ]),
+
+                // This goblin's health hits zero (threshold fired by stat_threshold_system).
+                ( event: "stat.{self}.health.depleted", do_actions: [
+                    Despawn("{self}"),
+                    PlaySound(key: "collect_coin"),
+                    IncrementVariable("score", 50),
+                ]),
+            ],
+        ),
+    ],
+
+    transitions: [],
+)

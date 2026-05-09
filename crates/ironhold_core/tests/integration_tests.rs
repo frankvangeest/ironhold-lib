@@ -3,8 +3,9 @@ use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
 use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats};
 use ironhold_core::schema::catalog::AudioEntry;
+use ironhold_core::schema::stats::StatMap;
 use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
@@ -514,7 +515,7 @@ fn test_play_sound_default_volume_is_full() {
 
 #[test]
 fn test_spawn_action_assigns_spawn_id_and_registers() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
 
     let mut app = setup_test_app();
     app.update();
@@ -558,7 +559,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
 #[test]
 fn test_spawn_auto_id_increments_counter() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
 
     let mut app = setup_test_app();
     app.update();
@@ -604,7 +605,7 @@ fn test_spawn_auto_id_increments_counter() {
 
 #[test]
 fn test_despawn_removes_entity_by_spawn_id() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
 
     let mut app = setup_test_app();
     app.update();
@@ -2684,4 +2685,147 @@ fn test_pending_spawns_cleared_on_load_scene() {
         .map(|s| s.0.clone())
         .collect();
     assert!(!ids.contains(&"should_be_cancelled".to_string()), "Queued spawn should not have been executed after LoadScene");
+}
+
+// ── Stat system tests ─────────────────────────────────────────────────────────
+
+fn make_stat_def(base: f32, max: f32) -> StatDef {
+    StatDef { base, min: 0.0, max, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![] }
+}
+
+#[test]
+fn test_stat_map_component_holds_correct_initial_values() {
+    // StatMap inserted directly carries the LiveStat's base value.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(80.0, 100.0)));
+    let entity = app.world_mut().spawn(stat_map).id();
+
+    let sm = app.world().get::<StatMap>(entity).unwrap();
+    assert!(sm.0.contains_key("health"), "StatMap must contain the inserted stat key");
+    assert_eq!(sm.0["health"].current, 80.0, "LiveStat must initialise to the declared base value");
+    assert_eq!(sm.0["health"].def.max, 100.0);
+}
+
+#[test]
+fn test_modify_stat_with_dot_key_routes_to_entity_stat_map() {
+    // "entity_id.stat_name" → executor finds the entity and mutates its StatMap.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(100.0, 100.0)));
+
+    let entity = app.world_mut().spawn((
+        SpawnId("goblin_01".to_string()),
+        stat_map,
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("goblin_01".to_string(), entity);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ModifyStat { key: "goblin_01.health".to_string(), delta: -25.0 });
+    app.update();
+
+    let sm = app.world().get::<StatMap>(entity).unwrap();
+    assert_eq!(sm.0["health"].current, 75.0,
+        "ModifyStat with dot key must mutate the entity's StatMap, not LoadedStats");
+}
+
+#[test]
+fn test_modify_stat_without_dot_key_routes_to_loaded_stats() {
+    // No dot in key → executor mutates global LoadedStats resource.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut loaded = LoadedStats::default();
+    loaded.0.insert("player_health".to_string(), LiveStat::new(make_stat_def(100.0, 100.0)));
+    app.world_mut().insert_resource(loaded);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ModifyStat { key: "player_health".to_string(), delta: -30.0 });
+    app.update();
+
+    let loaded = app.world().resource::<LoadedStats>();
+    assert_eq!(loaded.0["player_health"].current, 70.0,
+        "ModifyStat without dot key must mutate LoadedStats, not any entity StatMap");
+}
+
+#[test]
+fn test_stat_map_threshold_crossing_emits_game_event() {
+    // After a ModifyStat drives a stat to 0, stat_threshold_system emits the configured event.
+    let mut app = setup_test_app();
+    app.update();
+
+    let def = StatDef {
+        base: 50.0, min: 0.0, max: 50.0,
+        regen_rate: 0.0, regen_delay: 0.0,
+        thresholds: vec![
+            StatThreshold {
+                when: ThresholdCondition::BelowOrEqual(0.0),
+                emit: "stat.enemy_01.health.depleted".to_string(),
+            },
+        ],
+    };
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(def));
+
+    let entity = app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        stat_map,
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("enemy_01".to_string(), entity);
+
+    // Deplete the health stat in one action.
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ModifyStat { key: "enemy_01.health".to_string(), delta: -50.0 });
+    app.update();
+
+    // stat_threshold_system runs in the same frame as the executor (chained after it).
+    // The emitted GameEvent is readable immediately after the update.
+    app.world_mut().run_system_once(|mut events: MessageReader<GameEvent>| {
+        let names: Vec<String> = events.read()
+            .map(|e| { let GameEvent::Trigger(n) = e; n.clone() })
+            .collect();
+        assert!(
+            names.contains(&"stat.enemy_01.health.depleted".to_string()),
+            "stat_threshold_system must emit the configured event on false→true crossing; got: {:?}", names
+        );
+    }).unwrap();
+}
+
+#[test]
+fn test_despawn_action_removes_entity_and_stat_map() {
+    // Despawn by spawn ID removes the entity; its StatMap component is gone with it.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(40.0, 100.0)));
+
+    let entity = app.world_mut().spawn((
+        SpawnId("dying_01".to_string()),
+        stat_map,
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("dying_01".to_string(), entity);
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::Despawn("dying_01".to_string()));
+    app.update(); // executor queues despawn
+    app.update(); // flush
+
+    assert!(
+        app.world().get_entity(entity).is_err(),
+        "Despawned entity must no longer exist — StatMap is removed with the entity"
+    );
 }

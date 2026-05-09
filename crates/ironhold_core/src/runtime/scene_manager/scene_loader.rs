@@ -29,6 +29,7 @@ const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::capabilities::trigger_zone::TriggerZone;
 use crate::capabilities::interactable::Interactable;
+use crate::schema::stats::{LiveStat, StatMap};
 use crate::PipelineWarmup;
 use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
@@ -287,12 +288,38 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
+                    // Entity FSM behavior for composite primitives.
+                    if let Some(behavior_path) = &prefab.behavior {
+                        let project_root = params.project_root.0.as_str();
+                        let resolved = resolve_project_path(project_root, behavior_path);
+                        let handle: Handle<crate::schema::project::StateMachineAsset> =
+                            asset_server.load(resolved);
+                        commands.entity(parent).insert(PendingBehavior(handle));
+                    }
+
                     // Interactable: proximity + F key → entity.interacted:{id}
                     if let Some(interactable_def) = &prefab.interactable {
                         commands.entity(parent).insert(Interactable {
                             radius: interactable_def.radius,
                             hint_text: interactable_def.hint_text.clone(),
                         });
+                    }
+
+                    if !prefab.stat_templates.is_empty() {
+                        let spawn_id = &entity_def.id;
+                        let mut stat_map = StatMap::default();
+                        for tpl in &prefab.stat_templates {
+                            let def = crate::schema::stats::StatDef {
+                                base: tpl.base, min: tpl.min, max: tpl.max,
+                                regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
+                                thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                                    when: t.when.clone(),
+                                    emit: t.emit.replace("{self}", spawn_id),
+                                }).collect(),
+                            };
+                            stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+                        }
+                        commands.entity(parent).insert(stat_map);
                     }
 
                     if let Some(label_def) = &entity_def.label {
@@ -489,6 +516,23 @@ pub fn spawn_scene_v2(
                                 Sensor,
                                 ActiveEvents::COLLISION_EVENTS,
                             ));
+                        }
+
+                        if !prefab.stat_templates.is_empty() {
+                            let spawn_id = &entity_def.id;
+                            let mut stat_map = StatMap::default();
+                            for tpl in &prefab.stat_templates {
+                                let def = crate::schema::stats::StatDef {
+                                    base: tpl.base, min: tpl.min, max: tpl.max,
+                                    regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
+                                    thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                                        when: t.when.clone(),
+                                        emit: t.emit.replace("{self}", spawn_id),
+                                    }).collect(),
+                                };
+                                stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+                            }
+                            commands.entity(spawned).insert(stat_map);
                         }
 
                         if let Some(label_def) = &entity_def.label {

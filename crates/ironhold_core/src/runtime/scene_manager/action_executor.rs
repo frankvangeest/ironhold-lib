@@ -301,19 +301,59 @@ pub fn action_executor_system(
                 scene_state.game_vars.0.insert(key, next.to_string());
             }
             Action::ModifyStat { key, delta } => {
-                if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
-                    let new_val = stat.apply_delta(delta);
-                    info!("Action::ModifyStat: \"{}\" {:+.2} -> {:.2}", key, delta, new_val);
+                if let Some((entity_id, stat_name)) = key.split_once('.') {
+                    // Instance stat — find entity by spawn ID, mutate its StatMap component.
+                    let entity = spawn_params.registry.entities.get(entity_id).copied();
+                    if let Some(e) = entity {
+                        if let Ok((_, mut stat_map)) = scene_state.stat_map_query.get_mut(e) {
+                            if let Some(stat) = stat_map.0.get_mut(stat_name) {
+                                let new_val = stat.apply_delta(delta);
+                                info!("Action::ModifyStat: \"{}.{}\" {:+.2} -> {:.2}", entity_id, stat_name, delta, new_val);
+                            } else {
+                                warn!("Action::ModifyStat: stat {:?} not found in StatMap of entity {:?}", stat_name, entity_id);
+                            }
+                        } else {
+                            warn!("Action::ModifyStat: entity {:?} has no StatMap component", entity_id);
+                        }
+                    } else {
+                        warn!("Action::ModifyStat: entity {:?} not found in spawn registry", entity_id);
+                    }
                 } else {
-                    warn!("Action::ModifyStat: stat {:?} not found in stats catalog", key);
+                    // Global stat — LoadedStats resource.
+                    if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
+                        let new_val = stat.apply_delta(delta);
+                        info!("Action::ModifyStat: \"{}\" {:+.2} -> {:.2}", key, delta, new_val);
+                    } else {
+                        warn!("Action::ModifyStat: stat {:?} not found in stats catalog", key);
+                    }
                 }
             }
             Action::SetStat { key, value } => {
-                if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
-                    let new_val = stat.set_value(value);
-                    info!("Action::SetStat: \"{}\" = {:.2}", key, new_val);
+                if let Some((entity_id, stat_name)) = key.split_once('.') {
+                    // Instance stat — find entity by spawn ID, set its StatMap component.
+                    let entity = spawn_params.registry.entities.get(entity_id).copied();
+                    if let Some(e) = entity {
+                        if let Ok((_, mut stat_map)) = scene_state.stat_map_query.get_mut(e) {
+                            if let Some(stat) = stat_map.0.get_mut(stat_name) {
+                                let new_val = stat.set_value(value);
+                                info!("Action::SetStat: \"{}.{}\" = {:.2}", entity_id, stat_name, new_val);
+                            } else {
+                                warn!("Action::SetStat: stat {:?} not found in StatMap of entity {:?}", stat_name, entity_id);
+                            }
+                        } else {
+                            warn!("Action::SetStat: entity {:?} has no StatMap component", entity_id);
+                        }
+                    } else {
+                        warn!("Action::SetStat: entity {:?} not found in spawn registry", entity_id);
+                    }
                 } else {
-                    warn!("Action::SetStat: stat {:?} not found in stats catalog", key);
+                    // Global stat — LoadedStats resource.
+                    if let Some(stat) = scene_state.loaded_stats.0.get_mut(&key) {
+                        let new_val = stat.set_value(value);
+                        info!("Action::SetStat: \"{}\" = {:.2}", key, new_val);
+                    } else {
+                        warn!("Action::SetStat: stat {:?} not found in stats catalog", key);
+                    }
                 }
             }
         }

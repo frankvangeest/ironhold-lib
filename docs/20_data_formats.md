@@ -47,10 +47,11 @@ assets/projects/{name}/
   assets.ron                  ← AssetCatalog  (model/texture/audio/material keys)
   prefabs/prefabs.ron         ← PrefabCatalog (named entity templates)
   prefabs/animation/*.ron     ← AnimationPolicy per character type
+  behaviors/*.behavior.ron    ← per-entity FSM behavior files (optional)
   scenes/*.scene.ron          ← GameSceneV2   (one file per scene)
   logic/rules.ron             ← LogicRulesAsset (event → action rules)
   overrides/model_fixes.ron   ← ModelFixesAsset (per-asset transform corrections)
-  stats/stats.ron             ← StatCatalog     (named stat definitions; optional)
+  stats/stats.ron             ← StatCatalog     (global named stat definitions; optional)
 ```
 
 The native runner selects a project by name: `cargo run -p ironhold_native -- --project quick_scene`.
@@ -523,6 +524,10 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
+| `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `"primitive"` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
+| `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. |
+| `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
+| `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -1057,6 +1062,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
 | `SetVariable("key", "value")` | Write a named string variable into `GameVariables`; readable by data-bound UI labels |
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |
+| `ModifyStat(key: "key", delta: f32)` | Add `delta` to a stat and clamp. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap`; no dot targets global `LoadedStats`. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID. |
+| `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
 
 ---
 
@@ -1214,6 +1221,75 @@ Threshold events are **edge-triggered**: they fire once when the condition trans
 ( on: "stat.health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
 ( on: "stat.health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
 ```
+
+---
+
+## Instance stats (`stat_templates`) ✅
+
+While `stats.ron` holds **global** stats that persist across scene transitions (e.g. player health, score), `stat_templates` on a `PrefabDef` declare **per-entity** stats. Every spawned instance gets its own independent `StatMap` component — there is no shared state between instances of the same prefab.
+
+### Authoring
+
+```ron
+// prefabs/prefabs.ron
+"goblin_guard": (
+  kind: "primitive",
+  model: "Capsule3d",
+  behavior: "behaviors/goblin_guard.behavior.ron",
+  stat_templates: [
+    (
+      key: "health",
+      base: 60.0,
+      min:  0.0,
+      max:  60.0,
+      thresholds: [
+        ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+      ],
+    ),
+  ],
+),
+```
+
+`{self}` in `emit` strings is replaced with the entity's spawn ID at spawn time, so two instances `goblin_01` and `goblin_02` get independent events `"stat.goblin_01.health.depleted"` and `"stat.goblin_02.health.depleted"`.
+
+### StatTemplateDef fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `key` | `String` | — | Stat name within the entity (the key inside `StatMap`) |
+| `base` | `f32` | — | Starting value |
+| `min` | `f32` | `0.0` | Minimum allowed value |
+| `max` | `f32` | — | Maximum allowed value |
+| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active |
+| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes |
+| `thresholds` | `Vec<StatThreshold>` | `[]` | Events to emit on threshold crossings (same schema as `stats.ron`; `{self}` is substituted) |
+
+### Addressing instance stats in rules
+
+Use **dot notation** to address instance stats: `"spawn_id.stat_name"`.
+
+```ron
+// In a behavior file — {self} is substituted with the entity's spawn ID
+( event: "entity.interacted:{self}", do_actions: [
+    ModifyStat(key: "{self}.health", delta: -35.0),
+]),
+( event: "stat.{self}.health.depleted", do_actions: [
+    Despawn("{self}"),
+    IncrementVariable("score", 50),
+]),
+```
+
+```ron
+// In state_machine.ron — address a specific instance by ID
+ModifyStat(key: "goblin_01.health", delta: -10.0)
+```
+
+**Routing rules for `ModifyStat` / `SetStat`:**
+
+| Key format | Routed to |
+|---|---|
+| `"player_health"` (no dot) | `LoadedStats` resource (global stat) |
+| `"goblin_01.health"` (dot present) | `StatMap` component on the entity with `SpawnId("goblin_01")` |
 
 ---
 

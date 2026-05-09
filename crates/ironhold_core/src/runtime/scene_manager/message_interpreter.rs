@@ -192,6 +192,14 @@ fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             spawn_point: spawn_point.map(|s| s.replace("{self}", spawn_id)),
             yaw_deg,
         },
+        Action::ModifyStat { key, delta } => Action::ModifyStat {
+            key: key.replace("{self}", spawn_id),
+            delta,
+        },
+        Action::SetStat { key, value } => Action::SetStat {
+            key: key.replace("{self}", spawn_id),
+            value,
+        },
         other => other,
     }
 }

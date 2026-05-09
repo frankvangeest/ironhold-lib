@@ -277,6 +277,18 @@
         ),
       ],
       interactable: (radius: 2.5, hint_text: "F  Attack!"),
+      behavior: "behaviors/goblin_guard.behavior.ron",
+      stat_templates: [
+        (
+          key: "health",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          thresholds: [
+            ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+          ],
+        ),
+      ],
     ),
 
     // ── Neutral Merchant ─────────────────────────────────────────────────────

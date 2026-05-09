@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct StatCatalog {
@@ -79,6 +80,7 @@ impl ThresholdCondition {
     }
 }
 
+#[derive(Clone)]
 pub struct LiveStat {
     pub def: StatDef,
     pub current: f32,
@@ -129,6 +131,31 @@ impl LiveStat {
 /// Stats persist across scene transitions (the resource is not cleared on scene load).
 #[derive(Resource, Default)]
 pub struct LoadedStats(pub HashMap<String, LiveStat>);
+
+/// Stat shape declared on a prefab. Every spawned instance gets an independent `LiveStat`
+/// in its `StatMap` component. `{self}` in `emit` strings is replaced with the entity's
+/// spawn ID at spawn time.
+#[derive(Deserialize, Debug, Clone)]
+pub struct StatTemplateDef {
+    /// Stat name within this entity — the key inside `StatMap` (e.g. `"health"`).
+    pub key: String,
+    pub base: f32,
+    #[serde(default)]
+    pub min: f32,
+    pub max: f32,
+    #[serde(default)]
+    pub regen_rate: f32,
+    #[serde(default)]
+    pub regen_delay: f32,
+    #[serde(default)]
+    pub thresholds: Vec<StatThreshold>,
+}
+
+/// Per-entity stat store, inserted as a `Component` at spawn time.
+/// Uses `IndexMap` for deterministic insertion-order iteration (replay correctness).
+/// TODO: derive Reflect + register when bevy_ggrs rollback integration lands.
+#[derive(Component, Default, Clone)]
+pub struct StatMap(pub IndexMap<String, LiveStat>);
 
 #[cfg(test)]
 mod tests {

@@ -92,8 +92,12 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `PlayAnimationOn { target: "{self}", clip: "..." }` → target becomes the entity's ID
 - `EmitEvent("event:{self}")` → event name with `{self}` filled in
 - `Spawn { prefab: "...", id: "{self}_child" }` → id with `{self}` filled in
+- `ModifyStat(key: "{self}.health", delta: ...)` → key becomes `"entity_id.health"` (routes to StatMap)
+- `SetStat(key: "{self}.mana", value: ...)` → key becomes `"entity_id.mana"`
 
 **New capabilities for entity logic:**
+
+**Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: "primitive"` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.
 
 `TriggerZone` — set `trigger_zone: (radius: 2.0)` on a `PrefabDef`. A Rapier sphere sensor is spawned. Emits:
 - `GameEvent::Trigger("entity.entered:{id}")` on player enter

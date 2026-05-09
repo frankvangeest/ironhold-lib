@@ -252,13 +252,14 @@ pub struct SceneV2Params<'w> {
 
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.
 #[derive(bevy::ecs::system::SystemParam)]
-pub struct SceneStateParams<'w> {
+pub struct SceneStateParams<'w, 's> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
     pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
     pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
     pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
+    pub stat_map_query: Query<'w, 's, (&'static SpawnId, &'static mut crate::schema::stats::StatMap)>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

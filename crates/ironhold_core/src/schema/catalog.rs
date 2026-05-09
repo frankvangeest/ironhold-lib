@@ -203,6 +203,11 @@ pub struct PrefabDef {
     /// `entity.entered:{id}` / `entity.exited:{id}` on player overlap.
     #[serde(default)]
     pub trigger_zone: Option<TriggerZoneDef>,
+    /// Per-instance stat shapes. At spawn time each template produces one `LiveStat` inside
+    /// a `StatMap` component on the entity. Address instance stats with `"{spawn_id}.{key}"`.
+    /// `{self}` inside `emit` strings is replaced with the entity's spawn ID.
+    #[serde(default)]
+    pub stat_templates: Vec<crate::schema::stats::StatTemplateDef>,
     /// One or more static physics colliders for `kind: "actor"` / `kind: "prop"` prefabs.
     /// All shapes are combined into a single Rapier compound `RigidBody::Fixed` so the player
     /// can stand on or collide with the GLB without primitive wrappers. Use multiple entries

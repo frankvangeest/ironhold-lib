@@ -2157,3 +2157,82 @@ fn test_project_config_without_stats_path_is_ok() {
     assert!(config.stats_path.is_none());
     assert!(config.validate().is_ok());
 }
+
+// ── stat_templates on PrefabDef ───────────────────────────────────────────────
+
+#[test]
+fn test_prefab_stat_templates_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "goblin": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    stat_templates: [
+                        (
+                            key: "health",
+                            base: 60.0,
+                            max: 60.0,
+                            thresholds: [
+                                ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+                            ],
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabCatalog with stat_templates should parse");
+    assert!(catalog.validate().is_ok());
+    let goblin = &catalog.prefabs["goblin"];
+    assert_eq!(goblin.stat_templates.len(), 1);
+    let tpl = &goblin.stat_templates[0];
+    assert_eq!(tpl.key, "health");
+    assert_eq!(tpl.base, 60.0);
+    assert_eq!(tpl.max, 60.0);
+    assert_eq!(tpl.thresholds.len(), 1);
+    assert_eq!(tpl.thresholds[0].emit, "stat.{self}.health.depleted");
+}
+
+#[test]
+fn test_prefab_stat_templates_self_in_emit_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "enemy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    stat_templates: [
+                        ( key: "health",  base: 100.0, max: 100.0, thresholds: [ ( when: BelowOrEqual(0.0),    emit: "stat.{self}.health.depleted" ) ] ),
+                        ( key: "stamina", base: 50.0,  max: 50.0,  thresholds: [ ( when: BelowPercent(0.25),   emit: "stat.{self}.stamina.low" ),
+                                                                                  ( when: AtOrAbovePercent(1.0), emit: "stat.{self}.stamina.full" ) ] ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("multiple stat_templates with {self} should parse");
+    assert!(catalog.validate().is_ok());
+    let enemy = &catalog.prefabs["enemy"];
+    assert_eq!(enemy.stat_templates.len(), 2);
+    assert_eq!(enemy.stat_templates[0].key, "health");
+    assert_eq!(enemy.stat_templates[1].key, "stamina");
+    assert_eq!(enemy.stat_templates[1].thresholds.len(), 2);
+}
+
+#[test]
+fn test_prefab_without_stat_templates_defaults_to_empty() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "coin": ( kind: "primitive", model: "Cylinder" ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("prefab without stat_templates should parse");
+    assert!(catalog.validate().is_ok());
+    assert!(catalog.prefabs["coin"].stat_templates.is_empty());
+}

@@ -21,10 +21,8 @@
                 SetVariable("health", "100"),
                 SetVariable("score", "0"),
                 SetVariable("status", ""),
-                // Reset stats for a fresh run
-                SetStat(key: "player_health",    value: 100.0),
-                SetStat(key: "goblin_01_health", value: 60.0),
-                SetStat(key: "goblin_02_health", value: 60.0),
+                // Reset global stats for a fresh run (goblin stats are per-entity — reset on respawn)
+                SetStat(key: "player_health", value: 100.0),
                 PlayMusicLoop(key: "bg_music"),
                 PreloadScene("scenes/pause.scene.ron"),
                 PreloadScene("scenes/map.scene.ron"),
@@ -43,26 +41,12 @@
                 ( event: "entity.collected:coin_04", do_actions: [ Despawn("coin_04"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
                 ( event: "entity.collected:coin_05", do_actions: [ Despawn("coin_05"), PlaySound(key: "collect_coin"), IncrementVariable("score", 10), IncrementVariable("health", 15), ModifyStat(key: "player_health", delta: 15.0) ] ),
 
-                // ── Player attacks goblins (F key near goblin) ───────────────────────
-                // 35 damage per hit; two hits kill a goblin (60 HP → 25 → 0).
-                ( event: "entity.interacted:goblin_01", do_actions: [ PlaySound(key: "goblin_hit"), ModifyStat(key: "goblin_01_health", delta: -35.0), SetVariable("status", "Hit!") ] ),
-                ( event: "entity.interacted:goblin_02", do_actions: [ PlaySound(key: "goblin_hit"), ModifyStat(key: "goblin_02_health", delta: -35.0), SetVariable("status", "Hit!") ] ),
-                // No interactable in range — audible grunt so the player knows the swing registered.
-                ( event: "player.attack_missed",        do_actions: [ PlaySound(key: "swing_miss"), SetVariable("status", "Miss!") ] ),
+                // ── Player attack missed (no interactable in range) ─────────────────
+                ( event: "player.attack_missed", do_actions: [ PlaySound(key: "swing_miss"), SetVariable("status", "Miss!") ] ),
 
-                // ── Goblin deaths (fired by stat threshold system) ───────────────────
-                ( event: "stat.goblin_01_health.depleted", do_actions: [ Despawn("goblin_01"), PlaySound(key: "collect_coin"), IncrementVariable("score", 50) ] ),
-                ( event: "stat.goblin_02_health.depleted", do_actions: [ Despawn("goblin_02"), PlaySound(key: "collect_coin"), IncrementVariable("score", 50) ] ),
-
-                // ── NPC events ───────────────────────────────────────────────────────
+                // ── NPC events (non-goblin) ──────────────────────────────────────────
                 ( event: "npc.player_spotted:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
                 ( event: "npc.player_reached:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
-
-                // Goblin contact — 30 HP damage and -10 score per hit (stat + display).
-                ( event: "npc.player_spotted:goblin_01",  do_actions: [ PlaySound(key: "goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_01",  do_actions: [ PlaySound(key: "goblin_growl"), PlaySound(key: "player_pain"), IncrementVariable("score", -10), IncrementVariable("health", -30), ModifyStat(key: "player_health", delta: -30.0) ] ),
-                ( event: "npc.player_spotted:goblin_02",  do_actions: [ PlaySound(key: "goblin_growl") ] ),
-                ( event: "npc.player_reached:goblin_02",  do_actions: [ PlaySound(key: "goblin_growl"), PlaySound(key: "player_pain"), IncrementVariable("score", -10), IncrementVariable("health", -30), ModifyStat(key: "player_health", delta: -30.0) ] ),
 
                 ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
 

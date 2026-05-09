@@ -19,6 +19,7 @@ use super::{
     resolve_project_path,
     scene_loader::resolve_jump_velocity,
 };
+use crate::schema::stats::{LiveStat, StatMap};
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
 /// animation components based on what the PrefabDef declares. Called from both
@@ -114,6 +115,25 @@ pub fn spawn_prefab_instance(
         if !shapes.is_empty() {
             commands.entity(spawned.parent).insert((RigidBody::Fixed, Collider::compound(shapes)));
         }
+    }
+
+    if !prefab.stat_templates.is_empty() {
+        let mut stat_map = StatMap::default();
+        for tpl in &prefab.stat_templates {
+            let def = crate::schema::stats::StatDef {
+                base: tpl.base,
+                min: tpl.min,
+                max: tpl.max,
+                regen_rate: tpl.regen_rate,
+                regen_delay: tpl.regen_delay,
+                thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                    when: t.when.clone(),
+                    emit: t.emit.replace("{self}", name),
+                }).collect(),
+            };
+            stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+        }
+        commands.entity(spawned.parent).insert(stat_map);
     }
 
     spawned.parent
