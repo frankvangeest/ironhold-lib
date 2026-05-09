@@ -19,11 +19,6 @@ _(nothing active)_
 
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
 - [ ] **`PrefabComponents` silently drops unknown fields** — writing `health`, `ai`, `loot_table`, `faction`, or any other unrecognised field inside a prefab's `components` block produces no error or warning; the field is silently ignored. Root cause: `PrefabComponents` does not use `#[serde(deny_unknown_fields)]`. Fix: add the attribute and emit a `warn!` at load time naming the bad field so designers immediately see what was rejected.
-- [x] **no diagnostic when a rule event is never matched** — `match_rules` now emits `debug!("No rule matched event {:?} …")` when rules are loaded but none fire; skips the log when `LoadedRules` is empty (FSM projects).
-- [x] **`rules.ron` silently ignored when `state_machine_path` is set** — `project_loader` emits a `warn!` at Phase 1 if both `rules_path` and `state_machine_path` are set.
-- [x] **`Spawn` `position`/`spawn_point` conflict is silent** — `action_executor` emits a `warn!` naming the spawn ID when both fields are non-None; `position` still wins.
-- [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns. A further phantom-entity warmup approach could eliminate the pipeline-compile stall if that residual freeze proves unacceptable.
-- [x] **animation T-pose on landing** — Root cause confirmed: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session (sub-assets complete loading slightly after first spawn; more frequent on WASM/cold builds). `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized` so step 1 re-initializes on the new entity within 2-3 frames. See `planning/investigations/resolved/animation_tpose.md`.
 
 ---
 
@@ -123,6 +118,11 @@ _(nothing active)_
 
 ## Done (reference)
 
+- [x] **no diagnostic when a rule event is never matched** — `match_rules` emits `debug!` when rules are loaded but none fire; silent on FSM projects where `LoadedRules` is empty.
+- [x] **`rules.ron` silently ignored when `state_machine_path` is set** — `project_loader` warns at Phase 1 if both `rules_path` and `state_machine_path` are set.
+- [x] **`Spawn` `position`/`spawn_point` conflict is silent** — `action_executor` warns with the spawn ID when both fields are set; `position` wins.
+- [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns.
+- [x] **animation T-pose on landing** — Root cause: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session. `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized`. See `planning/investigations/resolved/animation_tpose.md`.
 - [x] **`implicit_some` RON extension** — `ImplicitRonPlugin` in `schema/ron_loader.rs` enables `implicit_some` globally via `ron::Options`; 671 `Some()` wrappers removed from all project `.ron` files; `tools/migrate_implicit_some.py` one-shot migration script included; no per-file directives needed
 - [x] **Nested prefabs — mesh support** — `spawn_primitive_children` dispatches on `kind`: actor/prop loads GLB via `spawn_prefab_instance`, single-shape primitive builds one mesh; `rock_deco` GLB prop nested in `village` demo; design: `planning/features/nested_prefabs_mesh_support.md`
 - [x] **Nested prefabs** — `children` entries reference named prefabs by key; multiplicative Bevy hierarchy; cycle detection; `village` prefab demo in `primitive_world`; design: `planning/features/nested_prefabs.md`
