@@ -1609,6 +1609,37 @@ fn test_npc_all_faction_and_behavior_variants_parse() {
     }
 }
 
+#[test]
+fn test_prefab_components_unknown_field_is_error() {
+    // Unknown fields (typos like `movements`, design-time fields like `health`) must
+    // be rejected so designers see the error immediately rather than losing the field silently.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "hero": ( kind: "actor", model: "m", components: ( health: 100 ) ),
+            },
+        )
+    "#;
+    let result: Result<PrefabCatalog, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown fields in PrefabComponents must be rejected");
+}
+
+#[test]
+fn test_prefab_components_typo_is_error() {
+    // `movements` (typo for `movement`) must not silently vanish.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "hero": ( kind: "actor", model: "m", components: ( movements: () ) ),
+            },
+        )
+    "#;
+    let result: Result<PrefabCatalog, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo `movements` must be rejected, not silently ignored");
+}
+
 // ── PrefabComponents.inputs (M-2) ─────────────────────────────────────────────
 
 #[test]

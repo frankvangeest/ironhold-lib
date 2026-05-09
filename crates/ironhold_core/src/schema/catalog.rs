@@ -441,11 +441,8 @@ fn default_flycam_up() -> String { "Space".to_string() }
 fn default_flycam_down() -> String { "KeyQ".to_string() }
 fn default_flycam_look_button() -> String { "Either".to_string() }
 
-/// Runtime-relevant prefab component data.
-/// Additional design-time fields (health, ai, etc.) are silently ignored.
-/// NOTE: deny_unknown_fields is intentionally absent — designer-only fields like
-/// `health`, `ai`, `dialogue` are valid here and silently dropped at runtime.
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct PrefabComponents {
     #[serde(default)]
     pub tags: Vec<String>,

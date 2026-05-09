@@ -18,7 +18,7 @@ _(nothing active)_
 ## Bugs
 
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
-- [ ] **`PrefabComponents` silently drops unknown fields** — writing `health`, `ai`, `loot_table`, `faction`, or any other unrecognised field inside a prefab's `components` block produces no error or warning; the field is silently ignored. Root cause: `PrefabComponents` does not use `#[serde(deny_unknown_fields)]`. Fix: add the attribute and emit a `warn!` at load time naming the bad field so designers immediately see what was rejected.
+- [x] **`PrefabComponents` silently drops unknown fields** — added `#[serde(deny_unknown_fields)]`; RON parse now fails with a clear field name on typos or unknown fields; two regression tests added.
 
 ---
 
