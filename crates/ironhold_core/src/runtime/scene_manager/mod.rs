@@ -271,6 +271,7 @@ pub struct SceneMaterialParams<'w> {
     pub custom: ResMut<'w, Assets<crate::capabilities::custom_material::CustomMaterial>>,
     pub built: ResMut<'w, BuiltMaterials>,
     pub meshes: ResMut<'w, Assets<Mesh>>,
+    pub radar: ResMut<'w, Assets<crate::capabilities::stat_radar::RadarMaterial>>,
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

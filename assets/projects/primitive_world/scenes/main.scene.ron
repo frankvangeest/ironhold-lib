@@ -11,6 +11,7 @@
 
   scene_key_bindings: {
     "KeyM": "toggle_map",
+    "KeyC": "toggle_stats",
   },
 
   lighting: (
@@ -456,20 +457,29 @@
       position: (16.0, 16.0),
       size: (80.0, 36.0),
     )),
-    Label((
-      id: "health_label",
-      text: "HP  100",
-      bind: "health",
-      format: "HP  {}",
+    // Health bar — auto-updates from LoadedStats without event wiring.
+    // Colour bands: >50% red, >25% orange, >0% dark red (critical).
+    StatBar((
+      id: "health_bar",
+      stat_key: "player_health",
       position: (16.0, 62.0),
-      size: (180.0, 32.0),
+      size: (200.0, 18.0),
+      fill_color:       (0.85, 0.15, 0.15, 1.0),
+      background_color: (0.20, 0.06, 0.06, 1.0),
+      show_value: true,
+      color_bands: [
+        ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),
+        ( above_percent: 0.25, color: (1.0,  0.55, 0.0,  1.0) ),
+        ( above_percent: 0.0,  color: (0.6,  0.0,  0.0,  1.0) ),
+      ],
+      absolute: true,
     )),
     Label((
       id: "score_label",
       text: "Score  0",
       bind: "score",
       format: "Score  {}",
-      position: (16.0, 98.0),
+      position: (16.0, 90.0),
       size: (180.0, 32.0),
     )),
     Label((
@@ -477,7 +487,7 @@
       text: "",
       bind: "status",
       format: "{}",
-      position: (16.0, 134.0),
+      position: (16.0, 126.0),
       size: (220.0, 32.0),
     )),
   ],

@@ -164,7 +164,7 @@ Two authoring workflows are supported. A project uses one or the other via its `
   ```
 
 ## UI v1 Scope (authoring)
-- Supported elements: `Button((...))`, `Label((...))`, `Rect((...))` — typed RON enum variants; unknown variants are rejected at parse time.
+- Supported elements: `Button((...))`, `Label((...))`, `Rect((...))`, `StatBar((...))`, `StatSpread((...))` — typed RON enum variants; unknown variants are rejected at parse time.
 - Example:
   ```ron
   ui: [
@@ -182,6 +182,33 @@ Two authoring workflows are supported. A project uses one or the other via its `
       format: "Score  {}",
       position: (16.0, 16.0),
       size: (180.0, 32.0),
+    )),
+    // Stat bar auto-fills from LoadedStats[stat_key] — no event wiring needed.
+    StatBar((
+      id: "health_bar",
+      stat_key: "player_health",
+      position: (16.0, 56.0),
+      size: (200.0, 18.0),
+      fill_color: (0.85, 0.15, 0.15, 1.0),
+      background_color: (0.20, 0.06, 0.06, 1.0),
+      show_value: true,
+      color_bands: [
+        ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),
+        ( above_percent: 0.25, color: (1.0,  0.55, 0.0,  1.0) ),
+        ( above_percent: 0.0,  color: (0.6,  0.0,  0.0,  1.0) ),
+      ],
+      absolute: true,
+    )),
+    // Stat spread lists multiple stats as labelled minibar rows.
+    StatSpread((
+      id: "stat_panel",
+      stats: ["player_health", "player_mana", "player_stamina"],
+      position: (16.0, 84.0),
+      label_width: 110.0,
+      bar_width: 150.0,
+      row_height: 22.0,
+      show_values: true,
+      absolute: true,
     )),
   ]
   ```

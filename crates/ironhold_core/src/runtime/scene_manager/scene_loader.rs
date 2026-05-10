@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use bevy_rapier3d::prelude::{
     Collider, RigidBody, LockedAxes, Damping, Velocity, ExternalImpulse,
     Friction, CoefficientCombineRule, Sensor, ActiveEvents,
@@ -22,6 +22,9 @@ use super::{
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
+use crate::capabilities::stat_display::{StatBarFill, StatValueText};
+use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
+use crate::schema::scene_v2::BarOrientation;
 
 const TAG_FLYCAM: &str = "flycam";
 const TAG_PLAYER: &str = "player";
@@ -883,6 +886,34 @@ pub fn spawn_scene_v2(
     } // end if !is_overlay
 
     // Spawn UI — always runs for both Replace and Overlay mode.
+    // Pre-create RadarMaterial handles for any StatRadar elements so we can pass owned
+    // handles into the with_children closures without borrowing `mats` inside them.
+    let radar_handles: HashMap<String, Handle<RadarMaterial>> = scene.ui.iter()
+        .filter_map(|el| {
+            if let crate::schema::scene_v2::UiNodeDef::StatRadar(d) = el {
+                let (fr, fg, fb, fa) = d.fill_color;
+                let (or, og, ob, oa) = d.outline_color;
+                let (gr, gg, gb, ga) = d.grid_color;
+                let (br, bg_c, bb, ba) = d.background_color;
+                let mat = RadarMaterial {
+                    uniforms: RadarUniforms {
+                        ratios_0: Vec4::ZERO,
+                        ratios_1: Vec4::ZERO,
+                        // outline_width is authored in pixels; convert to UV fraction.
+                        config: Vec4::new(d.stats.len().min(8) as f32, d.grid_steps as f32, d.outline_width / d.size.0.min(d.size.1).max(1.0), 0.0),
+                        fill_color: Vec4::new(fr, fg, fb, fa),
+                        outline_color: Vec4::new(or, og, ob, oa),
+                        grid_color: Vec4::new(gr, gg, gb, ga),
+                        background_color: Vec4::new(br, bg_c, bb, ba),
+                    },
+                };
+                Some((d.id.clone(), mats.radar.add(mat)))
+            } else {
+                None
+            }
+        })
+        .collect();
+
     if !scene.ui.is_empty() {
         if let Some(panel_def) = &scene.ui_panel {
             // Panel mode: full-screen flex root → centered panel box → column of elements.
@@ -949,7 +980,7 @@ pub fn spawn_scene_v2(
                                     ..default()
                                 }
                             };
-                            spawn_ui_element_node(parent, el, node);
+                            spawn_ui_element_node(parent, el, node, &radar_handles);
                         }
                     });
             });
@@ -980,7 +1011,7 @@ pub fn spawn_scene_v2(
                         top: Val::Px(el.position().1),
                         ..default()
                     };
-                    spawn_ui_element_node(parent, el, node);
+                    spawn_ui_element_node(parent, el, node, &radar_handles);
                 }
             });
         }
@@ -1004,6 +1035,7 @@ fn spawn_ui_element_node(
     parent: &mut ChildSpawnerCommands,
     el: &crate::schema::scene_v2::UiNodeDef,
     node: Node,
+    radar_handles: &HashMap<String, Handle<RadarMaterial>>,
 ) {
     use crate::schema::scene_v2::UiNodeDef;
     match el {
@@ -1064,6 +1096,189 @@ fn spawn_ui_element_node(
                         TextColor(Color::srgb(0.9, 0.9, 0.9)),
                     ));
                 });
+        }
+        UiNodeDef::StatBar(bar) => {
+            let (br, bg_c, bb, ba) = bar.background_color;
+            let (fr, fg, fb, fa) = bar.fill_color;
+            let orientation = bar.orientation;
+            let color_bands: Vec<(f32, (f32, f32, f32, f32))> = bar
+                .color_bands.iter()
+                .map(|cb| (cb.above_percent, cb.color))
+                .collect();
+            let mut bar_node = node;
+            bar_node.overflow = Overflow::clip();
+            match orientation {
+                BarOrientation::Horizontal => {
+                    bar_node.flex_direction = FlexDirection::Row;
+                    bar_node.align_items = AlignItems::Stretch;
+                }
+                BarOrientation::Vertical => {
+                    // ColumnReverse stacks children from the bottom, so the fill rect
+                    // grows upward as its height percentage increases.
+                    bar_node.flex_direction = FlexDirection::ColumnReverse;
+                    bar_node.align_items = AlignItems::Stretch;
+                }
+            }
+            let fill_node = match orientation {
+                BarOrientation::Horizontal => Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BarOrientation::Vertical => Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(0.0),
+                    ..default()
+                },
+            };
+            parent
+                .spawn((
+                    Name::new(format!("StatBar: {}", bar.id)),
+                    bar_node,
+                    BackgroundColor(Color::srgba(br, bg_c, bb, ba)),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        Name::new("Fill"),
+                        fill_node,
+                        BackgroundColor(Color::srgba(fr, fg, fb, fa)),
+                        StatBarFill {
+                            stat_key: bar.stat_key.clone(),
+                            orientation,
+                            fill_color: (fr, fg, fb, fa),
+                            color_bands,
+                        },
+                    ));
+                    if bar.show_value {
+                        parent.spawn((
+                            Name::new("ValueText"),
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(0.0),
+                                top: Val::Px(0.0),
+                                right: Val::Px(0.0),
+                                bottom: Val::Px(0.0),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            Text::new(""),
+                            TextFont { font_size: 13.0, ..default() },
+                            TextColor(Color::WHITE),
+                            StatValueText { stat_key: bar.stat_key.clone() },
+                        ));
+                    }
+                });
+        }
+        UiNodeDef::StatSpread(spread) => {
+            let (bfr, bfg, bfb, bfa) = spread.bar_fill_color;
+            let (bbr, bbg, bbb, bba) = spread.bar_background_color;
+            let (lr, lg, lb, la) = spread.label_color;
+            let font_size_label = (spread.row_height * 0.70).max(10.0);
+            let font_size_value = (spread.row_height * 0.65).max(10.0);
+            let bar_width = spread.bar_width;
+            let label_width = spread.label_width;
+            let row_height = spread.row_height;
+            let row_gap = spread.row_gap;
+            let show_values = spread.show_values;
+            let stats = spread.stats.clone();
+            let mut spread_node = node;
+            spread_node.flex_direction = FlexDirection::Column;
+            spread_node.row_gap = Val::Px(row_gap);
+            spread_node.width = Val::Auto;
+            spread_node.height = Val::Auto;
+            parent
+                .spawn((
+                    Name::new(format!("StatSpread: {}", spread.id)),
+                    spread_node,
+                ))
+                .with_children(|parent| {
+                    for stat_key in &stats {
+                        parent
+                            .spawn((
+                                Name::new(format!("Row: {}", stat_key)),
+                                Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: Val::Px(4.0),
+                                    height: Val::Px(row_height),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|parent| {
+                                // Stat name label
+                                parent.spawn((
+                                    Name::new("Label"),
+                                    Node {
+                                        width: Val::Px(label_width),
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    Text::new(stat_key.clone()),
+                                    TextFont { font_size: font_size_label, ..default() },
+                                    TextColor(Color::srgba(lr, lg, lb, la)),
+                                ));
+                                // Minibar background + fill
+                                parent
+                                    .spawn((
+                                        Name::new("Bar"),
+                                        Node {
+                                            width: Val::Px(bar_width),
+                                            height: Val::Percent(100.0),
+                                            overflow: Overflow::clip(),
+                                            flex_direction: FlexDirection::Row,
+                                            align_items: AlignItems::Stretch,
+                                            ..default()
+                                        },
+                                        BackgroundColor(Color::srgba(bbr, bbg, bbb, bba)),
+                                    ))
+                                    .with_children(|parent| {
+                                        parent.spawn((
+                                            Name::new("Fill"),
+                                            Node {
+                                                width: Val::Percent(0.0),
+                                                height: Val::Percent(100.0),
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgba(bfr, bfg, bfb, bfa)),
+                                            StatBarFill {
+                                                stat_key: stat_key.clone(),
+                                                orientation: BarOrientation::Horizontal,
+                                                fill_color: (bfr, bfg, bfb, bfa),
+                                                color_bands: vec![],
+                                            },
+                                        ));
+                                    });
+                                // Optional value text
+                                if show_values {
+                                    parent.spawn((
+                                        Name::new("Value"),
+                                        Node {
+                                            min_width: Val::Px(50.0),
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        Text::new(""),
+                                        TextFont { font_size: font_size_value, ..default() },
+                                        TextColor(Color::srgba(lr, lg, lb, la)),
+                                        StatValueText { stat_key: stat_key.clone() },
+                                    ));
+                                }
+                            });
+                    }
+                });
+        }
+        UiNodeDef::StatRadar(radar) => {
+            if let Some(handle) = radar_handles.get(&radar.id) {
+                parent.spawn((
+                    Name::new(format!("StatRadar: {}", radar.id)),
+                    node,
+                    MaterialNode(handle.clone()),
+                    StatRadarNode { stat_keys: radar.stats.clone() },
+                ));
+            } else {
+                warn!("StatRadar {:?}: no pre-created material handle — skipping spawn", radar.id);
+            }
         }
     }
 }

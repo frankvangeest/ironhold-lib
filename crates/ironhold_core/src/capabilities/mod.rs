@@ -13,6 +13,8 @@ pub mod npc;
 pub mod trigger_zone;
 pub mod interactable;
 pub mod stats;
+pub mod stat_display;
+pub mod stat_radar;
 
 pub use player::*;
 pub use camera::*;
@@ -29,4 +31,6 @@ pub use npc::*;
 pub use trigger_zone::*;
 pub use interactable::*;
 pub use stats::{stat_regen_system, stat_threshold_system};
+pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system};
+pub use stat_radar::{RadarMaterial, StatRadarNode, StatRadarPlugin, stat_radar_update_system};
 

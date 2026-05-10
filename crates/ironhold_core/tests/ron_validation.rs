@@ -1,5 +1,5 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
-use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
+use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, StatSpreadLayout};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::stats::StatCatalog;
@@ -2270,4 +2270,309 @@ fn test_prefab_without_stat_templates_defaults_to_empty() {
     let catalog: PrefabCatalog = from_str(ron_str).expect("prefab without stat_templates should parse");
     assert!(catalog.validate().is_ok());
     assert!(catalog.prefabs["coin"].stat_templates.is_empty());
+}
+
+// ─── StatBar and StatSpread UI node tests ─────────────────────────────────────
+
+#[test]
+fn test_stat_bar_minimal_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatBar((
+                    id: "health_bar",
+                    stat_key: "health",
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatBar minimal should parse");
+    assert_eq!(scene.ui.len(), 1);
+    let UiNodeDef::StatBar(bar) = &scene.ui[0] else { panic!("expected StatBar variant") };
+    assert_eq!(bar.id, "health_bar");
+    assert_eq!(bar.stat_key, "health");
+    assert_eq!(bar.orientation, BarOrientation::Horizontal);
+    assert_eq!(bar.size, (200.0, 20.0), "size should default to (200.0, 20.0)");
+    assert!(!bar.show_value, "show_value should default to false");
+    assert!(bar.color_bands.is_empty(), "color_bands should default to empty");
+    assert!(!bar.absolute, "absolute should default to false");
+}
+
+#[test]
+fn test_stat_bar_full_fields() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatBar((
+                    id: "mana_bar",
+                    stat_key: "mana",
+                    orientation: Vertical,
+                    position: (20.0, 50.0),
+                    size: (16.0, 100.0),
+                    fill_color: (0.2, 0.4, 1.0, 1.0),
+                    background_color: (0.05, 0.05, 0.2, 1.0),
+                    show_value: true,
+                    color_bands: [
+                        ( above_percent: 0.5, color: (0.2, 0.4, 1.0, 1.0) ),
+                        ( above_percent: 0.0, color: (0.1, 0.1, 0.6, 1.0) ),
+                    ],
+                    absolute: true,
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatBar with all fields should parse");
+    let UiNodeDef::StatBar(bar) = &scene.ui[0] else { panic!("expected StatBar variant") };
+    assert_eq!(bar.orientation, BarOrientation::Vertical);
+    assert_eq!(bar.position, (20.0, 50.0));
+    assert_eq!(bar.size, (16.0, 100.0));
+    assert!(bar.show_value);
+    assert_eq!(bar.color_bands.len(), 2);
+    assert!((bar.color_bands[0].above_percent - 0.5).abs() < 1e-5);
+    assert!(bar.absolute);
+}
+
+#[test]
+fn test_stat_bar_unknown_field_is_error() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatBar((
+                    id: "hp",
+                    stat_key: "health",
+                    typo_field: true,
+                )),
+            ],
+        )
+    "#;
+    let result: Result<GameSceneV2, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown field on StatBarDef should be a parse error");
+}
+
+#[test]
+fn test_stat_spread_minimal_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatSpread((
+                    id: "stat_panel",
+                    stats: ["health", "mana", "stamina"],
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatSpread minimal should parse");
+    assert_eq!(scene.ui.len(), 1);
+    let UiNodeDef::StatSpread(spread) = &scene.ui[0] else { panic!("expected StatSpread variant") };
+    assert_eq!(spread.id, "stat_panel");
+    assert_eq!(spread.stats, vec!["health", "mana", "stamina"]);
+    assert_eq!(spread.layout, StatSpreadLayout::Rows);
+    assert_eq!(spread.label_width, 80.0, "label_width should default to 80.0");
+    assert_eq!(spread.bar_width, 120.0, "bar_width should default to 120.0");
+    assert_eq!(spread.row_height, 22.0, "row_height should default to 22.0");
+    assert_eq!(spread.row_gap, 4.0, "row_gap should default to 4.0");
+    assert!(spread.show_values, "show_values should default to true");
+}
+
+#[test]
+fn test_stat_spread_full_fields() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatSpread((
+                    id: "hud_stats",
+                    stats: ["health", "mana"],
+                    layout: Rows,
+                    position: (16.0, 60.0),
+                    label_width: 90.0,
+                    bar_width: 140.0,
+                    row_height: 28.0,
+                    row_gap: 6.0,
+                    label_color: (1.0, 1.0, 1.0, 0.9),
+                    bar_fill_color: (0.2, 0.8, 0.2, 1.0),
+                    bar_background_color: (0.05, 0.2, 0.05, 1.0),
+                    show_values: false,
+                    absolute: true,
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatSpread with all fields should parse");
+    let UiNodeDef::StatSpread(spread) = &scene.ui[0] else { panic!("expected StatSpread variant") };
+    assert_eq!(spread.stats.len(), 2);
+    assert_eq!(spread.label_width, 90.0);
+    assert_eq!(spread.bar_width, 140.0);
+    assert_eq!(spread.row_height, 28.0);
+    assert!(!spread.show_values);
+    assert!(spread.absolute);
+}
+
+#[test]
+fn test_stat_spread_unknown_field_is_error() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatSpread((
+                    id: "panel",
+                    stats: ["health"],
+                    typo_field: "oops",
+                )),
+            ],
+        )
+    "#;
+    let result: Result<GameSceneV2, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown field on StatSpreadDef should be a parse error");
+}
+
+#[test]
+fn test_stat_bar_id_uniqueness_enforced() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatBar(( id: "hp", stat_key: "health" )),
+                StatBar(( id: "hp", stat_key: "health" )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("duplicate ids should parse but fail validate");
+    assert!(scene.validate().is_err(), "duplicate StatBar ids should fail validation");
+}
+
+#[test]
+fn test_ui_node_def_size_helper_stat_bar() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatBar(( id: "hp", stat_key: "health", size: (150.0, 18.0) )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("should parse");
+    assert_eq!(scene.ui[0].size(), (150.0, 18.0));
+}
+
+#[test]
+fn test_ui_node_def_size_helper_stat_spread() {
+    // 3 stats, row_height=20, row_gap=5 → height = 3*20 + 2*5 = 70
+    // label_width=80, bar_width=120 → width = 200
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatSpread((
+                    id: "sp",
+                    stats: ["a", "b", "c"],
+                    label_width: 80.0,
+                    bar_width: 120.0,
+                    row_height: 20.0,
+                    row_gap: 5.0,
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("should parse");
+    let (w, h) = scene.ui[0].size();
+    assert!((w - 200.0).abs() < 1e-4, "width should be 200.0, got {w}");
+    assert!((h - 70.0).abs() < 1e-4, "height should be 70.0, got {h}");
+}
+
+// ─── StatRadar UI node tests ───────────────────────────────────────────────────
+
+#[test]
+fn test_stat_radar_minimal_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar(( id: "radar", stats: ["hp", "mp"] )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatRadar minimal should parse");
+    let UiNodeDef::StatRadar(radar) = &scene.ui[0] else { panic!("expected StatRadar variant") };
+    assert_eq!(radar.id, "radar");
+    assert_eq!(radar.stats, vec!["hp", "mp"]);
+    assert_eq!(radar.grid_steps, 3);
+    assert!((radar.outline_width - 2.0).abs() < 1e-4);
+}
+
+#[test]
+fn test_stat_radar_full_fields() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar((
+                    id: "r1",
+                    stats: ["a", "b", "c", "d", "e"],
+                    size: (200.0, 200.0),
+                    position: (10.0, 20.0),
+                    absolute: true,
+                    grid_steps: 4,
+                    outline_width: 0.01,
+                    fill_color: (0.1, 0.2, 0.3, 0.5),
+                    outline_color: (1.0, 1.0, 1.0, 1.0),
+                    grid_color: (0.5, 0.5, 0.5, 0.3),
+                    background_color: (0.0, 0.0, 0.1, 0.9),
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("StatRadar full fields should parse");
+    let UiNodeDef::StatRadar(radar) = &scene.ui[0] else { panic!("expected StatRadar variant") };
+    assert_eq!(radar.stats.len(), 5);
+    assert_eq!(radar.grid_steps, 4);
+    assert!((radar.outline_width - 0.01).abs() < 1e-4);
+    assert_eq!(radar.size, (200.0, 200.0));
+    assert_eq!(radar.position, (10.0, 20.0));
+    assert!(radar.absolute);
+}
+
+#[test]
+fn test_stat_radar_unknown_field_is_error() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar(( id: "r", stats: ["hp"], unknown_xyz: true )),
+            ],
+        )
+    "#;
+    let result: Result<GameSceneV2, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown field on StatRadarDef should be a parse error");
+}
+
+#[test]
+fn test_stat_radar_size_helper() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar(( id: "r", stats: ["a"], size: (180.0, 180.0) )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("should parse");
+    assert_eq!(scene.ui[0].size(), (180.0, 180.0));
 }

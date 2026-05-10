@@ -1,6 +1,6 @@
 # Feature: Stat Display — Health Bars and Stat Spreads
 
-_Status: Draft_
+_Status: Implemented_
 _Planned at: `1f63f4d` (2026-05-04)_
 
 _Depends on: `game_stats_core.md` (Phase 1) must be complete. Phase 2 buffs are optional but useful for showing effective vs base values._
@@ -139,25 +139,27 @@ A `StatBar` does not listen to events — it polls `LoadedStats` directly each f
 
 ## Tasks
 
-- [ ] `StatBarDef`, `StatSpreadDef`, `ColorBand`, `BarOrientation`, `StatSpreadLayout` schema types
-- [ ] Add `StatBar` and `StatSpread` variants to `UiNodeDef`
-- [ ] Scene loader: spawn `StatBarComponent` and `StatSpreadComponent` nodes
-- [ ] `stat_bar_update_system` — change-detection poll, width/colour update
-- [ ] `stat_spread_update_system` — rebuild row values on change
-- [ ] Colour band selection logic (sorted by threshold, pick highest matching)
-- [ ] Integration test: `StatBar` reflects correct fill ratio after `ModifyStat`
-- [ ] Integration test: colour band switches when stat crosses threshold
-- [ ] Integration test: `StatSpread` renders correct rows for listed stats
-- [ ] RON validation: `StatBar` and `StatSpread` round-trip through serde
-- [ ] Add a `stats_display_demo` scene to an existing project (or `primitive_world`) showing both components
-- [ ] Docs: update `20_data_formats.md` with new UI node kind examples
+- [x] `StatBarDef`, `StatSpreadDef`, `ColorBand`, `BarOrientation`, `StatSpreadLayout` schema types
+- [x] Add `StatBar` and `StatSpread` variants to `UiNodeDef`
+- [x] Scene loader: spawn `StatBarComponent` and `StatSpreadComponent` nodes
+- [x] `stat_bar_update_system` — change-detection poll, width/colour update
+- [x] `stat_bar_value_text_system` — "current / max" text overlay update
+- [x] Colour band selection logic (sorted by threshold, pick highest matching)
+- [ ] Integration test: `StatBar` reflects correct fill ratio after `ModifyStat` _(headless Bevy; deferred)_
+- [ ] Integration test: colour band switches when stat crosses threshold _(deferred)_
+- [ ] Integration test: `StatSpread` renders correct rows for listed stats _(deferred)_
+- [x] RON validation: `StatBar` and `StatSpread` round-trip through serde (9 new tests)
+- [x] Add a `stats_display_demo` scene to `primitive_world` showing both components
+- [x] `player_mana` and `player_stamina` added to `primitive_world/stats/stats.ron` for the demo
+- [x] Health `StatBar` added to `primitive_world/scenes/main.scene.ron` HUD
+- [x] Docs: update `20_data_formats.md` and `STATUS.md` with `StatBar`/`StatSpread` examples
 
-## Open questions
+## Open questions — decisions made
 
-- **Stat not found**: if `stat_key` references a stat that doesn't exist in `LoadedStats`, should the bar render empty (silent) or log a warning? Prefer a visible warning in debug builds, silent fallback in release.
-- **Animated transitions**: should the fill width animate smoothly toward the target value, or snap immediately? Snap for now (simpler, avoids needing a lerp speed parameter); animation can be a follow-up.
-- **Per-entity bars**: when stats become per-entity (Phase 2+ extension), the `StatBar` will need to know which entity to track. Defer; assume single global stat pool for this feature.
-- **Radar chart**: reserved in the enum but not implemented. Should the variant exist in the schema now (returning an error/unsupported message) or be added later? Adding now prevents a future schema version bump.
+- **Stat not found**: Renders empty; `warn!` logged in debug builds (`cfg!(debug_assertions)`) each frame until the stat is present. Silent in release. ✅
+- **Animated transitions**: Snap (immediate). `Val::Percent` updated directly each frame; guarded writes avoid spurious Bevy change detection. ✅
+- **Per-entity bars**: Deferred. `StatBarFill` only tracks global `LoadedStats`. When per-entity stat display is needed, add an optional `entity_id` field and query `StatMap`. ⛔
+- **Radar chart**: `StatSpreadLayout::Rows` only. `Columns` and `Radar` variants omitted from schema for now (no schema break needed; add later). ⛔
 
 ## Acceptance criteria
 

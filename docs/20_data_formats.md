@@ -402,6 +402,79 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
 
+#### `StatBar((...))` ✅
+
+A bar that fills proportionally to `current / max` of a named stat from `LoadedStats`. Updates automatically every frame — no event wiring or `GameVariables` binding needed.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `stat_key` | `String` | required | Key of the stat to display (must match a key in `stats.ron`) |
+| `orientation` | `BarOrientation` | `Horizontal` | `Horizontal` (left→right) or `Vertical` (bottom→top) |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `size` | `(f32, f32)` | `(200.0, 20.0)` | Width and height in pixels |
+| `fill_color` | `(f32,f32,f32,f32)` | red | Colour of the filled portion as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | dark red | Colour of the unfilled portion |
+| `show_value` | `bool` | `false` | Overlay `"current / max"` text centred on the bar |
+| `color_bands` | `Vec<ColorBand>` | `[]` | Threshold-based colour overrides. Each band: `( above_percent: f32, color: (r,g,b,a) )`. The highest `above_percent` ≤ current fill ratio is selected. |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+
+```ron
+StatBar((
+  id: "health_bar",
+  stat_key: "player_health",
+  position: (16.0, 60.0),
+  size: (200.0, 18.0),
+  fill_color:       (0.85, 0.15, 0.15, 1.0),
+  background_color: (0.20, 0.06, 0.06, 1.0),
+  show_value: true,
+  color_bands: [
+    ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),  // red   (normal)
+    ( above_percent: 0.25, color: (1.0,  0.55, 0.0,  1.0) ),  // orange (low)
+    ( above_percent: 0.0,  color: (0.6,  0.0,  0.0,  1.0) ),  // dark red (critical)
+  ],
+  absolute: true,
+)),
+```
+
+**Stat not found:** If `stat_key` is not present in `LoadedStats`, the bar renders as empty (0 % fill). A warning is logged in debug builds. No panic occurs.
+
+#### `StatSpread((...))` ✅
+
+A panel that lists multiple stats as labelled minibar rows. Each row shows the stat name, a minibar fill, and optionally the numeric value.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `stats` | `Vec<String>` | required | Ordered list of stat keys to display |
+| `layout` | `StatSpreadLayout` | `Rows` | `Rows` (one row per stat) |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `label_width` | `f32` | `80.0` | Width of the stat-name label column in pixels |
+| `bar_width` | `f32` | `120.0` | Width of the minibar column in pixels |
+| `row_height` | `f32` | `22.0` | Height of each row in pixels |
+| `row_gap` | `f32` | `4.0` | Vertical gap between rows in pixels |
+| `label_color` | `(f32,f32,f32,f32)` | near-white | Colour of the stat-name and value text |
+| `bar_fill_color` | `(f32,f32,f32,f32)` | blue | Minibar fill colour |
+| `bar_background_color` | `(f32,f32,f32,f32)` | dark blue | Minibar background colour |
+| `show_values` | `bool` | `true` | Show `"current / max"` text after each minibar |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+
+```ron
+StatSpread((
+  id: "stat_panel",
+  stats: ["player_health", "player_mana", "player_stamina"],
+  position: (16.0, 88.0),
+  label_width: 110.0,
+  bar_width: 160.0,
+  row_height: 24.0,
+  row_gap: 5.0,
+  bar_fill_color:       (0.35, 0.75, 0.35, 1.0),
+  bar_background_color: (0.08, 0.18, 0.08, 1.0),
+  show_values: true,
+  absolute: true,
+)),
+```
+
 ### UI Panel (`UiPanelDef`) ✅
 
 When a scene includes a `ui_panel` block, all `ui` elements are arranged in a vertically-flowing centered panel instead of using absolute positioning. Elements with `absolute: true` are still positioned relative to the panel's top-left corner.

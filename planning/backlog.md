@@ -67,7 +67,10 @@ _(nothing active)_
 - [x] **Game stats — Phase 2a: stat templates** — `stat_templates` on `PrefabDef`; `StatMap` component (IndexMap, Clone); dot-routing `ModifyStat`/`SetStat`; threshold/regen for instance stats; `{self}` in stat keys; goblin guard moves to behavior file; composite primitive `behavior` field fixed; integration tests + docs; design: `planning/features/stat_templates.md`
 - [x] **Game stats — Phase 1: core stat model** — `StatDef` (base/min/max/regen/thresholds), `LoadedStats` resource, `ModifyStat`/`SetStat` actions, threshold events into existing pipeline; design: `planning/features/game_stats_core.md`
 - [ ] **Game stats — Phase 2: buffs and modifiers** — named modifier templates, additive/multiplicative/override kinds, stacking rules, soft_max, `ApplyModifier`/`RemoveModifier` actions; design: `planning/features/game_stats_buffs.md` _(depends on Phase 1)_
-- [ ] **Stat display — health bars and stat spreads** — `StatBar` and `StatSpread` UI node types in scene RON, colour bands, change-detection update; design: `planning/features/game_stats_display.md` _(depends on Phase 1)_
+- [x] **Stat display — health bars and stat spreads** — `StatBar` and `StatSpread` UI node types in scene RON, colour bands, change-detection update; design: `planning/features/game_stats_display.md` _(depends on Phase 1)_
+- [x] **Stat display — radar chart** — `StatRadar` UI node (up to 8 axes), WGSL polar-coordinate shader via `UiMaterial`, `stat_radar_update_system`; `primitive_world` demo: 5-stat pentagon (health/mana/stamina/strength/speed) on Key C overlay
+- [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
+- [ ] **Stat display — per-entity stat routing** — `StatBar`, `StatSpread`, and `StatRadar` only read the global `LoadedStats` resource; `stats: ["goblin_01.health"]` silently renders empty; unify with a shared `resolve_stat(key, &LoadedStats, &Query<(&SpawnId, &StatMap)>)` helper used by all three update systems _(depends on Phase 2a)_
 - [ ] Dialogue system — multi-step NPC conversation trees in RON; emits `dialogue.ended:{id}` trigger
 - [ ] Inventory / item system — `AddItem`, `RemoveItem`, `HasItem` condition
 - [ ] Quest / objective tracker — RON-defined objectives, `CompleteObjective`, `FailObjective` actions

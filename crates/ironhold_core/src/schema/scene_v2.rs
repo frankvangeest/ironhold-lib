@@ -295,6 +295,9 @@ pub enum UiNodeDef {
     Button(ButtonDef),
     Label(LabelDef),
     Rect(RectDef),
+    StatBar(StatBarDef),
+    StatSpread(StatSpreadDef),
+    StatRadar(StatRadarDef),
 }
 
 impl UiNodeDef {
@@ -303,6 +306,9 @@ impl UiNodeDef {
             UiNodeDef::Button(d) => &d.id,
             UiNodeDef::Label(d) => &d.id,
             UiNodeDef::Rect(d) => &d.id,
+            UiNodeDef::StatBar(d) => &d.id,
+            UiNodeDef::StatSpread(d) => &d.id,
+            UiNodeDef::StatRadar(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -310,6 +316,13 @@ impl UiNodeDef {
             UiNodeDef::Button(d) => d.size,
             UiNodeDef::Label(d) => d.size,
             UiNodeDef::Rect(d) => d.size,
+            UiNodeDef::StatBar(d) => d.size,
+            UiNodeDef::StatSpread(d) => {
+                let n = d.stats.len() as f32;
+                let h = n * d.row_height + (n - 1.0).max(0.0) * d.row_gap;
+                (d.label_width + d.bar_width, h)
+            }
+            UiNodeDef::StatRadar(d) => d.size,
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -317,6 +330,9 @@ impl UiNodeDef {
             UiNodeDef::Button(d) => d.position,
             UiNodeDef::Label(d) => d.position,
             UiNodeDef::Rect(d) => d.position,
+            UiNodeDef::StatBar(d) => d.position,
+            UiNodeDef::StatSpread(d) => d.position,
+            UiNodeDef::StatRadar(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -324,6 +340,9 @@ impl UiNodeDef {
             UiNodeDef::Button(d) => d.absolute,
             UiNodeDef::Label(d) => d.absolute,
             UiNodeDef::Rect(d) => d.absolute,
+            UiNodeDef::StatBar(d) => d.absolute,
+            UiNodeDef::StatSpread(d) => d.absolute,
+            UiNodeDef::StatRadar(d) => d.absolute,
         }
     }
     pub fn align(&self) -> UiTextAlign {
@@ -331,6 +350,9 @@ impl UiNodeDef {
             UiNodeDef::Button(d) => d.align,
             UiNodeDef::Label(d) => d.align,
             UiNodeDef::Rect(_) => UiTextAlign::Center,
+            UiNodeDef::StatBar(_) => UiTextAlign::Center,
+            UiNodeDef::StatSpread(_) => UiTextAlign::Center,
+            UiNodeDef::StatRadar(_) => UiTextAlign::Center,
         }
     }
 }
@@ -495,3 +517,166 @@ fn default_label_ref_distance() -> f32 { 50.0 }
 
 fn default_wl_font_size() -> f32 { 18.0 }
 fn default_wl_color() -> (f32, f32, f32, f32) { (0.95, 0.95, 0.95, 1.0) }
+
+// ─── Stat display ─────────────────────────────────────────────────────────────
+
+/// Fill direction of a stat bar.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub enum BarOrientation {
+    /// Fill left-to-right.
+    #[default]
+    Horizontal,
+    /// Fill bottom-to-top.
+    Vertical,
+}
+
+/// Row / column layout for a `StatSpread` panel.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub enum StatSpreadLayout {
+    /// One labelled row per stat.
+    #[default]
+    Rows,
+}
+
+/// Optional fill-colour override when the stat crosses a threshold.
+/// `above_percent` is in the range 0.0–1.0; the band with the highest value
+/// that is still ≤ the current fill ratio is selected.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ColorBand {
+    pub above_percent: f32,
+    pub color: (f32, f32, f32, f32),
+}
+
+/// A horizontal (or vertical) bar that fills proportionally to `current / max`
+/// for a named stat. Updated automatically each frame — no event wiring needed.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct StatBarDef {
+    pub id: String,
+    /// Key of the stat to display (matches a key in `stats.ron`).
+    pub stat_key: String,
+    #[serde(default)]
+    pub orientation: BarOrientation,
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width and height in pixels. Default: `(200.0, 20.0)`.
+    #[serde(default = "default_stat_bar_size")]
+    pub size: (f32, f32),
+    /// Colour of the filled portion. Default: red.
+    #[serde(default = "default_bar_fill_color")]
+    pub fill_color: (f32, f32, f32, f32),
+    /// Colour of the unfilled portion behind the fill. Default: dark red.
+    #[serde(default = "default_bar_bg_color")]
+    pub background_color: (f32, f32, f32, f32),
+    /// Show a `"current / max"` text overlay centred on the bar. Default: false.
+    #[serde(default)]
+    pub show_value: bool,
+    /// Threshold-based colour bands. The highest `above_percent` ≤ the current
+    /// fill ratio is chosen; when no band matches, `fill_color` is used.
+    #[serde(default)]
+    pub color_bands: Vec<ColorBand>,
+    #[serde(default)]
+    pub absolute: bool,
+}
+
+/// A panel listing multiple stats as labelled minibar rows.
+/// Each row shows the stat name, a minibar fill, and optionally the numeric value.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct StatSpreadDef {
+    pub id: String,
+    /// Stat keys to display (each matches a key in `stats.ron`).
+    pub stats: Vec<String>,
+    #[serde(default)]
+    pub layout: StatSpreadLayout,
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width of the stat-name label column in pixels. Default: 80.0.
+    #[serde(default = "default_spread_label_width")]
+    pub label_width: f32,
+    /// Width of the minibar column in pixels. Default: 120.0.
+    #[serde(default = "default_spread_bar_width")]
+    pub bar_width: f32,
+    /// Height of each row in pixels. Default: 22.0.
+    #[serde(default = "default_spread_row_height")]
+    pub row_height: f32,
+    /// Vertical gap between rows in pixels. Default: 4.0.
+    #[serde(default = "default_spread_row_gap")]
+    pub row_gap: f32,
+    /// Label text colour as linear RGBA. Default: near-white.
+    #[serde(default = "default_wl_color")]
+    pub label_color: (f32, f32, f32, f32),
+    /// Fill colour for each minibar. Default: blue.
+    #[serde(default = "default_spread_fill_color")]
+    pub bar_fill_color: (f32, f32, f32, f32),
+    /// Background colour behind each minibar fill. Default: dark blue.
+    #[serde(default = "default_spread_bg_color")]
+    pub bar_background_color: (f32, f32, f32, f32),
+    /// Show `"current / max"` text after each minibar. Default: true.
+    #[serde(default = "default_true")]
+    pub show_values: bool,
+    #[serde(default)]
+    pub absolute: bool,
+}
+
+fn default_stat_bar_size() -> (f32, f32) { (200.0, 20.0) }
+fn default_bar_fill_color() -> (f32, f32, f32, f32) { (0.85, 0.15, 0.15, 1.0) }
+fn default_bar_bg_color() -> (f32, f32, f32, f32) { (0.25, 0.10, 0.10, 1.0) }
+fn default_spread_label_width() -> f32 { 80.0 }
+fn default_spread_bar_width() -> f32 { 120.0 }
+fn default_spread_row_height() -> f32 { 22.0 }
+fn default_spread_row_gap() -> f32 { 4.0 }
+fn default_spread_fill_color() -> (f32, f32, f32, f32) { (0.3, 0.6, 1.0, 1.0) }
+fn default_spread_bg_color() -> (f32, f32, f32, f32) { (0.1, 0.1, 0.25, 1.0) }
+
+/// An N-sided (up to 8) radar/spider chart that fills each axis proportionally
+/// to a named stat's `current / max` ratio.  Updated automatically each frame
+/// by `stat_radar_update_system` — no event wiring needed.
+///
+/// Labels for each axis are not rendered by the current implementation and are
+/// planned as a follow-up (`stat_radar_labels` backlog item).
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct StatRadarDef {
+    pub id: String,
+    /// Stat keys to display, 1–8 entries (matches keys in `stats.ron`).
+    pub stats: Vec<String>,
+    /// Width and height of the bounding square in pixels. Default: `(240.0, 240.0)`.
+    #[serde(default = "default_radar_size")]
+    pub size: (f32, f32),
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Number of concentric grid rings drawn inside the polygon. Default: 3.
+    #[serde(default = "default_radar_grid_steps")]
+    pub grid_steps: u32,
+    /// Width of the polygon outline in pixels. Converted to UV fractions at spawn time
+    /// using the smaller of `size.width` / `size.height`. Default: 2.0 px.
+    #[serde(default = "default_radar_outline_width")]
+    pub outline_width: f32,
+    /// Fill colour as linear RGBA. Default: blue, 45 % opacity.
+    #[serde(default = "default_radar_fill_color")]
+    pub fill_color: (f32, f32, f32, f32),
+    /// Polygon outline colour as linear RGBA. Default: bright blue, opaque.
+    #[serde(default = "default_radar_outline_color")]
+    pub outline_color: (f32, f32, f32, f32),
+    /// Grid ring and spoke colour as linear RGBA. Default: grey, 45 % opacity.
+    #[serde(default = "default_radar_grid_color")]
+    pub grid_color: (f32, f32, f32, f32),
+    /// Background colour inside the max circle as linear RGBA. Default: dark blue, 80 % opacity.
+    #[serde(default = "default_radar_background_color")]
+    pub background_color: (f32, f32, f32, f32),
+    #[serde(default)]
+    pub absolute: bool,
+}
+
+fn default_radar_size() -> (f32, f32) { (240.0, 240.0) }
+fn default_radar_grid_steps() -> u32 { 3 }
+fn default_radar_outline_width() -> f32 { 2.0 }
+fn default_radar_fill_color() -> (f32, f32, f32, f32) { (0.35, 0.65, 1.0, 0.45) }
+fn default_radar_outline_color() -> (f32, f32, f32, f32) { (0.55, 0.85, 1.0, 1.0) }
+fn default_radar_grid_color() -> (f32, f32, f32, f32) { (0.40, 0.45, 0.55, 0.45) }
+fn default_radar_background_color() -> (f32, f32, f32, f32) { (0.10, 0.12, 0.20, 0.80) }

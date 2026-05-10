@@ -10,6 +10,7 @@ use ironhold_core::capabilities::player::{CharacterController, player_movement_s
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
+use ironhold_core::capabilities::stat_radar::StatRadarNode;
 
 fn setup_test_app() -> App {
     let mut app = App::new();
@@ -2828,4 +2829,58 @@ fn test_despawn_action_removes_entity_and_stat_map() {
         app.world().get_entity(entity).is_err(),
         "Despawned entity must no longer exist — StatMap is removed with the entity"
     );
+}
+
+#[test]
+fn test_stat_radar_scene_load_spawns_node_with_correct_stat_keys() {
+    // Loading a scene that contains a StatRadar UI element must produce an entity
+    // carrying a StatRadarNode component with the stat_keys from the RON definition.
+    let mut app = setup_test_app();
+    app.update();
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar((
+                    id: "test_radar",
+                    stats: ["player_health", "player_mana", "player_stamina"],
+                )),
+            ],
+        )
+    "#).expect("test scene RON must parse");
+
+    let scene_handle = app
+        .world_mut()
+        .resource_mut::<Assets<GameSceneV2>>()
+        .add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update(); // state transitions
+    app.update(); // spawn_scene_v2 fires
+    app.update(); // commands flushed
+
+    let mut found = false;
+    let mut world = app.world_mut();
+    let mut q = world.query::<&StatRadarNode>();
+    for node in q.iter(&world) {
+        if node.stat_keys == vec!["player_health", "player_mana", "player_stamina"] {
+            found = true;
+        }
+    }
+    assert!(found, "scene loader must spawn an entity with StatRadarNode carrying the RON-defined stat keys");
 }

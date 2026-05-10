@@ -131,6 +131,7 @@ impl Plugin for GamePlugin {
             .add_plugins(ImplicitRonPlugin::<crate::schema::stats::StatCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
+            .add_plugins(capabilities::stat_radar::StatRadarPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
@@ -192,6 +193,8 @@ impl Plugin for GamePlugin {
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(Update, update_dynamic_labels_system)
+            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system))
+            .add_systems(Update, stat_radar_update_system)
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

@@ -26,11 +26,13 @@
                 PlayMusicLoop(key: "bg_music"),
                 PreloadScene("scenes/pause.scene.ron"),
                 PreloadScene("scenes/map.scene.ron"),
+                PreloadScene("scenes/character_stats.scene.ron"),
                 PreloadScene("scenes/game_over.scene.ron"),
             ],
             exit_actions: [ StopMusic ],
             on: [
-                ( event: "ui.button_pressed:toggle_map", do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
+                ( event: "ui.button_pressed:toggle_map",   do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
+                ( event: "ui.button_pressed:toggle_stats", do_actions: [ ToggleOverlay("scenes/character_stats.scene.ron") ] ),
                 ( event: "player.jumped",               do_actions: [ PlaySound(key: "jump") ] ),
 
                 // ── Coin collectibles ────────────────────────────────────────────────
