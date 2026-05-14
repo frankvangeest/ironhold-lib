@@ -16,4 +16,7 @@ pub use scene_v2::*;
 pub use catalog::*;
 pub use material::*;
 pub use ron_loader::ImplicitRonPlugin;
-pub use stats::{StatCatalog, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats};
+pub use stats::{
+    StatCatalog, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats,
+    ModifierDef, ModifierKind, StackRule, ActiveModifier, LoadedModifiers,
+};

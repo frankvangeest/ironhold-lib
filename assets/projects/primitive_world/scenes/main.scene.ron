@@ -51,6 +51,13 @@
       font_size: 18.0,
       color: (0.5, 0.82, 1.0, 0.85),
     ),
+    (
+      id: "area_shrines",
+      text: "Buff Shrines",
+      translation: (12.5, 5.0, 2.5),
+      font_size: 20.0,
+      color: (0.55, 1.0, 0.70, 0.85),
+    ),
   ],
 
   entities: [
@@ -394,6 +401,51 @@
       ),
     ),
 
+    // ── Buff shrines (east of the main path) ─────────────────────────────────
+    // Four interactable shrines demonstrate the modifier system.
+    // Press F within 2 m to activate. Active effect shown in the buff_label HUD.
+    // Positions: x=11.5–13.5, z=7 to z=−2 — a column east of the cobblestone path.
+    (
+      id: "shrine_overheal_01",
+      prefab: "shrine_overheal",
+      transform: (
+        translation: (11.5, 0.0, 7.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Overheal [F]", offset: (0.0, 1.5, 0.0), color: (0.18, 0.88, 0.35, 1.0)),
+    ),
+    (
+      id: "shrine_speed_01",
+      prefab: "shrine_speed",
+      transform: (
+        translation: (13.5, 0.0, 4.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Speed [F]", offset: (0.0, 1.5, 0.0), color: (1.0, 0.82, 0.10, 1.0)),
+    ),
+    (
+      id: "shrine_mana_01",
+      prefab: "shrine_mana",
+      transform: (
+        translation: (11.5, 0.0, 1.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Mana [F]", offset: (0.0, 1.5, 0.0), color: (0.20, 0.45, 1.0, 1.0)),
+    ),
+    (
+      id: "shrine_poison_01",
+      prefab: "shrine_poison",
+      transform: (
+        translation: (13.5, 0.0, -2.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Poison [F]", offset: (0.0, 1.5, 0.0), color: (0.70, 0.20, 0.90, 1.0)),
+    ),
+
     // ── NPCs ─────────────────────────────────────────────────────────────────
     // Villager: patrols east-west beside the cobblestone path (right side).
     // Player spawns at (0, 0.5, 8) heading north — villager is visible on
@@ -489,6 +541,15 @@
       format: "{}",
       position: (16.0, 126.0),
       size: (220.0, 32.0),
+    )),
+    // Active buff/debuff display — updated by shrine interaction and modifier expiry events.
+    Label((
+      id: "buff_label",
+      text: "",
+      bind: "buff",
+      format: "{}",
+      position: (16.0, 160.0),
+      size: (280.0, 32.0),
     )),
   ],
 )

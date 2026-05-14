@@ -30,7 +30,7 @@ pub use motion::*;
 pub use npc::*;
 pub use trigger_zone::*;
 pub use interactable::*;
-pub use stats::{stat_regen_system, stat_threshold_system};
+pub use stats::{stat_modifier_system, stat_regen_system, stat_effective_value_system, stat_threshold_system};
 pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system};
 pub use stat_radar::{RadarMaterial, StatRadarNode, StatRadarPlugin, stat_radar_update_system};
 

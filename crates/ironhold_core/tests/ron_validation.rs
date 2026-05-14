@@ -2596,3 +2596,140 @@ fn test_stat_radar_twelve_stats_round_trip() {
     assert_eq!(radar.stats.len(), 12);
     assert_eq!(radar.stats[11], "s11");
 }
+
+// ── Modifier schema tests ──────────────────────────────────────────────────────
+
+#[test]
+fn test_stat_catalog_with_modifiers_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "speed": ( base: 10.0, min: 0.0, max: 10.0 ),
+                "health": ( base: 100.0, min: 0.0, max: 100.0, soft_max: 125.0 ),
+            },
+            modifiers: {
+                "speed_boost": (
+                    stat: "speed",
+                    kind: Multiplicative(1.5),
+                    duration_secs: 10.0,
+                    stack_rule: Add,
+                ),
+                "poison": (
+                    stat: "health",
+                    kind: Additive(-2.0),
+                    duration_secs: 8.0,
+                    stack_rule: Max,
+                ),
+                "overheal": (
+                    stat: "health",
+                    kind: Additive(25.0),
+                    duration_secs: 15.0,
+                    stack_rule: Add,
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("catalog with modifiers should parse");
+    assert_eq!(catalog.modifiers.len(), 3);
+    let boost = &catalog.modifiers["speed_boost"];
+    assert_eq!(boost.stat, "speed");
+    assert!(matches!(boost.kind, ironhold_core::schema::ModifierKind::Multiplicative(v) if v == 1.5));
+    assert_eq!(boost.duration_secs, Some(10.0));
+    assert!(matches!(boost.stack_rule, ironhold_core::schema::StackRule::Add));
+    let poison = &catalog.modifiers["poison"];
+    assert!(matches!(poison.stack_rule, ironhold_core::schema::StackRule::Max));
+    assert_eq!(catalog.stats["health"].soft_max, Some(125.0));
+    assert!(catalog.validate().is_ok());
+}
+
+#[test]
+fn test_stat_catalog_permanent_modifier_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: { "armor": ( base: 0.0, min: 0.0, max: 100.0 ) },
+            modifiers: {
+                "iron_skin": (
+                    stat: "armor",
+                    kind: Additive(20.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("permanent modifier should parse");
+    let m = &catalog.modifiers["iron_skin"];
+    assert!(m.duration_secs.is_none(), "omitted duration_secs should default to None (permanent)");
+    assert!(matches!(m.stack_rule, ironhold_core::schema::StackRule::Add), "omitted stack_rule should default to Add");
+    assert!(catalog.validate().is_ok());
+}
+
+#[test]
+fn test_stat_catalog_soft_max_validation() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "health": ( base: 100.0, min: 0.0, max: 100.0, soft_max: 80.0 ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_err(), "soft_max < max must fail validation");
+}
+
+#[test]
+fn test_stat_catalog_modifier_references_undefined_stat_is_invalid() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: { "health": ( base: 100.0, max: 100.0 ) },
+            modifiers: {
+                "orphan": (
+                    stat: "nonexistent",
+                    kind: Additive(5.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_err(), "modifier referencing unknown stat must fail validation");
+}
+
+#[test]
+fn test_action_apply_modifier_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"ApplyModifier(modifier_key: "speed_boost")"#;
+    let action: Action = from_str(ron_str).expect("ApplyModifier should parse");
+    assert!(matches!(action, Action::ApplyModifier { modifier_key } if modifier_key == "speed_boost"));
+}
+
+#[test]
+fn test_action_remove_modifier_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"RemoveModifier(modifier_key: "poison")"#;
+    let action: Action = from_str(ron_str).expect("RemoveModifier should parse");
+    assert!(matches!(action, Action::RemoveModifier { modifier_key } if modifier_key == "poison"));
+}
+
+#[test]
+fn test_modifier_kind_override_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: { "strength": ( base: 10.0, max: 100.0 ) },
+            modifiers: {
+                "petrify": (
+                    stat: "strength",
+                    kind: Override(0.0),
+                    stack_rule: Replace,
+                ),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("Override modifier should parse");
+    let m = &catalog.modifiers["petrify"];
+    assert!(matches!(m.kind, ironhold_core::schema::ModifierKind::Override(v) if v == 0.0));
+    assert!(matches!(m.stack_rule, ironhold_core::schema::StackRule::Replace));
+    assert!(catalog.validate().is_ok());
+}

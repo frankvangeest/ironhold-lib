@@ -1,6 +1,6 @@
 # Feature: Game Stats — Phase 2: Buffs and Modifiers
 
-_Status: Draft_
+_Status: Implemented_
 _Planned at: `1f63f4d` (2026-05-04)_
 
 _Depends on: `game_stats_core.md` (Phase 1) must be complete._
@@ -129,20 +129,20 @@ These feed back into `rules.ron` / `state_machine.ron` normally, allowing design
 
 ## Tasks
 
-- [ ] `StatDef`: add `soft_max: Option<f32>` field
-- [ ] `modifiers` map in `StatCatalog` schema
-- [ ] `ModifierDef`, `ModifierKind`, `StackRule` types in `schema/stats.rs`
-- [ ] `ActiveModifier` + `active_modifiers` field on `LiveStat`
-- [ ] Effective value computation function (additive → multiplicative → override → clamp)
-- [ ] `stat_modifier_system` — tick durations, remove expired, emit lifecycle events
-- [ ] `stat_effective_value_system`
-- [ ] `Action::ApplyModifier` and `Action::RemoveModifier` — schema + executor
-- [ ] Integration test: additive stacking accumulates correctly
-- [ ] Integration test: `Max` stack rule ignores weaker modifier
-- [ ] Integration test: timed modifier expires and effective value returns to base
-- [ ] Integration test: soft_max allows overheal; drains to max after buff expires
-- [ ] Integration test: threshold evaluates effective value, not raw `current`
-- [ ] RON validation: modifier template round-trips through serde
+- [x] `StatDef`: add `soft_max: Option<f32>` field
+- [x] `modifiers` map in `StatCatalog` schema
+- [x] `ModifierDef`, `ModifierKind`, `StackRule` types in `schema/stats.rs`
+- [x] `ActiveModifier` + `active_modifiers` field on `LiveStat`
+- [x] Effective value computation function (additive → multiplicative → override → clamp)
+- [x] `stat_modifier_system` — tick durations, remove expired, emit lifecycle events
+- [x] `stat_effective_value_system`
+- [x] `Action::ApplyModifier` and `Action::RemoveModifier` — schema + executor
+- [x] Integration test: additive stacking accumulates correctly
+- [x] Integration test: `Max` stack rule ignores weaker modifier
+- [ ] Integration test: timed modifier expires and effective value returns to base _(headless Bevy time simulation; deferred)_
+- [x] Integration test: soft_max allows overheal; drains to max after buff expires
+- [x] Integration test: threshold evaluates effective value, not raw `current`
+- [x] RON validation: modifier template round-trips through serde (7 new tests)
 - [ ] Docs: extend `20_data_formats.md` and `30_runtime_events_and_logic.md`
 
 ## Open questions

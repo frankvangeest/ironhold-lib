@@ -596,6 +596,155 @@
       ),
     ),
 
+    // ── Buff shrines ───────────────────────────────────────────────────────────
+    //
+    // Each shrine is a pedestal (Cylinder) + coloured orb (Sphere).
+    // The whole entity bobs gently via motion.bob.
+    // Geometry notes (origin = y=0 ground level):
+    //   Pedestal: Cylinder h=0.55 → center at y=0.275 → bottom at y=0.
+    //   Orb:      Sphere r=0.22  → center at y=0.55+0.22 = 0.77.
+    // Stone grey pedestal: (0.55, 0.53, 0.50).
+
+    // ── Green shrine — overheal (+30 HP, 15 s) ─────────────────────────────────
+    "shrine_overheal": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.0, hint_text: "F  Overheal"),
+      motion: (bob: (0.12, 0.7)),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.28,
+            height: 0.55,
+            color: (0.55, 0.53, 0.50),
+            roughness: 0.85,
+          ),
+          offset: (0.0, 0.275, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: 0.22,
+            color: (0.18, 0.88, 0.35),
+            roughness: 0.10,
+            metallic: 0.05,
+          ),
+          offset: (0.0, 0.77, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Yellow shrine — speed boost (×1.5, 10 s) ──────────────────────────────
+    "shrine_speed": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.0, hint_text: "F  Speed Boost"),
+      motion: (bob: (0.12, 0.7)),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.28,
+            height: 0.55,
+            color: (0.55, 0.53, 0.50),
+            roughness: 0.85,
+          ),
+          offset: (0.0, 0.275, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: 0.22,
+            color: (1.0, 0.82, 0.10),
+            roughness: 0.10,
+            metallic: 0.05,
+          ),
+          offset: (0.0, 0.77, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Blue shrine — mana surge (×1.8, 12 s) ─────────────────────────────────
+    "shrine_mana": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.0, hint_text: "F  Mana Surge"),
+      motion: (bob: (0.12, 0.7)),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.28,
+            height: 0.55,
+            color: (0.55, 0.53, 0.50),
+            roughness: 0.85,
+          ),
+          offset: (0.0, 0.275, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: 0.22,
+            color: (0.20, 0.45, 1.0),
+            roughness: 0.10,
+            metallic: 0.05,
+          ),
+          offset: (0.0, 0.77, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
+    // ── Purple shrine — poison (−30 HP, 8 s) ──────────────────────────────────
+    "shrine_poison": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.0, hint_text: "F  Poison"),
+      motion: (bob: (0.12, 0.7)),
+      children: [
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.28,
+            height: 0.55,
+            color: (0.55, 0.53, 0.50),
+            roughness: 0.85,
+          ),
+          offset: (0.0, 0.275, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: 0.22,
+            color: (0.55, 0.06, 0.75),
+            roughness: 0.10,
+            metallic: 0.05,
+          ),
+          offset: (0.0, 0.77, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
     // ── Composite prefabs ──────────────────────────────────────────────────────
     //
     // All children use offsets relative to the parent entity's origin (base of object).

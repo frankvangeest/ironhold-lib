@@ -5,6 +5,7 @@
             base: 100.0,
             min: 0.0,
             max: 100.0,
+            soft_max: 130.0,
             regen_rate: 0.0,
             regen_delay: 0.0,
             thresholds: [
@@ -53,6 +54,38 @@
             regen_rate: 0.0,
             regen_delay: 0.0,
             thresholds: [],
+        ),
+    },
+
+    modifiers: {
+        // Overheal: pushes health above max via soft_max (130); drains to 100 on expiry.
+        "overheal": (
+            stat: "player_health",
+            kind: Additive(30.0),
+            duration_secs: 15.0,
+            stack_rule: Replace,
+        ),
+        // Poison: flat −30 penalty on effective health; strong enough to be felt.
+        "poison": (
+            stat: "player_health",
+            kind: Additive(-30.0),
+            duration_secs: 8.0,
+            stack_rule: Max,
+        ),
+        // Speed boost: ×1.5 multiplicative — visually obvious when running.
+        "speed_boost": (
+            stat: "player_speed",
+            kind: Multiplicative(1.5),
+            duration_secs: 10.0,
+            stack_rule: Replace,
+        ),
+        // Mana surge: ×1.8 multiplicative on mana — demonstrates modifier on a
+        // non-health stat.
+        "mana_surge": (
+            stat: "player_mana",
+            kind: Multiplicative(1.8),
+            duration_secs: 12.0,
+            stack_rule: Replace,
         ),
     },
 )

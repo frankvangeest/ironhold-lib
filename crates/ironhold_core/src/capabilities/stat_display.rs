@@ -34,7 +34,7 @@ pub fn stat_bar_update_system(
             if range <= 0.0 {
                 1.0
             } else {
-                ((stat.current - stat.def.min) / range).clamp(0.0, 1.0)
+                ((stat.effective - stat.def.min) / range).clamp(0.0, 1.0)
             }
         } else {
             if cfg!(debug_assertions) {
@@ -81,7 +81,7 @@ pub fn stat_bar_value_text_system(
 ) {
     for (label, mut text) in text_query.iter_mut() {
         let new_text = if let Some(stat) = loaded_stats.0.get(&label.stat_key) {
-            format!("{:.0} / {:.0}", stat.current, stat.def.max)
+            format!("{:.0} / {:.0}", stat.effective, stat.def.max)
         } else {
             "? / ?".to_string()
         };

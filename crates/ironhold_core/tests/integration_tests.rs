@@ -3,7 +3,7 @@ use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
 use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats, ModifierDef, ModifierKind, StackRule, ActiveModifier, LoadedModifiers};
 use ironhold_core::schema::catalog::AudioEntry;
 use ironhold_core::schema::stats::StatMap;
 use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
@@ -2691,7 +2691,7 @@ fn test_pending_spawns_cleared_on_load_scene() {
 // ── Stat system tests ─────────────────────────────────────────────────────────
 
 fn make_stat_def(base: f32, max: f32) -> StatDef {
-    StatDef { base, min: 0.0, max, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![] }
+    StatDef { base, min: 0.0, max, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![] }
 }
 
 #[test]
@@ -2763,7 +2763,7 @@ fn test_stat_map_threshold_crossing_emits_game_event() {
     app.update();
 
     let def = StatDef {
-        base: 50.0, min: 0.0, max: 50.0,
+        base: 50.0, min: 0.0, max: 50.0, soft_max: None,
         regen_rate: 0.0, regen_delay: 0.0,
         thresholds: vec![
             StatThreshold {
@@ -2883,4 +2883,181 @@ fn test_stat_radar_scene_load_spawns_node_with_correct_stat_keys() {
         }
     }
     assert!(found, "scene loader must spawn an entity with StatRadarNode carrying the RON-defined stat keys");
+}
+
+// ── Modifier system tests ──────────────────────────────────────────────────────
+
+fn make_additive_modifier(stat: &str, amount: f32, stack_rule: StackRule) -> ModifierDef {
+    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Additive(amount), duration_secs: None, stack_rule }
+}
+
+fn make_timed_additive_modifier(stat: &str, amount: f32, duration: f32) -> ModifierDef {
+    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Additive(amount), duration_secs: Some(duration), stack_rule: StackRule::Add }
+}
+
+fn make_multiplicative_modifier(stat: &str, factor: f32) -> ModifierDef {
+    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Multiplicative(factor), duration_secs: None, stack_rule: StackRule::Add }
+}
+
+#[test]
+fn test_additive_modifier_raises_effective_value() {
+    let def = make_stat_def(50.0, 100.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 20.0, StackRule::Add));
+
+    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 70.0, "additive +20 on current=50 should give effective=70");
+}
+
+#[test]
+fn test_additive_modifiers_stack_with_add_rule() {
+    let def = make_stat_def(50.0, 100.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 10.0, StackRule::Add));
+
+    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
+    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 70.0, "two Add-rule +10 modifiers should accumulate to +20");
+}
+
+#[test]
+fn test_max_stack_rule_ignores_weaker_instance() {
+    let def = make_stat_def(40.0, 100.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("poison".to_string(), ModifierDef {
+        stat: "health".to_string(),
+        kind: ModifierKind::Additive(-5.0),
+        duration_secs: None,
+        stack_rule: StackRule::Max,
+    });
+
+    // Apply twice — Max rule means only one instance's magnitude counts
+    stat.active_modifiers.push(ActiveModifier { key: "poison".to_string(), remaining_secs: None });
+    stat.active_modifiers.push(ActiveModifier { key: "poison".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 35.0, "Max rule: two instances of -5 should still only apply -5 once (not -10)");
+}
+
+#[test]
+fn test_multiplicative_modifier_scales_current() {
+    let def = make_stat_def(10.0, 20.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
+
+    stat.active_modifiers.push(ActiveModifier { key: "speed_boost".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 15.0, "multiplicative 1.5× on current=10 should give effective=15");
+}
+
+#[test]
+fn test_soft_max_allows_overheal() {
+    let mut def = make_stat_def(100.0, 100.0);
+    def.soft_max = Some(125.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("overheal".to_string(), make_additive_modifier("health", 25.0, StackRule::Add));
+
+    stat.active_modifiers.push(ActiveModifier { key: "overheal".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 125.0, "additive +25 with soft_max=125 should reach 125");
+}
+
+#[test]
+fn test_soft_max_caps_overheal() {
+    let mut def = make_stat_def(100.0, 100.0);
+    def.soft_max = Some(125.0);
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("big_overheal".to_string(), make_additive_modifier("health", 999.0, StackRule::Add));
+
+    stat.active_modifiers.push(ActiveModifier { key: "big_overheal".to_string(), remaining_secs: None });
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 125.0, "effective value must be clamped to soft_max");
+}
+
+#[test]
+fn test_no_modifiers_effective_equals_current() {
+    let def = make_stat_def(75.0, 100.0);
+    let stat = LiveStat::new(def);
+    let modifier_defs = HashMap::new();
+    let eff = stat.compute_effective(&modifier_defs);
+    assert_eq!(eff, 75.0, "with no active modifiers effective must equal current");
+}
+
+#[test]
+fn test_apply_modifier_action_adds_to_loaded_stats() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut loaded_stats = LoadedStats::default();
+    loaded_stats.0.insert("speed".to_string(), LiveStat::new(make_stat_def(10.0, 20.0)));
+    app.world_mut().insert_resource(loaded_stats);
+
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
+    app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::ApplyModifier { modifier_key: "speed_boost".to_string() });
+    app.update();
+
+    let stats = app.world().resource::<LoadedStats>();
+    assert_eq!(stats.0["speed"].active_modifiers.len(), 1,
+        "ApplyModifier must push one ActiveModifier onto the stat");
+    assert_eq!(stats.0["speed"].active_modifiers[0].key, "speed_boost");
+}
+
+#[test]
+fn test_remove_modifier_action_clears_active_modifier() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut loaded_stats = LoadedStats::default();
+    let mut stat = LiveStat::new(make_stat_def(10.0, 20.0));
+    stat.active_modifiers.push(ActiveModifier { key: "speed_boost".to_string(), remaining_secs: None });
+    loaded_stats.0.insert("speed".to_string(), stat);
+    app.world_mut().insert_resource(loaded_stats);
+
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
+    app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
+
+    app.world_mut().resource_mut::<ActionQueue>()
+        .push(Action::RemoveModifier { modifier_key: "speed_boost".to_string() });
+    app.update();
+
+    let stats = app.world().resource::<LoadedStats>();
+    assert!(stats.0["speed"].active_modifiers.is_empty(),
+        "RemoveModifier must remove all instances of the modifier from the stat");
+}
+
+#[test]
+fn test_threshold_uses_effective_value_not_current() {
+    // A debuff reduces effective health below 25% while raw current stays above.
+    let mut def = make_stat_def(80.0, 100.0);
+    def.thresholds = vec![StatThreshold {
+        when: ThresholdCondition::BelowPercent(0.25),
+        emit: "stat.health.low".to_string(),
+    }];
+    let mut stat = LiveStat::new(def);
+    let mut modifier_defs = HashMap::new();
+    modifier_defs.insert("heavy_curse".to_string(), make_additive_modifier("health", -65.0, StackRule::Add));
+
+    stat.active_modifiers.push(ActiveModifier { key: "heavy_curse".to_string(), remaining_secs: None });
+    // effective = 80 - 65 = 15, which is 15% of max (100) — below 25%
+    let eff = stat.compute_effective(&modifier_defs);
+    assert!(eff < 25.0, "effective should be below 25 after debuff: got {}", eff);
+    // raw current is still 80 — not below 25%
+    assert!(stat.current >= 25.0);
+    // threshold should fire on effective, not current
+    let is_met = ThresholdCondition::BelowPercent(0.25).is_met(eff, stat.def.max);
+    assert!(is_met, "threshold must be met based on effective value");
+    let raw_is_met = ThresholdCondition::BelowPercent(0.25).is_met(stat.current, stat.def.max);
+    assert!(!raw_is_met, "threshold must NOT be met based on raw current");
 }

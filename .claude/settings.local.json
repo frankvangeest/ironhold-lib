@@ -44,7 +44,9 @@
       "Bash(git -C C:\\git\\rust\\ironhold-lib rev-parse --short HEAD)",
       "Bash(git -C C:/git/rust/ironhold-lib rev-parse --short HEAD)",
       "Bash(python tools/migrate_implicit_some.py)",
-      "Bash(awk -F: '{print $1\":\"$2}')"
+      "Bash(awk -F: '{print $1\":\"$2}')",
+      "Bash(Get-Content \"crates\\\\ironhold_core\\\\tests\\\\ron_validation.rs\")",
+      "Bash(Select-Object -Last 20)"
     ]
   }
 }

@@ -259,6 +259,7 @@ pub struct SceneStateParams<'w, 's> {
     pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
     pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
+    pub loaded_modifiers: Res<'w, crate::schema::stats::LoadedModifiers>,
     pub stat_map_query: Query<'w, 's, (&'static SpawnId, &'static mut crate::schema::stats::StatMap)>,
 }
 

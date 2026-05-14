@@ -314,6 +314,7 @@ pub fn spawn_scene_v2(
                         for tpl in &prefab.stat_templates {
                             let def = crate::schema::stats::StatDef {
                                 base: tpl.base, min: tpl.min, max: tpl.max,
+                                soft_max: None,
                                 regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
                                 thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
                                     when: t.when.clone(),
@@ -527,6 +528,7 @@ pub fn spawn_scene_v2(
                             for tpl in &prefab.stat_templates {
                                 let def = crate::schema::stats::StatDef {
                                     base: tpl.base, min: tpl.min, max: tpl.max,
+                                    soft_max: None,
                                     regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
                                     thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
                                         when: t.when.clone(),

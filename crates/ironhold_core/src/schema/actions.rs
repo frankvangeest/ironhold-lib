@@ -102,6 +102,20 @@ pub enum Action {
         key: String,
         value: f32,
     },
+    /// Apply a named modifier template (defined in `stats.ron`) to its target stat.
+    /// Multiple applications stack according to the modifier's `stack_rule`.
+    /// Timed modifiers expire automatically; permanent ones persist until `RemoveModifier`.
+    /// Example: `ApplyModifier(modifier_key: "speed_boost")`.
+    ApplyModifier {
+        modifier_key: String,
+    },
+    /// Remove all active instances of a named modifier from its target stat.
+    /// Emits `stat.modifier.removed:{modifier_key}` when at least one instance was removed.
+    /// No-op if the modifier is not currently active.
+    /// Example: `RemoveModifier(modifier_key: "poison")`.
+    RemoveModifier {
+        modifier_key: String,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }

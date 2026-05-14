@@ -4,7 +4,7 @@ use crate::schema::*;
 use crate::schema::project::StateMachineAsset;
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
-use crate::schema::stats::{StatCatalog, LiveStat, LoadedStats};
+use crate::schema::stats::{StatCatalog, LiveStat, LoadedStats, LoadedModifiers};
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
@@ -99,6 +99,7 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedRules(config.rules.clone()));
         commands.insert_resource(LoadedStateMachine(None));
         commands.insert_resource(LoadedStats::default());
+        commands.insert_resource(LoadedModifiers::default());
         {
             let key_bindings = config.global_key_bindings.clone();
             for key_name in key_bindings.keys() {
@@ -249,7 +250,7 @@ pub fn check_project_loaded(
         }
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
 
-        let loaded_stats = if let Some(h) = &pending.stats {
+        let (loaded_stats, loaded_modifiers) = if let Some(h) = &pending.stats {
             if let Some(catalog) = stat_catalog_assets.get(h) {
                 if let Err(e) = catalog.validate() {
                     error!("Invalid StatCatalog: {} — stat system may not behave correctly", e);
@@ -257,15 +258,20 @@ pub fn check_project_loaded(
                 let map = catalog.stats.iter()
                     .map(|(key, def)| (key.clone(), LiveStat::new(def.clone())))
                     .collect();
-                info!("Stats loaded: {} stat(s) defined", catalog.stats.len());
-                LoadedStats(map)
+                info!(
+                    "Stats loaded: {} stat(s), {} modifier(s) defined",
+                    catalog.stats.len(),
+                    catalog.modifiers.len(),
+                );
+                (LoadedStats(map), LoadedModifiers(catalog.modifiers.clone()))
             } else {
-                LoadedStats::default()
+                (LoadedStats::default(), LoadedModifiers::default())
             }
         } else {
-            LoadedStats::default()
+            (LoadedStats::default(), LoadedModifiers::default())
         };
         commands.insert_resource(loaded_stats);
+        commands.insert_resource(loaded_modifiers);
     }
 
     let initial = scene_override

@@ -21,6 +21,7 @@
                 SetVariable("health", "100"),
                 SetVariable("score", "0"),
                 SetVariable("status", ""),
+                SetVariable("buff", ""),
                 // Reset global stats for a fresh run (goblin stats are per-entity — reset on respawn)
                 SetStat(key: "player_health", value: 100.0),
                 PlayMusicLoop(key: "bg_music"),
@@ -51,6 +52,18 @@
                 ( event: "npc.player_reached:villager_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
 
                 ( event: "npc.player_spotted:merchant_01", do_actions: [ PlaySound(key: "npc_greet") ] ),
+
+                // ── Buff shrines ─────────────────────────────────────────────────────
+                ( event: "entity.interacted:shrine_overheal_01", do_actions: [ ApplyModifier(modifier_key: "overheal"),    SetVariable("buff", "Overheal +30 HP (15 s)") ] ),
+                ( event: "entity.interacted:shrine_speed_01",    do_actions: [ ApplyModifier(modifier_key: "speed_boost"), SetVariable("buff", "Speed x1.5 (10 s)") ] ),
+                ( event: "entity.interacted:shrine_mana_01",     do_actions: [ ApplyModifier(modifier_key: "mana_surge"),  SetVariable("buff", "Mana Surge x1.8 (12 s)") ] ),
+                ( event: "entity.interacted:shrine_poison_01",   do_actions: [ ApplyModifier(modifier_key: "poison"),      SetVariable("buff", "Poisoned -30 HP (8 s)") ] ),
+
+                // Clear buff label when a modifier expires naturally.
+                ( event: "stat.modifier.expired:overheal",    do_actions: [ SetVariable("buff", "") ] ),
+                ( event: "stat.modifier.expired:speed_boost", do_actions: [ SetVariable("buff", "") ] ),
+                ( event: "stat.modifier.expired:mana_surge",  do_actions: [ SetVariable("buff", "") ] ),
+                ( event: "stat.modifier.expired:poison",      do_actions: [ SetVariable("buff", "") ] ),
 
                 // ── Stat threshold feedback ──────────────────────────────────────────
                 // Low health warning (edge-triggered: fires once when HP drops below 25%).

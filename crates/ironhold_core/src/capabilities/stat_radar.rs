@@ -88,7 +88,7 @@ pub fn stat_radar_update_system(
                 r[i] = if range <= 0.0 {
                     1.0
                 } else {
-                    ((stat.current - stat.def.min) / range).clamp(0.0, 1.0)
+                    ((stat.effective - stat.def.min) / range).clamp(0.0, 1.0)
                 };
             }
         }

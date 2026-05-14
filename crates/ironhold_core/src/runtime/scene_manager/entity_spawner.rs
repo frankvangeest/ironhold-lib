@@ -124,6 +124,7 @@ pub fn spawn_prefab_instance(
                 base: tpl.base,
                 min: tpl.min,
                 max: tpl.max,
+                soft_max: None,
                 regen_rate: tpl.regen_rate,
                 regen_delay: tpl.regen_delay,
                 thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {

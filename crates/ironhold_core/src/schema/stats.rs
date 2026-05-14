@@ -3,10 +3,62 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use indexmap::IndexMap;
 
+// ─── Modifier schema types ─────────────────────────────────────────────────────
+
+/// The mathematical effect a modifier has on a stat's base value.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum ModifierKind {
+    /// Adds a flat delta to the effective value.
+    Additive(f32),
+    /// Multiplies the base value (additive modifiers are applied after multiplication).
+    Multiplicative(f32),
+    /// Forces the stat to a fixed effective value, ignoring all other modifiers.
+    Override(f32),
+}
+
+/// How multiple active instances of the same modifier key combine.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum StackRule {
+    /// All active instances accumulate (add or multiply together).
+    Add,
+    /// Only the instance with the largest absolute magnitude applies.
+    Max,
+    /// Each new application replaces all prior instances of this modifier.
+    Replace,
+}
+
+fn default_stack_rule() -> StackRule { StackRule::Add }
+
+/// Template for a named modifier defined in `stats.ron`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct ModifierDef {
+    /// The stat key this modifier affects (e.g. `"speed"`).
+    pub stat: String,
+    pub kind: ModifierKind,
+    /// Duration in seconds. `None` = permanent until explicitly removed.
+    #[serde(default)]
+    pub duration_secs: Option<f32>,
+    #[serde(default = "default_stack_rule")]
+    pub stack_rule: StackRule,
+}
+
+/// A live modifier instance attached to a `LiveStat`.
+#[derive(Debug, Clone)]
+pub struct ActiveModifier {
+    /// References a key in the project's `LoadedModifiers` map.
+    pub key: String,
+    /// Seconds remaining before this instance expires. `None` = permanent.
+    pub remaining_secs: Option<f32>,
+}
+
+// ─── Stat catalog ─────────────────────────────────────────────────────────────
+
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct StatCatalog {
     pub schema_version: u32,
     pub stats: HashMap<String, StatDef>,
+    #[serde(default)]
+    pub modifiers: HashMap<String, ModifierDef>,
 }
 
 impl StatCatalog {
@@ -27,6 +79,22 @@ impl StatCatalog {
                     key, def.base, def.min, def.max
                 ));
             }
+            if let Some(soft) = def.soft_max {
+                if soft < def.max {
+                    return Err(format!(
+                        "Stat {:?}: soft_max ({}) must be >= max ({})",
+                        key, soft, def.max
+                    ));
+                }
+            }
+        }
+        for (key, def) in &self.modifiers {
+            if !self.stats.contains_key(&def.stat) {
+                return Err(format!(
+                    "Modifier {:?}: references stat {:?} which is not defined",
+                    key, def.stat
+                ));
+            }
         }
         Ok(())
     }
@@ -38,6 +106,10 @@ pub struct StatDef {
     #[serde(default)]
     pub min: f32,
     pub max: f32,
+    /// When set, additive buffs can push `effective` above `max` up to `soft_max`.
+    /// Raw `current` always stays within `[min, max]`.
+    #[serde(default)]
+    pub soft_max: Option<f32>,
     /// Units per second added to the stat when regen is active. 0 = no regen.
     #[serde(default)]
     pub regen_rate: f32,
@@ -84,11 +156,16 @@ impl ThresholdCondition {
 pub struct LiveStat {
     pub def: StatDef,
     pub current: f32,
+    /// Computed each frame by `stat_effective_value_system`. Equals `current` when no
+    /// modifiers are active. Display systems and threshold checks use this value.
+    pub effective: f32,
     /// Seconds remaining before regen resumes. Counts down to 0.
     pub regen_cooldown: f32,
     /// Edge-detection state per threshold: `true` when the condition was met last check.
     /// Events fire only on false→true transitions to avoid re-firing every frame.
     pub prev_threshold_states: Vec<bool>,
+    /// Active modifier instances stacked on this stat.
+    pub active_modifiers: Vec<ActiveModifier>,
 }
 
 impl LiveStat {
@@ -100,8 +177,10 @@ impl LiveStat {
             .collect();
         Self {
             current,
+            effective: current,
             regen_cooldown: 0.0,
             prev_threshold_states: prev,
+            active_modifiers: Vec::new(),
             def,
         }
     }
@@ -125,7 +204,69 @@ impl LiveStat {
         self.current = clamped;
         clamped
     }
+
+    /// Compute the effective value by applying all active modifier instances.
+    ///
+    /// Order of operations:
+    /// 1. Multiplicative modifiers scale `current`
+    /// 2. Additive modifiers add a flat delta
+    /// 3. Override forces a fixed value (last Override wins, ignores other modifiers)
+    /// 4. Result clamped to `[min, soft_max.unwrap_or(max)]`
+    pub fn compute_effective(&self, modifier_defs: &HashMap<String, ModifierDef>) -> f32 {
+        let ceiling = self.def.soft_max.unwrap_or(self.def.max);
+
+        let mut additive_total = 0.0f32;
+        let mut mult_factor = 1.0f32;
+        let mut override_val: Option<f32> = None;
+
+        // Collect unique modifier keys present in active_modifiers
+        let mut seen: Vec<&str> = Vec::new();
+        for am in &self.active_modifiers {
+            if !seen.contains(&am.key.as_str()) {
+                seen.push(am.key.as_str());
+            }
+        }
+
+        for key in seen {
+            let Some(def) = modifier_defs.get(key) else { continue; };
+
+            let magnitude = match def.kind {
+                ModifierKind::Additive(v) => v,
+                ModifierKind::Multiplicative(v) => v,
+                ModifierKind::Override(v) => v,
+            };
+
+            let count = self.active_modifiers.iter().filter(|am| am.key == key).count();
+            if count == 0 { continue; }
+
+            let contribution = match def.stack_rule {
+                StackRule::Add => match def.kind {
+                    ModifierKind::Multiplicative(_) => magnitude.powi(count as i32),
+                    _ => magnitude * count as f32,
+                },
+                StackRule::Max => magnitude, // all instances have same magnitude (same def)
+                StackRule::Replace => magnitude, // only one instance kept; value is the def magnitude
+            };
+
+            match def.kind {
+                ModifierKind::Additive(_) => additive_total += contribution,
+                ModifierKind::Multiplicative(_) => mult_factor *= contribution,
+                ModifierKind::Override(_) => override_val = Some(contribution),
+            }
+        }
+
+        if let Some(v) = override_val {
+            return v.clamp(self.def.min, ceiling);
+        }
+
+        (self.current * mult_factor + additive_total).clamp(self.def.min, ceiling)
+    }
 }
+
+/// Loaded modifier templates for the current project. Populated at project load time.
+/// Persists across scene transitions (same lifecycle as `LoadedStats`).
+#[derive(Resource, Default, Clone)]
+pub struct LoadedModifiers(pub HashMap<String, ModifierDef>);
 
 /// Live stat state for the current project. Populated at project load time from `stats.ron`.
 /// Stats persist across scene transitions (the resource is not cleared on scene load).
@@ -166,6 +307,7 @@ mod tests {
             base: 100.0,
             min: 0.0,
             max: 100.0,
+            soft_max: None,
             regen_rate: 0.0,
             regen_delay: 0.0,
             thresholds: vec![
@@ -270,11 +412,13 @@ mod tests {
         let mut catalog = StatCatalog {
             schema_version: 1,
             stats: HashMap::new(),
+            modifiers: HashMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {
             base: 50.0,
             min: 100.0, // min > max — invalid
             max: 50.0,
+            soft_max: None,
             regen_rate: 0.0,
             regen_delay: 0.0,
             thresholds: vec![],
@@ -287,11 +431,13 @@ mod tests {
         let mut catalog = StatCatalog {
             schema_version: 1,
             stats: HashMap::new(),
+            modifiers: HashMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {
             base: 200.0, // base > max — invalid
             min: 0.0,
             max: 100.0,
+            soft_max: None,
             regen_rate: 0.0,
             regen_delay: 0.0,
             thresholds: vec![],

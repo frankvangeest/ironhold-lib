@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::ProjectRoot;
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
+use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
@@ -360,6 +361,55 @@ pub fn action_executor_system(
                     } else {
                         warn!("Action::SetStat: stat {:?} not found in stats catalog", key);
                     }
+                }
+            }
+            Action::ApplyModifier { modifier_key } => {
+                let Some(def) = scene_state.loaded_modifiers.0.get(&modifier_key) else {
+                    warn!("Action::ApplyModifier: modifier {:?} not defined in stats catalog", modifier_key);
+                    continue;
+                };
+                let stat_key = def.stat.clone();
+                let duration = def.duration_secs;
+                let stack_rule = def.stack_rule.clone();
+
+                let modifier = ActiveModifier {
+                    key: modifier_key.clone(),
+                    remaining_secs: duration,
+                };
+
+                if let Some(stat) = scene_state.loaded_stats.0.get_mut(&stat_key) {
+                    match stack_rule {
+                        StackRule::Replace => {
+                            stat.active_modifiers.retain(|am| am.key != modifier_key);
+                            stat.active_modifiers.push(modifier);
+                        }
+                        _ => stat.active_modifiers.push(modifier),
+                    }
+                    info!("Action::ApplyModifier: \"{}\" applied to stat \"{}\"", modifier_key, stat_key);
+                } else {
+                    warn!("Action::ApplyModifier: stat {:?} not found for modifier {:?}", stat_key, modifier_key);
+                }
+            }
+            Action::RemoveModifier { modifier_key } => {
+                let stat_key = scene_state.loaded_modifiers.0.get(&modifier_key)
+                    .map(|d| d.stat.clone());
+
+                if let Some(stat_key) = stat_key {
+                    if let Some(stat) = scene_state.loaded_stats.0.get_mut(&stat_key) {
+                        let before = stat.active_modifiers.len();
+                        stat.active_modifiers.retain(|am| am.key != modifier_key);
+                        if stat.active_modifiers.len() < before {
+                            let event = format!("stat.modifier.removed:{}", modifier_key);
+                            info!("Action::RemoveModifier: \"{}\" removed from stat \"{}\" -> emitting \"{}\"", modifier_key, stat_key, event);
+                            game_events.write(GameEvent::Trigger(event));
+                        } else {
+                            info!("Action::RemoveModifier: \"{}\" was not active (no-op)", modifier_key);
+                        }
+                    } else {
+                        warn!("Action::RemoveModifier: stat {:?} not found for modifier {:?}", stat_key, modifier_key);
+                    }
+                } else {
+                    warn!("Action::RemoveModifier: modifier {:?} not defined in stats catalog", modifier_key);
                 }
             }
         }

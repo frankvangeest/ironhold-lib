@@ -113,6 +113,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
+            .init_resource::<crate::schema::stats::LoadedModifiers>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -153,9 +154,13 @@ impl Plugin for GamePlugin {
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
-            // Stat regen runs before the interpreter chain so regen-triggered threshold
-            // crossings are visible to stat_threshold_system in the same frame.
-            .add_systems(Update, stat_regen_system.before(message_interpreter_system))
+            // Stat pipeline: modifier ticks → regen → effective value recompute — all before
+            // the interpreter chain so threshold crossings are visible in the same frame.
+            .add_systems(Update, (
+                stat_modifier_system,
+                stat_regen_system,
+                stat_effective_value_system,
+            ).chain().before(message_interpreter_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
             // stat_threshold_system runs after action_executor to detect crossings from
             // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.
@@ -166,6 +171,7 @@ impl Plugin for GamePlugin {
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
                 action_executor_system,
+                stat_effective_value_system, // recompute after ModifyStat/SetStat/ApplyModifier/RemoveModifier
                 stat_threshold_system,
                 drain_spawn_queue_system,
             ).chain())
