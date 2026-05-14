@@ -632,17 +632,18 @@ fn default_spread_row_gap() -> f32 { 4.0 }
 fn default_spread_fill_color() -> (f32, f32, f32, f32) { (0.3, 0.6, 1.0, 1.0) }
 fn default_spread_bg_color() -> (f32, f32, f32, f32) { (0.1, 0.1, 0.25, 1.0) }
 
-/// An N-sided (up to 8) radar/spider chart that fills each axis proportionally
+/// An N-sided (3–12) radar/spider chart that fills each axis proportionally
 /// to a named stat's `current / max` ratio.  Updated automatically each frame
 /// by `stat_radar_update_system` — no event wiring needed.
 ///
+/// The grid and outer boundary are straight-edged polygons (no circles).
 /// Labels for each axis are not rendered by the current implementation and are
 /// planned as a follow-up (`stat_radar_labels` backlog item).
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct StatRadarDef {
     pub id: String,
-    /// Stat keys to display, 1–8 entries (matches keys in `stats.ron`).
+    /// Stat keys to display, 3–12 entries (matches keys in `stats.ron`).
     pub stats: Vec<String>,
     /// Width and height of the bounding square in pixels. Default: `(240.0, 240.0)`.
     #[serde(default = "default_radar_size")]

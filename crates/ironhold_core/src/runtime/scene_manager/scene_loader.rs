@@ -899,8 +899,9 @@ pub fn spawn_scene_v2(
                     uniforms: RadarUniforms {
                         ratios_0: Vec4::ZERO,
                         ratios_1: Vec4::ZERO,
+                        ratios_2: Vec4::ZERO,
                         // outline_width is authored in pixels; convert to UV fraction.
-                        config: Vec4::new(d.stats.len().min(8) as f32, d.grid_steps as f32, d.outline_width / d.size.0.min(d.size.1).max(1.0), 0.0),
+                        config: Vec4::new(d.stats.len().min(12) as f32, d.grid_steps as f32, d.outline_width / d.size.0.min(d.size.1).max(1.0), 0.0),
                         fill_color: Vec4::new(fr, fg, fb, fa),
                         outline_color: Vec4::new(or, og, ob, oa),
                         grid_color: Vec4::new(gr, gg, gb, ga),

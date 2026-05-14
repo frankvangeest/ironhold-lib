@@ -2576,3 +2576,23 @@ fn test_stat_radar_size_helper() {
     let scene: GameSceneV2 = from_str(ron_str).expect("should parse");
     assert_eq!(scene.ui[0].size(), (180.0, 180.0));
 }
+
+#[test]
+fn test_stat_radar_twelve_stats_round_trip() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [],
+            ui: [
+                StatRadar((
+                    id: "dodecagon",
+                    stats: ["s0","s1","s2","s3","s4","s5","s6","s7","s8","s9","s10","s11"],
+                )),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("12-stat StatRadar should parse");
+    let UiNodeDef::StatRadar(radar) = &scene.ui[0] else { panic!("expected StatRadar") };
+    assert_eq!(radar.stats.len(), 12);
+    assert_eq!(radar.stats[11], "s11");
+}

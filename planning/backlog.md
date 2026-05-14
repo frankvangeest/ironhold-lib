@@ -68,7 +68,7 @@ _(nothing active)_
 - [x] **Game stats — Phase 1: core stat model** — `StatDef` (base/min/max/regen/thresholds), `LoadedStats` resource, `ModifyStat`/`SetStat` actions, threshold events into existing pipeline; design: `planning/features/game_stats_core.md`
 - [ ] **Game stats — Phase 2: buffs and modifiers** — named modifier templates, additive/multiplicative/override kinds, stacking rules, soft_max, `ApplyModifier`/`RemoveModifier` actions; design: `planning/features/game_stats_buffs.md` _(depends on Phase 1)_
 - [x] **Stat display — health bars and stat spreads** — `StatBar` and `StatSpread` UI node types in scene RON, colour bands, change-detection update; design: `planning/features/game_stats_display.md` _(depends on Phase 1)_
-- [x] **Stat display — radar chart** — `StatRadar` UI node (up to 8 axes), WGSL polar-coordinate shader via `UiMaterial`, `stat_radar_update_system`; `primitive_world` demo: 5-stat pentagon (health/mana/stamina/strength/speed) on Key C overlay
+- [x] **Stat display — radar chart** — `StatRadar` UI node (3–12 axes), WGSL polar-coordinate shader via `UiMaterial`, straight-edged polygon grid (no circles), `stat_radar_update_system`; `primitive_world` demo: 5-stat pentagon (health/mana/stamina/strength/speed) on Key C overlay
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
 - [ ] **Stat display — per-entity stat routing** — `StatBar`, `StatSpread`, and `StatRadar` only read the global `LoadedStats` resource; `stats: ["goblin_01.health"]` silently renders empty; unify with a shared `resolve_stat(key, &LoadedStats, &Query<(&SpawnId, &StatMap)>)` helper used by all three update systems _(depends on Phase 2a)_
 - [ ] Dialogue system — multi-step NPC conversation trees in RON; emits `dialogue.ended:{id}` trigger
@@ -91,7 +91,12 @@ _(nothing active)_
 
 ### Rendering & Assets
 - [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
-- [ ] LOD (level of detail) for terrain and models — distance-based mesh swap
+- [ ] LOD (level of detail) for terrain and models — distance-based mesh swap.
+    - Auto generated LODs of assets (only for web builds using IndexedDB). 
+    - A flag per asset and/or per scene? 
+    - Web workers or something similar will likely be needed for web builds, because it must not block the main thread. 
+    - Seamless switching between LODs?
+    - Use bevy meshlets?
 - [ ] Decal system — project a texture onto geometry without modifying meshes
 - [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
 - [ ] Water / reflective plane primitive with animated normal map

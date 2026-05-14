@@ -133,9 +133,9 @@ pub struct StatSpreadDef {
 
 A `StatBar` does not listen to events — it polls `LoadedStats` directly each frame (efficiently, via change detection). Designers do not need to write any event rules to keep the display in sync.
 
-### Radar chart (future, not in scope)
+### Radar chart
 
-`StatSpread` with `layout: Radar` would render an SVG-style polygon. Out of scope for this feature; the `Radar` variant is reserved in the enum to avoid a future breaking schema change.
+Implemented as a separate `StatRadar` UI node (not a `StatSpread` layout variant). Supports 3–12 axes, straight-edged polygon grid, WGSL polar-coordinate shader via `UiMaterial`. See backlog entry and `capabilities/stat_radar.rs`.
 
 ## Tasks
 
@@ -159,7 +159,7 @@ A `StatBar` does not listen to events — it polls `LoadedStats` directly each f
 - **Stat not found**: Renders empty; `warn!` logged in debug builds (`cfg!(debug_assertions)`) each frame until the stat is present. Silent in release. ✅
 - **Animated transitions**: Snap (immediate). `Val::Percent` updated directly each frame; guarded writes avoid spurious Bevy change detection. ✅
 - **Per-entity bars**: Deferred. `StatBarFill` only tracks global `LoadedStats`. When per-entity stat display is needed, add an optional `entity_id` field and query `StatMap`. ⛔
-- **Radar chart**: `StatSpreadLayout::Rows` only. `Columns` and `Radar` variants omitted from schema for now (no schema break needed; add later). ⛔
+- **Radar chart**: Implemented as `StatRadar` node (separate from `StatSpread`). ✅
 
 ## Acceptance criteria
 
