@@ -163,6 +163,11 @@ After either action executes, `stat_threshold_system` runs in the same frame and
 
 See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_templates)` sections for the full schema and `ThresholdCondition` variants.
 
+#### Entity visibility / timing actions ✅
+- `ShowDamagePopup { entity, amount }` ✅ — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style (font size, duration, rise speed, colours) configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior contexts
+- `SetEntityVisible { entity, visible }` ✅ — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
+- `EmitEventAfterDelay { event, delay_secs }` ✅ — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene`; `{self}` substituted in behavior contexts
+
 #### UI actions 🧭
 - `ShowUi(panel_id)`
 - `HideUi(panel_id)`
@@ -277,6 +282,9 @@ Applies actions to the world. Key design points:
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 - `ModifyStat { key, delta }` — adds `delta` to a stat, clamped to `[min, max]`; negative delta resets regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` → entity `StatMap`; no dot → global `LoadedStats`. `{self}` in `key` is substituted in behavior contexts.
 - `SetStat { key, value }` — sets a stat to an absolute value, clamped to `[min, max]`; decreasing resets regen cooldown. Same dot-routing and `{self}` substitution as `ModifyStat`.
+- `ShowDamagePopup { entity, amount }` — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style configured via `damage_popup_style` in `.project.ron`; `{self}` substituted in behavior contexts
+- `SetEntityVisible { entity, visible }` — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
+- `EmitEventAfterDelay { event, delay_secs }` — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene` so no delayed events survive scene transitions; `{self}` substituted in behavior contexts
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
@@ -385,6 +393,9 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `Spawn { prefab: "...", id: "{self}_debris" }` → id `"box_01_debris"`
 - `ModifyStat(key: "{self}.health", delta: -35.0)` → `key: "box_01.health"` (routes to that entity's `StatMap`)
 - `SetStat(key: "{self}.mana", value: 0.0)` → `key: "box_01.mana"`
+- `ShowDamagePopup(entity: "{self}", amount: -25.0)` → `entity: "box_01"`
+- `SetEntityVisible(entity: "{self}", visible: false)` → `entity: "box_01"`
+- `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → `event: "entity.respawned:box_01"`
 
 ### New capabilities
 
@@ -394,16 +405,77 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 | `TriggerZone` | `trigger_zone: ( radius: 2.0 )` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
 | `Interactable` | `interactable: ( radius: 2.5 )` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
 
+### Respawn pattern (hide + delayed re-emit)
+
+When an entity should reappear after a delay — training dummies, respawning enemies, timed obstacles — prefer the **hide + delay + restore** pattern over `Despawn` + `Spawn`. The entity stays in the ECS the entire time, preserving its spawn ID, `StatMap`, and world-space position.
+
+```ron
+// behaviors/attack_dummy.behavior.ron
+// Demonstrates a complete respawn loop in two FSM states.
+(
+  schema_version: 1,
+  initial_state: "alive",
+  global_on: [],
+  states: [
+    (
+      name: "alive",
+      // Reset health and restore visibility on every entry (including first spawn).
+      entry_actions: [
+        SetStat(key: "{self}.health", value: 100.0),
+        SetEntityVisible(entity: "{self}", visible: true),
+      ],
+      exit_actions: [],
+      on: [
+        ( event: "entity.interacted:{self}", do_actions: [
+            ModifyStat(key: "{self}.health", delta: -25.0),
+            PlaySound(key: "swing_miss"),
+            ShowDamagePopup(entity: "{self}", amount: -25.0),
+        ]),
+      ],
+    ),
+    (
+      name: "dead",
+      entry_actions: [
+        SetEntityVisible(entity: "{self}", visible: false),
+        EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+  ],
+  transitions: [
+    ( from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead" ),
+    ( from: Some("dead"),  on: "entity.respawned:{self}",    to: "alive" ),
+  ],
+)
+```
+
+**Key notes:**
+- The health reset (`SetStat`) happens before the visibility restore (`SetEntityVisible`) because entry actions are queued FIFO — HP is guaranteed to be full by the time the entity becomes interactable again.
+- `EmitEventAfterDelay` is cleared on `LoadScene`, so the delayed respawn event is silently cancelled if the player loads a different scene before the 15 seconds elapse.
+- Only labels attached via `stat_label` / `world_stat_bar` auto-hide when the entity is hidden. Screen-space UI labels driven by `SetVariable` continue to display.
+
+**When to use this pattern vs. `Despawn` + `Spawn`:**
+
+| Situation | Use |
+|-----------|-----|
+| Entity has persistent state (stats, position, spawn ID) to preserve | hide + delay + restore |
+| Entity is a one-shot consumable (coin, key) that should not reappear | `Despawn` |
+| Entity is dynamically cloned from a template each time | `Despawn` + `Spawn` |
+
 ### System ordering
 
 The interpreter chain in `Update` is:
 
 ```
-interactable_system  →  message_interpreter_system
-                     →  fsm_interpreter_system
-                     →  entity_fsm_interpreter_system
-                     →  action_executor_system
+tick_delayed_events_system  →  interactable_system
+                            →  message_interpreter_system
+                            →  fsm_interpreter_system
+                            →  entity_fsm_interpreter_system
+                            →  action_executor_system
 ```
+
+`tick_delayed_events_system` runs before the interpreter chain so delayed events fired in a given frame are visible to all three interpreters in the same frame.
 
 `trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to all three interpreter systems in the following `Update` tick.
 

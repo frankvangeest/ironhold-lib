@@ -208,6 +208,18 @@ fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             key: key.replace("{self}", spawn_id),
             value,
         },
+        Action::ShowDamagePopup { entity, amount } => Action::ShowDamagePopup {
+            entity: entity.replace("{self}", spawn_id),
+            amount,
+        },
+        Action::SetEntityVisible { entity, visible } => Action::SetEntityVisible {
+            entity: entity.replace("{self}", spawn_id),
+            visible,
+        },
+        Action::EmitEventAfterDelay { event, delay_secs } => Action::EmitEventAfterDelay {
+            event: event.replace("{self}", spawn_id),
+            delay_secs,
+        },
         other => other,
     }
 }

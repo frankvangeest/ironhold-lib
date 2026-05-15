@@ -58,6 +58,13 @@
       font_size: 20.0,
       color: (0.55, 1.0, 0.70, 0.85),
     ),
+    (
+      id: "area_training",
+      text: "Training Ground",
+      translation: (-7.0, 5.0, 2.0),
+      font_size: 20.0,
+      color: (1.0, 0.75, 0.30, 0.85),
+    ),
   ],
 
   entities: [
@@ -444,6 +451,38 @@
         scale: (1.0, 1.0, 1.0),
       ),
       label: (text: "Poison [F]", offset: (0.0, 1.5, 0.0), color: (0.70, 0.20, 0.90, 1.0)),
+    ),
+
+    // ── Attack dummies (west of path, Training Ground) ───────────────────────
+    // Press F within 2 m to deal 25 damage. Floating HP label shows current HP.
+    // Each dummy has 100 HP (4 strikes to defeat). Hides for 15 s then respawns at full HP.
+    // Placed at x=−7 (clear of path at x=0 and tree_01 at x=−10, z=3).
+    (
+      id: "dummy_01",
+      prefab: "attack_dummy",
+      transform: (
+        translation: (-7.0, 0.0, 5.0),
+        rotation_euler_deg: (0.0, 150.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "dummy_02",
+      prefab: "attack_dummy",
+      transform: (
+        translation: (-7.0, 0.0, 1.5),
+        rotation_euler_deg: (0.0, 180.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "dummy_03",
+      prefab: "attack_dummy",
+      transform: (
+        translation: (-7.0, 0.0, -2.0),
+        rotation_euler_deg: (0.0, 210.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
     ),
 
     // ── NPCs ─────────────────────────────────────────────────────────────────

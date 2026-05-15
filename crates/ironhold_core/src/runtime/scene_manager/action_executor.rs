@@ -6,9 +6,10 @@ use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
+use crate::capabilities::damage_popup::DamagePopup;
 use super::{
-    BackgroundMusic, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
-    SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, resolve_project_path,
+    BackgroundMusic, LevelEntity, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
+    SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, resolve_project_path,
 };
 
 pub fn action_executor_system(
@@ -39,6 +40,7 @@ pub fn action_executor_system(
                 }
                 scene_state.preloaded.0.clear();
                 scene_state.preloaded_glbs.0.clear();
+                scene_state.delayed_events.0.clear();
                 spawn_params.pending_spawns.0.clear();
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
@@ -411,6 +413,62 @@ pub fn action_executor_system(
                 } else {
                     warn!("Action::RemoveModifier: modifier {:?} not defined in stats catalog", modifier_key);
                 }
+            }
+            Action::ShowDamagePopup { entity: entity_id, amount } => {
+                let entity = spawn_params.registry.entities.get(&entity_id).copied();
+                if let Some(e) = entity {
+                    if let Ok(gtf) = scene_state.global_transforms.get(e) {
+                        let default_style = crate::schema::project::DamagePopupStyle::default();
+                        let style = scene_state.project_config
+                            .as_ref()
+                            .and_then(|pc| pc.damage_popup_style.as_ref())
+                            .unwrap_or(&default_style);
+                        let text = if amount >= 0.0 {
+                            format!("+{:.0}", amount)
+                        } else {
+                            format!("{:.0}", amount)
+                        };
+                        let (r, g, b, a) = if amount >= 0.0 { style.heal_color } else { style.damage_color };
+                        info!(
+                            "Action::ShowDamagePopup: '{}' ({}) at {:?}",
+                            entity_id, text, gtf.translation()
+                        );
+                        let (ox, oy, oz) = style.spawn_offset;
+                        commands.spawn((
+                            Text2d::new(text),
+                            TextFont { font_size: style.font_size, ..default() },
+                            TextColor(Color::srgba(r, g, b, a)),
+                            Transform::from_xyz(0.0, 0.0, 10.0),
+                            WorldLabel {
+                                world_pos: Vec3::ZERO,
+                                tracked_entity: Some(e),
+                                offset: Vec3::new(ox, oy, oz),
+                                base_font_size: style.font_size,
+                                depth_scale: None,
+                            },
+                            DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                            LevelEntity,
+                        ));
+                    } else {
+                        warn!("Action::ShowDamagePopup: entity '{}' has no GlobalTransform", entity_id);
+                    }
+                } else {
+                    warn!("Action::ShowDamagePopup: entity '{}' not found in spawn registry", entity_id);
+                }
+            }
+            Action::SetEntityVisible { entity: entity_id, visible } => {
+                let entity = spawn_params.registry.entities.get(&entity_id).copied();
+                if let Some(e) = entity {
+                    let vis = if visible { Visibility::Visible } else { Visibility::Hidden };
+                    commands.entity(e).insert(vis);
+                    info!("Action::SetEntityVisible: '{}' -> {:?}", entity_id, vis);
+                } else {
+                    warn!("Action::SetEntityVisible: entity '{}' not found in spawn registry", entity_id);
+                }
+            }
+            Action::EmitEventAfterDelay { event, delay_secs } => {
+                info!("Action::EmitEventAfterDelay: '{}' in {:.1}s", event, delay_secs);
+                scene_state.delayed_events.0.push((delay_secs, event));
             }
         }
     }

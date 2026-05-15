@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
-use crate::schema::stats::LoadedStats;
+use crate::schema::stats::{LoadedStats, StatMap};
+use crate::runtime::scene_manager::SpawnId;
+use crate::capabilities::stat_display::resolve_stat;
 
 // ---------------------------------------------------------------------------
 // Uniform layout
@@ -70,11 +72,12 @@ pub struct StatRadarNode {
     pub stat_keys: Vec<String>,
 }
 
-/// Updates every `RadarMaterial` instance by reading current stat ratios
-/// from `LoadedStats`. Guarded write: only marks the asset changed when
-/// the ratios actually differ.
+/// Updates every `RadarMaterial` instance by reading current stat ratios via `resolve_stat`.
+/// Supports both global (`"player_health"`) and entity-local (`"dummy_01.health"`) keys.
+/// Guarded write: only marks the asset changed when the ratios actually differ.
 pub fn stat_radar_update_system(
     loaded_stats: Res<LoadedStats>,
+    stat_map_query: Query<(&SpawnId, &StatMap)>,
     query: Query<(&StatRadarNode, &MaterialNode<RadarMaterial>)>,
     mut materials: ResMut<Assets<RadarMaterial>>,
 ) {
@@ -83,12 +86,12 @@ pub fn stat_radar_update_system(
 
         let mut r = [0.0f32; 12];
         for (i, key) in node.stat_keys.iter().enumerate().take(12) {
-            if let Some(stat) = loaded_stats.0.get(key) {
-                let range = stat.def.max - stat.def.min;
+            if let Some((effective, min, max)) = resolve_stat(key, &loaded_stats, &stat_map_query) {
+                let range = max - min;
                 r[i] = if range <= 0.0 {
                     1.0
                 } else {
-                    ((stat.effective - stat.def.min) / range).clamp(0.0, 1.0)
+                    ((effective - min) / range).clamp(0.0, 1.0)
                 };
             }
         }

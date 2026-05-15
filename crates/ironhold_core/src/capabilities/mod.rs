@@ -15,6 +15,7 @@ pub mod interactable;
 pub mod stats;
 pub mod stat_display;
 pub mod stat_radar;
+pub mod damage_popup;
 
 pub use player::*;
 pub use camera::*;
@@ -31,6 +32,7 @@ pub use npc::*;
 pub use trigger_zone::*;
 pub use interactable::*;
 pub use stats::{stat_modifier_system, stat_regen_system, stat_effective_value_system, stat_threshold_system};
-pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system};
+pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, StatLabelMarker, WorldStatBarFillMarker};
 pub use stat_radar::{RadarMaterial, StatRadarNode, StatRadarPlugin, stat_radar_update_system};
+pub use damage_popup::{DamagePopup, damage_popup_system};
 

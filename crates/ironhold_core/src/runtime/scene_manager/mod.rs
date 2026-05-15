@@ -81,6 +81,12 @@ pub struct LoadedAudioHandles(pub Vec<Handle<bevy::audio::AudioSource>>);
 #[derive(Resource, Default)]
 pub struct PreloadedGlbHandles(pub Vec<Handle<bevy::scene::Scene>>);
 
+/// Pending timed events. Each entry is `(remaining_secs, event_name)`.
+/// `tick_delayed_events_system` ticks these down each frame and emits `GameEvent::Trigger`
+/// when they expire. Cleared on `Action::LoadScene` so no stale events fire after transitions.
+#[derive(Resource, Default)]
+pub struct DelayedEventQueue(pub Vec<(f32, String)>);
+
 /// Pre-resolved spawn data waiting to be executed. `Action::Spawn` enqueues here instead of
 /// calling `spawn_prefab_instance` inline. `drain_spawn_queue_system` processes at most
 /// `SPAWNS_PER_FRAME` items per frame, spreading WebGPU pipeline compile stalls across
@@ -261,6 +267,9 @@ pub struct SceneStateParams<'w, 's> {
     pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
     pub loaded_modifiers: Res<'w, crate::schema::stats::LoadedModifiers>,
     pub stat_map_query: Query<'w, 's, (&'static SpawnId, &'static mut crate::schema::stats::StatMap)>,
+    pub global_transforms: Query<'w, 's, &'static GlobalTransform>,
+    pub delayed_events: ResMut<'w, DelayedEventQueue>,
+    pub project_config: Option<Res<'w, ProjectConfig>>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

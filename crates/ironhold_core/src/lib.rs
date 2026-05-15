@@ -111,6 +111,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PreloadedGlbHandles>()
             .init_resource::<crate::runtime::scene_manager::PendingEntitySpawns>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
+            .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()
@@ -186,6 +187,9 @@ impl Plugin for GamePlugin {
             // Interactable input runs before all interpreters so all three readers
             // see the emitted GameEvent in the same frame.
             .add_systems(Update, interactable_system.before(message_interpreter_system))
+            // Delayed events tick down each frame; emitted GameEvents are visible to all
+            // three interpreter systems in the same frame they fire.
+            .add_systems(Update, tick_delayed_events_system.before(message_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (
                 animation_resolver_system,
@@ -195,11 +199,12 @@ impl Plugin for GamePlugin {
             ).chain())
             .add_systems(Update, motion_system)
             .add_systems(Update, pipeline_warmup_system)
+            .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))
             .add_systems(Update, world_label_screen_pos_system)
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(Update, update_dynamic_labels_system)
-            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system))
+            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system))
             .add_systems(Update, stat_radar_update_system)
             .add_systems(PostUpdate, update_debug_state);
 
@@ -330,7 +335,7 @@ fn world_label_screen_pos_system(
         &mut Visibility,
         &mut TextFont,
     )>,
-    tracked_q: Query<&GlobalTransform, Without<crate::runtime::scene_manager::WorldLabel>>,
+    tracked_q: Query<(&GlobalTransform, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
     let Ok((camera, cam_global)) = camera_q.single() else { return };
     let Ok(window) = window_q.single() else { return };
@@ -340,10 +345,14 @@ fn world_label_screen_pos_system(
 
     for (label, mut t, mut vis, mut text_font) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
-            let Ok(gt) = tracked_q.get(tracked) else {
+            let Ok((gt, tracked_vis)) = tracked_q.get(tracked) else {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 continue;
             };
+            if tracked_vis.is_some_and(|v| *v == Visibility::Hidden) {
+                if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                continue;
+            }
             gt.translation() + label.offset
         } else {
             label.world_pos
@@ -376,6 +385,24 @@ fn world_label_screen_pos_system(
             }
         }
     }
+}
+
+fn tick_delayed_events_system(
+    mut queue: ResMut<crate::runtime::scene_manager::DelayedEventQueue>,
+    time: Res<Time>,
+    mut game_events: MessageWriter<GameEvent>,
+) {
+    let dt = time.delta_secs();
+    queue.0.retain_mut(|(remaining, event)| {
+        *remaining -= dt;
+        if *remaining <= 0.0 {
+            info!("DelayedEvent fired: '{}'", event);
+            game_events.write(GameEvent::Trigger(event.clone()));
+            false
+        } else {
+            true
+        }
+    });
 }
 
 fn update_debug_state(

@@ -116,6 +116,33 @@ pub enum Action {
     RemoveModifier {
         modifier_key: String,
     },
+    /// Spawn a floating damage number above a named entity.
+    /// Positive `amount` renders in green (healing); negative in red (damage).
+    /// The number rises ~1.5 m over 1.2 s then despawns automatically.
+    /// Inside behavior files, `{self}` in `entity` is resolved to the entity's spawn ID.
+    /// Example: `ShowDamagePopup(entity: "{self}", amount: -25.0)`.
+    ShowDamagePopup {
+        entity: String,
+        amount: f32,
+    },
+    /// Show or hide a spawned entity by its ID.
+    /// `visible: true` restores the entity; `visible: false` hides it (entity remains in ECS).
+    /// World labels (health bars, stat labels) tracking the entity are hidden automatically.
+    /// Inside behavior files, `{self}` in `entity` is resolved to the entity's spawn ID.
+    /// Example: `SetEntityVisible(entity: "{self}", visible: false)`.
+    SetEntityVisible {
+        entity: String,
+        visible: bool,
+    },
+    /// Emit a `GameEvent::Trigger` with the given name after a delay (in seconds).
+    /// The event is buffered in `DelayedEventQueue` and fired by `tick_delayed_events_system`.
+    /// Cleared on `Action::LoadScene` so no stale events fire after a scene transition.
+    /// Inside behavior files, `{self}` in `event` is resolved to the entity's spawn ID.
+    /// Example: `EmitEventAfterDelay(event: "entity.respawning:{self}", delay_secs: 15.0)`.
+    EmitEventAfterDelay {
+        event: String,
+        delay_secs: f32,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }

@@ -11,6 +11,8 @@ use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
 use ironhold_core::capabilities::stat_radar::StatRadarNode;
+use ironhold_core::capabilities::stat_display::resolve_stat;
+use std::sync::{Arc, Mutex};
 
 fn setup_test_app() -> App {
     let mut app = App::new();
@@ -3060,4 +3062,181 @@ fn test_threshold_uses_effective_value_not_current() {
     assert!(is_met, "threshold must be met based on effective value");
     let raw_is_met = ThresholdCondition::BelowPercent(0.25).is_met(stat.current, stat.def.max);
     assert!(!raw_is_met, "threshold must NOT be met based on raw current");
+}
+
+// ── resolve_stat routing tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_resolve_stat_routes_entity_local_key_through_stat_map() {
+    // "dummy_01.health" must resolve from the StatMap on the entity with SpawnId("dummy_01"),
+    // not from LoadedStats.
+    let mut app = setup_test_app();
+    app.update();
+
+    // Global LoadedStats — must NOT be used for entity-local key.
+    let mut loaded_stats = LoadedStats::default();
+    loaded_stats.0.insert("dummy_01.health".to_string(), LiveStat::new(make_stat_def(999.0, 999.0)));
+    app.world_mut().insert_resource(loaded_stats);
+
+    // Spawn entity with SpawnId + StatMap carrying health at 75/100.
+    let mut stat_map = StatMap(indexmap::IndexMap::new());
+    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(75.0, 100.0)));
+    app.world_mut().spawn((SpawnId("dummy_01".to_string()), stat_map));
+
+    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
+    let result_clone = result.clone();
+
+    let _ = app.world_mut().run_system_once(move |
+        loaded_stats: Res<LoadedStats>,
+        stat_map_query: Query<(&SpawnId, &StatMap)>,
+    | {
+        let val = resolve_stat("dummy_01.health", &loaded_stats, &stat_map_query);
+        *result_clone.lock().unwrap() = Some(val);
+    });
+
+    let val = result.lock().unwrap().unwrap();
+    assert!(val.is_some(), "resolve_stat must find 'dummy_01.health' in entity StatMap");
+    let (effective, min, max) = val.unwrap();
+    assert_eq!(effective, 75.0, "effective must come from StatMap, not the global LoadedStats sentinel");
+    assert_eq!(min, 0.0);
+    assert_eq!(max, 100.0);
+}
+
+#[test]
+fn test_resolve_stat_routes_global_key_through_loaded_stats() {
+    // A key without a dot must resolve from LoadedStats, not entity StatMaps.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut loaded_stats = LoadedStats::default();
+    loaded_stats.0.insert("player_health".to_string(), LiveStat::new(make_stat_def(60.0, 100.0)));
+    app.world_mut().insert_resource(loaded_stats);
+
+    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
+    let result_clone = result.clone();
+
+    let _ = app.world_mut().run_system_once(move |
+        loaded_stats: Res<LoadedStats>,
+        stat_map_query: Query<(&SpawnId, &StatMap)>,
+    | {
+        let val = resolve_stat("player_health", &loaded_stats, &stat_map_query);
+        *result_clone.lock().unwrap() = Some(val);
+    });
+
+    let val = result.lock().unwrap().unwrap();
+    assert!(val.is_some(), "resolve_stat must find 'player_health' in LoadedStats");
+    let (effective, _, max) = val.unwrap();
+    assert_eq!(effective, 60.0);
+    assert_eq!(max, 100.0);
+}
+
+#[test]
+fn test_resolve_stat_returns_none_for_missing_entity_key() {
+    // A dotted key whose entity does not exist must return None, not panic.
+    let mut app = setup_test_app();
+    app.update();
+
+    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
+    let result_clone = result.clone();
+
+    let _ = app.world_mut().run_system_once(move |
+        loaded_stats: Res<LoadedStats>,
+        stat_map_query: Query<(&SpawnId, &StatMap)>,
+    | {
+        let val = resolve_stat("ghost_entity.health", &loaded_stats, &stat_map_query);
+        *result_clone.lock().unwrap() = Some(val);
+    });
+
+    assert!(
+        result.lock().unwrap().unwrap().is_none(),
+        "resolve_stat must return None when entity does not exist"
+    );
+}
+
+// ─── DelayedEventQueue / tick_delayed_events_system tests ─────────────────────
+
+#[test]
+fn test_emit_event_after_delay_fires_game_event_when_elapsed() {
+    use ironhold_core::runtime::scene_manager::DelayedEventQueue;
+    let mut app = setup_test_app();
+    app.update();
+
+    // Seed a nearly-expired entry directly.
+    app.world_mut()
+        .resource_mut::<DelayedEventQueue>()
+        .0
+        .push((0.001, "entity.respawning:dummy_01".to_string()));
+
+    // Advance time enough for the entry to expire.
+    app.world_mut()
+        .resource_mut::<Time>()
+        .advance_by(std::time::Duration::from_millis(100));
+
+    app.update();
+
+    // Queue should be empty — the entry fired and was removed.
+    let queue = app.world().resource::<DelayedEventQueue>();
+    assert!(queue.0.is_empty(), "expired entry must be removed from DelayedEventQueue");
+
+    // The GameEvent must have been written.
+    let events = app.world().resource::<Messages<GameEvent>>();
+    let found = events.iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(n) if n == "entity.respawning:dummy_01"));
+    assert!(found, "tick_delayed_events_system must emit the event when it expires");
+}
+
+#[test]
+fn test_emit_event_after_delay_does_not_fire_before_elapsed() {
+    use ironhold_core::runtime::scene_manager::DelayedEventQueue;
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut()
+        .resource_mut::<DelayedEventQueue>()
+        .0
+        .push((15.0, "entity.respawning:dummy_01".to_string()));
+
+    // Advance only a little — should not fire yet.
+    app.world_mut()
+        .resource_mut::<Time>()
+        .advance_by(std::time::Duration::from_millis(500));
+
+    app.update();
+
+    let queue = app.world().resource::<DelayedEventQueue>();
+    assert_eq!(queue.0.len(), 1, "entry must remain when delay has not elapsed");
+}
+
+#[test]
+fn test_set_entity_visible_hides_then_shows_spawned_entity() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Manually register an entity in the SpawnRegistry and give it a Visibility component.
+    let entity = app.world_mut().spawn((
+        SpawnId("test_obj".to_string()),
+        Visibility::Visible,
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("test_obj".to_string(), entity);
+
+    // Hide it.
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::SetEntityVisible { entity: "test_obj".to_string(), visible: false });
+    app.update();
+
+    let vis = *app.world().entity(entity).get::<Visibility>().unwrap();
+    assert_eq!(vis, Visibility::Hidden, "entity must be hidden after SetEntityVisible(false)");
+
+    // Show it again.
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::SetEntityVisible { entity: "test_obj".to_string(), visible: true });
+    app.update();
+
+    let vis = *app.world().entity(entity).get::<Visibility>().unwrap();
+    assert_eq!(vis, Visibility::Visible, "entity must be visible after SetEntityVisible(true)");
 }

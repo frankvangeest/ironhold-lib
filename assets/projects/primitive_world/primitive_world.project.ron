@@ -24,4 +24,14 @@
 
     // Warm neutral fallback colour for any primitive with no explicit colour set.
     primitive_default_color: (0.70, 0.68, 0.65),
+
+    // Visual style for ShowDamagePopup. Defaults shown explicitly — omit any field to keep the default.
+    damage_popup_style: (
+        font_size:     22.0,    // screen-space pixels
+        duration_secs:  1.2,    // seconds before fully fading
+        rise_speed:     1.5,    // metres/second the label rises
+        spawn_offset:  (0.0, 1.8, 0.0),  // raised slightly for the dummy height
+        damage_color:  (0.95, 0.25, 0.20, 1.0),  // red
+        heal_color:    (0.20, 0.90, 0.20, 1.0),  // green
+    ),
 )

@@ -100,6 +100,7 @@ Entry point for a project. References all other files.
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
+| `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
@@ -623,6 +624,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. |
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
+| `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
+| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space ASCII stat bar above the entity. Two overlapping text entities (background track + fill). See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -1159,6 +1162,9 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |
 | `ModifyStat(key: "key", delta: f32)` | Add `delta` to a stat and clamp. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap`; no dot targets global `LoadedStats`. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID. |
 | `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
+| `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. |
+| `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label) auto-hide automatically. Uses `{self}` in behavior files. |
+| `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. |
 
 ---
 
@@ -1385,6 +1391,116 @@ ModifyStat(key: "goblin_01.health", delta: -10.0)
 |---|---|
 | `"player_health"` (no dot) | `LoadedStats` resource (global stat) |
 | `"goblin_01.health"` (dot present) | `StatMap` component on the entity with `SpawnId("goblin_01")` |
+
+---
+
+## World-space stat widgets (`stat_label` and `world_stat_bar`) ✅
+
+These fields on `PrefabDef` attach floating UI to a spawned entity. Both widgets track a live stat and update every frame via `resolve_stat` — the same routing that drives `StatBar` and `StatSpread`.
+
+**Auto-hide:** When the tracked entity is hidden (`SetEntityVisible(visible: false)`), both widgets automatically hide. They restore automatically when the entity is shown again.
+
+**Stat key routing:**
+- `"{self}.health"` — entity-local stat (requires `stat_templates`; `{self}` is resolved to the spawn ID at scene load)
+- `"player_health"` — global stat (from `stats.ron`)
+
+### `StatLabelDef` fields (`stat_label`)
+
+A numeric text label (e.g. `"85 / 100"`).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
+| `offset` | `(f32,f32,f32)` | `(0, 2.5, 0)` | World-space offset from the entity's origin in metres |
+| `font_size` | `f32` | `16.0` | Screen-space font size in pixels |
+| `color` | `(f32,f32,f32,f32)` | `(0.2, 0.9, 0.2, 1.0)` | Linear RGBA text colour |
+| `show_max` | `bool` | `true` | When `true`, shows `"current / max"`; when `false`, shows `"current"` |
+
+```ron
+stat_label: (
+  stat_key: "{self}.health",
+  offset: (0.0, 2.1, 0.0),
+  font_size: 14.0,
+  color: (0.8, 0.8, 0.8, 0.85),
+  show_max: true,
+),
+```
+
+### `WorldStatBarDef` fields (`world_stat_bar`)
+
+An ASCII bar (e.g. `"======    "`) displayed above the entity.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
+| `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity's origin in metres |
+| `cells` | `u8` | `10` | Total character width of the bar. Practical range: 1–32. |
+| `font_size` | `f32` | `14.0` | Screen-space font size in pixels |
+| `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour, used when `color_bands` is absent or no band matches |
+| `bg_color` | `(f32,f32,f32,f32)` | dark red-brown | Background track colour |
+| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The highest `above_ratio` ≤ the current fill ratio is used. Ratios are 0.0–1.0. When empty, the bar uses a built-in adaptive colour (green ≥ 60 %, yellow 30–59 %, red < 30 %). |
+
+```ron
+// Minimal — relies on built-in adaptive green/yellow/red.
+world_stat_bar: (
+  stat_key: "{self}.health",
+  offset: (0.0, 2.4, 0.0),
+  cells: 10,
+  font_size: 16.0,
+  fill_color: (0.15, 0.85, 0.15, 0.95),
+  bg_color: (0.25, 0.08, 0.08, 0.75),
+),
+
+// With explicit color_bands — each entry is (above_ratio, (r, g, b, a)).
+// The highest above_ratio that is ≤ the current fill ratio is selected.
+// Ratios are 0.0–1.0 (e.g. 0.5 = 50 % health).
+world_stat_bar: (
+  stat_key: "{self}.health",
+  offset: (0.0, 2.4, 0.0),
+  cells: 10,
+  font_size: 16.0,
+  fill_color: (0.15, 0.85, 0.15, 0.95),  // fallback when no band matches
+  bg_color: (0.25, 0.08, 0.08, 0.75),
+  color_bands: [
+    (0.6,  (0.15, 0.85, 0.15, 0.95)),  // ≥ 60 % → green
+    (0.30, (1.0,  0.55, 0.0,  1.0)),   // ≥ 30 % → orange
+    (0.10,  (0.85, 0.10, 0.10, 1.0)),   // ≥ 10 % → red (critical)
+  ],
+),
+```
+
+> **Tip:** Use `stat_label` for a compact numeric readout, `world_stat_bar` for a graphical bar. Both can coexist on the same prefab (useful for demos), but in production most designs pick one.
+
+---
+
+## `DamagePopupStyle`
+
+Optional block in `{name}.project.ron` that controls how `Action::ShowDamagePopup` popups look. All fields have built-in defaults — omit the block entirely to use them.
+
+```ron
+// {name}.project.ron
+(
+    schema_version: 3,
+    ...
+    damage_popup_style: (
+        font_size:     22.0,             // default
+        duration_secs:  1.2,             // default
+        rise_speed:     1.5,             // default — metres/second the label rises
+        spawn_offset:  (0.0, 1.2, 0.0), // default — world-space offset from entity origin
+        damage_color:  (0.95, 0.25, 0.20, 1.0),  // default red (RGBA)
+        heal_color:    (0.20, 0.90, 0.20, 1.0),  // default green (RGBA)
+    ),
+)
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `font_size` | `f32` | `22.0` | Screen-space font size in pixels |
+| `duration_secs` | `f32` | `1.2` | Seconds the popup is visible before fully fading |
+| `rise_speed` | `f32` | `1.5` | Metres per second the label rises during its lifetime |
+| `spawn_offset` | `(f32,f32,f32)` | `(0.0, 1.2, 0.0)` | World-space offset from the entity origin where the popup appears. Increase Y for tall entities. |
+| `damage_color` | `(f32,f32,f32,f32)` | `(0.95, 0.25, 0.20, 1.0)` | Linear RGBA colour for negative amounts (damage) |
+| `heal_color` | `(f32,f32,f32,f32)` | `(0.20, 0.90, 0.20, 1.0)` | Linear RGBA colour for positive amounts (healing) |
 
 ---
 

@@ -22,7 +22,7 @@ use super::{
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
-use crate::capabilities::stat_display::{StatBarFill, StatValueText};
+use crate::capabilities::stat_display::{StatBarFill, StatValueText, StatLabelMarker, WorldStatBarFillMarker};
 use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
 use crate::schema::scene_v2::BarOrientation;
 
@@ -153,9 +153,11 @@ pub fn spawn_scene_v2(
 
         // Spawn entities from prefabs
         let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
+        let mut pending_stat_labels: Vec<(Entity, String, crate::schema::catalog::StatLabelDef)> = Vec::new();
+        let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
+        let mut primitive_player: Option<(String, String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -192,7 +194,7 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((prefab.model.clone(), p, translation, prefab.components.clone(), prefab.children.clone()));
+                    primitive_player = Some((entity_def.id.clone(), prefab.model.clone(), p, translation, prefab.components.clone(), prefab.children.clone()));
                     continue;
                 }
 
@@ -326,8 +328,32 @@ pub fn spawn_scene_v2(
                         commands.entity(parent).insert(stat_map);
                     }
 
+                    // Motion: continuous rotation and/or vertical bob on the root entity.
+                    // Children inherit the transform via Bevy's hierarchy, so the whole
+                    // composite moves together.
+                    if let Some(motion_def) = &prefab.motion {
+                        let rotate = motion_def.rotate
+                            .map(|(x, y, z)| Vec3::new(x, y, z))
+                            .unwrap_or(Vec3::ZERO);
+                        commands.entity(parent).insert(Motion {
+                            rotate,
+                            bob: motion_def.bob,
+                            bob_origin_y: Some(translation.y),
+                        });
+                    }
+
                     if let Some(label_def) = &entity_def.label {
                         pending_labels.push((parent, label_def.clone()));
+                    }
+
+                    if let Some(sl) = &prefab.stat_label {
+                        let resolved_key = sl.stat_key.replace("{self}", &entity_def.id);
+                        pending_stat_labels.push((parent, resolved_key, sl.clone()));
+                    }
+
+                    if let Some(wb) = &prefab.world_stat_bar {
+                        let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
+                        pending_world_bars.push((parent, resolved_key, wb.clone()));
                     }
                     continue;
                 }
@@ -543,6 +569,16 @@ pub fn spawn_scene_v2(
                         if let Some(label_def) = &entity_def.label {
                             pending_labels.push((spawned, label_def.clone()));
                         }
+
+                        if let Some(sl) = &prefab.stat_label {
+                            let resolved_key = sl.stat_key.replace("{self}", &entity_def.id);
+                            pending_stat_labels.push((spawned, resolved_key, sl.clone()));
+                        }
+
+                        if let Some(wb) = &prefab.world_stat_bar {
+                            let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
+                            pending_world_bars.push((spawned, resolved_key, wb.clone()));
+                        }
                     }
                     None => load_errors.push(format!(
                         "entity '{}': unknown primitive shape '{}', entity skipped",
@@ -611,7 +647,7 @@ pub fn spawn_scene_v2(
         let tonemapping = scene.tonemapping.to_bevy();
 
         // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((shape, params, position, components, player_children)) = primitive_player {
+        if let Some((entity_id, shape, params, position, components, player_children)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
             // `height` always means total visual height (cylindrical body + two hemispheres).
             let player_height = params.height.unwrap_or(1.8);
@@ -642,6 +678,7 @@ pub fn spawn_scene_v2(
             let player_entity = commands.spawn((
                 (
                     Name::new("Player"),
+                    SpawnId(entity_id.clone()),
                     Transform::from_translation(position),
                     Visibility::default(),
                     LevelEntity,
@@ -684,6 +721,10 @@ pub fn spawn_scene_v2(
                     Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
                 ),
             )).id();
+
+            // Register the player in the spawn registry so SetEntityVisible and other
+            // entity-ID–targeted actions can reach it — same pattern as every other entity.
+            spawn_registry.entities.insert(entity_id.clone(), player_entity);
 
             // Visual body child — mesh centred at body_y above the feet so it aligns
             // with the compound collider above.
@@ -871,6 +912,76 @@ pub fn spawn_scene_v2(
                         label_def.depth_scale,
                     ),
                 },
+                LevelEntity,
+            ));
+        }
+
+        // Spawn floating stat labels from PrefabDef.stat_label.
+        // Uses the same WorldLabel + Text2d infrastructure as entity labels, but with
+        // a StatLabelMarker component so stat_label_update_system drives the text.
+        for (tracked, stat_key, sl) in pending_stat_labels {
+            let (r, g, b, a) = sl.color;
+            commands.spawn((
+                Name::new(format!("StatLabel: {}", stat_key)),
+                Text2d::new(String::new()),
+                TextFont { font_size: sl.font_size, ..default() },
+                TextColor(Color::srgba(r, g, b, a)),
+                Transform::from_xyz(0.0, 0.0, 1.0),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(tracked),
+                    offset: Vec3::from(sl.offset),
+                    base_font_size: sl.font_size,
+                    depth_scale: resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None),
+                },
+                StatLabelMarker { stat_key, show_max: sl.show_max },
+                LevelEntity,
+            ));
+        }
+
+        // Spawn world-space stat bars from PrefabDef.world_stat_bar.
+        // Each bar is two overlapping WorldLabel+Text2d entities: a static background track
+        // (spaces, always full-width) and a dynamic fill entity (= chars, updated by system).
+        for (tracked, stat_key, wb) in pending_world_bars {
+            let cells = wb.cells.max(1) as usize;
+            let bg_chars = " ".repeat(cells);
+            let (br, bg_c, bb, ba) = wb.bg_color;
+            let (fr, fg, fb, fa) = wb.fill_color;
+            let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None);
+
+            // Background track — static, never updated.
+            commands.spawn((
+                Name::new(format!("StatBarBg: {}", stat_key)),
+                Text2d::new(bg_chars),
+                TextFont { font_size: wb.font_size, ..default() },
+                TextColor(Color::srgba(br, bg_c, bb, ba)),
+                Transform::from_xyz(0.0, 0.0, 1.0),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(tracked),
+                    offset: Vec3::from(wb.offset),
+                    base_font_size: wb.font_size,
+                    depth_scale,
+                },
+                LevelEntity,
+            ));
+
+            // Fill entity — text and colour updated each frame by world_stat_bar_update_system.
+            // Z=2.0 renders on top of the background track (Z=1.0).
+            commands.spawn((
+                Name::new(format!("StatBarFill: {}", stat_key)),
+                Text2d::new(String::new()),
+                TextFont { font_size: wb.font_size, ..default() },
+                TextColor(Color::srgba(fr, fg, fb, fa)),
+                Transform::from_xyz(0.0, 0.0, 2.0),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(tracked),
+                    offset: Vec3::from(wb.offset),
+                    base_font_size: wb.font_size,
+                    depth_scale,
+                },
+                WorldStatBarFillMarker { stat_key, cells: wb.cells, fill_color: wb.fill_color, color_bands: wb.color_bands.clone() },
                 LevelEntity,
             ));
         }

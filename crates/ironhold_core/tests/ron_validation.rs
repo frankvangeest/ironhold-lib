@@ -1578,6 +1578,81 @@ fn test_npc_def_physics_fields_explicit() {
 }
 
 #[test]
+fn test_world_stat_bar_color_bands_parse() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    components: (),
+                    world_stat_bar: (
+                        stat_key: "dummy_01.health",
+                        cells: 10,
+                        color_bands: [
+                            (0.5, (0.85, 0.15, 0.15, 1.0)),
+                            (0.25, (1.0, 0.55, 0.0, 1.0)),
+                        ],
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
+    let bar = catalog.prefabs["dummy"].world_stat_bar.as_ref().expect("world_stat_bar should be Some");
+    assert_eq!(bar.cells, 10);
+    assert_eq!(bar.color_bands.len(), 2);
+    assert_eq!(bar.color_bands[0].0, 0.5);
+    assert_eq!(bar.color_bands[1].0, 0.25);
+}
+
+#[test]
+fn test_damage_popup_style_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            initial_scene: "scenes/main.scene.ron",
+            damage_popup_style: (
+                font_size: 28.0,
+                duration_secs: 2.0,
+                rise_speed: 2.5,
+                spawn_offset: (0.0, 2.0, 0.0),
+                damage_color: (1.0, 0.0, 0.0, 1.0),
+                heal_color: (0.0, 1.0, 0.0, 0.8),
+            ),
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("should parse");
+    let style = config.damage_popup_style.as_ref().expect("damage_popup_style should be Some");
+    assert_eq!(style.font_size, 28.0);
+    assert_eq!(style.duration_secs, 2.0);
+    assert_eq!(style.rise_speed, 2.5);
+    assert_eq!(style.spawn_offset, (0.0, 2.0, 0.0));
+    assert_eq!(style.damage_color, (1.0, 0.0, 0.0, 1.0));
+    assert_eq!(style.heal_color, (0.0, 1.0, 0.0, 0.8));
+}
+
+#[test]
+fn test_damage_popup_style_defaults() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            initial_scene: "scenes/main.scene.ron",
+            damage_popup_style: (),
+        )
+    "#;
+    let config: ProjectConfig = from_str(ron_str).expect("should parse");
+    let style = config.damage_popup_style.as_ref().expect("damage_popup_style should be Some");
+    assert_eq!(style.font_size, 22.0);
+    assert_eq!(style.duration_secs, 1.2);
+    assert_eq!(style.rise_speed, 1.5);
+    assert_eq!(style.spawn_offset, (0.0, 1.2, 0.0));
+    assert_eq!(style.damage_color, (0.95, 0.25, 0.20, 1.0));
+    assert_eq!(style.heal_color, (0.20, 0.90, 0.20, 1.0));
+}
+
+#[test]
 fn test_npc_all_faction_and_behavior_variants_parse() {
     // Verify every NpcFaction and NpcOnPlayerNear variant deserialises without error.
     let cases = [
@@ -2270,6 +2345,201 @@ fn test_prefab_without_stat_templates_defaults_to_empty() {
     let catalog: PrefabCatalog = from_str(ron_str).expect("prefab without stat_templates should parse");
     assert!(catalog.validate().is_ok());
     assert!(catalog.prefabs["coin"].stat_templates.is_empty());
+}
+
+// ─── stat_label on PrefabDef ─────────────────────────────────────────────────
+
+#[test]
+fn test_prefab_stat_label_full_fields_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    stat_label: (
+                        stat_key: "{self}.health",
+                        offset: (0.0, 2.2, 0.0),
+                        font_size: 16.0,
+                        color: (0.2, 0.9, 0.2, 1.0),
+                        show_max: true,
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabDef with stat_label should parse");
+    assert!(catalog.validate().is_ok());
+    let sl = catalog.prefabs["dummy"].stat_label.as_ref().expect("stat_label should be Some");
+    assert_eq!(sl.stat_key, "{self}.health");
+    assert_eq!(sl.offset, (0.0, 2.2, 0.0));
+    assert_eq!(sl.font_size, 16.0);
+    assert!(sl.show_max);
+}
+
+#[test]
+fn test_prefab_stat_label_defaults_applied() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    stat_label: (
+                        stat_key: "player_health",
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("stat_label with defaults should parse");
+    let sl = catalog.prefabs["dummy"].stat_label.as_ref().unwrap();
+    assert_eq!(sl.stat_key, "player_health");
+    assert_eq!(sl.offset, (0.0, 2.5, 0.0));
+    assert_eq!(sl.font_size, 16.0);
+    assert_eq!(sl.color, (0.2, 0.9, 0.2, 1.0));
+    assert!(sl.show_max);
+}
+
+#[test]
+fn test_prefab_without_stat_label_is_none() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "plain": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabDef without stat_label should parse");
+    assert!(catalog.prefabs["plain"].stat_label.is_none());
+}
+
+// ─── WorldStatBarDef tests ────────────────────────────────────────────────────
+
+#[test]
+fn test_prefab_world_stat_bar_full_fields_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        offset: (0.0, 2.4, 0.0),
+                        cells: 10,
+                        font_size: 14.0,
+                        fill_color: (0.15, 0.85, 0.15, 0.95),
+                        bg_color: (0.25, 0.08, 0.08, 0.75),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabDef with world_stat_bar should parse");
+    assert!(catalog.validate().is_ok());
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().expect("world_stat_bar should be Some");
+    assert_eq!(wb.stat_key, "{self}.health");
+    assert_eq!(wb.offset, (0.0, 2.4, 0.0));
+    assert_eq!(wb.cells, 10);
+    assert_eq!(wb.font_size, 14.0);
+}
+
+#[test]
+fn test_prefab_world_stat_bar_defaults_applied() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "player_health",
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("world_stat_bar with only stat_key should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    assert_eq!(wb.stat_key, "player_health");
+    assert_eq!(wb.offset, (0.0, 2.8, 0.0));
+    assert_eq!(wb.cells, 10);
+    assert_eq!(wb.font_size, 14.0);
+}
+
+#[test]
+fn test_prefab_without_world_stat_bar_is_none() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "plain": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabDef without world_stat_bar should parse");
+    assert!(catalog.prefabs["plain"].world_stat_bar.is_none());
+}
+
+#[test]
+fn test_action_show_damage_popup_parses() {
+    use ironhold_core::schema::Action;
+    let action: Action = ron::de::from_str(
+        r#"ShowDamagePopup(entity: "dummy_01", amount: -25.0)"#
+    ).expect("ShowDamagePopup action must parse");
+    match action {
+        Action::ShowDamagePopup { entity, amount } => {
+            assert_eq!(entity, "dummy_01");
+            assert_eq!(amount, -25.0);
+        }
+        other => panic!("unexpected action: {:?}", other),
+    }
+}
+
+#[test]
+fn test_action_set_entity_visible_parses() {
+    use ironhold_core::schema::Action;
+    let hide: Action = ron::de::from_str(
+        r#"SetEntityVisible(entity: "dummy_01", visible: false)"#
+    ).expect("SetEntityVisible(false) must parse");
+    match hide {
+        Action::SetEntityVisible { entity, visible } => {
+            assert_eq!(entity, "dummy_01");
+            assert!(!visible);
+        }
+        other => panic!("unexpected: {:?}", other),
+    }
+    let show: Action = ron::de::from_str(
+        r#"SetEntityVisible(entity: "dummy_01", visible: true)"#
+    ).expect("SetEntityVisible(true) must parse");
+    assert!(matches!(show, Action::SetEntityVisible { visible: true, .. }));
+}
+
+#[test]
+fn test_action_emit_event_after_delay_parses() {
+    use ironhold_core::schema::Action;
+    let action: Action = ron::de::from_str(
+        r#"EmitEventAfterDelay(event: "entity.respawning:dummy_01", delay_secs: 15.0)"#
+    ).expect("EmitEventAfterDelay must parse");
+    match action {
+        Action::EmitEventAfterDelay { event, delay_secs } => {
+            assert_eq!(event, "entity.respawning:dummy_01");
+            assert_eq!(delay_secs, 15.0);
+        }
+        other => panic!("unexpected: {:?}", other),
+    }
 }
 
 // ─── StatBar and StatSpread UI node tests ─────────────────────────────────────

@@ -94,6 +94,9 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `Spawn { prefab: "...", id: "{self}_child" }` → id with `{self}` filled in
 - `ModifyStat(key: "{self}.health", delta: ...)` → key becomes `"entity_id.health"` (routes to StatMap)
 - `SetStat(key: "{self}.mana", value: ...)` → key becomes `"entity_id.mana"`
+- `ShowDamagePopup(entity: "{self}", amount: -25.0)` → entity becomes the entity's ID
+- `SetEntityVisible(entity: "{self}", visible: false)` → entity becomes the entity's ID
+- `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → event name with `{self}` filled in
 
 **New capabilities for entity logic:**
 

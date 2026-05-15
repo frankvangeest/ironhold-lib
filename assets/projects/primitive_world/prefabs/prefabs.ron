@@ -745,6 +745,90 @@
       ],
     ),
 
+    // ── Attack dummy ──────────────────────────────────────────────────────────
+    // Interactable training target. Press F within 2 m to deal 25 damage.
+    // Floating HP label tracks {self}.health via StatLabelMarker.
+    // Geometry (origin = y=0, ground level):
+    //   Post: Cylinder r=0.25, h=1.2 → center at y=0.6.
+    //   Head: Sphere r=0.22 → center at y=1.2+0.22=1.42.
+    "attack_dummy": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.0, hint_text: "F  Strike"),
+      behavior: "behaviors/attack_dummy.behavior.ron",
+      stat_templates: [
+        (
+          key: "health",
+          base: 100.0,
+          min: 0.0,
+          max: 100.0,
+          regen_rate: 0.0,
+          regen_delay: 0.0,
+          thresholds: [
+            ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+          ],
+        ),
+      ],
+      // Both stat_label and world_stat_bar are shown here to demonstrate both widget types.
+      // In production, pick one: stat_label for a compact number, world_stat_bar for a graphical bar.
+      stat_label: (
+        stat_key: "{self}.health",
+        offset: (0.0, 2.1, 0.0),
+        font_size: 14.0,
+        color: (0.8, 0.8, 0.8, 0.85),
+        show_max: true,
+      ),
+      world_stat_bar: (
+        stat_key: "{self}.health",
+        offset: (0.0, 2.4, 0.0),
+        cells: 10,
+        font_size: 16.0,
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+      ),
+      children: [
+        // Post — wooden training post.
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.15,
+            height: 1.5,
+            color: (0.45, 0.32, 0.20),
+            roughness: 0.92,
+          ),
+          offset: (0.0, 0.75, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Torso — horizontal cross-arm.
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.12,
+            height: 0.9,
+            color: (0.45, 0.32, 0.20),
+            roughness: 0.92,
+          ),
+          offset: (0.0, 1.1, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 90.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Head — rounded straw-filled sack.
+        (
+          shape: "Sphere",
+          primitive: (
+            radius: 0.25,
+            color: (0.72, 0.60, 0.38),
+            roughness: 0.85,
+          ),
+          offset: (0.0, 1.65, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
     // ── Composite prefabs ──────────────────────────────────────────────────────
     //
     // All children use offsets relative to the parent entity's origin (base of object).

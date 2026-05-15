@@ -102,11 +102,15 @@ _Last updated: 2026‑05‑09_
 - `Action::IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 - `Action::PlayAnimationOn { target: String, clip: String }` — plays `clip` on the entity with the given spawn ID; use `"{self}"` as target inside `.behavior.ron` files
 - `Action::EmitEvent(String)` — emits a `GameEvent::Trigger`; `{self}` in the string is substituted with the entity's spawn ID when used inside `.behavior.ron` files
+- `Action::ShowDamagePopup { entity: String, amount: f32 }` — spawns a floating `+N` / `-N` world-space label above the entity identified by spawn ID; positive amounts show in heal colour, negative in damage colour; style (font size, duration, rise speed, colours) is configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior files
+- `Action::SetEntityVisible { entity: String, visible: bool }` — shows or hides a spawned entity by its spawn ID; the entity stays in the ECS (stats, colliders, and behavior FSM keep running); world labels (stat bar, stat label) tracking the entity auto-hide; `{self}` substituted in behavior files
+- `Action::EmitEventAfterDelay { event: String, delay_secs: f32 }` — fires a `GameEvent::Trigger` after `delay_secs` seconds have elapsed; cleared on `Action::LoadScene` so events do not leak across scene transitions; `{self}` substituted in behavior files
 
 ### Entity messages (Beta 0.4)
 - `entity.entered:{id}` — emitted by `TriggerZone` when the player enters the sensor collider
 - `entity.exited:{id}` — emitted by `TriggerZone` when the player exits the sensor collider
 - `entity.interacted:{id}` — emitted by `Interactable` when player is within `radius` metres and presses the interact key (`inputs.interact` on the player prefab, default `"KeyF"`)
+- `stat.{id}.{stat_name}.depleted` — emitted by the stat threshold system when `stat_name` on the entity with spawn ID `id` reaches a `BelowOrEqual(0.0)` threshold (pattern from `stat_templates`; `{self}` in `emit` is resolved at spawn time)
 
 > New Messages/Actions **must** update this table and include examples + tests.
 

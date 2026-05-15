@@ -1,0 +1,54 @@
+// Respawn-loop behavior for the attack dummy.
+// Demonstrates the hide+delay+restore pattern:
+//   1. Entity is damaged repeatedly until health depletes.
+//   2. "dead" entry hides it and queues a delayed event (15 s).
+//   3. "alive" entry resets health and restores visibility — no Despawn/Spawn needed.
+//
+// Prefer this pattern over Despawn+Spawn when the entity has persistent state (stats,
+// spawn ID, world position) that should survive the respawn. Use Despawn+Spawn only
+// for one-shot consumables (coins, keys) that should not reappear.
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            // Note: SetStat (heal to full) must precede SetEntityVisible (show) so the dummy
+            // is never briefly visible at 0 HP, which would immediately re-trigger the depleted event.
+            entry_actions: [
+                SetStat(key: "{self}.health", value: 100.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+            ],
+            exit_actions: [],
+            on: [
+                // F key within 2 m → 25 damage + swing sound + floating number.
+                (
+                    event: "entity.interacted:{self}",
+                    do_actions: [
+                        ModifyStat(key: "{self}.health", delta: -25.0),
+                        PlaySound(key: "swing_miss"),
+                        ShowDamagePopup(entity: "{self}", amount: -25.0),
+                    ],
+                ),
+            ],
+        ),
+        (
+            name: "dead",
+            entry_actions: [
+                PlaySound(key: "goblin_hit"),
+                SetEntityVisible(entity: "{self}", visible: false),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        (from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead"),
+        (from: Some("dead"),  on: "entity.respawned:{self}",      to: "alive"),
+    ],
+)

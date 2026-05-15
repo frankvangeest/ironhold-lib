@@ -208,7 +208,58 @@ pub struct ProjectConfig {
     /// Example: `"stats/stats.ron"`.
     #[serde(default)]
     pub stats_path: Option<String>,
+
+    /// Visual style for floating damage/heal popups shown by `Action::ShowDamagePopup`.
+    /// Omit to use the built-in defaults (22 px font, 1.2 s duration, 1.5 m/s rise).
+    #[serde(default)]
+    pub damage_popup_style: Option<DamagePopupStyle>,
 }
+
+/// Visual style for `Action::ShowDamagePopup` popups. Set once per project in `.project.ron`.
+/// All fields are optional — omit any to use the built-in default shown in the comment.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DamagePopupStyle {
+    /// Font size in screen pixels. Default: 22.0.
+    #[serde(default = "default_popup_font_size")]
+    pub font_size: f32,
+    /// Seconds the popup is visible before fading out completely. Default: 1.2.
+    #[serde(default = "default_popup_duration")]
+    pub duration_secs: f32,
+    /// Metres per second the popup rises. Default: 1.5.
+    #[serde(default = "default_popup_rise_speed")]
+    pub rise_speed: f32,
+    /// World-space offset from the entity origin where the popup spawns. Default: `(0.0, 1.2, 0.0)`.
+    /// Increase Y for tall entities (bosses) so the label appears above the head.
+    #[serde(default = "default_popup_spawn_offset")]
+    pub spawn_offset: (f32, f32, f32),
+    /// Colour for negative amounts (damage). Linear RGBA. Default: red `(0.95, 0.25, 0.20, 1.0)`.
+    #[serde(default = "default_popup_damage_color")]
+    pub damage_color: (f32, f32, f32, f32),
+    /// Colour for positive amounts (healing). Linear RGBA. Default: green `(0.20, 0.90, 0.20, 1.0)`.
+    #[serde(default = "default_popup_heal_color")]
+    pub heal_color: (f32, f32, f32, f32),
+}
+
+impl Default for DamagePopupStyle {
+    fn default() -> Self {
+        Self {
+            font_size: default_popup_font_size(),
+            duration_secs: default_popup_duration(),
+            rise_speed: default_popup_rise_speed(),
+            spawn_offset: default_popup_spawn_offset(),
+            damage_color: default_popup_damage_color(),
+            heal_color: default_popup_heal_color(),
+        }
+    }
+}
+
+fn default_popup_font_size() -> f32 { 22.0 }
+fn default_popup_duration() -> f32 { 1.2 }
+fn default_popup_rise_speed() -> f32 { 1.5 }
+fn default_popup_spawn_offset() -> (f32, f32, f32) { (0.0, 1.2, 0.0) }
+fn default_popup_damage_color() -> (f32, f32, f32, f32) { (0.95, 0.25, 0.20, 1.0) }
+fn default_popup_heal_color() -> (f32, f32, f32, f32) { (0.20, 0.90, 0.20, 1.0) }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct LogicRule {

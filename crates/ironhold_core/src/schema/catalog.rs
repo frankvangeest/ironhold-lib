@@ -208,6 +208,16 @@ pub struct PrefabDef {
     /// `{self}` inside `emit` strings is replaced with the entity's spawn ID.
     #[serde(default)]
     pub stat_templates: Vec<crate::schema::stats::StatTemplateDef>,
+    /// Optional floating stat label. When set, the scene loader spawns a world-space `Text2d`
+    /// that follows this entity and updates its text with the resolved stat each frame.
+    /// `{self}` in `stat_key` is replaced with the entity's spawn ID at load time.
+    #[serde(default)]
+    pub stat_label: Option<StatLabelDef>,
+    /// Optional floating stat bar above this entity. Renders as two overlapping `Text2d`
+    /// entities (background track + animated fill) using Unicode block characters.
+    /// `{self}` in `stat_key` is replaced with the entity's spawn ID at load time.
+    #[serde(default)]
+    pub world_stat_bar: Option<WorldStatBarDef>,
     /// One or more static physics colliders for `kind: "actor"` / `kind: "prop"` prefabs.
     /// All shapes are combined into a single Rapier compound `RigidBody::Fixed` so the player
     /// can stand on or collide with the GLB without primitive wrappers. Use multiple entries
@@ -280,6 +290,74 @@ pub struct TriggerZoneDef {
 }
 
 fn default_trigger_radius() -> f32 { 2.0 }
+
+/// Floating world-space label that tracks a live stat and updates its text each frame.
+/// Authored in `PrefabDef.stat_label`. `{self}` in `stat_key` is resolved at scene load.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct StatLabelDef {
+    /// Stat key to display. Supports `{self}` substitution.
+    /// Entity-local: `"{self}.health"` → `"dummy_01.health"`. Global: `"player_health"`.
+    pub stat_key: String,
+    /// World-space offset from the entity's origin in metres. Default: 2.5 units up.
+    #[serde(default = "default_stat_label_offset")]
+    pub offset: (f32, f32, f32),
+    /// Font size in screen pixels. Default: 16.
+    #[serde(default = "default_stat_label_font_size")]
+    pub font_size: f32,
+    /// Label colour as linear RGBA (0.0–1.0). Default: bright green.
+    #[serde(default = "default_stat_label_color")]
+    pub color: (f32, f32, f32, f32),
+    /// Show `"current / max"` instead of just `"current"`. Default: true.
+    #[serde(default = "default_stat_label_show_max")]
+    pub show_max: bool,
+}
+
+fn default_stat_label_offset() -> (f32, f32, f32) { (0.0, 2.5, 0.0) }
+fn default_stat_label_font_size() -> f32 { 16.0 }
+fn default_stat_label_color() -> (f32, f32, f32, f32) { (0.2, 0.9, 0.2, 1.0) }
+fn default_stat_label_show_max() -> bool { true }
+
+/// Floating world-space stat bar rendered as ASCII characters above an entity.
+/// Authored in `PrefabDef.world_stat_bar`. `{self}` in `stat_key` is resolved at scene load.
+/// Two overlapping `WorldLabel + Text2d` entities are spawned: a static background track
+/// (spaces) and a dynamic fill entity (`=` chars, updated by `world_stat_bar_update_system`).
+///
+/// Fill colour: if `color_bands` is set, the highest band whose threshold the fill ratio
+/// meets is used. Without bands the fill shifts green ≥ 60 %, yellow 30–59 %, red < 30 %.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct WorldStatBarDef {
+    /// Stat key. Supports `{self}` substitution.
+    pub stat_key: String,
+    /// World-space offset from the entity's origin. Default: 2.8 units up.
+    #[serde(default = "default_world_bar_offset")]
+    pub offset: (f32, f32, f32),
+    /// Total number of cells (characters). Practical range: 1–32. Default: 10.
+    #[serde(default = "default_world_bar_cells")]
+    pub cells: u8,
+    /// Font size in screen pixels. Default: 14.
+    #[serde(default = "default_world_bar_font_size")]
+    pub font_size: f32,
+    /// Fill colour used when `color_bands` is absent or no band matches. Default: bright green.
+    #[serde(default = "default_world_bar_fill_color")]
+    pub fill_color: (f32, f32, f32, f32),
+    /// Background track colour (shown behind the fill). Default: dark red-brown.
+    #[serde(default = "default_world_bar_bg_color")]
+    pub bg_color: (f32, f32, f32, f32),
+    /// Threshold-based colour overrides for the fill. Each entry is `(above_ratio, (r,g,b,a))`.
+    /// The highest `above_ratio` ≤ current fill ratio is selected. Ratios are 0.0–1.0.
+    /// When absent, the bar uses the built-in green/yellow/red adaptive colour.
+    /// Example: `[(0.5, (0.85, 0.15, 0.15, 1.0)), (0.25, (1.0, 0.55, 0.0, 1.0))]`
+    #[serde(default)]
+    pub color_bands: Vec<(f32, (f32, f32, f32, f32))>,
+}
+
+fn default_world_bar_offset() -> (f32, f32, f32) { (0.0, 2.8, 0.0) }
+fn default_world_bar_cells() -> u8 { 10 }
+fn default_world_bar_font_size() -> f32 { 14.0 }
+fn default_world_bar_fill_color() -> (f32, f32, f32, f32) { (0.15, 0.85, 0.15, 0.95) }
+fn default_world_bar_bg_color() -> (f32, f32, f32, f32) { (0.25, 0.08, 0.08, 0.75) }
 
 /// NPC faction — determines intent and which events fire.
 #[derive(Deserialize, Debug, Clone, PartialEq)]
