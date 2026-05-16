@@ -204,7 +204,7 @@ impl Plugin for GamePlugin {
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(Update, update_dynamic_labels_system)
-            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system))
+            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system))
             .add_systems(Update, stat_radar_update_system)
             .add_systems(PostUpdate, update_debug_state);
 
@@ -333,7 +333,7 @@ fn world_label_screen_pos_system(
         &crate::runtime::scene_manager::WorldLabel,
         &mut Transform,
         &mut Visibility,
-        &mut TextFont,
+        Option<&mut TextFont>,
     )>,
     tracked_q: Query<(&GlobalTransform, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
@@ -343,7 +343,7 @@ fn world_label_screen_pos_system(
     let half_h = window.height() / 2.0;
     let cam_pos = cam_global.translation();
 
-    for (label, mut t, mut vis, mut text_font) in label_q.iter_mut() {
+    for (label, mut t, mut vis, text_font_opt) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
             let Ok((gt, tracked_vis)) = tracked_q.get(tracked) else {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
@@ -358,20 +358,19 @@ fn world_label_screen_pos_system(
             label.world_pos
         };
 
-        // Depth-based font size: quantise to the nearest integer pixel so that
-        // sub-pixel drift from continuous camera movement does not mark TextFont
-        // as changed every frame. Bevy's text layout re-runs (and the glyph atlas
-        // re-rasterises) whenever TextFont is mutably accessed, so writing the same
-        // float value each frame is enough to cause 35× atlas uploads per frame.
-        let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
-            let dist = (world_pos - cam_pos).length().max(0.001);
-            let scale = (ref_dist / dist).min(1.0).max(min_floor);
-            (label.base_font_size * scale).round()
-        } else {
-            label.base_font_size
-        };
-        if (text_font.font_size - new_size).abs() >= 0.5 {
-            text_font.font_size = new_size;
+        // Depth-based font size — only applies to Text2d-bearing WorldLabel entities.
+        // Pixel bar anchors carry no TextFont, so this block is skipped for them.
+        if let Some(mut text_font) = text_font_opt {
+            let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
+                let dist = (world_pos - cam_pos).length().max(0.001);
+                let scale = (ref_dist / dist).min(1.0).max(min_floor);
+                (label.base_font_size * scale).round()
+            } else {
+                label.base_font_size
+            };
+            if (text_font.font_size - new_size).abs() >= 0.5 {
+                text_font.font_size = new_size;
+            }
         }
 
         match camera.world_to_viewport(cam_global, world_pos) {

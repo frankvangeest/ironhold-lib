@@ -22,7 +22,8 @@ use super::{
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
-use crate::capabilities::stat_display::{StatBarFill, StatValueText, StatLabelMarker, WorldStatBarFillMarker};
+use crate::capabilities::stat_display::{StatBarFill, StatValueText, StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker};
+use crate::schema::catalog::WorldStatBarStyle;
 use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
 use crate::schema::scene_v2::BarOrientation;
 
@@ -940,50 +941,114 @@ pub fn spawn_scene_v2(
         }
 
         // Spawn world-space stat bars from PrefabDef.world_stat_bar.
-        // Each bar is two overlapping WorldLabel+Text2d entities: a static background track
-        // (spaces, always full-width) and a dynamic fill entity (= chars, updated by system).
+        // Dispatches on wb.style: Ascii → two Text2d entities; Pixel → anchor + 3 Mesh2d children.
         for (tracked, stat_key, wb) in pending_world_bars {
-            let cells = wb.cells.max(1) as usize;
-            let bg_chars = " ".repeat(cells);
-            let (br, bg_c, bb, ba) = wb.bg_color;
-            let (fr, fg, fb, fa) = wb.fill_color;
+            let offset_v3 = Vec3::from(wb.offset);
+            let fill_color = wb.fill_color;
+            let (fr, fg, fb, fa) = fill_color;
+            let (bgr, bgg, bgb, bga) = wb.bg_color;
+            let color_bands = wb.color_bands;
             let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None);
 
-            // Background track — static, never updated.
-            commands.spawn((
-                Name::new(format!("StatBarBg: {}", stat_key)),
-                Text2d::new(bg_chars),
-                TextFont { font_size: wb.font_size, ..default() },
-                TextColor(Color::srgba(br, bg_c, bb, ba)),
-                Transform::from_xyz(0.0, 0.0, 1.0),
-                WorldLabel {
-                    world_pos: Vec3::ZERO,
-                    tracked_entity: Some(tracked),
-                    offset: Vec3::from(wb.offset),
-                    base_font_size: wb.font_size,
-                    depth_scale,
-                },
-                LevelEntity,
-            ));
+            match wb.style {
+                WorldStatBarStyle::Ascii { cells, font_size } => {
+                    let cells_clamped = cells.max(1) as usize;
+                    let bg_chars = " ".repeat(cells_clamped);
 
-            // Fill entity — text and colour updated each frame by world_stat_bar_update_system.
-            // Z=2.0 renders on top of the background track (Z=1.0).
-            commands.spawn((
-                Name::new(format!("StatBarFill: {}", stat_key)),
-                Text2d::new(String::new()),
-                TextFont { font_size: wb.font_size, ..default() },
-                TextColor(Color::srgba(fr, fg, fb, fa)),
-                Transform::from_xyz(0.0, 0.0, 2.0),
-                WorldLabel {
-                    world_pos: Vec3::ZERO,
-                    tracked_entity: Some(tracked),
-                    offset: Vec3::from(wb.offset),
-                    base_font_size: wb.font_size,
-                    depth_scale,
-                },
-                WorldStatBarFillMarker { stat_key, cells: wb.cells, fill_color: wb.fill_color, color_bands: wb.color_bands.clone() },
-                LevelEntity,
-            ));
+                    // Background track — static, never updated.
+                    commands.spawn((
+                        Name::new(format!("StatBarBg: {}", stat_key)),
+                        Text2d::new(bg_chars),
+                        TextFont { font_size, ..default() },
+                        TextColor(Color::srgba(bgr, bgg, bgb, bga)),
+                        Transform::from_xyz(0.0, 0.0, 1.0),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(tracked),
+                            offset: offset_v3,
+                            base_font_size: font_size,
+                            depth_scale,
+                        },
+                        LevelEntity,
+                    ));
+
+                    // Fill entity — text and colour updated each frame by world_stat_bar_update_system.
+                    commands.spawn((
+                        Name::new(format!("StatBarFill: {}", stat_key)),
+                        Text2d::new(String::new()),
+                        TextFont { font_size, ..default() },
+                        TextColor(Color::srgba(fr, fg, fb, fa)),
+                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(tracked),
+                            offset: offset_v3,
+                            base_font_size: font_size,
+                            depth_scale,
+                        },
+                        WorldStatBarFillMarker { stat_key, cells, fill_color, color_bands },
+                        LevelEntity,
+                    ));
+                }
+                WorldStatBarStyle::Pixel { size, border, border_color } => {
+                    let w = size.0.max(1.0);
+                    let h = size.1.max(1.0);
+                    let b = border.clamp(0.0, h / 2.0);
+                    let (bdr, bdg, bdb, bda) = border_color;
+                    let color_mats = mats.color_materials.as_mut()
+                        .expect("ColorMaterial assets must be available to spawn pixel stat bars");
+
+                    // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
+                    let anchor = commands.spawn((
+                        Name::new(format!("PixelBarAnchor: {}", stat_key)),
+                        Transform::default(),
+                        Visibility::default(),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(tracked),
+                            offset: offset_v3,
+                            base_font_size: 1.0,
+                            depth_scale: None,
+                        },
+                        LevelEntity,
+                    )).id();
+
+                    // Border quad (skip when border <= 0).
+                    if b > 0.0 {
+                        let border_child = commands.spawn((
+                            Name::new(format!("PixelBarBorder: {}", stat_key)),
+                            Mesh2d(mats.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
+                            MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
+                            Transform::from_xyz(0.0, 0.0, 1.0),
+                            LevelEntity,
+                        )).id();
+                        commands.entity(anchor).add_child(border_child);
+                    }
+
+                    // Background quad — full bar size, static.
+                    let bg_child = commands.spawn((
+                        Name::new(format!("PixelBarBg: {}", stat_key)),
+                        Mesh2d(mats.meshes.add(Rectangle::new(w, h))),
+                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
+                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(bg_child);
+
+                    // Fill quad — width=1 mesh scaled per frame; left-aligned via transform.
+                    // scale.x = ratio * w; translation.x = -w/2 + (ratio*w)/2.
+                    let fill_child = commands.spawn((
+                        Name::new(format!("PixelBarFill: {}", stat_key)),
+                        Mesh2d(mats.meshes.add(Rectangle::new(1.0, h))),
+                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
+                        Transform::from_xyz(-w / 2.0, 0.0, 3.0)
+                            .with_scale(Vec3::new(0.0, 1.0, 1.0)),
+                        WorldPixelBarFillMarker { stat_key, full_width: w, fill_color, color_bands },
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(fill_child);
+                }
+            }
         }
 
         // Apply lighting

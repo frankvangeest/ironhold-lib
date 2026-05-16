@@ -282,6 +282,7 @@ pub struct SceneMaterialParams<'w> {
     pub built: ResMut<'w, BuiltMaterials>,
     pub meshes: ResMut<'w, Assets<Mesh>>,
     pub radar: ResMut<'w, Assets<crate::capabilities::stat_radar::RadarMaterial>>,
+    pub color_materials: Option<ResMut<'w, Assets<ColorMaterial>>>,
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

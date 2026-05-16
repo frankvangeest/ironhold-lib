@@ -318,39 +318,71 @@ fn default_stat_label_font_size() -> f32 { 16.0 }
 fn default_stat_label_color() -> (f32, f32, f32, f32) { (0.2, 0.9, 0.2, 1.0) }
 fn default_stat_label_show_max() -> bool { true }
 
-/// Floating world-space stat bar rendered as ASCII characters above an entity.
+/// World-space stat bar floating above an entity. Visual mode chosen via `style`.
 /// Authored in `PrefabDef.world_stat_bar`. `{self}` in `stat_key` is resolved at scene load.
-/// Two overlapping `WorldLabel + Text2d` entities are spawned: a static background track
-/// (spaces) and a dynamic fill entity (`=` chars, updated by `world_stat_bar_update_system`).
-///
-/// Fill colour: if `color_bands` is set, the highest band whose threshold the fill ratio
-/// meets is used. Without bands the fill shifts green ≥ 60 %, yellow 30–59 %, red < 30 %.
+/// Shared fields (`fill_color`, `bg_color`, `color_bands`) apply to all styles.
+/// `style` defaults to `Ascii` — existing bars with no `style` field require no changes.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct WorldStatBarDef {
-    /// Stat key. Supports `{self}` substitution.
+    /// Stat key — e.g. `"{self}.health"` (entity-local) or `"player_mana"` (global).
     pub stat_key: String,
-    /// World-space offset from the entity's origin. Default: 2.8 units up.
+    /// World-space offset from the entity's origin in metres. Default: `(0.0, 2.8, 0.0)`.
     #[serde(default = "default_world_bar_offset")]
     pub offset: (f32, f32, f32),
-    /// Total number of cells (characters). Practical range: 1–32. Default: 10.
-    #[serde(default = "default_world_bar_cells")]
-    pub cells: u8,
-    /// Font size in screen pixels. Default: 14.
-    #[serde(default = "default_world_bar_font_size")]
-    pub font_size: f32,
-    /// Fill colour used when `color_bands` is absent or no band matches. Default: bright green.
+    /// Fill base colour (RGBA linear). Used when `color_bands` is absent or no band matches.
+    /// Default: bright green `(0.15, 0.85, 0.15, 0.95)`.
     #[serde(default = "default_world_bar_fill_color")]
     pub fill_color: (f32, f32, f32, f32),
-    /// Background track colour (shown behind the fill). Default: dark red-brown.
+    /// Background / track colour (RGBA linear). Default: dark red-brown `(0.25, 0.08, 0.08, 0.75)`.
     #[serde(default = "default_world_bar_bg_color")]
     pub bg_color: (f32, f32, f32, f32),
-    /// Threshold-based colour overrides for the fill. Each entry is `(above_ratio, (r,g,b,a))`.
-    /// The highest `above_ratio` ≤ current fill ratio is selected. Ratios are 0.0–1.0.
-    /// When absent, the bar uses the built-in green/yellow/red adaptive colour.
-    /// Example: `[(0.5, (0.85, 0.15, 0.15, 1.0)), (0.25, (1.0, 0.55, 0.0, 1.0))]`
+    /// Threshold-based fill colour overrides. Each entry: `(min_ratio, rgba)`.
+    /// The entry with the highest `min_ratio` ≤ current fill ratio is selected.
+    /// Example: `[(0.0, red), (0.3, yellow), (0.6, green)]` — green ≥ 60%, yellow ≥ 30%, red otherwise.
     #[serde(default)]
     pub color_bands: Vec<(f32, (f32, f32, f32, f32))>,
+    /// Visual rendering mode. Default: `Ascii` — existing bars require no `style` field.
+    #[serde(default)]
+    pub style: WorldStatBarStyle,
+}
+
+/// Visual rendering mode for `WorldStatBarDef`.
+#[derive(Deserialize, Debug, Clone)]
+pub enum WorldStatBarStyle {
+    /// ASCII character bar (`=` fill on space track). Default mode.
+    Ascii {
+        /// Total character cells. Practical range: 1–32. Default: 10.
+        #[serde(default = "default_world_bar_cells")]
+        cells: u8,
+        /// Font size in screen pixels. Default: 14.
+        #[serde(default = "default_world_bar_font_size")]
+        font_size: f32,
+    },
+    /// Pixel-rendered sprite-quad bar (border + background + fill).
+    /// Size is in screen pixels — constant at all camera distances (no depth scaling in v1).
+    Pixel {
+        /// Bar dimensions in screen pixels `(width, height)`. Clamped to min `(1.0, 1.0)`.
+        /// Default: `(64.0, 8.0)`.
+        #[serde(default = "default_pixel_bar_size")]
+        size: (f32, f32),
+        /// Border thickness in screen pixels. `0.0` disables the border sprite.
+        /// Clamped to `[0.0, height / 2.0]`. Default: `1.5`.
+        #[serde(default = "default_pixel_bar_border")]
+        border: f32,
+        /// Border quad colour (RGBA linear). Default: near-black `(0.05, 0.05, 0.05, 1.0)`.
+        #[serde(default = "default_pixel_bar_border_color")]
+        border_color: (f32, f32, f32, f32),
+    },
+}
+
+impl Default for WorldStatBarStyle {
+    fn default() -> Self {
+        WorldStatBarStyle::Ascii {
+            cells: default_world_bar_cells(),
+            font_size: default_world_bar_font_size(),
+        }
+    }
 }
 
 fn default_world_bar_offset() -> (f32, f32, f32) { (0.0, 2.8, 0.0) }
@@ -358,6 +390,9 @@ fn default_world_bar_cells() -> u8 { 10 }
 fn default_world_bar_font_size() -> f32 { 14.0 }
 fn default_world_bar_fill_color() -> (f32, f32, f32, f32) { (0.15, 0.85, 0.15, 0.95) }
 fn default_world_bar_bg_color() -> (f32, f32, f32, f32) { (0.25, 0.08, 0.08, 0.75) }
+fn default_pixel_bar_size() -> (f32, f32) { (64.0, 8.0) }
+fn default_pixel_bar_border() -> f32 { 1.5 }
+fn default_pixel_bar_border_color() -> (f32, f32, f32, f32) { (0.05, 0.05, 0.05, 1.0) }
 
 /// NPC faction — determines intent and which events fire.
 #[derive(Deserialize, Debug, Clone, PartialEq)]

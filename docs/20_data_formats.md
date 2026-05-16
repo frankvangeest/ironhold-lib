@@ -625,7 +625,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
-| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space ASCII stat bar above the entity. Two overlapping text entities (background track + fill). See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
+| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -1428,48 +1428,84 @@ stat_label: (
 
 ### `WorldStatBarDef` fields (`world_stat_bar`)
 
-An ASCII bar (e.g. `"======    "`) displayed above the entity.
+A floating stat bar above an entity. The visual style is set by the `style` field — either `Ascii` (text characters) or `Pixel` (solid-colour mesh quads). Both styles update every frame and auto-hide when the tracked entity is hidden.
+
+**Shared top-level fields:**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
-| `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity's origin in metres |
-| `cells` | `u8` | `10` | Total character width of the bar. Practical range: 1–32. |
-| `font_size` | `f32` | `14.0` | Screen-space font size in pixels |
-| `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour, used when `color_bands` is absent or no band matches |
+| `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity origin in metres |
+| `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour; used when `color_bands` is empty or no band matches |
 | `bg_color` | `(f32,f32,f32,f32)` | dark red-brown | Background track colour |
-| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The highest `above_ratio` ≤ the current fill ratio is used. Ratios are 0.0–1.0. When empty, the bar uses a built-in adaptive colour (green ≥ 60 %, yellow 30–59 %, red < 30 %). |
+| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; the `Pixel` style uses `fill_color` directly. |
+| `style` | `WorldStatBarStyle` | `Ascii()` | Visual style; see variants below |
+
+**`WorldStatBarStyle::Ascii` fields** (use `style: Ascii(...)` or omit `style` entirely for the default):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cells` | `u8` | `10` | Total character width. Practical range: 1–32. |
+| `font_size` | `f32` | `14.0` | Screen-space font size in pixels |
+
+**`WorldStatBarStyle::Pixel` fields** (use `style: Pixel(...)`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `size` | `(f32,f32)` | `(64.0, 8.0)` | Bar width × height in screen pixels. Size is constant at all camera distances. |
+| `border` | `f32` | `1.5` | Border thickness in pixels. Set to `0.0` to disable. |
+| `border_color` | `(f32,f32,f32,f32)` | near-black `(0.05,0.05,0.05,1.0)` | Border quad colour |
+
+> **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel style.
 
 ```ron
-// Minimal — relies on built-in adaptive green/yellow/red.
+// Minimal — omit style to get the default Ascii bar.
 world_stat_bar: (
   stat_key: "{self}.health",
-  offset: (0.0, 2.4, 0.0),
-  cells: 10,
-  font_size: 16.0,
-  fill_color: (0.15, 0.85, 0.15, 0.95),
-  bg_color: (0.25, 0.08, 0.08, 0.75),
 ),
 
-// With explicit color_bands — each entry is (above_ratio, (r, g, b, a)).
-// The highest above_ratio that is ≤ the current fill ratio is selected.
-// Ratios are 0.0–1.0 (e.g. 0.5 = 50 % health).
+// Ascii bar — full configuration.
 world_stat_bar: (
   stat_key: "{self}.health",
   offset: (0.0, 2.4, 0.0),
-  cells: 10,
-  font_size: 16.0,
-  fill_color: (0.15, 0.85, 0.15, 0.95),  // fallback when no band matches
+  fill_color: (0.15, 0.85, 0.15, 0.95),
   bg_color: (0.25, 0.08, 0.08, 0.75),
   color_bands: [
     (0.6,  (0.15, 0.85, 0.15, 0.95)),  // ≥ 60 % → green
-    (0.30, (1.0,  0.55, 0.0,  1.0)),   // ≥ 30 % → orange
-    (0.10,  (0.85, 0.10, 0.10, 1.0)),   // ≥ 10 % → red (critical)
+    (0.3,  (1.0,  0.75, 0.10, 1.0)),   // ≥ 30 % → yellow
+    (0.0,  (0.85, 0.10, 0.10, 1.0)),   // ≥  0 % → red
   ],
+  style: Ascii( cells: 12, font_size: 14.0 ),
+),
+
+// Pixel bar — size and border are in screen pixels.
+world_stat_bar: (
+  stat_key: "{self}.health",
+  offset: (0.0, 2.5, 0.0),
+  fill_color: (0.15, 0.85, 0.15, 1.0),
+  bg_color:   (0.20, 0.05, 0.05, 0.85),
+  color_bands: [
+    (0.0, (0.85, 0.12, 0.12, 1.0)),
+    (0.3, (0.95, 0.75, 0.10, 1.0)),
+    (0.6, (0.15, 0.85, 0.15, 1.0)),
+  ],
+  style: Pixel( size: (48.0, 6.0) ),
 ),
 ```
 
-> **Tip:** Use `stat_label` for a compact numeric readout, `world_stat_bar` for a graphical bar. Both can coexist on the same prefab (useful for demos), but in production most designs pick one.
+> **Tip:** Use `stat_label` for a compact numeric readout, `world_stat_bar` for a graphical bar. Both styles can coexist on the same prefab (useful for demos), but in production most designs pick one style per entity.
+
+**Migration from the pre-style schema:** The old flat fields `cells` and `font_size` at the top level of `WorldStatBarDef` are no longer supported. Move them inside `style: Ascii(...)`:
+
+```ron
+// Old (no longer valid)
+world_stat_bar: ( stat_key: "…", cells: 10, font_size: 16.0 )
+
+// New
+world_stat_bar: ( stat_key: "…", style: Ascii( cells: 10, font_size: 16.0 ) )
+```
+
+Entries with no `style` field continue to parse correctly — the default is `Ascii` with `cells: 10` and `font_size: 14.0`.
 
 ---
 

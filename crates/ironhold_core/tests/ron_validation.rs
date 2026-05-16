@@ -1579,6 +1579,7 @@ fn test_npc_def_physics_fields_explicit() {
 
 #[test]
 fn test_world_stat_bar_color_bands_parse() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
             schema_version: 1,
@@ -1589,7 +1590,7 @@ fn test_world_stat_bar_color_bands_parse() {
                     components: (),
                     world_stat_bar: (
                         stat_key: "dummy_01.health",
-                        cells: 10,
+                        style: Ascii(cells: 10),
                         color_bands: [
                             (0.5, (0.85, 0.15, 0.15, 1.0)),
                             (0.25, (1.0, 0.55, 0.0, 1.0)),
@@ -1601,7 +1602,11 @@ fn test_world_stat_bar_color_bands_parse() {
     "#;
     let catalog: PrefabCatalog = from_str(ron_str).expect("should parse");
     let bar = catalog.prefabs["dummy"].world_stat_bar.as_ref().expect("world_stat_bar should be Some");
-    assert_eq!(bar.cells, 10);
+    if let WorldStatBarStyle::Ascii { cells, .. } = bar.style {
+        assert_eq!(cells, 10);
+    } else {
+        panic!("Expected Ascii style");
+    }
     assert_eq!(bar.color_bands.len(), 2);
     assert_eq!(bar.color_bands[0].0, 0.5);
     assert_eq!(bar.color_bands[1].0, 0.25);
@@ -2423,7 +2428,8 @@ fn test_prefab_without_stat_label_is_none() {
 // ─── WorldStatBarDef tests ────────────────────────────────────────────────────
 
 #[test]
-fn test_prefab_world_stat_bar_full_fields_parses() {
+fn test_prefab_world_stat_bar_ascii_full_fields_parses() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
             schema_version: 1,
@@ -2434,10 +2440,9 @@ fn test_prefab_world_stat_bar_full_fields_parses() {
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         offset: (0.0, 2.4, 0.0),
-                        cells: 10,
-                        font_size: 14.0,
                         fill_color: (0.15, 0.85, 0.15, 0.95),
                         bg_color: (0.25, 0.08, 0.08, 0.75),
+                        style: Ascii(cells: 10, font_size: 14.0),
                     ),
                 ),
             },
@@ -2448,12 +2453,17 @@ fn test_prefab_world_stat_bar_full_fields_parses() {
     let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().expect("world_stat_bar should be Some");
     assert_eq!(wb.stat_key, "{self}.health");
     assert_eq!(wb.offset, (0.0, 2.4, 0.0));
-    assert_eq!(wb.cells, 10);
-    assert_eq!(wb.font_size, 14.0);
+    if let WorldStatBarStyle::Ascii { cells, font_size } = wb.style {
+        assert_eq!(cells, 10);
+        assert_eq!(font_size, 14.0);
+    } else {
+        panic!("Expected Ascii style");
+    }
 }
 
 #[test]
-fn test_prefab_world_stat_bar_defaults_applied() {
+fn test_prefab_world_stat_bar_ascii_defaults_applied() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
             schema_version: 1,
@@ -2472,8 +2482,13 @@ fn test_prefab_world_stat_bar_defaults_applied() {
     let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
     assert_eq!(wb.stat_key, "player_health");
     assert_eq!(wb.offset, (0.0, 2.8, 0.0));
-    assert_eq!(wb.cells, 10);
-    assert_eq!(wb.font_size, 14.0);
+    // Default style is Ascii with default cells/font_size.
+    if let WorldStatBarStyle::Ascii { cells, font_size } = wb.style {
+        assert_eq!(cells, 10);
+        assert_eq!(font_size, 14.0);
+    } else {
+        panic!("Expected default Ascii style");
+    }
 }
 
 #[test]
@@ -2491,6 +2506,145 @@ fn test_prefab_without_world_stat_bar_is_none() {
     "#;
     let catalog: PrefabCatalog = from_str(ron_str).expect("PrefabDef without world_stat_bar should parse");
     assert!(catalog.prefabs["plain"].world_stat_bar.is_none());
+}
+
+#[test]
+fn test_world_stat_bar_pixel_style_parses() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        fill_color: (0.15, 0.85, 0.15, 1.0),
+                        bg_color: (0.20, 0.05, 0.05, 0.85),
+                        color_bands: [
+                            (0.0, (0.85, 0.12, 0.12, 1.0)),
+                            (0.6, (0.15, 0.85, 0.15, 1.0)),
+                        ],
+                        style: Pixel(
+                            size: (64.0, 8.0),
+                            border: 1.5,
+                            border_color: (0.05, 0.05, 0.05, 1.0),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Pixel style world_stat_bar should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    assert_eq!(wb.stat_key, "{self}.health");
+    assert_eq!(wb.color_bands.len(), 2);
+    if let WorldStatBarStyle::Pixel { size, border, border_color } = wb.style {
+        assert_eq!(size, (64.0, 8.0));
+        assert_eq!(border, 1.5);
+        assert_eq!(border_color, (0.05, 0.05, 0.05, 1.0));
+    } else {
+        panic!("Expected Pixel style");
+    }
+}
+
+#[test]
+fn test_world_stat_bar_ascii_empty_variant_uses_defaults() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Ascii(),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Ascii() with no fields should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Ascii { cells, font_size } = wb.style {
+        assert_eq!(cells, 10);
+        assert_eq!(font_size, 14.0);
+    } else {
+        panic!("Expected Ascii style");
+    }
+}
+
+#[test]
+fn test_world_stat_bar_pixel_style_defaults() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Pixel(),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Pixel style with defaults should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Pixel { size, border, border_color } = wb.style {
+        assert_eq!(size, (64.0, 8.0));
+        assert_eq!(border, 1.5);
+        assert_eq!(border_color, (0.05, 0.05, 0.05, 1.0));
+    } else {
+        panic!("Expected Pixel style");
+    }
+}
+
+#[test]
+fn test_world_stat_bar_pixel_minimal_parses() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: ( stat_key: "{self}.health", style: Pixel() ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("minimal Pixel style should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    assert!(matches!(wb.style, WorldStatBarStyle::Pixel { .. }));
+}
+
+#[test]
+fn test_world_stat_bar_rejects_unknown_top_level_field() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "dummy": (
+                    kind: "primitive",
+                    model: "Capsule3d",
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        typo_field: 99,
+                    ),
+                ),
+            },
+        )
+    "#;
+    let result: Result<PrefabCatalog, _> = from_str(ron_str);
+    assert!(result.is_err(), "Unknown field in world_stat_bar should be rejected");
 }
 
 #[test]

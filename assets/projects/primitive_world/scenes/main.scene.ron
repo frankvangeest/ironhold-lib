@@ -484,6 +484,17 @@
         scale: (1.0, 1.0, 1.0),
       ),
     ),
+    // ASCII-bar dummy — same column, next slot south. Demonstrates the Ascii
+    // world_stat_bar style alongside the Pixel dummies above.
+    (
+      id: "dummy_04",
+      prefab: "attack_dummy_ascii",
+      transform: (
+        translation: (-7.0, 0.0, -5.5),
+        rotation_euler_deg: (0.0, 210.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
 
     // ── NPCs ─────────────────────────────────────────────────────────────────
     // Villager: patrols east-west beside the cobblestone path (right side).

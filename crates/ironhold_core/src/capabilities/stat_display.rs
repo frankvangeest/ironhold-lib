@@ -198,6 +198,68 @@ pub fn world_stat_bar_update_system(
     }
 }
 
+/// Marker on the fill mesh of a `WorldStatBarStyle::Pixel` bar.
+/// The entity is a child of an invisible anchor that carries `WorldLabel`.
+/// `world_pixel_bar_update_system` drives `Transform.scale.x` (fill width) and the
+/// `ColorMaterial` color each frame.
+#[derive(Component, Clone)]
+pub struct WorldPixelBarFillMarker {
+    pub stat_key: String,
+    /// Full bar width in screen pixels — fixed at spawn, used to compute fill width.
+    pub full_width: f32,
+    pub fill_color: (f32, f32, f32, f32),
+    pub color_bands: Vec<(f32, (f32, f32, f32, f32))>,
+}
+
+/// Updates the fill mesh scale and color of every `WorldPixelBarFillMarker` entity.
+/// `Transform.scale.x = ratio * full_width` (fill width).
+/// `Transform.translation.x` is kept left-aligned within the bar.
+/// Writes are guarded for change-detection efficiency.
+pub fn world_pixel_bar_update_system(
+    loaded_stats: Res<LoadedStats>,
+    stat_map_query: Query<(&SpawnId, &StatMap)>,
+    mut fill_query: Query<(&WorldPixelBarFillMarker, &mut Transform, &MeshMaterial2d<ColorMaterial>)>,
+    color_materials: Option<ResMut<Assets<ColorMaterial>>>,
+) {
+    let Some(mut color_materials) = color_materials else { return };
+    for (marker, mut transform, mat_handle) in fill_query.iter_mut() {
+        let ratio = if let Some((effective, min, max)) =
+            resolve_stat(&marker.stat_key, &loaded_stats, &stat_map_query)
+        {
+            let range = max - min;
+            if range <= 0.0 { 1.0 } else { ((effective - min) / range).clamp(0.0, 1.0) }
+        } else {
+            if cfg!(debug_assertions) {
+                warn!("WorldPixelBar: stat_key {:?} not found — bar renders empty", marker.stat_key);
+            }
+            0.0
+        };
+
+        let new_width = ratio * marker.full_width;
+        if (transform.scale.x - new_width).abs() > 0.5 {
+            transform.scale.x = new_width;
+            transform.translation.x = -marker.full_width / 2.0 + new_width / 2.0;
+        }
+
+        let chosen = if !marker.color_bands.is_empty() {
+            marker.color_bands.iter()
+                .filter(|(t, _)| ratio >= *t)
+                .max_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(_, c)| *c)
+                .unwrap_or(marker.fill_color)
+        } else {
+            marker.fill_color
+        };
+        let (r, g, b, a) = chosen;
+        let new_color = Color::srgba(r, g, b, a);
+        if let Some(mat) = color_materials.get_mut(&mat_handle.0) {
+            if mat.color != new_color {
+                mat.color = new_color;
+            }
+        }
+    }
+}
+
 /// Updates floating stat labels spawned from `PrefabDef.stat_label` each frame.
 /// Uses `resolve_stat` so both global (`"player_health"`) and entity-local
 /// (`"dummy_01.health"`) keys work transparently.

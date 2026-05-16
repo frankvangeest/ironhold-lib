@@ -85,6 +85,8 @@
 - [x] Data-bound UI labels — `bind`/`format` fields on labels + `GameVariables` resource; `Action::SetVariable` / `Action::IncrementVariable` let designers write arbitrary variables from RON; `DebugState.score` derived from `GameVariables["score"]`
 - [ ] UI layout — stack/flex layout or anchor-based positioning replacing raw pixel coords
 - [ ] Font + theme config per project
+- [ ] Drop shadow support for UI text
+- [ ] Drop shadow support for world entity text labels
 
 ### Terrain
 - [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
