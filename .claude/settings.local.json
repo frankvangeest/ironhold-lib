@@ -46,7 +46,11 @@
       "Bash(python tools/migrate_implicit_some.py)",
       "Bash(awk -F: '{print $1\":\"$2}')",
       "Bash(Get-Content \"crates\\\\ironhold_core\\\\tests\\\\ron_validation.rs\")",
-      "Bash(Select-Object -Last 20)"
+      "Bash(Select-Object -Last 20)",
+      "Bash(Get-Content \"C:\\\\git\\\\rust\\\\ironhold-lib\\\\crates\\\\ironhold_core\\\\tests\\\\ron_validation.rs\")",
+      "Bash(Measure-Object -Line)",
+      "PowerShell(cargo test *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }

@@ -220,6 +220,11 @@ fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             event: event.replace("{self}", spawn_id),
             delay_secs,
         },
+        Action::SpawnEffect { key, position, entity } => Action::SpawnEffect {
+            key,
+            position,
+            entity: entity.map(|e| e.replace("{self}", spawn_id)),
+        },
         other => other,
     }
 }

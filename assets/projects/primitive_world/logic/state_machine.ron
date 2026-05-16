@@ -29,6 +29,11 @@
                 PreloadScene("scenes/map.scene.ron"),
                 PreloadScene("scenes/character_stats.scene.ron"),
                 PreloadScene("scenes/game_over.scene.ron"),
+                // Warm the WebGPU particle pipeline (AlphaMode::Add) during the scene-load window
+                // so the first real particle burst does not stall the GPU thread. All effects share
+                // the same pipeline variant, so one SpawnEffect warms them all. Position far below
+                // the terrain makes this invisible to the player.
+                SpawnEffect(key: "hit_spark", position: Some((0.0, -100.0, 0.0))),
             ],
             exit_actions: [ StopMusic ],
             on: [

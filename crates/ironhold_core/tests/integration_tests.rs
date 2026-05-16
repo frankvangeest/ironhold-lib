@@ -3240,3 +3240,158 @@ fn test_set_entity_visible_hides_then_shows_spawned_entity() {
     let vis = *app.world().entity(entity).get::<Visibility>().unwrap();
     assert_eq!(vis, Visibility::Visible, "entity must be visible after SetEntityVisible(true)");
 }
+
+// ─── SpawnEffect / PendingParticleEffects tests ────────────────────────────────
+
+#[test]
+fn test_spawn_effect_with_position_spawns_particle_entities() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
+    use ironhold_core::capabilities::particle::Particle;
+
+    let mut app = setup_test_app();
+    // First update: Startup systems run, ParticleMeshCache gets its sphere mesh.
+    app.update();
+
+    let effect_def = EffectDef {
+        particle_count: 8,
+        lifetime_secs: 0.5,
+        speed: 2.0,
+        speed_jitter: 0.0,
+        spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0),
+        size: 0.05,
+        size_end: None,
+        color_start: (1.0, 1.0, 0.0, 1.0),
+        color_end: (1.0, 0.0, 0.0, 0.0),
+        gravity: 0.0,
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "sparks".to_string(),
+        position: Some((3.0, 1.0, -2.0)),
+        entity: None,
+    });
+    // action_executor pushes to PendingParticleEffects; drain_particle_effects_system spawns entities.
+    app.update();
+
+    let count = app.world_mut().query::<&Particle>().iter(app.world()).count();
+    assert_eq!(count, 8, "drain_particle_effects_system must spawn particle_count entities");
+}
+
+#[test]
+fn test_spawn_effect_with_entity_resolves_global_transform() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
+    use ironhold_core::capabilities::particle::Particle;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let effect_def = EffectDef {
+        particle_count: 4,
+        lifetime_secs: 0.3,
+        speed: 1.0,
+        speed_jitter: 0.0,
+        spread_deg: 90.0,
+        offset: (0.0, 0.5, 0.0),
+        size: 0.04,
+        size_end: None,
+        color_start: (0.0, 1.0, 0.0, 1.0),
+        color_end: (0.0, 0.0, 0.0, 0.0),
+        gravity: 0.0,
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("heal".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    // Spawn an entity at a known world position and register it.
+    let entity = app.world_mut().spawn((
+        SpawnId("npc_01".to_string()),
+        GlobalTransform::from_translation(Vec3::new(5.0, 0.0, 3.0)),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("npc_01".to_string(), entity);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "heal".to_string(),
+        position: None,
+        entity: Some("npc_01".to_string()),
+    });
+    app.update();
+
+    // All particles spawn at the resolved origin; drain_particle_effects_system sets Transform.
+    // origin = entity position (5, 0, 3) + offset (0, 0.5, 0) = (5, 0.5, 3)
+    let translations: Vec<Vec3> = app.world_mut()
+        .query::<(&Particle, &Transform)>()
+        .iter(app.world())
+        .map(|(_, tf)| tf.translation)
+        .collect();
+    assert_eq!(translations.len(), 4, "must spawn particle_count entities for entity-based effect");
+    for t in &translations {
+        assert!((t.x - 5.0).abs() < 0.001, "particle x must match entity x");
+        assert!((t.y - 0.5).abs() < 0.001, "particle y must equal entity y + offset");
+        assert!((t.z - 3.0).abs() < 0.001, "particle z must match entity z");
+    }
+}
+
+#[test]
+fn test_spawn_effect_unknown_key_does_not_push() {
+    use ironhold_core::capabilities::particle::PendingParticleEffects;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "nonexistent_effect".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pending = app.world().resource::<PendingParticleEffects>();
+    assert!(pending.0.is_empty(), "unknown effect key must not push to PendingParticleEffects");
+}
+
+#[test]
+fn test_spawn_effect_entity_missing_does_not_push() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
+    use ironhold_core::capabilities::particle::PendingParticleEffects;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let effect_def = EffectDef {
+        particle_count: 4,
+        lifetime_secs: 0.3,
+        speed: 1.0,
+        speed_jitter: 0.0,
+        spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0),
+        size: 0.05,
+        size_end: None,
+        color_start: (1.0, 1.0, 1.0, 1.0),
+        color_end: (1.0, 1.0, 1.0, 0.0),
+        gravity: 0.0,
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    // Entity name not registered in SpawnRegistry — should silently skip.
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "sparks".to_string(),
+        position: None,
+        entity: Some("ghost_entity".to_string()),
+    });
+    app.update();
+
+    let pending = app.world().resource::<PendingParticleEffects>();
+    assert!(pending.0.is_empty(), "unresolvable entity must not push to PendingParticleEffects");
+}

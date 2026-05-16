@@ -3157,3 +3157,223 @@ fn test_modifier_kind_override_parses() {
     assert!(matches!(m.stack_rule, ironhold_core::schema::StackRule::Replace));
     assert!(catalog.validate().is_ok());
 }
+
+// ── EffectDef / Action::SpawnEffect ──────────────────────────────────────────
+
+#[test]
+fn test_effect_def_full_fields_parse() {
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "hit_spark": (
+                    particle_count: 12,
+                    lifetime_secs: 0.4,
+                    speed: 3.0,
+                    speed_jitter: 0.8,
+                    spread_deg: 180.0,
+                    offset: (0.0, 1.0, 0.0),
+                    size: 0.06,
+                    size_end: 0.0,
+                    color_start: (1.0, 0.8, 0.2, 1.0),
+                    color_end:   (1.0, 0.1, 0.0, 0.0),
+                    gravity: -4.0,
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("AssetCatalog with effects should parse");
+    assert!(catalog.validate().is_ok());
+    let def: &EffectDef = catalog.effects.get("hit_spark").expect("hit_spark should exist");
+    assert_eq!(def.particle_count, 12);
+    assert_eq!(def.lifetime_secs, 0.4);
+    assert_eq!(def.speed, 3.0);
+    assert_eq!(def.speed_jitter, 0.8);
+    assert_eq!(def.spread_deg, 180.0);
+    assert_eq!(def.offset, (0.0, 1.0, 0.0));
+    assert_eq!(def.size, 0.06);
+    assert_eq!(def.size_end, Some(0.0));
+    assert_eq!(def.color_start, (1.0, 0.8, 0.2, 1.0));
+    assert_eq!(def.color_end, (1.0, 0.1, 0.0, 0.0));
+    assert_eq!(def.gravity, -4.0);
+}
+
+#[test]
+fn test_effect_def_minimal_uses_defaults() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    // Only the required fields are present; all optional fields take their defaults.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "minimal": (
+                    lifetime_secs: 0.5,
+                    color_start: (1.0, 0.5, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("minimal EffectDef should parse");
+    assert!(catalog.validate().is_ok());
+    let def = catalog.effects.get("minimal").unwrap();
+    assert_eq!(def.particle_count, 12,  "default particle_count");
+    assert_eq!(def.speed, 0.0,          "default speed");
+    assert_eq!(def.speed_jitter, 0.0,   "default speed_jitter");
+    assert_eq!(def.spread_deg, 180.0,   "default spread_deg");
+    assert_eq!(def.offset, (0.0, 1.0, 0.0), "default offset");
+    assert_eq!(def.size, 0.06,          "default size");
+    assert!(def.size_end.is_none(),     "default size_end is None");
+    assert_eq!(def.gravity, 0.0,        "default gravity");
+}
+
+#[test]
+fn test_effect_def_particle_count_over_limit_fails_validation() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "too_many": (
+                    particle_count: 300,
+                    lifetime_secs: 0.5,
+                    color_start: (1.0, 0.0, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("should parse (validation is post-parse)");
+    let err = catalog.validate().expect_err("particle_count 300 must fail validation");
+    assert!(err.contains("too_many"), "error must name the offending effect key");
+    assert!(err.contains("300"),      "error must include the bad count");
+    assert!(err.contains("256"),      "error must state the limit");
+}
+
+#[test]
+fn test_effect_def_particle_count_at_limit_is_valid() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "at_limit": (
+                    particle_count: 256,
+                    lifetime_secs: 0.5,
+                    color_start: (1.0, 0.0, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("should parse");
+    assert!(catalog.validate().is_ok(), "particle_count == 256 must be valid");
+}
+
+#[test]
+fn test_effect_def_unknown_field_is_error() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "typo": (
+                    lifetime_secs: 0.5,
+                    color_start: (1.0, 0.0, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                    particel_count: 10,
+                ),
+            },
+        )
+    "#;
+    let result: Result<AssetCatalog, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo in EffectDef field must be rejected (deny_unknown_fields)");
+}
+
+#[test]
+fn test_asset_catalog_with_no_effects_is_valid() {
+    // Existing catalogs without an effects section must still parse and validate.
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            audio: {
+                "bg_music": (path: "shared/audio/bg.mp3", volume: 0.3),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("catalog without effects should parse");
+    assert!(catalog.validate().is_ok());
+    assert!(catalog.effects.is_empty(), "effects should be empty when not specified");
+}
+
+#[test]
+fn test_action_spawn_effect_with_entity_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"SpawnEffect(key: "hit_spark", entity: "{self}")"#;
+    let action: Action = from_str(ron_str).expect("SpawnEffect with entity should parse");
+    if let Action::SpawnEffect { key, entity, position } = action {
+        assert_eq!(key, "hit_spark");
+        assert_eq!(entity.as_deref(), Some("{self}"));
+        assert!(position.is_none());
+    } else {
+        panic!("Expected SpawnEffect variant");
+    }
+}
+
+#[test]
+fn test_action_spawn_effect_with_position_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"SpawnEffect(key: "heal_burst", position: (1.0, 2.5, -3.0))"#;
+    let action: Action = from_str(ron_str).expect("SpawnEffect with position should parse");
+    if let Action::SpawnEffect { key, entity, position } = action {
+        assert_eq!(key, "heal_burst");
+        assert!(entity.is_none());
+        assert_eq!(position, Some((1.0, 2.5, -3.0)));
+    } else {
+        panic!("Expected SpawnEffect variant");
+    }
+}
+
+#[test]
+fn test_action_spawn_effect_key_only_parses() {
+    // Neither entity nor position given — valid RON (no-op with warning at runtime).
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"SpawnEffect(key: "pickup_sparkle")"#;
+    let action: Action = from_str(ron_str).expect("SpawnEffect with key only should parse");
+    if let Action::SpawnEffect { key, entity, position } = action {
+        assert_eq!(key, "pickup_sparkle");
+        assert!(entity.is_none());
+        assert!(position.is_none());
+    } else {
+        panic!("Expected SpawnEffect variant");
+    }
+}
+
+#[test]
+fn test_action_spawn_effect_in_rules_asset_parses() {
+    // SpawnEffect must round-trip inside a full LogicRulesAsset, as it would appear in rules.ron.
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            rules: [
+                (
+                    on: "entity.interacted:dummy_01",
+                    do_actions: [
+                        SpawnEffect(key: "hit_spark", entity: "dummy_01"),
+                        ShowDamagePopup(entity: "dummy_01", amount: -25.0),
+                    ],
+                ),
+            ],
+        )
+    "#;
+    let rules: ironhold_core::schema::project::LogicRulesAsset = from_str(ron_str)
+        .expect("LogicRulesAsset with SpawnEffect should parse");
+    assert!(rules.validate().is_ok());
+    let actions = &rules.rules[0].do_actions;
+    assert_eq!(actions.len(), 2);
+    assert!(matches!(&actions[0],
+        ironhold_core::schema::actions::Action::SpawnEffect { key, .. } if key == "hit_spark"
+    ));
+}

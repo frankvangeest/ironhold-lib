@@ -97,6 +97,7 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `ShowDamagePopup(entity: "{self}", amount: -25.0)` → entity becomes the entity's ID
 - `SetEntityVisible(entity: "{self}", visible: false)` → entity becomes the entity's ID
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → event name with `{self}` filled in
+- `SpawnEffect(key: "hit_spark", entity: "{self}")` → entity becomes the entity's ID (burst spawns at that entity's position)
 
 **New capabilities for entity logic:**
 
@@ -194,3 +195,15 @@ For single-entity spawns the queue is transparent: action_executor pushes, drain
 ```
 
 `PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first spawn.
+
+### Particle pipeline warmup
+`Action::SpawnEffect` uses `AlphaMode::Add` materials. WebGPU compiles the render pipeline for a material+blendmode combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Because particle entities don't exist at scene-load time, the existing `pipeline_warmup_system` (4-frame `NoFrustumCulling` pass) cannot pre-warm them.
+
+**Fix:** fire a `SpawnEffect` during `scene.ready` entry actions at a position far below the playable area. All effects share the same pipeline variant (`StandardMaterial + AlphaMode::Add` + the shared sphere mesh), so one warmup burst covers all effect keys.
+
+```ron
+// logic/state_machine.ron — playing state entry_actions
+SpawnEffect(key: "hit_spark", position: Some((0.0, -100.0, 0.0))),
+```
+
+Place this alongside `PreloadScene` / `PreloadPrefab` calls so it fires during the natural loading pause, before the player can interact.

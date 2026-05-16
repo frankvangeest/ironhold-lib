@@ -516,6 +516,21 @@ Named registry of all assets available to prefabs and scenes.
     "click": (path: "shared/audio/menu-button-click.wav"),
     "bg_music": (path: "shared/audio/theme.ogg", volume: 0.6),
   },
+  effects: {
+    "hit_spark": (
+      particle_count: 12,
+      lifetime_secs: 0.45,
+      speed: 3.5,
+      speed_jitter: 0.8,
+      spread_deg: 180.0,
+      offset: (0.0, 1.0, 0.0),
+      size: 0.055,
+      size_end: Some(0.0),
+      color_start: (1.0, 0.8, 0.2, 1.0),
+      color_end: (1.0, 0.1, 0.0, 0.0),
+      gravity: -5.0,
+    ),
+  },
   materials: {
     "wood_crate": (
       kind: Standard((
@@ -529,6 +544,24 @@ Named registry of all assets available to prefabs and scenes.
   },
 )
 ```
+
+**EffectDef fields** (used inside `effects: { "key": ( … ) }`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `particle_count` | `u32` | `12` | Number of particles per burst. Validated at catalog load — must be ≤ 256. |
+| `lifetime_secs` | `f32` | — | **Required.** How long each particle lives before despawning. |
+| `speed` | `f32` | `0.0` | Initial outward speed in metres/second along each particle's direction. |
+| `speed_jitter` | `f32` | `0.0` | Per-particle speed variation in `[−jitter, +jitter]` — deterministic, index-based. |
+| `spread_deg` | `f32` | `180.0` | Cone half-angle in degrees (0 = straight up column, 90 = hemisphere, 180 = full sphere). |
+| `offset` | `(f32, f32, f32)` | `(0.0, 1.0, 0.0)` | World-space offset from the entity origin or explicit position (e.g. chest height). |
+| `size` | `f32` | `0.06` | Particle radius in metres at birth. |
+| `size_end` | `Option<f32>` | `None` | If set, particle radius lerps from `size` to `size_end` over the lifetime. |
+| `color_start` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at birth (linear, 0.0–1.0). |
+| `color_end` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at death — typically fade alpha to 0.0. |
+| `gravity` | `f32` | `0.0` | Vertical acceleration in m/s² applied each frame (negative = down, positive = float upward). |
+
+Particles use `AlphaMode::Add` (additive blending) — overlapping particles glow brighter, no depth-sorting artefacts in WASM. Directions are sampled deterministically via a spherical-cap golden-angle spiral so the same effect always produces the same pattern.
 
 **Audio format recommendations:**
 

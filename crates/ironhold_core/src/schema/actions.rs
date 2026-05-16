@@ -143,6 +143,21 @@ pub enum Action {
         event: String,
         delay_secs: f32,
     },
+    /// Spawn a named particle burst effect defined in `AssetCatalog.effects`.
+    /// Position resolution precedence:
+    ///   1. `entity` (spawn ID, resolved via `SpawnRegistry` → `GlobalTransform`) + `EffectDef.offset`
+    ///   2. `position` (explicit world coords) + `EffectDef.offset`
+    ///   3. Neither given → no-op with a warning logged
+    /// If both `entity` and `position` are given, `entity` wins and a warning is logged.
+    /// Inside behavior files, `{self}` in `entity` is substituted with the entity's spawn ID.
+    /// Example: `SpawnEffect(key: "hit_spark", entity: "{self}")`.
+    SpawnEffect {
+        key: String,
+        #[serde(default)]
+        position: Option<(f32, f32, f32)>,
+        #[serde(default)]
+        entity: Option<String>,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }

@@ -242,6 +242,7 @@ pub struct SpawnParams<'w, 's> {
     pub merged_fixes: Res<'w, MergedModelFixes>,
     pub spawned: Query<'w, 's, (Entity, &'static SpawnId)>,
     pub pending_spawns: ResMut<'w, PendingEntitySpawns>,
+    pub pending_particles: ResMut<'w, crate::capabilities::particle::PendingParticleEffects>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.

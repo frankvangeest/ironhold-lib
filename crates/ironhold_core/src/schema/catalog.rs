@@ -7,6 +7,9 @@ use super::player::{CameraConfig, InputMap};
 pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 1;
 
+/// Maximum `particle_count` allowed in any `EffectDef`. Validated at catalog load time.
+pub const MAX_PARTICLES_PER_EFFECT: u32 = 256;
+
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct AssetCatalog {
     pub schema_version: u32,
@@ -18,6 +21,10 @@ pub struct AssetCatalog {
     pub audio: HashMap<String, AudioEntry>,
     #[serde(default)]
     pub materials: HashMap<String, MaterialDef>,
+    /// Particle burst effect definitions. Keyed by a designer-chosen name (e.g. `"hit_spark"`).
+    /// Referenced by `Action::SpawnEffect { key: "hit_spark", ... }` in rules and behavior files.
+    #[serde(default)]
+    pub effects: HashMap<String, EffectDef>,
 }
 
 impl AssetCatalog {
@@ -33,6 +40,15 @@ impl AssetCatalog {
                 return Err(format!("AssetCatalog model \"{}\" has empty path", key));
             }
         }
+        for (key, effect) in &self.effects {
+            if effect.particle_count > MAX_PARTICLES_PER_EFFECT {
+                return Err(format!(
+                    "AssetCatalog effect \"{}\": particle_count {} exceeds the maximum of {} — \
+                     split into multiple effects or reduce particle_count",
+                    key, effect.particle_count, MAX_PARTICLES_PER_EFFECT
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -45,9 +61,63 @@ impl Default for AssetCatalog {
             textures: HashMap::new(),
             audio: HashMap::new(),
             materials: HashMap::new(),
+            effects: HashMap::new(),
         }
     }
 }
+
+/// Particle burst effect definition. Authored in `AssetCatalog.effects` and referenced
+/// by `Action::SpawnEffect { key: "...", entity: "{self}" }` in rules and behavior files.
+///
+/// All fields are optional except `lifetime_secs`, `color_start`, and `color_end`.
+/// `particle_count` must be ≤ `MAX_PARTICLES_PER_EFFECT` (256) — validated at load time.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct EffectDef {
+    /// Number of particles spawned. Must be ≤ 256; validated at catalog load time.
+    #[serde(default = "default_particle_count")]
+    pub particle_count: u32,
+    /// Seconds until all particles have faded out and despawned.
+    pub lifetime_secs: f32,
+    /// Initial speed of each particle in m/s.
+    #[serde(default)]
+    pub speed: f32,
+    /// Speed randomness: actual per-particle speed is in `[speed - speed_jitter, speed + speed_jitter]`.
+    /// Determined by a deterministic per-index hash (no random state). Default: 0.0.
+    #[serde(default)]
+    pub speed_jitter: f32,
+    /// Emission cone half-angle in **degrees** from the +Y axis.
+    /// `0` = all particles go straight up, `90` = hemisphere, `180` = full sphere. Default: 180.
+    #[serde(default = "default_spread_deg")]
+    pub spread_deg: f32,
+    /// World-space offset added to the resolved spawn position.
+    /// When spawning relative to an entity, `(0.0, 1.0, 0.0)` places the burst at roughly chest
+    /// height for a 1.8 m entity. Applies to both `entity`-resolved and explicit `position` spawns.
+    /// Default: `(0.0, 1.0, 0.0)`.
+    #[serde(default = "default_effect_offset")]
+    pub offset: (f32, f32, f32),
+    /// Sphere radius of each particle in metres at spawn. Default: 0.06.
+    #[serde(default = "default_particle_size")]
+    pub size: f32,
+    /// Particle sphere radius at end of lifetime. Interpolated linearly from `size`.
+    /// `None` = constant size throughout the particle's life. Default: None.
+    #[serde(default)]
+    pub size_end: Option<f32>,
+    /// RGBA colour at spawn (linear sRGB, 0.0–1.0). Alpha 1.0 = fully opaque/bright.
+    pub color_start: (f32, f32, f32, f32),
+    /// RGBA colour at end of lifetime (linear sRGB). Alpha 0.0 = fully invisible.
+    /// Interpolated linearly from `color_start` over the particle's lifetime.
+    pub color_end: (f32, f32, f32, f32),
+    /// Y-axis acceleration in m/s². Negative = falls, positive = rises.
+    /// Reference: `-2.0` light sparks, `-9.8` Earth-like, `0.0` floaty, `+2.0` rising embers.
+    #[serde(default)]
+    pub gravity: f32,
+}
+
+fn default_particle_count() -> u32 { 12 }
+fn default_spread_deg() -> f32 { 180.0 }
+fn default_effect_offset() -> (f32, f32, f32) { (0.0, 1.0, 0.0) }
+fn default_particle_size() -> f32 { 0.06 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]

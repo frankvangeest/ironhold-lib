@@ -16,6 +16,7 @@ pub mod stats;
 pub mod stat_display;
 pub mod stat_radar;
 pub mod damage_popup;
+pub mod particle;
 
 pub use player::*;
 pub use camera::*;
@@ -35,4 +36,5 @@ pub use stats::{stat_modifier_system, stat_regen_system, stat_effective_value_sy
 pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker};
 pub use stat_radar::{RadarMaterial, StatRadarNode, StatRadarPlugin, stat_radar_update_system};
 pub use damage_popup::{DamagePopup, damage_popup_system};
+pub use particle::{Particle, ParticleMeshCache, PendingParticleEffects, QueuedParticleEffect, ParticlePlugin, drain_particle_effects_system, particle_system};
 

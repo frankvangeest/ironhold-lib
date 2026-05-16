@@ -16,6 +16,58 @@
     "swing_miss":   (path: "shared/audio/combat/heave-male.wav", volume: 0.6),
   },
 
+  effects: {
+
+    // Fast orange sparks flying in all directions — classic "hit" reaction.
+    // Full sphere spread + heavy gravity = debris-falling-away feel.
+    "hit_spark": (
+      particle_count: 12,      // sparse — quick read, not noisy
+      lifetime_secs: 0.45,     // brief flash, gone before next hit lands
+      speed: 3.5,
+      speed_jitter: 0.8,       // variation prevents robotic uniformity
+      spread_deg: 180.0,       // full sphere — debris flies everywhere
+      offset: (0.0, 1.0, 0.0),
+      size: 0.055,
+      size_end: 0.0,           // shrinks to nothing at end of life
+      color_start: (1.0, 0.8, 0.2, 1.0),
+      color_end:   (1.0, 0.1, 0.0, 0.0),
+      gravity: -5.0,           // strong fall — heavy "ash" feel
+    ),
+
+    // Soft green sparkles rising upward — used when the dummy resets to full health.
+    // Narrow cone + positive gravity = upward drift that settles back down.
+    "heal_burst": (
+      particle_count: 18,
+      lifetime_secs: 0.8,
+      speed: 2.2,
+      speed_jitter: 0.5,
+      spread_deg: 50.0,        // narrow upward cone — looks intentional, not random
+      offset: (0.0, 1.2, 0.0),
+      size: 0.05,
+      size_end: 0.08,          // grows slightly — "blooming" sparkle
+      color_start: (0.2, 1.0, 0.4, 1.0),
+      color_end:   (0.0, 0.4, 0.1, 0.0),
+      gravity: 1.5,            // positive gravity = floats upward then slows
+    ),
+
+    // Slow floaty white-to-blue particles drifting upward — used on coin pickup or scene events.
+    // Demonstrates: low speed, near-zero gravity, growing size, longer life.
+    "pickup_sparkle": (
+      particle_count: 16,
+      lifetime_secs: 1.2,
+      speed: 0.8,
+      speed_jitter: 0.3,
+      spread_deg: 60.0,
+      offset: (0.0, 0.8, 0.0),
+      size: 0.04,
+      size_end: 0.12,          // grows — "blossoming" feel
+      color_start: (0.9, 0.95, 1.0, 1.0),
+      color_end:   (0.3, 0.5, 1.0, 0.0),
+      gravity: 0.3,            // near-zero: slow rise
+    ),
+
+  },
+
   materials: {
 
     // ── Scenery surface textures — full PBR triplanar ─────────────────────────

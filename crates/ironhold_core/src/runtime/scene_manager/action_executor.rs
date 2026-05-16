@@ -7,6 +7,7 @@ use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
 use crate::capabilities::damage_popup::DamagePopup;
+use crate::capabilities::particle::QueuedParticleEffect;
 use super::{
     BackgroundMusic, LevelEntity, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
     SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, resolve_project_path,
@@ -469,6 +470,35 @@ pub fn action_executor_system(
             Action::EmitEventAfterDelay { event, delay_secs } => {
                 info!("Action::EmitEventAfterDelay: '{}' in {:.1}s", event, delay_secs);
                 scene_state.delayed_events.0.push((delay_secs, event));
+            }
+            Action::SpawnEffect { key, position, entity } => {
+                let Some(def) = asset_catalog.0.effects.get(&key).cloned() else {
+                    warn!("Action::SpawnEffect: unknown effect key {:?}", key);
+                    continue;
+                };
+                let offset = Vec3::new(def.offset.0, def.offset.1, def.offset.2);
+
+                let world_pos: Option<Vec3> = if let Some(ref entity_id) = entity {
+                    if position.is_some() {
+                        warn!("Action::SpawnEffect {:?}: both entity and position given; entity wins", key);
+                    }
+                    spawn_params.registry.entities.get(entity_id)
+                        .and_then(|e| scene_state.global_transforms.get(*e).ok())
+                        .map(|gt| gt.translation() + offset)
+                } else {
+                    position.map(|(x, y, z)| Vec3::new(x, y, z) + offset)
+                };
+
+                let Some(origin) = world_pos else {
+                    warn!("Action::SpawnEffect {:?}: no entity or position resolved; skipping", key);
+                    continue;
+                };
+
+                info!(
+                    "Action::SpawnEffect: queued {:?} at ({:.1}, {:.1}, {:.1}) ({} particles)",
+                    key, origin.x, origin.y, origin.z, def.particle_count
+                );
+                spawn_params.pending_particles.0.push(QueuedParticleEffect { origin, def });
             }
         }
     }

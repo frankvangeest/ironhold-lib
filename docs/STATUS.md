@@ -57,6 +57,7 @@ _Last updated: 2026‑05‑09_
 | Trigger zones               |   ✅   | `TriggerZone` component + Rapier sensor; emits `entity.entered:{id}` / `entity.exited:{id}` on player enter/exit. Add via `trigger_zone` field on `PrefabDef`. |
 | Interactable entities       |   ✅   | `Interactable { radius }` component; when player is within `radius` metres and presses the interact key (`inputs.interact` on the player prefab, default `"KeyF"`), emits `entity.interacted:{id}`. Add via `interactable` field on `PrefabDef`. |
 | Motion (rotate/bob)         |   ✅   | `Motion` component; world-space continuous rotation (per-axis rad/s) and sinusoidal vertical bob (amplitude, frequency). Runs in `Update`; purely visual. |
+| Particle effects            |   ✅   | `Action::SpawnEffect { key, position, entity }` bursts a named effect from `AssetCatalog.effects`; `EffectDef` fields: count (≤256), lifetime, speed/jitter, spread_deg, offset, size/size_end, color_start/end, gravity; additive blending; deterministic Fibonacci sphere distribution. Demonstrated in `primitive_world` (hit_spark, heal_burst, pickup_sparkle). |
 | Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
@@ -105,6 +106,7 @@ _Last updated: 2026‑05‑09_
 - `Action::ShowDamagePopup { entity: String, amount: f32 }` — spawns a floating `+N` / `-N` world-space label above the entity identified by spawn ID; positive amounts show in heal colour, negative in damage colour; style (font size, duration, rise speed, colours) is configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior files
 - `Action::SetEntityVisible { entity: String, visible: bool }` — shows or hides a spawned entity by its spawn ID; the entity stays in the ECS (stats, colliders, and behavior FSM keep running); world labels (stat bar, stat label) tracking the entity auto-hide; `{self}` substituted in behavior files
 - `Action::EmitEventAfterDelay { event: String, delay_secs: f32 }` — fires a `GameEvent::Trigger` after `delay_secs` seconds have elapsed; cleared on `Action::LoadScene` so events do not leak across scene transitions; `{self}` substituted in behavior files
+- `Action::SpawnEffect { key: String, position: Option<(f32,f32,f32)>, entity: Option<String> }` — bursts a particle effect from `AssetCatalog.effects`; `entity` wins over `position`; `EffectDef.offset` added to origin; additive blending; `{self}` substituted in behavior files
 
 ### Entity messages (Beta 0.4)
 - `entity.entered:{id}` — emitted by `TriggerZone` when the player enters the sensor collider

@@ -11,7 +11,8 @@
 
 ## Active
 
-- [ ] **World-space pixel stat bar** — see `planning/features/world_pixel_stat_bar.md`
+- [x] **World-space pixel stat bar** — see `planning/features/world_pixel_stat_bar.md`
+- [ ] **Particle effect spawning** — see `planning/features/particle_effects.md`
 
 ---
 
@@ -71,12 +72,12 @@
 - [x] **Stat display — radar chart** — `StatRadar` UI node (3–12 axes), WGSL polar-coordinate shader via `UiMaterial`, straight-edged polygon grid (no circles), `stat_radar_update_system`; `primitive_world` demo: 5-stat pentagon (health/mana/stamina/strength/speed) on Key C overlay
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
 - [x] **Stat display — per-entity stat routing** — `resolve_stat(key, &LoadedStats, &Query<(&SpawnId, &StatMap)>)` shared helper; dotted keys route to entity `StatMap`, plain keys to global `LoadedStats`; all three update systems (`StatBar`, `StatSpread`, `StatRadar`) + new `stat_label_update_system` use it; `StatLabelMarker` component enables floating world-space health labels; `primitive_world` attack dummies demonstrate the feature
-- [ ] **World-space stat bar — Pixel style** — see `planning/features/world_pixel_stat_bar.md` _(design done, ready to implement)_
+- [x] **World-space stat bar — Pixel style** — see `planning/features/world_pixel_stat_bar.md` _(design done, ready to implement)_
 - [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
 - [ ] Dialogue system — multi-step NPC conversation trees in RON; emits `dialogue.ended:{id}` trigger
 - [ ] Inventory / item system — `AddItem`, `RemoveItem`, `HasItem` condition
 - [ ] Quest / objective tracker — RON-defined objectives, `CompleteObjective`, `FailObjective` actions
-- [ ] Particle effect spawning via `Action::SpawnEffect(String)` — catalog-keyed effect prefab
+- [x] Particle effect spawning via `Action::SpawnEffect` — see `planning/features/particle_effects.md`
 - [ ] Camera shake action (`Action::CameraShake { duration, intensity }`)
 - [ ] Timeline / sequencer — scripted cutscene playback from a RON timeline asset
 

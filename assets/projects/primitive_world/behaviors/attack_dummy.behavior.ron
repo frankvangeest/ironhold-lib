@@ -21,16 +21,18 @@
             entry_actions: [
                 SetStat(key: "{self}.health", value: 100.0),
                 SetEntityVisible(entity: "{self}", visible: true),
+                SpawnEffect(key: "heal_burst", entity: "{self}"),
             ],
             exit_actions: [],
             on: [
-                // F key within 2 m → 25 damage + swing sound + floating number.
+                // F key within 2 m → 25 damage + swing sound + floating number + hit spark.
                 (
                     event: "entity.interacted:{self}",
                     do_actions: [
                         ModifyStat(key: "{self}.health", delta: -25.0),
                         PlaySound(key: "swing_miss"),
                         ShowDamagePopup(entity: "{self}", amount: -25.0),
+                        SpawnEffect(key: "hit_spark", entity: "{self}"),
                     ],
                 ),
             ],
@@ -39,6 +41,7 @@
             name: "dead",
             entry_actions: [
                 PlaySound(key: "goblin_hit"),
+                SpawnEffect(key: "hit_spark", entity: "{self}"),
                 SetEntityVisible(entity: "{self}", visible: false),
                 EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0),
             ],

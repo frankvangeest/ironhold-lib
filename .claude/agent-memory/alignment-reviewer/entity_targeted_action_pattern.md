@@ -4,7 +4,9 @@ description: When adding an Action variant that targets a single entity by spawn
 type: project
 ---
 
-For any new `Action` variant that takes an `entity` / `target` / `event` string referring to a specific spawned entity (e.g. `ShowDamagePopup`, `SetEntityVisible`, `EmitEventAfterDelay`, `PlayAnimationOn`, `Despawn`), all six of these locations must be updated. Missing #4 in particular silently breaks designer-authored behavior files — the action parses, executes for non-`{self}` targets, but always misses for behavior-driven targets.
+For any new `Action` variant that takes an `entity` / `target` / `event` string referring to a specific spawned entity (e.g. `ShowDamagePopup`, `SetEntityVisible`, `EmitEventAfterDelay`, `PlayAnimationOn`, `Despawn`, `SpawnEffect`), all six of these locations must be updated. Missing #4 in particular silently breaks designer-authored behavior files — the action parses, executes for non-`{self}` targets, but always misses for behavior-driven targets.
+
+**Variants with optional entity reference** (e.g. `SpawnEffect { entity: Option<String> }`) need the same treatment — wrap the `replace` in `entity.map(|e| e.replace("{self}", spawn_id))`. The compiler will not flag the omission since `Option::None` is a valid value; only runtime tests catch it.
 
 1. **`schema/actions.rs`** — add the variant with a doc comment explaining `{self}` semantics and a designer-facing RON example.
 
