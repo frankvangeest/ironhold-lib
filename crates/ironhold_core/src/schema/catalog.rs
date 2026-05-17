@@ -142,6 +142,18 @@ pub struct EffectDef {
     /// `false` (default) → `AlphaMode::Blend` (standard alpha compositing — good for smoke).
     #[serde(default)]
     pub additive: bool,
+    /// UV distortion strength for the flame particle shader. When non-zero the particle
+    /// uses `FlameParticleMaterial` instead of `StandardMaterial`, animating the sprite UVs
+    /// with tip-weighted sine waves so the flame wavers and flickers organically.
+    /// Range [0..1]: 0.0 = no distortion (static sprite), 0.4 = natural campfire flicker,
+    /// 1.0 = very heavy distortion. Has no effect when `sprite` is `None`. Default: 0.0.
+    #[serde(default)]
+    pub uv_distort: f32,
+    /// UV scroll speed: how many texture heights the sprite shifts upward per second.
+    /// Combine with `uv_distort` for a flowing flame look. Default: 0.0 (no scroll).
+    /// Has no effect when `sprite` is `None`.
+    #[serde(default)]
+    pub uv_scroll_speed: f32,
 }
 
 fn default_particle_count() -> u32 { 12 }

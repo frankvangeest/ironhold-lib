@@ -187,6 +187,8 @@
       turbulence: 0.40,
       sprite: "particle/flame_03",          // narrow upward flame tongue sprite
       additive: true,                        // additive blending for glowing fire look
+      uv_distort: 0.55,                      // tip-weighted distortion: flame wavers and dances
+      uv_scroll_speed: 0.35,                 // slow upward drift: flame appears to consume itself
     ),
 
     // Billboard smoke puffs rising above the flames — one burst every 0.8 s.

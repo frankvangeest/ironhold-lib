@@ -17,6 +17,7 @@ pub mod stat_display;
 pub mod stat_radar;
 pub mod damage_popup;
 pub mod particle;
+pub mod flame_material;
 
 pub use player::*;
 pub use camera::*;
@@ -37,4 +38,5 @@ pub use stat_display::{stat_bar_update_system, stat_bar_value_text_system, stat_
 pub use stat_radar::{RadarMaterial, StatRadarNode, StatRadarPlugin, stat_radar_update_system};
 pub use damage_popup::{DamagePopup, damage_popup_system};
 pub use particle::{Particle, ParticleMeshCache, PendingParticleEffects, QueuedParticleEffect, ParticlePlugin, drain_particle_effects_system, particle_system};
+pub use flame_material::{FlameParticleMaterial, FlameUniforms, FlameParticleMaterialPlugin};
 

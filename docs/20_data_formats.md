@@ -560,8 +560,22 @@ Named registry of all assets available to prefabs and scenes.
 | `color_start` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at birth (linear, 0.0–1.0). |
 | `color_end` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at death — typically fade alpha to 0.0. |
 | `gravity` | `f32` | `0.0` | Vertical acceleration in m/s² applied each frame (negative = down, positive = float upward). |
+| `sprite` | `Option<String>` | `None` | Asset key for a sprite texture (from `AssetCatalog.textures`). When set, each particle is a camera-facing quad with the texture applied instead of a sphere mesh. |
+| `additive` | `bool` | `false` | Blending mode for sprite particles (ignored when `sprite` is `None`). `true` → `AlphaMode::Add` (fire, glow); `false` → `AlphaMode::Blend` (smoke). |
+| `uv_distort` | `f32` | `0.0` | UV distortion strength for the flame particle shader. When non-zero, particles use `FlameParticleMaterial` (animated sine-wave distortion) instead of `StandardMaterial`. Tip-weighted: the flame tip distorts more than the base. Range 0.0–1.0; typical fire values: 0.4–0.6. Has no effect when `sprite` is `None`. |
+| `uv_scroll_speed` | `f32` | `0.0` | Upward UV scroll speed in texture-heights per second. Combine with `uv_distort` for a flowing flame look. Has no effect when `sprite` is `None`. |
 
-Particles use `AlphaMode::Add` (additive blending) — overlapping particles glow brighter, no depth-sorting artefacts in WASM. Directions are sampled deterministically via a spherical-cap golden-angle spiral so the same effect always produces the same pattern.
+Particles use `AlphaMode::Add` (additive blending) by default when no sprite is set — overlapping spheres glow brighter, no depth-sorting artefacts in WASM. Directions are sampled deterministically via a spherical-cap golden-angle spiral so the same effect always produces the same pattern.
+
+**Particle material paths** — the engine selects one of three implementations at spawn time:
+
+| Condition | Material | Notes |
+|-----------|----------|-------|
+| `sprite` is `None` | `StandardMaterial` + `AlphaMode::Add` | Sphere mesh, colour gradient only |
+| `sprite` set, `uv_distort == 0` and `uv_scroll_speed == 0` | `StandardMaterial` + configurable alpha | Quad billboard, static sprite |
+| `sprite` set, `uv_distort > 0` or `uv_scroll_speed > 0` | `FlameParticleMaterial` | Quad billboard, animated WGSL shader (`custom_flame_particle.wgsl`) |
+
+`FlameParticleMaterial` is an engine-internal material — it is not available as a `Custom(…)` shader key. Its uniforms (`color`, `elapsed_time`) are updated every frame by the particle system.
 
 **Audio format recommendations:**
 

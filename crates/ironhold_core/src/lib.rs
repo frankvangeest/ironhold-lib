@@ -136,6 +136,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::stat_radar::StatRadarPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_plugins(capabilities::particle::ParticlePlugin)
+            .add_plugins(capabilities::flame_material::FlameParticleMaterialPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input

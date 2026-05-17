@@ -197,13 +197,19 @@ For single-entity spawns the queue is transparent: action_executor pushes, drain
 `PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first spawn.
 
 ### Particle pipeline warmup
-`Action::SpawnEffect` uses `AlphaMode::Add` materials. WebGPU compiles the render pipeline for a material+blendmode combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Because particle entities don't exist at scene-load time, the existing `pipeline_warmup_system` (4-frame `NoFrustumCulling` pass) cannot pre-warm them.
+`Action::SpawnEffect` uses GPU-compiled render pipelines. WebGPU compiles a pipeline for each material+blendmode combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Because particle entities don't exist at scene-load time, the existing `pipeline_warmup_system` (4-frame `NoFrustumCulling` pass) cannot pre-warm them.
 
-**Fix:** fire a `SpawnEffect` during `scene.ready` entry actions at a position far below the playable area. All effects share the same pipeline variant (`StandardMaterial + AlphaMode::Add` + the shared sphere mesh), so one warmup burst covers all effect keys.
+There are **two particle pipeline variants**; each compiles separately:
+
+1. **Sphere particles** — `StandardMaterial + AlphaMode::Add` (no sprite, or `uv_distort == 0` and `uv_scroll_speed == 0`)
+2. **Flame sprite particles** — `FlameParticleMaterial + AlphaMode::Add` (used when `uv_distort > 0` or `uv_scroll_speed > 0`)
+
+**Fix:** fire a `SpawnEffect` for each variant you use, at a position far below the playable area. Effects that share the same material variant only need one warmup burst between them.
 
 ```ron
 // logic/state_machine.ron — playing state entry_actions
-SpawnEffect(key: "hit_spark", position: Some((0.0, -100.0, 0.0))),
+SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),  // warms sphere pipeline
+SpawnEffect(key: "campfire_fire", position: Some((0.0, -100.0, 0.0))),  // warms FlameParticleMaterial pipeline
 ```
 
-Place this alongside `PreloadScene` / `PreloadPrefab` calls so it fires during the natural loading pause, before the player can interact.
+Place these alongside `PreloadScene` / `PreloadPrefab` calls so they fire during the natural loading pause, before the player can interact.

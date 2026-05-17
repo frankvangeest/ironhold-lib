@@ -3232,6 +3232,8 @@ fn test_effect_def_minimal_uses_defaults() {
     assert_eq!(def.turbulence, 0.0,     "default turbulence");
     assert!(def.sprite.is_none(),       "default sprite is None");
     assert!(!def.additive,              "default additive is false");
+    assert_eq!(def.uv_distort,      0.0, "default uv_distort is 0.0");
+    assert_eq!(def.uv_scroll_speed, 0.0, "default uv_scroll_speed is 0.0");
 }
 
 #[test]
@@ -3289,6 +3291,8 @@ fn test_effect_def_sprite_fields_parse() {
                     color_end:   (0.5, 0.04, 0.0, 0.0),
                     sprite: "particle/flame_03",
                     additive: true,
+                    uv_distort: 0.55,
+                    uv_scroll_speed: 0.35,
                 ),
                 "campfire_smoke": (
                     lifetime_secs: 2.2,
@@ -3304,9 +3308,13 @@ fn test_effect_def_sprite_fields_parse() {
     let fire = catalog.effects.get("campfire_fire").unwrap();
     assert_eq!(fire.sprite.as_deref(), Some("particle/flame_03"), "sprite key round-trip");
     assert!(fire.additive,  "additive: true round-trip");
+    assert_eq!(fire.uv_distort,      0.55, "uv_distort round-trip");
+    assert_eq!(fire.uv_scroll_speed, 0.35, "uv_scroll_speed round-trip");
     let smoke = catalog.effects.get("campfire_smoke").unwrap();
     assert_eq!(smoke.sprite.as_deref(), Some("particle/smoke_04"), "smoke sprite key round-trip");
     assert!(!smoke.additive, "additive defaults to false");
+    assert_eq!(smoke.uv_distort, 0.0,      "smoke uv_distort defaults to 0.0");
+    assert_eq!(smoke.uv_scroll_speed, 0.0, "smoke uv_scroll_speed defaults to 0.0");
 }
 
 #[test]

@@ -180,6 +180,56 @@ All shaders live in `assets/shared/shaders/`.
 
 `terrain.wgsl` is used exclusively by `TerrainMaterial` and is not available for custom materials.
 
+`custom_flame_particle.wgsl` is used exclusively by `FlameParticleMaterial` (the particle engine's animated fire path). It is not available as a `Custom(…)` shader key in `assets.ron` — it is selected automatically when an `EffectDef` has `uv_distort > 0` or `uv_scroll_speed > 0`. See the [Flame particle shader](#flame-particle-shader-) section below.
+
+---
+
+## Flame particle shader ✅
+
+`assets/shared/shaders/custom_flame_particle.wgsl` is an engine-internal shader used by `FlameParticleMaterial`. It is not part of the `CustomMaterial` extension point — designers configure it through `EffectDef` fields in `assets.ron`, not by referencing it directly.
+
+### How it is selected
+
+The particle system chooses `FlameParticleMaterial` automatically when an `EffectDef` has a `sprite` key set **and** either `uv_distort > 0.0` or `uv_scroll_speed > 0.0`. When neither condition is met, the cheaper `StandardMaterial` path is used instead.
+
+### Binding contract
+
+`FlameParticleMaterial` uses its own binding layout — different from `CustomMaterial`:
+
+```wgsl
+struct FlameUniforms {
+    color:  vec4<f32>,  // linear RGBA tint  (updated every frame from colour gradient)
+    params: vec4<f32>,  // x=scroll_speed  y=distort_strength  z=_unused_  w=elapsed_time
+}
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: FlameUniforms;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var sprite_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(2) var sprite_sampler: sampler;
+```
+
+Both `Vec4` fields are required for 16-byte WebGPU alignment. The particle system writes `uniforms.color` and `uniforms.params.w` (`elapsed_time`) every frame so the shader can animate without a global time resource.
+
+### Shader behaviour
+
+- **UV scroll** — `uv.y -= elapsed_time * scroll_speed`, giving an upward drift.
+- **UV distortion** — three overlapping sine waves applied before scroll, tip-weighted (`tip_w = 1.0 - uv.y`):
+  - Primary sway: `uv.x += sin(t * 2.1 + uv.y * 2.4) * 0.10 * tip_w² * distort`
+  - Secondary flutter: `uv.x += sin(t * 5.7 + uv.y * 6.3) * 0.05 * tip_w² * distort`
+  - Vertical ripple: `uv.y += sin(t * 3.8 + uv.x * 4.9) * 0.04 * tip_w * distort`
+- **UVs are clamped** to `[0, 1]` — the sprite does not tile or wrap, avoiding seam artefacts on Kenney-style sprites.
+- **Output** — `tex.rgb * color.rgb, tex.a * color.a` (tinted additive). `AlphaMode::Add` and `cull_mode = None` (double-sided) are set in `FlameParticleMaterial::specialize()`.
+
+### Pipeline warmup
+
+`FlameParticleMaterial` compiles a different GPU pipeline than the `StandardMaterial + AlphaMode::Add` used by non-sprite effects. If your scene contains flame effects, add a warmup burst to the initial state `entry_actions`:
+
+```ron
+// logic/state_machine.ron — playing state entry_actions
+SpawnEffect(key: "campfire_fire", position: Some((0.0, -100.0, 0.0))),
+```
+
+Place it alongside any `SpawnEffect` warmup for sphere-particle effects — each material variant compiles a separate pipeline.
+
 ---
 
 ## Writing a new shader — step by step ✅

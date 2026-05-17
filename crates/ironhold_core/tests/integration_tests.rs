@@ -3271,6 +3271,8 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
         turbulence: 0.0,
         sprite: None,
         additive: false,
+        uv_distort: 0.0,
+        uv_scroll_speed: 0.0,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
@@ -3316,6 +3318,8 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
         turbulence: 0.0,
         sprite: None,
         additive: false,
+        uv_distort: 0.0,
+        uv_scroll_speed: 0.0,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("heal".to_string(), effect_def)]),
@@ -3396,6 +3400,8 @@ fn test_spawn_effect_entity_missing_does_not_push() {
         turbulence: 0.0,
         sprite: None,
         additive: false,
+        uv_distort: 0.0,
+        uv_scroll_speed: 0.0,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),

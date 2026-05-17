@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::schema::catalog::EffectDef;
 use crate::runtime::scene_manager::{LevelEntity, LoadedAssetCatalog};
+use crate::capabilities::flame_material::{FlameParticleMaterial, FlameUniforms};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,16 @@ pub struct Particle {
     pub color_mid: Option<LinearRgba>,
     pub color_end: LinearRgba,
     /// Unique material handle per particle — updated each frame for colour animation.
-    pub mat_handle: Handle<StandardMaterial>,
+    /// `None` when this particle uses `FlameParticleMaterial` instead (see `flame_mat_handle`).
+    pub mat_handle: Option<Handle<StandardMaterial>>,
+    /// Set when the effect requests UV animation (`uv_distort > 0` or `uv_scroll_speed > 0`).
+    /// Mutually exclusive with `mat_handle` — exactly one is `Some` per particle.
+    pub flame_mat_handle: Option<Handle<FlameParticleMaterial>>,
+    /// UV scroll speed (texture heights per second upward). Stored so `particle_system` can
+    /// pass it to the shader uniform each frame alongside `elapsed`.
+    pub uv_scroll_speed: f32,
+    /// UV distortion strength [0..1]. Stored alongside `uv_scroll_speed`.
+    pub uv_distort: f32,
     /// When `true`, `particle_system` rotates this entity each frame to face the active `Camera3d`.
     /// Set automatically for effects that have a `sprite` key in their `EffectDef`.
     pub is_billboard: bool,
@@ -93,14 +103,19 @@ pub fn particle_startup_system(
 }
 
 /// Drains `PendingParticleEffects` and spawns the actual mesh entities.
-/// Sprite effects (`EffectDef.sprite` is `Some`) spawn billboard quads with the resolved
-/// texture; plain effects spawn coloured sphere meshes (existing behaviour).
+///
+/// Three material paths, selected per effect:
+///   1. Sphere + `StandardMaterial` + `AlphaMode::Add`     — no `sprite` key
+///   2. Quad  + `StandardMaterial` + configurable alpha    — `sprite` set, no UV animation
+///   3. Quad  + `FlameParticleMaterial`                    — `sprite` set + `uv_distort`/`uv_scroll_speed`
+///
 /// Runs in the interpreter chain after `action_executor_system`.
 pub fn drain_particle_effects_system(
     mut pending: ResMut<PendingParticleEffects>,
     mut commands: Commands,
     cache: Res<ParticleMeshCache>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut std_materials: ResMut<Assets<StandardMaterial>>,
+    mut flame_materials: ResMut<Assets<FlameParticleMaterial>>,
     asset_server: Res<AssetServer>,
     asset_catalog: Res<LoadedAssetCatalog>,
 ) {
@@ -121,7 +136,7 @@ pub fn drain_particle_effects_system(
             def.color_end.0, def.color_end.1, def.color_end.2, def.color_end.3,
         ).to_linear();
 
-        // Resolve sprite texture once per effect burst (shared across all particles in this burst).
+        // Resolve sprite texture once per effect burst.
         let sprite_texture: Option<Handle<Image>> = def.sprite.as_ref().and_then(|key| {
             match asset_catalog.0.textures.get(key) {
                 Some(path) => Some(asset_server.load(path.clone())),
@@ -132,17 +147,16 @@ pub fn drain_particle_effects_system(
             }
         });
         let is_sprite = sprite_texture.is_some();
+        let use_flame_mat = is_sprite && (def.uv_distort > 0.0 || def.uv_scroll_speed > 0.0);
 
         for i in 0..def.particle_count {
             let dir = fibonacci_cone_dir(i, def.particle_count, half_angle);
-            // Independent hash streams: 0x00000000 for speed, 0x9E3779B9 for size.
             let speed = def.speed + hash_jitter(i, 0x0000_0000, def.speed_jitter);
             let velocity = dir * speed;
 
             let actual_size = (def.size + hash_jitter(i, 0x9E37_79B9, def.size_jitter))
                 .max(0.001);
 
-            // Scatter spawn position across a horizontal disc (volume emission).
             let spawn_pos = if def.emit_radius > 0.0 {
                 let angle = 2.399_963_f32 * i as f32;
                 let r = def.emit_radius * ((i as f32 + 0.5) / def.particle_count as f32).sqrt();
@@ -151,63 +165,102 @@ pub fn drain_particle_effects_system(
                 effect.origin
             };
 
-            // Unique turbulence phase per particle: golden-angle fraction → [0, 2π].
             let noise_seed = (i as f32 * 2.399_963_f32).fract() * std::f32::consts::TAU;
 
-            let (mat, mesh) = if is_sprite {
-                let alpha_mode = if def.additive { AlphaMode::Add } else { AlphaMode::Blend };
-                let m = materials.add(StandardMaterial {
-                    base_color: Color::from(color_start),
-                    base_color_texture: sprite_texture.clone(),
-                    unlit: true,
-                    alpha_mode,
-                    double_sided: true,
-                    ..default()
+            // Spawn with the appropriate material type.
+            if use_flame_mat {
+                let color_vec = Vec4::new(color_start.red, color_start.green, color_start.blue, color_start.alpha);
+                let fmat = flame_materials.add(FlameParticleMaterial {
+                    uniforms: FlameUniforms {
+                        color: color_vec,
+                        params: Vec4::new(def.uv_scroll_speed, def.uv_distort, 0.0, 0.0),
+                    },
+                    texture: sprite_texture.clone(),
                 });
-                (m, quad.clone())
+                commands.spawn((
+                    Mesh3d(quad.clone()),
+                    MeshMaterial3d(fmat.clone()),
+                    Transform::from_translation(spawn_pos).with_scale(Vec3::splat(actual_size)),
+                    Visibility::default(),
+                    LevelEntity,
+                    Particle {
+                        velocity,
+                        elapsed: 0.0,
+                        duration: def.lifetime_secs,
+                        start_size: actual_size,
+                        end_size: def.size_end,
+                        gravity: def.gravity,
+                        turbulence: def.turbulence,
+                        noise_seed,
+                        color_start,
+                        color_mid,
+                        color_end,
+                        mat_handle: None,
+                        flame_mat_handle: Some(fmat),
+                        uv_scroll_speed: def.uv_scroll_speed,
+                        uv_distort: def.uv_distort,
+                        is_billboard: true,
+                    },
+                ));
             } else {
-                let m = materials.add(StandardMaterial {
-                    base_color: Color::from(color_start),
-                    unlit: true,
-                    alpha_mode: AlphaMode::Add,
-                    ..default()
-                });
-                (m, sphere.clone())
-            };
-
-            commands.spawn((
-                Mesh3d(mesh),
-                MeshMaterial3d(mat.clone()),
-                Transform::from_translation(spawn_pos).with_scale(Vec3::splat(actual_size)),
-                Visibility::default(),
-                LevelEntity,
-                Particle {
-                    velocity,
-                    elapsed: 0.0,
-                    duration: def.lifetime_secs,
-                    start_size: actual_size,
-                    end_size: def.size_end,
-                    gravity: def.gravity,
-                    turbulence: def.turbulence,
-                    noise_seed,
-                    color_start,
-                    color_mid,
-                    color_end,
-                    mat_handle: mat,
-                    is_billboard: is_sprite,
-                },
-            ));
+                let mesh = if is_sprite { quad.clone() } else { sphere.clone() };
+                let smat = if is_sprite {
+                    let alpha_mode = if def.additive { AlphaMode::Add } else { AlphaMode::Blend };
+                    std_materials.add(StandardMaterial {
+                        base_color: Color::from(color_start),
+                        base_color_texture: sprite_texture.clone(),
+                        unlit: true,
+                        alpha_mode,
+                        double_sided: true,
+                        ..default()
+                    })
+                } else {
+                    std_materials.add(StandardMaterial {
+                        base_color: Color::from(color_start),
+                        unlit: true,
+                        alpha_mode: AlphaMode::Add,
+                        ..default()
+                    })
+                };
+                commands.spawn((
+                    Mesh3d(mesh),
+                    MeshMaterial3d(smat.clone()),
+                    Transform::from_translation(spawn_pos).with_scale(Vec3::splat(actual_size)),
+                    Visibility::default(),
+                    LevelEntity,
+                    Particle {
+                        velocity,
+                        elapsed: 0.0,
+                        duration: def.lifetime_secs,
+                        start_size: actual_size,
+                        end_size: def.size_end,
+                        gravity: def.gravity,
+                        turbulence: def.turbulence,
+                        noise_seed,
+                        color_start,
+                        color_mid,
+                        color_end,
+                        mat_handle: Some(smat),
+                        flame_mat_handle: None,
+                        uv_scroll_speed: 0.0,
+                        uv_distort: 0.0,
+                        is_billboard: is_sprite,
+                    },
+                ));
+            }
         }
     }
 }
 
 /// Ticks all live particles: gravity, turbulence, velocity integration, size lerp,
 /// colour lerp (two-stop or three-stop), billboard orientation, and despawn on lifetime expiry.
+/// Handles both `StandardMaterial` particles and `FlameParticleMaterial` particles (UV-animated).
 /// Change-detection guards prevent redundant render updates.
 pub fn particle_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut std_materials: ResMut<Assets<StandardMaterial>>,
+    mut flame_materials: ResMut<Assets<FlameParticleMaterial>>,
     mut query: Query<(Entity, &mut Particle, &mut Transform)>,
     cam_query: Query<&GlobalTransform, With<Camera3d>>,
 ) {
@@ -277,14 +330,31 @@ pub fn particle_system(
             }
         };
 
-        if let Some(mat) = materials.get_mut(&particle.mat_handle) {
-            let cur = mat.base_color.to_linear();
-            if (cur.red   - new_color.red).abs()   > 0.01
-            || (cur.green - new_color.green).abs() > 0.01
-            || (cur.blue  - new_color.blue).abs()  > 0.01
-            || (cur.alpha - new_color.alpha).abs() > 0.01
-            {
-                mat.base_color = Color::from(new_color);
+        // Update colour — path depends on which material type this particle uses.
+        if let Some(ref handle) = particle.mat_handle.clone() {
+            if let Some(mat) = std_materials.get_mut(handle) {
+                let cur = mat.base_color.to_linear();
+                if (cur.red   - new_color.red).abs()   > 0.01
+                || (cur.green - new_color.green).abs() > 0.01
+                || (cur.blue  - new_color.blue).abs()  > 0.01
+                || (cur.alpha - new_color.alpha).abs() > 0.01
+                {
+                    mat.base_color = Color::from(new_color);
+                }
+            }
+        } else if let Some(ref handle) = particle.flame_mat_handle.clone() {
+            if let Some(mat) = flame_materials.get_mut(handle) {
+                let new_vec = Vec4::new(new_color.red, new_color.green, new_color.blue, new_color.alpha);
+                let cur = mat.uniforms.color;
+                if (cur.x - new_vec.x).abs() > 0.01
+                || (cur.y - new_vec.y).abs() > 0.01
+                || (cur.z - new_vec.z).abs() > 0.01
+                || (cur.w - new_vec.w).abs() > 0.01
+                {
+                    mat.uniforms.color = new_vec;
+                }
+                // Always update elapsed time — the distortion shader needs it every frame.
+                mat.uniforms.params.w = particle.elapsed;
             }
         }
 
