@@ -252,6 +252,40 @@ Clean, light white marble with thin diagonal gray-blue veining. The veins are fi
 
 ---
 
+## Kenney Particle Pack (`particles/kenney-particle-pack/`)
+
+256×256 RGBA PNG sprites for use as particle billboards or effect overlays. Transparent background; white/light shapes on alpha. Downscaled from the original 512×512 release. Organized by visual category:
+
+| Key prefix | Files | Description |
+|---|---|---|
+| `particle/circle_*` | 01–05 | Soft circular glow blobs — core "orb" and "hit" shapes |
+| `particle/dirt_*` | 01–03 | Brown splatter chunks — ground impact, earth hit |
+| `particle/fire_*` | 01–02 | Flame silhouettes — broad fire tongues |
+| `particle/flame_*` | 01–06 | Narrow candle-style flames — campfire, torch |
+| `particle/flare_01` | — | Lens flare / star-burst streak |
+| `particle/light_*` | 01–03 | Soft radial glow — ambient light orb, aura |
+| `particle/magic_*` | 01–05 | Sparkle / rune shapes — spell effects |
+| `particle/muzzle_*` | 01–05 | Stylized gun-flash shapes |
+| `particle/scorch_*` | 01–03 | Dark ground-burn marks — impact decals |
+| `particle/scratch_01` | — | Linear scratch mark |
+| `particle/slash_*` | 01–04 | Curved slash / sword trail arcs |
+| `particle/smoke_*` | 01–10 | Puffy smoke puffs — varying density and size |
+| `particle/spark_*` | 01–07 | Small bright streaks — electric / fire sparks |
+| `particle/star_*` | 01–09 | Star polygons — collectible twinkle, magical hit |
+| `particle/symbol_*` | 01–02 | Abstract sigil / rune shapes |
+| `particle/trace_*` | 01–07 | Thin tapered trails — bullet, arrow, energy shot |
+| `particle/twirl_*` | 01–03 | Spiral swirl shapes — magic vortex, wind |
+| `particle/window_*` | 01–04 | Broken-glass / crystal shard shapes |
+
+**Rotated variants** (`Rotated/` subfolder, same key prefix):
+
+`particle/flame_05_rotated`, `particle/flame_06_rotated` — flames oriented horizontally  
+`particle/muzzle_01_rotated` through `particle/muzzle_05_rotated` — muzzle flash rotated 90°  
+`particle/spark_05_rotated`, `particle/spark_06_rotated` — sparks rotated  
+`particle/trace_01_rotated` through `particle/trace_07_rotated` — trails rotated for horizontal movement
+
+---
+
 ## Noise Textures (`noise/`)
 
 Seamlessly tiling greyscale utility textures for use in custom WGSL shaders. Assign to a `texture_0`–`texture_3` slot in your material's RON definition and sample in the shader. All files tile seamlessly.

@@ -3223,9 +3223,90 @@ fn test_effect_def_minimal_uses_defaults() {
     assert_eq!(def.speed_jitter, 0.0,   "default speed_jitter");
     assert_eq!(def.spread_deg, 180.0,   "default spread_deg");
     assert_eq!(def.offset, (0.0, 1.0, 0.0), "default offset");
+    assert_eq!(def.emit_radius, 0.0,    "default emit_radius");
     assert_eq!(def.size, 0.06,          "default size");
     assert!(def.size_end.is_none(),     "default size_end is None");
+    assert_eq!(def.size_jitter, 0.0,    "default size_jitter");
+    assert!(def.color_mid.is_none(),    "default color_mid is None");
     assert_eq!(def.gravity, 0.0,        "default gravity");
+    assert_eq!(def.turbulence, 0.0,     "default turbulence");
+    assert!(def.sprite.is_none(),       "default sprite is None");
+    assert!(!def.additive,              "default additive is false");
+}
+
+#[test]
+fn test_effect_def_realism_fields_parse() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    // Verifies all four realism-enhancing fields (emit_radius, size_jitter, color_mid,
+    // turbulence) parse correctly and are returned with the authored values.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "campfire_fire": (
+                    particle_count: 18,
+                    lifetime_secs: 0.6,
+                    speed: 1.7,
+                    speed_jitter: 0.45,
+                    spread_deg: 18.0,
+                    emit_radius: 0.12,
+                    offset: (0.0, 0.15, 0.0),
+                    size: 0.11,
+                    size_jitter: 0.04,
+                    size_end: 0.0,
+                    color_start: (1.0, 0.92, 0.55, 1.0),
+                    color_mid:   (1.0, 0.45, 0.05, 1.0),
+                    color_end:   (0.5, 0.04, 0.0,  0.0),
+                    gravity: -0.6,
+                    turbulence: 0.35,
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("campfire_fire effect should parse");
+    assert!(catalog.validate().is_ok());
+    let def = catalog.effects.get("campfire_fire").unwrap();
+    assert_eq!(def.emit_radius, 0.12,   "emit_radius round-trip");
+    assert_eq!(def.size_jitter, 0.04,   "size_jitter round-trip");
+    assert_eq!(def.turbulence,  0.35,   "turbulence round-trip");
+    let mid = def.color_mid.expect("color_mid should be Some");
+    assert_eq!(mid.0, 1.0,  "color_mid red");
+    assert_eq!(mid.1, 0.45, "color_mid green");
+    assert_eq!(mid.2, 0.05, "color_mid blue");
+    assert_eq!(mid.3, 1.0,  "color_mid alpha");
+}
+
+#[test]
+fn test_effect_def_sprite_fields_parse() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "campfire_fire": (
+                    lifetime_secs: 0.6,
+                    color_start: (1.0, 0.9, 0.5, 1.0),
+                    color_end:   (0.5, 0.04, 0.0, 0.0),
+                    sprite: "particle/flame_03",
+                    additive: true,
+                ),
+                "campfire_smoke": (
+                    lifetime_secs: 2.2,
+                    color_start: (0.35, 0.30, 0.28, 0.65),
+                    color_end:   (0.55, 0.52, 0.50, 0.0),
+                    sprite: "particle/smoke_04",
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("sprite fields should parse");
+    assert!(catalog.validate().is_ok());
+    let fire = catalog.effects.get("campfire_fire").unwrap();
+    assert_eq!(fire.sprite.as_deref(), Some("particle/flame_03"), "sprite key round-trip");
+    assert!(fire.additive,  "additive: true round-trip");
+    let smoke = catalog.effects.get("campfire_smoke").unwrap();
+    assert_eq!(smoke.sprite.as_deref(), Some("particle/smoke_04"), "smoke sprite key round-trip");
+    assert!(!smoke.additive, "additive defaults to false");
 }
 
 #[test]

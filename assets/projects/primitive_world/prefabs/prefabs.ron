@@ -1183,6 +1183,91 @@
       ],
     ),
 
+    // ── Campfire (fire + smoke particle loop) ─────────────────────────────────────────────
+    // Composite primitive: ash base + stone ring + crossed logs + ember glow.
+    // A self-sustaining particle loop runs via campfire.behavior.ron:
+    //   entry_actions queue the first fire and smoke ticks (staggered by 0.4 s).
+    //   Each handler fires SpawnEffect then re-queues itself — fire every 0.2 s,
+    //   smoke every 0.8 s — creating perpetual ambient animation with no Rust timer.
+    // Geometry notes (origin = y=0):
+    //   Ash disk:   Cylinder h=0.02, center at y=0.01
+    //   Stones:     Sphere r=0.09–0.11, center at y=0.06
+    //   Logs:       Cuboid 0.5×0.11×0.11, center at y=0.07, tilted ±40° Y / 15° X
+    //   Ember glow: Sphere r=0.07, center at y=0.12
+    "campfire": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      behavior: "behaviors/campfire.behavior.ron",
+      children: [
+        // Ash/charcoal base disk
+        (
+          shape: "Cylinder",
+          primitive: (
+            radius: 0.38,
+            height: 0.02,
+            color: (0.10, 0.08, 0.06),
+            roughness: 0.98,
+          ),
+          offset: (0.0, 0.01, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Stone ring — four slightly irregular stones give a hand-placed feel
+        (
+          shape: "Sphere",
+          primitive: ( radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90 ),
+          offset: ( 0.32, 0.06,  0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: ( radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90 ),
+          offset: (-0.32, 0.06,  0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: ( radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90 ),
+          offset: ( 0.0, 0.06,  0.32),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Sphere",
+          primitive: ( radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90 ),
+          offset: ( 0.0, 0.06, -0.32),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Crossed logs — two Cuboids angled ±40° around Y and leaned 15° forward
+        (
+          shape: "Cuboid",
+          primitive: ( size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92 ),
+          offset: (0.0, 0.07, 0.0),
+          rotation_euler_deg: (15.0,  40.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        (
+          shape: "Cuboid",
+          primitive: ( size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92 ),
+          offset: (0.0, 0.07, 0.0),
+          rotation_euler_deg: (15.0, -40.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+        // Ember glow — small bright-orange sphere at log intersection
+        (
+          shape: "Sphere",
+          primitive: ( radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10 ),
+          offset: (0.0, 0.12, 0.0),
+          rotation_euler_deg: (0.0, 0.0, 0.0),
+          scale: (1.0, 1.0, 1.0),
+        ),
+      ],
+    ),
+
     // ── Village (nested-prefab demo: cobblestone square + cottage + small house + well) ──
     // Demonstrates nested prefab composition: child entries reference other named prefabs
     // by key.  Transforms are multiplicative — each nested prefab's own children inherit

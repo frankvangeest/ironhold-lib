@@ -50,7 +50,8 @@
       "Bash(Get-Content \"C:\\\\git\\\\rust\\\\ironhold-lib\\\\crates\\\\ironhold_core\\\\tests\\\\ron_validation.rs\")",
       "Bash(Measure-Object -Line)",
       "PowerShell(cargo test *)",
-      "PowerShell(Get-Process *)"
+      "PowerShell(Get-Process *)",
+      "Bash(python tools/build_asset_manifest.py)"
     ]
   }
 }

@@ -14,6 +14,8 @@ assets:
   - https://publicdomaintextures.com/
   - https://3dtextures.me/
   - https://3dtextures.me/2018/04/13/cobblestone-001/
+  - https://kenney.nl/assets/particle-pack
+  - https://kenney.nl/assets/smoke-particles
 - icons: 
   - https://kenney.nl/assets/input-prompts
 - sounds:

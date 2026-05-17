@@ -1529,6 +1529,14 @@
     "description": ""
   },
   {
+    "name": "custom_stat_radar",
+    "path": "shared/shaders/custom_stat_radar.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
     "name": "custom_texture_tint",
     "path": "shared/shaders/custom_texture_tint.wgsl",
     "dir": "shared/shaders",

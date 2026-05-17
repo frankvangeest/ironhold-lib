@@ -19,6 +19,8 @@ use super::{
     resolve_project_path,
     scene_loader::resolve_jump_velocity,
 };
+use crate::runtime::actions::ActionQueue;
+use super::message_interpreter::rewrite_self;
 use crate::schema::stats::{LiveStat, StatMap};
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
@@ -201,13 +203,16 @@ pub fn animation_policy_loader_system(
 }
 
 /// Polls `PendingBehavior` handles; once the `StateMachineAsset` loads, replaces the
-/// pending component with `BehaviorHandle` + `EntityFsmState` seeded to `initial_state`.
+/// pending component with `BehaviorHandle` + `EntityFsmState` seeded to `initial_state`,
+/// and fires the initial state's `entry_actions` so self-sustaining loops (like campfire
+/// particle emitters) start without requiring an explicit transition into the first state.
 pub fn resolve_pending_behaviors_system(
     mut commands: Commands,
-    pending: Query<(Entity, &PendingBehavior)>,
+    pending: Query<(Entity, &PendingBehavior, &SpawnId)>,
     state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
+    mut action_queue: ResMut<ActionQueue>,
 ) {
-    for (entity, pending_behavior) in &pending {
+    for (entity, pending_behavior, spawn_id) in &pending {
         if let Some(fsm) = state_machines.get(&pending_behavior.0) {
             let initial = fsm.initial_state.clone();
             commands
@@ -218,6 +223,13 @@ pub fn resolve_pending_behaviors_system(
                 ))
                 .remove::<PendingBehavior>();
             info!("Behavior loaded — initial state: \"{}\"", initial);
+
+            // Fire initial state entry_actions so the behavior starts immediately.
+            if let Some(state_def) = fsm.states.iter().find(|s| s.name == initial) {
+                for action in &state_def.entry_actions {
+                    action_queue.push(rewrite_self(action.clone(), &spawn_id.0));
+                }
+            }
         }
     }
 }

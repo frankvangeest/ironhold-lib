@@ -29,11 +29,16 @@
                 PreloadScene("scenes/map.scene.ron"),
                 PreloadScene("scenes/character_stats.scene.ron"),
                 PreloadScene("scenes/game_over.scene.ron"),
-                // Warm the WebGPU particle pipeline (AlphaMode::Add) during the scene-load window
-                // so the first real particle burst does not stall the GPU thread. All effects share
-                // the same pipeline variant, so one SpawnEffect warms them all. Position far below
-                // the terrain makes this invisible to the player.
-                SpawnEffect(key: "hit_spark", position: Some((0.0, -100.0, 0.0))),
+                // Warm WebGPU particle pipelines during the scene-load window so the first visible
+                // burst does not stall the GPU thread. Three pipeline variants exist:
+                //   1. Sphere + AlphaMode::Add (no texture)     — hit_spark, heal_burst, pickup_sparkle
+                //   2. Quad  + AlphaMode::Add + texture          — campfire_fire  (additive sprite)
+                //   3. Quad  + AlphaMode::Blend + texture        — campfire_smoke (blend sprite)
+                // One SpawnEffect per variant is enough — all effects sharing a variant reuse the
+                // compiled pipeline. Position far below terrain keeps the warmup invisible.
+                SpawnEffect(key: "hit_spark",      position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_fire",  position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_smoke", position: Some((0.0, -100.0, 0.0))),
             ],
             exit_actions: [ StopMusic ],
             on: [

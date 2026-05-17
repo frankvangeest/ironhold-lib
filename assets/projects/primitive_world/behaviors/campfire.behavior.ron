@@ -1,0 +1,46 @@
+// Self-sustaining particle loop for the campfire prop.
+//
+// Pattern: each event handler fires SpawnEffect then re-queues itself via
+// EmitEventAfterDelay, creating a perpetual loop that starts on behavior entry
+// and runs until the entity is despawned.  Fire and smoke run as two independent
+// loops staggered by initial delay so their bursts don't land on the same frame.
+//
+//   Fire:  10 particles every 0.2 s → ~25 particles alive at peak
+//   Smoke:  3 particles every 0.8 s →  ~8 particles alive at peak
+(
+    schema_version: 1,
+    initial_state: "burning",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "burning",
+            entry_actions: [
+                // Stagger the two loops: fire starts at 0.1 s, smoke at 0.5 s.
+                EmitEventAfterDelay(event: "campfire.fire:{self}",  delay_secs: 0.1),
+                EmitEventAfterDelay(event: "campfire.smoke:{self}", delay_secs: 0.5),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "campfire.fire:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "campfire_fire", entity: "{self}"),
+                        // Re-queue next burst — this is what sustains the loop.
+                        EmitEventAfterDelay(event: "campfire.fire:{self}", delay_secs: 0.2),
+                    ],
+                ),
+                (
+                    event: "campfire.smoke:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "campfire_smoke", entity: "{self}"),
+                        EmitEventAfterDelay(event: "campfire.smoke:{self}", delay_secs: 0.8),
+                    ],
+                ),
+            ],
+        ),
+    ],
+
+    transitions: [],
+)

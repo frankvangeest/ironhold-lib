@@ -185,7 +185,7 @@ pub fn entity_fsm_interpreter_system(
 
 /// Substitutes `{self}` in action fields that can contain entity references.
 /// Called by `entity_fsm_interpreter_system` before pushing actions onto the queue.
-fn rewrite_self(action: Action, spawn_id: &str) -> Action {
+pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
     match action {
         Action::PlayAnimationOn { target, clip } => Action::PlayAnimationOn {
             target: target.replace("{self}", spawn_id),

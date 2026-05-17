@@ -96,6 +96,11 @@ pub struct EffectDef {
     /// Default: `(0.0, 1.0, 0.0)`.
     #[serde(default = "default_effect_offset")]
     pub offset: (f32, f32, f32),
+    /// Radius of the horizontal disc from which particles are scattered at spawn (metres).
+    /// Distributes spawn positions across the emitter surface so fire appears to emerge from
+    /// the whole log area rather than a single point. Default: 0.0 (point emission).
+    #[serde(default)]
+    pub emit_radius: f32,
     /// Sphere radius of each particle in metres at spawn. Default: 0.06.
     #[serde(default = "default_particle_size")]
     pub size: f32,
@@ -103,15 +108,40 @@ pub struct EffectDef {
     /// `None` = constant size throughout the particle's life. Default: None.
     #[serde(default)]
     pub size_end: Option<f32>,
+    /// Per-particle size randomness in metres. Each particle starts at `size ± size_jitter`.
+    /// Uses a deterministic per-index hash independent of `speed_jitter`. Default: 0.0.
+    #[serde(default)]
+    pub size_jitter: f32,
     /// RGBA colour at spawn (linear sRGB, 0.0–1.0). Alpha 1.0 = fully opaque/bright.
     pub color_start: (f32, f32, f32, f32),
+    /// Optional midpoint colour for a three-stop gradient (start → mid → end).
+    /// When `Some`, colour transitions start→mid in the first half of lifetime, then
+    /// mid→end in the second. Useful for fire: white/yellow base → orange core → dark red tip.
+    /// Default: `None` (linear two-stop interpolation).
+    #[serde(default)]
+    pub color_mid: Option<(f32, f32, f32, f32)>,
     /// RGBA colour at end of lifetime (linear sRGB). Alpha 0.0 = fully invisible.
-    /// Interpolated linearly from `color_start` over the particle's lifetime.
     pub color_end: (f32, f32, f32, f32),
     /// Y-axis acceleration in m/s². Negative = falls, positive = rises.
     /// Reference: `-2.0` light sparks, `-9.8` Earth-like, `0.0` floaty, `+2.0` rising embers.
     #[serde(default)]
     pub gravity: f32,
+    /// Per-frame lateral noise applied to velocity (m/s²). Creates billowing and swirling
+    /// instead of straight-line trajectories. Each particle has a unique noise phase set
+    /// at spawn, so they move independently. Default: 0.0 (no turbulence).
+    #[serde(default)]
+    pub turbulence: f32,
+    /// Optional texture key from `AssetCatalog.textures` for billboard sprite rendering.
+    /// When set, particles are spawned as camera-facing flat quads with this texture applied
+    /// as a base colour texture. The gradient colours (color_start/mid/end) tint the sprite.
+    /// Default: `None` — particles are sphere meshes coloured by the gradient only.
+    #[serde(default)]
+    pub sprite: Option<String>,
+    /// Selects the alpha blending mode for sprite particles. Has no effect when `sprite` is `None`.
+    /// `true` → `AlphaMode::Add` (bright areas add to background — good for fire and glow).
+    /// `false` (default) → `AlphaMode::Blend` (standard alpha compositing — good for smoke).
+    #[serde(default)]
+    pub additive: bool,
 }
 
 fn default_particle_count() -> u32 { 12 }

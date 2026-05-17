@@ -2,7 +2,106 @@
   schema_version: 1,
   models: {},
 
-  textures: {},
+  textures: {
+    // ── Kenney Particle Pack (256×256 RGBA) ───────────────────────────────
+    "particle/circle_01":         "shared/textures/particles/kenney-particle-pack/circle_01.png",
+    "particle/circle_02":         "shared/textures/particles/kenney-particle-pack/circle_02.png",
+    "particle/circle_03":         "shared/textures/particles/kenney-particle-pack/circle_03.png",
+    "particle/circle_04":         "shared/textures/particles/kenney-particle-pack/circle_04.png",
+    "particle/circle_05":         "shared/textures/particles/kenney-particle-pack/circle_05.png",
+    "particle/dirt_01":           "shared/textures/particles/kenney-particle-pack/dirt_01.png",
+    "particle/dirt_02":           "shared/textures/particles/kenney-particle-pack/dirt_02.png",
+    "particle/dirt_03":           "shared/textures/particles/kenney-particle-pack/dirt_03.png",
+    "particle/fire_01":           "shared/textures/particles/kenney-particle-pack/fire_01.png",
+    "particle/fire_02":           "shared/textures/particles/kenney-particle-pack/fire_02.png",
+    "particle/flame_01":          "shared/textures/particles/kenney-particle-pack/flame_01.png",
+    "particle/flame_02":          "shared/textures/particles/kenney-particle-pack/flame_02.png",
+    "particle/flame_03":          "shared/textures/particles/kenney-particle-pack/flame_03.png",
+    "particle/flame_04":          "shared/textures/particles/kenney-particle-pack/flame_04.png",
+    "particle/flame_05":          "shared/textures/particles/kenney-particle-pack/flame_05.png",
+    "particle/flame_06":          "shared/textures/particles/kenney-particle-pack/flame_06.png",
+    "particle/flare_01":          "shared/textures/particles/kenney-particle-pack/flare_01.png",
+    "particle/light_01":          "shared/textures/particles/kenney-particle-pack/light_01.png",
+    "particle/light_02":          "shared/textures/particles/kenney-particle-pack/light_02.png",
+    "particle/light_03":          "shared/textures/particles/kenney-particle-pack/light_03.png",
+    "particle/magic_01":          "shared/textures/particles/kenney-particle-pack/magic_01.png",
+    "particle/magic_02":          "shared/textures/particles/kenney-particle-pack/magic_02.png",
+    "particle/magic_03":          "shared/textures/particles/kenney-particle-pack/magic_03.png",
+    "particle/magic_04":          "shared/textures/particles/kenney-particle-pack/magic_04.png",
+    "particle/magic_05":          "shared/textures/particles/kenney-particle-pack/magic_05.png",
+    "particle/muzzle_01":         "shared/textures/particles/kenney-particle-pack/muzzle_01.png",
+    "particle/muzzle_02":         "shared/textures/particles/kenney-particle-pack/muzzle_02.png",
+    "particle/muzzle_03":         "shared/textures/particles/kenney-particle-pack/muzzle_03.png",
+    "particle/muzzle_04":         "shared/textures/particles/kenney-particle-pack/muzzle_04.png",
+    "particle/muzzle_05":         "shared/textures/particles/kenney-particle-pack/muzzle_05.png",
+    "particle/scorch_01":         "shared/textures/particles/kenney-particle-pack/scorch_01.png",
+    "particle/scorch_02":         "shared/textures/particles/kenney-particle-pack/scorch_02.png",
+    "particle/scorch_03":         "shared/textures/particles/kenney-particle-pack/scorch_03.png",
+    "particle/scratch_01":        "shared/textures/particles/kenney-particle-pack/scratch_01.png",
+    "particle/slash_01":          "shared/textures/particles/kenney-particle-pack/slash_01.png",
+    "particle/slash_02":          "shared/textures/particles/kenney-particle-pack/slash_02.png",
+    "particle/slash_03":          "shared/textures/particles/kenney-particle-pack/slash_03.png",
+    "particle/slash_04":          "shared/textures/particles/kenney-particle-pack/slash_04.png",
+    "particle/smoke_01":          "shared/textures/particles/kenney-particle-pack/smoke_01.png",
+    "particle/smoke_02":          "shared/textures/particles/kenney-particle-pack/smoke_02.png",
+    "particle/smoke_03":          "shared/textures/particles/kenney-particle-pack/smoke_03.png",
+    "particle/smoke_04":          "shared/textures/particles/kenney-particle-pack/smoke_04.png",
+    "particle/smoke_05":          "shared/textures/particles/kenney-particle-pack/smoke_05.png",
+    "particle/smoke_06":          "shared/textures/particles/kenney-particle-pack/smoke_06.png",
+    "particle/smoke_07":          "shared/textures/particles/kenney-particle-pack/smoke_07.png",
+    "particle/smoke_08":          "shared/textures/particles/kenney-particle-pack/smoke_08.png",
+    "particle/smoke_09":          "shared/textures/particles/kenney-particle-pack/smoke_09.png",
+    "particle/smoke_10":          "shared/textures/particles/kenney-particle-pack/smoke_10.png",
+    "particle/spark_01":          "shared/textures/particles/kenney-particle-pack/spark_01.png",
+    "particle/spark_02":          "shared/textures/particles/kenney-particle-pack/spark_02.png",
+    "particle/spark_03":          "shared/textures/particles/kenney-particle-pack/spark_03.png",
+    "particle/spark_04":          "shared/textures/particles/kenney-particle-pack/spark_04.png",
+    "particle/spark_05":          "shared/textures/particles/kenney-particle-pack/spark_05.png",
+    "particle/spark_06":          "shared/textures/particles/kenney-particle-pack/spark_06.png",
+    "particle/spark_07":          "shared/textures/particles/kenney-particle-pack/spark_07.png",
+    "particle/star_01":           "shared/textures/particles/kenney-particle-pack/star_01.png",
+    "particle/star_02":           "shared/textures/particles/kenney-particle-pack/star_02.png",
+    "particle/star_03":           "shared/textures/particles/kenney-particle-pack/star_03.png",
+    "particle/star_04":           "shared/textures/particles/kenney-particle-pack/star_04.png",
+    "particle/star_05":           "shared/textures/particles/kenney-particle-pack/star_05.png",
+    "particle/star_06":           "shared/textures/particles/kenney-particle-pack/star_06.png",
+    "particle/star_07":           "shared/textures/particles/kenney-particle-pack/star_07.png",
+    "particle/star_08":           "shared/textures/particles/kenney-particle-pack/star_08.png",
+    "particle/star_09":           "shared/textures/particles/kenney-particle-pack/star_09.png",
+    "particle/symbol_01":         "shared/textures/particles/kenney-particle-pack/symbol_01.png",
+    "particle/symbol_02":         "shared/textures/particles/kenney-particle-pack/symbol_02.png",
+    "particle/trace_01":          "shared/textures/particles/kenney-particle-pack/trace_01.png",
+    "particle/trace_02":          "shared/textures/particles/kenney-particle-pack/trace_02.png",
+    "particle/trace_03":          "shared/textures/particles/kenney-particle-pack/trace_03.png",
+    "particle/trace_04":          "shared/textures/particles/kenney-particle-pack/trace_04.png",
+    "particle/trace_05":          "shared/textures/particles/kenney-particle-pack/trace_05.png",
+    "particle/trace_06":          "shared/textures/particles/kenney-particle-pack/trace_06.png",
+    "particle/trace_07":          "shared/textures/particles/kenney-particle-pack/trace_07.png",
+    "particle/twirl_01":          "shared/textures/particles/kenney-particle-pack/twirl_01.png",
+    "particle/twirl_02":          "shared/textures/particles/kenney-particle-pack/twirl_02.png",
+    "particle/twirl_03":          "shared/textures/particles/kenney-particle-pack/twirl_03.png",
+    "particle/window_01":         "shared/textures/particles/kenney-particle-pack/window_01.png",
+    "particle/window_02":         "shared/textures/particles/kenney-particle-pack/window_02.png",
+    "particle/window_03":         "shared/textures/particles/kenney-particle-pack/window_03.png",
+    "particle/window_04":         "shared/textures/particles/kenney-particle-pack/window_04.png",
+    // ── Rotated variants ──────────────────────────────────────────────────
+    "particle/flame_05_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/flame_05_rotated.png",
+    "particle/flame_06_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/flame_06_rotated.png",
+    "particle/muzzle_01_rotated": "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_01_rotated.png",
+    "particle/muzzle_02_rotated": "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_02_rotated.png",
+    "particle/muzzle_03_rotated": "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_03_rotated.png",
+    "particle/muzzle_04_rotated": "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_04_rotated.png",
+    "particle/muzzle_05_rotated": "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_05_rotated.png",
+    "particle/spark_05_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/spark_05_rotated.png",
+    "particle/spark_06_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/spark_06_rotated.png",
+    "particle/trace_01_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_01_rotated.png",
+    "particle/trace_02_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_02_rotated.png",
+    "particle/trace_03_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_03_rotated.png",
+    "particle/trace_04_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_04_rotated.png",
+    "particle/trace_05_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_05_rotated.png",
+    "particle/trace_06_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_06_rotated.png",
+    "particle/trace_07_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/trace_07_rotated.png",
+  },
 
   audio: {
     "bg_music":     (path: "shared/audio/bg-music-balance.mp3", volume: 0.2),
@@ -64,6 +163,51 @@
       color_start: (0.9, 0.95, 1.0, 1.0),
       color_end:   (0.3, 0.5, 1.0, 0.0),
       gravity: 0.3,            // near-zero: slow rise
+    ),
+
+    // Billboard flame sprites — one burst every 0.2 s from campfire.behavior.ron.
+    // sprite: flame_03 is a narrow candle-tongue shape; additive blending makes it glow.
+    // Fewer particles than the old sphere version — sprites are much more visible.
+    // Three-stop gradient tints the sprite: white-yellow base → orange core → dark-red tip.
+    "campfire_fire": (
+      particle_count: 8,
+      lifetime_secs: 0.55,
+      speed: 1.6,
+      speed_jitter: 0.45,
+      spread_deg: 16.0,
+      emit_radius: 0.12,         // scatter across log surface
+      offset: (0.0, 0.15, 0.0),
+      size: 0.26,                // quad scale — 0.26 m wide sprite tongue
+      size_jitter: 0.06,
+      size_end: 0.0,             // shrinks to nothing as it burns out
+      color_start: (1.0, 0.92, 0.55, 1.0), // bright white-yellow at base
+      color_mid:   (1.0, 0.45, 0.05, 1.0), // deep orange through the middle
+      color_end:   (0.5, 0.04, 0.0,  0.0), // dark red, fully transparent at tip
+      gravity: -0.6,
+      turbulence: 0.40,
+      sprite: "particle/flame_03",          // narrow upward flame tongue sprite
+      additive: true,                        // additive blending for glowing fire look
+    ),
+
+    // Billboard smoke puffs rising above the flames — one burst every 0.8 s.
+    // sprite: smoke_04 is a soft rounded puff; Blend mode preserves soft alpha edges.
+    // size grows 0.25 → 0.90 m: puffs spread as hot air disperses and cools.
+    "campfire_smoke": (
+      particle_count: 3,
+      lifetime_secs: 2.4,
+      speed: 0.5,
+      speed_jitter: 0.15,
+      spread_deg: 10.0,
+      emit_radius: 0.06,
+      offset: (0.0, 0.7, 0.0),
+      size: 0.25,
+      size_jitter: 0.05,
+      size_end: 0.90,            // expands ~3.6× — natural dispersion into the air
+      color_start: (0.65, 0.62, 0.60, 0.65), // mid-gray in sRGB → ~0.38 linear: visible gray puff
+      color_end:   (0.78, 0.78, 0.76, 0.0),  // lighter gray, fully transparent as it disperses
+      gravity: 0.4,
+      turbulence: 0.25,          // more billowing than before — columns sway visibly
+      sprite: "particle/smoke_04",          // soft rounded smoke puff sprite
     ),
 
   },
