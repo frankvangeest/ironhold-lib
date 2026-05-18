@@ -103,7 +103,7 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 
 **Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: "primitive"` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.
 
-`TriggerZone` — set `trigger_zone: (radius: 2.0)` on a `PrefabDef`. A Rapier sphere sensor is spawned. Emits:
+`TriggerZone` — set `trigger_zone: (radius: 2.0)` on a `PrefabDef`. A Rapier sphere sensor is spawned. Works on **all prefab kinds**: single-mesh primitives, composite primitives (those with `model: ""` and a non-empty `children` list), and GLB actor/prop prefabs. Emits:
 - `GameEvent::Trigger("entity.entered:{id}")` on player enter
 - `GameEvent::Trigger("entity.exited:{id}")` on player exit
 

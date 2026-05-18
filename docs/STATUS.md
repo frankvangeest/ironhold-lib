@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026‑05‑09_
+_Last updated: 2026‑05‑18_
 
 ## Legend
 - ✅ Implemented
@@ -57,7 +57,7 @@ _Last updated: 2026‑05‑09_
 | Trigger zones               |   ✅   | `TriggerZone` component + Rapier sensor; emits `entity.entered:{id}` / `entity.exited:{id}` on player enter/exit. Add via `trigger_zone` field on `PrefabDef`. |
 | Interactable entities       |   ✅   | `Interactable { radius }` component; when player is within `radius` metres and presses the interact key (`inputs.interact` on the player prefab, default `"KeyF"`), emits `entity.interacted:{id}`. Add via `interactable` field on `PrefabDef`. |
 | Motion (rotate/bob)         |   ✅   | `Motion` component; world-space continuous rotation (per-axis rad/s) and sinusoidal vertical bob (amplitude, frequency). Runs in `Update`; purely visual. |
-| Particle effects            |   ✅   | `Action::SpawnEffect { key, position, entity }` bursts a named effect from `AssetCatalog.effects`; `EffectDef` fields: count (≤256), lifetime, speed/jitter, spread_deg, offset, size/size_end, color_start/end, gravity; additive blending; deterministic Fibonacci sphere distribution. Demonstrated in `primitive_world` (hit_spark, heal_burst, pickup_sparkle). |
+| Particle effects            |   ✅   | `Action::SpawnEffect { key, position, entity }` bursts a named effect from `AssetCatalog.effects`; `EffectDef` fields: count (≤256), lifetime, speed/jitter, spread_deg, offset, size/size_end, color_start/end, gravity; additive blending; deterministic Fibonacci sphere distribution. Demonstrated in `primitive_world` (hit_spark, heal_burst, pickup_sparkle) and comprehensively in `particles_demo` (8 stations: campfire, torch row, magic shrine, smoke tower, explosion zone, frost crystal, healing fountain, star shower). |
 | Custom WGSL material        |   ✅   | `CustomMaterial`; designer-supplied `.wgsl` fragment shader; 4×Vec4 uniform slots + up to 4 texture slots. See `docs/25_custom_shaders.md`. |
 | Primitive shapes            |   ✅   | `kind: "primitive"` prefabs; Cuboid, Sphere, Cylinder, Capsule3d, Cone, Torus, ConicalFrustum. Dimensions and color configurable per-prefab and via `primitive_default_color` in project config. |
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
@@ -69,7 +69,7 @@ _Last updated: 2026‑05‑09_
 |-----------------------|:------:|-------|
 | Native runner         |   ✅   | `crates/ironhold_native` (CLI can select project with `--project <name>`). |
 | Web runner (WASM)     |   ✅   | `crates/ironhold_web`; project selectable via `?project=<name>` URL param. |
-| Platform parity tests |   ✅   | Headless Chromium browser test suite (`test_web.py`) covering all three example projects. |
+| Platform parity tests |   ✅   | Headless Chromium browser test suite (`test_web.py`) covering all example projects. |
 
 ---
 

@@ -1,0 +1,29 @@
+// Magic sparkle orbit loop — one burst every 0.6 s.
+// High turbulence on the effect gives particles a swirling orbital path.
+(
+    schema_version: 1,
+    initial_state: "active",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "active",
+            entry_actions: [
+                EmitEventAfterDelay(event: "magic.orbit:{self}", delay_secs: 0.1),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "magic.orbit:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "magic_orbit", entity: "{self}"),
+                        EmitEventAfterDelay(event: "magic.orbit:{self}", delay_secs: 0.6),
+                    ],
+                ),
+            ],
+        ),
+    ],
+
+    transitions: [],
+)

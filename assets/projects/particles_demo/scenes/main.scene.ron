@@ -1,0 +1,328 @@
+(
+  schema_version: 2,
+  name: "main",
+  tonemapping: AcesFitted,
+
+  // Late-dusk scene: dark enough that additive particles glow, bright enough to read props.
+  // Point lights provide strong warm/cool accent pools around each station.
+  lighting: (
+    ambient: (0.35, 0.38, 0.55),
+    ambient_brightness: 160.0,
+
+    directional: (
+      color: (0.72, 0.82, 1.0),
+      intensity: 26000.0,
+      rotation_euler_deg: (-30.0, 45.0, 0.0),
+      shadows_enabled: true,
+    ),
+
+    // Accent point lights — strong colour pools around each station.
+    point_lights: [
+      // Campfire: warm orange glow
+      ( position: (-9.0, 2.0, -9.0),  color: (1.0, 0.55, 0.15), intensity: 18000.0, range: 14.0 ),
+      // Torch row: amber fill across all three torches
+      ( position: (-13.0, 3.0, 0.0),  color: (1.0, 0.65, 0.20), intensity: 15000.0, range: 14.0 ),
+      // Magic shrine: violet accent
+      ( position: (-9.0, 2.0, 9.0),   color: (0.75, 0.30, 1.0), intensity: 12000.0, range: 12.0 ),
+      // Star shower: cool blue fill from above
+      ( position: (0.0, 5.0, -12.0),  color: (0.65, 0.78, 1.0), intensity: 15000.0, range: 20.0 ),
+      // Healing fountain: soft green glow
+      ( position: (9.0, 2.0, -9.0),   color: (0.40, 1.0, 0.45), intensity: 12000.0, range: 12.0 ),
+      // Frost crystal: icy blue-white
+      ( position: (13.0, 2.0, 0.0),   color: (0.45, 0.78, 1.0), intensity: 12000.0, range: 12.0 ),
+    ],
+  ),
+
+  // Labels shrink gently past 18 m; pin at 35 % minimum so distance labels stay legible.
+  label_depth_scale: (
+    reference_distance: 18.0,
+    min_scale: 0.35,
+  ),
+
+  spawn_points: {},
+
+  entities: [
+
+    // ── Player ─────────────────────────────────────────────────────────────
+    (
+      id: "player_01",
+      prefab: "player_capsule",
+      transform: (
+        translation: (0.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Arena floor ────────────────────────────────────────────────────────
+    // Cuboid 60×0.5×60, centre at y=−0.25 so the top surface sits at y=0.
+    (
+      id: "ground_01",
+      prefab: "demo_ground",
+      transform: (
+        translation: (0.0, -0.25, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 1 — CAMPFIRE  (NW, −9, 0, −9)
+    // FlameParticleMaterial: UV distortion + scroll, three-stop gradient.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "campfire_01",
+      prefab: "campfire_prop",
+      transform: (
+        translation: (-9.0, 0.0, -9.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 2 — TORCH ROW  (W wall, x=−14, z=−4/0/+4)
+    // Three freestanding torches showing the same flame loop at smaller scale.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "torch_01",
+      prefab: "torch_stake",
+      transform: (
+        translation: (-14.0, 0.0, -4.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "torch_02",
+      prefab: "torch_stake",
+      transform: (
+        translation: (-14.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "torch_03",
+      prefab: "torch_stake",
+      transform: (
+        translation: (-14.0, 0.0, 4.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 3 — MAGIC SHRINE  (SW, −9, 0, +9)
+    // Continuous: orbiting violet sparkles (magic_orbit via behavior).
+    // Interactive: press F → arcane nova burst (magic_nova via rules.ron).
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "magic_rune_01",
+      prefab: "magic_rune",
+      transform: (
+        translation: (-9.0, 0.0, 9.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 4 — SMOKE TOWER  (S, 0, 0, +13)
+    // Heavy expanding smoke puffs demonstrating large Blend sprites.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "smoke_tower_01",
+      prefab: "smoke_tower",
+      transform: (
+        translation: (0.0, 0.0, 13.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 5 — EXPLOSION ZONE  (SE, +9, 0, +9)
+    // TriggerZone: walk onto the orange disc → full-sphere sphere-particle blast.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "explosion_pad_01",
+      prefab: "explosion_pad",
+      transform: (
+        translation: (9.0, 0.0, 9.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 6 — FROST CRYSTAL  (E, +13, 0, 0)
+    // Interactable: press F → cold blue ice-shard hemisphere burst.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "frost_crystal_01",
+      prefab: "frost_crystal",
+      transform: (
+        translation: (13.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 7 — HEALING FOUNTAIN  (NE, +9, 0, −9)
+    // Interactable: press F → green healing stars blooming upward.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "heal_fountain_01",
+      prefab: "heal_fountain",
+      transform: (
+        translation: (9.0, 0.0, -9.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 8 — STAR SHOWER  (N, 0, +5, −12)
+    // Invisible emitter at y=5. Strong gravity curves all particles earthward.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "star_emitter_01",
+      prefab: "star_emitter",
+      transform: (
+        translation: (0.0, 5.0, -12.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+  ],
+
+  ui: [],
+
+  // ── Station labels ──────────────────────────────────────────────────────────
+  world_labels: [
+
+    (
+      id: "label_campfire",
+      text: "Campfire",
+      translation: (-9.0, 3.5, -9.0),
+      font_size: 20.0,
+      color: (1.0, 0.80, 0.45, 1.0),
+    ),
+    (
+      id: "label_campfire_sub",
+      text: "UV distort · scroll · 3-stop gradient",
+      translation: (-9.0, 3.0, -9.0),
+      font_size: 14.0,
+      color: (0.75, 0.65, 0.45, 0.85),
+    ),
+
+    (
+      id: "label_torches",
+      text: "Torch Row",
+      translation: (-14.0, 4.0, 0.0),
+      font_size: 20.0,
+      color: (1.0, 0.75, 0.40, 1.0),
+    ),
+    (
+      id: "label_torches_sub",
+      text: "Sprite flame · fast cadence",
+      translation: (-14.0, 3.5, 0.0),
+      font_size: 14.0,
+      color: (0.80, 0.65, 0.38, 0.85),
+    ),
+
+    (
+      id: "label_magic",
+      text: "Magic Shrine",
+      translation: (-9.0, 3.5, 9.0),
+      font_size: 20.0,
+      color: (0.85, 0.60, 1.0, 1.0),
+    ),
+    (
+      id: "label_magic_sub",
+      text: "Orbit loop · [F] nova burst",
+      translation: (-9.0, 3.0, 9.0),
+      font_size: 14.0,
+      color: (0.70, 0.50, 0.90, 0.85),
+    ),
+
+    (
+      id: "label_smoke",
+      text: "Smoke Tower",
+      translation: (0.0, 6.0, 13.0),
+      font_size: 20.0,
+      color: (0.78, 0.78, 0.76, 1.0),
+    ),
+    (
+      id: "label_smoke_sub",
+      text: "Blend sprites · size 0.45 → 2.2 m",
+      translation: (0.0, 5.5, 13.0),
+      font_size: 14.0,
+      color: (0.65, 0.65, 0.63, 0.85),
+    ),
+
+    (
+      id: "label_explosion",
+      text: "Explosion Zone",
+      translation: (9.0, 3.5, 9.0),
+      font_size: 20.0,
+      color: (1.0, 0.45, 0.15, 1.0),
+    ),
+    (
+      id: "label_explosion_sub",
+      text: "Walk in → sphere burst · 180° spread",
+      translation: (9.0, 3.0, 9.0),
+      font_size: 14.0,
+      color: (0.85, 0.40, 0.15, 0.85),
+    ),
+
+    (
+      id: "label_frost",
+      text: "Frost Crystal",
+      translation: (13.0, 3.5, 0.0),
+      font_size: 20.0,
+      color: (0.70, 0.88, 1.0, 1.0),
+    ),
+    (
+      id: "label_frost_sub",
+      text: "[F] ice-shard burst · star sprites",
+      translation: (13.0, 3.0, 0.0),
+      font_size: 14.0,
+      color: (0.58, 0.76, 0.95, 0.85),
+    ),
+
+    (
+      id: "label_heal",
+      text: "Healing Fountain",
+      translation: (9.0, 3.5, -9.0),
+      font_size: 20.0,
+      color: (0.45, 1.0, 0.50, 1.0),
+    ),
+    (
+      id: "label_heal_sub",
+      text: "[F] bloom burst · positive gravity",
+      translation: (9.0, 3.0, -9.0),
+      font_size: 14.0,
+      color: (0.38, 0.85, 0.42, 0.85),
+    ),
+
+    (
+      id: "label_stars",
+      text: "Star Shower",
+      translation: (0.0, 4.5, -12.0),
+      font_size: 20.0,
+      color: (0.85, 0.90, 1.0, 1.0),
+    ),
+    (
+      id: "label_stars_sub",
+      text: "Emitter at y=5 · gravity arc · wide scatter",
+      translation: (0.0, 4.0, -12.0),
+      font_size: 14.0,
+      color: (0.72, 0.78, 0.95, 0.85),
+    ),
+
+  ],
+)

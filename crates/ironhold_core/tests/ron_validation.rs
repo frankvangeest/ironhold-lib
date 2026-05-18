@@ -3466,3 +3466,39 @@ fn test_action_spawn_effect_in_rules_asset_parses() {
         ironhold_core::schema::actions::Action::SpawnEffect { key, .. } if key == "hit_spark"
     ));
 }
+
+// ── particles_demo project RON coverage ──────────────────────────────────────
+
+#[test]
+fn test_particles_demo_project_config_parses() {
+    // particles_demo uses schema_version 3 with global_environment and
+    // primitive_default_color — both added after the initial v2 schema.
+    let ron_str = std::fs::read_to_string(
+        "../../assets/projects/particles_demo/particles_demo.project.ron"
+    ).expect("particles_demo.project.ron must be readable");
+    let config: ProjectConfig = from_str(&ron_str)
+        .expect("particles_demo.project.ron must parse without errors");
+    assert_eq!(config.project_id.as_deref(), Some("particles_demo"));
+    assert!(config.validate().is_ok(), "particles_demo project config must validate");
+}
+
+#[test]
+fn test_particles_demo_prefab_catalog_parses_and_validates() {
+    // Exercises the trigger_zone field on PrefabDef — the explosion_pad prefab
+    // is a composite primitive (model: "", non-empty children) with trigger_zone set.
+    let ron_str = std::fs::read_to_string(
+        "../../assets/projects/particles_demo/prefabs/prefabs.ron"
+    ).expect("particles_demo prefabs.ron must be readable");
+    let catalog: PrefabCatalog = from_str(&ron_str)
+        .expect("particles_demo prefabs.ron must parse without errors");
+    assert!(catalog.validate().is_ok(), "particles_demo prefab catalog must validate");
+
+    let pad = catalog.prefabs.get("explosion_pad")
+        .expect("explosion_pad prefab must be present");
+    assert!(pad.trigger_zone.is_some(),
+        "explosion_pad must have trigger_zone set");
+    assert_eq!(pad.trigger_zone.as_ref().unwrap().radius, 3.0,
+        "explosion_pad trigger_zone radius must be 3.0");
+    assert!(!pad.children.is_empty(),
+        "explosion_pad must be a composite prefab (non-empty children)");
+}

@@ -1,0 +1,48 @@
+(
+    schema_version: 2,
+    rules: [
+
+        // WebGPU pipeline warmup — four variants need separate warmup bursts.
+        // Fired during the scene-load window (off-screen, y=-100) before the player
+        // can interact, so the first visible burst does not stall the GPU thread.
+        //
+        //   1. Sphere  + AlphaMode::Add (no sprite)            → explosion_burst
+        //   2. Quad    + FlameParticleMaterial + AlphaMode::Add → campfire_fire, torch_flame
+        //   3. Quad    + StandardMaterial + AlphaMode::Blend    → campfire_smoke
+        //   4. Quad    + StandardMaterial + AlphaMode::Add      → star_rain, frost_burst, heal_pulse, magic_orbit, magic_nova
+        (
+            on: "scene.ready:main",
+            do_actions: [
+                SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
+            ],
+        ),
+
+        // Walk into the explosion pad to trigger a burst.
+        (
+            on: "entity.entered:explosion_pad_01",
+            do_actions: [ SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01") ],
+        ),
+
+        // Press F near the frost crystal for an ice shard burst.
+        (
+            on: "entity.interacted:frost_crystal_01",
+            do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_crystal_01") ],
+        ),
+
+        // Press F near the healing fountain for a green healing burst.
+        (
+            on: "entity.interacted:heal_fountain_01",
+            do_actions: [ SpawnEffect(key: "heal_pulse", entity: "heal_fountain_01") ],
+        ),
+
+        // Press F on the magic rune to summon an arcane nova.
+        (
+            on: "entity.interacted:magic_rune_01",
+            do_actions: [ SpawnEffect(key: "magic_nova", entity: "magic_rune_01") ],
+        ),
+
+    ],
+)

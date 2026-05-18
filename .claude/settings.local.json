@@ -51,7 +51,11 @@
       "Bash(Measure-Object -Line)",
       "PowerShell(cargo test *)",
       "PowerShell(Get-Process *)",
-      "Bash(python tools/build_asset_manifest.py)"
+      "Bash(python tools/build_asset_manifest.py)",
+      "Bash(Get-ChildItem C:\\git\\rust\\ironhold-lib\\*)",
+      "Bash(Sort-Object)",
+      "Bash(Select-Object -First 100)",
+      "PowerShell(Get-Item C:\\git\\rust\\ironhold-lib\\*)"
     ]
   }
 }

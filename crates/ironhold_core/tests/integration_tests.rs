@@ -3419,3 +3419,132 @@ fn test_spawn_effect_entity_missing_does_not_push() {
     let pending = app.world().resource::<PendingParticleEffects>();
     assert!(pending.0.is_empty(), "unresolvable entity must not push to PendingParticleEffects");
 }
+
+// ── particles_demo smoke test ─────────────────────────────────────────────────
+
+#[test]
+fn test_particles_demo_project_config_loads() {
+    // Smoke test: the particles_demo project config must deserialize and the
+    // engine must reach the LoadingScene state without panicking.
+    let mut app = setup_test_app();
+    app.update();
+
+    // Insert a real particles_demo ProjectConfig.
+    let config_handle = {
+        let ron_str = std::fs::read_to_string(
+            "../../assets/projects/particles_demo/particles_demo.project.ron"
+        ).expect("particles_demo.project.ron must be readable");
+        let config: ProjectConfig = ron::Options::default()
+            .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+            .from_str(&ron_str)
+            .expect("particles_demo project config must parse");
+        app.world_mut()
+            .resource_mut::<Assets<ProjectConfig>>()
+            .add(config)
+    };
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    // Load an empty scene so spawn_scene_v2 can run without a real asset.
+    let scene: GameSceneV2 = ron::de::from_str("(schema_version: 2, entities: [], ui: [])").unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update(); // state transitions to LoadingScene
+    app.update(); // spawn_scene_v2 fires
+    app.update(); // commands flushed — no panic = pass
+
+    // The app must not have panicked and the state transition must have occurred.
+    let state = app.world().resource::<State<AppState>>();
+    assert_ne!(*state.get(), AppState::Bootstrap,
+        "particles_demo project must advance past the Bootstrap state");
+}
+
+// ── Composite-prefab TriggerZone test ─────────────────────────────────────────
+
+#[test]
+fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
+    // Regression test for the composite-primitive branch of spawn_scene_v2.
+    // Before the fix, trigger_zone was only inserted on the single-mesh path;
+    // a composite prefab (model: "", non-empty children) silently dropped it.
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+    use ironhold_core::capabilities::trigger_zone::TriggerZone;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Build a minimal catalog with a composite prefab that has trigger_zone set.
+    // Deserialise the prefab catalog from RON to avoid constructing the structs by hand
+    // (ChildPrimitiveDef does not derive Default).
+    let prefab_ron = r#"
+        (
+            schema_version: 1,
+            prefabs: {
+                "danger_zone": (
+                    kind: "primitive",
+                    model: "",
+                    trigger_zone: (radius: 2.0),
+                    children: [
+                        (
+                            shape: "Cuboid",
+                            primitive: (size: (4.0, 0.1, 4.0)),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(prefab_ron)
+        .expect("inline prefab catalog must parse");
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(catalog));
+
+    // Insert a ProjectConfig and a scene that uses the composite prefab.
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(r#"
+            (
+                schema_version: 2,
+                entities: [
+                    ( id: "pad_01", prefab: "danger_zone", transform: () ),
+                ],
+                ui: [],
+            )
+        "#)
+        .expect("test scene must parse");
+    let scene_handle = app
+        .world_mut()
+        .resource_mut::<Assets<GameSceneV2>>()
+        .add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update(); // state transitions to LoadingScene
+    app.update(); // spawn_scene_v2 fires, commands queued
+    app.update(); // commands flushed
+
+    // The spawned entity must carry a TriggerZone component.
+    let count = app
+        .world_mut()
+        .query::<&TriggerZone>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 1,
+        "composite prefab with trigger_zone must produce exactly one entity with a TriggerZone component");
+}

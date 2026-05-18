@@ -1,0 +1,346 @@
+(
+  schema_version: 1,
+  models: {},
+
+  // ── Kenney Particle Pack (256×256 RGBA) ─────────────────────────────────────
+  // All 87 sprites registered so any can be referenced in effect definitions.
+  textures: {
+    "particle/circle_01":          "shared/textures/particles/kenney-particle-pack/circle_01.png",
+    "particle/circle_02":          "shared/textures/particles/kenney-particle-pack/circle_02.png",
+    "particle/circle_03":          "shared/textures/particles/kenney-particle-pack/circle_03.png",
+    "particle/circle_04":          "shared/textures/particles/kenney-particle-pack/circle_04.png",
+    "particle/circle_05":          "shared/textures/particles/kenney-particle-pack/circle_05.png",
+    "particle/dirt_01":            "shared/textures/particles/kenney-particle-pack/dirt_01.png",
+    "particle/dirt_02":            "shared/textures/particles/kenney-particle-pack/dirt_02.png",
+    "particle/dirt_03":            "shared/textures/particles/kenney-particle-pack/dirt_03.png",
+    "particle/fire_01":            "shared/textures/particles/kenney-particle-pack/fire_01.png",
+    "particle/fire_02":            "shared/textures/particles/kenney-particle-pack/fire_02.png",
+    "particle/flame_01":           "shared/textures/particles/kenney-particle-pack/flame_01.png",
+    "particle/flame_02":           "shared/textures/particles/kenney-particle-pack/flame_02.png",
+    "particle/flame_03":           "shared/textures/particles/kenney-particle-pack/flame_03.png",
+    "particle/flame_04":           "shared/textures/particles/kenney-particle-pack/flame_04.png",
+    "particle/flame_05":           "shared/textures/particles/kenney-particle-pack/flame_05.png",
+    "particle/flame_06":           "shared/textures/particles/kenney-particle-pack/flame_06.png",
+    "particle/flare_01":           "shared/textures/particles/kenney-particle-pack/flare_01.png",
+    "particle/light_01":           "shared/textures/particles/kenney-particle-pack/light_01.png",
+    "particle/light_02":           "shared/textures/particles/kenney-particle-pack/light_02.png",
+    "particle/light_03":           "shared/textures/particles/kenney-particle-pack/light_03.png",
+    "particle/magic_01":           "shared/textures/particles/kenney-particle-pack/magic_01.png",
+    "particle/magic_02":           "shared/textures/particles/kenney-particle-pack/magic_02.png",
+    "particle/magic_03":           "shared/textures/particles/kenney-particle-pack/magic_03.png",
+    "particle/magic_04":           "shared/textures/particles/kenney-particle-pack/magic_04.png",
+    "particle/magic_05":           "shared/textures/particles/kenney-particle-pack/magic_05.png",
+    "particle/muzzle_01":          "shared/textures/particles/kenney-particle-pack/muzzle_01.png",
+    "particle/muzzle_02":          "shared/textures/particles/kenney-particle-pack/muzzle_02.png",
+    "particle/muzzle_03":          "shared/textures/particles/kenney-particle-pack/muzzle_03.png",
+    "particle/muzzle_04":          "shared/textures/particles/kenney-particle-pack/muzzle_04.png",
+    "particle/muzzle_05":          "shared/textures/particles/kenney-particle-pack/muzzle_05.png",
+    "particle/scorch_01":          "shared/textures/particles/kenney-particle-pack/scorch_01.png",
+    "particle/scorch_02":          "shared/textures/particles/kenney-particle-pack/scorch_02.png",
+    "particle/scorch_03":          "shared/textures/particles/kenney-particle-pack/scorch_03.png",
+    "particle/scratch_01":         "shared/textures/particles/kenney-particle-pack/scratch_01.png",
+    "particle/slash_01":           "shared/textures/particles/kenney-particle-pack/slash_01.png",
+    "particle/slash_02":           "shared/textures/particles/kenney-particle-pack/slash_02.png",
+    "particle/slash_03":           "shared/textures/particles/kenney-particle-pack/slash_03.png",
+    "particle/slash_04":           "shared/textures/particles/kenney-particle-pack/slash_04.png",
+    "particle/smoke_01":           "shared/textures/particles/kenney-particle-pack/smoke_01.png",
+    "particle/smoke_02":           "shared/textures/particles/kenney-particle-pack/smoke_02.png",
+    "particle/smoke_03":           "shared/textures/particles/kenney-particle-pack/smoke_03.png",
+    "particle/smoke_04":           "shared/textures/particles/kenney-particle-pack/smoke_04.png",
+    "particle/smoke_05":           "shared/textures/particles/kenney-particle-pack/smoke_05.png",
+    "particle/smoke_06":           "shared/textures/particles/kenney-particle-pack/smoke_06.png",
+    "particle/smoke_07":           "shared/textures/particles/kenney-particle-pack/smoke_07.png",
+    "particle/smoke_08":           "shared/textures/particles/kenney-particle-pack/smoke_08.png",
+    "particle/smoke_09":           "shared/textures/particles/kenney-particle-pack/smoke_09.png",
+    "particle/smoke_10":           "shared/textures/particles/kenney-particle-pack/smoke_10.png",
+    "particle/spark_01":           "shared/textures/particles/kenney-particle-pack/spark_01.png",
+    "particle/spark_02":           "shared/textures/particles/kenney-particle-pack/spark_02.png",
+    "particle/spark_03":           "shared/textures/particles/kenney-particle-pack/spark_03.png",
+    "particle/spark_04":           "shared/textures/particles/kenney-particle-pack/spark_04.png",
+    "particle/spark_05":           "shared/textures/particles/kenney-particle-pack/spark_05.png",
+    "particle/spark_06":           "shared/textures/particles/kenney-particle-pack/spark_06.png",
+    "particle/spark_07":           "shared/textures/particles/kenney-particle-pack/spark_07.png",
+    "particle/star_01":            "shared/textures/particles/kenney-particle-pack/star_01.png",
+    "particle/star_02":            "shared/textures/particles/kenney-particle-pack/star_02.png",
+    "particle/star_03":            "shared/textures/particles/kenney-particle-pack/star_03.png",
+    "particle/star_04":            "shared/textures/particles/kenney-particle-pack/star_04.png",
+    "particle/star_05":            "shared/textures/particles/kenney-particle-pack/star_05.png",
+    "particle/star_06":            "shared/textures/particles/kenney-particle-pack/star_06.png",
+    "particle/star_07":            "shared/textures/particles/kenney-particle-pack/star_07.png",
+    "particle/star_08":            "shared/textures/particles/kenney-particle-pack/star_08.png",
+    "particle/star_09":            "shared/textures/particles/kenney-particle-pack/star_09.png",
+    "particle/symbol_01":          "shared/textures/particles/kenney-particle-pack/symbol_01.png",
+    "particle/symbol_02":          "shared/textures/particles/kenney-particle-pack/symbol_02.png",
+    "particle/trace_01":           "shared/textures/particles/kenney-particle-pack/trace_01.png",
+    "particle/trace_02":           "shared/textures/particles/kenney-particle-pack/trace_02.png",
+    "particle/trace_03":           "shared/textures/particles/kenney-particle-pack/trace_03.png",
+    "particle/trace_04":           "shared/textures/particles/kenney-particle-pack/trace_04.png",
+    "particle/trace_05":           "shared/textures/particles/kenney-particle-pack/trace_05.png",
+    "particle/trace_06":           "shared/textures/particles/kenney-particle-pack/trace_06.png",
+    "particle/trace_07":           "shared/textures/particles/kenney-particle-pack/trace_07.png",
+    "particle/twirl_01":           "shared/textures/particles/kenney-particle-pack/twirl_01.png",
+    "particle/twirl_02":           "shared/textures/particles/kenney-particle-pack/twirl_02.png",
+    "particle/twirl_03":           "shared/textures/particles/kenney-particle-pack/twirl_03.png",
+    "particle/window_01":          "shared/textures/particles/kenney-particle-pack/window_01.png",
+    "particle/window_02":          "shared/textures/particles/kenney-particle-pack/window_02.png",
+    "particle/window_03":          "shared/textures/particles/kenney-particle-pack/window_03.png",
+    "particle/window_04":          "shared/textures/particles/kenney-particle-pack/window_04.png",
+    // Rotated variants
+    "particle/flame_05_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/flame_05_rotated.png",
+    "particle/flame_06_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/flame_06_rotated.png",
+    "particle/muzzle_01_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_01_rotated.png",
+    "particle/muzzle_02_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_02_rotated.png",
+    "particle/muzzle_03_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_03_rotated.png",
+    "particle/muzzle_04_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_04_rotated.png",
+    "particle/muzzle_05_rotated":  "shared/textures/particles/kenney-particle-pack/Rotated/muzzle_05_rotated.png",
+    "particle/spark_05_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/spark_05_rotated.png",
+    "particle/spark_06_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/spark_06_rotated.png",
+    "particle/trace_01_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_01_rotated.png",
+    "particle/trace_02_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_02_rotated.png",
+    "particle/trace_03_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_03_rotated.png",
+    "particle/trace_04_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_04_rotated.png",
+    "particle/trace_05_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_05_rotated.png",
+    "particle/trace_06_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_06_rotated.png",
+    "particle/trace_07_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_07_rotated.png",
+  },
+
+  audio: {},
+
+  effects: {
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CONTINUOUS EFFECTS — looped via entity behavior files
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Billboard flame with UV distortion + upward scroll — the full FlameParticleMaterial path.
+    // Three-stop gradient: white-yellow base → orange core → dark red tip.
+    // Demonstrates: sprite particles, UV animation, three-stop colour gradient, additive blending.
+    "campfire_fire": (
+      particle_count: 10,
+      lifetime_secs: 0.60,
+      speed: 1.6,
+      speed_jitter: 0.45,
+      spread_deg: 18.0,
+      emit_radius: 0.14,
+      offset: (0.0, 0.15, 0.0),
+      size: 0.38,
+      size_jitter: 0.08,
+      size_end: 0.0,
+      color_start: (1.0, 0.92, 0.55, 1.0),
+      color_mid:   (1.0, 0.45, 0.05, 1.0),
+      color_end:   (0.5, 0.04, 0.0,  0.0),
+      gravity: -0.6,
+      turbulence: 0.40,
+      sprite: "particle/flame_03",
+      additive: true,
+      uv_distort: 0.55,
+      uv_scroll_speed: 0.35,
+    ),
+
+    // Soft grey smoke puffs rising above the campfire.
+    // Demonstrates: Blend (non-additive) sprite, growing size, slow turbulence.
+    "campfire_smoke": (
+      particle_count: 3,
+      lifetime_secs: 2.4,
+      speed: 0.5,
+      speed_jitter: 0.15,
+      spread_deg: 10.0,
+      emit_radius: 0.06,
+      offset: (0.0, 0.7, 0.0),
+      size: 0.25,
+      size_jitter: 0.05,
+      size_end: 0.90,
+      color_start: (0.65, 0.62, 0.60, 0.65),
+      color_end:   (0.78, 0.78, 0.76, 0.0),
+      gravity: 0.4,
+      turbulence: 0.25,
+      sprite: "particle/smoke_04",
+    ),
+
+    // Wall-torch flame — smaller, faster, more intense orange than the campfire.
+    // Uses flame_04 sprite + UV distort; offset places the effect above the torch glow orb.
+    // Demonstrates: same FlameParticleMaterial as campfire_fire but different parameters.
+    "torch_flame": (
+      particle_count: 5,
+      lifetime_secs: 0.40,
+      speed: 1.1,
+      speed_jitter: 0.30,
+      spread_deg: 14.0,
+      emit_radius: 0.05,
+      offset: (0.0, 1.7, 0.0),
+      size: 0.24,
+      size_jitter: 0.06,
+      size_end: 0.0,
+      color_start: (1.0, 0.85, 0.35, 1.0),
+      color_mid:   (1.0, 0.42, 0.06, 1.0),
+      color_end:   (0.40, 0.04, 0.0,  0.0),
+      gravity: -0.5,
+      turbulence: 0.35,
+      sprite: "particle/flame_04",
+      additive: true,
+      uv_distort: 0.40,
+      uv_scroll_speed: 0.50,
+    ),
+
+    // Violet sparkles orbiting the magic rune.
+    // High turbulence (1.6) makes each particle drift in its own curved path — orbital illusion.
+    // Demonstrates: magic sprite, turbulence as a movement shaping tool, zero gravity float.
+    "magic_orbit": (
+      particle_count: 14,
+      lifetime_secs: 1.8,
+      speed: 0.6,
+      speed_jitter: 0.30,
+      spread_deg: 70.0,
+      emit_radius: 0.8,
+      offset: (0.0, 0.4, 0.0),
+      size: 0.16,
+      size_jitter: 0.04,
+      size_end: 0.0,
+      color_start: (0.80, 0.55, 1.0, 1.0),
+      color_end:   (0.25, 0.08, 0.70, 0.0),
+      gravity: 0.08,
+      turbulence: 1.6,
+      sprite: "particle/magic_03",
+      additive: true,
+    ),
+
+    // Heavy industrial smoke from the chimney tower.
+    // Offset 3.8 m places bursts above the chimney lip; size expands to 2.2 m.
+    // Demonstrates: large Blend sprites, very long lifetime (4 s), maximum size growth.
+    "smoke_column": (
+      particle_count: 3,
+      lifetime_secs: 4.0,
+      speed: 0.8,
+      speed_jitter: 0.25,
+      spread_deg: 8.0,
+      emit_radius: 0.12,
+      offset: (0.0, 3.8, 0.0),
+      size: 0.60,
+      size_jitter: 0.15,
+      size_end: 3.0,
+      color_start: (0.35, 0.33, 0.30, 0.75),
+      color_end:   (0.60, 0.60, 0.58, 0.0),
+      gravity: 0.5,
+      turbulence: 0.40,
+      sprite: "particle/smoke_07",
+    ),
+
+    // Cascading stars from the high-altitude emitter (entity placed at y=5).
+    // Strong gravity curves all particles down from the emission point to ground.
+    // Demonstrates: entity placed above ground as emitter, wide emit_radius area scatter,
+    //               three-stop colour (warm → cool → blue), star sprites, big gravity arc.
+    "star_rain": (
+      particle_count: 12,
+      lifetime_secs: 2.8,
+      speed: 2.8,
+      speed_jitter: 1.0,
+      spread_deg: 110.0,
+      emit_radius: 2.5,
+      offset: (0.0, 0.0, 0.0),
+      size: 0.22,
+      size_jitter: 0.08,
+      size_end: 0.0,
+      color_start: (1.0, 0.95, 0.65, 1.0),
+      color_mid:   (0.75, 0.88, 1.0, 0.9),
+      color_end:   (0.30, 0.50, 1.0, 0.0),
+      gravity: -3.0,
+      turbulence: 0.08,
+      sprite: "particle/star_02",
+      additive: true,
+    ),
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // BURST EFFECTS — triggered once by TriggerZone or Interactable
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Massive full-sphere explosion using plain sphere particles (no sprite).
+    // Demonstrates: sphere particles vs billboard sprites, max spread (180°), heavy gravity.
+    "explosion_burst": (
+      particle_count: 70,
+      lifetime_secs: 1.1,
+      speed: 7.0,
+      speed_jitter: 2.5,
+      spread_deg: 180.0,
+      emit_radius: 0.5,
+      offset: (0.0, 0.5, 0.0),
+      size: 0.26,
+      size_jitter: 0.08,
+      size_end: 0.0,
+      color_start: (1.0, 0.98, 0.55, 1.0),  // bright yellow-white flash
+      color_mid:   (1.0, 0.45, 0.05, 1.0),  // fiery orange
+      color_end:   (0.55, 0.04, 0.0,  0.0), // deep red fading
+      gravity: -5.0,
+      turbulence: 0.70,
+    ),
+
+    // Cold blue-white ice shards bursting upward.
+    // Star sprite with near-zero gravity = shards glide and linger.
+    // Demonstrates: cool colour palette, shallow gravity, upper-hemisphere cone spread.
+    "frost_burst": (
+      particle_count: 30,
+      lifetime_secs: 1.4,
+      speed: 3.5,
+      speed_jitter: 0.9,
+      spread_deg: 85.0,
+      emit_radius: 0.25,
+      offset: (0.0, 1.1, 0.0),
+      size: 0.16,
+      size_jitter: 0.04,
+      size_end: 0.0,
+      color_start: (0.88, 0.96, 1.0, 1.0),
+      color_end:   (0.28, 0.58, 1.0, 0.0),
+      gravity: -0.4,
+      turbulence: 0.45,
+      sprite: "particle/star_07",
+      additive: true,
+    ),
+
+    // Healing green stars blooming upward. Positive gravity floats them skyward.
+    // Large count + growing size_end creates a fountain-of-light bloom.
+    // Demonstrates: size_end growth (blooming), positive gravity, magic sprite.
+    "heal_pulse": (
+      particle_count: 55,
+      lifetime_secs: 1.6,
+      speed: 4.0,
+      speed_jitter: 1.2,
+      spread_deg: 65.0,
+      emit_radius: 0.40,
+      offset: (0.0, 0.8, 0.0),
+      size: 0.22,
+      size_jitter: 0.08,
+      size_end: 0.55,
+      color_start: (0.40, 1.0, 0.60, 1.0),
+      color_mid:   (0.85, 1.0, 0.35, 0.95),
+      color_end:   (0.15, 0.80, 0.25, 0.0),
+      gravity: 1.2,
+      turbulence: 0.50,
+      sprite: "particle/magic_01",
+      additive: true,
+    ),
+
+    // Violent arcane nova — wide burst with swirling twirl sprites.
+    // Demonstrates: wide spread, twirl sprite type, high turbulence burst.
+    "magic_nova": (
+      particle_count: 32,
+      lifetime_secs: 1.6,
+      speed: 4.2,
+      speed_jitter: 1.2,
+      spread_deg: 125.0,
+      emit_radius: 0.6,
+      offset: (0.0, 0.5, 0.0),
+      size: 0.20,
+      size_jitter: 0.06,
+      size_end: 0.0,
+      color_start: (0.95, 0.80, 1.0, 1.0),
+      color_mid:   (0.65, 0.20, 1.0, 1.0),
+      color_end:   (0.25, 0.04, 0.75, 0.0),
+      gravity: 0.7,
+      turbulence: 1.4,
+      sprite: "particle/twirl_01",
+      additive: true,
+    ),
+
+  },
+
+  materials: {},
+)

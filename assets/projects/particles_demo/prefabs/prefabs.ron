@@ -1,0 +1,201 @@
+(
+  schema_version: 1,
+  prefabs: {
+
+    // ── Player ────────────────────────────────────────────────────────────────
+    "player_capsule": (
+      kind: "primitive",
+      model: "Capsule3d",
+      components: (
+        tags: ["player"],
+        movement: (
+          walk_speed: 5.5,
+          run_speed: 10.0,
+          jump: RelativeToHeight(percent: 100.0),
+          double_jump: true,
+        ),
+      ),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        color: (0.22, 0.52, 0.88),
+        roughness: 0.3,
+        metallic: 0.15,
+      ),
+      children: [
+        // Left eye (player faces −Z)
+        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: (-0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Right eye
+        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: ( 0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Nose
+        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40), offset: (0.0,  1.49, -0.40), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Arena floor ───────────────────────────────────────────────────────────
+    // Dark charcoal slab so every particle reads against a neutral background.
+    // Centre at y=−0.25 → top surface at y=0.
+    "demo_ground": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: (
+        size: (60.0, 0.5, 60.0),
+        color: (0.30, 0.28, 0.34),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // ── Campfire ──────────────────────────────────────────────────────────────
+    // Identical construction to the primitive_world campfire.
+    // Runs campfire.behavior.ron: fire every 0.2 s, smoke every 0.8 s.
+    "campfire_prop": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      behavior: "behaviors/campfire.behavior.ron",
+      children: [
+        // Ash disk
+        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.02, color: (0.10, 0.08, 0.06), roughness: 0.98), offset: (0.0, 0.01, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Stone ring
+        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90), offset: ( 0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: "Sphere",   primitive: (radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90), offset: (-0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90), offset: ( 0.0,  0.06,  0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: "Sphere",   primitive: (radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90), offset: ( 0.0,  0.06, -0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Crossed logs
+        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0,  40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0, -40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Ember glow
+        ( shape: "Sphere",   primitive: (radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10), offset: (0.0, 0.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Freestanding torch ────────────────────────────────────────────────────
+    // Stone base → wooden post → torch head → flame glow orb.
+    // torch_flame effect offset (0, 1.7, 0) puts sparks above the glow orb.
+    "torch_stake": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      behavior: "behaviors/torch.behavior.ron",
+      children: [
+        // Stone base
+        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.40, color: (0.38, 0.35, 0.32), roughness: 0.90), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Wooden post
+        ( shape: "Cylinder", primitive: (radius: 0.04, height: 0.90, color: (0.30, 0.18, 0.07), roughness: 0.92), offset: (0.0, 0.85, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Torch head (widened top of post)
+        ( shape: "Cylinder", primitive: (radius: 0.07, height: 0.14, color: (0.28, 0.14, 0.05), roughness: 0.88), offset: (0.0, 1.37, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Flame glow orb
+        ( shape: "Sphere",   primitive: (radius: 0.065, color: (1.0, 0.55, 0.05), roughness: 0.15), offset: (0.0, 1.58, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Industrial smoke tower ────────────────────────────────────────────────
+    // Foundation + tall chimney + lip. Offset 3.8 m in smoke_column emits above lip.
+    "smoke_tower": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      behavior: "behaviors/smoke_tower.behavior.ron",
+      children: [
+        // Foundation
+        ( shape: "Cylinder", primitive: (radius: 0.65, height: 0.40, color: (0.25, 0.23, 0.22), roughness: 0.92), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Chimney body — centre at y=2.0, spans y=0.4 to y=3.6
+        ( shape: "Cylinder", primitive: (radius: 0.30, height: 3.20, color: (0.28, 0.26, 0.24), roughness: 0.90), offset: (0.0, 2.00, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Chimney lip
+        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.12, color: (0.22, 0.20, 0.19), roughness: 0.88), offset: (0.0, 3.66, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Magic rune ────────────────────────────────────────────────────────────
+    // Slowly rotating disc + central orb. Two functions:
+    //   1. Behavior runs magic_orbit loop (sparkle swirl).
+    //   2. Interactable fires entity.interacted → rules.ron → magic_nova burst.
+    "magic_rune": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 3.0, hint_text: "F  Summon Nova"),
+      behavior: "behaviors/magic_shrine.behavior.ron",
+      motion: (rotate: (0.0, 0.30, 0.0)),
+      children: [
+        // Outer stone disc
+        ( shape: "Cylinder", primitive: (radius: 1.4, height: 0.07, color: (0.18, 0.12, 0.25), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Inner rune ring
+        ( shape: "Cylinder", primitive: (radius: 0.75, height: 0.09, color: (0.35, 0.15, 0.55), roughness: 0.55), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Central orb
+        ( shape: "Sphere",   primitive: (radius: 0.22, color: (0.70, 0.30, 1.0), roughness: 0.08),              offset: (0.0, 0.38, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Frost crystal ─────────────────────────────────────────────────────────
+    // Icy blue pedestal + glowing crystal sphere.
+    // Press F to fire frost_burst (handled in rules.ron).
+    "frost_crystal": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.5, hint_text: "F  Frost Burst"),
+      children: [
+        // Pedestal
+        ( shape: "Cylinder", primitive: (radius: 0.28, height: 0.75, color: (0.35, 0.50, 0.68), roughness: 0.70), offset: (0.0, 0.375, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Crystal outer
+        ( shape: "Sphere",   primitive: (radius: 0.30, color: (0.55, 0.80, 0.98), roughness: 0.08, metallic: 0.10), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Crystal inner glow
+        ( shape: "Sphere",   primitive: (radius: 0.18, color: (0.82, 0.95, 1.0), roughness: 0.04), offset: (0.0, 1.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Healing fountain ─────────────────────────────────────────────────────
+    // Green stone pedestal + bowl rim + glowing water orb.
+    // Press F to fire heal_pulse (handled in rules.ron).
+    "heal_fountain": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.5, hint_text: "F  Heal Burst"),
+      children: [
+        // Pedestal
+        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.55, color: (0.28, 0.42, 0.30), roughness: 0.85), offset: (0.0, 0.275, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Bowl rim
+        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.08, color: (0.22, 0.35, 0.24), roughness: 0.80), offset: (0.0, 0.59, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Glowing water orb
+        ( shape: "Sphere",   primitive: (radius: 0.26, color: (0.20, 0.90, 0.40), roughness: 0.10), offset: (0.0, 0.78, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Explosion pad ─────────────────────────────────────────────────────────
+    // TriggerZone sensor (radius 3 m) fires entity.entered → rules.ron → explosion_burst.
+    // Visible orange disc warns the player they are standing on a danger zone.
+    "explosion_pad": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      trigger_zone: (radius: 3.0),
+      children: [
+        // Warning disc
+        ( shape: "Cylinder", primitive: (radius: 2.8, height: 0.04, color: (0.60, 0.18, 0.04), roughness: 0.75), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Centre hotspot marker
+        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.06, color: (1.0, 0.45, 0.05), roughness: 0.60), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Star shower emitter ───────────────────────────────────────────────────
+    // Tiny dark sphere placed at y=5 in the scene — essentially invisible against the night sky.
+    // Runs star_shower.behavior.ron: emits star_rain (offset 0,0,0) from that altitude.
+    // Strong gravity in the effect curves all particles back down toward the ground.
+    "star_emitter": (
+      kind: "primitive",
+      model: "Sphere",
+      components: (),
+      behavior: "behaviors/star_shower.behavior.ron",
+      primitive: (
+        radius: 0.04,
+        color: (0.02, 0.02, 0.03),
+        roughness: 0.95,
+      ),
+    ),
+
+  },
+)

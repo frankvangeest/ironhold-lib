@@ -311,6 +311,16 @@ pub fn spawn_scene_v2(
                         });
                     }
 
+                    // TriggerZone: Rapier sensor → entity.entered/exited:{id}
+                    if let Some(zone_def) = &prefab.trigger_zone {
+                        commands.entity(parent).insert((
+                            TriggerZone,
+                            bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
+                            Sensor,
+                            ActiveEvents::COLLISION_EVENTS,
+                        ));
+                    }
+
                     if !prefab.stat_templates.is_empty() {
                         let spawn_id = &entity_def.id;
                         let mut stat_map = StatMap::default();

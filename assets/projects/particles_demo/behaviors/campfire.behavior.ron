@@ -1,0 +1,37 @@
+// Self-sustaining particle loop for campfire: fire every 0.2 s, smoke every 0.8 s.
+// Entry actions stagger the two loops so their bursts never land on the same frame.
+(
+    schema_version: 1,
+    initial_state: "burning",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "burning",
+            entry_actions: [
+                EmitEventAfterDelay(event: "campfire.fire:{self}",  delay_secs: 0.1),
+                EmitEventAfterDelay(event: "campfire.smoke:{self}", delay_secs: 0.5),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "campfire.fire:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "campfire_fire", entity: "{self}"),
+                        EmitEventAfterDelay(event: "campfire.fire:{self}", delay_secs: 0.2),
+                    ],
+                ),
+                (
+                    event: "campfire.smoke:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "campfire_smoke", entity: "{self}"),
+                        EmitEventAfterDelay(event: "campfire.smoke:{self}", delay_secs: 0.8),
+                    ],
+                ),
+            ],
+        ),
+    ],
+
+    transitions: [],
+)

@@ -1,0 +1,29 @@
+// Star shower loop — one burst every 0.7 s from the high-altitude emitter.
+// Entity is placed at y=5 in the scene; strong gravity curves all particles downward.
+(
+    schema_version: 1,
+    initial_state: "showering",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "showering",
+            entry_actions: [
+                EmitEventAfterDelay(event: "stars.burst:{self}", delay_secs: 0.05),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "stars.burst:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "star_rain", entity: "{self}"),
+                        EmitEventAfterDelay(event: "stars.burst:{self}", delay_secs: 0.70),
+                    ],
+                ),
+            ],
+        ),
+    ],
+
+    transitions: [],
+)

@@ -1,0 +1,25 @@
+(
+    schema_version: 3,
+    project_id: "particles_demo",
+    display_name: "Particles Demo",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+
+    // Night sky — almost pitch black so particles read against the dark.
+    global_environment: (
+        intensity: 60.0,
+        fallback: (
+            top_color:    (0.03, 0.04, 0.10),
+            bottom_color: (0.01, 0.01, 0.03),
+        ),
+    ),
+
+    global_key_bindings: {},
+
+    // Dark charcoal fallback for any primitive without an explicit colour.
+    primitive_default_color: (0.28, 0.26, 0.24),
+)
