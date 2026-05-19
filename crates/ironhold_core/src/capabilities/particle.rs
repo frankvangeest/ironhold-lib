@@ -136,20 +136,39 @@ pub fn drain_particle_effects_system(
             def.color_end.0, def.color_end.1, def.color_end.2, def.color_end.3,
         ).to_linear();
 
-        // Resolve sprite texture once per effect burst.
-        let sprite_texture: Option<Handle<Image>> = def.sprite.as_ref().and_then(|key| {
-            match asset_catalog.0.textures.get(key) {
-                Some(path) => Some(asset_server.load(path.clone())),
-                None => {
-                    warn!("SpawnEffect: sprite key {:?} not in catalog textures", key);
-                    None
-                }
-            }
-        });
-        let is_sprite = sprite_texture.is_some();
+        // Pre-compute sprite mode flags at effect level.
+        let has_sprites = !def.sprites.is_empty();
+        let is_sprite = has_sprites || def.sprite.is_some();
         let use_flame_mat = is_sprite && (def.uv_distort > 0.0 || def.uv_scroll_speed > 0.0);
 
         for i in 0..def.particle_count {
+            // Resolve per-particle sprite. `sprites` array takes precedence over `sprite`;
+            // index is chosen by a deterministic hash so particles within a burst vary.
+            let sprite_texture: Option<Handle<Image>> = if has_sprites {
+                let idx = {
+                    let mut h = i.wrapping_mul(2_654_435_761) ^ 0xDEAD_BEEF_u32;
+                    h ^= h >> 16;
+                    (h as usize) % def.sprites.len()
+                };
+                let key = &def.sprites[idx];
+                match asset_catalog.0.textures.get(key) {
+                    Some(path) => Some(asset_server.load(path.clone())),
+                    None => {
+                        warn!("SpawnEffect: sprites[{}] key {:?} not in catalog textures", idx, key);
+                        None
+                    }
+                }
+            } else {
+                def.sprite.as_ref().and_then(|key| {
+                    match asset_catalog.0.textures.get(key) {
+                        Some(path) => Some(asset_server.load(path.clone())),
+                        None => {
+                            warn!("SpawnEffect: sprite key {:?} not in catalog textures", key);
+                            None
+                        }
+                    }
+                })
+            };
             let dir = fibonacci_cone_dir(i, def.particle_count, half_angle);
             let speed = def.speed + hash_jitter(i, 0x0000_0000, def.speed_jitter);
             let velocity = dir * speed;

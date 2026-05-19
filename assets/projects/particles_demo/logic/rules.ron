@@ -14,7 +14,7 @@
             on: "scene.ready:main",
             do_actions: [
                 SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_body",   position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
             ],

@@ -3318,6 +3318,51 @@ fn test_effect_def_sprite_fields_parse() {
 }
 
 #[test]
+fn test_effect_def_sprites_array_parses() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "campfire_body": (
+                    lifetime_secs: 1.0,
+                    color_start: (1.0, 0.52, 0.08, 0.0),
+                    color_mid:   (1.0, 0.38, 0.04, 0.90),
+                    color_end:   (0.55, 0.06, 0.0, 0.0),
+                    sprites: ["particle/flame_01", "particle/flame_02", "particle/flame_03", "particle/flame_04"],
+                    additive: true,
+                    uv_distort: 0.50,
+                    uv_scroll_speed: 0.55,
+                ),
+                "campfire_core": (
+                    lifetime_secs: 0.8,
+                    color_start: (1.0, 1.0, 0.88, 0.0),
+                    color_mid:   (1.0, 0.80, 0.18, 1.0),
+                    color_end:   (1.0, 0.28, 0.0,  0.0),
+                    sprites: ["particle/flame_05", "particle/flame_06"],
+                    additive: true,
+                    uv_distort: 0.35,
+                    uv_scroll_speed: 1.0,
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("sprites array should parse");
+    assert!(catalog.validate().is_ok());
+
+    let body = catalog.effects.get("campfire_body").unwrap();
+    assert_eq!(body.sprites.len(), 4, "campfire_body sprites count");
+    assert_eq!(body.sprites[0], "particle/flame_01");
+    assert_eq!(body.sprites[3], "particle/flame_04");
+    assert!(body.sprite.is_none(), "sprite field is None when sprites is used");
+
+    let core = catalog.effects.get("campfire_core").unwrap();
+    assert_eq!(core.sprites.len(), 2, "campfire_core sprites count");
+    assert_eq!(core.sprites[0], "particle/flame_05");
+    assert_eq!(core.sprites[1], "particle/flame_06");
+}
+
+#[test]
 fn test_effect_def_particle_count_over_limit_fails_validation() {
     use ironhold_core::schema::catalog::AssetCatalog;
     let ron_str = r#"

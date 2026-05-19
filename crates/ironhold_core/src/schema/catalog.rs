@@ -137,6 +137,12 @@ pub struct EffectDef {
     /// Default: `None` — particles are sphere meshes coloured by the gradient only.
     #[serde(default)]
     pub sprite: Option<String>,
+    /// Optional list of texture keys for billboard sprite rendering. When non-empty, each
+    /// particle in the burst picks a texture by a deterministic per-index hash, giving visual
+    /// variety within a single burst without random state. Takes precedence over `sprite`.
+    /// Default: empty.
+    #[serde(default)]
+    pub sprites: Vec<String>,
     /// Selects the alpha blending mode for sprite particles. Has no effect when `sprite` is `None`.
     /// `true` → `AlphaMode::Add` (bright areas add to background — good for fire and glow).
     /// `false` (default) → `AlphaMode::Blend` (standard alpha compositing — good for smoke).

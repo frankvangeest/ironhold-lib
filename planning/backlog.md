@@ -12,7 +12,8 @@
 ## Active
 
 - [x] **World-space pixel stat bar** — see `planning/features/world_pixel_stat_bar.md`
-- [ ] **Particle effect spawning** — see `planning/features/particle_effects.md`
+- [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/particle_effects.md`
+- [ ] **Particle System v2 — Instanced Renderer** — replace per-entity particles with GPU-instanced draw calls; performance foundation for all v2 features. See `planning/features/particle_instanced_renderer.md`
 
 ---
 
@@ -24,6 +25,17 @@
 ---
 
 ## Queued
+
+### Particle System v2
+
+- [ ] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/particle_multi_layer.md`
+- [ ] **Bloom / post-processing in scene RON** — opt-in bloom via `post_processing` block in `GameSceneV2`. See `planning/features/particle_bloom.md`
+- [ ] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
+- [ ] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/particle_extended_behaviours.md`
+- [ ] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/particle_ground_decals.md`
+- [ ] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority, live-count cap. See `planning/features/particle_quality_budget.md`
+- [ ] **Flipbook / sprite sheet animation** — animated sprite sheets on particle layers; depends on instanced renderer. See `planning/features/particle_flipbook.md`
+- [ ] **Shared effect library** — `assets/shared/effects/` with reusable effects and per-project overrides. See `planning/features/particle_shared_library.md`
 
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] Fixed-tick schedule for gameplay systems (separate from render tick)
