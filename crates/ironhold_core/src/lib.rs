@@ -136,6 +136,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::stat_radar::StatRadarPlugin)
             .add_plugins(capabilities::physics::PhysicsPlugin)
             .add_plugins(capabilities::particle::ParticlePlugin)
+            .add_plugins(capabilities::particle_renderer::ParticleRendererPlugin)
             .add_plugins(capabilities::flame_material::FlameParticleMaterialPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
@@ -178,7 +179,10 @@ impl Plugin for GamePlugin {
                 stat_threshold_system,
                 drain_spawn_queue_system,
                 drain_particle_effects_system,
+                simulate_pool_system,
+                rebuild_pool_meshes_system,
             ).chain())
+            .add_systems(Update, clear_pool_on_scene_unload_system)
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (
                 input_translator_system,

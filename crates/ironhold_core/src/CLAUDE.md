@@ -39,6 +39,22 @@ If you push actions directly from Rust, the behaviour is locked in code. You can
 3. Add `#[derive(Deserialize)]` — it's already derived on `Action`; just ensure serde can deserialize the inner types.
 4. Document the new action in this file if it has non-obvious semantics.
 
+### RON action syntax — struct vs tuple variants
+
+The RON syntax for an action depends on how its variant is declared in `schema/actions.rs`:
+
+- **Struct variant** (`SpawnEffect { key, entity, position }`) → **named-field** RON:
+  ```ron
+  SpawnEffect(key: "hit_spark", entity: "{self}")
+  ```
+- **Tuple variant** (`SetVariable(String, String)`, `IncrementVariable(String, i32)`) → **positional** RON:
+  ```ron
+  SetVariable("score", "0")
+  IncrementVariable("score", 1)
+  ```
+
+Using named fields on a tuple variant (`SetVariable(key: "score", value: "0")`) is a RON parse error. When in doubt, check the variant definition in `schema/actions.rs`.
+
 ### Conditions on rules
 
 The only runtime condition available to the rules engine is `LogicState` — a single named string (e.g. `"playing"`, `"hp_low"`). Rules with a `when:` field only fire while the FSM is in a matching named state. To add conditions:
@@ -197,19 +213,21 @@ For single-entity spawns the queue is transparent: action_executor pushes, drain
 `PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first spawn.
 
 ### Particle pipeline warmup
-`Action::SpawnEffect` uses GPU-compiled render pipelines. WebGPU compiles a pipeline for each material+blendmode combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Because particle entities don't exist at scene-load time, the existing `pipeline_warmup_system` (4-frame `NoFrustumCulling` pass) cannot pre-warm them.
+`Action::SpawnEffect` uses GPU-compiled render pipelines. WebGPU compiles a pipeline for each material+blend combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Pool group entities (`NoFrustumCulling` + `LevelEntity`) are created lazily on first use, so the existing `pipeline_warmup_system` cannot pre-warm them on its own.
 
-There are **two particle pipeline variants**; each compiles separately:
+**v2 pool renderer pipeline variants** (each compiles separately):
 
-1. **Sphere particles** — `StandardMaterial + AlphaMode::Add` (no sprite, or `uv_distort == 0` and `uv_scroll_speed == 0`)
-2. **Flame sprite particles** — `FlameParticleMaterial + AlphaMode::Add` (used when `uv_distort > 0` or `uv_scroll_speed > 0`)
+1. **Additive particles** — `StandardMaterial + AlphaMode::Add` (sphere-like quads, sprites without UV animation)
+2. **Blend particles** — `StandardMaterial + AlphaMode::Blend` (smoke, cloud, soft auras)
+3. **Flame distort particles** — `PoolFlameMaterial + AlphaMode::Add` (UV distort/scroll — campfire, torches)
 
-**Fix:** fire a `SpawnEffect` for each variant you use, at a position far below the playable area. Effects that share the same material variant only need one warmup burst between them.
+**Fix:** fire a `SpawnEffect` for each variant you use during scene load. The pool group entity is created and its pipeline compiled on the first update after the effect lands in the pool. Since the group entity gets `NoFrustumCulling`, the warmup system's 4-frame pass then pre-warms subsequent frames.
 
 ```ron
 // logic/state_machine.ron — playing state entry_actions
-SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),  // warms sphere pipeline
-SpawnEffect(key: "campfire_fire", position: Some((0.0, -100.0, 0.0))),  // warms FlameParticleMaterial pipeline
+SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),  // warms additive pipeline
+SpawnEffect(key: "campfire_smoke",position: Some((0.0, -100.0, 0.0))),  // warms blend pipeline
+SpawnEffect(key: "campfire_body", position: Some((0.0, -100.0, 0.0))),  // warms PoolFlameMaterial pipeline
 ```
 
 Place these alongside `PreloadScene` / `PreloadPrefab` calls so they fire during the natural loading pause, before the player can interact.

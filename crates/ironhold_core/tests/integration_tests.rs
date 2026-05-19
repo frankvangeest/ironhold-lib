@@ -3247,10 +3247,9 @@ fn test_set_entity_visible_hides_then_shows_spawned_entity() {
 fn test_spawn_effect_with_position_spawns_particle_entities() {
     use ironhold_core::runtime::LoadedAssetCatalog;
     use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::particle::Particle;
+    use ironhold_core::capabilities::particle_renderer::ParticlePool;
 
     let mut app = setup_test_app();
-    // First update: Startup systems run, ParticleMeshCache gets its sphere mesh.
     app.update();
 
     let effect_def = EffectDef {
@@ -3270,6 +3269,7 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
         gravity: 0.0,
         turbulence: 0.0,
         sprite: None,
+        sprites: vec![],
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
@@ -3284,18 +3284,19 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
         position: Some((3.0, 1.0, -2.0)),
         entity: None,
     });
-    // action_executor pushes to PendingParticleEffects; drain_particle_effects_system spawns entities.
+    // action_executor pushes to PendingParticleEffects; drain_particle_effects_system fills the pool.
     app.update();
 
-    let count = app.world_mut().query::<&Particle>().iter(app.world()).count();
-    assert_eq!(count, 8, "drain_particle_effects_system must spawn particle_count entities");
+    let pool = app.world().resource::<ParticlePool>();
+    let count = pool.particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(count, 8, "drain_particle_effects_system must add particle_count entries to the pool");
 }
 
 #[test]
 fn test_spawn_effect_with_entity_resolves_global_transform() {
     use ironhold_core::runtime::LoadedAssetCatalog;
     use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::particle::Particle;
+    use ironhold_core::capabilities::particle_renderer::ParticlePool;
 
     let mut app = setup_test_app();
     app.update();
@@ -3317,6 +3318,7 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
         gravity: 0.0,
         turbulence: 0.0,
         sprite: None,
+        sprites: vec![],
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
@@ -3340,18 +3342,19 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
     });
     app.update();
 
-    // All particles spawn at the resolved origin; drain_particle_effects_system sets Transform.
     // origin = entity position (5, 0, 3) + offset (0, 0.5, 0) = (5, 0.5, 3)
-    let translations: Vec<Vec3> = app.world_mut()
-        .query::<(&Particle, &Transform)>()
-        .iter(app.world())
-        .map(|(_, tf)| tf.translation)
+    // Particles are in the pool at spawn_pos with velocity just beginning to advance.
+    let pool = app.world().resource::<ParticlePool>();
+    let positions: Vec<Vec3> = pool.particles.iter()
+        .filter(|p| p.is_alive())
+        .map(|p| p.position)
         .collect();
-    assert_eq!(translations.len(), 4, "must spawn particle_count entities for entity-based effect");
-    for t in &translations {
-        assert!((t.x - 5.0).abs() < 0.001, "particle x must match entity x");
-        assert!((t.y - 0.5).abs() < 0.001, "particle y must equal entity y + offset");
-        assert!((t.z - 3.0).abs() < 0.001, "particle z must match entity z");
+    assert_eq!(positions.len(), 4, "must add particle_count pool entries for entity-based effect");
+    for pos in &positions {
+        // Use wider tolerance (0.1 m) to accommodate up to one physics tick of movement.
+        assert!((pos.x - 5.0).abs() < 0.1, "particle x must be near entity x (got {})", pos.x);
+        assert!((pos.y - 0.5).abs() < 0.1, "particle y must be near entity y + offset (got {})", pos.y);
+        assert!((pos.z - 3.0).abs() < 0.1, "particle z must be near entity z (got {})", pos.z);
     }
 }
 
@@ -3399,6 +3402,7 @@ fn test_spawn_effect_entity_missing_does_not_push() {
         gravity: 0.0,
         turbulence: 0.0,
         sprite: None,
+        sprites: vec![],
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,

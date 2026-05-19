@@ -13,7 +13,7 @@
 
 - [x] **World-space pixel stat bar** — see `planning/features/world_pixel_stat_bar.md`
 - [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/particle_effects.md`
-- [ ] **Particle System v2 — Instanced Renderer** — replace per-entity particles with GPU-instanced draw calls; performance foundation for all v2 features. See `planning/features/particle_instanced_renderer.md`
+- [x] **Particle System v2 — Pool Renderer** — replaced per-entity particles with CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls instead of O(particle count); `PoolFlameMaterial` for UV-animated flames with per-particle elapsed time in mesh UV1. See `planning/features/particle_instanced_renderer.md`
 
 ---
 

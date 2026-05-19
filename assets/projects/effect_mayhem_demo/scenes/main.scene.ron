@@ -1,0 +1,379 @@
+(
+  schema_version: 2,
+  name: "main",
+  tonemapping: AcesFitted,
+
+  // Deep night: dark enough that additive particles blaze; warm point lights pool colour
+  // around each station so the scene reads well even before particles fire.
+  lighting: (
+    ambient: (0.25, 0.28, 0.45),
+    ambient_brightness: 100.0,
+
+    directional: (
+      color: (0.55, 0.65, 0.90),
+      intensity: 8000.0,
+      rotation_euler_deg: (-25.0, 40.0, 0.0),
+      shadows_enabled: true,
+    ),
+
+    point_lights: [
+      // Four campfire corners — warm orange pools
+      ( position: (-12.0, 3.0, -12.0), color: (1.0, 0.55, 0.15), intensity: 20000.0, range: 16.0 ),
+      ( position: ( 12.0, 3.0, -12.0), color: (1.0, 0.55, 0.15), intensity: 20000.0, range: 16.0 ),
+      ( position: (-12.0, 3.0,  12.0), color: (1.0, 0.55, 0.15), intensity: 20000.0, range: 16.0 ),
+      ( position: ( 12.0, 3.0,  12.0), color: (1.0, 0.55, 0.15), intensity: 20000.0, range: 16.0 ),
+      // Lightning orbs — cyan arc between both positions
+      ( position: (  0.0, 4.0, -11.0), color: (0.45, 0.80, 1.0), intensity: 22000.0, range: 20.0 ),
+      // Magic shrines — dual violet wash
+      ( position: (-18.0, 3.0, 0.0),   color: (0.75, 0.30, 1.0), intensity: 15000.0, range: 15.0 ),
+      ( position: ( 18.0, 3.0, 0.0),   color: (0.75, 0.30, 1.0), intensity: 15000.0, range: 15.0 ),
+    ],
+  ),
+
+  label_depth_scale: (
+    reference_distance: 20.0,
+    min_scale: 0.35,
+  ),
+
+  spawn_points: {},
+
+  entities: [
+
+    // ── Player ──────────────────────────────────────────────────────────────
+    (
+      id: "player_01",
+      prefab: "player_capsule",
+      transform: (
+        translation: (0.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Arena floor ─────────────────────────────────────────────────────────
+    (
+      id: "ground_01",
+      prefab: "demo_ground",
+      transform: (
+        translation: (0.0, -0.25, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CAMPFIRES — four corners at ±12, ±12
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "campfire_nw",
+      prefab: "campfire_prop",
+      transform: ( translation: (-12.0, 0.0, -12.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "campfire_ne",
+      prefab: "campfire_prop",
+      transform: ( translation: (12.0, 0.0, -12.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "campfire_sw",
+      prefab: "campfire_prop",
+      transform: ( translation: (-12.0, 0.0, 12.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "campfire_se",
+      prefab: "campfire_prop",
+      transform: ( translation: (12.0, 0.0, 12.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TORCHES — four close to the player for immediate visual impact
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "torch_n",
+      prefab: "torch_stake",
+      transform: ( translation: (0.0, 0.0, -5.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "torch_w",
+      prefab: "torch_stake",
+      transform: ( translation: (-5.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "torch_e",
+      prefab: "torch_stake",
+      transform: ( translation: (5.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "torch_s",
+      prefab: "torch_stake",
+      transform: ( translation: (0.0, 0.0, 5.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SMOKE TOWERS — north and south edges
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "smoke_tower_n",
+      prefab: "smoke_tower",
+      transform: ( translation: (0.0, 0.0, -18.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "smoke_tower_s",
+      prefab: "smoke_tower",
+      transform: ( translation: (0.0, 0.0, 18.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MAGIC SHRINES — east and west edges
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "magic_rune_w",
+      prefab: "magic_rune",
+      transform: ( translation: (-18.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "magic_rune_e",
+      prefab: "magic_rune",
+      transform: ( translation: (18.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LIGHTNING ORBS — flanking the north side (−10, +10 on the X axis)
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "lightning_orb_w",
+      prefab: "lightning_orb",
+      transform: ( translation: (-10.0, 0.0, -10.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "lightning_orb_e",
+      prefab: "lightning_orb",
+      transform: ( translation: (10.0, 0.0, -10.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STAR SHOWER EMITTER — directly overhead at y=10
+    // Particles fall in all directions under gravity.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "star_emitter_01",
+      prefab: "star_emitter",
+      transform: ( translation: (0.0, 10.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BURST STATIONS — interactive and trigger-based effects
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // EXPLOSION PAD — walk onto the orange disc
+    (
+      id: "explosion_pad_01",
+      prefab: "explosion_pad",
+      transform: ( translation: (0.0, 0.0, 10.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // FROST CRYSTAL — [F] ice-shard burst
+    (
+      id: "frost_crystal_01",
+      prefab: "frost_crystal",
+      transform: ( translation: (14.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // HEALING FOUNTAIN — [F] green star bloom
+    (
+      id: "heal_fountain_01",
+      prefab: "heal_fountain",
+      transform: ( translation: (-14.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // VOID ALTAR — [F] dark indigo nova
+    (
+      id: "void_altar_01",
+      prefab: "void_altar",
+      transform: ( translation: (14.0, 0.0, 6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+    // EMBER GEYSER — walk into the warning ring
+    (
+      id: "ember_geyser_01",
+      prefab: "ember_geyser",
+      transform: ( translation: (-14.0, 0.0, 6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+
+  ],
+
+  // ── HUD ────────────────────────────────────────────────────────────────────
+  ui: [
+    Button((
+      id: "btn_mayhem",
+      text: "MAYHEM!",
+      action: "btn_mayhem",
+      position: (16.0, 60.0),
+      size: (120.0, 44.0),
+    )),
+    Label((
+      id: "lbl_count",
+      text: "Mayhem  0",
+      bind: "mayhem_count",
+      format: "Mayhem  {}",
+      position: (16.0, 120.0),
+      size: (160.0, 28.0),
+    )),
+  ],
+
+  // ── Station labels ──────────────────────────────────────────────────────────
+  world_labels: [
+
+    (
+      id: "lbl_campfire_nw",
+      text: "Campfire ×4",
+      translation: (-12.0, 3.8, -12.0),
+      font_size: 18.0,
+      color: (1.0, 0.78, 0.42, 1.0),
+    ),
+
+    (
+      id: "lbl_torch",
+      text: "Torch Ring",
+      translation: (0.0, 3.5, -5.0),
+      font_size: 18.0,
+      color: (1.0, 0.72, 0.35, 1.0),
+    ),
+
+    (
+      id: "lbl_lightning",
+      text: "Lightning Orbs",
+      translation: (0.0, 3.8, -11.0),
+      font_size: 18.0,
+      color: (0.60, 0.88, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_lightning_sub",
+      text: "Continuous arc discharge",
+      translation: (0.0, 3.2, -11.0),
+      font_size: 13.0,
+      color: (0.45, 0.72, 0.95, 0.85),
+    ),
+
+    (
+      id: "lbl_magic_w",
+      text: "Magic Shrine",
+      translation: (-18.0, 3.5, 0.0),
+      font_size: 18.0,
+      color: (0.85, 0.60, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_magic_w_sub",
+      text: "[F] nova burst",
+      translation: (-18.0, 2.9, 0.0),
+      font_size: 13.0,
+      color: (0.68, 0.45, 0.90, 0.85),
+    ),
+
+    (
+      id: "lbl_magic_e",
+      text: "Magic Shrine",
+      translation: (18.0, 3.5, 0.0),
+      font_size: 18.0,
+      color: (0.85, 0.60, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_magic_e_sub",
+      text: "[F] nova burst",
+      translation: (18.0, 2.9, 0.0),
+      font_size: 13.0,
+      color: (0.68, 0.45, 0.90, 0.85),
+    ),
+
+    (
+      id: "lbl_explosion",
+      text: "Explosion Zone",
+      translation: (0.0, 3.5, 10.0),
+      font_size: 18.0,
+      color: (1.0, 0.45, 0.15, 1.0),
+    ),
+    (
+      id: "lbl_explosion_sub",
+      text: "Walk in → full-sphere burst",
+      translation: (0.0, 2.9, 10.0),
+      font_size: 13.0,
+      color: (0.88, 0.38, 0.12, 0.85),
+    ),
+
+    (
+      id: "lbl_frost",
+      text: "Frost Crystal",
+      translation: (14.0, 3.5, -6.0),
+      font_size: 18.0,
+      color: (0.70, 0.88, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_frost_sub",
+      text: "[F] ice-shard burst",
+      translation: (14.0, 2.9, -6.0),
+      font_size: 13.0,
+      color: (0.55, 0.75, 0.95, 0.85),
+    ),
+
+    (
+      id: "lbl_heal",
+      text: "Healing Fountain",
+      translation: (-14.0, 3.5, -6.0),
+      font_size: 18.0,
+      color: (0.45, 1.0, 0.50, 1.0),
+    ),
+    (
+      id: "lbl_heal_sub",
+      text: "[F] bloom burst",
+      translation: (-14.0, 2.9, -6.0),
+      font_size: 13.0,
+      color: (0.35, 0.85, 0.40, 0.85),
+    ),
+
+    (
+      id: "lbl_void",
+      text: "Void Altar",
+      translation: (14.0, 3.5, 6.0),
+      font_size: 18.0,
+      color: (0.65, 0.25, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_void_sub",
+      text: "[F] void nova",
+      translation: (14.0, 2.9, 6.0),
+      font_size: 13.0,
+      color: (0.50, 0.15, 0.85, 0.85),
+    ),
+
+    (
+      id: "lbl_ember",
+      text: "Ember Geyser",
+      translation: (-14.0, 3.5, 6.0),
+      font_size: 18.0,
+      color: (1.0, 0.48, 0.12, 1.0),
+    ),
+    (
+      id: "lbl_ember_sub",
+      text: "Walk in → fire shower",
+      translation: (-14.0, 2.9, 6.0),
+      font_size: 13.0,
+      color: (0.90, 0.38, 0.08, 0.85),
+    ),
+
+    (
+      id: "lbl_star",
+      text: "Star Shower",
+      translation: (0.0, 5.0, 0.0),
+      font_size: 18.0,
+      color: (0.85, 0.90, 1.0, 1.0),
+    ),
+    (
+      id: "lbl_star_sub",
+      text: "Emitter at y=10 · gravity arc",
+      translation: (0.0, 4.4, 0.0),
+      font_size: 13.0,
+      color: (0.70, 0.78, 0.95, 0.85),
+    ),
+
+  ],
+)

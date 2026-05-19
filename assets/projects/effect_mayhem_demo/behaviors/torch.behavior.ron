@@ -1,0 +1,25 @@
+// Torch flame loop — one burst every 0.18 s.
+(
+    schema_version: 1,
+    initial_state: "lit",
+    global_on: [],
+    states: [
+        (
+            name: "lit",
+            entry_actions: [
+                EmitEventAfterDelay(event: "torch.flame:{self}", delay_secs: 0.05),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "torch.flame:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "torch_flame", entity: "{self}"),
+                        EmitEventAfterDelay(event: "torch.flame:{self}", delay_secs: 0.18),
+                    ],
+                ),
+            ],
+        ),
+    ],
+    transitions: [],
+)

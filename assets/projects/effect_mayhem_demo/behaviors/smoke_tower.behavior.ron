@@ -1,0 +1,25 @@
+// Industrial smoke loop — one heavy puff every 1.4 s.
+(
+    schema_version: 1,
+    initial_state: "smoking",
+    global_on: [],
+    states: [
+        (
+            name: "smoking",
+            entry_actions: [
+                EmitEventAfterDelay(event: "smoke.puff:{self}", delay_secs: 0.2),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "smoke.puff:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "smoke_column", entity: "{self}"),
+                        EmitEventAfterDelay(event: "smoke.puff:{self}", delay_secs: 1.4),
+                    ],
+                ),
+            ],
+        ),
+    ],
+    transitions: [],
+)

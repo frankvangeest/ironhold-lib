@@ -1,0 +1,26 @@
+// Electric arc discharge loop — one crackle burst every 0.30 s.
+// Offset (0, 1.5, 0) in the effect def places sparks at the orb height.
+(
+    schema_version: 1,
+    initial_state: "arcing",
+    global_on: [],
+    states: [
+        (
+            name: "arcing",
+            entry_actions: [
+                EmitEventAfterDelay(event: "lightning.arc:{self}", delay_secs: 0.05),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "lightning.arc:{self}",
+                    do_actions: [
+                        SpawnEffect(key: "lightning_loop", entity: "{self}"),
+                        EmitEventAfterDelay(event: "lightning.arc:{self}", delay_secs: 0.30),
+                    ],
+                ),
+            ],
+        ),
+    ],
+    transitions: [],
+)
