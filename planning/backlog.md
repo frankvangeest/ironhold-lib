@@ -11,7 +11,7 @@
 
 ## Active
 
-_(nothing in flight)_
+- [ ] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/particle_multi_layer.md`
 
 ---
 
@@ -26,7 +26,6 @@ _(nothing in flight)_
 
 ### Particle System v2
 
-- [ ] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/particle_multi_layer.md`
 - [ ] **Bloom / post-processing in scene RON** — opt-in bloom via `post_processing` block in `GameSceneV2`. See `planning/features/particle_bloom.md`
 - [ ] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
 - [ ] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/particle_extended_behaviours.md`
