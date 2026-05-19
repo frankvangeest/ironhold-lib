@@ -11,6 +11,8 @@ planning/
   features/                ← design specs for non-trivial features
     _template.md
     {name}.md
+    done/                  ← shipped feature specs (moved here when status → Done)
+      {name}.md
   investigations/          ← debug journals for bugs that need investigation before fixing
     {name}.md
 ```
@@ -44,6 +46,8 @@ If the bug needs investigation before it can be fixed, add the backlog entry _an
 ## features/ — design specs
 
 Create `planning/features/{name}.md` (copy `_template.md`) when a feature needs design discussion before coding: new schema fields, new event/action types, cross-capability changes, or anything where the approach is unclear. Skip the file for simple, self-contained additions.
+
+When a feature is shipped (merged and working), move its file from `planning/features/` into `planning/features/done/`. Leave the backlog entry marked Done — the file move is the long-term archive.
 
 Always fill in the `Planned at` metadata at the top of a new feature file:
 
