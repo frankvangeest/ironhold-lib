@@ -11,9 +11,7 @@
 
 ## Active
 
-- [x] **World-space pixel stat bar** — see `planning/features/world_pixel_stat_bar.md`
-- [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/particle_effects.md`
-- [x] **Particle System v2 — Pool Renderer** — replaced per-entity particles with CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls instead of O(particle count); `PoolFlameMaterial` for UV-animated flames with per-particle elapsed time in mesh UV1. See `planning/features/particle_instanced_renderer.md`
+_(nothing in flight)_
 
 ---
 
@@ -155,3 +153,6 @@
 - [x] Beta 0.3 — Global Logic (FSM v1)
 - [x] Beta 0.4 — Entity Logic (FSM v1): per-entity `.behavior.ron`, `{self}` substitution, `TriggerZone`, `Interactable`, `PlayAnimationOn`/`EmitEvent`, `entity_logic_demo` project
 - [x] Three-point warm lighting defaults for GLB preview tool (`--light-strength 0.3`)
+- [x] **World-space pixel stat bar** — see `planning/features/done/world_pixel_stat_bar.md`
+- [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/done/particle_effects.md`
+- [x] **Particle System v2 — Pool Renderer** — CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls; `PoolFlameMaterial` for UV-animated flames. See `planning/features/done/particle_instanced_renderer.md`
