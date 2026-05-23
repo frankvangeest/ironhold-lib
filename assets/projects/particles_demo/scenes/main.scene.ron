@@ -30,6 +30,10 @@
       ( position: (9.0, 2.0, -9.0),   color: (0.40, 1.0, 0.45), intensity: 12000.0, range: 12.0 ),
       // Frost crystal: icy blue-white
       ( position: (13.0, 2.0, 0.0),   color: (0.45, 0.78, 1.0), intensity: 12000.0, range: 12.0 ),
+      // Charge pad: electric blue (inner E)
+      ( position: (7.0, 2.0, 0.0),    color: (0.40, 0.75, 1.0), intensity: 8000.0,  range: 8.0  ),
+      // Energy sphere: warm gold (inner W)
+      ( position: (-7.0, 2.0, 0.0),   color: (1.0, 0.80, 0.25), intensity: 8000.0,  range: 8.0  ),
     ],
   ),
 
@@ -184,6 +188,34 @@
     ),
 
     // ═══════════════════════════════════════════════════════════════════════
+    // STATION 9 — CHARGE PAD  (inner E, +7, 0, 0)
+    // TriggerZone: walk onto the teal disc → EaseIn charge burst.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "charge_pad_01",
+      prefab: "charge_pad",
+      transform: (
+        translation: (7.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATION 10 — ENERGY SPHERE  (inner W, −7, 0, 0)
+    // Interactable: press F → Sphere emitter + Pulse curve nova burst.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "energy_sphere_01",
+      prefab: "energy_sphere",
+      transform: (
+        translation: (-7.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
     // STATION 8 — STAR SHOWER  (N, 0, +5, −12)
     // Invisible emitter at y=5. Strong gravity curves all particles earthward.
     // ═══════════════════════════════════════════════════════════════════════
@@ -307,6 +339,36 @@
       translation: (9.0, 3.0, -9.0),
       font_size: 14.0,
       color: (0.38, 0.85, 0.42, 0.85),
+    ),
+
+    (
+      id: "label_charge",
+      text: "Charge Pad",
+      translation: (7.0, 3.0, 0.0),
+      font_size: 20.0,
+      color: (0.55, 0.88, 1.0, 1.0),
+    ),
+    (
+      id: "label_charge_sub",
+      text: "Walk in → EaseIn burst",
+      translation: (7.0, 2.5, 0.0),
+      font_size: 14.0,
+      color: (0.42, 0.72, 0.90, 0.85),
+    ),
+
+    (
+      id: "label_energy",
+      text: "Energy Sphere",
+      translation: (-7.0, 3.0, 0.0),
+      font_size: 20.0,
+      color: (1.0, 0.85, 0.40, 1.0),
+    ),
+    (
+      id: "label_energy_sub",
+      text: "[F] Sphere emitter · Pulse curve",
+      translation: (-7.0, 2.5, 0.0),
+      font_size: 14.0,
+      color: (0.85, 0.70, 0.32, 0.85),
     ),
 
     (

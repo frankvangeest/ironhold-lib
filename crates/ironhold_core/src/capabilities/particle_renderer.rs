@@ -30,6 +30,7 @@ use bevy::asset::RenderAssetUsages;
 use std::collections::HashMap;
 use crate::runtime::scene_manager::LevelEntity;
 use crate::runtime::messages::SceneEvent;
+use crate::schema::catalog::VelocityCurve;
 
 // ─── Pool particle state ──────────────────────────────────────────────────────
 
@@ -53,6 +54,23 @@ pub struct PooledParticle {
     pub uv_scroll_speed: f32,
     /// UV distort strength for flame distort variant. 0 = standard material.
     pub uv_distort: f32,
+    // ── Extended behaviour fields ────────────────────────────────────────────
+    /// Current billboard rotation in radians. Updated each frame by `simulate_pool_system`.
+    pub rotation_rad: f32,
+    /// Fixed rotation at spawn (computed from `rotation_start_deg`).
+    pub rotation_start_rad: f32,
+    /// Fixed rotation at end-of-life (constant speed or explicit end value).
+    pub rotation_end_rad: f32,
+    /// Independent start half-width for the billboard quad (overrides `start_size` for X).
+    pub start_size_x: f32,
+    /// Independent start half-height for the billboard quad (overrides `start_size` for Y).
+    pub start_size_y: f32,
+    /// End-of-life half-width. `None` = use `end_size` fallback.
+    pub end_size_x: Option<f32>,
+    /// End-of-life half-height. `None` = use `end_size` fallback.
+    pub end_size_y: Option<f32>,
+    /// Velocity scale curve over lifetime. Scales the per-frame position step.
+    pub velocity_curve: VelocityCurve,
 }
 
 impl PooledParticle {
@@ -159,13 +177,15 @@ impl Material for PoolFlameMaterial {
 
 // ─── Systems ──────────────────────────────────────────────────────────────────
 
-/// Tick all alive particles: gravity, turbulence, velocity integration, size lerp.
+/// Tick all alive particles: gravity, turbulence, velocity integration, rotation, size lerp.
 /// Does NOT update material uniforms or transforms (those come from mesh rebuild).
 pub fn simulate_pool_system(mut pool: ResMut<ParticlePool>, time: Res<Time>) {
     let dt = time.delta_secs();
     for p in pool.particles.iter_mut() {
         if !p.is_alive() { continue; }
         p.elapsed += dt;
+        let t = (p.elapsed / p.duration).min(1.0);
+
         p.velocity.y += p.gravity * dt;
         if p.turbulence > 0.0 {
             let s = p.noise_seed;
@@ -175,7 +195,20 @@ pub fn simulate_pool_system(mut pool: ResMut<ParticlePool>, time: Res<Time>) {
             p.velocity.x += dx * dt;
             p.velocity.z += dz * dt;
         }
-        p.position += p.velocity * dt;
+        let curve = velocity_curve_factor(&p.velocity_curve, t);
+        p.position += p.velocity * dt * curve;
+
+        // Rotation: linear interpolation from start to end (constant speed pre-baked into end).
+        p.rotation_rad = p.rotation_start_rad + (p.rotation_end_rad - p.rotation_start_rad) * t;
+    }
+}
+
+fn velocity_curve_factor(curve: &VelocityCurve, t: f32) -> f32 {
+    match curve {
+        VelocityCurve::Linear  => 1.0,
+        VelocityCurve::EaseOut => (1.0 - t).max(0.0),
+        VelocityCurve::EaseIn  => t,
+        VelocityCurve::Pulse   => 1.0 - (t * std::f32::consts::PI).sin(),
     }
 }
 
@@ -312,19 +345,27 @@ pub fn rebuild_pool_meshes_system(
             let p = &pool.particles[pi];
             let t = (p.elapsed / p.duration).min(1.0);
             let color = lerp_color(p, t);
-            let size  = lerp_size(p, t);
             let c = [color.red, color.green, color.blue, color.alpha];
 
-            let half = size * 0.5;
-            let r = cam_right * half;
-            let u = cam_up  * half;
+            let hw = lerp_size_x(p, t) * 0.5;
+            let hh = lerp_size_y(p, t) * 0.5;
             let pos = p.position;
 
+            // Billboard corners in local camera-facing space, then rotated and projected.
+            let (sin_r, cos_r) = p.rotation_rad.sin_cos();
+            let rotate = |v: Vec2| Vec2::new(cos_r * v.x - sin_r * v.y, sin_r * v.x + cos_r * v.y);
+            let [bl, br, tr, tl] = [
+                Vec2::new(-hw, -hh),
+                Vec2::new( hw, -hh),
+                Vec2::new( hw,  hh),
+                Vec2::new(-hw,  hh),
+            ].map(rotate);
+
             // Bottom-left, bottom-right, top-right, top-left.
-            let v0: [f32; 3] = (pos - r - u).into();
-            let v1: [f32; 3] = (pos + r - u).into();
-            let v2: [f32; 3] = (pos + r + u).into();
-            let v3: [f32; 3] = (pos - r + u).into();
+            let v0: [f32; 3] = (pos + cam_right * bl.x + cam_up * bl.y).into();
+            let v1: [f32; 3] = (pos + cam_right * br.x + cam_up * br.y).into();
+            let v2: [f32; 3] = (pos + cam_right * tr.x + cam_up * tr.y).into();
+            let v3: [f32; 3] = (pos + cam_right * tl.x + cam_up * tl.y).into();
 
             positions.extend_from_slice(&[v0, v1, v2, v3]);
             // UV: tip at y=0, base at y=1 (matches Kenney flame sprite orientation).
@@ -391,6 +432,24 @@ pub fn lerp_size(p: &PooledParticle, t: f32) -> f32 {
         p.start_size + (end - p.start_size) * t
     } else {
         p.start_size
+    }
+}
+
+pub fn lerp_size_x(p: &PooledParticle, t: f32) -> f32 {
+    let end = p.end_size_x.or(p.end_size);
+    if let Some(e) = end {
+        p.start_size_x + (e - p.start_size_x) * t
+    } else {
+        p.start_size_x
+    }
+}
+
+pub fn lerp_size_y(p: &PooledParticle, t: f32) -> f32 {
+    let end = p.end_size_y.or(p.end_size);
+    if let Some(e) = end {
+        p.start_size_y + (e - p.start_size_y) * t
+    } else {
+        p.start_size_y
     }
 }
 

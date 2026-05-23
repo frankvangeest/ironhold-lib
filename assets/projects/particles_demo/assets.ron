@@ -127,7 +127,7 @@
           spread_deg: 0.0,
           emit_radius: 0.16,
           offset: (0.0, 0.22, 0.0),
-          size: 0.65,
+          size: 0.85,
           size_jitter: 0.08,
           color_start: (1.0, 0.52, 0.08, 0.0),
           color_mid:   (1.0, 0.42, 0.05, 1.0),
@@ -145,7 +145,7 @@
           spread_deg: 0.0,
           emit_radius: 0.06,
           offset: (0.0, 0.26, 0.0),
-          size: 0.28,
+          size: 0.38,
           size_jitter: 0.05,
           color_start: (1.0, 1.0,  0.88, 0.0),
           color_mid:   (1.0, 0.80, 0.18, 1.0),
@@ -196,7 +196,7 @@
       spread_deg: 14.0,
       emit_radius: 0.05,
       offset: (0.0, 1.7, 0.0),
-      size: 0.24,
+      size: 0.34,
       size_jitter: 0.06,
       size_end: 0.0,
       color_start: (1.0, 0.85, 0.35, 1.0),
@@ -217,24 +217,26 @@
       ),
     ),
 
-    // Violet sparkles orbiting the magic rune.
-    // High turbulence (1.6) makes each particle drift in its own curved path — orbital illusion.
-    // Demonstrates: magic sprite, turbulence as a movement shaping tool, zero gravity float.
+    // Violet sparkles orbiting the magic rune — structured ring with spinning quads.
+    // Ring emitter places all 14 particles evenly on a 0.8 m circle; rotation_speed_deg: 180
+    // makes each quad spin two half-turns over its 1.8 s lifetime.
+    // Demonstrates: EmitterShape::Ring, rotation_speed_deg, spread_deg 0 = all rise vertically.
     "magic_orbit": (
       particle_count: 14,
       lifetime_secs: 1.8,
-      speed: 0.6,
-      speed_jitter: 0.30,
-      spread_deg: 70.0,
-      emit_radius: 0.8,
+      speed: 0.4,
+      speed_jitter: 0.10,
+      spread_deg: 12.0,
+      emitter: Ring(radius: 0.8),
       offset: (0.0, 0.4, 0.0),
-      size: 0.16,
+      size: 0.56,
       size_jitter: 0.04,
       size_end: 0.0,
+      rotation_speed_deg: 180.0,
       color_start: (0.80, 0.55, 1.0, 1.0),
       color_end:   (0.25, 0.08, 0.70, 0.0),
       gravity: 0.08,
-      turbulence: 1.6,
+      turbulence: 0.3,
       sprite: "particle/magic_03",
       additive: true,
     ),
@@ -272,7 +274,7 @@
       spread_deg: 110.0,
       emit_radius: 2.5,
       offset: (0.0, 0.0, 0.0),
-      size: 0.22,
+      size: 0.52,
       size_jitter: 0.08,
       size_end: 0.0,
       color_start: (1.0, 0.95, 0.65, 1.0),
@@ -289,7 +291,9 @@
     // ══════════════════════════════════════════════════════════════════════════
 
     // Massive full-sphere explosion using plain sphere particles (no sprite).
-    // Demonstrates: sphere particles vs billboard sprites, max spread (180°), heavy gravity.
+    // velocity_curve: EaseOut gives a fast initial burst that decelerates — distinct from
+    // linear constant-speed motion, especially visible on the outer shrapnel trails.
+    // Demonstrates: sphere particles, EaseOut velocity curve, full spread, heavy gravity.
     "explosion_burst": (
       particle_count: 70,
       lifetime_secs: 1.1,
@@ -298,9 +302,10 @@
       spread_deg: 180.0,
       emit_radius: 0.5,
       offset: (0.0, 0.5, 0.0),
-      size: 0.26,
+      size: 0.56,
       size_jitter: 0.08,
       size_end: 0.0,
+      velocity_curve: EaseOut,
       color_start: (1.0, 0.98, 0.55, 1.0),  // bright yellow-white flash
       color_mid:   (1.0, 0.45, 0.05, 1.0),  // fiery orange
       color_end:   (0.55, 0.04, 0.0,  0.0), // deep red fading
@@ -315,6 +320,34 @@
       ),
     ),
 
+    // Tall narrow ice shards that burst upward and tumble as they fly.
+    // size_x: 0.07 and size_y: 0.30 produce 4:1 aspect quads; rotation_speed_deg makes them
+    // visibly tumble rather than staying axis-aligned. EaseOut curve gives the snap-and-coast
+    // trajectory of physical ice fragments striking a surface.
+    // Demonstrates: size_x / size_y non-uniform scale, rotation_speed_deg, EaseOut curve.
+    "frost_shard": (
+      particle_count: 22,
+      lifetime_secs: 1.2,
+      speed: 4.0,
+      speed_jitter: 1.2,
+      spread_deg: 75.0,
+      emit_radius: 0.2,
+      offset: (0.0, 0.5, 0.0),
+      size: 0.50,
+      size_x: 0.07,
+      size_y: 0.30,
+      size_y_end: 0.0,
+      velocity_curve: EaseOut,
+      rotation_speed_deg: 270.0,
+      color_start: (0.85, 0.95, 1.0, 1.0),
+      color_mid:   (0.55, 0.80, 1.0, 0.90),
+      color_end:   (0.25, 0.55, 1.0, 0.0),
+      gravity: -1.8,
+      turbulence: 0.15,
+      sprite: "particle/trace_01",
+      additive: true,
+    ),
+
     // Cold blue-white ice shards bursting upward.
     // Star sprite with near-zero gravity = shards glide and linger.
     // Demonstrates: cool colour palette, shallow gravity, upper-hemisphere cone spread.
@@ -326,7 +359,7 @@
       spread_deg: 85.0,
       emit_radius: 0.25,
       offset: (0.0, 1.1, 0.0),
-      size: 0.16,
+      size: 0.5,
       size_jitter: 0.04,
       size_end: 0.0,
       color_start: (0.88, 0.96, 1.0, 1.0),
@@ -360,6 +393,144 @@
       additive: true,
     ),
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // VELOCITY CURVE DEMOS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Rising blue-white energy orbs that start nearly still then surge upward.
+    // velocity_curve: EaseIn — scale goes from 0→1 over lifetime, so particles
+    // drift up gently for the first half then launch fast toward the end.
+    // Contrast with explosion_burst (EaseOut): charge_burst builds; explosion releases.
+    // Demonstrates: EaseIn velocity curve, positive gravity rise.
+    "charge_burst": (
+      particle_count: 28,
+      lifetime_secs: 3.0,
+      speed: 18.0,
+      speed_jitter: 1.8,
+      spread_deg: 0.0,
+      emit_radius: 1.5,
+      offset: (0.0, 0.5, 0.0),
+      size: 0.70,
+      size_jitter: 0.04,
+      size_end: 0.0,
+      velocity_curve: EaseIn,
+      color_start: (0.70, 0.90, 1.0, 1.0),
+      color_mid:   (0.40, 0.65, 1.0, 0.90),
+      color_end:   (0.15, 0.40, 1.0, 0.0),
+      gravity: 0.8,
+      turbulence: 0.20,
+      sprite: "particle/light_01",
+      additive: true,
+      light: (
+        color: (0.50, 0.78, 1.0),
+        intensity: 10000.0,
+        range: 7.0,
+        fade_in_secs: 0.25,
+        fade_out_secs: 0.80,
+      ),
+    ),
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // EMITTER SHAPE DEMOS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Golden particles erupting uniformly from a sphere surface.
+    // velocity_curve: Pulse — fast→slow→fast; particles rush out, hover, then drift.
+    // emitter: Sphere(radius: 0.6) — all particles start on sphere surface (Fibonacci).
+    // The combination creates an expanding shell that lingers before fading.
+    // Demonstrates: Sphere emitter, Pulse velocity curve.
+    "sphere_nova": (
+      particle_count: 36,
+      lifetime_secs: 2.2,
+      speed: 2.8,
+      speed_jitter: 0.5,
+      spread_deg: 180.0,
+      emitter: Sphere(radius: 0.6),
+      offset: (0.0, 0.8, 0.0),
+      size: 0.58,
+      size_jitter: 0.05,
+      size_end: 0.0,
+      velocity_curve: Pulse,
+      color_start: (1.0,  0.88, 0.35, 1.0),
+      color_mid:   (0.90, 0.55, 0.10, 0.9),
+      color_end:   (0.55, 0.15, 0.0,  0.0),
+      gravity: 0.15,
+      turbulence: 0.35,
+      sprite: "particle/star_05",
+      additive: true,
+      light: (
+        color: (1.0, 0.78, 0.25),
+        intensity: 14000.0,
+        range: 9.0,
+        fade_in_secs: 0.08,
+        fade_out_secs: 0.90,
+      ),
+    ),
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // EMITTER SHAPE LIBRARY — unwired, copy-and-paste references
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Disc emitter: uniform horizontal scatter across a 2 m disc area.
+    // Good for ground-level area effects — fire pit embers, ground dust.
+    // Demonstrates: EmitterShape::Disc.
+    "disc_sparkle": (
+      particle_count: 20,
+      lifetime_secs: 1.2,
+      speed: 2.5,
+      spread_deg: 40.0,
+      emitter: Disc(radius: 2.0),
+      offset: (0.0, 0.05, 0.0),
+      size: 0.50,
+      size_end: 0.0,
+      size_jitter: 0.03,
+      color_start: (1.0, 0.80, 0.30, 1.0),
+      color_end:   (0.80, 0.30, 0.05, 0.0),
+      gravity: -0.5,
+      turbulence: 0.30,
+      sprite: "particle/spark_03",
+      additive: true,
+    ),
+
+    // Line emitter: particles rise from a 4 m horizontal segment (X axis).
+    // Good for energy walls, barriers, or sword-slash trails.
+    // Demonstrates: EmitterShape::Line with axis: X.
+    "line_sweep": (
+      particle_count: 14,
+      lifetime_secs: 1.0,
+      speed: 3.0,
+      spread_deg: 20.0,
+      emitter: Line(length: 4.0, axis: X),
+      offset: (0.0, 0.2, 0.0),
+      size: 0.52,
+      size_end: 0.0,
+      color_start: (0.60, 0.20, 1.0, 1.0),
+      color_end:   (0.20, 0.05, 0.80, 0.0),
+      gravity: -0.3,
+      turbulence: 0.15,
+      sprite: "particle/magic_05",
+      additive: true,
+    ),
+
+    // Arc emitter: particles from a 200° partial ring — like a shield edge or portal rim.
+    // Demonstrates: EmitterShape::Arc with angle_deg less than 360.
+    "arc_sweep": (
+      particle_count: 15,
+      lifetime_secs: 1.4,
+      speed: 3.5,
+      spread_deg: 30.0,
+      emitter: Arc(radius: 1.8, angle_deg: 200.0),
+      offset: (0.0, 0.3, 0.0),
+      size: 0.54,
+      size_end: 0.0,
+      color_start: (0.35, 0.90, 0.80, 1.0),
+      color_end:   (0.10, 0.55, 0.70, 0.0),
+      gravity: 0.4,
+      turbulence: 0.40,
+      sprite: "particle/trace_04",
+      additive: true,
+    ),
+
     // Violent arcane nova — wide burst with swirling twirl sprites.
     // Demonstrates: wide spread, twirl sprite type, high turbulence burst.
     "magic_nova": (
@@ -370,7 +541,7 @@
       spread_deg: 125.0,
       emit_radius: 0.6,
       offset: (0.0, 0.5, 0.0),
-      size: 0.20,
+      size: 0.50,
       size_jitter: 0.06,
       size_end: 0.0,
       color_start: (0.95, 0.80, 1.0, 1.0),

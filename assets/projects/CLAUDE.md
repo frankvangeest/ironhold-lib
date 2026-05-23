@@ -151,6 +151,10 @@ Common event name patterns:
     size: 0.2,                    // default ~0.06
     size_end: 0.0,                // default None (constant)
     size_jitter: 0.05,            // default 0.0
+    size_x: 0.05,                 // default None — independent width (overrides size for X)
+    size_y: 0.20,                 // default None — independent height (overrides size for Y)
+    size_x_end: 0.01,             // default None — end-of-life width (falls back to size_end)
+    size_y_end: 0.0,              // default None — end-of-life height
     color_start: (1.0, 0.5, 0.1, 1.0),  // default white
     color_mid:   (1.0, 0.2, 0.0, 0.8),  // optional 3-stop gradient
     color_end:   (0.3, 0.0, 0.0, 0.0),  // default transparent
@@ -162,8 +166,36 @@ Common event name patterns:
     additive: true,               // default false (Blend); true = Add (fire/glow)
     uv_distort: 0.4,              // default 0.0; flame shader only
     uv_scroll_speed: 0.5,         // default 0.0; flame shader only
+    rotation_start_deg: 0.0,      // default 0.0 — billboard rotation at spawn (degrees)
+    rotation_end_deg: 360.0,      // default 0.0 — rotation at end of lifetime in degrees (lerped; ignored when rotation_speed_deg != 0)
+    rotation_speed_deg: 90.0,     // default 0.0 — constant degrees/second (overrides start/end)
+    emitter: Ring(radius: 1.0),   // default Point — spawn distribution shape
+    velocity_curve: EaseOut,      // default Linear — speed envelope over lifetime
 ),
 ```
+
+**Emitter shapes** (for the `emitter` field):
+- `Point` — all at origin, or disc scatter when `emit_radius > 0` (backward compat)
+- `Disc(radius: 0.5)` — uniform horizontal disc scatter
+- `Ring(radius: 1.5)` — evenly spaced around a circle circumference
+- `Sphere(radius: 0.3)` — uniform sphere surface (Fibonacci)
+- `Line(length: 2.0, axis: Y)` — spaced along a segment (`axis`: X / Y (default) / Z)
+- `Arc(radius: 1.0, angle_deg: 120.0)` — partial ring
+
+**Velocity curves** (for the `velocity_curve` field):
+- `Linear` — constant speed (default)
+- `EaseOut` — fast burst that decelerates to stop
+- `EaseIn` — slow start that accelerates
+- `Pulse` — fast → slow → fast (orbit-like)
+
+> **Field interaction rules** — silent overrides that catch designers by surprise:
+> - `rotation_speed_deg` (non-zero) → `rotation_start_deg` and `rotation_end_deg` are ignored.
+> - `size_x` / `size_y` override `size` per axis only; unset axes still use uniform `size`.
+> - `size_x_end` / `size_y_end` fall back to `size_end` when omitted; if `size_end` is also omitted the axis holds constant at birth size.
+> - Non-`Point` emitter (`Disc`, `Ring`, `Sphere`, `Line`, `Arc`) → `emit_radius` is ignored.
+> - `layers:` non-empty → all flat fields are ignored **except `light`**; author everything inside each layer entry.
+>
+> Full reference with type signatures: `docs/20_data_formats.md` § AssetCatalog → EffectDef.
 
 Using both `uv_distort`/`uv_scroll_speed` and a sprite key routes the particle through `PoolFlameMaterial` (animated flame). Without those fields, sprites use `StandardMaterial`.
 

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::schema::catalog::{EffectDef, LayerDef};
+use crate::schema::catalog::{EffectDef, EmitterShape, LayerDef, LineAxis};
 use crate::runtime::scene_manager::{LoadedAssetCatalog, LevelEntity};
 use crate::capabilities::particle_renderer::{ParticlePool, PooledParticle};
 use crate::capabilities::fading_light::{FadingLight, MAX_FADING_LIGHTS};
@@ -43,6 +43,57 @@ pub fn hash_jitter(i: u32, seed_xor: u32, jitter: f32) -> f32 {
 
 // ─── Systems ──────────────────────────────────────────────────────────────────
 
+/// Spawn position for particle `i` of `count` from a layer.
+fn emitter_spawn_pos(origin: Vec3, layer: &LayerDef, i: u32) -> Vec3 {
+    let count = layer.particle_count;
+    match &layer.emitter {
+        EmitterShape::Point => {
+            if layer.emit_radius > 0.0 {
+                let angle = 2.399_963_f32 * i as f32;
+                let r = layer.emit_radius * ((i as f32 + 0.5) / count as f32).sqrt();
+                origin + Vec3::new(r * angle.cos(), 0.0, r * angle.sin())
+            } else {
+                origin
+            }
+        }
+        EmitterShape::Disc { radius } => {
+            let angle = 2.399_963_f32 * i as f32;
+            let r = radius * ((i as f32 + 0.5) / count as f32).sqrt();
+            origin + Vec3::new(r * angle.cos(), 0.0, r * angle.sin())
+        }
+        EmitterShape::Ring { radius } => {
+            let angle = if count > 1 {
+                (i as f32 / count as f32) * std::f32::consts::TAU
+            } else {
+                0.0
+            };
+            origin + Vec3::new(radius * angle.cos(), 0.0, radius * angle.sin())
+        }
+        EmitterShape::Sphere { radius } => {
+            let dir = fibonacci_cone_dir(i, count, std::f32::consts::PI);
+            origin + dir * radius
+        }
+        EmitterShape::Line { length, axis } => {
+            let t = if count > 1 { (i as f32 / (count - 1) as f32) - 0.5 } else { 0.0 };
+            let offset = match axis {
+                LineAxis::X => Vec3::new(length * t, 0.0, 0.0),
+                LineAxis::Y => Vec3::new(0.0, length * t, 0.0),
+                LineAxis::Z => Vec3::new(0.0, 0.0, length * t),
+            };
+            origin + offset
+        }
+        EmitterShape::Arc { radius, angle_deg } => {
+            let half = angle_deg.to_radians() * 0.5;
+            let angle = if count > 1 {
+                -half + (i as f32 / (count - 1) as f32) * 2.0 * half
+            } else {
+                0.0
+            };
+            origin + Vec3::new(radius * angle.cos(), 0.0, radius * angle.sin())
+        }
+    }
+}
+
 /// Allocates all particles for one layer into the pool.
 fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_catalog: &LoadedAssetCatalog) {
     let half_angle = layer.spread_deg.clamp(0.0, 180.0).to_radians();
@@ -54,6 +105,14 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
         layer.color_end.0, layer.color_end.1, layer.color_end.2, layer.color_end.3,
     ).to_linear();
     let has_sprites = !layer.sprites.is_empty();
+
+    // Pre-compute rotation constants for this layer.
+    let rotation_start_rad = layer.rotation_start_deg.to_radians();
+    let rotation_end_rad = if layer.rotation_speed_deg != 0.0 {
+        rotation_start_rad + layer.rotation_speed_deg.to_radians() * layer.lifetime_secs
+    } else {
+        layer.rotation_end_deg.to_radians()
+    };
 
     for i in 0..layer.particle_count {
         let texture_path: String = if has_sprites {
@@ -86,14 +145,12 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
         let speed = layer.speed + hash_jitter(i, 0x0000_0000, layer.speed_jitter);
         let velocity = dir * speed;
         let start_size = (layer.size + hash_jitter(i, 0x9E37_79B9, layer.size_jitter)).max(0.001);
+        let start_size_x = layer.size_x.unwrap_or(start_size);
+        let start_size_y = layer.size_y.unwrap_or(start_size);
+        let end_size_x = layer.size_x_end.or(layer.size_end);
+        let end_size_y = layer.size_y_end.or(layer.size_end);
 
-        let spawn_pos = if layer.emit_radius > 0.0 {
-            let angle = 2.399_963_f32 * i as f32;
-            let r = layer.emit_radius * ((i as f32 + 0.5) / layer.particle_count as f32).sqrt();
-            origin + Vec3::new(r * angle.cos(), 0.0, r * angle.sin())
-        } else {
-            origin
-        };
+        let spawn_pos = emitter_spawn_pos(origin, layer, i);
         let noise_seed = (i as f32 * 2.399_963_f32).fract() * std::f32::consts::TAU;
 
         pool.alloc(PooledParticle {
@@ -113,6 +170,14 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
             texture_path,
             uv_scroll_speed: layer.uv_scroll_speed,
             uv_distort: layer.uv_distort,
+            rotation_rad: rotation_start_rad,
+            rotation_start_rad,
+            rotation_end_rad,
+            start_size_x,
+            start_size_y,
+            end_size_x,
+            end_size_y,
+            velocity_curve: layer.velocity_curve.clone(),
         });
     }
 }

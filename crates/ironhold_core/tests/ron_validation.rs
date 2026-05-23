@@ -3699,3 +3699,209 @@ fn test_effect_without_light_parses() {
     let def = catalog.effects.get("hit_spark").unwrap();
     assert!(def.light.is_none(), "light should default to None when omitted");
 }
+
+// ── Extended particle behaviour RON validation ────────────────────────────────
+
+#[test]
+fn test_layer_def_rotation_fields_parse() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "spin_test": (
+                    layers: [
+                        (
+                            particle_count: 4,
+                            lifetime_secs: 2.0,
+                            rotation_start_deg: 45.0,
+                            rotation_end_deg: 180.0,
+                            color_start: (1.0, 1.0, 1.0, 1.0),
+                            color_end:   (1.0, 1.0, 1.0, 0.0),
+                        ),
+                    ],
+                ),
+                "spin_speed": (
+                    layers: [
+                        (
+                            particle_count: 8,
+                            lifetime_secs: 1.5,
+                            rotation_speed_deg: 90.0,
+                            color_start: (1.0, 0.5, 0.0, 1.0),
+                            color_end:   (1.0, 0.0, 0.0, 0.0),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("rotation fields must parse");
+    let spin = catalog.effects.get("spin_test").unwrap();
+    assert_eq!(spin.layers[0].rotation_start_deg, 45.0);
+    assert_eq!(spin.layers[0].rotation_end_deg, 180.0);
+    assert_eq!(spin.layers[0].rotation_speed_deg, 0.0, "unset rotation_speed_deg must default to 0");
+
+    let speed = catalog.effects.get("spin_speed").unwrap();
+    assert_eq!(speed.layers[0].rotation_speed_deg, 90.0);
+    assert_eq!(speed.layers[0].rotation_start_deg, 0.0, "unset rotation_start_deg must default to 0");
+}
+
+#[test]
+fn test_layer_def_non_uniform_scale_fields_parse() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "tall_shard": (
+                    layers: [
+                        (
+                            particle_count: 6,
+                            lifetime_secs: 1.2,
+                            size_x: 0.07,
+                            size_y: 0.35,
+                            size_x_end: 0.02,
+                            color_start: (0.8, 0.95, 1.0, 1.0),
+                            color_end:   (0.3, 0.6,  1.0, 0.0),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("size_x/size_y fields must parse");
+    let def = &catalog.effects.get("tall_shard").unwrap().layers[0];
+    assert_eq!(def.size_x, Some(0.07));
+    assert_eq!(def.size_y, Some(0.35));
+    assert_eq!(def.size_x_end, Some(0.02));
+    assert_eq!(def.size_y_end, None, "omitted size_y_end must be None");
+}
+
+#[test]
+fn test_all_emitter_shapes_parse() {
+    use ironhold_core::schema::catalog::{AssetCatalog, EmitterShape, LineAxis};
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "point_emitter": (
+                    layers: [(particle_count: 1, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Point,
+                    )],
+                ),
+                "disc_emitter": (
+                    layers: [(particle_count: 1, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Disc(radius: 1.5),
+                    )],
+                ),
+                "ring_emitter": (
+                    layers: [(particle_count: 8, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Ring(radius: 2.0),
+                    )],
+                ),
+                "sphere_emitter": (
+                    layers: [(particle_count: 4, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Sphere(radius: 0.5),
+                    )],
+                ),
+                "line_emitter": (
+                    layers: [(particle_count: 6, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Line(length: 3.0, axis: Y),
+                    )],
+                ),
+                "arc_emitter": (
+                    layers: [(particle_count: 5, lifetime_secs: 1.0,
+                        color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                        emitter: Arc(radius: 1.0, angle_deg: 120.0),
+                    )],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("all EmitterShape variants must parse");
+
+    let disc = &catalog.effects.get("disc_emitter").unwrap().layers[0];
+    assert!(matches!(disc.emitter, EmitterShape::Disc { radius } if (radius - 1.5).abs() < 0.001));
+
+    let ring = &catalog.effects.get("ring_emitter").unwrap().layers[0];
+    assert!(matches!(ring.emitter, EmitterShape::Ring { radius } if (radius - 2.0).abs() < 0.001));
+
+    let sphere = &catalog.effects.get("sphere_emitter").unwrap().layers[0];
+    assert!(matches!(sphere.emitter, EmitterShape::Sphere { radius } if (radius - 0.5).abs() < 0.001));
+
+    let line = &catalog.effects.get("line_emitter").unwrap().layers[0];
+    assert!(matches!(&line.emitter, EmitterShape::Line { length, axis: LineAxis::Y } if (length - 3.0).abs() < 0.001));
+
+    let arc = &catalog.effects.get("arc_emitter").unwrap().layers[0];
+    assert!(matches!(&arc.emitter, EmitterShape::Arc { radius, angle_deg }
+        if (radius - 1.0).abs() < 0.001 && (angle_deg - 120.0).abs() < 0.001));
+}
+
+#[test]
+fn test_all_velocity_curves_parse() {
+    use ironhold_core::schema::catalog::{AssetCatalog, VelocityCurve};
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "linear_vc": (layers: [(particle_count: 1, lifetime_secs: 1.0,
+                    color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                    velocity_curve: Linear,
+                )]),
+                "ease_out_vc": (layers: [(particle_count: 1, lifetime_secs: 1.0,
+                    color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                    velocity_curve: EaseOut,
+                )]),
+                "ease_in_vc": (layers: [(particle_count: 1, lifetime_secs: 1.0,
+                    color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                    velocity_curve: EaseIn,
+                )]),
+                "pulse_vc": (layers: [(particle_count: 1, lifetime_secs: 1.0,
+                    color_start: (1.0,1.0,1.0,1.0), color_end: (1.0,1.0,1.0,0.0),
+                    velocity_curve: Pulse,
+                )]),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("all VelocityCurve variants must parse");
+    assert!(matches!(catalog.effects.get("linear_vc").unwrap().layers[0].velocity_curve, VelocityCurve::Linear));
+    assert!(matches!(catalog.effects.get("ease_out_vc").unwrap().layers[0].velocity_curve, VelocityCurve::EaseOut));
+    assert!(matches!(catalog.effects.get("ease_in_vc").unwrap().layers[0].velocity_curve, VelocityCurve::EaseIn));
+    assert!(matches!(catalog.effects.get("pulse_vc").unwrap().layers[0].velocity_curve, VelocityCurve::Pulse));
+}
+
+#[test]
+fn test_new_particle_fields_default_when_omitted() {
+    // Existing RON without any new fields must still parse and produce correct defaults.
+    use ironhold_core::schema::catalog::{AssetCatalog, EmitterShape, VelocityCurve};
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "legacy_spark": (
+                    particle_count: 8,
+                    lifetime_secs: 0.5,
+                    speed: 3.0,
+                    spread_deg: 90.0,
+                    color_start: (1.0, 1.0, 0.5, 1.0),
+                    color_end:   (1.0, 0.3, 0.0, 0.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("legacy effect without new fields must parse");
+    // Validate via From<&EffectDef> (single-layer path).
+    use ironhold_core::schema::catalog::LayerDef;
+    let layer: LayerDef = catalog.effects.get("legacy_spark").unwrap().into();
+    assert_eq!(layer.rotation_start_deg, 0.0);
+    assert_eq!(layer.rotation_speed_deg, 0.0);
+    assert!(layer.size_x.is_none());
+    assert!(layer.size_y.is_none());
+    assert!(matches!(layer.emitter, EmitterShape::Point));
+    assert!(matches!(layer.velocity_curve, VelocityCurve::Linear));
+}

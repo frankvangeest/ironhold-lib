@@ -181,6 +181,45 @@
       ],
     ),
 
+    // ── Charge pad ───────────────────────────────────────────────────────────
+    // TriggerZone (radius 3 m): walk on it → charge_burst (EaseIn velocity curve).
+    // Electric teal colouring distinguishes it from the orange explosion pad.
+    "charge_pad": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      trigger_zone: (radius: 3.0),
+      children: [
+        // Base disc
+        ( shape: "Cylinder", primitive: (radius: 2.8, height: 0.04, color: (0.06, 0.22, 0.38), roughness: 0.70), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Inner ring
+        ( shape: "Cylinder", primitive: (radius: 0.70, height: 0.06, color: (0.15, 0.60, 1.0), roughness: 0.45), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Centre orb
+        ( shape: "Sphere",   primitive: (radius: 0.18, color: (0.55, 0.88, 1.0), roughness: 0.08), offset: (0.0, 0.26, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Energy sphere ─────────────────────────────────────────────────────────
+    // Interactable (radius 2.5 m): press F → sphere_nova (Sphere emitter + Pulse curve).
+    // Golden colouring reflects the warm colour palette of sphere_nova.
+    "energy_sphere": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      interactable: (radius: 2.5, hint_text: "F  Sphere Nova"),
+      motion: (rotate: (0.0, 0.50, 0.0)),
+      children: [
+        // Base disc
+        ( shape: "Cylinder", primitive: (radius: 0.55, height: 0.08, color: (0.22, 0.16, 0.06), roughness: 0.88), offset: (0.0, 0.04, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Pedestal
+        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.65, color: (0.28, 0.22, 0.08), roughness: 0.82), offset: (0.0, 0.405, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Outer sphere
+        ( shape: "Sphere",   primitive: (radius: 0.30, color: (0.88, 0.62, 0.08), roughness: 0.12, metallic: 0.20), offset: (0.0, 1.08, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Inner glow
+        ( shape: "Sphere",   primitive: (radius: 0.18, color: (1.0, 0.92, 0.40), roughness: 0.04), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
     // ── Star shower emitter ───────────────────────────────────────────────────
     // Tiny dark sphere placed at y=5 in the scene — essentially invisible against the night sky.
     // Runs star_shower.behavior.ron: emits star_rain (offset 0,0,0) from that altitude.

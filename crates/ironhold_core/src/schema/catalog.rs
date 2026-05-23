@@ -78,6 +78,49 @@ impl Default for AssetCatalog {
     }
 }
 
+/// Axis used by the `Line` emitter shape.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub enum LineAxis {
+    #[default]
+    Y,
+    X,
+    Z,
+}
+
+/// Spawn-position distribution for particles in a `LayerDef`.
+/// `Point` (default) preserves the existing `emit_radius` disc behavior when `emit_radius > 0`.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub enum EmitterShape {
+    /// All particles spawn at the origin. Falls back to `emit_radius` disc scatter if > 0.
+    #[default]
+    Point,
+    /// Uniform disc: particles scattered across a horizontal disc of given radius.
+    Disc { radius: f32 },
+    /// Ring: particles evenly spaced around a circle circumference.
+    Ring { radius: f32 },
+    /// Sphere surface: particles uniformly distributed over a sphere using Fibonacci mapping.
+    Sphere { radius: f32 },
+    /// Line: particles spaced along a segment of given length.
+    Line { length: f32, #[serde(default)] axis: LineAxis },
+    /// Arc: particles evenly spaced along a partial ring.
+    Arc { radius: f32, angle_deg: f32 },
+}
+
+/// Velocity falloff curve applied over particle lifetime. Scales the per-frame position
+/// step; the stored `velocity` vector is unchanged.
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub enum VelocityCurve {
+    /// Constant speed throughout lifetime. Default.
+    #[default]
+    Linear,
+    /// Fast start, decelerates to a stop (good for impact bursts and shards).
+    EaseOut,
+    /// Slow start, accelerates toward end (good for rising energy or charge effects).
+    EaseIn,
+    /// Fast → slow → fast: peaks at start and end, troughs at mid-life (orbit-like bob).
+    Pulse,
+}
+
 /// A single emitter layer within an `EffectDef`. When `EffectDef.layers` is non-empty,
 /// each layer is spawned independently at the same origin. All fields behave identically
 /// to the matching flat fields on `EffectDef`.
@@ -105,6 +148,27 @@ pub struct LayerDef {
     #[serde(default)] pub additive: bool,
     #[serde(default)] pub uv_distort: f32,
     #[serde(default)] pub uv_scroll_speed: f32,
+    // ── Extended behaviours ──────────────────────────────────────────────────
+    /// Rotation of the billboard quad at spawn, in degrees. Default: 0.
+    #[serde(default)] pub rotation_start_deg: f32,
+    /// Rotation at end of lifetime. Ignored when `rotation_speed_deg != 0`. Default: 0.
+    #[serde(default)] pub rotation_end_deg: f32,
+    /// Constant angular velocity in degrees/second. When non-zero, overrides
+    /// `rotation_start_deg` / `rotation_end_deg` and spins at a fixed rate. Default: 0.
+    #[serde(default)] pub rotation_speed_deg: f32,
+    /// Independent billboard width override (metres). When set, overrides `size` for X.
+    /// Use `size_x < size_y` for tall narrow shapes (flame tongues, shards). Default: None.
+    #[serde(default)] pub size_x: Option<f32>,
+    /// Independent billboard height override (metres). Default: None.
+    #[serde(default)] pub size_y: Option<f32>,
+    /// End-of-life billboard width. Defaults to `size_end` when not set. Default: None.
+    #[serde(default)] pub size_x_end: Option<f32>,
+    /// End-of-life billboard height. Defaults to `size_end` when not set. Default: None.
+    #[serde(default)] pub size_y_end: Option<f32>,
+    /// Spawn-position distribution. Overrides `emit_radius` when not `Point`. Default: `Point`.
+    #[serde(default)] pub emitter: EmitterShape,
+    /// Velocity scaling curve over lifetime. Default: `Linear` (constant speed).
+    #[serde(default)] pub velocity_curve: VelocityCurve,
 }
 
 /// Particle burst effect definition. Authored in `AssetCatalog.effects` and referenced
@@ -212,6 +276,26 @@ pub struct EffectDef {
     /// Has no effect when `sprite` is `None`.
     #[serde(default)]
     pub uv_scroll_speed: f32,
+    // ── Extended behaviours ──────────────────────────────────────────────────
+    /// Rotation of the billboard quad at spawn, in degrees. Default: 0.
+    #[serde(default)] pub rotation_start_deg: f32,
+    /// Rotation at end of lifetime. Ignored when `rotation_speed_deg != 0`. Default: 0.
+    #[serde(default)] pub rotation_end_deg: f32,
+    /// Constant angular velocity in degrees/second. When non-zero, overrides
+    /// `rotation_start_deg` / `rotation_end_deg` and spins at a fixed rate. Default: 0.
+    #[serde(default)] pub rotation_speed_deg: f32,
+    /// Independent billboard width override (metres). When set, overrides `size` for X. Default: None.
+    #[serde(default)] pub size_x: Option<f32>,
+    /// Independent billboard height override (metres). Default: None.
+    #[serde(default)] pub size_y: Option<f32>,
+    /// End-of-life billboard width. Defaults to `size_end` when not set. Default: None.
+    #[serde(default)] pub size_x_end: Option<f32>,
+    /// End-of-life billboard height. Defaults to `size_end` when not set. Default: None.
+    #[serde(default)] pub size_y_end: Option<f32>,
+    /// Spawn-position distribution. Overrides `emit_radius` when not `Point`. Default: `Point`.
+    #[serde(default)] pub emitter: EmitterShape,
+    /// Velocity scaling curve over lifetime. Default: `Linear` (constant speed).
+    #[serde(default)] pub velocity_curve: VelocityCurve,
     /// Multi-layer emitter definitions. When non-empty, each entry is spawned independently
     /// at the same origin and all flat fields above are ignored. Allows complex effects
     /// (e.g. campfire body + hot core) to be defined in a single catalog key.
@@ -247,26 +331,35 @@ pub struct EffectLightDef {
 impl From<&EffectDef> for LayerDef {
     fn from(d: &EffectDef) -> Self {
         Self {
-            particle_count:  d.particle_count,
-            lifetime_secs:   d.lifetime_secs,
-            speed:           d.speed,
-            speed_jitter:    d.speed_jitter,
-            spread_deg:      d.spread_deg,
-            offset:          d.offset,
-            emit_radius:     d.emit_radius,
-            size:            d.size,
-            size_end:        d.size_end,
-            size_jitter:     d.size_jitter,
-            color_start:     d.color_start,
-            color_mid:       d.color_mid,
-            color_end:       d.color_end,
-            gravity:         d.gravity,
-            turbulence:      d.turbulence,
-            sprite:          d.sprite.clone(),
-            sprites:         d.sprites.clone(),
-            additive:        d.additive,
-            uv_distort:      d.uv_distort,
-            uv_scroll_speed: d.uv_scroll_speed,
+            particle_count:     d.particle_count,
+            lifetime_secs:      d.lifetime_secs,
+            speed:              d.speed,
+            speed_jitter:       d.speed_jitter,
+            spread_deg:         d.spread_deg,
+            offset:             d.offset,
+            emit_radius:        d.emit_radius,
+            size:               d.size,
+            size_end:           d.size_end,
+            size_jitter:        d.size_jitter,
+            color_start:        d.color_start,
+            color_mid:          d.color_mid,
+            color_end:          d.color_end,
+            gravity:            d.gravity,
+            turbulence:         d.turbulence,
+            sprite:             d.sprite.clone(),
+            sprites:            d.sprites.clone(),
+            additive:           d.additive,
+            uv_distort:         d.uv_distort,
+            uv_scroll_speed:    d.uv_scroll_speed,
+            rotation_start_deg: d.rotation_start_deg,
+            rotation_end_deg:   d.rotation_end_deg,
+            rotation_speed_deg: d.rotation_speed_deg,
+            size_x:             d.size_x,
+            size_y:             d.size_y,
+            size_x_end:         d.size_x_end,
+            size_y_end:         d.size_y_end,
+            emitter:            d.emitter.clone(),
+            velocity_curve:     d.velocity_curve.clone(),
         }
     }
 }

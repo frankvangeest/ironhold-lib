@@ -1,8 +1,9 @@
 # Feature: Particle System v2 — 5. Extended Particle Behaviours
 
-_Status: Draft — reviewed, ready to implement_
+_Status: Done_
 _Planned at: `2cc61ca` (2026-05-19)_
 _Reviewed at: `a16bd98` (2026-05-23) — approach rewritten for CPU pool renderer_
+_Shipped at: `b6dc0f9` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -112,22 +113,22 @@ Applied as a multiplier to `particle.velocity` in the simulation tick, derived f
 
 ## Tasks
 
-- [ ] Add `rotation_start_deg`, `rotation_end_deg`, `rotation_speed_deg` to `LayerDef`
-- [ ] Add `size_x`, `size_y`, `size_x_end`, `size_y_end` to `LayerDef`
-- [ ] Add `EmitterShape` enum + `emitter` field to `LayerDef`
-- [ ] Add `VelocityCurve` enum + `velocity_curve` field to `LayerDef`
-- [ ] Add `rotation_rad` field to `PooledParticle`; update simulation tick to advance it
-- [ ] Apply rotation in mesh rebuild: rotate 4 quad corner offsets by `rotation_rad`
-- [ ] Add `size_x`/`size_y` fields to `PooledParticle`; interpolate from layer def at spawn
-- [ ] Use `size_x`/`size_y` as independent half-extents in mesh rebuild corner computation
-- [ ] Implement all emitter shapes in the spawn distribution function
-- [ ] Implement velocity curve multiplier in simulation tick
-- [ ] Add particles_demo effects using new capabilities:
-  - [ ] Magic orbit using `Ring` emitter + `rotation_speed_deg`
-  - [ ] Frost shard using non-uniform scale (`size_x < size_y`)
-  - [ ] Explosion using `EaseOut` velocity curve
-- [ ] RON parse + round-trip tests for all new fields and enum variants
-- [ ] Update `docs/20_data_formats.md`
+- [x] Add `rotation_start_deg`, `rotation_end_deg`, `rotation_speed_deg` to `LayerDef`
+- [x] Add `size_x`, `size_y`, `size_x_end`, `size_y_end` to `LayerDef`
+- [x] Add `EmitterShape` enum + `emitter` field to `LayerDef`
+- [x] Add `VelocityCurve` enum + `velocity_curve` field to `LayerDef`
+- [x] Add `rotation_rad` field to `PooledParticle`; update simulation tick to advance it
+- [x] Apply rotation in mesh rebuild: rotate 4 quad corner offsets by `rotation_rad`
+- [x] Add `size_x`/`size_y` fields to `PooledParticle`; interpolate from layer def at spawn
+- [x] Use `size_x`/`size_y` as independent half-extents in mesh rebuild corner computation
+- [x] Implement all emitter shapes in the spawn distribution function
+- [x] Implement velocity curve multiplier in simulation tick
+- [x] Add particles_demo effects using new capabilities:
+  - [x] Magic orbit using `Ring` emitter + `rotation_speed_deg`
+  - [x] Frost shard using non-uniform scale (`size_x < size_y`)
+  - [x] Explosion using `EaseOut` velocity curve
+- [x] RON parse + round-trip tests for all new fields and enum variants
+- [x] Update `docs/20_data_formats.md`
 
 ## Open questions
 

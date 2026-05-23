@@ -9,7 +9,9 @@
         //   1. Sphere  + AlphaMode::Add (no sprite)            → explosion_burst
         //   2. Quad    + FlameParticleMaterial + AlphaMode::Add → campfire_fire (both layers), torch_flame
         //   3. Quad    + StandardMaterial + AlphaMode::Blend    → campfire_smoke
-        //   4. Quad    + StandardMaterial + AlphaMode::Add      → star_rain, frost_burst, heal_pulse, magic_orbit, magic_nova
+        //   4. Quad    + StandardMaterial + AlphaMode::Add      → star_rain, frost_burst, heal_pulse,
+        //                                                          magic_orbit, magic_nova,
+        //                                                          charge_burst, sphere_nova (new station effects)
         (
             on: "scene.ready:main",
             do_actions: [
@@ -42,6 +44,18 @@
         (
             on: "entity.interacted:magic_rune_01",
             do_actions: [ SpawnEffect(key: "magic_nova", entity: "magic_rune_01") ],
+        ),
+
+        // Walk onto the charge pad to trigger an EaseIn energy burst.
+        (
+            on: "entity.entered:charge_pad_01",
+            do_actions: [ SpawnEffect(key: "charge_burst", entity: "charge_pad_01") ],
+        ),
+
+        // Press F near the energy sphere for a Sphere-emitter Pulse-curve nova.
+        (
+            on: "entity.interacted:energy_sphere_01",
+            do_actions: [ SpawnEffect(key: "sphere_nova", entity: "energy_sphere_01") ],
         ),
 
     ],

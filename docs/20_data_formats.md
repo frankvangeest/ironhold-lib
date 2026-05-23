@@ -568,8 +568,96 @@ Named registry of all assets available to prefabs and scenes.
 | `additive` | `bool` | `false` | `true` → `AlphaMode::Add` (fire, glow); `false` → `AlphaMode::Blend` (smoke). Has no effect without a sprite. |
 | `uv_distort` | `f32` | `0.0` | UV distortion for the flame shader. Non-zero switches the particle to `PoolFlameMaterial` (animated WGSL). Range 0.0–1.0; typical: 0.4–0.6. |
 | `uv_scroll_speed` | `f32` | `0.0` | Upward UV scroll in texture-heights per second. Combine with `uv_distort` for flowing flame. |
+| `emit_radius` | `f32` | `0.0` | Disc scatter radius. Deprecated in favour of `emitter: Disc(radius: …)` — kept for backward compatibility. |
+| `rotation_start_deg` | `f32` | `0.0` | Billboard quad rotation at spawn, in degrees. |
+| `rotation_end_deg` | `f32` | `0.0` | Rotation at end of lifetime (lerped from `rotation_start_deg`). Ignored when `rotation_speed_deg` is non-zero. |
+| `rotation_speed_deg` | `f32` | `0.0` | Constant angular velocity in degrees/second. When non-zero, overrides `rotation_start_deg` / `rotation_end_deg`. |
+| `size_x` | `Option<f32>` | `None` | Independent billboard width in metres. Overrides `size` for the X axis. Use `size_x < size_y` for tall narrow shapes. |
+| `size_y` | `Option<f32>` | `None` | Independent billboard height in metres. Overrides `size` for the Y axis. |
+| `size_x_end` | `Option<f32>` | `None` | End-of-life billboard width. Falls back to `size_end` when not set. |
+| `size_y_end` | `Option<f32>` | `None` | End-of-life billboard height. Falls back to `size_end` when not set. |
+| `emitter` | `EmitterShape` | `Point` | Spawn-position distribution — see "Emitter shapes" section below. |
+| `velocity_curve` | `VelocityCurve` | `Linear` | Speed envelope over lifetime — see "Velocity curves" section below. |
 | `layers` | `Vec<LayerDef>` | `[]` | Multi-layer emitter list — see section below. When non-empty, all flat fields above are unused. |
 | `light` | `Option<EffectLightDef>` | `None` | Dynamic point light spawned at the effect origin — see section below. |
+
+**Emitter shapes (`emitter`)**
+
+Controls where particles are spawned relative to the effect origin. All shapes are deterministic (no RNG).
+
+| Variant | Example RON | Description |
+|---------|-------------|-------------|
+| `Point` | `emitter: Point` | All particles at origin (with optional `emit_radius` disc). Default. |
+| `Disc` | `emitter: Disc(radius: 0.5)` | Uniform disc — particles scattered across a horizontal circle. |
+| `Ring` | `emitter: Ring(radius: 1.5)` | All particles evenly spaced around the ring circumference. |
+| `Sphere` | `emitter: Sphere(radius: 0.3)` | Uniform sphere surface via Fibonacci point distribution. |
+| `Line` | `emitter: Line(length: 2.0, axis: Y)` | Particles spaced along a segment. `axis` is `X`, `Y` (default), or `Z`. |
+| `Arc` | `emitter: Arc(radius: 1.0, angle_deg: 120.0)` | Partial ring subtending `angle_deg` degrees, centred on the origin. |
+
+```ron
+// orbiting rune particles — Ring emitter + rotation_speed_deg, flat single-layer effect
+// (emitter: and rotation_* work at the top level, not only inside layers:[])
+"magic_orbit": (
+    particle_count: 14,
+    lifetime_secs: 1.8,
+    speed: 0.4,
+    speed_jitter: 0.10,
+    spread_deg: 12.0,
+    emitter: Ring(radius: 0.8),
+    offset: (0.0, 0.4, 0.0),
+    size: 0.16,
+    size_end: 0.0,
+    rotation_speed_deg: 180.0,
+    color_start: (0.80, 0.55, 1.0, 1.0),
+    color_end:   (0.25, 0.08, 0.70, 0.0),
+    gravity: 0.08,
+    turbulence: 0.3,
+    sprite: "particle/magic_03",
+    additive: true,
+),
+```
+
+**Velocity curves (`velocity_curve`)**
+
+Scales the per-frame position delta over the particle's lifetime. The stored velocity vector is unmodified; only the step size changes.
+
+| Variant | Scale at t=0 | Scale at t=1 | Use for |
+|---------|-------------|-------------|---------|
+| `Linear` | 1.0 | 1.0 | Constant speed (default). |
+| `EaseOut` | 1.0 | 0.0 | Fast burst that decelerates to a stop — impact shards, explosions. |
+| `EaseIn` | 0.0 | 1.0 | Slow start that accelerates — rising energy, charge-up. |
+| `Pulse` | 1.0 | 1.0 | Fast → slow → fast (trough at mid-life) — orbit-like bob. |
+
+```ron
+// explosion shards: fast burst that coasts to a stop
+"explosion_burst": (
+    particle_count: 60, lifetime_secs: 1.1, speed: 7.0, spread_deg: 180.0,
+    velocity_curve: EaseOut,
+    color_start: (1.0, 0.98, 0.55, 1.0), color_end: (0.55, 0.04, 0.0, 0.0),
+),
+
+// tall narrow ice shards that tumble as they fly
+"frost_shard": (
+    particle_count: 20, lifetime_secs: 1.2, speed: 4.0, spread_deg: 75.0,
+    size_x: 0.07, size_y: 0.30, size_y_end: 0.0,
+    velocity_curve: EaseOut,
+    rotation_speed_deg: 270.0,
+    color_start: (0.85, 0.95, 1.0, 1.0), color_end: (0.25, 0.55, 1.0, 0.0),
+    sprite: "particle/trace_01", additive: true,
+),
+```
+
+**Field interactions**
+
+These rules apply to both flat `EffectDef` fields and fields inside a `LayerDef` entry.
+
+| Rule | Detail |
+|------|--------|
+| `rotation_speed_deg` overrides start/end | When non-zero, `rotation_start_deg` and `rotation_end_deg` are silently ignored. Only `rotation_speed_deg` takes effect. |
+| `size_x` / `size_y` override `size` per axis | `size_x` replaces `size` for the X axis only; `size_y` replaces `size` for Y only. Unset axes still use the uniform `size`. |
+| `size_x_end` / `size_y_end` fall back to `size_end` | If `size_x_end` is omitted it falls back to `size_end`; if that is also omitted the axis holds constant at its birth size. Same rule applies to `size_y_end`. |
+| Non-`Point` emitter overrides `emit_radius` | When `emitter` is `Disc`, `Ring`, `Sphere`, `Line`, or `Arc`, `emit_radius` is ignored. Only `emitter: Point` (the default) honours `emit_radius` as a legacy disc-scatter fallback. |
+| `layers:` makes all flat fields unused | When `layers` is non-empty, every field at the `EffectDef` level is ignored **except `light`**. Each `LayerDef` entry carries its own complete set of fields. |
 
 **Dynamic effect lights (`light`)**
 
