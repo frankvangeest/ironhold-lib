@@ -158,13 +158,17 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 ### Code change workflow
 Every code change must follow this order before committing:
 
-1. **Code changes** — implement the feature or fix
-2. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
-3. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
-4. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
-5. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
-6. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
-7. **Commit** — only after Frank confirms; include a summary in git commit message format
+1. **Verify feature plan** — Check if the plan for the feature is:
+  - planned out enough
+  - project goal aligned
+  - follows proper UX design 
+2. **Code changes** — implement the feature or fix
+3. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
+4. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
+5. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+6. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
+7. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
+8. **Commit** — only after Frank confirms; include a summary in git commit message format
 
 Do not commit before step 6. Do not skip the WASM build — new Rust code can compile natively but fail in WASM.
 
