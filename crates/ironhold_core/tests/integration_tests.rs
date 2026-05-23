@@ -3274,6 +3274,7 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
         layers: vec![],
+        light: None,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
@@ -3324,6 +3325,7 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
         layers: vec![],
+        light: None,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("heal".to_string(), effect_def)]),
@@ -3409,6 +3411,7 @@ fn test_spawn_effect_entity_missing_does_not_push() {
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
         layers: vec![],
+        light: None,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
@@ -3472,6 +3475,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
         sprite: None, sprites: vec![], additive: false,
         uv_distort: 0.0, uv_scroll_speed: 0.0,
         layers: vec![layer0, layer1],
+        light: None,
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("campfire_fire".to_string(), effect_def)]),
@@ -3488,6 +3492,97 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
     let pool = app.world().resource::<ParticlePool>();
     let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
     assert_eq!(alive, 6, "multi-layer effect must spawn layer[0].particle_count + layer[1].particle_count particles (4 + 2 = 6)");
+}
+
+// ── dynamic effect lights ─────────────────────────────────────────────────────
+
+#[test]
+fn test_spawn_effect_with_light_spawns_point_light_entity() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EffectLightDef};
+    use ironhold_core::capabilities::fading_light::FadingLight;
+    use bevy::prelude::PointLight;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let effect_def = EffectDef {
+        particle_count: 4,
+        lifetime_secs: 1.0,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
+        size: 0.05, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 0.5, 0.0, 1.0), color_mid: None,
+        color_end: (0.0, 0.0, 0.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: false,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+        layers: vec![],
+        light: Some(EffectLightDef {
+            color: (1.0, 0.55, 0.15),
+            intensity: 8000.0,
+            range: 6.0,
+            fade_in_secs: 0.05,
+            fade_out_secs: 0.4,
+            duration_secs: None,
+        }),
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("campfire".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "campfire".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let light_count = app.world_mut().query::<&FadingLight>().iter(app.world()).count();
+    assert_eq!(light_count, 1, "SpawnEffect with light block must spawn exactly one FadingLight entity");
+
+    let point_light_count = app.world_mut().query::<&PointLight>().iter(app.world()).count();
+    assert_eq!(point_light_count, 1, "FadingLight entity must have a PointLight component");
+}
+
+#[test]
+fn test_spawn_effect_without_light_spawns_no_point_light() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
+    use ironhold_core::capabilities::fading_light::FadingLight;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let effect_def = EffectDef {
+        particle_count: 4,
+        lifetime_secs: 0.5,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
+        size: 0.05, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 1.0, 0.0, 1.0), color_mid: None,
+        color_end: (0.0, 0.0, 0.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: false,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+        layers: vec![],
+        light: None,
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("no_light".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "no_light".to_string(),
+        position: Some((1.0, 0.0, 1.0)),
+        entity: None,
+    });
+    app.update();
+
+    let light_count = app.world_mut().query::<&FadingLight>().iter(app.world()).count();
+    assert_eq!(light_count, 0, "SpawnEffect without light block must not spawn any FadingLight entity");
 }
 
 // ── particles_demo smoke test ─────────────────────────────────────────────────

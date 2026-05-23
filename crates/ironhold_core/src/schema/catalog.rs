@@ -217,6 +217,31 @@ pub struct EffectDef {
     /// (e.g. campfire body + hot core) to be defined in a single catalog key.
     #[serde(default)]
     pub layers: Vec<LayerDef>,
+    /// Optional dynamic point light spawned at the effect origin when the effect fires.
+    /// Fades in and out over the authored durations, then despawns automatically.
+    /// Capped at `MAX_FADING_LIGHTS` simultaneous lights; excess spawns are silently skipped.
+    #[serde(default)]
+    pub light: Option<EffectLightDef>,
+}
+
+/// Dynamic point light attached to a particle effect. Authored in `EffectDef.light`.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct EffectLightDef {
+    /// RGB colour of the light (linear, 0.0–1.0 per channel).
+    pub color: (f32, f32, f32),
+    /// Peak luminous power in lumens (Bevy's physical units). 8000 ≈ warm campfire glow.
+    pub intensity: f32,
+    /// Radius of influence in metres.
+    pub range: f32,
+    /// Seconds to fade from 0 to `intensity`. Use 0.0 for an instant flash.
+    pub fade_in_secs: f32,
+    /// Seconds to fade from `intensity` back to 0 before despawn.
+    pub fade_out_secs: f32,
+    /// Total lifetime of the light in seconds. When `None`, defaults to the longest layer
+    /// lifetime in the effect (or `EffectDef.lifetime_secs` for single-layer effects).
+    #[serde(default)]
+    pub duration_secs: Option<f32>,
 }
 
 impl From<&EffectDef> for LayerDef {

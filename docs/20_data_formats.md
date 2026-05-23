@@ -569,6 +569,35 @@ Named registry of all assets available to prefabs and scenes.
 | `uv_distort` | `f32` | `0.0` | UV distortion for the flame shader. Non-zero switches the particle to `PoolFlameMaterial` (animated WGSL). Range 0.0–1.0; typical: 0.4–0.6. |
 | `uv_scroll_speed` | `f32` | `0.0` | Upward UV scroll in texture-heights per second. Combine with `uv_distort` for flowing flame. |
 | `layers` | `Vec<LayerDef>` | `[]` | Multi-layer emitter list — see section below. When non-empty, all flat fields above are unused. |
+| `light` | `Option<EffectLightDef>` | `None` | Dynamic point light spawned at the effect origin — see section below. |
+
+**Dynamic effect lights (`light`)**
+
+When `light` is set, a temporary `PointLight` is spawned at the effect origin the moment the effect fires. It fades in over `fade_in_secs`, holds at `intensity`, then fades out over `fade_out_secs` and despawns automatically. `LevelEntity` ensures cleanup on scene transitions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `color` | `(f32, f32, f32)` | — | RGB light colour (linear, 0.0–1.0). |
+| `intensity` | `f32` | — | Peak luminous power in lumens. 4000 ≈ torch, 8000 ≈ campfire, 30000 ≈ explosion. |
+| `range` | `f32` | — | Radius of influence in metres. |
+| `fade_in_secs` | `f32` | — | Seconds to reach full intensity. Use `0.0` for an instant flash. |
+| `fade_out_secs` | `f32` | — | Seconds to fade out before despawn. |
+| `duration_secs` | `Option<f32>` | `None` | Total lifetime. When omitted, defaults to the longest layer lifetime (or `lifetime_secs` for single-layer effects). |
+
+```ron
+"explosion_burst": (
+    // ... particle fields ...
+    light: (
+        color: (1.0, 0.85, 0.40),
+        intensity: 30000.0,
+        range: 12.0,
+        fade_in_secs: 0.0,
+        fade_out_secs: 0.60,
+    ),
+),
+```
+
+The engine caps simultaneous fading lights at 16. When the cap is full, new light spawns are silently skipped — the particles still fire. This keeps within WebGPU mobile cluster limits (~32 total lights including authored scene fixtures).
 
 **Multi-layer effects (`layers`)**
 

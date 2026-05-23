@@ -3626,3 +3626,76 @@ fn test_particles_demo_prefab_catalog_parses_and_validates() {
     assert!(!pad.children.is_empty(),
         "explosion_pad must be a composite prefab (non-empty children)");
 }
+
+#[test]
+fn test_effect_light_def_parses() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "campfire_fire": (
+                    particle_count: 6,
+                    lifetime_secs: 1.0,
+                    color_start: (1.0, 0.5, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                    light: (
+                        color: (1.0, 0.55, 0.15),
+                        intensity: 8000.0,
+                        range: 6.0,
+                        fade_in_secs: 0.05,
+                        fade_out_secs: 0.40,
+                    ),
+                ),
+                "explosion_burst": (
+                    particle_count: 20,
+                    lifetime_secs: 1.1,
+                    color_start: (1.0, 0.9, 0.4, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                    light: (
+                        color: (1.0, 0.85, 0.40),
+                        intensity: 30000.0,
+                        range: 12.0,
+                        fade_in_secs: 0.0,
+                        fade_out_secs: 0.60,
+                        duration_secs: 0.8,
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("EffectDef with light block should parse");
+    assert!(catalog.validate().is_ok());
+
+    let campfire = catalog.effects.get("campfire_fire").unwrap();
+    let light = campfire.light.as_ref().expect("campfire_fire should have a light block");
+    assert_eq!(light.intensity, 8000.0);
+    assert_eq!(light.range, 6.0);
+    assert_eq!(light.fade_in_secs, 0.05);
+    assert!(light.duration_secs.is_none(), "omitted duration_secs should be None");
+
+    let explosion = catalog.effects.get("explosion_burst").unwrap();
+    let elight = explosion.light.as_ref().expect("explosion_burst should have a light block");
+    assert_eq!(elight.duration_secs, Some(0.8));
+}
+
+#[test]
+fn test_effect_without_light_parses() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "hit_spark": (
+                    particle_count: 8,
+                    lifetime_secs: 0.5,
+                    color_start: (1.0, 1.0, 0.0, 1.0),
+                    color_end:   (0.0, 0.0, 0.0, 0.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("EffectDef without light block should parse");
+    let def = catalog.effects.get("hit_spark").unwrap();
+    assert!(def.light.is_none(), "light should default to None when omitted");
+}

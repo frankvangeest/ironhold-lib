@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use crate::schema::catalog::{EffectDef, LayerDef};
-use crate::runtime::scene_manager::LoadedAssetCatalog;
+use crate::runtime::scene_manager::{LoadedAssetCatalog, LevelEntity};
 use crate::capabilities::particle_renderer::{ParticlePool, PooledParticle};
+use crate::capabilities::fading_light::{FadingLight, MAX_FADING_LIGHTS};
 
 // ─── Public queue types (unchanged API) ───────────────────────────────────────
 
@@ -120,13 +121,20 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
 ///
 /// Single-layer effects use the flat `EffectDef` fields. Multi-layer effects (`layers`
 /// non-empty) spawn each layer independently at the same origin.
-/// No ECS entities are spawned — all particles live in `ParticlePool` and are
-/// rendered as billboard quads by `rebuild_pool_meshes_system`.
+/// Pool particles live in `ParticlePool` and are rendered as billboard quads by
+/// `rebuild_pool_meshes_system`. If the effect has a `light` block and the live fading-light
+/// count is below `MAX_FADING_LIGHTS`, a `PointLight + FadingLight + LevelEntity` entity is
+/// also spawned at the effect origin.
 pub fn drain_particle_effects_system(
+    mut commands: Commands,
     mut pending: ResMut<PendingParticleEffects>,
     mut pool: ResMut<ParticlePool>,
     asset_catalog: Res<LoadedAssetCatalog>,
+    live_lights: Query<(), With<FadingLight>>,
 ) {
+    let current_light_count = live_lights.iter().count();
+    let mut lights_spawned = 0usize;
+
     for effect in pending.0.drain(..) {
         let def = &effect.def;
         if def.layers.is_empty() {
@@ -135,6 +143,37 @@ pub fn drain_particle_effects_system(
         } else {
             for layer in &def.layers {
                 alloc_layer(effect.origin, layer, &mut pool, &asset_catalog);
+            }
+        }
+
+        if let Some(light_def) = &def.light {
+            if current_light_count + lights_spawned < MAX_FADING_LIGHTS {
+                let duration = light_def.duration_secs.unwrap_or_else(|| {
+                    if def.layers.is_empty() {
+                        def.lifetime_secs
+                    } else {
+                        def.layers.iter().map(|l| l.lifetime_secs).fold(0.0_f32, f32::max)
+                    }
+                });
+                commands.spawn((
+                    PointLight {
+                        color: Color::srgb(light_def.color.0, light_def.color.1, light_def.color.2),
+                        intensity: 0.0,
+                        range: light_def.range,
+                        shadows_enabled: false,
+                        ..default()
+                    },
+                    Transform::from_translation(effect.origin),
+                    FadingLight {
+                        peak_intensity: light_def.intensity,
+                        fade_in_secs: light_def.fade_in_secs,
+                        fade_out_secs: light_def.fade_out_secs,
+                        duration_secs: duration,
+                        elapsed: 0.0,
+                    },
+                    LevelEntity,
+                ));
+                lights_spawned += 1;
             }
         }
     }

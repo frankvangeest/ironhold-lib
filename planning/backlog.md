@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
+
 
 ---
 
@@ -27,7 +27,7 @@
 ### Particle System v2
 
 - [ ] **Bloom / post-processing in scene RON** — BLOCKED: Bevy's `Bloom` requires `#[require(Hdr)]`; HDR breaks the WASM build. Needs native-only guard or custom SDR pass before this can ship. See `planning/features/particle_bloom.md`
-- [ ] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
+- [x] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
 - [ ] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/particle_extended_behaviours.md`
 - [ ] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/particle_ground_decals.md`
 - [ ] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority, live-count cap. See `planning/features/particle_quality_budget.md`

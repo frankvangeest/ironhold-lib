@@ -1,8 +1,9 @@
 # Feature: Particle System v2 — 4. Dynamic Effect Lights
 
-_Status: Draft — reviewed, ready to implement_
+_Status: Done_
 _Planned at: `2cc61ca` (2026-05-19)_
 _Reviewed at: `a16bd98` (2026-05-23) — goal-alignment pass; two clarifications added below_
+_Shipped at: `87abc13` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -78,14 +79,14 @@ up on scene transitions.
 
 ## Tasks
 
-- [ ] Add `EffectLightDef` struct to `schema/catalog.rs`
-- [ ] Add `light: Option<EffectLightDef>` to `EffectDef`
-- [ ] Implement `FadingLight` component + `fading_light_system` in `capabilities/fading_light.rs`
-- [ ] Register `fading_light_system` in the app (after `drain_particle_effects_system`)
-- [ ] Wire light spawn into `drain_particle_effects_system`
-- [ ] Add `light` blocks to campfire, torch, explosion, and magic effects in particles_demo
-- [ ] Add RON parse test for `EffectLightDef`
-- [ ] Add integration test: SpawnEffect with light → PointLight entity exists → despawns at duration
+- [x] Add `EffectLightDef` struct to `schema/catalog.rs`
+- [x] Add `light: Option<EffectLightDef>` to `EffectDef`
+- [x] Implement `FadingLight` component + `fading_light_system` in `capabilities/fading_light.rs`
+- [x] Register `fading_light_system` in the app (after `drain_particle_effects_system`)
+- [x] Wire light spawn into `drain_particle_effects_system`
+- [x] Add `light` blocks to campfire, torch, explosion, and magic effects in particles_demo
+- [x] Add RON parse test for `EffectLightDef`
+- [x] Add integration test: SpawnEffect with light → PointLight entity exists → despawns at duration
 - [ ] Update `docs/20_data_formats.md`
 
 ## Spawn-path wiring (clarification from review)

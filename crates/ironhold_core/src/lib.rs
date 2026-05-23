@@ -182,6 +182,7 @@ impl Plugin for GamePlugin {
                 simulate_pool_system,
                 rebuild_pool_meshes_system,
             ).chain())
+            .add_systems(Update, fading_light_system.after(drain_particle_effects_system))
             .add_systems(Update, clear_pool_on_scene_unload_system)
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (
