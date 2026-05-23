@@ -11,7 +11,7 @@
 
 ## Active
 
-- [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
+- [ ] **Bloom / post-processing in scene RON** — opt-in bloom via `post_processing` block in `GameSceneV2`. See `planning/features/particle_bloom.md`
 
 ---
 
@@ -26,7 +26,6 @@
 
 ### Particle System v2
 
-- [ ] **Bloom / post-processing in scene RON** — opt-in bloom via `post_processing` block in `GameSceneV2`. See `planning/features/particle_bloom.md`
 - [ ] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
 - [ ] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/particle_extended_behaviours.md`
 - [ ] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/particle_ground_decals.md`
@@ -155,3 +154,4 @@
 - [x] **World-space pixel stat bar** — see `planning/features/done/world_pixel_stat_bar.md`
 - [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/done/particle_effects.md`
 - [x] **Particle System v2 — Pool Renderer** — CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls; `PoolFlameMaterial` for UV-animated flames. See `planning/features/done/particle_instanced_renderer.md`
+- [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
