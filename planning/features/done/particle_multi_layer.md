@@ -1,6 +1,6 @@
 # Feature: Particle System v2 — 2. Multi-Layer EffectDef
 
-_Status: Draft_
+_Status: Done_
 _Planned at: `2cc61ca` (2026-05-19)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 

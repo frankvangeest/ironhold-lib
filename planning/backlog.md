@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/particle_multi_layer.md`
+- [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
 
 ---
 
