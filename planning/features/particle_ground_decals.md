@@ -1,7 +1,8 @@
 # Feature: Particle System v2 — 6. Ground Decals / AoE Projections
 
-_Status: Draft_
+_Status: Draft — reviewed, ready to implement_
 _Planned at: `2cc61ca` (2026-05-19)_
+_Reviewed at: `a16bd98` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -19,6 +20,14 @@ plane prefabs) require pre-baking every possible shape into the scene. `ProjectD
 makes them dynamic and composable with effects.
 
 ## Approach
+
+**Implementation note:** this feature uses a flat `Mesh3d` quad + `StandardMaterial`,
+not Bevy's `ClusteredDecal`. `ClusteredDecal` was considered and rejected for this scope:
+it requires `DepthPrepass` on the camera (extra render pass, unverified WebGPU cost) and
+only pays off when decals must conform to sloped or curved surfaces. All current use cases
+(AoE circles, cast indicators) live on flat ground, so the simpler path is the right
+choice. If terrain-conformed decals become a concrete requirement in the future, that
+should be a separate feature with a WebGPU compatibility verification.
 
 **Decal mesh:** a flat `1m × 1m` quad in the XZ plane, face up (normal +Y), placed at
 `y = 0.02` to float above the ground without Z-fighting. Scaled by `radius` in XZ.

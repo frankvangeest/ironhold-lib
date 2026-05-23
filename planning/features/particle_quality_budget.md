@@ -1,7 +1,8 @@
 # Feature: Particle System v2 — 7. Quality Tiers & Particle Budget
 
-_Status: Draft_
+_Status: Draft — reviewed, ready to implement_
 _Planned at: `2cc61ca` (2026-05-19)_
+_Reviewed at: `a16bd98` (2026-05-23) — terminology and resource-persistence note added_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -105,11 +106,15 @@ Can be called from rules.ron on scene load or from a settings UI button.
 - **`max_count` configuration**: per-scene in RON (`particle_budget: 2000`) or global
   engine constant? Per-scene is more flexible; a dense raid scene can set a higher cap
   than a calm exploration scene.
-- **Budget and the instanced renderer**: the instanced renderer (feature 1) pre-allocates
-  a fixed buffer (e.g. 4096 entries). The budget `max_count` should not exceed this; add
-  a `debug_assert` and document the constraint.
+- **Budget and the pool renderer**: the pool renderer (shipped as feature 1) pre-allocates
+  a fixed `Vec<PooledParticle>` (currently sized at runtime). The budget `max_count`
+  should not exceed the pool capacity; add a `debug_assert` and document the constraint.
 - **UI for quality setting**: in-game settings panel is not yet implemented. For now,
   expose via `SetParticleQuality` in rules.ron so a test scene can exercise it.
+- **Resource persistence across scene transitions**: `ParticleQuality` must survive
+  `Action::LoadScene` — it is a global resource, not a `LevelEntity`. Verify this is
+  the case and add an integration test asserting the quality level does not reset when
+  a new scene loads. This is explicitly required in the acceptance criteria above.
 
 ## Acceptance criteria
 

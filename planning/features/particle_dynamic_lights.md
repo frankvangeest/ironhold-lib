@@ -1,7 +1,8 @@
 # Feature: Particle System v2 — 4. Dynamic Effect Lights
 
-_Status: Draft_
+_Status: Draft — reviewed, ready to implement_
 _Planned at: `2cc61ca` (2026-05-19)_
+_Reviewed at: `a16bd98` (2026-05-23) — goal-alignment pass; two clarifications added below_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -87,15 +88,34 @@ up on scene transitions.
 - [ ] Add integration test: SpawnEffect with light → PointLight entity exists → despawns at duration
 - [ ] Update `docs/20_data_formats.md`
 
+## Spawn-path wiring (clarification from review)
+
+`drain_particle_effects_system` handles three origin cases: `entity`-targeted (resolves
+world position from `SpawnRegistry`), `position`-targeted (literal world position), and
+`{self}`-substituted entity target (same as entity-targeted after substitution). The
+light entity must be spawned correctly for all three. Make sure the implementation wires
+the light spawn symmetrically — one code path resolves the origin Vec3, then the light
+spawn is always identical regardless of how the origin was expressed.
+
+## Dynamic light cap
+
+Cap simultaneous fading lights at **16** by default. Bevy's clustered forward renderer
+handles a moderate number of dynamic point lights on WebGPU, but the tile/cluster light
+limit on mobile WebGPU can be as low as 32 total (scene fixtures + dynamic effects). 16
+dynamic effect lights leaves comfortable headroom for authored scene point lights. If
+`drain_particle_effects_system` would exceed this cap, skip the light for that spawn
+(particle still fires). Document the cap as a constant in `capabilities/fading_light.rs`.
+If feature 7 (quality & budget) is implemented first, this cap can be folded into the
+budget system instead.
+
 ## Open questions
 
-- **Light budget in raids**: 40 simultaneous casters may each spawn a light. 40 dynamic
-  point lights may be expensive even with Bevy's clustered forward lighting. Should the
-  particle budget (feature 7) also cap dynamic effect lights, or is Bevy's clustered
-  lighting sufficient? Defer to benchmarking after implementation.
-- **Per-layer lights**: once multi-layer EffectDef (feature 2) is implemented, should
-  individual layers be able to carry their own light (e.g. two-colour fire with a hot
-  white core light + warm orange body light)? Useful but deferred to v2.1.
+- **Light budget in raids**: with the cap at 16, 40 simultaneous casters will silently
+  drop lights once full. Acceptable for ambient effects; for player abilities consider
+  giving `Player` priority effects the same treatment as in the particle budget — always
+  fire. Defer to implementation.
+- **Per-layer lights**: once multi-layer EffectDef is in, should individual layers carry
+  their own light (hot white core + warm orange body)? Useful but deferred to v2.1.
 
 ## Acceptance criteria
 

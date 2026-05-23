@@ -1,8 +1,40 @@
 # Feature: Particle System v2 — 8. Flipbook / Sprite Sheet Animation
 
-_Status: Draft_
+_Status: **Blocked — design must be rewritten before implementation**_
 _Planned at: `2cc61ca` (2026-05-19)_
+_Blocked at: `a16bd98` (2026-05-23) — goal-alignment review found renderer mismatch_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
+
+## Blocking issue
+
+The Dependencies section and entire Approach section were written for a **GPU-instanced
+renderer** that does not exist. The renderer that shipped (feature 1, pool renderer) is
+a **CPU-side particle pool** that rebuilds mesh vertex data every frame. There is no
+per-instance GPU buffer, and there is no instanced particle shader.
+
+Before any implementation work starts, the Approach section must be rewritten to answer:
+
+1. **How are flipbook UVs applied in the CPU pool renderer?**
+   The pool renderer builds quad corners on the CPU each frame. UV rects for the current
+   frame must be baked into the vertex UV attribute during that build step — not written
+   to a GPU instance buffer. Confirm this is the chosen path.
+
+2. **Does flipbook require a new pool group / pipeline variant?**
+   The current pool has three pipeline variants: Additive (`StandardMaterial + Add`),
+   Blend (`StandardMaterial + Blend`), PoolFlameMaterial (`Add` + UV distort shader).
+   A sprite-sheet flipbook particle with Additive blend and standard UV selection may
+   fit the existing `StandardMaterial + Add` variant with no new pipeline. Confirm or
+   document the new variant.
+
+3. **If a new pipeline variant is added, warmup is required.**
+   Per `crates/ironhold_core/src/CLAUDE.md` (Particle pipeline warmup section), every
+   new `(blend_mode, material_type)` combination triggers a 300–1000 ms synchronous
+   WebGPU compile stall on first use in WASM. Add the corresponding warmup
+   `SpawnEffect` call to the design's implementation tasks.
+
+Do not start implementation until these three questions are answered and documented here.
+
+---
 
 ## What
 

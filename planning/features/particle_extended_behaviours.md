@@ -1,7 +1,8 @@
 # Feature: Particle System v2 — 5. Extended Particle Behaviours
 
-_Status: Draft_
+_Status: Draft — reviewed, ready to implement_
 _Planned at: `2cc61ca` (2026-05-19)_
+_Reviewed at: `a16bd98` (2026-05-23) — approach rewritten for CPU pool renderer_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -23,9 +24,15 @@ These four capabilities unlock effects that are currently impossible:
 
 ## Approach
 
-All changes are in `LayerDef` fields and the CPU simulation tick. No shader changes are
-needed for rotation or scale (handled by the billboard transform). Emitter shapes replace
-the current `fibonacci_cone_dir` + `emit_radius` logic.
+**Implementation note:** this feature targets the CPU pool renderer (shipped as feature 1),
+which rebuilds quad vertex data on the CPU every frame. There is no per-instance GPU buffer
+and no instanced particle shader. All rotation and scale changes are applied by modifying
+the 4 quad corner positions computed during the mesh rebuild step. No shader changes are
+needed.
+
+All changes are in `LayerDef` fields, `PooledParticle` state, and the mesh rebuild step.
+Emitter shapes replace the current `fibonacci_cone_dir` + `emit_radius` logic in the
+spawn function.
 
 ### 1. Rotation over lifetime
 
@@ -36,8 +43,29 @@ rotation_end_deg: 360.0,    // full spin over lifetime
 rotation_speed_deg: 120.0,  // degrees/second
 ```
 
-Each particle stores a `rotation_rad: f32` field. The simulation writes this into the
-per-instance data each frame. The billboard shader reads it as a Z-axis rotation.
+`PooledParticle` gains a `rotation_rad: f32` field. The simulation tick updates it each
+frame (interpolate start→end over lifetime, or add `rotation_speed_rad * dt`).
+
+In the mesh rebuild step, when computing the 4 corner offsets for a quad, the current
+code uses axis-aligned `±half_size` offsets. Rotation is applied by rotating those
+offsets using `cos(rotation_rad)` / `sin(rotation_rad)`:
+
+```rust
+let (s, c) = rotation_rad.sin_cos();
+let hw = half_size_x;
+let hh = half_size_y;
+// corners: TL, TR, BR, BL in local billboard space
+let corners = [
+    Vec2::new(-hw,  hh),
+    Vec2::new( hw,  hh),
+    Vec2::new( hw, -hh),
+    Vec2::new(-hw, -hh),
+];
+let rotated = corners.map(|v| Vec2::new(c * v.x - s * v.y, s * v.x + c * v.y));
+```
+
+The rotated corner offsets are then added to the particle world position to produce
+final vertex positions.
 
 ### 2. Non-uniform scale
 
@@ -49,8 +77,10 @@ size_y_end: 0.10,
 ```
 
 When `size_x` / `size_y` are set, they override the uniform `size` / `size_end`.
-Simulation writes `size_xy: [f32; 2]` into instance data. Shader reads for non-uniform
-scale on the quad.
+`PooledParticle` gains `size_x: f32` and `size_y: f32` fields (interpolated at spawn
+from the layer def, same as the existing `size` interpolation). In the mesh rebuild step,
+`half_size_x` and `half_size_y` replace the current `half_size` used for both axes.
+The rotation code above already uses `hw`/`hh` independently.
 
 ### 3. Emitter shapes
 
@@ -86,8 +116,10 @@ Applied as a multiplier to `particle.velocity` in the simulation tick, derived f
 - [ ] Add `size_x`, `size_y`, `size_x_end`, `size_y_end` to `LayerDef`
 - [ ] Add `EmitterShape` enum + `emitter` field to `LayerDef`
 - [ ] Add `VelocityCurve` enum + `velocity_curve` field to `LayerDef`
-- [ ] Implement rotation in simulation tick (writes `rotation_rad` to instance data)
-- [ ] Implement non-uniform scale in simulation tick (writes `size_xy`)
+- [ ] Add `rotation_rad` field to `PooledParticle`; update simulation tick to advance it
+- [ ] Apply rotation in mesh rebuild: rotate 4 quad corner offsets by `rotation_rad`
+- [ ] Add `size_x`/`size_y` fields to `PooledParticle`; interpolate from layer def at spawn
+- [ ] Use `size_x`/`size_y` as independent half-extents in mesh rebuild corner computation
 - [ ] Implement all emitter shapes in the spawn distribution function
 - [ ] Implement velocity curve multiplier in simulation tick
 - [ ] Add particles_demo effects using new capabilities:
