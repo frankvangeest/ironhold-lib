@@ -41,12 +41,24 @@ impl AssetCatalog {
             }
         }
         for (key, effect) in &self.effects {
-            if effect.particle_count > MAX_PARTICLES_PER_EFFECT {
-                return Err(format!(
-                    "AssetCatalog effect \"{}\": particle_count {} exceeds the maximum of {} — \
-                     split into multiple effects or reduce particle_count",
-                    key, effect.particle_count, MAX_PARTICLES_PER_EFFECT
-                ));
+            if effect.layers.is_empty() {
+                if effect.particle_count > MAX_PARTICLES_PER_EFFECT {
+                    return Err(format!(
+                        "AssetCatalog effect \"{}\": particle_count {} exceeds the maximum of {} — \
+                         split into multiple effects or reduce particle_count",
+                        key, effect.particle_count, MAX_PARTICLES_PER_EFFECT
+                    ));
+                }
+            } else {
+                for (i, layer) in effect.layers.iter().enumerate() {
+                    if layer.particle_count > MAX_PARTICLES_PER_EFFECT {
+                        return Err(format!(
+                            "AssetCatalog effect \"{}\": layer[{}] particle_count {} exceeds the \
+                             maximum of {} — reduce particle_count",
+                            key, i, layer.particle_count, MAX_PARTICLES_PER_EFFECT
+                        ));
+                    }
+                }
             }
         }
         Ok(())
@@ -66,18 +78,54 @@ impl Default for AssetCatalog {
     }
 }
 
+/// A single emitter layer within an `EffectDef`. When `EffectDef.layers` is non-empty,
+/// each layer is spawned independently at the same origin. All fields behave identically
+/// to the matching flat fields on `EffectDef`.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct LayerDef {
+    #[serde(default = "default_particle_count")]
+    pub particle_count: u32,
+    pub lifetime_secs: f32,
+    #[serde(default)] pub speed: f32,
+    #[serde(default)] pub speed_jitter: f32,
+    #[serde(default = "default_spread_deg")] pub spread_deg: f32,
+    #[serde(default = "default_effect_offset")] pub offset: (f32, f32, f32),
+    #[serde(default)] pub emit_radius: f32,
+    #[serde(default = "default_particle_size")] pub size: f32,
+    #[serde(default)] pub size_end: Option<f32>,
+    #[serde(default)] pub size_jitter: f32,
+    pub color_start: (f32, f32, f32, f32),
+    #[serde(default)] pub color_mid: Option<(f32, f32, f32, f32)>,
+    pub color_end: (f32, f32, f32, f32),
+    #[serde(default)] pub gravity: f32,
+    #[serde(default)] pub turbulence: f32,
+    #[serde(default)] pub sprite: Option<String>,
+    #[serde(default)] pub sprites: Vec<String>,
+    #[serde(default)] pub additive: bool,
+    #[serde(default)] pub uv_distort: f32,
+    #[serde(default)] pub uv_scroll_speed: f32,
+}
+
 /// Particle burst effect definition. Authored in `AssetCatalog.effects` and referenced
 /// by `Action::SpawnEffect { key: "...", entity: "{self}" }` in rules and behavior files.
 ///
-/// All fields are optional except `lifetime_secs`, `color_start`, and `color_end`.
-/// `particle_count` must be ≤ `MAX_PARTICLES_PER_EFFECT` (256) — validated at load time.
+/// **Single-layer** (existing format): set `lifetime_secs`, `color_start`, `color_end` and any
+/// emission fields. All flat fields are used directly.
+///
+/// **Multi-layer**: set `layers: [( … ), ( … )]` and omit flat fields. Each layer is spawned
+/// independently at the same origin; flat fields are ignored. `particle_count` must be ≤ 256
+/// per layer — validated at catalog load time.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct EffectDef {
     /// Number of particles spawned. Must be ≤ 256; validated at catalog load time.
+    /// Ignored when `layers` is non-empty.
     #[serde(default = "default_particle_count")]
     pub particle_count: u32,
-    /// Seconds until all particles have faded out and despawned.
+    /// Seconds until all particles have faded out and despawned. Required for single-layer
+    /// effects; unused (may be omitted) when `layers` is non-empty.
+    #[serde(default = "default_lifetime_secs")]
     pub lifetime_secs: f32,
     /// Initial speed of each particle in m/s.
     #[serde(default)]
@@ -113,6 +161,8 @@ pub struct EffectDef {
     #[serde(default)]
     pub size_jitter: f32,
     /// RGBA colour at spawn (linear sRGB, 0.0–1.0). Alpha 1.0 = fully opaque/bright.
+    /// Required for single-layer effects; unused (may be omitted) when `layers` is non-empty.
+    #[serde(default = "default_color_white")]
     pub color_start: (f32, f32, f32, f32),
     /// Optional midpoint colour for a three-stop gradient (start → mid → end).
     /// When `Some`, colour transitions start→mid in the first half of lifetime, then
@@ -121,6 +171,8 @@ pub struct EffectDef {
     #[serde(default)]
     pub color_mid: Option<(f32, f32, f32, f32)>,
     /// RGBA colour at end of lifetime (linear sRGB). Alpha 0.0 = fully invisible.
+    /// Required for single-layer effects; unused (may be omitted) when `layers` is non-empty.
+    #[serde(default = "default_color_transparent")]
     pub color_end: (f32, f32, f32, f32),
     /// Y-axis acceleration in m/s². Negative = falls, positive = rises.
     /// Reference: `-2.0` light sparks, `-9.8` Earth-like, `0.0` floaty, `+2.0` rising embers.
@@ -160,12 +212,47 @@ pub struct EffectDef {
     /// Has no effect when `sprite` is `None`.
     #[serde(default)]
     pub uv_scroll_speed: f32,
+    /// Multi-layer emitter definitions. When non-empty, each entry is spawned independently
+    /// at the same origin and all flat fields above are ignored. Allows complex effects
+    /// (e.g. campfire body + hot core) to be defined in a single catalog key.
+    #[serde(default)]
+    pub layers: Vec<LayerDef>,
+}
+
+impl From<&EffectDef> for LayerDef {
+    fn from(d: &EffectDef) -> Self {
+        Self {
+            particle_count:  d.particle_count,
+            lifetime_secs:   d.lifetime_secs,
+            speed:           d.speed,
+            speed_jitter:    d.speed_jitter,
+            spread_deg:      d.spread_deg,
+            offset:          d.offset,
+            emit_radius:     d.emit_radius,
+            size:            d.size,
+            size_end:        d.size_end,
+            size_jitter:     d.size_jitter,
+            color_start:     d.color_start,
+            color_mid:       d.color_mid,
+            color_end:       d.color_end,
+            gravity:         d.gravity,
+            turbulence:      d.turbulence,
+            sprite:          d.sprite.clone(),
+            sprites:         d.sprites.clone(),
+            additive:        d.additive,
+            uv_distort:      d.uv_distort,
+            uv_scroll_speed: d.uv_scroll_speed,
+        }
+    }
 }
 
 fn default_particle_count() -> u32 { 12 }
 fn default_spread_deg() -> f32 { 180.0 }
 fn default_effect_offset() -> (f32, f32, f32) { (0.0, 1.0, 0.0) }
 fn default_particle_size() -> f32 { 0.06 }
+fn default_lifetime_secs() -> f32 { 1.0 }
+fn default_color_white() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }
+fn default_color_transparent() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 0.0) }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]

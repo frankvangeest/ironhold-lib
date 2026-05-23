@@ -1,6 +1,6 @@
 // Self-sustaining particle loop for campfire: fire every 0.45 s, smoke every 0.8 s.
-// Fire uses stationary billboard quads (lifetime 0.8–1.0 s) that fade in/out, so the
-// 0.45 s cadence keeps 2–4 overlapping quads visible at all times — no spitting rhythm.
+// campfire_fire is a two-layer effect (body + core) — one SpawnEffect fires both layers.
+// The 0.45 s cadence keeps 2–4 overlapping quads visible at all times — no spitting rhythm.
 // Entry actions stagger the two loops so their bursts never land on the same frame.
 (
     schema_version: 1,
@@ -20,8 +20,7 @@
                 (
                     event: "campfire.fire:{self}",
                     do_actions: [
-                        SpawnEffect(key: "campfire_body", entity: "{self}"),
-                        SpawnEffect(key: "campfire_core", entity: "{self}"),
+                        SpawnEffect(key: "campfire_fire", entity: "{self}"),
                         EmitEventAfterDelay(event: "campfire.fire:{self}", delay_secs: 0.45),
                     ],
                 ),

@@ -7,14 +7,14 @@
         // can interact, so the first visible burst does not stall the GPU thread.
         //
         //   1. Sphere  + AlphaMode::Add (no sprite)            → explosion_burst
-        //   2. Quad    + FlameParticleMaterial + AlphaMode::Add → campfire_fire, torch_flame
+        //   2. Quad    + FlameParticleMaterial + AlphaMode::Add → campfire_fire (both layers), torch_flame
         //   3. Quad    + StandardMaterial + AlphaMode::Blend    → campfire_smoke
         //   4. Quad    + StandardMaterial + AlphaMode::Add      → star_rain, frost_burst, heal_pulse, magic_orbit, magic_nova
         (
             on: "scene.ready:main",
             do_actions: [
                 SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_body",   position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
             ],

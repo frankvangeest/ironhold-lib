@@ -1,4 +1,7 @@
-// Campfire loop: fire every 0.45 s, smoke every 0.8 s.
+// Self-sustaining particle loop for campfire: fire every 0.45 s, smoke every 0.8 s.
+// campfire_fire is a two-layer effect (body + core) — one SpawnEffect fires both layers.
+// The 0.45 s cadence keeps 2–4 overlapping quads visible at all times — no spitting rhythm.
+// Entry actions stagger the two loops so their bursts never land on the same frame.
 (
     schema_version: 1,
     initial_state: "burning",
@@ -15,8 +18,7 @@
                 (
                     event: "campfire.fire:{self}",
                     do_actions: [
-                        SpawnEffect(key: "campfire_body", entity: "{self}"),
-                        SpawnEffect(key: "campfire_core", entity: "{self}"),
+                        SpawnEffect(key: "campfire_fire", entity: "{self}"),
                         EmitEventAfterDelay(event: "campfire.fire:{self}", delay_secs: 0.45),
                     ],
                 ),

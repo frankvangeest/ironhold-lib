@@ -3273,6 +3273,7 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
+        layers: vec![],
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
@@ -3322,6 +3323,7 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
+        layers: vec![],
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("heal".to_string(), effect_def)]),
@@ -3406,6 +3408,7 @@ fn test_spawn_effect_entity_missing_does_not_push() {
         additive: false,
         uv_distort: 0.0,
         uv_scroll_speed: 0.0,
+        layers: vec![],
     };
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
@@ -3422,6 +3425,69 @@ fn test_spawn_effect_entity_missing_does_not_push() {
 
     let pending = app.world().resource::<PendingParticleEffects>();
     assert!(pending.0.is_empty(), "unresolvable entity must not push to PendingParticleEffects");
+}
+
+#[test]
+fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, LayerDef};
+    use ironhold_core::capabilities::particle_renderer::ParticlePool;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Two-layer effect: 4 particles in layer 0, 2 particles in layer 1 → 6 total.
+    let layer0 = LayerDef {
+        particle_count: 4,
+        lifetime_secs: 1.0,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
+        size: 0.1, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 0.5, 0.0, 1.0), color_mid: None,
+        color_end: (0.0, 0.0, 0.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: true,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+    };
+    let layer1 = LayerDef {
+        particle_count: 2,
+        lifetime_secs: 0.8,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
+        offset: (0.0, 0.1, 0.0), emit_radius: 0.0,
+        size: 0.05, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 1.0, 0.9, 1.0), color_mid: None,
+        color_end: (1.0, 0.3, 0.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: true,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+    };
+    let effect_def = EffectDef {
+        particle_count: 12, lifetime_secs: 1.0,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
+        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
+        size: 0.06, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
+        color_end: (1.0, 1.0, 1.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: false,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+        layers: vec![layer0, layer1],
+    };
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("campfire_fire".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "campfire_fire".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(alive, 6, "multi-layer effect must spawn layer[0].particle_count + layer[1].particle_count particles (4 + 2 = 6)");
 }
 
 // ── particles_demo smoke test ─────────────────────────────────────────────────

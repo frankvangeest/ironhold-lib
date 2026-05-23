@@ -141,8 +141,8 @@ Common event name patterns:
 
 ```ron
 "my_effect": (
-    particle_count: 20,           // required; max 256
-    lifetime_secs: 1.2,           // required
+    particle_count: 20,           // default 12; max 256
+    lifetime_secs: 1.2,           // default 1.0
     speed: 3.0,                   // default 0.0
     speed_jitter: 0.5,            // default 0.0
     spread_deg: 90.0,             // default 180.0 (full sphere)
@@ -151,9 +151,9 @@ Common event name patterns:
     size: 0.2,                    // default ~0.06
     size_end: 0.0,                // default None (constant)
     size_jitter: 0.05,            // default 0.0
-    color_start: (1.0, 0.5, 0.1, 1.0),
+    color_start: (1.0, 0.5, 0.1, 1.0),  // default white
     color_mid:   (1.0, 0.2, 0.0, 0.8),  // optional 3-stop gradient
-    color_end:   (0.3, 0.0, 0.0, 0.0),
+    color_end:   (0.3, 0.0, 0.0, 0.0),  // default transparent
     gravity: -4.0,                // default 0.0; negative = falls
     turbulence: 0.5,              // default 0.0
     sprite: "particle/flame_04",  // single texture key from assets.ron
@@ -169,6 +169,63 @@ Using both `uv_distort`/`uv_scroll_speed` and a sprite key routes the particle t
 
 ---
 
+## Multi-layer effects
+
+A single effect key can fire multiple emitter layers at once. Use this when you want a fire body and a bright inner core, or smoke and rising sparks, under one `SpawnEffect` call. When `layers:` is set, **all flat fields above are ignored** — each layer carries its own `lifetime_secs`, colours, and emission parameters.
+
+```ron
+// assets.ron
+"campfire_fire": (
+    layers: [
+        // body — 4 large orange flame quads spread across the fire base
+        (
+            particle_count: 4,
+            lifetime_secs: 1.00,
+            spread_deg: 0.0,
+            emit_radius: 0.16,
+            offset: (0.0, 0.22, 0.0),
+            size: 0.65,
+            size_jitter: 0.08,
+            color_start: (1.0, 0.52, 0.08, 0.0),
+            color_mid:   (1.0, 0.42, 0.05, 1.0),
+            color_end:   (0.55, 0.06, 0.0, 0.0),
+            sprites: ["particle/flame_01", "particle/flame_02"],
+            additive: true,
+            uv_distort: 0.50,
+            uv_scroll_speed: 0.55,
+        ),
+        // core — 2 bright white-hot tongue quads at the flame centre
+        (
+            particle_count: 2,
+            lifetime_secs: 0.80,
+            spread_deg: 0.0,
+            emit_radius: 0.06,
+            offset: (0.0, 0.26, 0.0),
+            size: 0.28,
+            color_start: (1.0, 1.0, 0.88, 0.0),
+            color_mid:   (1.0, 0.80, 0.18, 1.0),
+            color_end:   (1.0, 0.28, 0.0,  0.0),
+            sprites: ["particle/flame_05", "particle/flame_06"],
+            additive: true,
+            uv_distort: 0.35,
+            uv_scroll_speed: 1.00,
+        ),
+    ],
+),
+```
+
+Each layer accepts every field listed in the single-layer table above (except `layers` itself). The full canonical example is `assets/projects/particles_demo/assets.ron` → `"campfire_fire"`.
+
+In `behaviors/campfire.behavior.ron` you only need one `SpawnEffect` call per tick — it fires all layers:
+
+```ron
+SpawnEffect(key: "campfire_fire", entity: "{self}")
+```
+
+For WebGPU pipeline warmup, one `SpawnEffect` on `scene.ready` is enough to warm all layers of a multi-layer effect.
+
+---
+
 ## WebGPU pipeline warmup
 
 On first load, WASM lazily compiles a GPU pipeline for each material+blend variant. Without warmup this causes a visible frame stall when the first burst fires. Warm all variants you use by firing them off-screen on `scene.ready`:
@@ -178,7 +235,7 @@ On first load, WASM lazily compiles a GPU pipeline for each material+blend varia
     SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),  // additive sphere
     SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),  // additive sprite
     SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),  // blend sprite
-    SpawnEffect(key: "campfire_body",   position: Some((0.0, -100.0, 0.0))),  // flame material
+    SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),  // flame material (multi-layer ok — one call warms all layers)
 ]),
 ```
 

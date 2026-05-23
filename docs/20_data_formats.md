@@ -549,21 +549,55 @@ Named registry of all assets available to prefabs and scenes.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `particle_count` | `u32` | `12` | Number of particles per burst. Validated at catalog load — must be ≤ 256. |
-| `lifetime_secs` | `f32` | — | **Required.** How long each particle lives before despawning. |
+| `particle_count` | `u32` | `12` | Number of particles per burst. Must be ≤ 256 (validated at catalog load). Unused when `layers` is non-empty. |
+| `lifetime_secs` | `f32` | `1.0` | How long each particle lives. Provide a meaningful value for single-layer effects; unused when `layers` is non-empty. |
 | `speed` | `f32` | `0.0` | Initial outward speed in metres/second along each particle's direction. |
 | `speed_jitter` | `f32` | `0.0` | Per-particle speed variation in `[−jitter, +jitter]` — deterministic, index-based. |
 | `spread_deg` | `f32` | `180.0` | Cone half-angle in degrees (0 = straight up column, 90 = hemisphere, 180 = full sphere). |
 | `offset` | `(f32, f32, f32)` | `(0.0, 1.0, 0.0)` | World-space offset from the entity origin or explicit position (e.g. chest height). |
 | `size` | `f32` | `0.06` | Particle radius in metres at birth. |
 | `size_end` | `Option<f32>` | `None` | If set, particle radius lerps from `size` to `size_end` over the lifetime. |
-| `color_start` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at birth (linear, 0.0–1.0). |
-| `color_end` | `(f32, f32, f32, f32)` | — | **Required.** RGBA colour at death — typically fade alpha to 0.0. |
-| `gravity` | `f32` | `0.0` | Vertical acceleration in m/s² applied each frame (negative = down, positive = float upward). |
-| `sprite` | `Option<String>` | `None` | Asset key for a sprite texture (from `AssetCatalog.textures`). When set, each particle is a camera-facing quad with the texture applied instead of a sphere mesh. |
-| `additive` | `bool` | `false` | Blending mode for sprite particles (ignored when `sprite` is `None`). `true` → `AlphaMode::Add` (fire, glow); `false` → `AlphaMode::Blend` (smoke). |
-| `uv_distort` | `f32` | `0.0` | UV distortion strength for the flame particle shader. When non-zero, particles use `FlameParticleMaterial` (animated sine-wave distortion) instead of `StandardMaterial`. Tip-weighted: the flame tip distorts more than the base. Range 0.0–1.0; typical fire values: 0.4–0.6. Has no effect when `sprite` is `None`. |
-| `uv_scroll_speed` | `f32` | `0.0` | Upward UV scroll speed in texture-heights per second. Combine with `uv_distort` for a flowing flame look. Has no effect when `sprite` is `None`. |
+| `size_jitter` | `f32` | `0.0` | Per-particle size variation in `[−jitter, +jitter]` at birth. |
+| `color_start` | `(f32, f32, f32, f32)` | `(1,1,1,1)` | RGBA colour at birth (linear, 0.0–1.0). Provide a value for single-layer effects; unused when `layers` is non-empty. |
+| `color_mid` | `Option<(f32,f32,f32,f32)>` | `None` | Optional midpoint colour for a three-stop gradient (start → mid → end). |
+| `color_end` | `(f32, f32, f32, f32)` | `(1,1,1,0)` | RGBA colour at death. Provide a value for single-layer effects; unused when `layers` is non-empty. |
+| `gravity` | `f32` | `0.0` | Vertical acceleration in m/s² (negative = falls, positive = rises). |
+| `turbulence` | `f32` | `0.0` | Per-frame lateral noise strength; creates billowing and swirling motion. |
+| `sprite` | `Option<String>` | `None` | Asset key for a sprite texture (from `AssetCatalog.textures`). When set, particles are camera-facing quads instead of sphere meshes. |
+| `sprites` | `Vec<String>` | `[]` | Multiple sprite keys; each particle picks one by deterministic hash. Takes precedence over `sprite`. |
+| `additive` | `bool` | `false` | `true` → `AlphaMode::Add` (fire, glow); `false` → `AlphaMode::Blend` (smoke). Has no effect without a sprite. |
+| `uv_distort` | `f32` | `0.0` | UV distortion for the flame shader. Non-zero switches the particle to `PoolFlameMaterial` (animated WGSL). Range 0.0–1.0; typical: 0.4–0.6. |
+| `uv_scroll_speed` | `f32` | `0.0` | Upward UV scroll in texture-heights per second. Combine with `uv_distort` for flowing flame. |
+| `layers` | `Vec<LayerDef>` | `[]` | Multi-layer emitter list — see section below. When non-empty, all flat fields above are unused. |
+
+**Multi-layer effects (`layers`)**
+
+When `layers` is non-empty, each entry is spawned independently at the same origin. All flat fields on the parent `EffectDef` are ignored. Use this to compose complex effects — fire body + hot core, smoke + rising sparks — in a single catalog key and a single `SpawnEffect` call.
+
+Each `LayerDef` accepts every field in the table above except `layers` itself. Fields work identically inside a layer. Example:
+
+```ron
+"campfire_fire": (
+    layers: [
+        // body — 4 large orange flame quads
+        ( particle_count: 4, lifetime_secs: 1.00, spread_deg: 0.0, emit_radius: 0.16,
+          offset: (0.0, 0.22, 0.0), size: 0.65, size_jitter: 0.08,
+          color_start: (1.0, 0.52, 0.08, 0.0), color_mid: (1.0, 0.42, 0.05, 1.0),
+          color_end: (0.55, 0.06, 0.0, 0.0),
+          sprites: ["particle/flame_01", "particle/flame_02"], additive: true,
+          uv_distort: 0.50, uv_scroll_speed: 0.55 ),
+        // core — 2 bright white-hot quads
+        ( particle_count: 2, lifetime_secs: 0.80, spread_deg: 0.0, emit_radius: 0.06,
+          offset: (0.0, 0.26, 0.0), size: 0.28,
+          color_start: (1.0, 1.0, 0.88, 0.0), color_mid: (1.0, 0.80, 0.18, 1.0),
+          color_end: (1.0, 0.28, 0.0, 0.0),
+          sprites: ["particle/flame_05", "particle/flame_06"], additive: true,
+          uv_distort: 0.35, uv_scroll_speed: 1.00 ),
+    ],
+),
+```
+
+Full canonical example: `assets/projects/particles_demo/assets.ron` → `"campfire_fire"`.
 
 Particles use `AlphaMode::Add` (additive blending) by default when no sprite is set — overlapping spheres glow brighter, no depth-sorting artefacts in WASM. Directions are sampled deterministically via a spherical-cap golden-angle spiral so the same effect always produces the same pattern.
 

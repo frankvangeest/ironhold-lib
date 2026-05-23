@@ -112,52 +112,50 @@
     // CONTINUOUS EFFECTS — looped via entity behavior files
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Stationary fire body — four large billboard quads (one per flame_01..04 sprite) placed
-    // across the fire base. Speed=0 means the quads don't move; the UV scroll + distort
-    // animates the texture upward to create the illusion of rising flame.
+    // Two-layer campfire flame: body (4 large quads) + core (2 bright inner quads).
+    // Both layers are stationary (speed=0); UV scroll + distort animates the texture upward.
     // Alpha envelope: transparent at birth → opaque at mid-life → transparent at death,
     // so overlapping quads from successive bursts always keep some visible.
-    "campfire_body": (
-      particle_count: 4,
-      lifetime_secs: 1.00,
-      speed: 0.0,
-      spread_deg: 0.0,
-      emit_radius: 0.16,
-      offset: (0.0, 0.22, 0.0),
-      size: 0.65,
-      size_jitter: 0.08,
-      color_start: (1.0, 0.52, 0.08, 0.0),
-      color_mid:   (1.0, 0.42, 0.05, 1.0),
-      color_end:   (0.55, 0.06, 0.0, 0.0),
-      gravity: 0.0,
-      turbulence: 0.0,
-      sprites: ["particle/flame_01", "particle/flame_02", "particle/flame_03", "particle/flame_04"],
-      additive: true,
-      uv_distort: 0.50,
-      uv_scroll_speed: 0.55,
-    ),
-
-    // Stationary white-hot core — two tall tongue quads (flame_05 and flame_06) sitting at
-    // the centre of the flame column. Brighter and smaller than the body layer.
-    // Faster UV scroll gives the impression of intense heat in the inner core.
-    "campfire_core": (
-      particle_count: 2,
-      lifetime_secs: 0.80,
-      speed: 0.0,
-      spread_deg: 0.0,
-      emit_radius: 0.06,
-      offset: (0.0, 0.26, 0.0),
-      size: 0.28,
-      size_jitter: 0.05,
-      color_start: (1.0, 1.0,  0.88, 0.0),
-      color_mid:   (1.0, 0.80, 0.18, 1.0),
-      color_end:   (1.0, 0.28, 0.0,  0.0),
-      gravity: 0.0,
-      turbulence: 0.0,
-      sprites: ["particle/flame_05", "particle/flame_06"],
-      additive: true,
-      uv_distort: 0.35,
-      uv_scroll_speed: 1.00,
+    // Demonstrates: multi-layer EffectDef — one SpawnEffect call fires both layers at once.
+    "campfire_fire": (
+      layers: [
+        // body — 4 large orange flame quads spread across the fire base
+        (
+          particle_count: 4,
+          lifetime_secs: 1.00,
+          speed: 0.0,
+          spread_deg: 0.0,
+          emit_radius: 0.16,
+          offset: (0.0, 0.22, 0.0),
+          size: 0.65,
+          size_jitter: 0.08,
+          color_start: (1.0, 0.52, 0.08, 0.0),
+          color_mid:   (1.0, 0.42, 0.05, 1.0),
+          color_end:   (0.55, 0.06, 0.0, 0.0),
+          sprites: ["particle/flame_01", "particle/flame_02", "particle/flame_03", "particle/flame_04"],
+          additive: true,
+          uv_distort: 0.50,
+          uv_scroll_speed: 0.55,
+        ),
+        // core — 2 bright white-hot tongue quads at the flame centre
+        (
+          particle_count: 2,
+          lifetime_secs: 0.80,
+          speed: 0.0,
+          spread_deg: 0.0,
+          emit_radius: 0.06,
+          offset: (0.0, 0.26, 0.0),
+          size: 0.28,
+          size_jitter: 0.05,
+          color_start: (1.0, 1.0,  0.88, 0.0),
+          color_mid:   (1.0, 0.80, 0.18, 1.0),
+          color_end:   (1.0, 0.28, 0.0,  0.0),
+          sprites: ["particle/flame_05", "particle/flame_06"],
+          additive: true,
+          uv_distort: 0.35,
+          uv_scroll_speed: 1.00,
+        ),
+      ],
     ),
 
     // Soft grey smoke puffs rising above the campfire.

@@ -165,7 +165,8 @@
       gravity: 0.3,            // near-zero: slow rise
     ),
 
-    // Billboard flame sprites — one burst every 0.2 s from campfire.behavior.ron.
+    // Single-layer campfire flame sprites — one burst every 0.2 s from campfire.behavior.ron.
+    // (particles_demo and effect_mayhem_demo use a two-layer version of this key.)
     // sprite: flame_03 is a narrow candle-tongue shape; additive blending makes it glow.
     // Fewer particles than the old sphere version — sprites are much more visible.
     // Three-stop gradient tints the sprite: white-yellow base → orange core → dark-red tip.

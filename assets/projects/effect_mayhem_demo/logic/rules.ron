@@ -10,7 +10,7 @@
         //   1. Additive sphere (no sprite)      → explosion_burst
         //   2. Additive sprite (StandardMaterial + Add) → star_rain
         //   3. Blend sprite   (StandardMaterial + Blend) → campfire_smoke
-        //   4. Flame material (PoolFlameMaterial + Add)  → campfire_body
+        //   4. Flame material (PoolFlameMaterial + Add)  → campfire_fire (both layers)
         (
             on: "scene.ready:main",
             do_actions: [
@@ -18,7 +18,7 @@
                 SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_body",   position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
             ],
         ),
 

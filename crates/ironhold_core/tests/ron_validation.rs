@@ -3426,6 +3426,85 @@ fn test_effect_def_unknown_field_is_error() {
 }
 
 #[test]
+fn test_effect_def_multi_layer_parses() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "campfire_fire": (
+                    layers: [
+                        (
+                            particle_count: 4,
+                            lifetime_secs: 1.0,
+                            spread_deg: 0.0,
+                            emit_radius: 0.16,
+                            offset: (0.0, 0.22, 0.0),
+                            size: 0.65,
+                            color_start: (1.0, 0.52, 0.08, 0.0),
+                            color_mid:   (1.0, 0.42, 0.05, 1.0),
+                            color_end:   (0.55, 0.06, 0.0, 0.0),
+                            sprites: ["particle/flame_01", "particle/flame_02"],
+                            additive: true,
+                            uv_distort: 0.50,
+                            uv_scroll_speed: 0.55,
+                        ),
+                        (
+                            particle_count: 2,
+                            lifetime_secs: 0.80,
+                            spread_deg: 0.0,
+                            emit_radius: 0.06,
+                            offset: (0.0, 0.26, 0.0),
+                            size: 0.28,
+                            color_start: (1.0, 1.0, 0.88, 0.0),
+                            color_end:   (1.0, 0.28, 0.0,  0.0),
+                            sprites: ["particle/flame_05", "particle/flame_06"],
+                            additive: true,
+                            uv_distort: 0.35,
+                            uv_scroll_speed: 1.00,
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("multi-layer EffectDef should parse");
+    assert!(catalog.validate().is_ok(), "multi-layer effect should validate");
+    let def = catalog.effects.get("campfire_fire").expect("campfire_fire key should exist");
+    assert_eq!(def.layers.len(), 2, "two layers");
+    assert_eq!(def.layers[0].particle_count, 4,  "layer[0] particle_count");
+    assert_eq!(def.layers[0].lifetime_secs,  1.0, "layer[0] lifetime_secs");
+    assert_eq!(def.layers[1].particle_count, 2,   "layer[1] particle_count");
+    assert_eq!(def.layers[1].lifetime_secs,  0.80, "layer[1] lifetime_secs");
+    assert_eq!(def.layers[1].uv_scroll_speed, 1.0, "layer[1] uv_scroll_speed");
+}
+
+#[test]
+fn test_effect_def_multi_layer_validate_rejects_over_limit() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "overloaded": (
+                    layers: [
+                        (
+                            particle_count: 300,
+                            lifetime_secs: 1.0,
+                            color_start: (1.0, 1.0, 1.0, 1.0),
+                            color_end:   (1.0, 1.0, 1.0, 0.0),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("should parse");
+    let err = catalog.validate().expect_err("layer over 256 should fail validation");
+    assert!(err.contains("layer[0]"), "error must identify layer index: {}", err);
+}
+
+#[test]
 fn test_asset_catalog_with_no_effects_is_valid() {
     // Existing catalogs without an effects section must still parse and validate.
     use ironhold_core::schema::catalog::AssetCatalog;
