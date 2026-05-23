@@ -11,7 +11,7 @@
 
 ## Active
 
-
+- [ ] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/particle_extended_behaviours.md`
 
 ---
 
