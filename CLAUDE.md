@@ -156,21 +156,26 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 ## Critical Rules
 
 ### Code change workflow
-Every code change must follow this order before committing:
+Every code change must follow this order before committing code:
 
-1. **Verify feature plan** — Check if the plan for the feature is:
-  - planned out enough
-  - project goal aligned
-  - follows proper UX design 
-2. **Code changes** — implement the feature or fix
-3. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
-4. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
-5. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
-6. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
-7. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
-8. **Commit** — only after Frank confirms; include a summary in git commit message format
+ 1. **Verify feature plan is complete and up-to-date** — Check if the plan for the feature is:
+    - planned out enough - Require more input or decisions from the Frank or not?
+    - project goal aligned - Goal alignment review for the feature plan
+    - follows proper UX design - UX review for the feature plan
+ 2. **Make feature active in backlog and commit before coding** — If not already
+ 3. **Code changes** — implement the feature or fix
+ 4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
+ 5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
+ 6. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+ 7. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
+ 8. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
+ 9. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
+10. **Commit** — only after Frank confirms; include a summary in git commit message format
+11. **Propose the next feature to add to active in the backlog**
 
-Do not commit before step 6. Do not skip the WASM build — new Rust code can compile natively but fail in WASM.
+Do not start coding before the feature plan is finalized and reviewed.
+Once code changes have been made, do not commit before "User play-tests" are approved. 
+Do not skip the WASM build — new Rust code can compile natively but fail in WASM.
 
 ### After changes
 When ever you make changes in the code, give the summery of the changes in a nice git commit message format.
