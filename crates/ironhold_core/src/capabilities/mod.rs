@@ -20,6 +20,7 @@ pub mod particle;
 pub mod fading_light;
 pub mod flame_material;
 pub mod particle_renderer;
+pub mod decal;
 
 pub use player::*;
 pub use camera::*;
@@ -48,4 +49,5 @@ pub use particle_renderer::{
     simulate_pool_system, rebuild_pool_meshes_system, clear_pool_on_scene_unload_system,
     ParticleRendererPlugin,
 };
+pub use decal::{FadingDecal, TrackedDecal, PendingDecalSpawns, spawn_decal_system, fading_decal_system};
 

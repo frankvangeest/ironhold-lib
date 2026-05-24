@@ -111,7 +111,9 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PreloadedGlbHandles>()
             .init_resource::<crate::runtime::scene_manager::PendingEntitySpawns>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
+            .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
+            .init_resource::<crate::capabilities::decal::PendingDecalSpawns>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()
@@ -150,6 +152,7 @@ impl Plugin for GamePlugin {
                 // Replace before the correct handle is ever visible.
                 spawn_scene_v2.before(message_interpreter_system),
                 preload_audio_system,
+                preload_decals_system,
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
                 resolve_pending_behaviors_system,
@@ -181,8 +184,10 @@ impl Plugin for GamePlugin {
                 drain_particle_effects_system,
                 simulate_pool_system,
                 rebuild_pool_meshes_system,
+                spawn_decal_system,
             ).chain())
             .add_systems(Update, fading_light_system.after(drain_particle_effects_system))
+            .add_systems(Update, fading_decal_system.after(spawn_decal_system))
             .add_systems(Update, clear_pool_on_scene_unload_system)
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (

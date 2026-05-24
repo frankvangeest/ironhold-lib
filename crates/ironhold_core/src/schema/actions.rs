@@ -158,6 +158,38 @@ pub enum Action {
         #[serde(default)]
         entity: Option<String>,
     },
+    /// Spawn a flat textured quad on the ground plane. Used for AoE circles, cast indicators,
+    /// impact splats, and persistent debuff zones.
+    ///
+    /// - `key` — decal catalog key defined in `assets.ron decals` map.
+    /// - `entity` — if set, the decal XZ position tracks this entity each frame.
+    ///   Use `"{self}"` in behavior files. Mutually exclusive with `position`; `entity` wins.
+    /// - `position` — explicit world-space origin `(x, y, z)`. The y component is ignored;
+    ///   decals always float at y=0.02 above the ground.
+    /// - `radius` — decal radius in metres (scales the quad uniformly in XZ).
+    /// - `duration_secs` — lifetime in seconds before the decal despawns.
+    /// - `color` — RGBA tint `(r, g, b, a)` in linear 0–1 range. Defaults to opaque white.
+    /// - `pulse_speed` — cycles per second for opacity heartbeat. 0.0 = no pulse.
+    ///
+    /// Example:
+    /// ```ron
+    /// ProjectDecal(key: "aoe_fire_circle", entity: "boss_01", radius: 3.0,
+    ///              duration_secs: 5.0, color: (1.0, 0.4, 0.1, 0.7), pulse_speed: 0.8)
+    /// ```
+    ProjectDecal {
+        key: String,
+        #[serde(default)]
+        entity: Option<String>,
+        #[serde(default)]
+        position: Option<(f32, f32, f32)>,
+        radius: f32,
+        duration_secs: f32,
+        #[serde(default = "default_decal_color")]
+        color: (f32, f32, f32, f32),
+        #[serde(default)]
+        pulse_speed: f32,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }
+fn default_decal_color() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }

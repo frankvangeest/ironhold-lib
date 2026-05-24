@@ -19,19 +19,31 @@
                 SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
                 SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
+                // Warms the decal pipeline: StandardMaterial + AlphaBlend + depth_bias:128 + double_sided.
+                // This variant is distinct from particle blend materials (no depth_bias).
+                ProjectDecal(key: "explosion_ring", position: Some((0.0, -100.0, 0.0)),
+                             radius: 1.0, duration_secs: 2.0, color: (1.0, 1.0, 1.0, 0.01)),
             ],
         ),
 
-        // Walk into the explosion pad to trigger a burst.
+        // Walk into the explosion pad to trigger a burst + orange ring decal.
         (
             on: "entity.entered:explosion_pad_01",
-            do_actions: [ SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01") ],
+            do_actions: [
+                SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01"),
+                ProjectDecal(key: "explosion_ring", entity: "explosion_pad_01", radius: 3.5,
+                             duration_secs: 3.0, color: (1.0, 0.40, 0.10, 0.75), pulse_speed: 0.6),
+            ],
         ),
 
-        // Press F near the frost crystal for an ice shard burst.
+        // Press F near the frost crystal for an ice shard burst + blue circle decal.
         (
             on: "entity.interacted:frost_crystal_01",
-            do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_crystal_01") ],
+            do_actions: [
+                SpawnEffect(key: "frost_burst", entity: "frost_crystal_01"),
+                ProjectDecal(key: "frost_circle", entity: "frost_crystal_01", radius: 2.5,
+                             duration_secs: 4.0, color: (0.45, 0.80, 1.0, 0.70), pulse_speed: 1.2),
+            ],
         ),
 
         // Press F near the healing fountain for a green healing burst.

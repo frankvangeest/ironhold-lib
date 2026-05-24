@@ -728,6 +728,57 @@ Particles use `AlphaMode::Add` (additive blending) by default when no sprite is 
 
 `FlameParticleMaterial` is an engine-internal material — it is not available as a `Custom(…)` shader key. Its uniforms (`color`, `elapsed_time`) are updated every frame by the particle system.
 
+---
+
+**Ground decals (`decals`)**
+
+The `decals` map in `assets.ron` registers texture paths for flat ground-projected quads. Decals are spawned by `Action::ProjectDecal` from `rules.ron` or behavior files. All decal textures are white-on-transparent PNGs — colour comes from the `color` field in the action.
+
+```ron
+// assets.ron
+decals: {
+  "aoe_fire_circle": "shared/textures/decals/ring_thick.png",
+  "cast_indicator":  "shared/textures/decals/circle_filled.png",
+},
+```
+
+**`Action::ProjectDecal` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `key` | `String` | required | Decal key from the `decals` map in `assets.ron`. |
+| `entity` | `Option<String>` | `None` | If set, the decal XZ position tracks this entity each frame. Wins over `position`. Use `"{self}"` in behavior files. |
+| `position` | `Option<(f32, f32, f32)>` | `None` | World-space origin. Y is ignored; decals always float at y=0.02. |
+| `radius` | `f32` | required | Decal radius in metres. |
+| `duration_secs` | `f32` | required | Lifetime in seconds. The decal fades out over the last 20 % and then despawns. |
+| `color` | `(f32, f32, f32, f32)` | `(1,1,1,1)` | RGBA tint in linear 0–1 range. |
+| `pulse_speed` | `f32` | `0.0` | Opacity heartbeat cycles per second (`0.0` = no pulse). |
+
+**Shared decal textures** (`assets/shared/textures/decals/`):
+
+| Key prefix | File | Shape |
+|------------|------|-------|
+| `circle_filled` | `circle_filled.png` | Solid disc with hard edge |
+| `ring_thin` | `ring_thin.png` | Thin 10 px ring |
+| `ring_thick` | `ring_thick.png` | Thick 28 px ring |
+| `splat_01` | `splat_01.png` | Soft-edged disc (feathered) |
+| `shockwave` | `shockwave.png` | Two concentric thin rings |
+
+Example rule:
+
+```ron
+( on: "entity.entered:explosion_pad_01", do_actions: [
+    SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01"),
+    ProjectDecal(key: "aoe_fire_circle", entity: "explosion_pad_01",
+                 radius: 3.5, duration_secs: 3.0,
+                 color: (1.0, 0.40, 0.10, 0.75), pulse_speed: 0.6),
+]),
+```
+
+Decals use `LevelEntity` — they are automatically cleaned up on scene transitions.
+
+---
+
 **Audio format recommendations:**
 
 | Format | Use for | Notes |

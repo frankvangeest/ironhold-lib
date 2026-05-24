@@ -17,7 +17,7 @@ use super::{
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, SpawnId, WorldLabel,
-    LoadedAudioHandles, LoadedAssetCatalog,
+    LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     PendingBehavior, resolve_project_path,
 };
 use crate::capabilities::collectible::Collectable;
@@ -1968,6 +1968,26 @@ pub fn preload_audio_system(
             }
             if !audio_handles.0.is_empty() {
                 info!("Audio preload: {} file(s) warmed up", audio_handles.0.len());
+            }
+        }
+    }
+}
+
+pub fn preload_decals_system(
+    mut events: MessageReader<SceneEvent>,
+    asset_catalog: Res<LoadedAssetCatalog>,
+    asset_server: Res<AssetServer>,
+    mut decal_handles: ResMut<LoadedDecalHandles>,
+) {
+    for event in events.read() {
+        if matches!(event, SceneEvent::Ready(_)) {
+            decal_handles.0.clear();
+            for path in asset_catalog.0.decals.values() {
+                let handle: Handle<Image> = asset_server.load(path.clone());
+                decal_handles.0.push(handle);
+            }
+            if !decal_handles.0.is_empty() {
+                info!("Decal preload: {} texture(s) warmed up", decal_handles.0.len());
             }
         }
     }

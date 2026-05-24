@@ -500,6 +500,46 @@ pub fn action_executor_system(
                 );
                 spawn_params.pending_particles.0.push(QueuedParticleEffect { origin, def });
             }
+            Action::ProjectDecal { key, entity, position, radius, duration_secs, color, pulse_speed } => {
+                let Some(texture_path) = asset_catalog.0.decals.get(&key).cloned() else {
+                    warn!("Action::ProjectDecal: unknown decal key {:?}", key);
+                    continue;
+                };
+
+                let world_pos: Option<Vec3> = if let Some(ref entity_id) = entity {
+                    if position.is_some() {
+                        warn!("Action::ProjectDecal {:?}: both entity and position given; entity wins", key);
+                    }
+                    spawn_params.registry.entities.get(entity_id)
+                        .and_then(|e| scene_state.global_transforms.get(*e).ok())
+                        .map(|gt| gt.translation())
+                } else {
+                    position.map(|(x, y, z)| Vec3::new(x, y, z))
+                };
+
+                let Some(origin) = world_pos else {
+                    warn!("Action::ProjectDecal {:?}: no entity or position resolved; skipping", key);
+                    continue;
+                };
+
+                let track_entity = entity.as_ref()
+                    .and_then(|id| spawn_params.registry.entities.get(id))
+                    .copied();
+
+                info!(
+                    "Action::ProjectDecal: queued {:?} at ({:.1}, {:.1}, {:.1}) r={:.1} dur={:.1}s",
+                    key, origin.x, origin.y, origin.z, radius, duration_secs
+                );
+                spawn_params.pending_decals.0.push(crate::capabilities::decal::QueuedDecal {
+                    texture_path,
+                    world_pos: origin,
+                    radius,
+                    duration_secs,
+                    color,
+                    pulse_speed,
+                    track_entity,
+                });
+            }
         }
     }
 }

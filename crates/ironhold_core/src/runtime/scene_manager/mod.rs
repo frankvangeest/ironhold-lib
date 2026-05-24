@@ -74,6 +74,12 @@ pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
 #[derive(Resource, Default)]
 pub struct LoadedAudioHandles(pub Vec<Handle<bevy::audio::AudioSource>>);
 
+/// Holds pre-loaded decal texture handles so HTTP fetch is complete before the first
+/// `ProjectDecal` fires. Populated by `preload_decals_system` on each `SceneEvent::Ready`.
+/// Cleared and repopulated on each scene transition.
+#[derive(Resource, Default)]
+pub struct LoadedDecalHandles(pub Vec<Handle<Image>>);
+
 /// Holds pre-loaded GLTF scene handles for prefab models, populated by `Action::PreloadPrefab`.
 /// Keeping handles alive prevents the asset server from evicting the decoded GLB between scene
 /// loads, so the first `Action::Spawn` of that prefab doesn't block the WASM main thread with
@@ -243,6 +249,7 @@ pub struct SpawnParams<'w, 's> {
     pub spawned: Query<'w, 's, (Entity, &'static SpawnId)>,
     pub pending_spawns: ResMut<'w, PendingEntitySpawns>,
     pub pending_particles: ResMut<'w, crate::capabilities::particle::PendingParticleEffects>,
+    pub pending_decals: ResMut<'w, crate::capabilities::decal::PendingDecalSpawns>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.

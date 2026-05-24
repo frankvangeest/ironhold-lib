@@ -25,6 +25,11 @@ pub struct AssetCatalog {
     /// Referenced by `Action::SpawnEffect { key: "hit_spark", ... }` in rules and behavior files.
     #[serde(default)]
     pub effects: HashMap<String, EffectDef>,
+    /// Ground decal texture paths. Keyed by a designer-chosen name (e.g. `"aoe_fire_circle"`).
+    /// Referenced by `Action::ProjectDecal { key: "aoe_fire_circle", ... }` in rules and behavior files.
+    /// Values are asset-relative paths to the texture file (e.g. `"shared/textures/decals/ring_thick.png"`).
+    #[serde(default)]
+    pub decals: HashMap<String, String>,
 }
 
 impl AssetCatalog {
@@ -38,6 +43,11 @@ impl AssetCatalog {
         for (key, entry) in &self.models {
             if entry.path.is_empty() {
                 return Err(format!("AssetCatalog model \"{}\" has empty path", key));
+            }
+        }
+        for (key, path) in &self.decals {
+            if path.is_empty() {
+                return Err(format!("AssetCatalog decal \"{}\" has empty path", key));
             }
         }
         for (key, effect) in &self.effects {
@@ -74,6 +84,7 @@ impl Default for AssetCatalog {
             audio: HashMap::new(),
             materials: HashMap::new(),
             effects: HashMap::new(),
+            decals: HashMap::new(),
         }
     }
 }

@@ -563,4 +563,13 @@
   },
 
   materials: {},
+
+  // ── Ground decals ────────────────────────────────────────────────────────────
+  decals: {
+    "explosion_ring":   "shared/textures/decals/ring_thick.png",
+    "frost_circle":     "shared/textures/decals/circle_filled.png",
+    "shockwave":        "shared/textures/decals/shockwave.png",
+    "aoe_splat":        "shared/textures/decals/splat_01.png",
+    "ring_thin":        "shared/textures/decals/ring_thin.png",
+  },
 )

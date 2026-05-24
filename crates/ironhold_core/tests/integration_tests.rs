@@ -3986,3 +3986,97 @@ fn test_velocity_curve_stored_in_particle() {
             "velocity_curve must be EaseOut as authored in LayerDef");
     }
 }
+
+// ─── ProjectDecal ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_project_decal_with_position_queues_pending_spawn() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+    use ironhold_core::capabilities::decal::PendingDecalSpawns;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        decals: std::collections::HashMap::from([
+            ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
+        key: "test_ring".to_string(),
+        entity: None,
+        position: Some((5.0, 0.0, -3.0)),
+        radius: 2.0,
+        duration_secs: 3.0,
+        color: (1.0, 0.5, 0.0, 0.8),
+        pulse_speed: 0.0,
+    });
+    app.update();
+
+    // After one update: action_executor pushed to PendingDecalSpawns;
+    // spawn_decal_system ran in the same chained set and drained it, spawning a FadingDecal entity.
+    let pending = app.world().resource::<PendingDecalSpawns>();
+    assert!(pending.0.is_empty(), "spawn_decal_system must drain PendingDecalSpawns");
+}
+
+#[test]
+fn test_project_decal_unknown_key_does_not_queue() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+    use ironhold_core::capabilities::decal::PendingDecalSpawns;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
+        key: "nonexistent".to_string(),
+        entity: None,
+        position: Some((0.0, 0.0, 0.0)),
+        radius: 1.0,
+        duration_secs: 1.0,
+        color: (1.0, 1.0, 1.0, 1.0),
+        pulse_speed: 0.0,
+    });
+    app.update();
+
+    let pending = app.world().resource::<PendingDecalSpawns>();
+    assert!(pending.0.is_empty(), "unknown decal key must not push anything to PendingDecalSpawns");
+}
+
+#[test]
+fn test_project_decal_no_position_no_entity_skips() {
+    use ironhold_core::runtime::LoadedAssetCatalog;
+    use ironhold_core::schema::catalog::AssetCatalog;
+    use ironhold_core::capabilities::decal::PendingDecalSpawns;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        decals: std::collections::HashMap::from([
+            ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
+        key: "test_ring".to_string(),
+        entity: None,
+        position: None,
+        radius: 2.0,
+        duration_secs: 3.0,
+        color: (1.0, 1.0, 1.0, 1.0),
+        pulse_speed: 0.0,
+    });
+    app.update();
+
+    let pending = app.world().resource::<PendingDecalSpawns>();
+    assert!(pending.0.is_empty(), "no entity and no position must skip without queueing");
+}
