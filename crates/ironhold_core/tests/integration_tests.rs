@@ -1,56 +1,17 @@
-use bevy::prelude::*;
+﻿use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
-use ironhold_core::{GamePlugin, ProjectConfigPath, ProjectRoot, PipelineWarmup, GameVariables};
-use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, BackgroundMusic, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, LoadedAudioHandles, BehaviorHandle, EntityFsmState};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats, ModifierDef, ModifierKind, StackRule, ActiveModifier, LoadedModifiers};
-use ironhold_core::schema::catalog::AudioEntry;
-use ironhold_core::schema::stats::StatMap;
+use ironhold_core::{PipelineWarmup, GameVariables};
+use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, BehaviorHandle, EntityFsmState};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
 use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
-use ironhold_core::capabilities::stat_radar::StatRadarNode;
-use ironhold_core::capabilities::stat_display::resolve_stat;
-use std::sync::{Arc, Mutex};
 
-fn setup_test_app() -> App {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-    //    .add_plugins(bevy::log::LogPlugin::default())
-       .add_plugins(bevy::state::app::StatesPlugin)
-       .add_plugins(bevy::transform::TransformPlugin)
-       .add_plugins(AssetPlugin::default())
-       .add_plugins(bevy::scene::ScenePlugin)
-       .add_message::<bevy::input::mouse::MouseMotion>()
-       .add_message::<bevy::input::mouse::MouseWheel>()
-       .init_resource::<ButtonInput<KeyCode>>()
-       .init_resource::<ButtonInput<MouseButton>>()
-       .init_resource::<Messages<UiEvent>>()
-       .init_resource::<Messages<GameEvent>>()
-       .init_resource::<Messages<SceneEvent>>()
-       .init_resource::<Messages<InputActionMessage>>()
-       .init_resource::<Messages<AppExit>>()
-       .init_resource::<Messages<bevy::input::mouse::MouseMotion>>()
-       .init_resource::<Messages<bevy::input::mouse::MouseWheel>>()
-       .init_asset::<Mesh>()
-       .init_asset::<bevy::shader::Shader>()
-       .init_asset::<ironhold_core::capabilities::terrain_material::TerrainMaterial>()
-       .init_asset::<StandardMaterial>()
-       .init_asset::<Image>()
+mod support;
+use support::setup_test_app;
 
-       .init_asset::<Scene>()
-       .init_asset::<Gltf>()
-       .init_asset::<AnimationGraph>()
-       .init_asset::<ironhold_core::schema::player::AnimationPolicy>()
-       .init_asset::<ironhold_core::schema::project::LogicRulesAsset>()
-       .init_asset::<ironhold_core::schema::project::StateMachineAsset>()
-       .init_asset::<bevy::audio::AudioSource>()
-       .insert_resource(ProjectConfigPath("projects/integration_tests/integration_tests.project.ron".to_string()))
-       .insert_resource(ProjectRoot("projects/integration_tests".to_string()))
-       .add_plugins(GamePlugin);
-    app
-}
 #[test]
 fn test_ui_button_to_load_scene_action() {
     let mut app = setup_test_app();
@@ -382,141 +343,6 @@ fn model_fixup_persists_reset() {
 }
 
 #[test]
-fn test_play_sound_action_spawns_audio_player() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // Provide a catalog with a known audio key
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("click".to_string(), AudioEntry { path: "shared/audio/menu-button-click.wav".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "click".to_string(), volume: 1.0 });
-    app.update();
-
-    let count = app.world_mut()
-        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 1, "Expected one AudioPlayer entity to be spawned for PlaySound");
-}
-
-#[test]
-fn test_play_sound_unsupported_format_does_not_panic() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // Register a catalog entry with an unsupported file extension
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("bad".to_string(), AudioEntry { path: "shared/audio/soundtrack.aac".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "bad".to_string(), volume: 1.0 });
-    app.update(); // Must not panic
-
-    // No AudioPlayer should have been spawned
-    let count = app.world_mut()
-        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 0, "Unsupported format should be rejected before spawning AudioPlayer");
-}
-
-#[test]
-fn test_play_sound_missing_key_does_not_panic() {
-    let mut app = setup_test_app();
-    app.update();
-
-    // No audio entries in the default catalog — should warn and not panic
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::PlaySound { key: "nonexistent".to_string(), volume: 1.0 });
-    app.update();
-
-    let count = app.world_mut()
-        .query::<&bevy::audio::AudioPlayer<bevy::audio::AudioSource>>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 0, "No AudioPlayer should be spawned for an unknown sound key");
-}
-
-#[test]
-fn test_play_sound_combined_volume_applied_to_playback_settings() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // catalog volume 0.5, action volume 0.5 → combined should be 0.25
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 0.5 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlaySound { key: "click".to_string(), volume: 0.5 });
-    app.update();
-
-    let mut q = app.world_mut()
-        .query::<&bevy::audio::PlaybackSettings>();
-    let settings = q.iter(app.world()).next()
-        .expect("PlaybackSettings component should exist on the spawned AudioPlayer entity");
-    let bevy::audio::Volume::Linear(v) = settings.volume else {
-        panic!("Expected Volume::Linear");
-    };
-    assert!(
-        (v - 0.25).abs() < 1e-5,
-        "Expected combined volume 0.5 * 0.5 = 0.25, got {v}"
-    );
-}
-
-#[test]
-fn test_play_sound_default_volume_is_full() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // Both volumes default to 1.0 — PlaybackSettings should have Linear(1.0)
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlaySound { key: "click".to_string(), volume: 1.0 });
-    app.update();
-
-    let mut q = app.world_mut()
-        .query::<&bevy::audio::PlaybackSettings>();
-    let settings = q.iter(app.world()).next()
-        .expect("PlaybackSettings should exist on spawned entity");
-    let bevy::audio::Volume::Linear(v) = settings.volume else {
-        panic!("Expected Volume::Linear");
-    };
-    assert!(
-        (v - 1.0).abs() < 1e-5,
-        "Default volumes should produce Linear(1.0), got {v}"
-    );
-}
-
-#[test]
 fn test_spawn_action_assigns_spawn_id_and_registers() {
     use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
 
@@ -688,7 +514,7 @@ fn test_state_gated_rule_only_fires_in_matching_state() {
         }
     ]));
 
-    // Fire event while in the wrong state ("") — rule must be suppressed.
+    // Fire event while in the wrong state ("") â€” rule must be suppressed.
     app.world_mut().resource_mut::<Messages<UiEvent>>()
         .write(UiEvent::ButtonPressed("do_thing".to_string()));
     app.update();
@@ -710,7 +536,7 @@ fn test_state_gated_rule_only_fires_in_matching_state() {
     assert_eq!(state.0, "triggered", "Rule should fire in the matching state");
 }
 
-// ── FSM interpreter tests ─────────────────────────────────────────────────────
+// â”€â”€ FSM interpreter tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Helper: build a minimal StateMachineAsset with two states ("a" and "b") and one transition.
 fn make_test_fsm() -> StateMachineAsset {
@@ -775,7 +601,7 @@ fn test_fsm_in_state_on_binding_suppressed_in_wrong_state() {
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
-    // Start in "b" — the "in_state_a" binding belongs to "a".
+    // Start in "b" â€” the "in_state_a" binding belongs to "a".
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -797,7 +623,7 @@ fn test_fsm_transition_fires_exit_enter_and_advances_state() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    // Trigger the transition a → b.
+    // Trigger the transition a â†’ b.
     app.world_mut().resource_mut::<Messages<UiEvent>>()
         .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
@@ -818,7 +644,7 @@ fn test_fsm_transition_does_not_fire_from_wrong_state() {
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
-    // Start in "b" — transition is from "a" only.
+    // Start in "b" â€” transition is from "a" only.
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -843,7 +669,7 @@ fn test_fsm_any_state_transition_fires_from_any_state() {
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
-    // Start in "b" — the any-state transition should still fire.
+    // Start in "b" â€” the any-state transition should still fire.
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -874,7 +700,7 @@ fn test_fsm_global_on_fires_regardless_of_state() {
         "global_on binding should fire from any state");
 }
 
-// ── Rules interpreter additional tests ────────────────────────────────────────
+// â”€â”€ Rules interpreter additional tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_rules_no_match_does_not_queue_action() {
@@ -894,7 +720,7 @@ fn test_rules_no_match_does_not_queue_action() {
     app.update();
 
     let queue = app.world().resource::<ActionQueue>();
-    assert!(queue.0.is_empty(), "No rule matched — queue must stay empty");
+    assert!(queue.0.is_empty(), "No rule matched â€” queue must stay empty");
 }
 
 #[test]
@@ -986,7 +812,7 @@ fn test_rules_scene_event_unloading_triggers_action() {
         "scene.unloading:main rule should fire on SceneEvent::Unloading");
 }
 
-// ── FIFO ordering tests ───────────────────────────────────────────────────────
+// â”€â”€ FIFO ordering tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_action_queue_is_fifo() {
@@ -1055,10 +881,10 @@ fn test_fsm_exit_before_entry_fifo_order() {
     // last_action reflects the final action executed.
     let debug = app.world().resource::<ironhold_core::DebugState>();
     assert_eq!(debug.last_action, "Log(\"entry_b_2\")",
-        "FIFO exit→entry: last executed action should be the second entry action of state b");
+        "FIFO exitâ†’entry: last executed action should be the second entry action of state b");
 }
 
-// ── FSM interpreter additional tests ──────────────────────────────────────────
+// â”€â”€ FSM interpreter additional tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_fsm_exit_action_fires_on_transition() {
@@ -1178,58 +1004,12 @@ fn test_fsm_scene_event_loaded_triggers_transition() {
     assert_eq!(state.0, "b", "SceneEvent::Loaded should trigger an FSM transition");
 }
 
-// ── Audio preload tests ───────────────────────────────────────────────────────
-
-#[test]
-fn test_preload_audio_populates_handles_on_scene_ready() {
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
-    catalog.audio.insert("jump".to_string(),         AudioEntry { path: "shared/audio/jump.wav".to_string(), volume: 1.0 });
-    catalog.audio.insert("collect_coin".to_string(), AudioEntry { path: "shared/audio/coin.wav".to_string(), volume: 1.0 });
-    app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
-
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Ready("projects/test/scenes/main.scene.ron".to_string()));
-    app.update();
-
-    let handles = app.world().resource::<LoadedAudioHandles>();
-    assert_eq!(handles.0.len(), 2,
-        "preload_audio_system should create one handle per catalog audio entry");
-}
-
-#[test]
-fn test_preload_audio_clears_on_scene_transition() {
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut catalog = ironhold_core::schema::catalog::AssetCatalog::default();
-    catalog.audio.insert("jump".to_string(),         AudioEntry { path: "shared/audio/jump.wav".to_string(), volume: 1.0 });
-    catalog.audio.insert("collect_coin".to_string(), AudioEntry { path: "shared/audio/coin.wav".to_string(), volume: 1.0 });
-    app.world_mut().insert_resource(LoadedAssetCatalog(catalog));
-
-    // First scene load.
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Ready("projects/test/scenes/scene_a.scene.ron".to_string()));
-    app.update();
-
-    // Second scene load (transition) — handles must not accumulate.
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Ready("projects/test/scenes/scene_b.scene.ron".to_string()));
-    app.update();
-
-    let handles = app.world().resource::<LoadedAudioHandles>();
-    assert_eq!(handles.0.len(), 2,
-        "preload_audio_system must clear and repopulate on each Ready, not accumulate");
-}
-
 #[test]
 fn test_fsm_no_loaded_state_machine_is_noop() {
     let mut app = setup_test_app();
     app.update();
 
-    // Explicit None — no FSM loaded.
+    // Explicit None â€” no FSM loaded.
     app.world_mut().insert_resource(LoadedStateMachine(None));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -1237,12 +1017,12 @@ fn test_fsm_no_loaded_state_machine_is_noop() {
     app.update(); // must not panic
 
     let queue = app.world().resource::<ActionQueue>();
-    assert!(queue.0.is_empty(), "No FSM loaded — action queue must remain empty");
+    assert!(queue.0.is_empty(), "No FSM loaded â€” action queue must remain empty");
     let state = app.world().resource::<LogicState>();
     assert_eq!(state.0, "", "LogicState must remain unchanged when no FSM is loaded");
 }
 
-// ── Executor additional tests ──────────────────────────────────────────────────
+// â”€â”€ Executor additional tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_log_action_updates_debug_last_action() {
@@ -1297,7 +1077,7 @@ fn test_toggle_overlay_opens_when_no_overlay_active() {
     let mut app = setup_test_app();
     app.update();
 
-    // No OverlayEntity present — toggle should open (set load mode to Overlay).
+    // No OverlayEntity present â€” toggle should open (set load mode to Overlay).
     app.world_mut().resource_mut::<ActionQueue>()
         .push(Action::ToggleOverlay("scenes/pause.scene.ron".to_string()));
     app.update();
@@ -1329,206 +1109,6 @@ fn test_toggle_overlay_closes_when_overlay_active() {
 }
 
 #[test]
-fn test_play_music_loop_spawns_background_music() {
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("bg_music".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "bg_music".to_string(), volume: 1.0 });
-    app.update();
-
-    let count = app.world_mut()
-        .query::<&BackgroundMusic>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 1, "PlayMusicLoop should spawn exactly one BackgroundMusic entity");
-}
-
-#[test]
-fn test_play_music_loop_stops_previous_track_and_spawns_new() {
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("track_a".to_string(), AudioEntry { path: "shared/audio/track_a.ogg".to_string(), volume: 1.0 }),
-            ("track_b".to_string(), AudioEntry { path: "shared/audio/track_b.ogg".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    // Start first track.
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "track_a".to_string(), volume: 1.0 });
-    app.update();
-    app.update(); // flush despawn commands from any previous music stop
-
-    // Start second track — should stop the first and spawn a new one.
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "track_b".to_string(), volume: 1.0 });
-    app.update();
-    app.update(); // flush
-
-    let count = app.world_mut()
-        .query::<&BackgroundMusic>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 1,
-        "PlayMusicLoop should replace the previous track — exactly one BackgroundMusic entity");
-}
-
-#[test]
-fn test_play_music_loop_unsupported_format_does_not_panic() {
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("bad_music".to_string(), AudioEntry { path: "shared/audio/track.aac".to_string(), volume: 1.0 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "bad_music".to_string(), volume: 1.0 });
-    app.update(); // must not panic
-
-    let count = app.world_mut()
-        .query::<&BackgroundMusic>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 0, "Unsupported audio format should not spawn a BackgroundMusic entity");
-}
-
-#[test]
-fn test_play_music_loop_missing_key_does_not_panic() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "nonexistent_track".to_string(), volume: 1.0 });
-    app.update(); // must not panic
-
-    let count = app.world_mut()
-        .query::<&BackgroundMusic>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 0, "Missing audio key should not spawn a BackgroundMusic entity");
-}
-
-#[test]
-fn test_play_music_loop_combined_volume_applied_to_playback_settings() {
-    use ironhold_core::schema::catalog::AssetCatalog;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // catalog 0.6 × action 0.5 = 0.3
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
-            ("bg".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 0.6 }),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::PlayMusicLoop { key: "bg".to_string(), volume: 0.5 });
-    app.update();
-
-    let mut q = app.world_mut()
-        .query::<(&BackgroundMusic, &bevy::audio::PlaybackSettings)>();
-    let (_, settings) = q.iter(app.world()).next()
-        .expect("BackgroundMusic entity should have PlaybackSettings");
-    let bevy::audio::Volume::Linear(v) = settings.volume else {
-        panic!("Expected Volume::Linear");
-    };
-    assert!(
-        (v - 0.30).abs() < 1e-5,
-        "Expected combined volume 0.6 * 0.5 = 0.30, got {v}"
-    );
-}
-
-#[test]
-fn test_stop_music_despawns_background_music() {
-    let mut app = setup_test_app();
-    app.update();
-
-    // Manually place a BackgroundMusic entity in the world.
-    app.world_mut().spawn(BackgroundMusic);
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::StopMusic);
-    app.update(); // executor queues despawn
-    app.update(); // flush
-
-    let count = app.world_mut()
-        .query::<&BackgroundMusic>()
-        .iter(app.world())
-        .count();
-    assert_eq!(count, 0, "StopMusic should despawn all BackgroundMusic entities");
-}
-
-#[test]
-fn test_set_volume_updates_global_volume() {
-    let mut app = setup_test_app();
-    app.insert_resource(bevy::audio::GlobalVolume::default());
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::SetVolume(50));
-    app.update();
-
-    let gv = app.world().resource::<bevy::audio::GlobalVolume>();
-    let linear = match gv.volume {
-        bevy::audio::Volume::Linear(v) => v,
-        _ => panic!("Expected Volume::Linear"),
-    };
-    assert!((linear - 0.5).abs() < 1e-5, "SetVolume(50) should set GlobalVolume to 0.5 linear");
-}
-
-#[test]
-fn test_set_volume_clamped_to_100() {
-    let mut app = setup_test_app();
-    app.insert_resource(bevy::audio::GlobalVolume::default());
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::SetVolume(150)); // over 100 — clamped
-    app.update();
-
-    let gv = app.world().resource::<bevy::audio::GlobalVolume>();
-    let linear = match gv.volume {
-        bevy::audio::Volume::Linear(v) => v,
-        _ => panic!("Expected Volume::Linear"),
-    };
-    assert!((linear - 1.0).abs() < 1e-5, "SetVolume > 100 should clamp to 1.0 linear");
-}
-
-#[test]
-fn test_set_volume_no_resource_does_not_panic() {
-    // GlobalVolume resource absent — executor warns but must not panic.
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::SetVolume(80));
-    app.update(); // must not panic
-}
-
-#[test]
 fn test_preload_scene_ron_pushes_handle() {
     let mut app = setup_test_app();
     app.update();
@@ -1546,7 +1126,7 @@ fn test_preload_non_scene_path_does_not_panic() {
     let mut app = setup_test_app();
     app.update();
 
-    // Non-.scene.ron path — executor should warn, not push a handle.
+    // Non-.scene.ron path â€” executor should warn, not push a handle.
     app.world_mut().resource_mut::<ActionQueue>()
         .push(Action::PreloadScene("textures/something.png".to_string()));
     app.update(); // must not panic
@@ -1556,7 +1136,7 @@ fn test_preload_non_scene_path_does_not_panic() {
         "Non-.scene.ron path should not be added to PreloadedScenes");
 }
 
-// ── Animation clip validation ─────────────────────────────────────────────────
+// â”€â”€ Animation clip validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_animation_graph_only_includes_present_clips() {
@@ -1597,7 +1177,7 @@ fn test_animation_graph_only_includes_present_clips() {
         .named_animations
         .insert("Walk_Loop".into(), walk_clip);
 
-    // Policy declares four clips — only "Walk_Loop" exists in the Gltf.
+    // Policy declares four clips â€” only "Walk_Loop" exists in the Gltf.
     let policy = AnimationPolicy {
         base: BaseAnimations {
             idle: "Idle_Loop".to_string(),
@@ -1694,7 +1274,7 @@ fn test_animation_missing_clip_stops_retrying() {
     );
 }
 
-// ── Scene load cleanup tests ──────────────────────────────────────────────────
+// â”€â”€ Scene load cleanup tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Drive a Replace-mode scene load through `spawn_scene_v2`.
 /// Inserts a minimal ProjectConfig override and a synthetic empty scene, then
@@ -1789,11 +1369,11 @@ fn test_key_bindings_do_not_bleed_across_scenes() {
     let bindings = app.world().resource::<LoadedKeyBindings>();
     assert!(
         !bindings.0.contains_key("KeyX"),
-        "LoadedKeyBindings must not carry 'KeyX' forward from a previous scene — no bleed allowed"
+        "LoadedKeyBindings must not carry 'KeyX' forward from a previous scene â€” no bleed allowed"
     );
 }
 
-// ── Spawn/despawn registry tests ──────────────────────────────────────────────
+// â”€â”€ Spawn/despawn registry tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_spawn_id_collision_orphans_old_entity() {
@@ -1827,7 +1407,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
     );
     app.update();
 
-    // Second spawn with the same ID — silently overwrites the registry entry.
+    // Second spawn with the same ID â€” silently overwrites the registry entry.
     app.world_mut().resource_mut::<ActionQueue>().push(
         Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None },
     );
@@ -1841,7 +1421,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
         .filter(|s| s.0 == "crate_1")
         .count();
     assert_eq!(id_count, 2,
-        "Both spawns should produce a SpawnId('crate_1') — the first entity is now orphaned");
+        "Both spawns should produce a SpawnId('crate_1') â€” the first entity is now orphaned");
 
     let registry = app.world().resource::<SpawnRegistry>();
     assert_eq!(registry.entities.len(), 1,
@@ -1915,16 +1495,16 @@ fn test_spawn_yaw_deg_sets_transform_rotation() {
     let expected = Quat::from_rotation_y(90f32.to_radians());
     assert!(
         transform.rotation.abs_diff_eq(expected, 1e-5),
-        "yaw_deg: 90 should produce a 90° Y-axis rotation, got {:?}",
+        "yaw_deg: 90 should produce a 90Â° Y-axis rotation, got {:?}",
         transform.rotation,
     );
 }
 
-// ── FSM correctness tests ─────────────────────────────────────────────────────
+// â”€â”€ FSM correctness tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_fsm_only_first_matching_transition_fires() {
-    // Two transitions on the same event from state "a": first → "b", second → "c".
+    // Two transitions on the same event from state "a": first â†’ "b", second â†’ "c".
     // The FSM interpreter uses `.find()` so only the first match executes.
     let fsm = StateMachineAsset {
         schema_version: 1,
@@ -1968,8 +1548,8 @@ fn test_fsm_only_first_matching_transition_fires() {
 #[test]
 fn test_fsm_state_advance_visible_in_same_frame() {
     // Two events arrive in the same frame.
-    // Event 1 "go_b" fires the a→b transition and advances logic_state to "b" immediately.
-    // Event 2 "go_c" fires the b→c transition because the interpreter already sees state "b".
+    // Event 1 "go_b" fires the aâ†’b transition and advances logic_state to "b" immediately.
+    // Event 2 "go_c" fires the bâ†’c transition because the interpreter already sees state "b".
     let fsm = StateMachineAsset {
         schema_version: 1,
         initial_state: "a".to_string(),
@@ -1999,7 +1579,7 @@ fn test_fsm_state_advance_visible_in_same_frame() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    // Both events in the same frame — first advances state so second can fire.
+    // Both events in the same frame â€” first advances state so second can fire.
     app.world_mut()
         .resource_mut::<Messages<UiEvent>>()
         .write(UiEvent::ButtonPressed("go_b".to_string()));
@@ -2013,7 +1593,7 @@ fn test_fsm_state_advance_visible_in_same_frame() {
         "State advance from first transition must be visible to second event in the same frame");
 }
 
-// ── Model fixes merge tests ───────────────────────────────────────────────────
+// â”€â”€ Model fixes merge tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_model_fixes_external_overrides_inline() {
@@ -2037,7 +1617,7 @@ fn test_model_fixes_external_overrides_inline() {
         ("models/hero.glb".to_string(), inline_fix.clone()),
     ]);
 
-    // Extend with external file — same key present in both.
+    // Extend with external file â€” same key present in both.
     let external: HashMap<String, TransformFix> = HashMap::from([
         ("models/hero.glb".to_string(), external_fix.clone()),
         ("models/prop.glb".to_string(), inline_fix.clone()), // key only in external
@@ -2078,7 +1658,7 @@ fn test_model_fixes_base_path_fallback() {
         scale: (1.0, 1.0, 1.0),
     };
 
-    // Store fix under the BASE path only — no fragment path entry.
+    // Store fix under the BASE path only â€” no fragment path entry.
     {
         let mut merged = app
             .world_mut()
@@ -2088,7 +1668,7 @@ fn test_model_fixes_base_path_fallback() {
             "Precondition: fragment path must not be in fixes");
     }
 
-    // Spawn using the FRAGMENT path — base path fallback should apply the fix.
+    // Spawn using the FRAGMENT path â€” base path fallback should apply the fix.
     let (_, child) = app
         .world_mut()
         .run_system_once(move |
@@ -2122,7 +1702,7 @@ fn test_model_fixes_base_path_fallback() {
     );
 }
 
-// ── PipelineWarmup ────────────────────────────────────────────────────────────
+// â”€â”€ PipelineWarmup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_pipeline_warmup_decrements_to_zero() {
@@ -2147,7 +1727,7 @@ fn test_pipeline_warmup_stops_at_zero() {
 
     app.world_mut().insert_resource(PipelineWarmup(2));
 
-    // Run more frames than the initial count — should not underflow.
+    // Run more frames than the initial count â€” should not underflow.
     for _ in 0..10 {
         app.update();
     }
@@ -2156,7 +1736,7 @@ fn test_pipeline_warmup_stops_at_zero() {
     assert_eq!(warmup.0, 0, "PipelineWarmup must not go below 0");
 }
 
-// ── Entity FSM (Beta 0.4) tests ───────────────────────────────────────────────
+// â”€â”€ Entity FSM (Beta 0.4) tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn make_two_state_behavior(app: &mut App) -> Handle<StateMachineAsset> {
     let fsm = StateMachineAsset {
@@ -2192,7 +1772,7 @@ fn test_entity_fsm_transitions_on_game_event() {
         SpawnId("box_01".to_string()),
     )).id();
 
-    // Fire the scoped event: {self} → box_01
+    // Fire the scoped event: {self} â†’ box_01
     app.world_mut()
         .resource_mut::<Messages<GameEvent>>()
         .write(GameEvent::Trigger("entity.interacted:box_01".to_string()));
@@ -2200,7 +1780,7 @@ fn test_entity_fsm_transitions_on_game_event() {
 
     let state = app.world().get::<EntityFsmState>(entity).unwrap();
     assert_eq!(state.current, "collected",
-        "Entity FSM should transition idle → collected on matching interacted event");
+        "Entity FSM should transition idle â†’ collected on matching interacted event");
 }
 
 #[test]
@@ -2280,7 +1860,7 @@ fn test_entity_fsm_entry_actions_queued_on_transition() {
     app.update();
 
     // The entry action is `Despawn("{self}")` which the interpreter rewrites to
-    // `Despawn("crate_01")`. Verify the action was queued (and executed — the queue
+    // `Despawn("crate_01")`. Verify the action was queued (and executed â€” the queue
     // is drained each frame, so we check side-effects via the SpawnRegistry).
     // Since the entity has no SpawnRegistry entry, the executor warns but doesn't panic.
     // The test passes if no panic occurs and the FSM state advanced.
@@ -2338,11 +1918,11 @@ fn test_entity_fsm_despawn_self_rewritten_to_concrete_id() {
 
     assert!(
         app.world().get_entity(entity).is_err(),
-        "Entity with SpawnId 'target_01' must be despawned — Despawn(\"{{self}}\") was not rewritten correctly"
+        "Entity with SpawnId 'target_01' must be despawned â€” Despawn(\"{{self}}\") was not rewritten correctly"
     );
 }
 
-// ── GameVariables: SetVariable / IncrementVariable ───────────────────────────
+// â”€â”€ GameVariables: SetVariable / IncrementVariable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_set_variable_writes_value() {
@@ -2463,7 +2043,7 @@ fn test_player_jump_emits_game_event() {
     let mut app = setup_test_app();
     app.update();
 
-    // Spawn a minimal player entity; no Rapier context → is_grounded defaults to true each frame.
+    // Spawn a minimal player entity; no Rapier context â†’ is_grounded defaults to true each frame.
     let entity = app.world_mut().spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
         GlobalTransform::default(),
@@ -2524,7 +2104,7 @@ fn test_player_jump_emits_game_event() {
 
     // RapierPhysicsPlugin runs (even in integration tests, cfg(test) does not apply to lib
     // dependencies) and spawns a DefaultRapierContext entity.  With no physics simulation
-    // running, cast_shape always returns None → is_grounded=false → no jump.
+    // running, cast_shape always returns None â†’ is_grounded=false â†’ no jump.
     // Remove that entity so player_movement_system falls into its headless else-branch
     // (is_grounded=true), letting us exercise the jump code path without a physics world.
     {
@@ -2538,7 +2118,7 @@ fn test_player_jump_emits_game_event() {
         }
     }
 
-    // Write InputActionMessage directly — bypasses input_translator and FixedUpdate timing.
+    // Write InputActionMessage directly â€” bypasses input_translator and FixedUpdate timing.
     app.world_mut()
         .resource_mut::<Messages<InputActionMessage>>()
         .write(InputActionMessage { entity, action: InputAction::Jump(true) });
@@ -2559,7 +2139,7 @@ fn test_player_jump_emits_game_event() {
     assert!(has_jumped, "Expected GameEvent::Trigger(\"player.jumped\") in messages after jump");
 }
 
-// ─── PreloadPrefab + spawn queue tests ───────────────────────────────────────
+// â”€â”€â”€ PreloadPrefab + spawn queue tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn minimal_orc_catalogs(app: &mut App) {
     use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
@@ -2600,7 +2180,7 @@ fn test_preload_prefab_unknown_key_does_not_panic() {
     let mut app = setup_test_app();
     app.update();
 
-    // No catalogs inserted — should log a warning and keep going, not panic.
+    // No catalogs inserted â€” should log a warning and keep going, not panic.
     app.world_mut().resource_mut::<ActionQueue>()
         .push(Action::PreloadPrefab("nonexistent_prefab".to_string()));
     app.update();
@@ -2615,7 +2195,7 @@ fn test_spawn_queue_rate_limits_to_two_per_frame() {
     app.update();
     minimal_orc_catalogs(&mut app);
 
-    // Queue 3 spawns — only 2 should be processed in the first update.
+    // Queue 3 spawns â€” only 2 should be processed in the first update.
     for i in 0..3 {
         app.world_mut().resource_mut::<ActionQueue>().push(
             Action::Spawn {
@@ -2690,470 +2270,7 @@ fn test_pending_spawns_cleared_on_load_scene() {
     assert!(!ids.contains(&"should_be_cancelled".to_string()), "Queued spawn should not have been executed after LoadScene");
 }
 
-// ── Stat system tests ─────────────────────────────────────────────────────────
-
-fn make_stat_def(base: f32, max: f32) -> StatDef {
-    StatDef { base, min: 0.0, max, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![] }
-}
-
-#[test]
-fn test_stat_map_component_holds_correct_initial_values() {
-    // StatMap inserted directly carries the LiveStat's base value.
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut stat_map = StatMap::default();
-    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(80.0, 100.0)));
-    let entity = app.world_mut().spawn(stat_map).id();
-
-    let sm = app.world().get::<StatMap>(entity).unwrap();
-    assert!(sm.0.contains_key("health"), "StatMap must contain the inserted stat key");
-    assert_eq!(sm.0["health"].current, 80.0, "LiveStat must initialise to the declared base value");
-    assert_eq!(sm.0["health"].def.max, 100.0);
-}
-
-#[test]
-fn test_modify_stat_with_dot_key_routes_to_entity_stat_map() {
-    // "entity_id.stat_name" → executor finds the entity and mutates its StatMap.
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut stat_map = StatMap::default();
-    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(100.0, 100.0)));
-
-    let entity = app.world_mut().spawn((
-        SpawnId("goblin_01".to_string()),
-        stat_map,
-    )).id();
-    app.world_mut()
-        .resource_mut::<SpawnRegistry>()
-        .entities
-        .insert("goblin_01".to_string(), entity);
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::ModifyStat { key: "goblin_01.health".to_string(), delta: -25.0 });
-    app.update();
-
-    let sm = app.world().get::<StatMap>(entity).unwrap();
-    assert_eq!(sm.0["health"].current, 75.0,
-        "ModifyStat with dot key must mutate the entity's StatMap, not LoadedStats");
-}
-
-#[test]
-fn test_modify_stat_without_dot_key_routes_to_loaded_stats() {
-    // No dot in key → executor mutates global LoadedStats resource.
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut loaded = LoadedStats::default();
-    loaded.0.insert("player_health".to_string(), LiveStat::new(make_stat_def(100.0, 100.0)));
-    app.world_mut().insert_resource(loaded);
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::ModifyStat { key: "player_health".to_string(), delta: -30.0 });
-    app.update();
-
-    let loaded = app.world().resource::<LoadedStats>();
-    assert_eq!(loaded.0["player_health"].current, 70.0,
-        "ModifyStat without dot key must mutate LoadedStats, not any entity StatMap");
-}
-
-#[test]
-fn test_stat_map_threshold_crossing_emits_game_event() {
-    // After a ModifyStat drives a stat to 0, stat_threshold_system emits the configured event.
-    let mut app = setup_test_app();
-    app.update();
-
-    let def = StatDef {
-        base: 50.0, min: 0.0, max: 50.0, soft_max: None,
-        regen_rate: 0.0, regen_delay: 0.0,
-        thresholds: vec![
-            StatThreshold {
-                when: ThresholdCondition::BelowOrEqual(0.0),
-                emit: "stat.enemy_01.health.depleted".to_string(),
-            },
-        ],
-    };
-    let mut stat_map = StatMap::default();
-    stat_map.0.insert("health".to_string(), LiveStat::new(def));
-
-    let entity = app.world_mut().spawn((
-        SpawnId("enemy_01".to_string()),
-        stat_map,
-    )).id();
-    app.world_mut()
-        .resource_mut::<SpawnRegistry>()
-        .entities
-        .insert("enemy_01".to_string(), entity);
-
-    // Deplete the health stat in one action.
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::ModifyStat { key: "enemy_01.health".to_string(), delta: -50.0 });
-    app.update();
-
-    // stat_threshold_system runs in the same frame as the executor (chained after it).
-    // The emitted GameEvent is readable immediately after the update.
-    app.world_mut().run_system_once(|mut events: MessageReader<GameEvent>| {
-        let names: Vec<String> = events.read()
-            .map(|e| { let GameEvent::Trigger(n) = e; n.clone() })
-            .collect();
-        assert!(
-            names.contains(&"stat.enemy_01.health.depleted".to_string()),
-            "stat_threshold_system must emit the configured event on false→true crossing; got: {:?}", names
-        );
-    }).unwrap();
-}
-
-#[test]
-fn test_despawn_action_removes_entity_and_stat_map() {
-    // Despawn by spawn ID removes the entity; its StatMap component is gone with it.
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut stat_map = StatMap::default();
-    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(40.0, 100.0)));
-
-    let entity = app.world_mut().spawn((
-        SpawnId("dying_01".to_string()),
-        stat_map,
-    )).id();
-    app.world_mut()
-        .resource_mut::<SpawnRegistry>()
-        .entities
-        .insert("dying_01".to_string(), entity);
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::Despawn("dying_01".to_string()));
-    app.update(); // executor queues despawn
-    app.update(); // flush
-
-    assert!(
-        app.world().get_entity(entity).is_err(),
-        "Despawned entity must no longer exist — StatMap is removed with the entity"
-    );
-}
-
-#[test]
-fn test_stat_radar_scene_load_spawns_node_with_correct_stat_keys() {
-    // Loading a scene that contains a StatRadar UI element must produce an entity
-    // carrying a StatRadarNode component with the stat_keys from the RON definition.
-    let mut app = setup_test_app();
-    app.update();
-
-    let config_handle = app
-        .world_mut()
-        .resource_mut::<Assets<ProjectConfig>>()
-        .add(ProjectConfig {
-            schema_version: 1,
-            initial_scene: "scenes/t.ron".to_string(),
-            ..Default::default()
-        });
-    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-
-    let scene: GameSceneV2 = ron::de::from_str(r#"
-        (
-            schema_version: 2,
-            entities: [],
-            ui: [
-                StatRadar((
-                    id: "test_radar",
-                    stats: ["player_health", "player_mana", "player_stamina"],
-                )),
-            ],
-        )
-    "#).expect("test scene RON must parse");
-
-    let scene_handle = app
-        .world_mut()
-        .resource_mut::<Assets<GameSceneV2>>()
-        .add(scene);
-    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
-
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::LoadingScene);
-    app.update(); // state transitions
-    app.update(); // spawn_scene_v2 fires
-    app.update(); // commands flushed
-
-    let mut found = false;
-    let mut world = app.world_mut();
-    let mut q = world.query::<&StatRadarNode>();
-    for node in q.iter(&world) {
-        if node.stat_keys == vec!["player_health", "player_mana", "player_stamina"] {
-            found = true;
-        }
-    }
-    assert!(found, "scene loader must spawn an entity with StatRadarNode carrying the RON-defined stat keys");
-}
-
-// ── Modifier system tests ──────────────────────────────────────────────────────
-
-fn make_additive_modifier(stat: &str, amount: f32, stack_rule: StackRule) -> ModifierDef {
-    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Additive(amount), duration_secs: None, stack_rule }
-}
-
-fn make_timed_additive_modifier(stat: &str, amount: f32, duration: f32) -> ModifierDef {
-    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Additive(amount), duration_secs: Some(duration), stack_rule: StackRule::Add }
-}
-
-fn make_multiplicative_modifier(stat: &str, factor: f32) -> ModifierDef {
-    ModifierDef { stat: stat.to_string(), kind: ModifierKind::Multiplicative(factor), duration_secs: None, stack_rule: StackRule::Add }
-}
-
-#[test]
-fn test_additive_modifier_raises_effective_value() {
-    let def = make_stat_def(50.0, 100.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 20.0, StackRule::Add));
-
-    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 70.0, "additive +20 on current=50 should give effective=70");
-}
-
-#[test]
-fn test_additive_modifiers_stack_with_add_rule() {
-    let def = make_stat_def(50.0, 100.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 10.0, StackRule::Add));
-
-    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
-    stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 70.0, "two Add-rule +10 modifiers should accumulate to +20");
-}
-
-#[test]
-fn test_max_stack_rule_ignores_weaker_instance() {
-    let def = make_stat_def(40.0, 100.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("poison".to_string(), ModifierDef {
-        stat: "health".to_string(),
-        kind: ModifierKind::Additive(-5.0),
-        duration_secs: None,
-        stack_rule: StackRule::Max,
-    });
-
-    // Apply twice — Max rule means only one instance's magnitude counts
-    stat.active_modifiers.push(ActiveModifier { key: "poison".to_string(), remaining_secs: None });
-    stat.active_modifiers.push(ActiveModifier { key: "poison".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 35.0, "Max rule: two instances of -5 should still only apply -5 once (not -10)");
-}
-
-#[test]
-fn test_multiplicative_modifier_scales_current() {
-    let def = make_stat_def(10.0, 20.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
-
-    stat.active_modifiers.push(ActiveModifier { key: "speed_boost".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 15.0, "multiplicative 1.5× on current=10 should give effective=15");
-}
-
-#[test]
-fn test_soft_max_allows_overheal() {
-    let mut def = make_stat_def(100.0, 100.0);
-    def.soft_max = Some(125.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("overheal".to_string(), make_additive_modifier("health", 25.0, StackRule::Add));
-
-    stat.active_modifiers.push(ActiveModifier { key: "overheal".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 125.0, "additive +25 with soft_max=125 should reach 125");
-}
-
-#[test]
-fn test_soft_max_caps_overheal() {
-    let mut def = make_stat_def(100.0, 100.0);
-    def.soft_max = Some(125.0);
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("big_overheal".to_string(), make_additive_modifier("health", 999.0, StackRule::Add));
-
-    stat.active_modifiers.push(ActiveModifier { key: "big_overheal".to_string(), remaining_secs: None });
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 125.0, "effective value must be clamped to soft_max");
-}
-
-#[test]
-fn test_no_modifiers_effective_equals_current() {
-    let def = make_stat_def(75.0, 100.0);
-    let stat = LiveStat::new(def);
-    let modifier_defs = HashMap::new();
-    let eff = stat.compute_effective(&modifier_defs);
-    assert_eq!(eff, 75.0, "with no active modifiers effective must equal current");
-}
-
-#[test]
-fn test_apply_modifier_action_adds_to_loaded_stats() {
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut loaded_stats = LoadedStats::default();
-    loaded_stats.0.insert("speed".to_string(), LiveStat::new(make_stat_def(10.0, 20.0)));
-    app.world_mut().insert_resource(loaded_stats);
-
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
-    app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::ApplyModifier { modifier_key: "speed_boost".to_string() });
-    app.update();
-
-    let stats = app.world().resource::<LoadedStats>();
-    assert_eq!(stats.0["speed"].active_modifiers.len(), 1,
-        "ApplyModifier must push one ActiveModifier onto the stat");
-    assert_eq!(stats.0["speed"].active_modifiers[0].key, "speed_boost");
-}
-
-#[test]
-fn test_remove_modifier_action_clears_active_modifier() {
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut loaded_stats = LoadedStats::default();
-    let mut stat = LiveStat::new(make_stat_def(10.0, 20.0));
-    stat.active_modifiers.push(ActiveModifier { key: "speed_boost".to_string(), remaining_secs: None });
-    loaded_stats.0.insert("speed".to_string(), stat);
-    app.world_mut().insert_resource(loaded_stats);
-
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
-    app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::RemoveModifier { modifier_key: "speed_boost".to_string() });
-    app.update();
-
-    let stats = app.world().resource::<LoadedStats>();
-    assert!(stats.0["speed"].active_modifiers.is_empty(),
-        "RemoveModifier must remove all instances of the modifier from the stat");
-}
-
-#[test]
-fn test_threshold_uses_effective_value_not_current() {
-    // A debuff reduces effective health below 25% while raw current stays above.
-    let mut def = make_stat_def(80.0, 100.0);
-    def.thresholds = vec![StatThreshold {
-        when: ThresholdCondition::BelowPercent(0.25),
-        emit: "stat.health.low".to_string(),
-    }];
-    let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
-    modifier_defs.insert("heavy_curse".to_string(), make_additive_modifier("health", -65.0, StackRule::Add));
-
-    stat.active_modifiers.push(ActiveModifier { key: "heavy_curse".to_string(), remaining_secs: None });
-    // effective = 80 - 65 = 15, which is 15% of max (100) — below 25%
-    let eff = stat.compute_effective(&modifier_defs);
-    assert!(eff < 25.0, "effective should be below 25 after debuff: got {}", eff);
-    // raw current is still 80 — not below 25%
-    assert!(stat.current >= 25.0);
-    // threshold should fire on effective, not current
-    let is_met = ThresholdCondition::BelowPercent(0.25).is_met(eff, stat.def.max);
-    assert!(is_met, "threshold must be met based on effective value");
-    let raw_is_met = ThresholdCondition::BelowPercent(0.25).is_met(stat.current, stat.def.max);
-    assert!(!raw_is_met, "threshold must NOT be met based on raw current");
-}
-
-// ── resolve_stat routing tests ─────────────────────────────────────────────────
-
-#[test]
-fn test_resolve_stat_routes_entity_local_key_through_stat_map() {
-    // "dummy_01.health" must resolve from the StatMap on the entity with SpawnId("dummy_01"),
-    // not from LoadedStats.
-    let mut app = setup_test_app();
-    app.update();
-
-    // Global LoadedStats — must NOT be used for entity-local key.
-    let mut loaded_stats = LoadedStats::default();
-    loaded_stats.0.insert("dummy_01.health".to_string(), LiveStat::new(make_stat_def(999.0, 999.0)));
-    app.world_mut().insert_resource(loaded_stats);
-
-    // Spawn entity with SpawnId + StatMap carrying health at 75/100.
-    let mut stat_map = StatMap(indexmap::IndexMap::new());
-    stat_map.0.insert("health".to_string(), LiveStat::new(make_stat_def(75.0, 100.0)));
-    app.world_mut().spawn((SpawnId("dummy_01".to_string()), stat_map));
-
-    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
-    let result_clone = result.clone();
-
-    let _ = app.world_mut().run_system_once(move |
-        loaded_stats: Res<LoadedStats>,
-        stat_map_query: Query<(&SpawnId, &StatMap)>,
-    | {
-        let val = resolve_stat("dummy_01.health", &loaded_stats, &stat_map_query);
-        *result_clone.lock().unwrap() = Some(val);
-    });
-
-    let val = result.lock().unwrap().unwrap();
-    assert!(val.is_some(), "resolve_stat must find 'dummy_01.health' in entity StatMap");
-    let (effective, min, max) = val.unwrap();
-    assert_eq!(effective, 75.0, "effective must come from StatMap, not the global LoadedStats sentinel");
-    assert_eq!(min, 0.0);
-    assert_eq!(max, 100.0);
-}
-
-#[test]
-fn test_resolve_stat_routes_global_key_through_loaded_stats() {
-    // A key without a dot must resolve from LoadedStats, not entity StatMaps.
-    let mut app = setup_test_app();
-    app.update();
-
-    let mut loaded_stats = LoadedStats::default();
-    loaded_stats.0.insert("player_health".to_string(), LiveStat::new(make_stat_def(60.0, 100.0)));
-    app.world_mut().insert_resource(loaded_stats);
-
-    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
-    let result_clone = result.clone();
-
-    let _ = app.world_mut().run_system_once(move |
-        loaded_stats: Res<LoadedStats>,
-        stat_map_query: Query<(&SpawnId, &StatMap)>,
-    | {
-        let val = resolve_stat("player_health", &loaded_stats, &stat_map_query);
-        *result_clone.lock().unwrap() = Some(val);
-    });
-
-    let val = result.lock().unwrap().unwrap();
-    assert!(val.is_some(), "resolve_stat must find 'player_health' in LoadedStats");
-    let (effective, _, max) = val.unwrap();
-    assert_eq!(effective, 60.0);
-    assert_eq!(max, 100.0);
-}
-
-#[test]
-fn test_resolve_stat_returns_none_for_missing_entity_key() {
-    // A dotted key whose entity does not exist must return None, not panic.
-    let mut app = setup_test_app();
-    app.update();
-
-    let result: Arc<Mutex<Option<Option<(f32, f32, f32)>>>> = Arc::new(Mutex::new(None));
-    let result_clone = result.clone();
-
-    let _ = app.world_mut().run_system_once(move |
-        loaded_stats: Res<LoadedStats>,
-        stat_map_query: Query<(&SpawnId, &StatMap)>,
-    | {
-        let val = resolve_stat("ghost_entity.health", &loaded_stats, &stat_map_query);
-        *result_clone.lock().unwrap() = Some(val);
-    });
-
-    assert!(
-        result.lock().unwrap().unwrap().is_none(),
-        "resolve_stat must return None when entity does not exist"
-    );
-}
-
-// ─── DelayedEventQueue / tick_delayed_events_system tests ─────────────────────
+// â”€â”€â”€ DelayedEventQueue / tick_delayed_events_system tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_emit_event_after_delay_fires_game_event_when_elapsed() {
@@ -3174,7 +2291,7 @@ fn test_emit_event_after_delay_fires_game_event_when_elapsed() {
 
     app.update();
 
-    // Queue should be empty — the entry fired and was removed.
+    // Queue should be empty â€” the entry fired and was removed.
     let queue = app.world().resource::<DelayedEventQueue>();
     assert!(queue.0.is_empty(), "expired entry must be removed from DelayedEventQueue");
 
@@ -3196,7 +2313,7 @@ fn test_emit_event_after_delay_does_not_fire_before_elapsed() {
         .0
         .push((15.0, "entity.respawning:dummy_01".to_string()));
 
-    // Advance only a little — should not fire yet.
+    // Advance only a little â€” should not fire yet.
     app.world_mut()
         .resource_mut::<Time>()
         .advance_by(std::time::Duration::from_millis(500));
@@ -3241,417 +2358,7 @@ fn test_set_entity_visible_hides_then_shows_spawned_entity() {
     assert_eq!(vis, Visibility::Visible, "entity must be visible after SetEntityVisible(true)");
 }
 
-// ─── SpawnEffect / PendingParticleEffects tests ────────────────────────────────
-
-#[test]
-fn test_spawn_effect_with_position_spawns_particle_entities() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let effect_def = EffectDef {
-        particle_count: 8,
-        lifetime_secs: 0.5,
-        speed: 2.0,
-        speed_jitter: 0.0,
-        spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0),
-        emit_radius: 0.0,
-        size: 0.05,
-        size_end: None,
-        size_jitter: 0.0,
-        color_start: (1.0, 1.0, 0.0, 1.0),
-        color_mid: None,
-        color_end: (1.0, 0.0, 0.0, 0.0),
-        gravity: 0.0,
-        turbulence: 0.0,
-        sprite: None,
-        sprites: vec![],
-        additive: false,
-        uv_distort: 0.0,
-        uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![],
-        light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "sparks".to_string(),
-        position: Some((3.0, 1.0, -2.0)),
-        entity: None,
-    });
-    // action_executor pushes to PendingParticleEffects; drain_particle_effects_system fills the pool.
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    let count = pool.particles.iter().filter(|p| p.is_alive()).count();
-    assert_eq!(count, 8, "drain_particle_effects_system must add particle_count entries to the pool");
-}
-
-#[test]
-fn test_spawn_effect_with_entity_resolves_global_transform() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let effect_def = EffectDef {
-        particle_count: 4,
-        lifetime_secs: 0.3,
-        speed: 1.0,
-        speed_jitter: 0.0,
-        spread_deg: 90.0,
-        offset: (0.0, 0.5, 0.0),
-        emit_radius: 0.0,
-        size: 0.04,
-        size_end: None,
-        size_jitter: 0.0,
-        color_start: (0.0, 1.0, 0.0, 1.0),
-        color_mid: None,
-        color_end: (0.0, 0.0, 0.0, 0.0),
-        gravity: 0.0,
-        turbulence: 0.0,
-        sprite: None,
-        sprites: vec![],
-        additive: false,
-        uv_distort: 0.0,
-        uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![],
-        light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("heal".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    // Spawn an entity at a known world position and register it.
-    let entity = app.world_mut().spawn((
-        SpawnId("npc_01".to_string()),
-        GlobalTransform::from_translation(Vec3::new(5.0, 0.0, 3.0)),
-    )).id();
-    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("npc_01".to_string(), entity);
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "heal".to_string(),
-        position: None,
-        entity: Some("npc_01".to_string()),
-    });
-    app.update();
-
-    // origin = entity position (5, 0, 3) + offset (0, 0.5, 0) = (5, 0.5, 3)
-    // Particles are in the pool at spawn_pos with velocity just beginning to advance.
-    let pool = app.world().resource::<ParticlePool>();
-    let positions: Vec<Vec3> = pool.particles.iter()
-        .filter(|p| p.is_alive())
-        .map(|p| p.position)
-        .collect();
-    assert_eq!(positions.len(), 4, "must add particle_count pool entries for entity-based effect");
-    for pos in &positions {
-        // Use wider tolerance (0.1 m) to accommodate up to one physics tick of movement.
-        assert!((pos.x - 5.0).abs() < 0.1, "particle x must be near entity x (got {})", pos.x);
-        assert!((pos.y - 0.5).abs() < 0.1, "particle y must be near entity y + offset (got {})", pos.y);
-        assert!((pos.z - 3.0).abs() < 0.1, "particle z must be near entity z (got {})", pos.z);
-    }
-}
-
-#[test]
-fn test_spawn_effect_unknown_key_does_not_push() {
-    use ironhold_core::capabilities::particle::PendingParticleEffects;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "nonexistent_effect".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let pending = app.world().resource::<PendingParticleEffects>();
-    assert!(pending.0.is_empty(), "unknown effect key must not push to PendingParticleEffects");
-}
-
-#[test]
-fn test_spawn_effect_entity_missing_does_not_push() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::particle::PendingParticleEffects;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let effect_def = EffectDef {
-        particle_count: 4,
-        lifetime_secs: 0.3,
-        speed: 1.0,
-        speed_jitter: 0.0,
-        spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0),
-        emit_radius: 0.0,
-        size: 0.05,
-        size_end: None,
-        size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0),
-        color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0,
-        turbulence: 0.0,
-        sprite: None,
-        sprites: vec![],
-        additive: false,
-        uv_distort: 0.0,
-        uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![],
-        light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sparks".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    // Entity name not registered in SpawnRegistry — should silently skip.
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "sparks".to_string(),
-        position: None,
-        entity: Some("ghost_entity".to_string()),
-    });
-    app.update();
-
-    let pending = app.world().resource::<PendingParticleEffects>();
-    assert!(pending.0.is_empty(), "unresolvable entity must not push to PendingParticleEffects");
-}
-
-#[test]
-fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EmitterShape, LayerDef, VelocityCurve};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    // Two-layer effect: 4 particles in layer 0, 2 particles in layer 1 → 6 total.
-    let layer0 = LayerDef {
-        particle_count: 4,
-        lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 0.5, 0.0, 1.0), color_mid: None,
-        color_end: (0.0, 0.0, 0.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: true,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-    };
-    let layer1 = LayerDef {
-        particle_count: 2,
-        lifetime_secs: 0.8,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.1, 0.0), emit_radius: 0.0,
-        size: 0.05, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 0.9, 1.0), color_mid: None,
-        color_end: (1.0, 0.3, 0.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: true,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-    };
-    let effect_def = EffectDef {
-        particle_count: 12, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.06, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![layer0, layer1],
-        light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("campfire_fire".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "campfire_fire".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
-    assert_eq!(alive, 6, "multi-layer effect must spawn layer[0].particle_count + layer[1].particle_count particles (4 + 2 = 6)");
-}
-
-// ── dynamic effect lights ─────────────────────────────────────────────────────
-
-#[test]
-fn test_spawn_effect_with_light_spawns_point_light_entity() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EffectLightDef};
-    use ironhold_core::capabilities::fading_light::FadingLight;
-    use bevy::prelude::PointLight;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let effect_def = EffectDef {
-        particle_count: 4,
-        lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.05, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 0.5, 0.0, 1.0), color_mid: None,
-        color_end: (0.0, 0.0, 0.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![],
-        light: Some(EffectLightDef {
-            color: (1.0, 0.55, 0.15),
-            intensity: 8000.0,
-            range: 6.0,
-            fade_in_secs: 0.05,
-            fade_out_secs: 0.4,
-            duration_secs: None,
-        }),
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("campfire".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "campfire".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let light_count = app.world_mut().query::<&FadingLight>().iter(app.world()).count();
-    assert_eq!(light_count, 1, "SpawnEffect with light block must spawn exactly one FadingLight entity");
-
-    let point_light_count = app.world_mut().query::<&PointLight>().iter(app.world()).count();
-    assert_eq!(point_light_count, 1, "FadingLight entity must have a PointLight component");
-}
-
-#[test]
-fn test_spawn_effect_without_light_spawns_no_point_light() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef};
-    use ironhold_core::capabilities::fading_light::FadingLight;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let effect_def = EffectDef {
-        particle_count: 4,
-        lifetime_secs: 0.5,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 180.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.05, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 0.0, 1.0), color_mid: None,
-        color_end: (0.0, 0.0, 0.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![],
-        light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("no_light".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "no_light".to_string(),
-        position: Some((1.0, 0.0, 1.0)),
-        entity: None,
-    });
-    app.update();
-
-    let light_count = app.world_mut().query::<&FadingLight>().iter(app.world()).count();
-    assert_eq!(light_count, 0, "SpawnEffect without light block must not spawn any FadingLight entity");
-}
-
-// ── particles_demo smoke test ─────────────────────────────────────────────────
-
-#[test]
-fn test_particles_demo_project_config_loads() {
-    // Smoke test: the particles_demo project config must deserialize and the
-    // engine must reach the LoadingScene state without panicking.
-    let mut app = setup_test_app();
-    app.update();
-
-    // Insert a real particles_demo ProjectConfig.
-    let config_handle = {
-        let ron_str = std::fs::read_to_string(
-            "../../assets/projects/particles_demo/particles_demo.project.ron"
-        ).expect("particles_demo.project.ron must be readable");
-        let config: ProjectConfig = ron::Options::default()
-            .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
-            .from_str(&ron_str)
-            .expect("particles_demo project config must parse");
-        app.world_mut()
-            .resource_mut::<Assets<ProjectConfig>>()
-            .add(config)
-    };
-    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-
-    // Load an empty scene so spawn_scene_v2 can run without a real asset.
-    let scene: GameSceneV2 = ron::de::from_str("(schema_version: 2, entities: [], ui: [])").unwrap();
-    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
-    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
-
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::LoadingScene);
-    app.update(); // state transitions to LoadingScene
-    app.update(); // spawn_scene_v2 fires
-    app.update(); // commands flushed — no panic = pass
-
-    // The app must not have panicked and the state transition must have occurred.
-    let state = app.world().resource::<State<AppState>>();
-    assert_ne!(*state.get(), AppState::Bootstrap,
-        "particles_demo project must advance past the Bootstrap state");
-}
-
-// ── Composite-prefab TriggerZone test ─────────────────────────────────────────
+// â”€â”€ Composite-prefab TriggerZone test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
@@ -3738,345 +2445,3 @@ fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
         "composite prefab with trigger_zone must produce exactly one entity with a TriggerZone component");
 }
 
-// ── Extended particle behaviour tests ────────────────────────────────────────
-
-#[test]
-fn test_rotation_speed_produces_nonzero_rotation_rad() {
-    // A layer with rotation_speed_deg: 360 over 1 s should produce particles that start at
-    // rotation_rad == 0 and reach ~2π at end-of-life (after simulate advances t to ~1).
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EmitterShape, LayerDef, VelocityCurve};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let layer = LayerDef {
-        particle_count: 4, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0,
-        rotation_speed_deg: 360.0,  // one full spin per second
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-    };
-    let effect_def = EffectDef {
-        particle_count: 4, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![layer], light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("spin".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "spin".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    let alive: Vec<_> = pool.particles.iter().filter(|p| p.is_alive()).collect();
-    assert_eq!(alive.len(), 4, "must have spawned 4 particles");
-
-    // rotation_start_rad must be 0 (rotation_start_deg defaults to 0).
-    for p in &alive {
-        assert!(p.rotation_start_rad.abs() < 0.001,
-            "rotation_start_rad must be 0 (rotation_start_deg=0), got {}", p.rotation_start_rad);
-    }
-
-    // rotation_end_rad must equal 2π (360° × 1.0 s × π/180).
-    for p in &alive {
-        let expected_end = std::f32::consts::TAU;
-        assert!((p.rotation_end_rad - expected_end).abs() < 0.001,
-            "rotation_end_rad must be 2π for 360 deg/s over 1 s, got {}", p.rotation_end_rad);
-    }
-}
-
-#[test]
-fn test_non_uniform_scale_stored_in_particle() {
-    // size_x: 0.1 / size_y: 0.5 must be stored separately in start_size_x / start_size_y.
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EmitterShape, LayerDef, VelocityCurve};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let layer = LayerDef {
-        particle_count: 2, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: Some(0.10), size_y: Some(0.50),
-        size_x_end: Some(0.05), size_y_end: None,  // only x end overridden
-        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-    };
-    let effect_def = EffectDef {
-        particle_count: 2, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![layer], light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("shard".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "shard".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    for p in pool.particles.iter().filter(|p| p.is_alive()) {
-        assert!((p.start_size_x - 0.10).abs() < 0.001, "start_size_x must be 0.10, got {}", p.start_size_x);
-        assert!((p.start_size_y - 0.50).abs() < 0.001, "start_size_y must be 0.50, got {}", p.start_size_y);
-        assert_eq!(p.end_size_x, Some(0.05), "end_size_x must be Some(0.05)");
-        assert_eq!(p.end_size_y, None, "end_size_y must be None (falls back to layer.size_end)");
-    }
-}
-
-#[test]
-fn test_ring_emitter_places_particles_on_circumference() {
-    // Ring(radius: 2.0) with 4 particles: all particles must be ~2.0 m from origin on XZ plane.
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EmitterShape, LayerDef, VelocityCurve};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let layer = LayerDef {
-        particle_count: 4, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: EmitterShape::Ring { radius: 2.0 }, velocity_curve: VelocityCurve::Linear,
-    };
-    let effect_def = EffectDef {
-        particle_count: 4, lifetime_secs: 1.0,
-        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![layer], light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("ring".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "ring".to_string(),
-        position: Some((0.0, 0.0, 0.0)),
-        entity: None,
-    });
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    let alive: Vec<_> = pool.particles.iter().filter(|p| p.is_alive()).collect();
-    assert_eq!(alive.len(), 4, "ring emitter with 4 particles must spawn 4 pool entries");
-    for p in &alive {
-        let xz_dist = (p.position.x * p.position.x + p.position.z * p.position.z).sqrt();
-        assert!((xz_dist - 2.0).abs() < 0.01,
-            "Ring emitter particle must be ~2.0 m from origin on XZ plane, got {:.4}", xz_dist);
-    }
-}
-
-#[test]
-fn test_velocity_curve_stored_in_particle() {
-    // Verify that the velocity_curve field from LayerDef is propagated into PooledParticle.
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EmitterShape, LayerDef, VelocityCurve};
-    use ironhold_core::capabilities::particle_renderer::ParticlePool;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    let layer = LayerDef {
-        particle_count: 3, lifetime_secs: 2.0,
-        speed: 1.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::EaseOut,
-    };
-    let effect_def = EffectDef {
-        particle_count: 3, lifetime_secs: 2.0,
-        speed: 1.0, speed_jitter: 0.0, spread_deg: 0.0,
-        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
-        size: 0.1, size_end: None, size_jitter: 0.0,
-        color_start: (1.0, 1.0, 1.0, 1.0), color_mid: None,
-        color_end: (1.0, 1.0, 1.0, 0.0),
-        gravity: 0.0, turbulence: 0.0,
-        sprite: None, sprites: vec![], additive: false,
-        uv_distort: 0.0, uv_scroll_speed: 0.0,
-        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
-        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
-        emitter: Default::default(), velocity_curve: Default::default(),
-        layers: vec![layer], light: None,
-    };
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("ease_test".to_string(), effect_def)]),
-        ..Default::default()
-    }));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
-        key: "ease_test".to_string(), position: Some((0.0, 0.0, 0.0)), entity: None,
-    });
-    app.update();
-
-    let pool = app.world().resource::<ParticlePool>();
-    let alive: Vec<_> = pool.particles.iter().filter(|p| p.is_alive()).collect();
-    assert_eq!(alive.len(), 3, "must spawn 3 particles");
-    for p in &alive {
-        assert_eq!(p.velocity_curve, VelocityCurve::EaseOut,
-            "velocity_curve must be EaseOut as authored in LayerDef");
-    }
-}
-
-// ─── ProjectDecal ──────────────────────────────────────────────────────────────
-
-#[test]
-fn test_project_decal_with_position_queues_pending_spawn() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-    use ironhold_core::capabilities::decal::PendingDecalSpawns;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        decals: std::collections::HashMap::from([
-            ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
-        key: "test_ring".to_string(),
-        entity: None,
-        position: Some((5.0, 0.0, -3.0)),
-        radius: 2.0,
-        duration_secs: 3.0,
-        color: (1.0, 0.5, 0.0, 0.8),
-        pulse_speed: 0.0,
-    });
-    app.update();
-
-    // After one update: action_executor pushed to PendingDecalSpawns;
-    // spawn_decal_system ran in the same chained set and drained it, spawning a FadingDecal entity.
-    let pending = app.world().resource::<PendingDecalSpawns>();
-    assert!(pending.0.is_empty(), "spawn_decal_system must drain PendingDecalSpawns");
-}
-
-#[test]
-fn test_project_decal_unknown_key_does_not_queue() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-    use ironhold_core::capabilities::decal::PendingDecalSpawns;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
-        key: "nonexistent".to_string(),
-        entity: None,
-        position: Some((0.0, 0.0, 0.0)),
-        radius: 1.0,
-        duration_secs: 1.0,
-        color: (1.0, 1.0, 1.0, 1.0),
-        pulse_speed: 0.0,
-    });
-    app.update();
-
-    let pending = app.world().resource::<PendingDecalSpawns>();
-    assert!(pending.0.is_empty(), "unknown decal key must not push anything to PendingDecalSpawns");
-}
-
-#[test]
-fn test_project_decal_no_position_no_entity_skips() {
-    use ironhold_core::runtime::LoadedAssetCatalog;
-    use ironhold_core::schema::catalog::AssetCatalog;
-    use ironhold_core::capabilities::decal::PendingDecalSpawns;
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        decals: std::collections::HashMap::from([
-            ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
-        ]),
-        ..Default::default()
-    }));
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::ProjectDecal {
-        key: "test_ring".to_string(),
-        entity: None,
-        position: None,
-        radius: 2.0,
-        duration_secs: 3.0,
-        color: (1.0, 1.0, 1.0, 1.0),
-        pulse_speed: 0.0,
-    });
-    app.update();
-
-    let pending = app.world().resource::<PendingDecalSpawns>();
-    assert!(pending.0.is_empty(), "no entity and no position must skip without queueing");
-}
