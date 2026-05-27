@@ -1,8 +1,9 @@
 # Feature: Particle System v2 — 7. Quality Tiers & Particle Budget
 
-_Status: Draft — reviewed, ready to implement_
+_Status: Active_
 _Planned at: `2cc61ca` (2026-05-19)_
 _Reviewed at: `a16bd98` (2026-05-23) — terminology and resource-persistence note added_
+_Verified at: `fa7d4bc` (2026-05-27) — open questions resolved, gap in From impl and budget tracking clarified_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What
@@ -61,15 +62,21 @@ priority: Player,    // Player | Npc | Ambient   (default: Npc)
 
 ### Particle budget
 
-`ParticleBudget` resource: `live_count: u32`, `max_count: u32` (default: 2000, configurable
-in scene RON or engine config).
+`ParticleBudget` resource: `max_count: u32` (default: 2000, configurable per scene via
+`particle_budget` field on `GameSceneV2`).
+
+Live count is derived directly from the pool at spawn time — no separate tracking resource:
+```rust
+let live_count = pool.particles.iter().filter(|p| p.is_alive()).count() as u32;
+```
+This is always correct by construction. Particles die by time (`elapsed >= duration`), not
+by explicit despawn, so increment/decrement tracking would require careful simulation-tick
+integration for no benefit over a simple pool scan.
 
 When `live_count + new_count > max_count`:
 - `Ambient` priority effects: silently skip spawn
 - `Npc` priority effects: halve count (min 1)
 - `Player` priority effects: always spawn at full count; may briefly exceed budget
-
-`live_count` increments on spawn, decrements on despawn (tracked in simulation tick).
 
 ### Quality action
 
@@ -80,41 +87,42 @@ Action::SetParticleQuality(Low)
 Can be called from rules.ron on scene load or from a settings UI button.
 
 **Files:**
-- `capabilities/particle_budget.rs` (new, small)
-- `schema/catalog.rs` — add `QualityOverride` struct + `quality`, `priority` fields to `LayerDef`
+- `capabilities/particle_budget.rs` (new, small) — `ParticleQuality`, `ParticleBudget` resources
+- `schema/catalog.rs` — add `QualityOverride` struct + `quality` field to `LayerDef`, `priority` field to `EffectDef`; also update `From<&EffectDef> for LayerDef` to copy `quality`
 - `schema/actions.rs` — add `SetParticleQuality` variant
 
 ## Tasks
 
 - [ ] Add `ParticleQuality` resource with `multiplier()` method
+- [ ] Add `ParticleBudget` resource (`max_count: u32`, default 2000)
 - [ ] Add `SetParticleQuality` to `Action` enum + executor dispatch
-- [ ] Apply quality multiplier in `drain_particle_effects_system`
-- [ ] Add `QualityOverride` struct + `quality` field to `LayerDef`
+- [ ] Add `QualityOverride` struct + `quality` field to `LayerDef`; update `From<&EffectDef> for LayerDef` to copy `quality`
 - [ ] Add `priority: EffectPriority` field to `EffectDef`
-- [ ] Implement `ParticleBudget` resource with increment/decrement tracking
-- [ ] Integrate budget gating into `drain_particle_effects_system`
-- [ ] Decrement budget in particle despawn path
-- [ ] Add quality setting to particles_demo (UI button or startup action)
+- [ ] Apply quality multiplier in `drain_particle_effects_system`
+- [ ] Integrate budget gating into `drain_particle_effects_system` (derive live count from pool scan)
+- [ ] Add `particle_budget` optional field to `GameSceneV2`; load it into `ParticleBudget` on scene load
+- [ ] Add quality setting to particles_demo (startup action via rules.ron)
 - [ ] Tests:
   - [ ] `Minimal` quality → count scaled, never zero
   - [ ] Explicit `quality` overrides bypass multiplier
   - [ ] Budget cap: `Ambient` effect skipped; `Player` effect always fires
+  - [ ] Quality persists across scene transition (resource survives `LoadScene`)
 - [ ] Update `docs/20_data_formats.md`
 
-## Open questions
+## Resolved decisions
 
-- **`max_count` configuration**: per-scene in RON (`particle_budget: 2000`) or global
-  engine constant? Per-scene is more flexible; a dense raid scene can set a higher cap
-  than a calm exploration scene.
-- **Budget and the pool renderer**: the pool renderer (shipped as feature 1) pre-allocates
-  a fixed `Vec<PooledParticle>` (currently sized at runtime). The budget `max_count`
-  should not exceed the pool capacity; add a `debug_assert` and document the constraint.
-- **UI for quality setting**: in-game settings panel is not yet implemented. For now,
-  expose via `SetParticleQuality` in rules.ron so a test scene can exercise it.
-- **Resource persistence across scene transitions**: `ParticleQuality` must survive
-  `Action::LoadScene` — it is a global resource, not a `LevelEntity`. Verify this is
-  the case and add an integration test asserting the quality level does not reset when
-  a new scene loads. This is explicitly required in the acceptance criteria above.
+- **`max_count` configuration**: per-scene RON field `particle_budget` on `GameSceneV2` (optional,
+  default 2000). Loaded into `ParticleBudget` resource on each `SceneEvent::Ready`. Fits the
+  data-driven philosophy; dense scenes can raise the cap without code changes.
+- **Live count tracking**: derive from pool scan (`pool.particles.iter().filter(p.is_alive())`)
+  at spawn time — not tracked via increment/decrement. Particles die by time, not despawn events.
+- **`From<&EffectDef> for LayerDef` must be updated**: `quality` is per-layer; single-layer
+  effects use `LayerDef::from(def)`, so the `From` impl must copy `quality`. Omitting this
+  would silently disable per-layer quality overrides for single-layer effects.
+- **`ParticleQuality` persistence**: plain `Resource` (not `LevelEntity`) — survives `LoadScene`
+  by default. No special handling needed; verified against `action_executor.rs`.
+- **UI for quality setting**: no in-game settings panel yet. Expose via `SetParticleQuality`
+  action in `rules.ron` so the particles_demo can exercise it.
 
 ## Acceptance criteria
 
