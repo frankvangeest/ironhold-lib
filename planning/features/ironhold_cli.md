@@ -169,6 +169,132 @@ PrefabDef — prefabs/prefabs.ron
 
 ---
 
+### `ironhold inspect <SUBCOMMAND> <path>`
+
+Inspect individual asset files without needing a full project directory. Replaces the need
+to run `tools/glb_inspector/inspect_glb.py` for day-to-day authoring.
+
+```
+ironhold inspect glb     <path.glb>
+ironhold inspect texture <path.png|jpg|avif|webp>
+ironhold inspect audio   <path.ogg|mp3|wav>
+```
+
+#### `ironhold inspect glb <path.glb>`
+
+Reports everything a designer needs to author RON for a model.
+
+**Human output**:
+```
+assets/shared/characters/orc_warrior.glb
+
+  Animations (4)
+    idle          2.08 s   loopable
+    run           0.96 s   loopable
+    attack        1.20 s
+    death         1.80 s
+
+  Meshes (3)
+    Armature      verts: 2 048   tris: 3 840
+    Weapon_R      verts:   312   tris:   580
+    Cape          verts:   540   tris:   960
+
+  Materials (2)
+    OrcBody
+    OrcWeapon
+
+  Root nodes
+    Armature
+```
+
+**JSON output** (`--json`):
+```json
+{
+  "path": "assets/shared/characters/orc_warrior.glb",
+  "animations": [
+    { "name": "idle",   "duration_secs": 2.08 },
+    { "name": "run",    "duration_secs": 0.96 },
+    { "name": "attack", "duration_secs": 1.20 },
+    { "name": "death",  "duration_secs": 1.80 }
+  ],
+  "meshes": [
+    { "name": "Armature", "vertex_count": 2048, "triangle_count": 3840 },
+    { "name": "Weapon_R", "vertex_count": 312,  "triangle_count": 580  },
+    { "name": "Cape",     "vertex_count": 540,  "triangle_count": 960  }
+  ],
+  "materials": ["OrcBody", "OrcWeapon"],
+  "root_nodes": ["Armature"]
+}
+```
+
+This replaces `tools/glb_inspector/inspect_glb.py` for everyday use. The Python tool remains
+for the `--preview` render path which needs Blender.
+
+---
+
+#### `ironhold inspect texture <path>`
+
+Reports image metadata without fully decoding the pixel data.
+
+**Human output**:
+```
+assets/shared/textures/terrain_grass.png
+
+  Dimensions   1024 × 1024
+  Format       PNG
+  Channels     RGBA
+  File size    412 KB
+```
+
+**JSON output**:
+```json
+{
+  "path": "assets/shared/textures/terrain_grass.png",
+  "width": 1024,
+  "height": 1024,
+  "format": "PNG",
+  "channels": "RGBA",
+  "file_size_bytes": 421888
+}
+```
+
+Useful for catching oversized textures before they land in WASM builds (no mip generation
+at runtime — what you ship is what the GPU uploads).
+
+---
+
+#### `ironhold inspect audio <path>`
+
+Reports audio metadata useful for timing RON events.
+
+**Human output**:
+```
+assets/shared/audio/explosion_large.ogg
+
+  Format       OGG Vorbis
+  Duration     2.34 s
+  Sample rate  44 100 Hz
+  Channels     Stereo
+  File size    86 KB
+```
+
+**JSON output**:
+```json
+{
+  "path": "assets/shared/audio/explosion_large.ogg",
+  "format": "OGG",
+  "duration_secs": 2.34,
+  "sample_rate_hz": 44100,
+  "channels": 2,
+  "file_size_bytes": 88064
+}
+```
+
+Duration is the key output — designers need it to set correct `delay_secs` values in
+`EmitEventAfterDelay` after a sound plays.
+
+---
+
 ### `ironhold query <SUBCOMMAND> <project_dir>`
 
 ```
@@ -217,9 +343,15 @@ ironhold query scenes assets/projects/3rd_person_game_demo/
 8. Implement `query prefabs`, `query effects`, `query scenes`
 9. `--filter` support on query (simple `key=value` string match against serialized fields)
 
-### Phase 3 — Polish
-10. Add to CI (validate all example projects as a smoke check)
-11. Document in `docs/60_contributing.md` and `CLAUDE.md`
+### Phase 3 — Asset Inspection
+10. Add `inspect glb` using the `gltf` crate: animations (name + duration), meshes (name + vertex/tri count), materials, root nodes
+11. Add `inspect texture` using `image` crate header-only read: dimensions, format, channels, file size
+12. Add `inspect audio` using `symphonia` crate: format, duration, sample rate, channel count, file size
+13. Wire all three into `--json` output
+
+### Phase 4 — Polish
+14. Add to CI (validate all example projects as a smoke check)
+15. Document in `docs/60_contributing.md` and `CLAUDE.md`
 
 ---
 
@@ -230,8 +362,13 @@ ironhold query scenes assets/projects/3rd_person_game_demo/
 | `clap` (4.x, `derive` feature) | Argument parsing |
 | `serde_json` | `--json` output serialization |
 | `colored` (optional) | ANSI color in human-readable output |
+| `gltf` | GLB/GLTF parsing for `inspect glb` — animations, meshes, materials, nodes |
+| `image` | Header-only texture metadata read for `inspect texture` |
+| `symphonia` | Audio metadata (duration, sample rate) for `inspect audio` |
 
 `ron`, `serde` already in `ironhold_core` — no new additions there.
+
+All three asset-inspection crates are native-only (`ironhold_cli` does not target WASM).
 
 ---
 
@@ -259,5 +396,9 @@ ironhold query scenes assets/projects/3rd_person_game_demo/
 - Cross-file check catches a missing effect key referenced in `rules.ron`
 - Cross-file check catches a missing prefab key referenced in a scene
 - All existing example projects pass `ironhold validate` (enforced in CI)
+- `ironhold inspect glb <path>` lists animation clip names, durations, mesh names, and materials
+- `ironhold inspect glb --json <path>` outputs valid JSON with the same data
+- `ironhold inspect texture <path>` reports dimensions, format, channels, and file size
+- `ironhold inspect audio <path>` reports format, duration, sample rate, and channel count
 - Compiles on Windows and Linux (no WASM target — CLI is native-only)
 - Shares `Deserialize` impls from `ironhold_core::schema` — no duplicate struct definitions

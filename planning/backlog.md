@@ -24,7 +24,7 @@
 
 ### Tooling
 
-- [ ] **Ironhold CLI** — `ironhold validate / schema / query` commands; new `crates/ironhold_cli`; shared validation module from `ironhold_core`; `--json` flag for AI agent use. See `planning/features/ironhold_cli.md`
+- [ ] **Ironhold CLI** — `ironhold validate / schema / query / inspect` commands; new `crates/ironhold_cli`; shared validation module from `ironhold_core`; `--json` flag for AI agent use; `inspect glb` lists animations/meshes/materials, `inspect texture` reports dimensions/format, `inspect audio` reports duration/sample-rate. See `planning/features/ironhold_cli.md`
 
 ### Particle System v2
 
@@ -129,6 +129,11 @@
 - [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
 
 ### Designer Experience
+- [ ] **Extend `entity_logic_demo`** — add one clearly labeled station per behavior concept: multi-state FSM behavior file with `EmitEventAfterDelay` loop (goblin-guard pattern), a timed-door sequence (`EmitEventAfterDelay` chain), side-by-side trigger zone enter vs. interactable [F] comparison, and a `global_on` example showing project-wide vs. entity-local events; modeled on the station-per-concept layout of `particles_demo`
+- [ ] **`stats_demo` project** — standalone demo project showcasing the full stats system in one place: health/mana bars, stat spread widget, radar chart, world-space pixel bars, buffs and modifiers, damage popups, and per-entity stat routing; the current `primitive_world` mixes all of this with geometry and AI work making it hard to use as a reference
+- [ ] **`ui_demo` project** — standalone demo project for every UI capability: buttons, data-bound labels with `SetVariable`/`IncrementVariable`, overlays, pause-menu pattern, and all stat display widget types; gives designers a single project to copy patterns from
+- [ ] **`audio_demo` project** — standalone demo project focused on audio authoring: `PlaySound`, `PlayMusicLoop`, `SetVolume`, stop/loop patterns, and how audio is triggered from RON rules; no existing project makes audio its primary focus
+- [ ] **`scene_transitions_demo` project** — standalone demo project with 3–4 scenes wired through a state machine, demonstrating portal navigation, scene overlays, preloading, and multi-scene project config; distinct from `particles_demo` where portal navigation is a side feature
 - [ ] **Blank starter project template** — a minimal `blank_project` under `assets/projects/` containing only the required files (project config, one empty scene, empty prefab catalog, empty asset catalog, empty rules), no terrain, no models, and no dummy fields; the canonical copy-and-rename starting point so new projects do not inherit `quick_scene` noise
 - [ ] **Schema version v2→v3 migration guide** — add a "Migrating from v2 to v3" section in `docs/20_data_formats.md` covering: rename `rules_path` → `state_machine_path`, bump `schema_version` to `3`, convert `rules.ron` to the FSM format, and the warning to expect if both files coexist
 - [ ] **Magic-string event/action validator** — `tools/ron_validator/` CLI that cross-checks event names used in `rules.ron` / `state_machine.ron` against the set emitted by capabilities and reports unknown event keys before runtime; eliminates silent no-ops from typos in event names
