@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority, live-count cap. See `planning/features/particle_quality_budget.md`
-
 ---
 
 ## Bugs
@@ -155,3 +153,4 @@
 - [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/done/particle_effects.md`
 - [x] **Particle System v2 — Pool Renderer** — CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls; `PoolFlameMaterial` for UV-animated flames. See `planning/features/done/particle_instanced_renderer.md`
 - [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
+- [x] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority (`Player`/`Npc`/`Ambient`), live-count cap, multi-layer running counter, portal navigation, Arcane Observatory demo scene. See `planning/features/done/particle_quality_budget.md`
