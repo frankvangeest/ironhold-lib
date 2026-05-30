@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, SpawnId, SpawnRegistry, SceneHandleV2};
 use ironhold_core::schema::{Action, AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{
-    AssetCatalog, EffectDef, EffectLightDef, EmitterShape, LayerDef, VelocityCurve,
+    AssetCatalog, EffectDef, EffectLightDef, EffectPriority, EmitterShape, LayerDef,
+    QualityLevel, QualityOverride, VelocityCurve,
 };
+use ironhold_core::capabilities::particle_budget::{ParticleBudget, ParticleQuality};
 use ironhold_core::capabilities::particle_renderer::ParticlePool;
 use ironhold_core::capabilities::particle::PendingParticleEffects;
 use ironhold_core::capabilities::fading_light::FadingLight;
@@ -41,6 +43,8 @@ fn minimal_effect_def(particle_count: u32, lifetime_secs: f32) -> EffectDef {
         emitter: Default::default(), velocity_curve: Default::default(),
         layers: vec![],
         light: None,
+        priority: EffectPriority::Npc,
+        quality: None,
     }
 }
 
@@ -163,6 +167,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
+        quality: None,
     };
     let layer1 = LayerDef {
         particle_count: 2, lifetime_secs: 0.8,
@@ -177,6 +182,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
+        quality: None,
     };
     let mut effect_def = minimal_effect_def(12, 1.0);
     effect_def.layers = vec![layer0, layer1];
@@ -310,6 +316,7 @@ fn test_rotation_speed_produces_nonzero_rotation_rad() {
         rotation_speed_deg: 360.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
+        quality: None,
     };
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
@@ -358,6 +365,7 @@ fn test_non_uniform_scale_stored_in_particle() {
         size_x: Some(0.10), size_y: Some(0.50),
         size_x_end: Some(0.05), size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
+        quality: None,
     };
     let mut effect_def = minimal_effect_def(2, 1.0);
     effect_def.layers = vec![layer];
@@ -399,6 +407,7 @@ fn test_ring_emitter_places_particles_on_circumference() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Ring { radius: 2.0 }, velocity_curve: VelocityCurve::Linear,
+        quality: None,
     };
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
@@ -441,6 +450,7 @@ fn test_velocity_curve_stored_in_particle() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::EaseOut,
+        quality: None,
     };
     let mut effect_def = minimal_effect_def(3, 2.0);
     effect_def.speed = 1.0;
@@ -541,4 +551,293 @@ fn test_project_decal_no_position_no_entity_skips() {
 
     let pending = app.world().resource::<PendingDecalSpawns>();
     assert!(pending.0.is_empty(), "no entity and no position must skip without queueing");
+}
+
+// ── Quality tier tests ────────────────────────────────────────────────────────
+
+#[test]
+fn test_minimal_quality_scales_count_never_zero() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleQuality { level: QualityLevel::Minimal });
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("big".to_string(), minimal_effect_def(20, 1.0))]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "big".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    assert!(alive >= 1, "Minimal quality must still spawn at least 1 particle, got {}", alive);
+    assert!(alive < 20, "Minimal quality must reduce count below 20, got {}", alive);
+}
+
+#[test]
+fn test_quality_override_bypasses_multiplier() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleQuality { level: QualityLevel::Low });
+
+    let mut effect = minimal_effect_def(20, 1.0);
+    effect.quality = Some(QualityOverride { minimal: 1, low: 7, medium: 14, high: None });
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("override_test".to_string(), effect)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "override_test".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(alive, 7, "Low quality with QualityOverride(low: 7) must spawn exactly 7 particles");
+}
+
+#[test]
+fn test_high_quality_spawns_full_count() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleQuality { level: QualityLevel::High });
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("full".to_string(), minimal_effect_def(12, 1.0))]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "full".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(alive, 12, "High quality must spawn full particle_count (12)");
+}
+
+#[test]
+fn test_set_particle_quality_action_changes_quality() {
+    let mut app = setup_test_app();
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<ParticleQuality>().level,
+        QualityLevel::High,
+        "default quality must be High"
+    );
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetParticleQuality(QualityLevel::Minimal));
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<ParticleQuality>().level,
+        QualityLevel::Minimal,
+        "SetParticleQuality(Minimal) must update the ParticleQuality resource"
+    );
+}
+
+// ── Budget tests ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_ambient_effect_skipped_when_budget_full() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleBudget { max_count: 5 });
+
+    // Pre-fill the pool with 5 live particles by spawning an Npc-priority effect
+    let mut filler = minimal_effect_def(5, 60.0);
+    filler.priority = EffectPriority::Npc;
+
+    let mut ambient = minimal_effect_def(4, 60.0);
+    ambient.priority = EffectPriority::Ambient;
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([
+            ("filler".to_string(), filler),
+            ("ambient".to_string(), ambient),
+        ]),
+        ..Default::default()
+    }));
+
+    // First spawn fills the budget (Npc, 5 particles)
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "filler".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let before = app.world().resource::<ParticlePool>()
+        .particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(before, 5, "filler must put 5 live particles in pool");
+
+    // Ambient spawn should be skipped since budget (5) is full
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "ambient".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let after = app.world().resource::<ParticlePool>()
+        .particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(after, 5, "Ambient effect must be skipped when budget is full (still 5)");
+}
+
+#[test]
+fn test_player_effect_fires_even_when_budget_full() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleBudget { max_count: 5 });
+
+    let mut filler = minimal_effect_def(5, 60.0);
+    filler.priority = EffectPriority::Npc;
+
+    let mut player_burst = minimal_effect_def(4, 60.0);
+    player_burst.priority = EffectPriority::Player;
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([
+            ("filler".to_string(), filler),
+            ("player_hit".to_string(), player_burst),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "filler".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    // Player effect must spawn regardless of budget
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "player_hit".to_string(),
+        position: Some((1.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let after = app.world().resource::<ParticlePool>()
+        .particles.iter().filter(|p| p.is_alive()).count();
+    assert_eq!(after, 9, "Player priority effect must fire even when budget is full (5 + 4 = 9)");
+}
+
+#[test]
+fn test_quality_persists_across_scene_transition() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Set quality to Low
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetParticleQuality(QualityLevel::Low));
+    app.update();
+    assert_eq!(app.world().resource::<ParticleQuality>().level, QualityLevel::Low);
+
+    // Simulate a scene load by inserting a new SceneHandleV2 (the resource that triggers scene reload)
+    // ParticleQuality is a plain Resource (not LevelEntity) so it must survive
+    let scene: GameSceneV2 = ron::de::from_str("(schema_version: 2, entities: [], ui: [])").unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    // Multiple updates to let any reset systems fire
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<ParticleQuality>().level,
+        QualityLevel::Low,
+        "ParticleQuality must persist across scene transitions"
+    );
+}
+
+#[test]
+fn test_multilayer_budget_accounts_for_all_layers() {
+    // Regression: budget gating must track live count across all layers of a multi-layer effect
+    // in the same drain pass, not recount from scratch per layer (which would allow unbounded spawns).
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ParticleBudget { max_count: 8 });
+
+    let mut layer_a = LayerDef::from(&minimal_effect_def(5, 60.0));
+    layer_a.particle_count = 5;
+    let mut layer_b = LayerDef::from(&minimal_effect_def(5, 60.0));
+    layer_b.particle_count = 5;
+
+    let mut multi = minimal_effect_def(0, 60.0);
+    multi.priority = EffectPriority::Player;
+    multi.layers = vec![layer_a, layer_b];
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("multi".to_string(), multi)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "multi".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    // Player priority: both layers fire regardless of budget — 5 + 5 = 10.
+    // The running live counter increments after layer A (5), so layer B sees live=5
+    // and fires at full count (Player always passes). Total must be 10, not 8.
+    assert_eq!(alive, 10, "multi-layer Player effect must spawn all layers (5 + 5 = 10); budget gating must use a running counter, not a stale scan per layer");
+}
+
+#[test]
+fn test_multilayer_budget_blocks_second_layer_for_ambient() {
+    // An Ambient multi-layer effect: once live+layer_a fills the budget, layer_b must be blocked.
+    let mut app = setup_test_app();
+    app.update();
+
+    // Budget=5; first layer needs 5 → fills pool; second layer should be shed (Ambient).
+    app.world_mut().insert_resource(ParticleBudget { max_count: 5 });
+
+    let mut layer_a = LayerDef::from(&minimal_effect_def(5, 60.0));
+    layer_a.particle_count = 5;
+    let mut layer_b = LayerDef::from(&minimal_effect_def(3, 60.0));
+    layer_b.particle_count = 3;
+
+    let mut multi = minimal_effect_def(0, 60.0);
+    multi.priority = EffectPriority::Ambient;
+    multi.layers = vec![layer_a, layer_b];
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("multi_ambient".to_string(), multi)]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "multi_ambient".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive = pool.particles.iter().filter(|p| p.is_alive()).count();
+    // Layer A: live=0, budget=5, 0+5<=5 → 5 spawned. live becomes 5.
+    // Layer B: live=5, budget=5, Ambient → 5+3>5, shed → 0.
+    assert_eq!(alive, 5, "Ambient multi-layer: second layer must be shed once live count reaches budget");
 }

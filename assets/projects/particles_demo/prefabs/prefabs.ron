@@ -236,5 +236,63 @@
       ),
     ),
 
+    // ── Portal arch — Night Arena → Arcane Observatory ────────────────────────
+    // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene particles2.
+    // Blue glow disc + dark stone pillars hint at the bright magical destination.
+    "portal_to_p2": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        // Left pillar
+        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Right pillar
+        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Lintel
+        ( shape: "Cuboid", primitive: (size: (2.60, 0.25, 0.30), color: (0.18, 0.16, 0.22), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Portal disc — blue (Arcane Observatory)
+        ( shape: "Cylinder", primitive: (radius: 0.85, height: 0.04, color: (0.42, 0.62, 1.0), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Glow orb
+        ( shape: "Sphere", primitive: (radius: 0.18, color: (0.65, 0.82, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Portal arch — Arcane Observatory → Night Arena ────────────────────────
+    // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene main.
+    // Violet glow disc + light stone pillars hint at the dark night destination.
+    "portal_to_main": (
+      kind: "primitive",
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        // Left pillar
+        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Right pillar
+        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Lintel
+        ( shape: "Cuboid", primitive: (size: (2.60, 0.25, 0.30), color: (0.65, 0.62, 0.58), roughness: 0.88), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Portal disc — violet (Night Arena)
+        ( shape: "Cylinder", primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.28, 0.82), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Glow orb
+        ( shape: "Sphere", primitive: (radius: 0.18, color: (0.68, 0.42, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Dark grass platform (Arcane Observatory) ──────────────────────────────
+    // Deep green slab — contrasts with the bright sky and violet accent lights.
+    "ground_grass": (
+      kind: "primitive",
+      model: "Cuboid",
+      components: (),
+      primitive: (
+        size: (60.0, 0.5, 60.0),
+        color: (0.12, 0.22, 0.08),
+        roughness: 0.90,
+        physics: true,
+      ),
+    ),
+
   },
 )

@@ -13,7 +13,7 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `integration_tests.rs` | Core scene/UI/input/FSM/spawner | 69 |
 | `audio_tests.rs` | PlaySound, PlayMusicLoop, StopMusic, SetVolume | 16 |
 | `stats_tests.rs` | StatMap, modifiers, resolve_stat | 19 |
-| `particle_tests.rs` | SpawnEffect, layers, visual effects (particles + decals + fading lights) | 15 |
+| `particle_tests.rs` | SpawnEffect, layers, visual effects (particles + decals + fading lights), quality tiers, budget gating | 22 |
 | `ron_validation.rs` | RON schema round-trips | 174 |
 | `assets_schema_version_regression.rs` | Schema version regression guard | 1 |
 

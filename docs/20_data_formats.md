@@ -163,6 +163,7 @@ File extension must be `.scene.ron`.
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: false` or `depth_scale: true`. |
+| `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 
 **Example:**
 ```ron
@@ -580,6 +581,8 @@ Named registry of all assets available to prefabs and scenes.
 | `velocity_curve` | `VelocityCurve` | `Linear` | Speed envelope over lifetime — see "Velocity curves" section below. |
 | `layers` | `Vec<LayerDef>` | `[]` | Multi-layer emitter list — see section below. When non-empty, all flat fields above are unused. |
 | `light` | `Option<EffectLightDef>` | `None` | Dynamic point light spawned at the effect origin — see section below. |
+| `priority` | `EffectPriority` | `Npc` | Budget shedding bucket. `Ambient` = dropped when full; `Npc` = halved (min 1); `Player` = always fires. See "Quality & Budget" below. |
+| `quality` | `Option<QualityOverride>` | `None` | Explicit per-tier counts. Bypasses the global multiplier when set. `high` is optional — omit to use `particle_count` at High. Example: `quality: (minimal: 1, low: 3, medium: 6)`. |
 
 **Emitter shapes (`emitter`)**
 
@@ -686,6 +689,69 @@ When `light` is set, a temporary `PointLight` is spawned at the effect origin th
 ```
 
 The engine caps simultaneous fading lights at 16. When the cap is full, new light spawns are silently skipped — the particles still fire. This keeps within WebGPU mobile cluster limits (~32 total lights including authored scene fixtures).
+
+**Quality tiers & particle budget**
+
+The engine supports a global quality level and a per-scene live-particle cap to keep frame times stable across hardware.
+
+*Quality level* — set via `Action::SetParticleQuality`:
+
+| Level | Multiplier | RON example |
+|-------|-----------|-------------|
+| `High` | 1.0× (default) | `SetParticleQuality(High)` |
+| `Medium` | 0.75× | `SetParticleQuality(Medium)` |
+| `Low` | 0.50× | `SetParticleQuality(Low)` |
+| `Minimal` | 0.25× (min 1) | `SetParticleQuality(Minimal)` |
+
+The multiplier is applied to each `particle_count` at spawn time. When `quality: (minimal: N, low: N, medium: N)` is set on an `EffectDef` or `LayerDef`, those explicit counts are used instead of the multiplier. The optional `high: N` field overrides the count at High quality too; when omitted, High uses `particle_count` directly.
+
+```ron
+// rules.ron — downgrade quality on scene load for mobile-class builds
+( on: "scene.ready:main", do_actions: [ SetParticleQuality(Low) ] ),
+```
+
+`SetParticleQuality` persists across scene transitions (the `ParticleQuality` resource is never reset on `LoadScene`). Explicitly call `SetParticleQuality(High)` to restore full counts.
+
+*Particle budget* — configured in the scene file:
+
+```ron
+// scene.ron — raise the cap for a particle-heavy boss arena
+(
+    schema_version: 2,
+    particle_budget: 5000,
+    entities: [ … ],
+)
+```
+
+Default is 2000 when `particle_budget` is omitted. The cap is re-applied from the scene file on every scene load.
+
+When the live count approaches `max_count`, effects are shed by `priority`:
+- `Ambient` — silently skipped. Use for background fog, ambient embers, non-critical atmosphere.
+- `Npc` (default) — particle count halved (minimum 1). The effect still fires with reduced density.
+- `Player` — always fires at full count; may briefly exceed the budget.
+
+> **Migration note**: effects defined without a `priority` field inherit `Npc` (the default). In a scene with a tight `particle_budget`, existing effects may now be halved when the budget is under pressure. If you observe effects being cut unexpectedly after adding `particle_budget` to a scene, add `priority: Player` to player-driven burst effects or `priority: Ambient` to background emitters.
+
+```ron
+// assets.ron
+effects: {
+    "campfire_smoke": (
+        priority: Ambient,       // shed first when budget is full
+        particle_count: 6, …
+    ),
+    "hit_spark": (
+        priority: Player,        // always fires
+        particle_count: 12, …
+    ),
+    // per-tier explicit counts override the global multiplier
+    "ability_burst": (
+        priority: Player,
+        particle_count: 20,
+        quality: ( minimal: 3, low: 8, medium: 14 ),
+        …
+    ),
+}
+```
 
 **Multi-layer effects (`layers`)**
 
@@ -1414,6 +1480,12 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. |
 | `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label) auto-hide automatically. Uses `{self}` in behavior files. |
 | `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. |
+| `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
+| `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
+| `SetParticleQuality(Level)` | Set the global quality tier (`High`, `Medium`, `Low`, `Minimal`). Persists across scene transitions. Affects all subsequent `SpawnEffect` calls. |
+| `SetVolume(0–100)` | Set the global audio volume (percent). 0 = mute, 100 = full. |
+| `ApplyModifier(modifier_key: "key")` | Apply a named stat modifier template to its target stat. |
+| `RemoveModifier(modifier_key: "key")` | Remove all active instances of a named modifier. |
 
 ---
 

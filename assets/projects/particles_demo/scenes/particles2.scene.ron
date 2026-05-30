@@ -1,0 +1,218 @@
+(
+  schema_version: 2,
+  name: "particles2",
+  tonemapping: AcesFitted,
+
+  // Arcane Observatory — high noon, open sky.
+  // Stark contrast to the Night Arena: bright white light, dark grass platform,
+  // violet/frost/gold accent pools around each station.
+  lighting: (
+    ambient: (0.50, 0.55, 0.78),
+    ambient_brightness: 360.0,
+
+    directional: (
+      color: (1.0, 0.97, 0.90),
+      intensity: 52000.0,
+      rotation_euler_deg: (-65.0, 15.0, 0.0),
+      shadows_enabled: true,
+    ),
+
+    point_lights: [
+      // Central arcane nexus
+      ( position: ( 0.0,  5.0,  0.0),  color: (0.65, 0.40, 1.0), intensity: 25000.0, range: 22.0 ),
+      // Rune ring — violet accent per rune
+      ( position: ( 0.0,  2.0, -8.0),  color: (0.72, 0.35, 1.0), intensity: 8000.0,  range: 8.0  ),
+      ( position: ( 7.6,  2.0, -2.5),  color: (0.72, 0.35, 1.0), intensity: 8000.0,  range: 8.0  ),
+      ( position: ( 4.7,  2.0,  6.5),  color: (0.72, 0.35, 1.0), intensity: 8000.0,  range: 8.0  ),
+      ( position: (-4.7,  2.0,  6.5),  color: (0.72, 0.35, 1.0), intensity: 8000.0,  range: 8.0  ),
+      ( position: (-7.6,  2.0, -2.5),  color: (0.72, 0.35, 1.0), intensity: 8000.0,  range: 8.0  ),
+      // Frost obelisks — icy blue-white
+      ( position: ( 0.0,  2.0, 13.0),  color: (0.60, 0.82, 1.0), intensity: 10000.0, range: 10.0 ),
+      ( position: ( 11.3, 2.0, -6.5),  color: (0.60, 0.82, 1.0), intensity: 10000.0, range: 10.0 ),
+      ( position: (-11.3, 2.0, -6.5),  color: (0.60, 0.82, 1.0), intensity: 10000.0, range: 10.0 ),
+      // Energy spheres — warm gold
+      ( position: ( 13.0, 2.0,  0.0),  color: (1.0,  0.80, 0.25), intensity: 10000.0, range: 10.0 ),
+      ( position: (-13.0, 2.0,  0.0),  color: (1.0,  0.80, 0.25), intensity: 10000.0, range: 10.0 ),
+      // Return portal glow — violet
+      ( position: ( 0.0,  2.0, 18.0),  color: (0.55, 0.28, 0.88), intensity: 12000.0, range: 12.0 ),
+    ],
+  ),
+
+  // Budget cap demo: 100-particle ceiling stresses the continuous emitters.
+  // Orbits (Npc) + rain (Ambient) fill ~72 at Minimal quality; any frost_burst
+  // (50 Minimal) exceeds the cap and fires halved. Ambient star_rain sheds first.
+  particle_budget: 100,
+
+  label_depth_scale: (
+    reference_distance: 18.0,
+    min_scale: 0.35,
+  ),
+
+  spawn_points: {},
+
+  entities: [
+
+    // ── Player ─────────────────────────────────────────────────────────────
+    // Spawns just south of the return portal, facing into the observatory.
+    (
+      id: "player_01",
+      prefab: "player_capsule",
+      transform: (
+        translation: (0.0, 0.5, 14.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Ground (dark grass) ────────────────────────────────────────────────
+    (
+      id: "ground_01",
+      prefab: "ground_grass",
+      transform: (
+        translation: (0.0, -0.25, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MAGIC RUNE RING — 5 runes in a pentagonal ring at radius 8
+    // Each interactable: press F → arcane nova burst.
+    // ═══════════════════════════════════════════════════════════════════════
+    ( id: "rune_p2_01", prefab: "magic_rune", transform: ( translation: ( 0.0, 0.0, -8.0), rotation_euler_deg: (0.0,   0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "rune_p2_02", prefab: "magic_rune", transform: ( translation: ( 7.6, 0.0, -2.5), rotation_euler_deg: (0.0,  72.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "rune_p2_03", prefab: "magic_rune", transform: ( translation: ( 4.7, 0.0,  6.5), rotation_euler_deg: (0.0, 144.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "rune_p2_04", prefab: "magic_rune", transform: ( translation: (-4.7, 0.0,  6.5), rotation_euler_deg: (0.0, 216.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "rune_p2_05", prefab: "magic_rune", transform: ( translation: (-7.6, 0.0, -2.5), rotation_euler_deg: (0.0, 288.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FROST OBELISKS — triangle at radius 13, offset from rune ring
+    // Press F → ice-shard hemisphere burst.
+    // ═══════════════════════════════════════════════════════════════════════
+    ( id: "frost_p2_01", prefab: "frost_crystal", transform: ( translation: (  0.0, 0.0,  13.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "frost_p2_02", prefab: "frost_crystal", transform: ( translation: ( 11.3, 0.0,  -6.5), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "frost_p2_03", prefab: "frost_crystal", transform: ( translation: (-11.3, 0.0,  -6.5), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENERGY SPHERES — flanking East and West
+    // Press F → Sphere emitter + Pulse velocity curve nova.
+    // ═══════════════════════════════════════════════════════════════════════
+    ( id: "esphere_p2_01", prefab: "energy_sphere", transform: ( translation: ( 13.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+    ( id: "esphere_p2_02", prefab: "energy_sphere", transform: ( translation: (-13.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ARCANE RAIN — star_shower behavior from overhead
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "star_emitter_p2",
+      prefab: "star_emitter",
+      transform: (
+        translation: (0.0, 8.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // RETURN PORTAL — far south, leads back to Night Arena
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "portal_to_main",
+      prefab: "portal_to_main",
+      transform: (
+        translation: (0.0, 0.0, 18.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+  ],
+
+  ui: [],
+
+  world_labels: [
+
+    (
+      id: "label_obs_title",
+      text: "Arcane Observatory",
+      translation: (0.0, 5.5, 0.0),
+      font_size: 26.0,
+      color: (0.82, 0.65, 1.0, 1.0),
+    ),
+    (
+      id: "label_budget",
+      text: "particle_budget: 100  ·  quality: Minimal",
+      translation: (0.0, 4.8, 0.0),
+      font_size: 13.0,
+      color: (0.65, 0.65, 0.75, 0.80),
+    ),
+    (
+      id: "label_budget_sub",
+      text: "Orbits+rain fill ~72/100 · frost burst halved · rain sheds first",
+      translation: (0.0, 4.4, 0.0),
+      font_size: 11.0,
+      color: (0.55, 0.55, 0.68, 0.70),
+    ),
+
+    (
+      id: "label_rune_ring",
+      text: "Magic Rune Ring",
+      translation: (0.0, 3.8, -8.0),
+      font_size: 20.0,
+      color: (0.85, 0.60, 1.0, 1.0),
+    ),
+    (
+      id: "label_rune_ring_sub",
+      text: "[F] each rune → arcane nova",
+      translation: (0.0, 3.3, -8.0),
+      font_size: 14.0,
+      color: (0.70, 0.50, 0.90, 0.85),
+    ),
+
+    (
+      id: "label_frost_outer",
+      text: "Frost Obelisks",
+      translation: (0.0, 3.5, 13.0),
+      font_size: 20.0,
+      color: (0.70, 0.90, 1.0, 1.0),
+    ),
+    (
+      id: "label_frost_outer_sub",
+      text: "[F] → ice-shard burst",
+      translation: (0.0, 3.0, 13.0),
+      font_size: 14.0,
+      color: (0.58, 0.78, 0.95, 0.85),
+    ),
+
+    (
+      id: "label_esphere",
+      text: "Energy Spheres",
+      translation: (0.0, 3.5, 0.0),
+      font_size: 20.0,
+      color: (1.0, 0.85, 0.40, 1.0),
+    ),
+    (
+      id: "label_esphere_sub",
+      text: "[F] each sphere → Sphere emitter · Pulse curve",
+      translation: (0.0, 3.0, 0.0),
+      font_size: 14.0,
+      color: (0.85, 0.70, 0.32, 0.85),
+    ),
+
+    (
+      id: "label_portal_main",
+      text: "Night Arena",
+      translation: (0.0, 3.8, 18.0),
+      font_size: 20.0,
+      color: (0.75, 0.60, 1.0, 1.0),
+    ),
+    (
+      id: "label_portal_main_sub",
+      text: "Walk through to return",
+      translation: (0.0, 3.3, 18.0),
+      font_size: 14.0,
+      color: (0.60, 0.48, 0.88, 0.85),
+    ),
+
+  ],
+)

@@ -284,6 +284,7 @@
       turbulence: 0.08,
       sprite: "particle/star_02",
       additive: true,
+      priority: Ambient,
     ),
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -295,7 +296,7 @@
     // linear constant-speed motion, especially visible on the outer shrapnel trails.
     // Demonstrates: sphere particles, EaseOut velocity curve, full spread, heavy gravity.
     "explosion_burst": (
-      particle_count: 70,
+      particle_count: 200,
       lifetime_secs: 1.1,
       speed: 7.0,
       speed_jitter: 2.5,
@@ -326,7 +327,7 @@
     // trajectory of physical ice fragments striking a surface.
     // Demonstrates: size_x / size_y non-uniform scale, rotation_speed_deg, EaseOut curve.
     "frost_shard": (
-      particle_count: 22,
+      particle_count: 100,
       lifetime_secs: 1.2,
       speed: 4.0,
       speed_jitter: 1.2,
@@ -352,7 +353,7 @@
     // Star sprite with near-zero gravity = shards glide and linger.
     // Demonstrates: cool colour palette, shallow gravity, upper-hemisphere cone spread.
     "frost_burst": (
-      particle_count: 30,
+      particle_count: 200,
       lifetime_secs: 1.4,
       speed: 3.5,
       speed_jitter: 0.9,
@@ -374,7 +375,7 @@
     // Large count + growing size_end creates a fountain-of-light bloom.
     // Demonstrates: size_end growth (blooming), positive gravity, magic sprite.
     "heal_pulse": (
-      particle_count: 55,
+      particle_count: 100,
       lifetime_secs: 1.6,
       speed: 4.0,
       speed_jitter: 1.2,
@@ -403,12 +404,12 @@
     // Contrast with explosion_burst (EaseOut): charge_burst builds; explosion releases.
     // Demonstrates: EaseIn velocity curve, positive gravity rise.
     "charge_burst": (
-      particle_count: 28,
-      lifetime_secs: 3.0,
+      particle_count: 100,
+      lifetime_secs: 2.0,
       speed: 18.0,
-      speed_jitter: 1.8,
+      speed_jitter: 10.0,
       spread_deg: 0.0,
-      emit_radius: 1.5,
+      emit_radius: 2.5,
       offset: (0.0, 0.5, 0.0),
       size: 0.70,
       size_jitter: 0.04,

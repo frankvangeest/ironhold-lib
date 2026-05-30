@@ -231,3 +231,5 @@ SpawnEffect(key: "campfire_body", position: Some((0.0, -100.0, 0.0))),  // warms
 ```
 
 Place these alongside `PreloadScene` / `PreloadPrefab` calls so they fire during the natural loading pause, before the player can interact.
+
+**Budget footgun**: warmup `SpawnEffect` calls at `y=-100` are real particle allocations and consume `ParticleBudget`. In scenes with a tight budget (e.g. `particle_budget: 100`), 3–4 warmup effects can each fire their full `particle_count` against the cap. Either use low-count effects for warmup, place warmup calls on `scene.ready` before continuous emitters fill the pool, or account for warmup cost when sizing the budget.

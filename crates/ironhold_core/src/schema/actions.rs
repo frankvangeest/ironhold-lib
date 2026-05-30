@@ -189,6 +189,12 @@ pub enum Action {
         #[serde(default)]
         pulse_speed: f32,
     },
+    /// Set the global particle quality level. Scales particle counts for all subsequent
+    /// `SpawnEffect` calls. Does not affect already-spawned particles.
+    /// `High` (default) = full count; `Minimal` = 0.25× count, minimum 1 per layer.
+    /// Persists across scene transitions — call again to restore full quality.
+    /// Example: `SetParticleQuality(Low)`.
+    SetParticleQuality(crate::schema::catalog::QualityLevel),
 }
 
 fn default_action_volume() -> f32 { 1.0 }

@@ -271,6 +271,8 @@ On first load, WASM lazily compiles a GPU pipeline for each material+blend varia
 ]),
 ```
 
+> **Budget note**: warmup `SpawnEffect` calls at `y=-100` are real particle allocations and consume `particle_budget`. In scenes with a tight cap, use low-count effects for warmup or fire them before continuous emitters fill the pool.
+
 ---
 
 ## New project checklist

@@ -540,6 +540,10 @@ pub fn action_executor_system(
                     track_entity,
                 });
             }
+            Action::SetParticleQuality(level) => {
+                info!("Action::SetParticleQuality: {:?}", level);
+                spawn_params.particle_quality.level = level;
+            }
         }
     }
 }

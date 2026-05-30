@@ -132,6 +132,48 @@ pub enum VelocityCurve {
     Pulse,
 }
 
+/// Quality level for `Action::SetParticleQuality` and the `ParticleQuality` resource.
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub enum QualityLevel {
+    Minimal,
+    Low,
+    Medium,
+    #[default]
+    High,
+}
+
+/// Per-layer explicit particle counts for each quality tier.
+/// When present on a `LayerDef`, these values bypass the global quality multiplier.
+/// `high` is optional — when absent, the layer's `particle_count` is used as-is at High quality.
+///
+/// Example (RON): `quality: ( minimal: 1, low: 2, medium: 4 )`
+/// Example (RON): `quality: ( minimal: 1, low: 2, medium: 4, high: 16 )`
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct QualityOverride {
+    pub minimal: u32,
+    pub low: u32,
+    pub medium: u32,
+    /// When `None`, falls back to the layer's `particle_count` at High quality.
+    #[serde(default)]
+    pub high: Option<u32>,
+}
+
+/// Budget priority for an effect. Controls shedding behaviour when the live particle
+/// count approaches `ParticleBudget::max_count`.
+///
+/// Example (RON): `priority: Player`
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub enum EffectPriority {
+    /// Always spawns at full count; may briefly exceed the budget.
+    Player,
+    /// Halved when budget is tight (minimum 1). Default.
+    #[default]
+    Npc,
+    /// Silently skipped when the budget is exhausted.
+    Ambient,
+}
+
 /// A single emitter layer within an `EffectDef`. When `EffectDef.layers` is non-empty,
 /// each layer is spawned independently at the same origin. All fields behave identically
 /// to the matching flat fields on `EffectDef`.
@@ -180,6 +222,9 @@ pub struct LayerDef {
     #[serde(default)] pub emitter: EmitterShape,
     /// Velocity scaling curve over lifetime. Default: `Linear` (constant speed).
     #[serde(default)] pub velocity_curve: VelocityCurve,
+    /// Per-tier explicit particle counts. When set, bypasses the global quality multiplier.
+    /// `High` always uses `particle_count`. Example: `quality: ( minimal: 1, low: 2, medium: 4 )`.
+    #[serde(default)] pub quality: Option<QualityOverride>,
 }
 
 /// Particle burst effect definition. Authored in `AssetCatalog.effects` and referenced
@@ -317,6 +362,15 @@ pub struct EffectDef {
     /// Capped at `MAX_FADING_LIGHTS` simultaneous lights; excess spawns are silently skipped.
     #[serde(default)]
     pub light: Option<EffectLightDef>,
+    /// Budget priority for this effect. Controls shedding order when `ParticleBudget::max_count`
+    /// is approached. `Ambient` is dropped first; `Player` always fires. Default: `Npc`.
+    #[serde(default)]
+    pub priority: EffectPriority,
+    /// Per-tier explicit particle count for single-layer effects. When set, bypasses the
+    /// global quality multiplier for this effect. `High` always uses `particle_count`.
+    /// Copied into `LayerDef` via `From<&EffectDef>` so single-layer effects support overrides.
+    #[serde(default)]
+    pub quality: Option<QualityOverride>,
 }
 
 /// Dynamic point light attached to a particle effect. Authored in `EffectDef.light`.
@@ -371,6 +425,7 @@ impl From<&EffectDef> for LayerDef {
             size_y_end:         d.size_y_end,
             emitter:            d.emitter.clone(),
             velocity_curve:     d.velocity_curve.clone(),
+            quality:            d.quality.clone(),
         }
     }
 }

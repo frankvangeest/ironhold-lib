@@ -114,6 +114,8 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
             .init_resource::<crate::capabilities::decal::PendingDecalSpawns>()
+            .init_resource::<crate::capabilities::particle_budget::ParticleQuality>()
+            .init_resource::<crate::capabilities::particle_budget::ParticleBudget>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()

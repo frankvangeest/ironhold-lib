@@ -1070,6 +1070,10 @@ pub fn spawn_scene_v2(
         // per-entity stalls as the camera moves and new objects enter the frustum.
         commands.insert_resource(PipelineWarmup(4));
 
+        commands.insert_resource(crate::capabilities::particle_budget::ParticleBudget {
+            max_count: scene.particle_budget.unwrap_or(2000),
+        });
+
         next_state.set(AppState::InGame);
     } // end if !is_overlay
 

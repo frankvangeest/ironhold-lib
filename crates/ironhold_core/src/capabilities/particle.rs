@@ -1,8 +1,9 @@
 use bevy::prelude::*;
-use crate::schema::catalog::{EffectDef, EmitterShape, LayerDef, LineAxis};
+use crate::schema::catalog::{EffectDef, EffectPriority, EmitterShape, LayerDef, LineAxis, QualityLevel, QualityOverride};
 use crate::runtime::scene_manager::{LoadedAssetCatalog, LevelEntity};
 use crate::capabilities::particle_renderer::{ParticlePool, PooledParticle};
 use crate::capabilities::fading_light::{FadingLight, MAX_FADING_LIGHTS};
+use crate::capabilities::particle_budget::{ParticleBudget, ParticleQuality};
 
 // ─── Public queue types (unchanged API) ───────────────────────────────────────
 
@@ -182,7 +183,39 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
     }
 }
 
+/// Applies the quality multiplier to `count`, or uses per-tier override when present.
+/// Always returns at least 1.
+fn scaled_count(count: u32, quality_override: &Option<QualityOverride>, quality: &ParticleQuality) -> u32 {
+    if let Some(q) = quality_override {
+        match quality.level {
+            QualityLevel::Minimal => q.minimal,
+            QualityLevel::Low     => q.low,
+            QualityLevel::Medium  => q.medium,
+            QualityLevel::High    => q.high.unwrap_or(count),
+        }
+    } else {
+        (count as f32 * quality.multiplier()).round().max(1.0) as u32
+    }
+}
+
+/// Applies budget gating: returns the number of particles that may actually spawn.
+/// `Ambient`: 0 when budget is full. `Npc`: halved (min 1). `Player`: always full.
+fn budgeted_count(count: u32, priority: &EffectPriority, live: u32, max: u32) -> u32 {
+    if live + count <= max {
+        return count;
+    }
+    match priority {
+        EffectPriority::Player  => count,
+        EffectPriority::Npc     => (count / 2).max(1),
+        EffectPriority::Ambient => 0,
+    }
+}
+
 /// Drains `PendingParticleEffects` and pushes each particle into the CPU pool.
+///
+/// Quality is applied via `ParticleQuality`: the global multiplier scales `particle_count`,
+/// or per-layer `quality` overrides bypass it. Budget gating then checks the live pool count
+/// against `ParticleBudget::max_count` and sheds effects by priority (`Ambient` first).
 ///
 /// Single-layer effects use the flat `EffectDef` fields. Multi-layer effects (`layers`
 /// non-empty) spawn each layer independently at the same origin.
@@ -196,18 +229,38 @@ pub fn drain_particle_effects_system(
     mut pool: ResMut<ParticlePool>,
     asset_catalog: Res<LoadedAssetCatalog>,
     live_lights: Query<(), With<FadingLight>>,
+    quality: Res<ParticleQuality>,
+    budget: Res<ParticleBudget>,
 ) {
     let current_light_count = live_lights.iter().count();
     let mut lights_spawned = 0usize;
 
+    // Scan the pool once; increment `live` as we commit allocations this frame.
+    // This is O(n) once rather than O(n × effects × layers), and correctly accounts
+    // for particles allocated earlier in the same drain pass when gating later effects.
+    let mut live = pool.particles.iter().filter(|p| p.is_alive()).count() as u32;
+
     for effect in pending.0.drain(..) {
         let def = &effect.def;
         if def.layers.is_empty() {
-            let layer = LayerDef::from(def);
-            alloc_layer(effect.origin, &layer, &mut pool, &asset_catalog);
+            let mut layer = LayerDef::from(def);
+            let q_count = scaled_count(layer.particle_count, &layer.quality, &quality);
+            let final_count = budgeted_count(q_count, &def.priority, live, budget.max_count);
+            if final_count > 0 {
+                layer.particle_count = final_count;
+                alloc_layer(effect.origin, &layer, &mut pool, &asset_catalog);
+                live += final_count;
+            }
         } else {
-            for layer in &def.layers {
-                alloc_layer(effect.origin, layer, &mut pool, &asset_catalog);
+            for layer_def in &def.layers {
+                let mut layer = layer_def.clone();
+                let q_count = scaled_count(layer.particle_count, &layer.quality, &quality);
+                let final_count = budgeted_count(q_count, &def.priority, live, budget.max_count);
+                if final_count > 0 {
+                    layer.particle_count = final_count;
+                    alloc_layer(effect.origin, &layer, &mut pool, &asset_catalog);
+                    live += final_count;
+                }
             }
         }
 

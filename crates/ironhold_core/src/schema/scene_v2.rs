@@ -83,6 +83,11 @@ pub struct GameSceneV2 {
     /// Individual labels can opt out via `depth_scale: Some(false)`.
     #[serde(default)]
     pub label_depth_scale: Option<LabelDepthScaleDef>,
+    /// Maximum live particle count for this scene. `Ambient` effects are silently skipped
+    /// when the cap is reached; `Npc` effects are halved; `Player` effects always fire.
+    /// Applied to `ParticleBudget` on scene load. Defaults to 2000 when omitted.
+    #[serde(default)]
+    pub particle_budget: Option<u32>,
 }
 
 impl GameSceneV2 {

@@ -464,6 +464,42 @@ When an entity should reappear after a delay — training dummies, respawning en
 | Entity is a one-shot consumable (coin, key) that should not reappear | `Despawn` |
 | Entity is dynamically cloned from a template each time | `Despawn` + `Spawn` |
 
+### Multi-scene navigation via portal prefabs
+
+A walkthrough portal between two scenes is the standard pattern for multi-scene projects. The full setup uses a composite `TriggerZone` prefab and a `LoadScene` rule:
+
+**1. Define the portal prefab** (`prefabs/prefabs.ron`):
+```ron
+"portal_to_arena": (
+  kind: "primitive",
+  model: "",
+  trigger_zone: (radius: 1.5),
+  children: [
+    // arch pillars, lintel, glow disc — visual only
+    ( offset: (-0.8, 1.5, 0.0), primitive: Cuboid(0.3, 3.0, 0.3), color: (0.3, 0.3, 0.4) ),
+    ( offset: ( 0.8, 1.5, 0.0), primitive: Cuboid(0.3, 3.0, 0.3), color: (0.3, 0.3, 0.4) ),
+    ( offset: ( 0.0, 3.1, 0.0), primitive: Cuboid(2.0, 0.3, 0.3), color: (0.3, 0.3, 0.4) ),
+    ( offset: ( 0.0, 1.5, 0.0), primitive: Cylinder(height: 2.8, radius: 0.75),
+      color: (0.5, 0.3, 1.0), alpha: 0.35, alpha_mode: Blend ),
+  ],
+),
+```
+
+**2. Place it in the scene** (`scenes/main.scene.ron`):
+```ron
+( id: "portal_to_arena", prefab: "portal_to_arena",
+  transform: ( translation: (0.0, 0.0, -20.0), ... ) ),
+```
+
+**3. Wire the rule** (`logic/rules.ron`):
+```ron
+( on: "entity.entered:portal_to_arena", do_actions: [ LoadScene("scenes/arena.scene.ron") ] ),
+```
+
+The `TriggerZone` radius should cover the gate opening but not the frame — 1.0–1.5 m works for a standard doorway width. The trigger fires `entity.entered:{id}` on player overlap; `LoadScene` then transitions immediately.
+
+**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` rule alongside any warmup `SpawnEffect` calls — quality persists across `LoadScene` and must be reset explicitly per scene.
+
 ### System ordering
 
 The interpreter chain in `Update` is:
