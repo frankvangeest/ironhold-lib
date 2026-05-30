@@ -22,6 +22,10 @@
 
 ## Queued
 
+### Tooling
+
+- [ ] **Ironhold CLI** — `ironhold validate / schema / query` commands; new `crates/ironhold_cli`; shared validation module from `ironhold_core`; `--json` flag for AI agent use. See `planning/features/ironhold_cli.md`
+
 ### Particle System v2
 
 - [ ] **Bloom / post-processing in scene RON** — BLOCKED: Bevy's `Bloom` requires `#[require(Hdr)]`; HDR breaks the WASM build. Needs native-only guard or custom SDR pass before this can ship. See `planning/features/particle_bloom.md`
