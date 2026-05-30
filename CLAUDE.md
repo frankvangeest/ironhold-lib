@@ -163,7 +163,7 @@ Every code change must follow this order before committing code:
     - project goal aligned - Goal alignment review for the feature plan
     - follows proper UX design - UX review for the feature plan
  2. **Make feature active in backlog and commit before coding** — If not already
- 3. **Code changes** — implement the feature or fix
+ 3. **Code changes** — implement the feature or fix and update tests
  4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
  6. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
