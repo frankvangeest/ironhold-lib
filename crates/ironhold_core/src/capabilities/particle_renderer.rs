@@ -71,6 +71,12 @@ pub struct PooledParticle {
     pub end_size_y: Option<f32>,
     /// Velocity scale curve over lifetime. Scales the per-frame position step.
     pub velocity_curve: VelocityCurve,
+    // ── Flipbook ─────────────────────────────────────────────────────────────
+    /// Number of columns in the sprite sheet. 0 = not a flipbook particle.
+    pub flipbook_cols: u8,
+    pub flipbook_rows: u8,
+    pub flipbook_fps:  f32,
+    pub flipbook_loop: bool,
 }
 
 impl PooledParticle {
@@ -369,7 +375,20 @@ pub fn rebuild_pool_meshes_system(
 
             positions.extend_from_slice(&[v0, v1, v2, v3]);
             // UV: tip at y=0, base at y=1 (matches Kenney flame sprite orientation).
-            uvs.extend_from_slice(&[[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]);
+            // For flipbook particles, compute the current frame's sub-rectangle.
+            let (u0, u1, fv0, fv1) = if p.flipbook_cols > 0 {
+                let total = p.flipbook_cols as usize * p.flipbook_rows as usize;
+                let raw   = (p.elapsed * p.flipbook_fps) as usize;
+                let frame = if p.flipbook_loop { raw % total } else { raw.min(total - 1) };
+                let col   = frame % p.flipbook_cols as usize;
+                let row   = frame / p.flipbook_cols as usize;
+                let cf    = p.flipbook_cols as f32;
+                let rf    = p.flipbook_rows as f32;
+                (col as f32 / cf, (col + 1) as f32 / cf, row as f32 / rf, (row + 1) as f32 / rf)
+            } else {
+                (0.0, 1.0, 0.0, 1.0)
+            };
+            uvs.extend_from_slice(&[[u0, fv1], [u1, fv1], [u1, fv0], [u0, fv0]]);
             colors.extend_from_slice(&[c, c, c, c]);
 
             if is_flame {

@@ -179,6 +179,10 @@ fn alloc_layer(origin: Vec3, layer: &LayerDef, pool: &mut ParticlePool, asset_ca
             end_size_x,
             end_size_y,
             velocity_curve: layer.velocity_curve.clone(),
+            flipbook_cols: layer.flipbook.as_ref().map_or(0, |f| f.cols),
+            flipbook_rows: layer.flipbook.as_ref().map_or(0, |f| f.rows),
+            flipbook_fps:  layer.flipbook.as_ref().map_or(0.0, |f| f.fps),
+            flipbook_loop: layer.flipbook.as_ref().map_or(false, |f| f.r#loop),
         });
     }
 }

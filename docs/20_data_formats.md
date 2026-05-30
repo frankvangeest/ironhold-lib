@@ -583,6 +583,7 @@ Named registry of all assets available to prefabs and scenes.
 | `light` | `Option<EffectLightDef>` | `None` | Dynamic point light spawned at the effect origin — see section below. |
 | `priority` | `EffectPriority` | `Npc` | Budget shedding bucket. `Ambient` = dropped when full; `Npc` = halved (min 1); `Player` = always fires. See "Quality & Budget" below. |
 | `quality` | `Option<QualityOverride>` | `None` | Explicit per-tier counts. Bypasses the global multiplier when set. `high` is optional — omit to use `particle_count` at High. Example: `quality: (minimal: 1, low: 3, medium: 6)`. |
+| `flipbook` | `Option<FlipbookDef>` | `None` | Sprite-sheet animation — see "Flipbook animation" section below. Cannot be combined with `uv_distort > 0`. |
 
 **Emitter shapes (`emitter`)**
 
@@ -689,6 +690,37 @@ When `light` is set, a temporary `PointLight` is spawned at the effect origin th
 ```
 
 The engine caps simultaneous fading lights at 16. When the cap is full, new light spawns are silently skipped — the particles still fire. This keeps within WebGPU mobile cluster limits (~32 total lights including authored scene fixtures).
+
+**Flipbook animation (`flipbook`)**
+
+Animates a sprite sheet by selecting UV sub-rectangles from a single texture over the particle's lifetime. Each particle advances through frames independently based on its own `elapsed` time.
+
+```ron
+// In EffectDef or LayerDef:
+"sheet_explosion": (
+    particle_count: 8,
+    lifetime_secs: 1.4,
+    sprite: "particle/explosion_4x4",   // 512×512 sprite sheet, 4 cols × 4 rows
+    additive: true,
+    flipbook: (
+        cols: 4,    // number of columns in the sheet
+        rows: 4,    // number of rows
+        fps: 12.0,  // frame rate; at 12 fps a 16-frame sheet plays in 1.33 s
+        loop: false,  // false: hold last frame until lifetime_secs expires (default)
+                      // true: loop continuously for the full lifetime
+    ),
+),
+```
+
+**Sheet authoring conventions:**
+- Row order: top-to-bottom, left-to-right (standard Aseprite / Photoshop export).
+- Power-of-two PNGs recommended (256×256, 512×512, 1024×1024).
+- White-on-transparent; tint via `color_start`/`color_end` gradient as usual.
+- Place shared sheets in `assets/shared/textures/particles/sheets/`; register in the project's `assets.ron` textures section.
+
+**Constraint:** `flipbook` and `uv_distort > 0` cannot be combined on the same layer. `uv_distort` animates UVs in the flame shader; flipbook bakes UV sub-rects into vertex data — they are mutually exclusive. Validation raises an error at catalog load time.
+
+**No new pipeline variant:** flipbook particles use the existing `Additive` or `Blend` group key (same `StandardMaterial` pipeline). The sprite sheet is just a texture, so no additional WebGPU pipeline warmup is needed beyond the standard pattern for any new texture.
 
 **Quality tiers & particle budget**
 

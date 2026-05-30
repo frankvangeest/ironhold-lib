@@ -15,16 +15,25 @@
         (
             on: "scene.ready:main",
             do_actions: [
-                SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "explosion_burst",    position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_fire",      position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "campfire_smoke",     position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "star_rain",          position: Some((0.0, -100.0, 0.0))),
+                // Flipbook shares Additive+StandardMaterial pipeline — star_rain warmup covers it.
+                // Include explicitly for clarity; zero extra pipeline cost.
+                SpawnEffect(key: "explosion_flipbook", position: Some((0.0, -100.0, 0.0))),
                 // Warms the decal pipeline: StandardMaterial + AlphaBlend + depth_bias:128 + double_sided.
                 // This variant is distinct from particle blend materials (no depth_bias).
                 ProjectDecal(key: "explosion_ring", position: Some((0.0, -100.0, 0.0)),
                              radius: 1.0, duration_secs: 2.0, color: (1.0, 1.0, 1.0, 0.01)),
                 SetParticleQuality(High),
             ],
+        ),
+
+        // Press F near the flipbook pad — sprite-sheet animated explosion burst.
+        (
+            on: "entity.interacted:flipbook_pad_01",
+            do_actions: [ SpawnEffect(key: "explosion_flipbook", entity: "flipbook_pad_01") ],
         ),
 
         // Walk into the explosion pad to trigger a burst + orange ring decal.

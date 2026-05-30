@@ -171,6 +171,12 @@ Common event name patterns:
     rotation_speed_deg: 90.0,     // default 0.0 — constant degrees/second (overrides start/end)
     emitter: Ring(radius: 1.0),   // default Point — spawn distribution shape
     velocity_curve: EaseOut,      // default Linear — speed envelope over lifetime
+    flipbook: (                   // optional sprite-sheet animation (cannot combine with uv_distort > 0)
+        cols: 4,                  // columns in the sheet
+        rows: 4,                  // rows in the sheet
+        fps: 12.0,                // frames per second
+        loop: false,              // false: hold last frame; true: loop continuously
+    ),
 ),
 ```
 

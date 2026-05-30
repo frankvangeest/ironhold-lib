@@ -34,6 +34,8 @@
       ( position: (7.0, 2.0, 0.0),    color: (0.40, 0.75, 1.0), intensity: 8000.0,  range: 8.0  ),
       // Energy sphere: warm gold (inner W)
       ( position: (-7.0, 2.0, 0.0),   color: (1.0, 0.80, 0.25), intensity: 8000.0,  range: 8.0  ),
+      // Flipbook pad: warm orange glow
+      ( position: (0.0, 2.0, -6.0),   color: (1.0, 0.55, 0.10), intensity: 6000.0,  range: 8.0  ),
     ],
   ),
 
@@ -230,6 +232,21 @@
     ),
 
     // ═══════════════════════════════════════════════════════════════════════
+    // STATION 11 — FLIPBOOK PAD  (inner N, 0, 0, −6)
+    // Interactable: press F → sprite-sheet flipbook explosion burst.
+    // First station visible from spawn — demonstrates UV sub-rect animation.
+    // ═══════════════════════════════════════════════════════════════════════
+    (
+      id: "flipbook_pad_01",
+      prefab: "flipbook_pad",
+      transform: (
+        translation: (0.0, 0.0, -6.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════════
     // PORTAL — to Arcane Observatory  (far N, 0, 0, −20)
     // Walk through the gate to load particles2.scene.ron.
     // ═══════════════════════════════════════════════════════════════════════
@@ -398,6 +415,21 @@
       translation: (0.0, 4.0, -12.0),
       font_size: 14.0,
       color: (0.72, 0.78, 0.95, 0.85),
+    ),
+
+    (
+      id: "label_flipbook",
+      text: "Flipbook Pad",
+      translation: (0.0, 3.0, -6.0),
+      font_size: 20.0,
+      color: (1.0, 0.75, 0.35, 1.0),
+    ),
+    (
+      id: "label_flipbook_sub",
+      text: "[F] sprite-sheet animation · 4×4 frames",
+      translation: (0.0, 2.5, -6.0),
+      font_size: 14.0,
+      color: (0.88, 0.62, 0.28, 0.85),
     ),
 
     (

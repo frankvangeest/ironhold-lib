@@ -102,6 +102,8 @@
     "particle/trace_05_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_05_rotated.png",
     "particle/trace_06_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_06_rotated.png",
     "particle/trace_07_rotated":   "shared/textures/particles/kenney-particle-pack/Rotated/trace_07_rotated.png",
+    // Sprite sheet for flipbook animation (4×4, 16 frames, 512×512)
+    "particle/explosion_4x4":      "shared/textures/particles/sheets/explosion_4x4.png",
   },
 
   audio: {},
@@ -558,6 +560,57 @@
         range: 8.0,
         fade_in_secs: 0.05,
         fade_out_secs: 0.50,
+      ),
+    ),
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // FLIPBOOK DEMO — sprite-sheet frame animation
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Demonstrates flipbook animation: a single large quad plays through a 4×4 explosion
+    // sprite sheet at 12 fps over 1.4 s. hold last frame until lifetime expires.
+    // Triggered by the [F] interact pad in the demo scene.
+    "explosion_flipbook": (
+      particle_count: 8,
+      lifetime_secs: 1.4,
+      speed: 0.4,
+      speed_jitter: 0.2,
+      spread_deg: 60.0,
+      size: 0.8,
+      size_end: 0.2,
+      color_start: (1.0, 0.85, 0.3, 1.0),
+      color_mid:   (1.0, 0.4,  0.1, 0.9),
+      color_end:   (0.4, 0.1,  0.0, 0.0),
+      sprite: "particle/explosion_4x4",
+      additive: true,
+      gravity: -1.0,
+      flipbook: (
+        cols: 4,
+        rows: 4,
+        fps: 12.0,
+        loop: false,
+      ),
+    ),
+
+    // Loop variant: plays the explosion sheet on repeat for as long as the particle lives.
+    "explosion_flipbook_loop": (
+      particle_count: 4,
+      lifetime_secs: 2.0,
+      speed: 0.2,
+      speed_jitter: 0.1,
+      spread_deg: 30.0,
+      size: 1.0,
+      size_end: 0.5,
+      color_start: (1.0, 0.7, 0.2, 0.9),
+      color_end:   (0.3, 0.1, 0.0, 0.0),
+      sprite: "particle/explosion_4x4",
+      additive: true,
+      gravity: 0.5,
+      flipbook: (
+        cols: 4,
+        rows: 4,
+        fps: 8.0,
+        loop: true,
       ),
     ),
 

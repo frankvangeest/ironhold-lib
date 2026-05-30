@@ -3904,4 +3904,160 @@ fn test_new_particle_fields_default_when_omitted() {
     assert!(layer.size_y.is_none());
     assert!(matches!(layer.emitter, EmitterShape::Point));
     assert!(matches!(layer.velocity_curve, VelocityCurve::Linear));
+    assert!(layer.flipbook.is_none());
+}
+
+#[test]
+fn test_flipbook_def_parses_on_effect_def() {
+    use ironhold_core::schema::catalog::{AssetCatalog, LayerDef};
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "sheet_burst": (
+                    particle_count: 8,
+                    lifetime_secs: 1.4,
+                    speed: 0.4,
+                    color_start: (1.0, 0.8, 0.3, 1.0),
+                    color_end:   (0.4, 0.1, 0.0, 0.0),
+                    sprite: "particle/explosion_4x4",
+                    additive: true,
+                    flipbook: (
+                        cols: 4,
+                        rows: 4,
+                        fps: 12.0,
+                        loop: false,
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("flipbook EffectDef must parse");
+    let effect = catalog.effects.get("sheet_burst").unwrap();
+    let fb = effect.flipbook.as_ref().expect("flipbook field must be Some");
+    assert_eq!(fb.cols, 4);
+    assert_eq!(fb.rows, 4);
+    assert!((fb.fps - 12.0).abs() < 0.001);
+    assert!(!fb.r#loop);
+
+    // From<&EffectDef> must copy flipbook into LayerDef
+    let layer: LayerDef = effect.into();
+    let layer_fb = layer.flipbook.as_ref().expect("LayerDef must inherit flipbook");
+    assert_eq!(layer_fb.cols, 4);
+    assert_eq!(layer_fb.rows, 4);
+}
+
+#[test]
+fn test_flipbook_def_loop_true() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "loop_burst": (
+                    particle_count: 4,
+                    lifetime_secs: 2.0,
+                    color_start: (1.0, 0.7, 0.2, 0.9),
+                    color_end:   (0.3, 0.1, 0.0, 0.0),
+                    sprite: "particle/explosion_4x4",
+                    additive: true,
+                    flipbook: (
+                        cols: 4,
+                        rows: 4,
+                        fps: 8.0,
+                        loop: true,
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("looping flipbook must parse");
+    let fb = catalog.effects.get("loop_burst").unwrap()
+        .flipbook.as_ref().unwrap();
+    assert!(fb.r#loop);
+}
+
+#[test]
+fn test_flipbook_on_layer_def() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "multi_flipbook": (
+                    layers: [
+                        (
+                            particle_count: 6,
+                            lifetime_secs: 1.0,
+                            color_start: (1.0, 0.5, 0.1, 1.0),
+                            color_end:   (0.2, 0.0, 0.0, 0.0),
+                            sprite: "particle/explosion_4x4",
+                            additive: true,
+                            flipbook: (cols: 4, rows: 4, fps: 16.0),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("flipbook in LayerDef must parse");
+    let layer = &catalog.effects.get("multi_flipbook").unwrap().layers[0];
+    let fb = layer.flipbook.as_ref().expect("layer flipbook must be Some");
+    assert_eq!(fb.cols, 4);
+    assert_eq!(fb.rows, 4);
+    assert!(!fb.r#loop, "default loop must be false");
+}
+
+#[test]
+fn test_flipbook_and_uv_distort_is_validation_error_single_layer() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "bad_combo": (
+                    particle_count: 4,
+                    lifetime_secs: 1.0,
+                    color_start: (1.0, 0.5, 0.1, 1.0),
+                    color_end:   (0.2, 0.0, 0.0, 0.0),
+                    sprite: "particle/explosion_4x4",
+                    additive: true,
+                    uv_distort: 0.4,
+                    flipbook: (cols: 4, rows: 4, fps: 12.0),
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("parse should succeed; validation catches the error");
+    let err = catalog.validate().expect_err("flipbook + uv_distort must fail validation");
+    assert!(err.contains("flipbook") && err.contains("uv_distort"), "error message: {err}");
+}
+
+#[test]
+fn test_flipbook_and_uv_distort_is_validation_error_in_layer() {
+    use ironhold_core::schema::catalog::AssetCatalog;
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            effects: {
+                "bad_layer": (
+                    layers: [
+                        (
+                            particle_count: 4,
+                            lifetime_secs: 1.0,
+                            color_start: (1.0, 0.5, 0.1, 1.0),
+                            color_end:   (0.2, 0.0, 0.0, 0.0),
+                            sprite: "particle/explosion_4x4",
+                            additive: true,
+                            uv_distort: 0.3,
+                            flipbook: (cols: 2, rows: 2, fps: 8.0),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: AssetCatalog = from_str(ron_str).expect("parse should succeed");
+    let err = catalog.validate().expect_err("flipbook + uv_distort in layer must fail");
+    assert!(err.contains("flipbook") && err.contains("uv_distort"), "error: {err}");
 }

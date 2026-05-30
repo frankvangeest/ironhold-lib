@@ -59,6 +59,13 @@ impl AssetCatalog {
                         key, effect.particle_count, MAX_PARTICLES_PER_EFFECT
                     ));
                 }
+                if effect.flipbook.is_some() && effect.uv_distort > 0.0 {
+                    return Err(format!(
+                        "AssetCatalog effect \"{}\": `flipbook` and `uv_distort` cannot be used \
+                         together — flipbook uses UV sub-rects; uv_distort animates UVs in the shader",
+                        key
+                    ));
+                }
             } else {
                 for (i, layer) in effect.layers.iter().enumerate() {
                     if layer.particle_count > MAX_PARTICLES_PER_EFFECT {
@@ -66,6 +73,13 @@ impl AssetCatalog {
                             "AssetCatalog effect \"{}\": layer[{}] particle_count {} exceeds the \
                              maximum of {} — reduce particle_count",
                             key, i, layer.particle_count, MAX_PARTICLES_PER_EFFECT
+                        ));
+                    }
+                    if layer.flipbook.is_some() && layer.uv_distort > 0.0 {
+                        return Err(format!(
+                            "AssetCatalog effect \"{}\": layer[{}] has both `flipbook` and \
+                             `uv_distort > 0` — these cannot be combined",
+                            key, i
                         ));
                     }
                 }
@@ -174,6 +188,25 @@ pub enum EffectPriority {
     Ambient,
 }
 
+/// Sprite-sheet (flipbook) animation for a particle layer. Authored as `flipbook: (...)` on
+/// `LayerDef` or `EffectDef`. Each particle advances through frames over its lifetime.
+///
+/// Row order: top-to-bottom, left-to-right (matches Aseprite / Photoshop sprite sheet export).
+/// `loop: false` holds the last frame until `lifetime_secs` expires (despawn via lifetime).
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct FlipbookDef {
+    /// Number of columns in the sprite sheet. Must be ≥ 1.
+    pub cols: u8,
+    /// Number of rows in the sprite sheet. Must be ≥ 1.
+    pub rows: u8,
+    /// Frames per second. At 24.0 fps a 4×4 sheet plays in 0.67 s.
+    pub fps: f32,
+    /// When `true`, loops the animation for the full lifetime. Default: `false` (hold last frame).
+    #[serde(default)]
+    pub r#loop: bool,
+}
+
 /// A single emitter layer within an `EffectDef`. When `EffectDef.layers` is non-empty,
 /// each layer is spawned independently at the same origin. All fields behave identically
 /// to the matching flat fields on `EffectDef`.
@@ -225,6 +258,9 @@ pub struct LayerDef {
     /// Per-tier explicit particle counts. When set, bypasses the global quality multiplier.
     /// `High` always uses `particle_count`. Example: `quality: ( minimal: 1, low: 2, medium: 4 )`.
     #[serde(default)] pub quality: Option<QualityOverride>,
+    /// Sprite-sheet animation. When set, each particle advances through UV frames over its
+    /// lifetime. Cannot be combined with `uv_distort > 0` — validated at catalog load time.
+    #[serde(default)] pub flipbook: Option<FlipbookDef>,
 }
 
 /// Particle burst effect definition. Authored in `AssetCatalog.effects` and referenced
@@ -371,6 +407,10 @@ pub struct EffectDef {
     /// Copied into `LayerDef` via `From<&EffectDef>` so single-layer effects support overrides.
     #[serde(default)]
     pub quality: Option<QualityOverride>,
+    /// Sprite-sheet animation for single-layer effects. Copied into `LayerDef` via
+    /// `From<&EffectDef>`. Cannot be combined with `uv_distort > 0`.
+    #[serde(default)]
+    pub flipbook: Option<FlipbookDef>,
 }
 
 /// Dynamic point light attached to a particle effect. Authored in `EffectDef.light`.
@@ -426,6 +466,7 @@ impl From<&EffectDef> for LayerDef {
             emitter:            d.emitter.clone(),
             velocity_curve:     d.velocity_curve.clone(),
             quality:            d.quality.clone(),
+            flipbook:           d.flipbook.clone(),
         }
     }
 }
