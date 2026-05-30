@@ -55,7 +55,9 @@
       "Bash(Get-ChildItem C:\\git\\rust\\ironhold-lib\\*)",
       "Bash(Sort-Object)",
       "Bash(Select-Object -First 100)",
-      "PowerShell(Get-Item C:\\git\\rust\\ironhold-lib\\*)"
+      "PowerShell(Get-Item C:\\git\\rust\\ironhold-lib\\*)",
+      "Bash(cargo info *)",
+      "Bash(cargo tree *)"
     ]
   }
 }

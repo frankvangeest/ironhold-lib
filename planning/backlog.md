@@ -67,6 +67,8 @@
 ### Engine / Runtime
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
+- [ ] **`ChildOf` hierarchy migration** — migrate from `Children`/`Parent` (Bevy pre-0.16 API) to the `ChildOf` relationship component (Bevy 0.16+); the animation system queries `&Children` to walk GLB hierarchies and all spawners use `with_children()` — these need updating to the forward-looking API before a future Bevy upgrade removes the compat shim
+- [ ] **Required components on project-defined components** — adopt `#[require(...)]` (Bevy 0.15+) on project-defined marker components (e.g. `TriggerZone`, `FadingLight`, `LevelEntity`) so that inserting the primary component automatically inserts its mandatory companions; reduces manual bundle construction in spawners and makes component contracts explicit at the type level
 - [ ] **Typed primitive shape field** — split the `model:` field on `kind: "primitive"` prefabs into a separate typed `shape:` field (e.g. `shape: Cuboid`) so it is clearly distinct from the asset catalog key used by `kind: "actor"` and `kind: "prop"`; requires schema version bump; breaking change — needs design doc
 - [ ] **Consistent RON enum casing** — unify quoted magic strings (`kind: "actor"`) and bare enum variants (`kind: Standard(...)`) to a single convention across the schema; requires schema version bump; breaking change — needs design doc
 - [ ] **Consistent `assets.ron` entry shapes** — `models` entries use `(path: "...")`, `textures` are bare strings, `audio` uses `(path: "...", volume: ...)`; unifying the shapes reduces copy-paste errors and parse confusion; requires schema version bump

@@ -638,7 +638,7 @@ dependencies = [
 [[package]]
 name = "bevy_common_assets"
 version = "0.15.0"
-source = "git+https://github.com/NiklasEi/bevy_common_assets?branch=main#ae3243defb5c07170c1ece647061f4117cf5f97e"
+source = "git+https://github.com/NiklasEi/bevy_common_assets?rev=ae3243defb5c07170c1ece647061f4117cf5f97e#ae3243defb5c07170c1ece647061f4117cf5f97e"
 dependencies = [
  "anyhow",
  "bevy_app",
