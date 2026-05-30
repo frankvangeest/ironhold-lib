@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, SpawnId, SpawnRegistry, SceneHandleV2};
 use ironhold_core::schema::{Action, AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{
-    AssetCatalog, EffectDef, EffectLightDef, EffectPriority, EmitterShape, LayerDef,
+    AssetCatalog, EffectDef, EffectLightDef, EffectPriority, EmitterShape, FlipbookDef, LayerDef,
     QualityLevel, QualityOverride, VelocityCurve,
 };
 use ironhold_core::capabilities::particle_budget::{ParticleBudget, ParticleQuality};
@@ -45,6 +45,7 @@ fn minimal_effect_def(particle_count: u32, lifetime_secs: f32) -> EffectDef {
         light: None,
         priority: EffectPriority::Npc,
         quality: None,
+        flipbook: None,
     }
 }
 
@@ -167,7 +168,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let layer1 = LayerDef {
         particle_count: 2, lifetime_secs: 0.8,
@@ -182,7 +183,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let mut effect_def = minimal_effect_def(12, 1.0);
     effect_def.layers = vec![layer0, layer1];
@@ -316,7 +317,7 @@ fn test_rotation_speed_produces_nonzero_rotation_rad() {
         rotation_speed_deg: 360.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
@@ -365,7 +366,7 @@ fn test_non_uniform_scale_stored_in_particle() {
         size_x: Some(0.10), size_y: Some(0.50),
         size_x_end: Some(0.05), size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let mut effect_def = minimal_effect_def(2, 1.0);
     effect_def.layers = vec![layer];
@@ -407,7 +408,7 @@ fn test_ring_emitter_places_particles_on_circumference() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Ring { radius: 2.0 }, velocity_curve: VelocityCurve::Linear,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
@@ -450,7 +451,7 @@ fn test_velocity_curve_stored_in_particle() {
         rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
         size_x: None, size_y: None, size_x_end: None, size_y_end: None,
         emitter: EmitterShape::Point, velocity_curve: VelocityCurve::EaseOut,
-        quality: None,
+        quality: None, flipbook: None,
     };
     let mut effect_def = minimal_effect_def(3, 2.0);
     effect_def.speed = 1.0;
@@ -840,4 +841,104 @@ fn test_multilayer_budget_blocks_second_layer_for_ambient() {
     // Layer A: live=0, budget=5, 0+5<=5 → 5 spawned. live becomes 5.
     // Layer B: live=5, budget=5, Ambient → 5+3>5, shed → 0.
     assert_eq!(alive, 5, "Ambient multi-layer: second layer must be shed once live count reaches budget");
+}
+
+// ── Flipbook integration tests ────────────────────────────────────────────────
+
+fn flipbook_layer(cols: u8, rows: u8, fps: f32, loop_anim: bool) -> LayerDef {
+    LayerDef {
+        particle_count: 4,
+        lifetime_secs: 2.0,
+        speed: 0.0, speed_jitter: 0.0, spread_deg: 0.0,
+        offset: (0.0, 0.0, 0.0), emit_radius: 0.0,
+        size: 0.2, size_end: None, size_jitter: 0.0,
+        color_start: (1.0, 0.8, 0.3, 1.0), color_mid: None,
+        color_end: (0.4, 0.1, 0.0, 0.0),
+        gravity: 0.0, turbulence: 0.0,
+        sprite: None, sprites: vec![], additive: true,
+        uv_distort: 0.0, uv_scroll_speed: 0.0,
+        rotation_start_deg: 0.0, rotation_end_deg: 0.0, rotation_speed_deg: 0.0,
+        size_x: None, size_y: None, size_x_end: None, size_y_end: None,
+        emitter: EmitterShape::Point, velocity_curve: VelocityCurve::Linear,
+        quality: None,
+        flipbook: Some(FlipbookDef { cols, rows, fps, r#loop: loop_anim }),
+    }
+}
+
+#[test]
+fn test_flipbook_fields_stored_on_pooled_particle() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut effect_def = minimal_effect_def(4, 2.0);
+    effect_def.layers = vec![flipbook_layer(4, 4, 12.0, false)];
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("sheet_burst".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "sheet_burst".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    let alive: Vec<_> = pool.particles.iter().filter(|p| p.is_alive()).collect();
+    assert_eq!(alive.len(), 4, "must spawn 4 flipbook particles");
+    for p in &alive {
+        assert_eq!(p.flipbook_cols, 4, "flipbook_cols must be 4");
+        assert_eq!(p.flipbook_rows, 4, "flipbook_rows must be 4");
+        assert!((p.flipbook_fps - 12.0).abs() < 0.001, "flipbook_fps must be 12.0");
+        assert!(!p.flipbook_loop, "flipbook_loop must be false");
+    }
+}
+
+#[test]
+fn test_flipbook_loop_flag_stored_on_pooled_particle() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut effect_def = minimal_effect_def(2, 2.0);
+    effect_def.layers = vec![flipbook_layer(4, 4, 8.0, true)];
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("loop_burst".to_string(), effect_def)]),
+        ..Default::default()
+    }));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "loop_burst".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    for p in pool.particles.iter().filter(|p| p.is_alive()) {
+        assert!(p.flipbook_loop, "flipbook_loop must be true for looping variant");
+    }
+}
+
+#[test]
+fn test_non_flipbook_particle_has_zero_cols() {
+    // Particles spawned without flipbook must have flipbook_cols = 0 (non-flipbook path).
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([("sparks".to_string(), minimal_effect_def(4, 1.0))]),
+        ..Default::default()
+    }));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: "sparks".to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+
+    let pool = app.world().resource::<ParticlePool>();
+    for p in pool.particles.iter().filter(|p| p.is_alive()) {
+        assert_eq!(p.flipbook_cols, 0, "non-flipbook particle must have flipbook_cols = 0");
+        assert_eq!(p.flipbook_rows, 0, "non-flipbook particle must have flipbook_rows = 0");
+        assert!((p.flipbook_fps).abs() < 0.001, "non-flipbook particle must have flipbook_fps = 0");
+    }
 }
