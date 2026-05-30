@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Flipbook / sprite sheet animation** — animated sprite sheets on particle layers; CPU UV sub-rect baked per-frame; no new pipeline variant; `explosion_4x4.png` demo in particles_demo. See `planning/features/particle_flipbook.md`
+
 ---
 
 ## Bugs
@@ -32,7 +34,7 @@
 - [x] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
 - [x] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/done/particle_extended_behaviours.md`
 - [x] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/done/particle_ground_decals.md`
-- [ ] **Flipbook / sprite sheet animation** — animated sprite sheets on particle layers; depends on instanced renderer. See `planning/features/particle_flipbook.md`
+- [x] **Flipbook / sprite sheet animation** — moved to Active. See `planning/features/particle_flipbook.md`
 - [ ] **Shared effect library** — `assets/shared/effects/` with reusable effects and per-project overrides. See `planning/features/particle_shared_library.md`
 
 ### Beta 0.5 — Deterministic Tick + Replay
