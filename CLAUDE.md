@@ -12,8 +12,10 @@ cargo run -p ironhold_cli -- inspect texture <path.png|jpg|webp> # dimensions, f
 cargo run -p ironhold_cli -- inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
 cargo run -p ironhold_cli -- query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
 cargo run -p ironhold_cli -- query effects <project_dir>         # list particle effects (count, layers, flags)
-cargo run -p ironhold_cli -- query scenes  <project_dir>         # list scenes (entities, ui, player, overlay)
-cargo run -p ironhold_cli -- query rules   <project_dir>         # list rules.ron and/or state_machine.ron
+cargo run -p ironhold_cli -- query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
+cargo run -p ironhold_cli -- query rules    <project_dir>        # list rules.ron and/or state_machine.ron
+cargo run -p ironhold_cli -- query actions  <project_dir>        # list all action types used across logic files
+cargo run -p ironhold_cli -- query events   <project_dir>        # list all event triggers used across logic files
 cargo run -p ironhold_cli -- query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
 cargo run -p ironhold_cli -- query effects <project_dir> --filter additive=true  # filter by field=value
 cargo run -p ironhold_cli -- watch  <project_dir>               # watch for .ron changes and re-validate on every save

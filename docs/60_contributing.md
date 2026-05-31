@@ -266,11 +266,15 @@ ironhold query effects assets/projects/particles_demo/ --filter additive=true
 ironhold query effects assets/projects/particles_demo/ --filter priority=Ambient
 ironhold query effects assets/projects/particles_demo/ --filter layers=true
 
-ironhold query scenes assets/projects/3rd_person_game_demo/
-ironhold query rules  assets/projects/3rd_person_game_demo/
+ironhold query scenes   assets/projects/3rd_person_game_demo/
+ironhold query rules    assets/projects/3rd_person_game_demo/
+ironhold query actions  assets/projects/3rd_person_game_demo/
+ironhold query events   assets/projects/3rd_person_game_demo/
 
-ironhold --json query prefabs assets/projects/particles_demo/ --keys-only
-ironhold --json query effects assets/projects/particles_demo/
+ironhold --json query prefabs  assets/projects/particles_demo/ --keys-only
+ironhold --json query effects  assets/projects/particles_demo/
+ironhold --json query actions  assets/projects/3rd_person_game_demo/
+ironhold --json query events   assets/projects/particles_demo/
 ```
 
 **`query prefabs`** — lists all entries from `prefabs/prefabs.ron`. Human output shows kind, model, tags, npc/trigger_zone/interactable flags, and behavior path. Supports `--filter kind=actor|prop|primitive`, `--filter tag=<value>`, `--filter behavior=true|false`, `--filter npc=true`. Use `--keys-only` to get one key per line for piping.
@@ -280,6 +284,10 @@ ironhold --json query effects assets/projects/particles_demo/
 **`query scenes`** — lists all `*.scene.ron` files. Output shows name, entity count, UI element count, `player:true` (if any entity's prefab has the `player` tag), and `overlay` (scenes with only UI and no world entities or terrain).
 
 **`query rules`** — shows `logic/rules.ron` (each rule's event trigger, optional `when:` guard, and action count) and/or `logic/state_machine.ron` (initial state, states with entry/exit/on counts and outgoing transitions).
+
+**`query actions`** — lists every action type used across `rules.ron`, `state_machine.ron`, and all `*.behavior.ron` files. Shows variant name, total count, and which source files use it. Sorted by count descending. Useful for auditing what a project actually does at a glance.
+
+**`query events`** — lists every event trigger string used across the same logic files. Shows the event name, how many bindings use it, which action types it directly fires, and `[transition]` when it also drives an FSM state change. Sorted alphabetically.
 
 ### `--json` flag
 
