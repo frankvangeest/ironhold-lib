@@ -1,7 +1,7 @@
 # Feature: Ironhold Live Project Editor
 
-_Status: Concept
-_Planned at: `<git rev-parse --short HEAD>` (YYYY-MM-DD)_
+_Status: Concept_
+_Planned at: `dbcdf02` (2026-05-31)_
 
 ## What
 A web application to manage the Rust Object Notation (RON) files that follow the fixed RON schema of the ironhold_core.
