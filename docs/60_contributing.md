@@ -202,6 +202,31 @@ Watching C:\git\rust\ironhold-lib\assets\projects\quick_scene\ — Ctrl+C to sto
 
 The `--json` flag has no effect on `watch` — output is always human-readable.
 
+### `stats <project_dir>`
+
+Prints a compact summary of a project without starting the engine. Useful for quick AI context
+before authoring new RON files, and for spotting projects that have grown unexpectedly large.
+
+```bash
+ironhold stats assets/projects/particles_demo/
+ironhold stats assets/projects/3rd_person_game_demo/
+ironhold --json stats assets/projects/quick_scene/
+```
+
+Example output:
+
+```
+particles_demo
+  Scenes:    2
+  Prefabs:   16
+  Effects:   18
+  Logic:     21 rules  5 behaviors
+  Catalog:   120 entries  (models:0  textures:97  audio:0  effects:18  decals:5)
+  Project:   11 RON files, 87.6 KB on disk
+```
+
+The `--json` flag emits a structured object with all the same fields plus `total_bytes`.
+
 ### `validate <project_dir>`
 
 Parses every RON file in a project directory using the same schema types as the engine runtime,

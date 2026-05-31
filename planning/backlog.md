@@ -12,7 +12,7 @@
 ## Active
 
 - [x] **`watch <project_dir>` (CLI)** — file-watcher loop that re-runs `validate` on every `.ron` save; prints changed file path + result on each re-check; edit-validate loop without engine startup
-- [ ] **`stats <project_dir>` (CLI)** — one-line project summary: scene count, prefab count, effect count, rule count, total asset file count and on-disk size; useful as quick AI context before authoring and for spotting bloated projects
+- [x] **`stats <project_dir>` (CLI)** — one-line project summary: scene count, prefab count, effect count, rule count, total asset file count and on-disk size; useful as quick AI context before authoring and for spotting bloated projects
 
 ---
 

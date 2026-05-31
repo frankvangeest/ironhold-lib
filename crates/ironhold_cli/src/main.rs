@@ -38,6 +38,11 @@ enum Command {
         /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: std::path::PathBuf,
     },
+    #[command(about = "Print a compact summary of a project (scenes, prefabs, effects, rules, size)")]
+    Stats {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
+        project_dir: std::path::PathBuf,
+    },
 }
 
 fn main() {
@@ -49,6 +54,7 @@ fn main() {
         Command::Validate { project_dir } => commands::validate::run(&project_dir, &mode),
         Command::Query { subcommand } => commands::query::run(subcommand, &mode),
         Command::Watch { project_dir } => commands::watch::run(&project_dir),
+        Command::Stats { project_dir } => commands::stats::run(&project_dir, &mode),
     };
 
     if let Err(e) = result {
