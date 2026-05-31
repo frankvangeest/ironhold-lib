@@ -55,6 +55,10 @@
 - [x] **Flipbook / sprite sheet animation** — UV sub-rect baked per-frame in CPU pool renderer; `explosion_4x4.png` sheet; Flipbook Pad station in particles_demo. See `planning/features/done/particle_flipbook.md`
 - [ ] **Shared effect library** — `assets/shared/effects/` with reusable effects and per-project overrides. See `planning/features/particle_shared_library.md`
 
+### Rendering & Assets
+
+- [ ] **LOD — pre-baked mesh swap** — distance-based LOD switching using offline-generated LOD GLB files; `lod_distances: [20.0, 50.0]` field on `PrefabDef` declares swap distances; a system watches camera distance and swaps the active mesh handle; LOD meshes generated offline (Blender / `meshopt`) and referenced in `assets.ron`; no runtime compute required — fully WASM-compatible. Requires a feature file before coding.
+
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] Fixed-tick schedule for gameplay systems (separate from render tick)
 - [ ] Deterministic RNG resource (seeded, replaces any `rand` usage in gameplay)
@@ -159,12 +163,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 
 ### Rendering & Assets
 - [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
-- [ ] LOD (level of detail) for terrain and models — distance-based mesh swap.
-    - Auto generated LODs of assets (only for web builds using IndexedDB). 
-    - A flag per asset and/or per scene? 
-    - Web workers or something similar will likely be needed for web builds, because it must not block the main thread. 
-    - Seamless switching between LODs?
-    - Use bevy meshlets?
+- [ ] **LOD — runtime generation + caching** — WASM-BLOCKED: generating simplified meshes at runtime requires offthread compute (web workers + `SharedArrayBuffer`); Bevy's WASM build does not support this today. Also covers IndexedDB caching of generated LODs and Bevy meshlets (GPU-driven micro-mesh rendering — not WASM-stable). Parked until Bevy's WASM offthread compute support matures.
 - [ ] Decal system — project a texture onto geometry without modifying meshes
 - [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
 - [ ] Water / reflective plane primitive with animated normal map — WASM-BLOCKED: reflection passes require multi-pass rendering or screen-space sampling; not performantly supported in Bevy's WebGPU backend yet. Parked until WASM support matures.
