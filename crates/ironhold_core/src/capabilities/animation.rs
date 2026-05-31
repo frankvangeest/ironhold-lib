@@ -135,36 +135,53 @@ pub fn animation_playback_system(
         // hierarchy position. Our AnimationGraphHandle and AnimationTransitions are on
         // the OLD entity — the new one has neither. Reset graph_initialized so step 1
         // re-inserts them on the new entity next frame.
+        //
+        // Fast path: if the cached entity still has AnimationPlayer, skip the O(tree_depth)
+        // hierarchy walk entirely. Fall back to the full walk only on a cache miss
+        // (the cached entity was despawned/replaced — the rare GLTF re-spawn case).
         if controller.graph_initialized {
-            match find_player_entity_recursive(entity, &player_marker_query, &children_query) {
-                Some(found) if controller.last_player_entity.map_or(false, |prev| prev != found) => {
-                    warn!(
-                        "[{}] AnimationPlayer entity changed {:?} → {:?} — GLTF scene re-spawned. \
-                        Resetting animation graph for re-initialization next frame.",
-                        entity_name, controller.last_player_entity, found
-                    );
-                    controller.graph_initialized = false;
-                    controller.last_player_entity = None;
-                    controller.last_played = String::new();
-                    continue;
+            if let Some(cached) = controller.last_player_entity {
+                if !player_marker_query.contains(cached) {
+                    // Cache miss: cached entity no longer has AnimationPlayer — do the full walk.
+                    match find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+                        Some(found) => {
+                            warn!(
+                                "[{}] AnimationPlayer entity changed {:?} → {:?} — GLTF scene re-spawned. \
+                                Resetting animation graph for re-initialization next frame.",
+                                entity_name, controller.last_player_entity, found
+                            );
+                            controller.graph_initialized = false;
+                            controller.last_player_entity = None;
+                            controller.last_played = String::new();
+                            continue;
+                        }
+                        None => {
+                            warn!(
+                                "[{}] AnimationPlayer entity lost after graph init — resetting for re-initialization",
+                                entity_name
+                            );
+                            controller.graph_initialized = false;
+                            controller.last_player_entity = None;
+                            controller.last_played = String::new();
+                            continue;
+                        }
+                    }
                 }
-                None if controller.last_player_entity.is_some() => {
-                    warn!(
-                        "[{}] AnimationPlayer entity lost after graph init — resetting for re-initialization",
-                        entity_name
-                    );
-                    controller.graph_initialized = false;
-                    controller.last_player_entity = None;
-                    controller.last_played = String::new();
-                    continue;
-                }
-                _ => {}
+                // else: cache hit — cached entity is still valid, no tree walk needed.
             }
+            // If last_player_entity is None (shouldn't happen outside tests), skip
+            // the staleness check and let step 2's fallback resolve it.
         }
 
         // 2. Handle Playback
         if controller.graph_initialized && controller.current != controller.last_played {
-            if let Some(player_ent) = find_player_entity_recursive(entity, &player_marker_query, &children_query) {
+            // Fast path: use the cached entity (staleness check above confirmed it's valid).
+            // Fall back to the recursive walk only when last_player_entity is None, which
+            // shouldn't happen in production (graph init always sets both together) but can
+            // occur in tests that construct synthetic controller state.
+            let maybe_player = controller.last_player_entity
+                .or_else(|| find_player_entity_recursive(entity, &player_marker_query, &children_query));
+            if let Some(player_ent) = maybe_player {
                 if let Ok((mut player, maybe_transitions)) = player_query.get_mut(player_ent) {
                     if let Some(&index) = controller.node_indices.get(&controller.current) {
                         let duration = if controller.transition_ms == 0 { Duration::ZERO } else { Duration::from_millis(controller.transition_ms) };
@@ -209,8 +226,8 @@ pub fn animation_playback_system(
                     );
                 }
             }
-            // Note: if find_player_entity_recursive returns None here, it was already
-            // caught by the staleness check above and reset on this or the previous frame.
+            // Note: last_player_entity is always Some here — staleness check above
+            // resets graph_initialized (and continues) whenever the cached entity is lost.
         }
     }
 }

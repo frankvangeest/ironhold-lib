@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Animation player entity lookup cache** — `animation_playback_system` recurses through the entity hierarchy every frame to locate the `AnimationPlayer` child; `AnimationController` already has a `last_player_entity` field — use it as a fast-path cache and only re-walk the tree on cache miss; reduces O(tree_depth) lookups to O(1) for the common case (`animation.rs`)
-
 ---
 
 ## Bugs
@@ -151,6 +149,7 @@
 - [ ] **Scene transition material cache** — `scene_loader` rebuilds all materials in the asset catalog on every `LoadScene`, including materials already built for the previous scene; cache built handles per-project in a persistent resource and only rebuild when the catalog key set changes; estimated 50–200 ms saving per transition on large projects (`scene_loader.rs` material rebuild block)
 - [ ] **WASM terrain generation first-frame stall** — `AsyncComputeTaskPool` degrades to `block_on` on the main thread in WASM, causing 100–500 ms jank on first frame for large heightmaps; fix by splitting mesh generation across multiple frames (progressive tile-by-tile build) or pre-baking terrain meshes as GLB assets; requires `#[cfg(target_arch = "wasm32")]` code path (`terrain.rs` poll system)
 - [x] **Particle mesh buffer recreation** — the pool renderer rebuilds full `Vec<[f32;3]>` vertex buffers and re-inserts mesh attributes every frame for every active particle group; replace with in-place attribute mutation (`Mesh::attribute_mut`) to avoid per-frame allocations and reduce GPU upload overhead; particularly impactful on WASM where buffer uploads block the main thread (`particle_renderer.rs`)
+- [x] **Animation player entity lookup cache** — `animation_playback_system` recurses through the entity hierarchy every frame to locate the `AnimationPlayer` child; `AnimationController` already has a `last_player_entity` field — use it as a fast-path cache and only re-walk the tree on cache miss; reduces O(tree_depth) lookups to O(1) for the common case (`animation.rs`)
 - [ ] **Stat systems parallel scheduling** — `stat_modifier_system` and `stat_regen_system` are chained but share no data; can run in parallel before `stat_effective_value_system`, freeing one thread slot on desktop and tightening the stat pipeline before `message_interpreter_system` (`lib.rs` stat system chain)
 - [ ] **Per-frame collection allocations in hot systems** — `stat_modifier_system` (key clone Vec), `message_interpreter_system` (event Vec rebuilt each frame), and `player_movement_system` (input HashMap) each allocate new collections every frame; refactor to reuse pre-allocated collections via `.clear()` on a `Local` resource or avoid the intermediate collection entirely; WASM GC pressure is higher than native so the gain is larger there
 
