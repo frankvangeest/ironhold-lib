@@ -3400,6 +3400,9 @@ dependencies = [
  "clap",
  "gltf",
  "image",
+ "ironhold_core",
+ "ron 0.11.0",
+ "serde",
  "serde_json",
  "symphonia",
 ]

@@ -23,6 +23,11 @@ enum Command {
         #[command(subcommand)]
         subcommand: commands::inspect::InspectCommand,
     },
+    #[command(about = "Parse and validate all RON files in a project directory")]
+    Validate {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
+        project_dir: std::path::PathBuf,
+    },
 }
 
 fn main() {
@@ -31,6 +36,7 @@ fn main() {
 
     let result = match cli.command {
         Command::Inspect { subcommand } => commands::inspect::run(subcommand, &mode),
+        Command::Validate { project_dir } => commands::validate::run(&project_dir, &mode),
     };
 
     if let Err(e) = result {

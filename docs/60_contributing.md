@@ -158,10 +158,31 @@ ironhold inspect audio assets/shared/audio/boulder/boulder-push1.wav
 ironhold --json inspect audio assets/shared/audio/bg-music-balance.mp3
 ```
 
+### `validate <project_dir>`
+
+Parses every RON file in a project directory using the same schema types as the engine runtime,
+then runs cross-file consistency checks. Use this before committing to catch typos and broken
+references without starting the engine.
+
+**Checks performed:**
+- Per-file RON parse errors with line and column numbers
+- Effect keys in `SpawnEffect` / decal keys in `ProjectDecal` exist in `assets.ron`
+- Audio keys in `PlaySound` / `PlayMusicLoop` exist in `assets.ron`
+- Prefab keys in scene entity defs and `Spawn` / `PreloadPrefab` actions exist in `prefabs.ron`
+- Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
+- Behavior file paths on `PrefabDef` exist on disk
+
+```bash
+ironhold validate assets/projects/particles_demo/
+ironhold validate assets/projects/primitive_world/
+ironhold --json validate assets/projects/quick_scene/
+```
+
+**Exit codes:** `0` = all valid, `1` = validation errors found, `2` = tool / IO error.
+
 ### `--json` flag
 
-Any `inspect` subcommand accepts `--json` (before the subcommand name) for machine-readable output.
-Exit codes: `0` = success, `2` = error (file not found, unsupported format, etc.).
+Any command accepts `--json` (before the subcommand name) for machine-readable output.
 
 ---
 
