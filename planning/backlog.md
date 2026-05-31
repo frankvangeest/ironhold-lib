@@ -29,6 +29,7 @@
 - [ ] **`query actions` / `query events`** — list all unique action types and event triggers used across `rules.ron` and `state_machine.ron` in a project; completes the query suite; no new schema types needed
 - [ ] **`validate --strict`** — orphan/dead-data detection: prefabs defined but never referenced in any scene or `Spawn` action; effects/audio keys defined but never used in any action; the normal validate checks forward references only, this adds the reverse
 - [ ] **`stats <project_dir>`** — one-line project summary: scene count, prefab count, effect count, rule count, total asset file count and on-disk size; useful as quick AI context before authoring and for spotting bloated projects
+- [ ] **`after_help` usage examples** — add clap `after_help` strings to each subcommand (`validate`, `watch`, `inspect`, `query`, `stats`) with 2–3 concrete example invocations; clap already generates `--help` but the short `about` text shows no examples; no new commands or schema changes needed
 
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
