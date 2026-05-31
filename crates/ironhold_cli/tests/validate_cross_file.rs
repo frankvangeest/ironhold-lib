@@ -21,6 +21,16 @@ fn validate(fixture_name: &str) -> (i32, String) {
     (out.status.code().unwrap_or(-1), stdout)
 }
 
+fn validate_strict(fixture_name: &str) -> (i32, String) {
+    let out = ironhold()
+        .args(["validate", "--strict"])
+        .arg(fixture(fixture_name))
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run ironhold: {e}"));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    (out.status.code().unwrap_or(-1), stdout)
+}
+
 // ── Valid project ─────────────────────────────────────────────────────────────
 
 #[test]
@@ -90,5 +100,49 @@ fn parse_error_exits_1() {
     assert!(
         stdout.contains("ERROR"),
         "expected 'ERROR' in output:\n{stdout}"
+    );
+}
+
+// ── Strict mode ───────────────────────────────────────────────────────────────
+
+#[test]
+fn valid_project_strict_exits_0() {
+    let (code, _) = validate_strict("valid_project");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn orphan_prefab_without_strict_exits_0() {
+    let (code, _) = validate("orphan_prefab");
+    assert_eq!(code, 0, "orphan prefab without --strict should exit 0");
+}
+
+#[test]
+fn orphan_prefab_strict_exits_1() {
+    let (code, stdout) = validate_strict("orphan_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("orphan_prop"),
+        "expected 'orphan_prop' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn orphan_effect_strict_exits_1() {
+    let (code, stdout) = validate_strict("orphan_effect");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("orphan_smoke"),
+        "expected 'orphan_smoke' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn orphan_audio_strict_exits_1() {
+    let (code, stdout) = validate_strict("orphan_audio");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("orphan_sound"),
+        "expected 'orphan_sound' in output:\n{stdout}"
     );
 }

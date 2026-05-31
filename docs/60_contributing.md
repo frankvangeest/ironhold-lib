@@ -247,7 +247,20 @@ ironhold validate assets/projects/primitive_world/
 ironhold --json validate assets/projects/quick_scene/
 ```
 
-**Exit codes:** `0` = all valid, `1` = validation errors found, `2` = tool / IO error.
+**`--strict` flag** adds reverse / orphan detection on top of the normal checks:
+- Prefab keys in `prefabs.ron` never referenced in any scene entity or `Spawn` / `PreloadPrefab` action
+- Effect keys in `assets.ron` never used in any `SpawnEffect` action
+- Audio keys in `assets.ron` never used in any `PlaySound` or `PlayMusicLoop` action
+- Decal keys in `assets.ron` never used in any `ProjectDecal` action
+
+```bash
+ironhold validate --strict assets/projects/particles_demo/
+ironhold --json validate --strict assets/projects/quick_scene/
+```
+
+Strict warnings appear in a separate `Strict checks` section and cause exit code `1`. Use in CI to enforce no dead data; omit for day-to-day editing where catalog entries accumulate ahead of usage.
+
+**Exit codes:** `0` = all valid, `1` = validation errors or strict warnings found, `2` = tool / IO error.
 
 ### `query <subcommand> <project_dir>`
 

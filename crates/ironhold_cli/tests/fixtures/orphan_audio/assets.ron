@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    audio: {
+        "click": (path: "shared/audio/click.wav"),
+        "orphan_sound": (path: "shared/audio/orphan.wav"),
+    },
+)

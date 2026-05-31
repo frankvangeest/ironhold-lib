@@ -27,6 +27,9 @@ enum Command {
     Validate {
         /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: std::path::PathBuf,
+        /// Also report keys defined in assets.ron / prefabs.ron that are never referenced anywhere
+        #[arg(long)]
+        strict: bool,
     },
     #[command(about = "List and filter data from a project (prefabs, effects, scenes, rules)")]
     Query {
@@ -51,7 +54,9 @@ fn main() {
 
     let result = match cli.command {
         Command::Inspect { subcommand } => commands::inspect::run(subcommand, &mode),
-        Command::Validate { project_dir } => commands::validate::run(&project_dir, &mode),
+        Command::Validate { project_dir, strict } => {
+            commands::validate::run(&project_dir, &mode, strict)
+        }
         Command::Query { subcommand } => commands::query::run(subcommand, &mode),
         Command::Watch { project_dir } => commands::watch::run(&project_dir),
         Command::Stats { project_dir } => commands::stats::run(&project_dir, &mode),

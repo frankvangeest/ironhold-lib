@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:play",
+            do_actions: [
+                PlaySound(key: "click"),
+            ],
+        ),
+    ],
+)

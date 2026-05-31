@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
@@ -28,10 +29,17 @@ struct CrossFileError {
     error_type: &'static str,
 }
 
+struct StrictWarning {
+    source_file: String,
+    message: String,
+    kind: &'static str,
+}
+
 struct ValidationRun {
     project_name: String,
     file_results: Vec<FileResult>,
     cross_errors: Vec<CrossFileError>,
+    strict_warnings: Vec<StrictWarning>,
     all_valid: bool,
 }
 
@@ -266,9 +274,108 @@ fn cross_file_checks(
     errors
 }
 
+// ── Strict (orphan) checks ────────────────────────────────────────────────────
+
+fn strict_checks(
+    asset_catalog: Option<&AssetCatalog>,
+    prefab_catalog: Option<&PrefabCatalog>,
+    scenes: &[(String, GameSceneV2)],
+    actions: &[(String, Action)],
+) -> Vec<StrictWarning> {
+    let mut warnings: Vec<StrictWarning> = Vec::new();
+
+    // Collect every key that appears on the "usage" side.
+    let mut used_prefabs: HashSet<&str> = HashSet::new();
+    let mut used_effects: HashSet<&str> = HashSet::new();
+    let mut used_audio: HashSet<&str> = HashSet::new();
+    let mut used_decals: HashSet<&str> = HashSet::new();
+
+    for (_, scene) in scenes {
+        for entity in &scene.entities {
+            used_prefabs.insert(&entity.prefab);
+        }
+    }
+    for (_, action) in actions {
+        match action {
+            Action::Spawn { prefab, .. } => { used_prefabs.insert(prefab); }
+            Action::PreloadPrefab(key) => { used_prefabs.insert(key); }
+            Action::SpawnEffect { key, .. } => { used_effects.insert(key); }
+            Action::PlaySound { key, .. } | Action::PlayMusicLoop { key, .. } => {
+                used_audio.insert(key);
+            }
+            Action::ProjectDecal { key, .. } => { used_decals.insert(key); }
+            _ => {}
+        }
+    }
+
+    // Report defined-but-never-used keys.
+    if let Some(catalog) = prefab_catalog {
+        let mut keys: Vec<&String> = catalog.prefabs.keys().collect();
+        keys.sort();
+        for key in keys {
+            if !used_prefabs.contains(key.as_str()) {
+                warnings.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {:?} is defined but never referenced in any scene or action",
+                        key
+                    ),
+                    kind: "unused_prefab",
+                });
+            }
+        }
+    }
+    if let Some(catalog) = asset_catalog {
+        let mut effect_keys: Vec<&String> = catalog.effects.keys().collect();
+        effect_keys.sort();
+        for key in effect_keys {
+            if !used_effects.contains(key.as_str()) {
+                warnings.push(StrictWarning {
+                    source_file: "assets.ron".to_string(),
+                    message: format!(
+                        "effect {:?} is defined but never used in any SpawnEffect action",
+                        key
+                    ),
+                    kind: "unused_effect",
+                });
+            }
+        }
+        let mut audio_keys: Vec<&String> = catalog.audio.keys().collect();
+        audio_keys.sort();
+        for key in audio_keys {
+            if !used_audio.contains(key.as_str()) {
+                warnings.push(StrictWarning {
+                    source_file: "assets.ron".to_string(),
+                    message: format!(
+                        "audio {:?} is defined but never used in any PlaySound or PlayMusicLoop action",
+                        key
+                    ),
+                    kind: "unused_audio",
+                });
+            }
+        }
+        let mut decal_keys: Vec<&String> = catalog.decals.keys().collect();
+        decal_keys.sort();
+        for key in decal_keys {
+            if !used_decals.contains(key.as_str()) {
+                warnings.push(StrictWarning {
+                    source_file: "assets.ron".to_string(),
+                    message: format!(
+                        "decal {:?} is defined but never used in any ProjectDecal action",
+                        key
+                    ),
+                    kind: "unused_decal",
+                });
+            }
+        }
+    }
+
+    warnings
+}
+
 // ── Core validation (shared by `run` and `validate_project`) ─────────────────
 
-fn do_validate(project_dir: &Path) -> ValidationRun {
+fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let project_name = project_dir
         .file_name()
         .and_then(|n| n.to_str())
@@ -329,15 +436,23 @@ fn do_validate(project_dir: &Path) -> ValidationRun {
         &all_actions,
     );
 
-    let all_valid = file_results.iter().all(|r| r.is_ok()) && cross_errors.is_empty();
+    let strict_warnings = if strict {
+        strict_checks(asset_catalog.as_ref(), prefab_catalog.as_ref(), &scenes, &all_actions)
+    } else {
+        Vec::new()
+    };
 
-    ValidationRun { project_name, file_results, cross_errors, all_valid }
+    let all_valid = file_results.iter().all(|r| r.is_ok())
+        && cross_errors.is_empty()
+        && strict_warnings.is_empty();
+
+    ValidationRun { project_name, file_results, cross_errors, strict_warnings, all_valid }
 }
 
 // ── Public: used by `watch` ───────────────────────────────────────────────────
 
 pub fn validate_project(project_dir: &Path) -> ValidateResult {
-    let vr = do_validate(project_dir);
+    let vr = do_validate(project_dir, false);
 
     let mut errors = Vec::new();
     for fr in &vr.file_results {
@@ -362,16 +477,19 @@ fn print_human(
     project_dir: &Path,
     file_results: &[FileResult],
     cross_errors: &[CrossFileError],
+    strict_warnings: &[StrictWarning],
     all_valid: bool,
 ) {
     println!("Validating: {}", project_dir.display());
     println!();
 
     const CROSS_LABEL: &str = "Cross-file checks";
+    const STRICT_LABEL: &str = "Strict checks";
     let col_width = file_results
         .iter()
         .map(|r| r.rel_path.len())
         .chain(std::iter::once(CROSS_LABEL.len()))
+        .chain(std::iter::once(STRICT_LABEL.len()))
         .max()
         .unwrap_or(24)
         + 4;
@@ -399,6 +517,18 @@ fn print_human(
         println!("    {}: {}", err.source_file, err.message);
     }
 
+    if !strict_warnings.is_empty() {
+        println!();
+        let strict_status = match strict_warnings.len() {
+            1 => "1 warning".to_string(),
+            n => format!("{n} warnings"),
+        };
+        println!("  {:<width$} {}", STRICT_LABEL, strict_status, width = col_width);
+        for w in strict_warnings {
+            println!("    {}: {}", w.source_file, w.message);
+        }
+    }
+
     println!();
 
     let file_error_count = file_results.iter().filter(|r| !r.is_ok()).count();
@@ -422,6 +552,13 @@ fn print_human(
                 if cross_errors.len() == 1 { "" } else { "s" }
             ));
         }
+        if !strict_warnings.is_empty() {
+            parts.push(format!(
+                "{} unused definition{}",
+                strict_warnings.len(),
+                if strict_warnings.len() == 1 { "" } else { "s" }
+            ));
+        }
         println!("{total} files checked — {}.", parts.join(", "));
     }
 }
@@ -430,6 +567,7 @@ fn print_json(
     project_name: &str,
     file_results: &[FileResult],
     cross_errors: &[CrossFileError],
+    strict_warnings: &[StrictWarning],
     all_valid: bool,
 ) {
     let val = serde_json::json!({
@@ -448,23 +586,44 @@ fn print_json(
             "source": e.source_file,
             "message": e.message,
         })).collect::<Vec<_>>(),
+        "strict_warnings": strict_warnings.iter().map(|w| serde_json::json!({
+            "type": w.kind,
+            "source": w.source_file,
+            "message": w.message,
+        })).collect::<Vec<_>>(),
     });
     println!("{}", serde_json::to_string_pretty(&val).unwrap());
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub fn run(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    project_dir: &Path,
+    mode: &OutputMode,
+    strict: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if !project_dir.is_dir() {
         return Err(format!("{}: not a directory", project_dir.display()).into());
     }
 
-    let vr = do_validate(project_dir);
+    let vr = do_validate(project_dir, strict);
 
     if mode.json {
-        print_json(&vr.project_name, &vr.file_results, &vr.cross_errors, vr.all_valid);
+        print_json(
+            &vr.project_name,
+            &vr.file_results,
+            &vr.cross_errors,
+            &vr.strict_warnings,
+            vr.all_valid,
+        );
     } else {
-        print_human(project_dir, &vr.file_results, &vr.cross_errors, vr.all_valid);
+        print_human(
+            project_dir,
+            &vr.file_results,
+            &vr.cross_errors,
+            &vr.strict_warnings,
+            vr.all_valid,
+        );
     }
 
     if !vr.all_valid {

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Ironhold CLI — inspect, validate, and query project assets (no engine startup required)
 cargo run -p ironhold_cli -- validate <project_dir>              # parse & cross-check all RON files; exit 0=ok 1=errors 2=tool-error
+cargo run -p ironhold_cli -- validate --strict <project_dir>    # also report defined keys never referenced anywhere (orphan detection)
 cargo run -p ironhold_cli -- inspect glb     <path.glb>          # animations, meshes, materials, root nodes
 cargo run -p ironhold_cli -- inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
 cargo run -p ironhold_cli -- inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size

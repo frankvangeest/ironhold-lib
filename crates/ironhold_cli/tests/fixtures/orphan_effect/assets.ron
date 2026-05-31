@@ -1,0 +1,17 @@
+(
+    schema_version: 1,
+    effects: {
+        "used_spark": (
+            particle_count: 4,
+            lifetime_secs: 0.5,
+            color_start: (1.0, 1.0, 1.0, 1.0),
+            color_end: (1.0, 1.0, 1.0, 0.0),
+        ),
+        "orphan_smoke": (
+            particle_count: 8,
+            lifetime_secs: 1.0,
+            color_start: (0.5, 0.5, 0.5, 1.0),
+            color_end: (0.5, 0.5, 0.5, 0.0),
+        ),
+    },
+)
