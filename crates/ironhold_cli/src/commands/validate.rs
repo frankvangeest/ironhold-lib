@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
 use ironhold_core::schema::project::LogicRulesAsset;
@@ -6,6 +6,7 @@ use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 
+use super::utils::{glob_dir, rel, ron_from_str};
 use crate::output::OutputMode;
 
 // ── Data structures ───────────────────────────────────────────────────────────
@@ -28,12 +29,6 @@ struct CrossFileError {
 }
 
 // ── RON parsing ───────────────────────────────────────────────────────────────
-
-fn ron_from_str<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, ron::error::SpannedError> {
-    ron::Options::default()
-        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
-        .from_str(s)
-}
 
 fn parse_file<T: serde::de::DeserializeOwned>(
     full_path: &Path,
@@ -86,29 +81,6 @@ fn find_project_ron(project_dir: &Path) -> Option<String> {
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .find(|name| name.ends_with(".project.ron"))
-}
-
-fn glob_dir(project_dir: &Path, subdir: &str, suffix: &str) -> Vec<PathBuf> {
-    let dir = project_dir.join(subdir);
-    if !dir.is_dir() {
-        return Vec::new();
-    }
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.to_str().map(|s| s.ends_with(suffix)).unwrap_or(false))
-        .collect();
-    paths.sort();
-    paths
-}
-
-fn rel(project_dir: &Path, full: &Path) -> String {
-    full.strip_prefix(project_dir)
-        .unwrap_or(full)
-        .to_string_lossy()
-        .replace('\\', "/")
 }
 
 // ── Action collection ─────────────────────────────────────────────────────────

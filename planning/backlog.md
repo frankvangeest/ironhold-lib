@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Ironhold CLI** — scaffold `crates/ironhold_cli`; starting with `inspect glb` (animation/mesh/material listing) to support monster model authoring; full validate/schema/query phases to follow. See `planning/features/ironhold_cli.md`
-
 ---
 
 ## Bugs
@@ -191,3 +189,4 @@
 - [x] **Particle System v2 — Pool Renderer** — CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls; `PoolFlameMaterial` for UV-animated flames. See `planning/features/done/particle_instanced_renderer.md`
 - [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
 - [x] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority (`Player`/`Npc`/`Ambient`), live-count cap, multi-layer running counter, portal navigation, Arcane Observatory demo scene. See `planning/features/done/particle_quality_budget.md`
+- [x] **Ironhold CLI** — `validate`, `inspect glb/texture/audio`, `query prefabs/effects/scenes/rules`; `--json` flag throughout; all example projects pass validate. See `planning/features/ironhold_cli.md`

@@ -10,6 +10,12 @@ cargo run -p ironhold_cli -- validate <project_dir>              # parse & cross
 cargo run -p ironhold_cli -- inspect glb     <path.glb>          # animations, meshes, materials, root nodes
 cargo run -p ironhold_cli -- inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
 cargo run -p ironhold_cli -- inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
+cargo run -p ironhold_cli -- query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
+cargo run -p ironhold_cli -- query effects <project_dir>         # list particle effects (count, layers, flags)
+cargo run -p ironhold_cli -- query scenes  <project_dir>         # list scenes (entities, ui, player, overlay)
+cargo run -p ironhold_cli -- query rules   <project_dir>         # list rules.ron and/or state_machine.ron
+cargo run -p ironhold_cli -- query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
+cargo run -p ironhold_cli -- query effects <project_dir> --filter additive=true  # filter by field=value
 cargo run -p ironhold_cli -- --json <command>                    # any command accepts --json for machine-readable output
 cargo build -p ironhold_cli --release   # produces target/release/ironhold.exe
 

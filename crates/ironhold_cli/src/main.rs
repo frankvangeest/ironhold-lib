@@ -28,6 +28,11 @@ enum Command {
         /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: std::path::PathBuf,
     },
+    #[command(about = "List and filter data from a project (prefabs, effects, scenes, rules)")]
+    Query {
+        #[command(subcommand)]
+        subcommand: commands::query::QueryCommand,
+    },
 }
 
 fn main() {
@@ -37,6 +42,7 @@ fn main() {
     let result = match cli.command {
         Command::Inspect { subcommand } => commands::inspect::run(subcommand, &mode),
         Command::Validate { project_dir } => commands::validate::run(&project_dir, &mode),
+        Command::Query { subcommand } => commands::query::run(subcommand, &mode),
     };
 
     if let Err(e) = result {

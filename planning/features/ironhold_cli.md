@@ -1,6 +1,6 @@
 # Feature: Ironhold CLI
 
-_Status: Active — Phase 1 (validate) and Phase 3 (inspect glb/texture/audio) shipped; Phase 2 (schema/query) pending_
+_Status: Done — Phase 1 (validate), Phase 2 (query prefabs/effects/scenes/rules), and Phase 3 (inspect glb/texture/audio) all shipped; Phase 4 (CI integration) pending_
 _Planned at: `6d36ea1` (2026-05-30)_
 
 ## What

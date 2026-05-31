@@ -180,6 +180,38 @@ ironhold --json validate assets/projects/quick_scene/
 
 **Exit codes:** `0` = all valid, `1` = validation errors found, `2` = tool / IO error.
 
+### `query <subcommand> <project_dir>`
+
+Lists data parsed from a project directory. Useful for AI agents and scripts that need to know what keys are defined before authoring new RON files.
+
+```bash
+ironhold query prefabs assets/projects/particles_demo/
+ironhold query prefabs assets/projects/particles_demo/ --keys-only
+ironhold query prefabs assets/projects/particles_demo/ --filter kind=actor
+ironhold query prefabs assets/projects/particles_demo/ --filter tag=player
+ironhold query prefabs assets/projects/particles_demo/ --filter behavior=true
+
+ironhold query effects assets/projects/particles_demo/
+ironhold query effects assets/projects/particles_demo/ --keys-only
+ironhold query effects assets/projects/particles_demo/ --filter additive=true
+ironhold query effects assets/projects/particles_demo/ --filter priority=Ambient
+ironhold query effects assets/projects/particles_demo/ --filter layers=true
+
+ironhold query scenes assets/projects/3rd_person_game_demo/
+ironhold query rules  assets/projects/3rd_person_game_demo/
+
+ironhold --json query prefabs assets/projects/particles_demo/ --keys-only
+ironhold --json query effects assets/projects/particles_demo/
+```
+
+**`query prefabs`** — lists all entries from `prefabs/prefabs.ron`. Human output shows kind, model, tags, npc/trigger_zone/interactable flags, and behavior path. Supports `--filter kind=actor|prop|primitive`, `--filter tag=<value>`, `--filter behavior=true|false`, `--filter npc=true`. Use `--keys-only` to get one key per line for piping.
+
+**`query effects`** — lists all entries from `assets.ron → effects`. Human output shows particle count or layer count, lifetime, additive flag, sprite flag, light flag, and non-default priority. Supports `--filter additive=true`, `--filter priority=Player|Npc|Ambient`, `--filter layers=true`, `--filter sprite=true`.
+
+**`query scenes`** — lists all `*.scene.ron` files. Output shows name, entity count, UI element count, `player:true` (if any entity's prefab has the `player` tag), and `overlay` (scenes with only UI and no world entities or terrain).
+
+**`query rules`** — shows `logic/rules.ron` (each rule's event trigger, optional `when:` guard, and action count) and/or `logic/state_machine.ron` (initial state, states with entry/exit/on counts and outgoing transitions).
+
 ### `--json` flag
 
 Any command accepts `--json` (before the subcommand name) for machine-readable output.
