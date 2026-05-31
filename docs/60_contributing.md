@@ -118,6 +118,53 @@ If you add a new UI button that should be testable, note its canvas coordinates 
 
 ---
 
+## CLI tooling (`ironhold`) ✅
+
+The `ironhold` CLI (`crates/ironhold_cli`) inspects asset files without starting the engine.
+Build it once with `cargo build -p ironhold_cli` or run ad-hoc with `cargo run -p ironhold_cli -- <args>`.
+
+### `inspect glb <path.glb>`
+
+Lists everything you need to author RON for a model: animation clip names and durations,
+mesh names with vertex/triangle counts, materials, and root scene nodes.
+
+```bash
+ironhold inspect glb assets/shared/models/creatures/orc-enemy.glb
+ironhold --json inspect glb assets/shared/models/creatures/dragon.glb
+```
+
+Use this instead of `tools/glb_inspector/inspect_glb.py` for day-to-day authoring
+(the Python tool is still needed for `--preview` renders that require Blender).
+
+### `inspect texture <path>`
+
+Reports image dimensions, format (PNG/JPEG/WebP/etc.), channel layout (RGB/RGBA/Grayscale),
+and file size. Useful for catching oversized textures before they land in WASM builds.
+Supports PNG, JPEG, WebP, GIF, BMP, TIFF. AVIF requires a native C decoder and is not supported.
+
+```bash
+ironhold inspect texture assets/shared/textures/decals/circle_filled.png
+ironhold --json inspect texture assets/shared/textures/Cobblestone_001_SD/Cobblestone_001_COLOR.jpg
+```
+
+### `inspect audio <path>`
+
+Reports audio format, duration, sample rate, channel count, and file size.
+Duration is the key output — use it to set correct `delay_secs` values in `EmitEventAfterDelay`
+after a sound plays. Supports WAV and MP3.
+
+```bash
+ironhold inspect audio assets/shared/audio/boulder/boulder-push1.wav
+ironhold --json inspect audio assets/shared/audio/bg-music-balance.mp3
+```
+
+### `--json` flag
+
+Any `inspect` subcommand accepts `--json` (before the subcommand name) for machine-readable output.
+Exit codes: `0` = success, `2` = error (file not found, unsupported format, etc.).
+
+---
+
 ## Pull request checklist
 
 - [ ] Documentation updated (use ✅/🧪/🧭 labeling)

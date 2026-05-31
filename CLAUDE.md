@@ -5,9 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 
 ```bash
-# Ironhold CLI — inspect, validate, and query project assets
-cargo run -p ironhold_cli -- inspect glb assets/shared/models/creatures/orc-enemy.glb
-cargo run -p ironhold_cli -- --json inspect glb <path.glb>
+# Ironhold CLI — inspect project assets (no engine startup required)
+cargo run -p ironhold_cli -- inspect glb     <path.glb>          # animations, meshes, materials, root nodes
+cargo run -p ironhold_cli -- inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
+cargo run -p ironhold_cli -- inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
+cargo run -p ironhold_cli -- --json inspect glb <path.glb>       # any subcommand accepts --json for machine-readable output
 cargo build -p ironhold_cli --release   # produces target/release/ironhold.exe
 
 # Run native (desktop) build

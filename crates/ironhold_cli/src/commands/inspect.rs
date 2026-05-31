@@ -16,12 +16,18 @@ pub enum InspectCommand {
         /// Path to the image file (png, jpg, webp, gif, bmp, tiff)
         path: PathBuf,
     },
+    #[command(about = "Report format, duration, sample rate, and channel count of an audio file")]
+    Audio {
+        /// Path to the audio file (wav, mp3)
+        path: PathBuf,
+    },
 }
 
 pub fn run(cmd: InspectCommand, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
     match cmd {
         InspectCommand::Glb { path } => inspect_glb(&path, mode),
         InspectCommand::Texture { path } => inspect_texture(&path, mode),
+        InspectCommand::Audio { path } => inspect_audio(&path, mode),
     }
 }
 
@@ -259,4 +265,83 @@ fn human_file_size(bytes: u64) -> String {
     } else {
         format!("{} KB", (bytes + 512) / 1_024)
     }
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+
+fn inspect_audio(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    let file_size = std::fs::metadata(path)?.len();
+    let file = std::fs::File::open(path)?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+
+    let probed = symphonia::default::get_probe().format(
+        &hint,
+        mss,
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
+    )?;
+
+    let format = probed.format;
+    let track = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or("no audio track found")?;
+
+    let params = &track.codec_params;
+    let sample_rate = params.sample_rate.unwrap_or(0);
+    let channels = params.channels.map(|c| c.count()).unwrap_or(0);
+
+    // Duration: prefer n_frames / sample_rate; fall back to time_base * n_frames
+    let duration_secs = if let (Some(frames), Some(rate)) = (params.n_frames, params.sample_rate) {
+        frames as f64 / rate as f64
+    } else if let (Some(frames), Some(tb)) = (params.n_frames, params.time_base) {
+        frames as f64 * tb.numer as f64 / tb.denom as f64
+    } else {
+        0.0
+    };
+
+    let format_str = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_uppercase())
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    let channels_str = match channels {
+        1 => "Mono",
+        2 => "Stereo",
+        _ => "Multi",
+    };
+
+    if mode.json {
+        let val = serde_json::json!({
+            "path": path.display().to_string(),
+            "format": format_str,
+            "duration_secs": duration_secs,
+            "sample_rate_hz": sample_rate,
+            "channels": channels,
+            "file_size_bytes": file_size,
+        });
+        println!("{}", serde_json::to_string_pretty(&val).unwrap());
+    } else {
+        println!("{}", path.display());
+        println!();
+        println!("  Format       {}", format_str);
+        println!("  Duration     {:.2} s", duration_secs);
+        println!("  Sample rate  {} Hz", sample_rate);
+        println!("  Channels     {}", channels_str);
+        println!("  File size    {}", human_file_size(file_size));
+    }
+
+    Ok(())
 }
