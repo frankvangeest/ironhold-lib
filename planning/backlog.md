@@ -14,6 +14,7 @@
 - [x] **`watch <project_dir>` (CLI)** — file-watcher loop that re-runs `validate` on every `.ron` save; prints changed file path + result on each re-check; edit-validate loop without engine startup
 - [x] **`stats <project_dir>` (CLI)** — one-line project summary: scene count, prefab count, effect count, rule count, total asset file count and on-disk size; useful as quick AI context before authoring and for spotting bloated projects
 - [x] **`query actions` / `query events` (CLI)** — list all unique action types and event triggers used across `rules.ron`, `state_machine.ron`, and behavior files
+- [ ] **`validate --strict` (CLI)** — orphan/dead-data detection: prefabs defined but never referenced in any scene or `Spawn` action; effects/audio/decal keys defined but never used in any action; normal validate checks forward refs only, this adds the reverse
 
 ---
 
