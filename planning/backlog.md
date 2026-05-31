@@ -48,7 +48,7 @@
 
 ### Particle System v2
 
-- [ ] **Bloom / post-processing in scene RON** — BLOCKED: Bevy's `Bloom` requires `#[require(Hdr)]`; HDR breaks the WASM build. Needs native-only guard or custom SDR pass before this can ship. See `planning/features/particle_bloom.md`
+- [ ] **Bloom / post-processing in scene RON** — WASM-BLOCKED: Bevy's `Bloom` requires `#[require(Hdr)]`; HDR breaks the WASM build. Parked until performant HDR/post-process support is available in Bevy's WebGPU backend. Do not implement a native-only workaround — that splits the runtime model. See `planning/features/particle_bloom.md`
 - [x] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
 - [x] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/done/particle_extended_behaviours.md`
 - [x] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/done/particle_ground_decals.md`
@@ -167,8 +167,8 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
     - Use bevy meshlets?
 - [ ] Decal system — project a texture onto geometry without modifying meshes
 - [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
-- [ ] Water / reflective plane primitive with animated normal map
-- [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene
+- [ ] Water / reflective plane primitive with animated normal map — WASM-BLOCKED: reflection passes require multi-pass rendering or screen-space sampling; not performantly supported in Bevy's WebGPU backend yet. Parked until WASM support matures.
+- [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene — WASM-BLOCKED: same root cause as Bloom and water; HDR and multi-pass post-process break or perform poorly on WebGPU. Parked until Bevy's WebGPU backend matures.
 
 ### Performance
 - [ ] **Extend pipeline warmup to Text2d and UI pipelines** — spawn hidden warmup entities for `Text2d` and UI `Node` at scene load to pre-compile the 2D/UI GPU pipelines, eliminating WASM frame spikes on first text/UI render; design: `planning/features/pipeline_warmup_2d_ui.md`
