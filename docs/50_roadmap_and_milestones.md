@@ -87,7 +87,24 @@ Design: `planning/features/loading_screen.md`, `planning/features/scene_preloadi
 - docs updated
 - examples updated
 - CI green on native + web
-- no known data-breaking changes without migration notes
+- breaking RON changes follow the policy below
+
+## Breaking change policy
+
+The strictness scales with the release stage.
+
+### Pre-1.0 (current)
+Breaking RON schema changes are permitted without migration notes. Two conditions must be met in the same commit:
+1. All `assets/projects/` example files are updated to the new shape — no broken examples on `main`.
+2. The schema version is bumped on the affected file type when the shape changes.
+
+No upgrade guide or deprecation cycle is required. The commit message is sufficient documentation. (The repo is public but there are no committed external users before 1.0.)
+
+### Beta milestone boundaries (0.5, 0.6, …)
+Add a short "Breaking changes in this milestone" paragraph to the milestone's backlog section or to the relevant feature file before merging. A bullet list of what changed and what to update in project files is enough — no full migration guide needed.
+
+### 1.0 and beyond
+Full migration notes required: a dedicated section in `docs/20_data_formats.md`, a schema version bump, and a one-paragraph upgrade summary in the milestone doc. Breaking changes must be flagged in the PR description. Deprecation cycle (warn one milestone, remove the next) preferred over silent removal.
 ``
 
 See docs/STATUS.md for the authoritative, up‑to‑date implementation status.
