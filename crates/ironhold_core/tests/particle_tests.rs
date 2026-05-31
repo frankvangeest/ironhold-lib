@@ -77,8 +77,8 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
     app.update();
 
     let mut def = minimal_effect_def(4, 0.3);
-    def.speed = 1.0;
-    def.spread_deg = 90.0;
+    def.speed = 0.0; // zero velocity so position is stable across any dt
+    def.spread_deg = 0.0;
     def.offset = (0.0, 0.5, 0.0);
     def.color_start = (0.0, 1.0, 0.0, 1.0);
     def.color_end = (0.0, 0.0, 0.0, 0.0);

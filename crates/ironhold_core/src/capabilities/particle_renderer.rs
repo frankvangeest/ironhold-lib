@@ -17,7 +17,7 @@
 // so all flame particles of the same texture still share one material handle.
 
 use bevy::prelude::*;
-use bevy_mesh::Indices;
+use bevy_mesh::{Indices, VertexAttributeValues};
 use bevy::render::render_resource::{
     AsBindGroup, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError,
     PrimitiveTopology,
@@ -181,6 +181,71 @@ impl Material for PoolFlameMaterial {
     }
 }
 
+// ─── Per-frame scratch buffers ────────────────────────────────────────────────
+
+/// Reusable vertex/index buffers kept alive as a `Local` resource so they grow
+/// to the per-frame high-water mark once and never reallocate again.
+#[derive(Default)]
+pub struct RebuildScratch {
+    positions: Vec<[f32; 3]>,
+    uvs:       Vec<[f32; 2]>,
+    colors:    Vec<[f32; 4]>,
+    uv1:       Vec<[f32; 2]>,
+    idx_buf:   Vec<u32>,
+}
+
+/// Write scratch buffers into `mesh` attributes in-place (no allocation after the
+/// first frame per group).  Falls back to `insert_attribute` on the first call
+/// when the attribute slot does not yet exist.
+fn write_mesh_attrs(mesh: &mut Mesh, s: &RebuildScratch, is_flame: bool) {
+    macro_rules! write_attr {
+        ($id:expr, $variant:ident, $data:expr) => {
+            match mesh.attribute_mut($id) {
+                Some(VertexAttributeValues::$variant(v)) => {
+                    v.clear();
+                    v.extend_from_slice($data);
+                }
+                _ => {
+                    mesh.insert_attribute($id, $data.to_vec());
+                }
+            }
+        };
+    }
+    write_attr!(Mesh::ATTRIBUTE_POSITION, Float32x3, &s.positions);
+    write_attr!(Mesh::ATTRIBUTE_UV_0,     Float32x2, &s.uvs);
+    write_attr!(Mesh::ATTRIBUTE_COLOR,    Float32x4, &s.colors);
+    if is_flame {
+        write_attr!(Mesh::ATTRIBUTE_UV_1, Float32x2, &s.uv1);
+    }
+    match mesh.indices_mut() {
+        Some(Indices::U32(v)) => { v.clear(); v.extend_from_slice(&s.idx_buf); }
+        _ => { mesh.insert_indices(Indices::U32(s.idx_buf.clone())); }
+    }
+}
+
+/// Clear all attributes to empty without deallocating the backing `Vec`s, so the
+/// allocation is ready for the next frame where particles reappear.
+fn clear_mesh_attrs(mesh: &mut Mesh, is_flame: bool) {
+    // Groups are only created on frames with active particles, so by the time
+    // clear_mesh_attrs is called the attributes already exist — no insert fallback needed.
+    for id in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_UV_0, Mesh::ATTRIBUTE_COLOR] {
+        match mesh.attribute_mut(id) {
+            Some(VertexAttributeValues::Float32x3(v)) => v.clear(),
+            Some(VertexAttributeValues::Float32x2(v)) => v.clear(),
+            Some(VertexAttributeValues::Float32x4(v)) => v.clear(),
+            _ => {}
+        }
+    }
+    if is_flame {
+        if let Some(VertexAttributeValues::Float32x2(v)) = mesh.attribute_mut(Mesh::ATTRIBUTE_UV_1) {
+            v.clear();
+        }
+    }
+    if let Some(Indices::U32(v)) = mesh.indices_mut() {
+        v.clear();
+    }
+}
+
 // ─── Systems ──────────────────────────────────────────────────────────────────
 
 /// Tick all alive particles: gravity, turbulence, velocity integration, rotation, size lerp.
@@ -229,6 +294,7 @@ pub fn rebuild_pool_meshes_system(
     pool: Res<ParticlePool>,
     camera_q: Query<&GlobalTransform, With<Camera3d>>,
     asset_server: Res<AssetServer>,
+    mut scratch: Local<RebuildScratch>,
 ) {
     // Camera basis vectors for billboard orientation.
     let (cam_right, cam_up) = if let Ok(cam_gt) = camera_q.single() {
@@ -328,24 +394,18 @@ pub fn rebuild_pool_meshes_system(
 
         let indices_ref = buckets.get(key);
         if indices_ref.map_or(true, |v| v.is_empty()) {
-            // Zero out this group's mesh so no stale geometry renders.
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, Vec::<[f32; 4]>::new());
-            if is_flame {
-                mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, Vec::<[f32; 2]>::new());
-            }
-            mesh.insert_indices(Indices::U32(vec![]));
+            // Zero out this group's mesh in-place; keeps Vec capacity for next burst.
+            clear_mesh_attrs(mesh, is_flame);
             continue;
         }
         let particle_indices = indices_ref.unwrap();
-        let n = particle_indices.len();
 
-        let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n * 4);
-        let mut uvs:       Vec<[f32; 2]> = Vec::with_capacity(n * 4);
-        let mut colors:    Vec<[f32; 4]> = Vec::with_capacity(n * 4);
-        let mut uv1:       Vec<[f32; 2]> = if is_flame { Vec::with_capacity(n * 4) } else { Vec::new() };
-        let mut idx_buf:   Vec<u32>       = Vec::with_capacity(n * 6);
+        // Reuse pre-allocated scratch buffers — grows to high-water mark, then stable.
+        scratch.positions.clear();
+        scratch.uvs.clear();
+        scratch.colors.clear();
+        scratch.uv1.clear();
+        scratch.idx_buf.clear();
 
         for (qi, &pi) in particle_indices.iter().enumerate() {
             let p = &pool.particles[pi];
@@ -373,7 +433,7 @@ pub fn rebuild_pool_meshes_system(
             let v2: [f32; 3] = (pos + cam_right * tr.x + cam_up * tr.y).into();
             let v3: [f32; 3] = (pos + cam_right * tl.x + cam_up * tl.y).into();
 
-            positions.extend_from_slice(&[v0, v1, v2, v3]);
+            scratch.positions.extend_from_slice(&[v0, v1, v2, v3]);
             // UV: tip at y=0, base at y=1 (matches Kenney flame sprite orientation).
             // For flipbook particles, compute the current frame's sub-rectangle.
             let (u0, u1, fv0, fv1) = if p.flipbook_cols > 0 {
@@ -388,25 +448,20 @@ pub fn rebuild_pool_meshes_system(
             } else {
                 (0.0, 1.0, 0.0, 1.0)
             };
-            uvs.extend_from_slice(&[[u0, fv1], [u1, fv1], [u1, fv0], [u0, fv0]]);
-            colors.extend_from_slice(&[c, c, c, c]);
+            scratch.uvs.extend_from_slice(&[[u0, fv1], [u1, fv1], [u1, fv0], [u0, fv0]]);
+            scratch.colors.extend_from_slice(&[c, c, c, c]);
 
             if is_flame {
                 let e = p.elapsed;
-                uv1.extend_from_slice(&[[e, 0.0], [e, 0.0], [e, 0.0], [e, 0.0]]);
+                scratch.uv1.extend_from_slice(&[[e, 0.0], [e, 0.0], [e, 0.0], [e, 0.0]]);
             }
 
             let b = (qi * 4) as u32;
-            idx_buf.extend_from_slice(&[b, b + 1, b + 2, b, b + 2, b + 3]);
+            scratch.idx_buf.extend_from_slice(&[b, b + 1, b + 2, b, b + 2, b + 3]);
         }
 
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-        if is_flame {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uv1);
-        }
-        mesh.insert_indices(Indices::U32(idx_buf));
+        // Write into existing mesh attribute Vecs in-place; no allocation after first frame.
+        write_mesh_attrs(mesh, &scratch, is_flame);
     }
 }
 
