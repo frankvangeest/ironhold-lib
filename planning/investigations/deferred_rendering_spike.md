@@ -152,9 +152,12 @@ All code analysis points to WASM compatibility, but a live browser test has not 
 
 ## Outcome
 
-- [ ] Native: **expected to work** — add `DeferredPrepass + DepthPrepass + Fxaa` to camera, run `particles_demo`, confirm GLB models lit by >16 lights _(not yet run — low risk based on analysis)_
-- [ ] WASM Chrome: **expected to work** — `Rgba32Uint`/`R8Uint` are standard WebGPU formats _(must run before shipping feature)_
-- [ ] WASM Firefox: **expected to work** _(must run before shipping feature)_
+- [ ] Native: not yet run — low risk based on analysis; run `particles_demo` with `DeferredPrepass` and confirm >16 simultaneous dynamic lights work
+- [x] WASM compiles: **clean build**, no errors, no warnings related to deferred (`wasm-pack` exit 0 in 8m 30s)
+- [x] WASM browser (GL/ANGLE backend): **scene fully loads** — terrain, player, animations, materials, all systems initialize; no crashes; no WebGPU format errors
+- [x] WASM GL degradation: **graceful** — Playwright's headless Chromium uses WebGL2/ANGLE backend; `DeferredPrepass` is silently skipped and falls back to clustered forward; scene renders correctly
+- [ ] WASM native WebGPU: **manual test needed** — Playwright uses GL, not native WebGPU; run `python serve.py` in Chrome with WebGPU enabled and check console for `Rgba32Uint` format errors before shipping
 - [x] Custom materials: **no changes needed** — all default to `OpaqueRendererMethod::Forward`
 - [x] Mixed scene: **correct by design** — Bevy routes materials automatically
-- [x] **Decision: write feature file.** Move to Queued after WASM browser test passes.
+- [x] Camera render graph WARN on GL: **harmless** — Entity with `DeferredPrepass` on GL backend logs one WARN per scene load; does not affect rendering; will not appear on WebGPU backend
+- [x] **Decision: write feature file.** Move deferred rendering to Queued. One action remaining before shipping: manual Chrome WebGPU console check.
