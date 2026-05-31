@@ -118,7 +118,13 @@ action_bar.no_target:{slot_key}          // {target} used but CurrentTarget is N
 pub struct CooldownMap(pub HashMap<String, f32>);
 ```
 
-Ticked each frame by `cooldown_tick_system`: drains all entries by `time.delta_secs()`, removes when ≤ 0.
+Ticked by `cooldown_tick_system`: drains all entries by the elapsed time each tick, removes when ≤ 0.
+
+> **Tick schedule note:** For v1 (single-player), `cooldown_tick_system` runs on the variable-rate render schedule using `time.delta_secs()`. This is non-deterministic — frame timing varies slightly between machines — which is acceptable for single-player but incompatible with multiplayer replay (Beta 0.5+).
+>
+> When Beta 0.5 ships its fixed-tick schedule, `cooldown_tick_system` must migrate to that schedule, subtracting the fixed timestep per tick instead of `delta_secs`. The visual sweep overlay (`action_bar_visual_system`) is presentation-only and must stay on the render tick regardless.
+>
+> Design `cooldown_tick_system` as a standalone system with no render-only dependencies so the schedule migration is a one-line change.
 
 ---
 
