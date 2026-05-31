@@ -1,4 +1,5 @@
 use clap::Subcommand;
+use image::GenericImageView;
 use std::path::{Path, PathBuf};
 
 use crate::output::OutputMode;
@@ -10,13 +11,21 @@ pub enum InspectCommand {
         /// Path to the .glb or .gltf file
         path: PathBuf,
     },
+    #[command(about = "Report dimensions, format, channels, and file size of an image")]
+    Texture {
+        /// Path to the image file (png, jpg, webp, gif, bmp, tiff)
+        path: PathBuf,
+    },
 }
 
 pub fn run(cmd: InspectCommand, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
     match cmd {
         InspectCommand::Glb { path } => inspect_glb(&path, mode),
+        InspectCommand::Texture { path } => inspect_texture(&path, mode),
     }
 }
+
+// ── GLB ──────────────────────────────────────────────────────────────────────
 
 struct AnimationInfo {
     name: String,
@@ -66,7 +75,6 @@ fn inspect_glb(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error:
                 if let Some(indices) = primitive.indices() {
                     triangle_count += indices.count() / 3;
                 } else {
-                    // Non-indexed: each 3 vertices form a triangle
                     let prim_verts: usize = primitive
                         .attributes()
                         .find(|(s, _)| *s == gltf::Semantic::Positions)
@@ -102,15 +110,15 @@ fn inspect_glb(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error:
     };
 
     if mode.json {
-        print_json(path, &animations, &meshes, &materials, &root_nodes);
+        glb_print_json(path, &animations, &meshes, &materials, &root_nodes);
     } else {
-        print_human(path, &animations, &meshes, &materials, &root_nodes);
+        glb_print_human(path, &animations, &meshes, &materials, &root_nodes);
     }
 
     Ok(())
 }
 
-fn print_human(
+fn glb_print_human(
     path: &Path,
     animations: &[AnimationInfo],
     meshes: &[MeshInfo],
@@ -163,7 +171,7 @@ fn print_human(
     }
 }
 
-fn print_json(
+fn glb_print_json(
     path: &Path,
     animations: &[AnimationInfo],
     meshes: &[MeshInfo],
@@ -185,4 +193,70 @@ fn print_json(
         "root_nodes": root_nodes,
     });
     println!("{}", serde_json::to_string_pretty(&val).unwrap());
+}
+
+// ── Texture ───────────────────────────────────────────────────────────────────
+
+fn inspect_texture(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
+    let file_size = std::fs::metadata(path)?.len();
+
+    let reader = image::ImageReader::open(path)?.with_guessed_format()?;
+    let format = reader.format();
+    let img = reader.decode()?;
+
+    let (width, height) = img.dimensions();
+    let channels = color_type_name(img.color());
+    let format_str = format.map(image_format_name).unwrap_or("Unknown");
+
+    if mode.json {
+        let val = serde_json::json!({
+            "path": path.display().to_string(),
+            "width": width,
+            "height": height,
+            "format": format_str,
+            "channels": channels,
+            "file_size_bytes": file_size,
+        });
+        println!("{}", serde_json::to_string_pretty(&val).unwrap());
+    } else {
+        println!("{}", path.display());
+        println!();
+        println!("  Dimensions   {} × {}", width, height);
+        println!("  Format       {}", format_str);
+        println!("  Channels     {}", channels);
+        println!("  File size    {}", human_file_size(file_size));
+    }
+
+    Ok(())
+}
+
+fn image_format_name(fmt: image::ImageFormat) -> &'static str {
+    match fmt {
+        image::ImageFormat::Png => "PNG",
+        image::ImageFormat::Jpeg => "JPEG",
+        image::ImageFormat::WebP => "WebP",
+        image::ImageFormat::Avif => "AVIF",
+        image::ImageFormat::Gif => "GIF",
+        image::ImageFormat::Bmp => "BMP",
+        image::ImageFormat::Tiff => "TIFF",
+        _ => "Unknown",
+    }
+}
+
+fn color_type_name(ct: image::ColorType) -> &'static str {
+    match ct {
+        image::ColorType::L8 | image::ColorType::L16 => "Grayscale",
+        image::ColorType::La8 | image::ColorType::La16 => "Grayscale+Alpha",
+        image::ColorType::Rgb8 | image::ColorType::Rgb16 | image::ColorType::Rgb32F => "RGB",
+        image::ColorType::Rgba8 | image::ColorType::Rgba16 | image::ColorType::Rgba32F => "RGBA",
+        _ => "Unknown",
+    }
+}
+
+fn human_file_size(bytes: u64) -> String {
+    if bytes >= 1_048_576 {
+        format!("{:.1} MB", bytes as f64 / 1_048_576.0)
+    } else {
+        format!("{} KB", (bytes + 512) / 1_024)
+    }
 }
