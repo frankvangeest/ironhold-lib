@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **`watch <project_dir>` (CLI)** — file-watcher loop that re-runs `validate` on every `.ron` save; prints changed file path + result on each re-check; edit-validate loop without engine startup
+- [x] **`watch <project_dir>` (CLI)** — file-watcher loop that re-runs `validate` on every `.ron` save; prints changed file path + result on each re-check; edit-validate loop without engine startup
 
 ---
 

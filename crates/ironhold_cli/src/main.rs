@@ -33,6 +33,11 @@ enum Command {
         #[command(subcommand)]
         subcommand: commands::query::QueryCommand,
     },
+    #[command(about = "Watch a project directory and re-validate on every .ron file change")]
+    Watch {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
+        project_dir: std::path::PathBuf,
+    },
 }
 
 fn main() {
@@ -43,6 +48,7 @@ fn main() {
         Command::Inspect { subcommand } => commands::inspect::run(subcommand, &mode),
         Command::Validate { project_dir } => commands::validate::run(&project_dir, &mode),
         Command::Query { subcommand } => commands::query::run(subcommand, &mode),
+        Command::Watch { project_dir } => commands::watch::run(&project_dir),
     };
 
     if let Err(e) = result {

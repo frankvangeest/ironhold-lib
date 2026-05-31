@@ -175,6 +175,33 @@ ironhold inspect audio assets/shared/audio/boulder/boulder-push1.wav
 ironhold --json inspect audio assets/shared/audio/bg-music-balance.mp3
 ```
 
+### `watch <project_dir>`
+
+Re-runs `validate` automatically every time a `.ron` file in the project directory changes.
+Press Ctrl+C to stop. Useful for an edit-validate loop without starting the engine.
+
+```bash
+ironhold watch assets/projects/quick_scene/
+ironhold watch assets/projects/particles_demo/
+```
+
+Each save prints the changed file path and a compact result line:
+
+```
+Watching C:\git\rust\ironhold-lib\assets\projects\quick_scene\ — Ctrl+C to stop
+
+[14:23:01] initial check  →  OK (6 files)
+
+[14:24:15] scenes\main.scene.ron
+           →  ERROR (1 issue)
+             scenes/main.scene.ron: line 12, col 5: unknown field `directioonal`
+
+[14:24:32] scenes\main.scene.ron
+           →  OK (6 files)
+```
+
+The `--json` flag has no effect on `watch` — output is always human-readable.
+
 ### `validate <project_dir>`
 
 Parses every RON file in a project directory using the same schema types as the engine runtime,

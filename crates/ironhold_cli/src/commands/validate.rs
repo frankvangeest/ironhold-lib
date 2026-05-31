@@ -9,7 +9,7 @@ use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachine
 use super::utils::{glob_dir, rel, ron_from_str};
 use crate::output::OutputMode;
 
-// ── Data structures ───────────────────────────────────────────────────────────
+// ── Internal data structures ──────────────────────────────────────────────────
 
 struct FileResult {
     rel_path: String,
@@ -26,6 +26,22 @@ struct CrossFileError {
     source_file: String,
     message: String,
     error_type: &'static str,
+}
+
+struct ValidationRun {
+    project_name: String,
+    file_results: Vec<FileResult>,
+    cross_errors: Vec<CrossFileError>,
+    all_valid: bool,
+}
+
+// ── Public result type (used by watch) ───────────────────────────────────────
+
+pub struct ValidateResult {
+    pub all_valid: bool,
+    pub file_count: usize,
+    /// Flat list of error strings in "path: message" format.
+    pub errors: Vec<String>,
 }
 
 // ── RON parsing ───────────────────────────────────────────────────────────────
@@ -60,7 +76,6 @@ fn parse_file<T: serde::de::DeserializeOwned>(
     }
 }
 
-// Parse a project-relative path only if the file exists on disk.
 fn try_parse<T: serde::de::DeserializeOwned>(
     project_dir: &Path,
     rel_path: &str,
@@ -214,7 +229,6 @@ fn cross_file_checks(
         }
     }
 
-    // Prefab keys in scene entity defs
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
             for entity in &scene.entities {
@@ -232,7 +246,6 @@ fn cross_file_checks(
         }
     }
 
-    // Behavior file paths on PrefabDef
     if let Some(catalog) = prefab_catalog {
         for (key, def) in &catalog.prefabs {
             if let Some(behavior_path) = &def.behavior {
@@ -251,6 +264,96 @@ fn cross_file_checks(
     }
 
     errors
+}
+
+// ── Core validation (shared by `run` and `validate_project`) ─────────────────
+
+fn do_validate(project_dir: &Path) -> ValidationRun {
+    let project_name = project_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let mut file_results: Vec<FileResult> = Vec::new();
+
+    let _project_config: Option<ProjectConfig> = find_project_ron(project_dir)
+        .and_then(|name| try_parse(project_dir, &name, &mut file_results));
+
+    let asset_catalog: Option<AssetCatalog> =
+        try_parse(project_dir, "assets.ron", &mut file_results);
+
+    let prefab_catalog: Option<PrefabCatalog> =
+        try_parse(project_dir, "prefabs/prefabs.ron", &mut file_results);
+
+    let stat_catalog: Option<StatCatalog> =
+        try_parse(project_dir, "stats/stats.ron", &mut file_results);
+
+    let mut scenes: Vec<(String, GameSceneV2)> = Vec::new();
+    for path in glob_dir(project_dir, "scenes", ".scene.ron") {
+        let r = rel(project_dir, &path);
+        if let Some(scene) = parse_file::<GameSceneV2>(&path, &r, &mut file_results) {
+            scenes.push((r, scene));
+        }
+    }
+
+    let rules: Option<LogicRulesAsset> =
+        try_parse(project_dir, "logic/rules.ron", &mut file_results);
+
+    let state_machine: Option<StateMachineAsset> =
+        try_parse(project_dir, "logic/state_machine.ron", &mut file_results);
+
+    let mut behaviors: Vec<(String, StateMachineAsset)> = Vec::new();
+    for path in glob_dir(project_dir, "behaviors", ".behavior.ron") {
+        let r = rel(project_dir, &path);
+        if let Some(b) = parse_file::<StateMachineAsset>(&path, &r, &mut file_results) {
+            behaviors.push((r, b));
+        }
+    }
+
+    let _model_fixes: Option<ModelFixesAsset> =
+        try_parse(project_dir, "overrides/model_fixes.ron", &mut file_results);
+
+    let all_actions = collect_actions(
+        rules.as_ref().map(|r| ("logic/rules.ron", r)),
+        state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
+        &behaviors,
+    );
+
+    let cross_errors = cross_file_checks(
+        project_dir,
+        asset_catalog.as_ref(),
+        prefab_catalog.as_ref(),
+        stat_catalog.as_ref(),
+        &scenes,
+        &all_actions,
+    );
+
+    let all_valid = file_results.iter().all(|r| r.is_ok()) && cross_errors.is_empty();
+
+    ValidationRun { project_name, file_results, cross_errors, all_valid }
+}
+
+// ── Public: used by `watch` ───────────────────────────────────────────────────
+
+pub fn validate_project(project_dir: &Path) -> ValidateResult {
+    let vr = do_validate(project_dir);
+
+    let mut errors = Vec::new();
+    for fr in &vr.file_results {
+        for e in &fr.errors {
+            errors.push(format!("{}: {}", fr.rel_path, e));
+        }
+    }
+    for ce in &vr.cross_errors {
+        errors.push(format!("{}: {}", ce.source_file, ce.message));
+    }
+
+    ValidateResult {
+        all_valid: vr.all_valid,
+        file_count: vr.file_results.len(),
+        errors,
+    }
 }
 
 // ── Output ────────────────────────────────────────────────────────────────────
@@ -356,81 +459,15 @@ pub fn run(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::err
         return Err(format!("{}: not a directory", project_dir.display()).into());
     }
 
-    let project_name = project_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
-        .to_string();
-
-    let mut file_results: Vec<FileResult> = Vec::new();
-
-    // ── Parse per-file ────────────────────────────────────────────────────────
-
-    let _project_config: Option<ProjectConfig> = find_project_ron(project_dir)
-        .and_then(|name| try_parse(project_dir, &name, &mut file_results));
-
-    let asset_catalog: Option<AssetCatalog> =
-        try_parse(project_dir, "assets.ron", &mut file_results);
-
-    let prefab_catalog: Option<PrefabCatalog> =
-        try_parse(project_dir, "prefabs/prefabs.ron", &mut file_results);
-
-    let stat_catalog: Option<StatCatalog> =
-        try_parse(project_dir, "stats/stats.ron", &mut file_results);
-
-    let mut scenes: Vec<(String, GameSceneV2)> = Vec::new();
-    for path in glob_dir(project_dir, "scenes", ".scene.ron") {
-        let r = rel(project_dir, &path);
-        if let Some(scene) = parse_file::<GameSceneV2>(&path, &r, &mut file_results) {
-            scenes.push((r, scene));
-        }
-    }
-
-    let rules: Option<LogicRulesAsset> =
-        try_parse(project_dir, "logic/rules.ron", &mut file_results);
-
-    let state_machine: Option<StateMachineAsset> =
-        try_parse(project_dir, "logic/state_machine.ron", &mut file_results);
-
-    let mut behaviors: Vec<(String, StateMachineAsset)> = Vec::new();
-    for path in glob_dir(project_dir, "behaviors", ".behavior.ron") {
-        let r = rel(project_dir, &path);
-        if let Some(b) = parse_file::<StateMachineAsset>(&path, &r, &mut file_results) {
-            behaviors.push((r, b));
-        }
-    }
-
-    let _model_fixes: Option<ModelFixesAsset> =
-        try_parse(project_dir, "overrides/model_fixes.ron", &mut file_results);
-
-    // ── Cross-file checks ─────────────────────────────────────────────────────
-
-    let all_actions = collect_actions(
-        rules.as_ref().map(|r| ("logic/rules.ron", r)),
-        state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
-        &behaviors,
-    );
-
-    let cross_errors = cross_file_checks(
-        project_dir,
-        asset_catalog.as_ref(),
-        prefab_catalog.as_ref(),
-        stat_catalog.as_ref(),
-        &scenes,
-        &all_actions,
-    );
-
-    // ── Output ────────────────────────────────────────────────────────────────
-
-    let all_valid = file_results.iter().all(|r| r.is_ok()) && cross_errors.is_empty();
+    let vr = do_validate(project_dir);
 
     if mode.json {
-        print_json(&project_name, &file_results, &cross_errors, all_valid);
+        print_json(&vr.project_name, &vr.file_results, &vr.cross_errors, vr.all_valid);
     } else {
-        print_human(project_dir, &file_results, &cross_errors, all_valid);
+        print_human(project_dir, &vr.file_results, &vr.cross_errors, vr.all_valid);
     }
 
-    if !all_valid {
+    if !vr.all_valid {
         std::process::exit(1);
     }
 

@@ -16,6 +16,7 @@ cargo run -p ironhold_cli -- query scenes  <project_dir>         # list scenes (
 cargo run -p ironhold_cli -- query rules   <project_dir>         # list rules.ron and/or state_machine.ron
 cargo run -p ironhold_cli -- query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
 cargo run -p ironhold_cli -- query effects <project_dir> --filter additive=true  # filter by field=value
+cargo run -p ironhold_cli -- watch  <project_dir>               # watch for .ron changes and re-validate on every save
 cargo run -p ironhold_cli -- --json <command>                    # any command accepts --json for machine-readable output
 cargo build -p ironhold_cli --release   # produces target/release/ironhold.exe
 
