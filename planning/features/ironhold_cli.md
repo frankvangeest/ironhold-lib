@@ -1,6 +1,6 @@
 # Feature: Ironhold CLI
 
-_Status: Planning_
+_Status: Active — Phase 3 (inspect glb) shipped; Phase 1 (validate), Phase 2 (schema/query) pending_
 _Planned at: `6d36ea1` (2026-05-30)_
 
 ## What

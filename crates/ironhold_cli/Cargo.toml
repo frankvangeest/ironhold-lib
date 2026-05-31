@@ -1,0 +1,16 @@
+[package]
+name = "ironhold_cli"
+version = "0.1.0"
+edition = "2021"
+description = "Ironhold CLI — inspect, validate, and query game project assets"
+license = "MIT OR Apache-2.0"
+authors = ["Frank van Geest"]
+
+[[bin]]
+name = "ironhold"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+gltf = "1"

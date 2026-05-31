@@ -4,6 +4,7 @@ members = [
     "crates/ironhold_core",
     "crates/ironhold_native",
     "crates/ironhold_web",
+    "crates/ironhold_cli",
 ]
 
 [workspace.dependencies]
