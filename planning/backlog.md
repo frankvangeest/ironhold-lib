@@ -63,13 +63,32 @@
 - [ ] Snapshot/restore stub for core gameplay state
 - [ ] Determinism constraints doc
 
-### Beta 0.6 — Networking Prototype
-- [ ] Server-authoritative input relay (client sends inputs, server simulates)
-- [ ] Client interpolation pass
-- [ ] Connect / disconnect flow (minimal, no lobby)
-- [ ] Network message protocol doc
-- [ ] Latency/jitter test harness
-- [ ] Multiplayer demo scene
+### Beta 0.6 — Multiplayer Form 1: LAN Co-op
+See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic tick) must ship first.
+- [ ] Library spike (Bevy Lightyear vs alternatives — see feature file pre-checks)
+- [ ] `HostGame` / `JoinGame` / `DisconnectGame` actions
+- [ ] Input replication: client sends `InputActionMessage` per tick; host authorises
+- [ ] State replication: `Transform`, `AnimationState`, `StatMap`, `GameVariables`
+- [ ] `multiplayer.*` pipeline events
+- [ ] LAN co-op demo scene
+- [ ] Network protocol doc + integration tests
+
+### Beta 0.8 — Multiplayer Form 2: Internet Player-Hosted
+See `planning/features/networking_multiplayer.md`. Gate: Beta 0.6 (LAN) must ship first.
+- [ ] Relay/signaling service decision and deployment (Matchbox recommended — see feature file)
+- [ ] WASM-compatible transport confirmed in browser
+- [ ] Lobby system: `CreateLobby` / `JoinLobby` / `ListLobbies` actions
+- [ ] `LobbyList` UI scene node
+- [ ] Internet co-op demo (accessible from WASM build)
+- [ ] Relay setup docs
+
+### Beta 0.9+ — Multiplayer Form 3: Dedicated Server
+See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet listen server) must ship first. Requires a separate detailed feature file before coding.
+- [ ] `ironhold_server` crate (headless Bevy, no render/window)
+- [ ] `start_server()` entry point in `ironhold_core`
+- [ ] Client-mode thin renderer (no local simulation)
+- [ ] Server admin actions (kick, change_scene)
+- [ ] Dedicated server demo + deployment guide
 
 ### Beta 0.7 — Loading & Preloading
 - [ ] Loading screen overlay during `LoadingScene` / `LoadingProject` states
