@@ -96,6 +96,23 @@ For any capability change:
 | Pure function, no Bevy | `#[cfg(test)]` block in the `.rs` file |
 | Bevy system / ECS behavior | `tests/integration_tests.rs` |
 | RON file loads correctly | `tests/ron_validation.rs` |
+| CLI output and exit codes | `crates/ironhold_cli/tests/` |
+
+### CLI tests (`crates/ironhold_cli/tests/`) ✅
+
+These tests build and invoke the `ironhold` binary directly using `env!("CARGO_BIN_EXE_ironhold")`. No GitHub Actions dependency — they run anywhere `cargo test` runs.
+
+```bash
+cargo test -p ironhold_cli                             # run all CLI tests
+cargo test -p ironhold_cli --test validate_projects    # smoke: all example projects pass validate
+cargo test -p ironhold_cli --test validate_cross_file  # cross-file reference errors are caught
+```
+
+**`validate_projects.rs`** — one test per example project under `assets/projects/`. Verifies `ironhold validate` exits `0` for every shipped project. Add a new test here whenever a new project is added.
+
+**`validate_cross_file.rs`** — targeted tests for each cross-file reference check: missing effect key, missing audio key, missing prefab in scene, missing prefab in `Spawn` action, missing behavior file, and parse error. Each test asserts both the exit code (`1`) and that the offending key name appears in stdout.
+
+Fixtures live in `crates/ironhold_cli/tests/fixtures/`. Each fixture contains only the minimum files to trigger its specific error. Do not pad them — lean fixtures stay readable and fail fast when the validate logic changes.
 
 ### Strongly recommended 🧪
 - Add a “golden” RON file under `assets/` for new schema features.
