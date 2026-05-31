@@ -15,39 +15,62 @@ use crate::output::OutputMode;
 
 #[derive(Subcommand)]
 pub enum QueryCommand {
-    #[command(about = "List prefab definitions in a project")]
+    #[command(
+        about = "List prefab definitions in a project",
+        after_help = "Examples:\n  ironhold query prefabs assets/projects/particles_demo/\n  ironhold query prefabs assets/projects/particles_demo/ --keys-only\n  ironhold query prefabs assets/projects/particles_demo/ --filter kind=actor\n  ironhold query prefabs assets/projects/particles_demo/ --filter tag=player\n  ironhold --json query prefabs assets/projects/particles_demo/ --keys-only"
+    )]
     Prefabs {
         /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
         #[arg(long, help = "Print only prefab keys, one per line")]
         keys_only: bool,
         #[arg(long, value_name = "key=value",
-              help = "Filter: kind=actor, kind=prop, kind=primitive, tag=player, behavior=true")]
+              help = "Filter: kind=actor, kind=prop, kind=primitive, tag=<value>, behavior=true, npc=true")]
         filter: Option<String>,
     },
-    #[command(about = "List particle effect definitions in a project")]
+    #[command(
+        about = "List particle effect definitions in a project",
+        after_help = "Examples:\n  ironhold query effects assets/projects/particles_demo/\n  ironhold query effects assets/projects/particles_demo/ --keys-only\n  ironhold query effects assets/projects/particles_demo/ --filter additive=true\n  ironhold query effects assets/projects/particles_demo/ --filter priority=Ambient\n  ironhold --json query effects assets/projects/particles_demo/"
+    )]
     Effects {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
         #[arg(long, help = "Print only effect keys, one per line")]
         keys_only: bool,
         #[arg(long, value_name = "key=value",
-              help = "Filter: additive=true, priority=Player, priority=Ambient, layers=true")]
+              help = "Filter: additive=true, priority=Player, priority=Npc, priority=Ambient, layers=true, sprite=true")]
         filter: Option<String>,
     },
-    #[command(about = "List scene files in a project")]
+    #[command(
+        about = "List scene files in a project",
+        after_help = "Examples:\n  ironhold query scenes assets/projects/3rd_person_game_demo/\n  ironhold --json query scenes assets/projects/quick_scene/"
+    )]
     Scenes {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
     },
-    #[command(about = "List logic rules and state machines in a project")]
+    #[command(
+        about = "List logic rules and state machines in a project",
+        after_help = "Examples:\n  ironhold query rules assets/projects/3rd_person_game_demo/\n  ironhold query rules assets/projects/entity_logic_demo/\n  ironhold --json query rules assets/projects/quick_scene/"
+    )]
     Rules {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
     },
-    #[command(about = "List all action types used across a project's logic files")]
+    #[command(
+        about = "List all action types used across a project's logic files",
+        after_help = "Examples:\n  ironhold query actions assets/projects/3rd_person_game_demo/\n  ironhold --json query actions assets/projects/particles_demo/"
+    )]
     Actions {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
     },
-    #[command(about = "List all event triggers used across a project's logic files")]
+    #[command(
+        about = "List all event triggers used across a project's logic files",
+        after_help = "Examples:\n  ironhold query events assets/projects/3rd_person_game_demo/\n  ironhold --json query events assets/projects/particles_demo/"
+    )]
     Events {
+        /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
     },
 }

@@ -6,17 +6,26 @@ use crate::output::OutputMode;
 
 #[derive(Subcommand)]
 pub enum InspectCommand {
-    #[command(about = "List animations, meshes, materials, and root nodes of a GLB/GLTF file")]
+    #[command(
+        about = "List animations, meshes, materials, and root nodes of a GLB/GLTF file",
+        after_help = "Examples:\n  ironhold inspect glb assets/shared/models/creatures/orc-enemy.glb\n  ironhold --json inspect glb assets/shared/models/creatures/dragon.glb"
+    )]
     Glb {
         /// Path to the .glb or .gltf file
         path: PathBuf,
     },
-    #[command(about = "Report dimensions, format, channels, and file size of an image")]
+    #[command(
+        about = "Report dimensions, format, channels, and file size of an image",
+        after_help = "Supported formats: PNG, JPEG, WebP, GIF, BMP, TIFF. AVIF is not supported.\n\nExamples:\n  ironhold inspect texture assets/shared/textures/decals/circle_filled.png\n  ironhold --json inspect texture assets/shared/textures/Cobblestone_001_SD/Cobblestone_001_COLOR.jpg"
+    )]
     Texture {
         /// Path to the image file (png, jpg, webp, gif, bmp, tiff)
         path: PathBuf,
     },
-    #[command(about = "Report format, duration, sample rate, and channel count of an audio file")]
+    #[command(
+        about = "Report format, duration, sample rate, and channel count of an audio file",
+        after_help = "Supported formats: WAV, MP3. Duration is useful for setting delay_secs in EmitEventAfterDelay.\n\nExamples:\n  ironhold inspect audio assets/shared/audio/boulder/boulder-push1.wav\n  ironhold --json inspect audio assets/shared/audio/bg-music-balance.mp3"
+    )]
     Audio {
         /// Path to the audio file (wav, mp3)
         path: PathBuf,
