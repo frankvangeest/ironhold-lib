@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Ironhold CLI** — scaffold `crates/ironhold_cli`; starting with `inspect glb` (animation/mesh/material listing) to support monster model authoring; full validate/schema/query phases to follow. See `planning/features/ironhold_cli.md`
+
 ---
 
 ## Bugs
@@ -21,10 +23,6 @@
 ---
 
 ## Queued
-
-### Tooling
-
-- [ ] **Ironhold CLI** — `ironhold validate / schema / query / inspect` commands; new `crates/ironhold_cli`; shared validation module from `ironhold_core`; `--json` flag for AI agent use; `inspect glb` lists animations/meshes/materials, `inspect texture` reports dimensions/format, `inspect audio` reports duration/sample-rate. See `planning/features/ironhold_cli.md`
 
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
