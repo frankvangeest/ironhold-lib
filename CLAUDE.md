@@ -38,6 +38,9 @@ cargo test -p ironhold_core --test ron_validation
 # Run a single test by name
 cargo test -p ironhold_core --test integration_tests test_ui_button_to_load_scene_action
 
+# Validate all example projects (CLI smoke test — runs the built binary against each project)
+cargo test -p ironhold_cli --test validate_projects
+
 # Build for WASM (requires wasm-pack)
 wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 
