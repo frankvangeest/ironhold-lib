@@ -187,7 +187,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)
 - [ ] Live reload server — watch `assets/` and push scene reload to running native build via IPC
 - [ ] GLB batch inspector — produce a markdown table of node names, animations, and materials for a whole folder
-- [ ] **Live project editor** — web application for managing RON files that follow the ironhold schema; prevents invalid data entry, hot-reloads changes into the running engine; aimed at AI agents and non-programmer designers. See `planning/features/live_project_editor.md` _(design pending)_
+- [ ] **Live project editor** — `crates/ironhold_editor`; axum server on port 3001 serving React frontend + WASM game preview + REST API; `schemars`-derived JSON Schema → RJSF forms; RON ↔ JSON bridge with validation gate; WebSocket-triggered iframe reload on save; v1 edit-only, v2 create/delete. See `planning/features/live_project_editor.md`
 
 ---
 
