@@ -293,6 +293,11 @@
             align-self: flex-start;
         }
 
+        .asset-type.pbr {
+            color: #22d3ee;
+            background: rgba(34, 211, 238, 0.1);
+        }
+
         .asset-desc {
             font-size: 0.8rem;
             color: var(--text-secondary);
@@ -501,6 +506,13 @@
             });
         }
 
+        function assetBadge(asset) {
+            const isPbr = asset.name.endsWith('_SD');
+            const label = isPbr ? 'PBR Set' : (asset.type === 'texture_set' ? 'Texture' : asset.type.toUpperCase());
+            const cls   = isPbr ? 'asset-type pbr' : 'asset-type';
+            return { label, cls };
+        }
+
         function updateView() {
             renderFolderTree();
             renderAssets();
@@ -541,12 +553,13 @@
                     previewHtml = `<div class="audio-icon" style="opacity: 0.1">?</div>`;
                 }
 
+                const badge = assetBadge(asset);
                 card.innerHTML = `
                     <div class="asset-preview ${asset.type === 'wav' || asset.type === 'mp3' ? 'audio-preview' : ''}">
                         ${previewHtml}
                     </div>
                     <div class="asset-info">
-                        <div class="asset-type">${asset.type}</div>
+                        <div class="${badge.cls}">${badge.label}</div>
                         <div class="asset-name">${asset.name}</div>
                         <div class="asset-desc">${asset.description || 'No description available.'}</div>
                         ${(asset.type === 'wav' || asset.type === 'mp3') ? `<audio controls class="audio-player"><source src="assets/${asset.path}" type="audio/${asset.type === 'wav' ? 'wav' : 'mpeg'}"></audio>` : ''}
@@ -573,7 +586,7 @@
 
             body.innerHTML = `
                 <h2>${asset.name}</h2>
-                <div class="asset-type" style="margin-bottom: 1rem">${asset.type}</div>
+                <div class="${assetBadge(asset).cls}" style="margin-bottom: 1rem">${assetBadge(asset).label}</div>
                 <p>${asset.description || 'No description available.'}</p>
                 <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem">Path: assets/${asset.path}</div>
                 <div class="modal-previews">

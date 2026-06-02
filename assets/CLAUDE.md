@@ -30,15 +30,17 @@ assets/
 
 ### Texture subfolder conventions
 
-| Folder | Contents |
-|---|---|
-| `{Name}_SD/` | PBR material set — one folder per set (basecolor, normal, roughness, AO, height) |
-| `particles/` | Particle billboard sprites (e.g. kenney-particle-pack) |
-| `noise/` | Seamlessly tiling greyscale utility textures for WGSL shaders (Perlin, Voronoi, blue noise …) |
-| `decals/` | Projected decal textures (rings, impact marks, splats) |
-| `foliage/` | Leaf alpha brush-stroke textures for the stylized foliage system |
-| `ui/` | UI icons, atlas sheets, and HUD elements |
-| `skybox/` | Skybox cubemaps and HDRIs |
+| Folder | Type | Contents |
+|---|---|---|
+| `{Name}_SD/` | **PBR set** | Full PBR material set — basecolor, normal, roughness, AO, height (one folder per material) |
+| `particles/` | Texture | Particle billboard sprites (e.g. kenney-particle-pack) |
+| `noise/` | Texture | Seamlessly tiling greyscale utility textures for WGSL shaders (Perlin, Voronoi, blue noise …) |
+| `decals/` | Texture | Projected decal textures (rings, impact marks, splats) |
+| `foliage/` | Texture | Leaf alpha brush-stroke textures for the stylized foliage system |
+| `ui/` | Texture | UI icons, atlas sheets, and HUD elements |
+| `skybox/` | Texture | Skybox cubemaps and HDRIs |
+
+The `_SD` suffix is the naming convention for **all** PBR material sets. Any folder that does not end in `_SD` is a non-PBR texture category. The asset browser (`assets.html`) uses this distinction to show a "PBR Set" badge vs a "Texture" badge.
 
 Do not dump new textures at the `textures/` root. Place them in the matching subfolder; create the subfolder with a `.gitkeep` if none exists yet. Delete the `.gitkeep` once real files land.
 
