@@ -1227,6 +1227,14 @@
     "description": ""
   },
   {
+    "name": "trunk_with_branches_01",
+    "path": "shared/models/plants/trunk_with_branches_01.glb",
+    "dir": "shared/models/plants",
+    "type": "glb",
+    "previews": [],
+    "description": ""
+  },
+  {
     "name": "anvil",
     "path": "shared/models/props/anvil.glb",
     "dir": "shared/models/props",
@@ -1481,6 +1489,14 @@
     "description": ""
   },
   {
+    "name": "custom_flame_particle",
+    "path": "shared/shaders/custom_flame_particle.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
     "name": "custom_fresnel",
     "path": "shared/shaders/custom_fresnel.wgsl",
     "dir": "shared/shaders",
@@ -1579,6 +1595,22 @@
   {
     "name": "custom_world_stripes",
     "path": "shared/shaders/custom_world_stripes.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pool_flame_particle",
+    "path": "shared/shaders/pool_flame_particle.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "pool_particle",
+    "path": "shared/shaders/pool_particle.wgsl",
     "dir": "shared/shaders",
     "type": "wgsl",
     "previews": [],

@@ -32,7 +32,7 @@ The sphere-normal technique is the key insight: without it, individual billboard
 "ghibli_oak": (
     kind: Foliage,
     foliage: (
-        trunk: Some("vegetation/oak_trunk"),   // asset catalog key; None for bushes
+        trunk: Some("models/plants/trunk_with_branches_01"),   // asset catalog key; None for bushes
         clusters: (
             count: 7,
             emitter_radius: 1.5,               // sphere radius for cluster placement
@@ -307,6 +307,10 @@ pub struct FoliageMaterial {
 - [ ] **`toon_bands` as a uniform vs shader variant.** A `u32` uniform with a runtime `select` in WGSL adds one branch per fragment. Alternatively, generate three shader variants at compile time. For v1, the uniform branch is fine — profiling can guide a later switch.
 - [ ] **Leaf texture asset type.** The `leaf_texture` key resolves through `LoadedAssetCatalog` to a `Handle<Image>` the same way particle textures do. Confirm the asset loader path for textures is already in place — it is, via `AssetServer` in the particle system.
 - [ ] **Sun direction sync strategy.** `foliage_lighting_sync_system` queries the scene's `DirectionalLight` entity for its `GlobalTransform` to extract the light direction. Runs in `PostUpdate` after the transform propagation stage. If no directional light exists in the scene, default to `Vec3::NEG_Y` (directly overhead).
+- [ ] **Available assets.** The following shared assets are ready to use immediately:
+  - Trunk model: `assets/shared/models/plants/trunk_with_branches_01.glb` → catalog key `"models/plants/trunk_with_branches_01"`. No preview image yet — generate one with `python tools/glb_preview/preview.py assets/shared/models/plants/ --avif`.
+  - Leaf texture: `assets/shared/textures/foliage/leaf_brush_01.png` → catalog key `"textures/foliage/leaf_brush_01"`.
+
 - [ ] **New demo project vs existing project.** Adding a `foliage_demo` project is the cleanest option — it avoids cluttering existing projects and gives designers a clear reference. Requires the three registration steps in `CLAUDE.md` (test_web.py, baseline screenshot, index.html card).
 
 ---
@@ -317,7 +321,7 @@ pub struct FoliageMaterial {
 - Given the camera rotating around the tree, leaf cards always face the camera with no geometry tearing.
 - Given a directional light at a 45° angle, exactly two distinct light bands (highlight and shadow) are visible when `toon_bands: 2`; three when `toon_bands: 3`.
 - Given `ao_intensity: 0.5`, the underside of foliage clusters is visibly darker than the top.
-- Given `trunk: Some("vegetation/oak_trunk")`, the trunk GLB renders at the prefab position as a child of the foliage root.
+- Given `trunk: Some("models/plants/trunk_with_branches_01")`, the trunk GLB renders at the prefab position as a child of the foliage root.
 - Given `trunk: None`, only leaf clusters render (valid for bushes).
 - Given `python test_web.py --skip-build`, the foliage demo project passes smoke and baseline tests.
 - Given `python test_web.py --webgpu --skip-build --project foliage_demo`, smoke test passes (WebGPU path renders correctly).
