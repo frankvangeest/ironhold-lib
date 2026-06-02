@@ -11,8 +11,7 @@
 
 ## Active
 
-- [x] **Typed primitive shape field** — `shape: PrimitiveShapeKind` on `PrefabDef` and `ChildPrimitiveDef`; ships with enum casing change. See `planning/features/done/typed_primitive_shape_field.md`
-- [x] **Consistent RON enum casing** — `PrefabDef.kind` → `PrefabKind`; `ColliderDef.shape` → `ColliderShapeKind`; `PREFAB_CATALOG_SCHEMA_VERSION` → 2; ships with typed shape change. See `planning/features/done/consistent_ron_enum_casing.md`
+- [ ] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; v2 adds GPU wind sway and particle leaf drop. See `planning/features/stylized_foliage.md`
 
 ---
 
@@ -153,7 +152,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 
 ### Rendering & Assets
 - [ ] **Deferred rendering** — replace clustered forward with Bevy's deferred pipeline to remove the `MAX_FADING_LIGHTS = 16` cap and efficiently handle large numbers of dynamic lights (torches, particle lights, explosions); transparent/additive materials (particles, decals) stay on the forward path automatically. Investigation complete — WASM builds clean, GL degrades gracefully; one remaining step: manual Chrome WebGPU console check. See `planning/features/deferred_rendering.md`
-- [ ] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; v2 adds GPU wind sway and particle leaf drop. See `planning/features/stylized_foliage.md`. _Dep: Consistent RON enum casing (for `PrefabKind::Foliage`)._
+- [>] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; v2 adds GPU wind sway and particle leaf drop. See `planning/features/stylized_foliage.md`
 - [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
 - [ ] **LOD — runtime generation + caching** — WASM-BLOCKED: generating simplified meshes at runtime requires offthread compute (web workers + `SharedArrayBuffer`); Bevy's WASM build does not support this today. Also covers IndexedDB caching of generated LODs and Bevy meshlets (GPU-driven micro-mesh rendering — not WASM-stable). Parked until Bevy's WASM offthread compute support matures.
 - [ ] Decal system — project a texture onto geometry without modifying meshes
