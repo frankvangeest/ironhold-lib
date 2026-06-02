@@ -923,7 +923,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 (
   prefabs: {
     "player_warrior": (
-      kind: "actor",
+      kind: Actor,
       model: "hero",               // key in AssetCatalog.models
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
@@ -938,7 +938,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
       ),
     ),
     "prop_anvil": (
-      kind: "prop",
+      kind: Prop,
       model: "anvil",
       material: "wood_crate",      // overrides embedded material
       components: (
@@ -953,8 +953,9 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | `String` | `"actor"`, `"prop"`, or `"primitive"` |
-| `model` | `String` | Key into `AssetCatalog.models`; for `kind: "primitive"` this is the Bevy shape name (see below) |
+| `kind` | `PrefabKind` | `Actor`, `Prop`, or `Primitive` (bare enum variant, no quotes) |
+| `model` | `String` | Key into `AssetCatalog.models` for `Actor`/`Prop`. Must be `""` (empty) for `Primitive` — use `shape` instead. |
+| `shape` | `Option<PrimitiveShapeKind>` | Required for `Primitive` prefabs. Write the bare variant: `Cuboid`, `Sphere`, etc. (`implicit_some` is active; no `Some()` wrapper needed). Omit for `Actor`/`Prop`. See [Primitive shapes](#primitive-shapes-) below. |
 | `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root |
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
@@ -964,10 +965,10 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `components.camera` | `Option<CameraConfig>` | Orbit camera settings (offset, zoom, orbit speed, radius limits). Only read for `"player"` prefabs. Omit to use engine defaults. See [Special tag: `"player"`](#special-tag-player-) below. |
 | `components.npc` | `Option<NpcDef>` | NPC AI configuration. When set, the entity gets a dynamic physics body and an NPC behaviour driver. See [NPC behaviour](#npc-behaviour-componentsnpc-) below. |
 | `components.sounds` | `HashMap<String, String>` | Informational map from event name to `AssetCatalog` audio key. Not auto-wired — reference these keys in `state_machine.ron` to bind sounds to events (e.g. `player.jumped → PlaySound(key: "sfx_jump")`). |
-| `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: "primitive"` |
-| `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: "primitive"`. See below. |
-| `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: "actor"` / `kind: "prop"`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
-| `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `"primitive"` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
+| `primitive` | `Option<PrimitiveParams>` | Shape dimensions and appearance; only used when `kind: Primitive` |
+| `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: Primitive`. See below. |
+| `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: Actor` / `kind: Prop`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
+| `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `Primitive` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
 | `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). |
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
@@ -1006,14 +1007,14 @@ To display the camera's world position in the UI, add a label element with `id: 
 ```ron
 // In prefabs/prefabs.ron — minimal (all defaults)
 "flycam": (
-  kind: "prop",
+  kind: Prop,
   model: "",
   components: ( tags: ["flycam"] ),
 ),
 
 // In prefabs/prefabs.ron — with custom speed tuning
 "flycam_slow": (
-  kind: "prop",
+  kind: Prop,
   model: "",
   components: (
     tags: ["flycam"],
@@ -1157,7 +1158,7 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
 ```ron
 // Hostile patrol guard — full configuration
 "orc_guard": (
-  kind: "actor",
+  kind: Actor,
   model: "orc_glb",
   components: (
     npc: (
@@ -1181,8 +1182,9 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
 
 // Small creature — custom physics feel and tight waypoint radius
 "rat": (
-  kind: "primitive",
-  model: "Capsule3d",
+  kind: Primitive,
+  model: "",
+  shape: Capsule3d,
   primitive: ( radius: 0.15, height: 0.3 ),
   components: (
     npc: (
@@ -1200,19 +1202,22 @@ Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic
 
 ### Primitive shapes ✅
 
-When `kind: "primitive"`, no GLB model is loaded. Instead the runtime generates a procedural Bevy mesh from the `model` field (the Bevy shape name) and the optional `primitive` parameters block.
+When `kind: Primitive`, no GLB model is loaded. Instead the runtime generates a procedural Bevy mesh from the `shape` field and the optional `primitive` parameters block. The `model` field must be `""` (empty string) for primitive prefabs.
 
-**Supported shape names:**
+**Supported `PrimitiveShapeKind` variants:**
 
-| `model` value | Shape | Key dimension fields |
+| `shape` value | Shape | Key dimension fields |
 |---|---|---|
-| `"Cuboid"` | Box | `size: (x, y, z)` |
-| `"Sphere"` | Sphere | `radius` |
-| `"Cylinder"` | Cylinder | `radius`, `height` |
-| `"Capsule3d"` | Capsule | `radius`, `height` (used as half_length) |
-| `"Cone"` | Cone | `radius`, `height` |
-| `"Torus"` | Torus / donut | `radius` (outer), `radius_top` (inner) |
-| `"ConicalFrustum"` | Truncated cone | `radius` (bottom), `radius_top` (top), `height` |
+| `Cuboid` | Box | `size: (x, y, z)` |
+| `Sphere` | Sphere | `radius` |
+| `Cylinder` | Cylinder | `radius`, `height` |
+| `Capsule3d` | Capsule | `radius`, `height` (used as half_length) |
+| `Cone` | Cone | `radius`, `height` |
+| `Torus` | Torus / donut | `radius` (outer), `radius_top` (inner) |
+| `ConicalFrustum` | Truncated cone | `radius` (bottom), `radius_top` (top), `height` |
+| `Plane` | Flat plane | `size: (x, _, z)` (Y ignored) |
+
+> **Physics collider support:** `Cuboid`, `Sphere`, `Cylinder`, and `Capsule3d` support physics/sensor colliders. `Cone`, `Torus`, `ConicalFrustum`, and `Plane` are visual-only — `physics: true` / `sensor: true` is ignored for these shapes.
 
 **`PrimitiveParams` fields** (all optional — defaults apply when omitted):
 
@@ -1265,7 +1270,7 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `shape` | `String` | — | `"Cuboid"`, `"Sphere"`, or `"Cylinder"` |
+| `shape` | `ColliderShapeKind` | — | `Cuboid`, `Sphere`, or `Cylinder` (bare enum variant, no quotes) |
 | `size` | `Option<(f32,f32,f32)>` | `(1,1,1)` | Full extents (width, height, depth) for Cuboid |
 | `radius` | `Option<f32>` | `0.5` | Radius for Sphere / Cylinder |
 | `height` | `Option<f32>` | `1.0` | Total height for Cylinder |
@@ -1275,35 +1280,35 @@ To make a GLB prop solid (so the player can stand on it or bump into it), add a 
 ```ron
 // Simple single-shape prop
 "barrel": (
-  kind: "prop",
+  kind: Prop,
   model: "barrel",
   components: (),
   colliders: [
-    (shape: "Cylinder", radius: 0.35, height: 0.9),
+    (shape: Cylinder, radius: 0.35, height: 0.9),
   ],
 ),
 
 // Multi-shape prop: chest with separate base and lid colliders
 "chest_01": (
-  kind: "prop",
+  kind: Prop,
   model: "chest_01",
   components: (tags: ["loot"]),
   colliders: [
-    (shape: "Cuboid", size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
-    (shape: "Cuboid", size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
+    (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
+    (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
   ],
 ),
 
 // Archway approximated with three boxes — diagonal brace uses rotation_euler_deg
 "archway": (
-  kind: "prop",
+  kind: Prop,
   model: "archway",
   components: (),
   colliders: [
-    (shape: "Cuboid", size: (0.4, 3.0, 0.4), offset: (-1.5, 1.5, 0.0)),
-    (shape: "Cuboid", size: (0.4, 3.0, 0.4), offset: ( 1.5, 1.5, 0.0)),
-    (shape: "Cuboid", size: (3.4, 0.4, 0.4), offset: ( 0.0, 3.2, 0.0)),
-    (shape: "Cuboid", size: (0.3, 2.0, 0.3), offset: ( 0.0, 1.5, 0.0), rotation_euler_deg: (0.0, 0.0, 45.0)),
+    (shape: Cuboid, size: (0.4, 3.0, 0.4), offset: (-1.5, 1.5, 0.0)),
+    (shape: Cuboid, size: (0.4, 3.0, 0.4), offset: ( 1.5, 1.5, 0.0)),
+    (shape: Cuboid, size: (3.4, 0.4, 0.4), offset: ( 0.0, 3.2, 0.0)),
+    (shape: Cuboid, size: (0.3, 2.0, 0.3), offset: ( 0.0, 1.5, 0.0), rotation_euler_deg: (0.0, 0.0, 45.0)),
   ],
 ),
 ```
@@ -1320,7 +1325,7 @@ A primitive prefab with a non-empty `children` list spawns multiple child meshes
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `shape` | `String` | `""` | Inline primitive shape name — same vocabulary as `model` for single primitives. Leave empty when using `prefab`. |
+| `shape` | `Option<PrimitiveShapeKind>` | `None` | Inline primitive shape — write the bare variant: `Cuboid`, `Sphere`, etc. (`implicit_some` active). Leave omitted when using `prefab`. Mutually exclusive with `prefab`. |
 | `primitive` | `PrimitiveParams` | defaults | Shape dimensions and colour. Only used when `shape` is set. |
 | `offset` | `(f32,f32,f32)` | `(0,0,0)` | Translation offset from the parent entity's origin |
 | `rotation_euler_deg` | `(f32,f32,f32)` | `(0,0,0)` | Euler rotation in degrees (XYZ order) |
@@ -1332,22 +1337,22 @@ The `material` field accepts the same custom/standard/terrain keys as the top-le
 
 ### Nested prefab references ✅
 
-A child can reference another named prefab by key instead of defining an inline shape. All three prefab kinds are supported as nested children — `kind: "primitive"` (both composite and single-shape), `kind: "actor"`, and `kind: "prop"` (GLB meshes). Transforms compose **multiplicatively** (standard Bevy hierarchy), so rotation and scale inherit correctly at every nesting level.
+A child can reference another named prefab by key instead of defining an inline shape. All three prefab kinds are supported as nested children — `kind: Primitive` (both composite and single-shape), `kind: Actor`, and `kind: Prop` (GLB meshes). Transforms compose **multiplicatively** (standard Bevy hierarchy), so rotation and scale inherit correctly at every nesting level.
 
 ```ron
 "village": (
-  kind: "primitive",
+  kind: Primitive,
   model: "",
   components: (),
   children: [
-    // Inline primitive — existing syntax, unchanged
+    // Inline primitive
     (
-      shape: "Cuboid",
+      shape: Cuboid,
       material: "mat_stone_cobble",
       primitive: (size: (18.0, 0.02, 14.0)),
       offset: (0.0, 0.01, 0.0),
     ),
-    // Nested composite prefab (kind: "primitive" with children)
+    // Nested composite prefab (kind: Primitive with children)
     (
       prefab: "well",
       offset: (5.0, 0.0, 0.0),
@@ -1372,9 +1377,9 @@ A child can reference another named prefab by key instead of defining an inline 
 
 | Nested prefab `kind` | Has `children`? | Result |
 |---|---|---|
-| `"primitive"` | yes | Anchor + all children spawned recursively |
-| `"primitive"` | no (single `model`) | Anchor + one mesh child |
-| `"actor"` / `"prop"` | — | GLB loaded via `spawn_prefab_instance`; the GLB root entity sits at the child `offset` |
+| `Primitive` | yes | Anchor + all children spawned recursively |
+| `Primitive` | no (single `shape`) | Anchor + one mesh child |
+| `Actor` / `Prop` | — | GLB loaded via `spawn_prefab_instance`; the GLB root entity sits at the child `offset` |
 
 **Rules and constraints:**
 
@@ -1922,3 +1927,68 @@ When adding fields to any data type:
 4. Update this document and `docs/STATUS.md`.
 
 Breaking changes (removing or renaming fields) require a `schema_version` bump.
+
+---
+
+## Migrating `prefabs.ron` from schema_version 1 to 2
+
+`PrefabCatalog` was bumped from version 1 to 2. Two sets of changes are required in every `prefabs.ron`:
+
+### 1. `kind` field — quoted string → bare enum variant
+
+```ron
+// Before (v1)           // After (v2)
+kind: "actor"      →     kind: Actor
+kind: "prop"       →     kind: Prop
+kind: "primitive"  →     kind: Primitive
+```
+
+### 2. Collider `shape` field — quoted string → bare enum variant
+
+```ron
+// Before (v1)           // After (v2)
+shape: "Cuboid"    →     shape: Cuboid
+shape: "Sphere"    →     shape: Sphere
+shape: "Cylinder"  →     shape: Cylinder
+```
+
+### 3. Primitive shape — `model:` → `shape:` + `model: ""`
+
+For top-level `kind: Primitive` prefabs that have a shape name in `model:`:
+
+```ron
+// Before (v1)
+"my_cube": (
+    kind: "primitive",
+    model: "Cuboid",
+    primitive: ( size: (2.0, 1.0, 2.0) ),
+)
+
+// After (v2)
+"my_cube": (
+    kind: Primitive,
+    model: "",
+    shape: Cuboid,
+    primitive: ( size: (2.0, 1.0, 2.0) ),
+)
+```
+
+### 4. Child `shape` — quoted string → bare enum variant
+
+For `ChildPrimitiveDef` entries in `children:` lists:
+
+```ron
+// Before (v1)
+( shape: "Sphere", primitive: (radius: 0.5), ... )
+
+// After (v2)
+( shape: Sphere, primitive: (radius: 0.5), ... )
+```
+
+Composite primitives (those that only have `children:`, no top-level `shape:`) do not need a `shape:` field — only single-mesh primitives do.
+
+### 5. Bump `schema_version`
+
+```ron
+schema_version: 1  →  schema_version: 2
+```

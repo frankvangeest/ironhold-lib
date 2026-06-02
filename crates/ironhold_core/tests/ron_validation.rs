@@ -1,6 +1,6 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
 use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, StatSpreadLayout};
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::stats::StatCatalog;
 use ron::extensions::Extensions;
@@ -301,7 +301,7 @@ fn test_game_scene_v2_wrong_version_is_invalid() {
 fn test_game_scene_v2_duplicate_entity_ids_is_invalid() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [
                 ( id: "player", prefab: "hero", transform: () ),
                 ( id: "player", prefab: "hero", transform: () ),
@@ -317,7 +317,7 @@ fn test_game_scene_v2_duplicate_entity_ids_is_invalid() {
 fn test_game_scene_v2_duplicate_ui_ids_is_invalid() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 Button(( id: "btn", text: "A", size: (100.0, 40.0) )),
@@ -333,7 +333,7 @@ fn test_game_scene_v2_duplicate_ui_ids_is_invalid() {
 fn test_game_scene_v2_unknown_ui_variant_is_parse_error() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 Checkbox(( id: "opt", text: "Enable", size: (100.0, 40.0) )),
@@ -348,7 +348,7 @@ fn test_game_scene_v2_unknown_ui_variant_is_parse_error() {
 fn test_game_scene_v2_unknown_field_is_error() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             typo_field: 123,
@@ -360,7 +360,7 @@ fn test_game_scene_v2_unknown_field_is_error() {
 
 #[test]
 fn test_game_scene_v2_tonemapping_defaults_to_aces_fitted() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [])"#;
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [])"#;
     let scene: GameSceneV2 = from_str(ron_str).unwrap();
     assert_eq!(
         scene.tonemapping,
@@ -373,7 +373,7 @@ fn test_game_scene_v2_tonemapping_defaults_to_aces_fitted() {
 fn test_game_scene_v2_excluded_tonemapping_variants_are_rejected() {
     // TonyMcMapface and BlenderFilmic require a LUT and are intentionally excluded.
     for variant in &["TonyMcMapface", "BlenderFilmic"] {
-        let ron_str = format!(r#"(schema_version: 2, entities: [], ui: [], tonemapping: {})"#, variant);
+        let ron_str = format!(r#"(schema_version: 1, entities: [], ui: [], tonemapping: {})"#, variant);
         let result: Result<GameSceneV2, _> = from_str(&ron_str);
         assert!(result.is_err(), "{} should be rejected as an unsupported tonemapping option", variant);
     }
@@ -383,7 +383,7 @@ fn test_game_scene_v2_excluded_tonemapping_variants_are_rejected() {
 fn test_game_scene_v2_label_depth_scale_full() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             label_depth_scale: Some((
@@ -404,7 +404,7 @@ fn test_game_scene_v2_label_depth_scale_full() {
 fn test_terrain_config_v2_uv_scale_defaults_to_ten() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             terrain: Some((
@@ -424,7 +424,7 @@ fn test_terrain_config_v2_uv_scale_defaults_to_ten() {
 fn test_terrain_config_v2_uv_scale_explicit() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             terrain: Some((
@@ -501,7 +501,7 @@ fn test_game_scene_v2_label_depth_scale_defaults() {
     // Only reference_distance is required; min_scale defaults to None.
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             label_depth_scale: Some(()),
@@ -516,7 +516,7 @@ fn test_game_scene_v2_label_depth_scale_defaults() {
 #[test]
 fn test_game_scene_v2_label_depth_scale_omitted() {
     // Existing scenes without the field must still deserialize cleanly.
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [])"#;
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("scene without label_depth_scale should parse");
     assert!(scene.label_depth_scale.is_none());
 }
@@ -525,7 +525,7 @@ fn test_game_scene_v2_label_depth_scale_omitted() {
 fn test_game_scene_v2_entity_label_depth_scale_override() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [
                 (
                     id: "obj",
@@ -549,7 +549,7 @@ fn test_game_scene_v2_entity_label_depth_scale_override() {
 fn test_game_scene_v2_directional_light_cascade_options() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             lighting: Some((
@@ -573,7 +573,7 @@ fn test_game_scene_v2_directional_light_cascade_options() {
 fn test_game_scene_v2_shadow_map_sizes_explicit() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             lighting: Some((
@@ -590,7 +590,7 @@ fn test_game_scene_v2_shadow_map_sizes_explicit() {
 
 #[test]
 fn test_game_scene_v2_shadow_map_sizes_default_to_none() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [], lighting: Some(()))"#;
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [], lighting: Some(()))"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("lighting with all defaults should parse");
     let lighting = scene.lighting.unwrap();
     assert_eq!(lighting.shadow_map_size, None, "shadow_map_size should default to None");
@@ -601,7 +601,7 @@ fn test_game_scene_v2_shadow_map_sizes_default_to_none() {
 fn test_game_scene_v2_directional_light_num_cascades_explicit() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             lighting: Some((
@@ -623,7 +623,7 @@ fn test_game_scene_v2_directional_light_num_cascades_explicit() {
 fn test_game_scene_v2_directional_light_num_cascades_defaults_to_none() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [],
             lighting: Some((
@@ -644,7 +644,7 @@ fn test_game_scene_v2_directional_light_num_cascades_defaults_to_none() {
 
 #[test]
 fn test_ui_label_align_defaults_to_center() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [
         Label(( id: "lbl", text: "hi", size: (100.0, 30.0) ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("label without align should parse");
@@ -664,7 +664,7 @@ fn test_ui_label_align_explicit_variants() {
         ("Right",  ironhold_core::schema::scene_v2::UiTextAlign::Right),
     ] {
         let ron_str = format!(
-            r#"(schema_version: 2, entities: [], ui: [
+            r#"(schema_version: 1, entities: [], ui: [
                 Label(( id: "lbl", text: "hi", size: (100.0, 30.0), align: {variant} ))
             ])"#,
         );
@@ -679,7 +679,7 @@ fn test_ui_label_align_explicit_variants() {
 
 #[test]
 fn test_ui_element_size_defaults_to_120_32() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [
         Button(( id: "btn", text: "Go", action: "start" ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("button without size should parse");
@@ -689,7 +689,7 @@ fn test_ui_element_size_defaults_to_120_32() {
 
 #[test]
 fn test_ui_element_size_explicit() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [
         Label(( id: "lbl", text: "Score", size: (200.0, 50.0) ))
     ])"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("label with explicit size should parse");
@@ -701,7 +701,7 @@ fn test_ui_element_size_explicit() {
 
 #[test]
 fn test_ui_panel_background_color_defaults() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [], ui_panel: Some(()))"#;
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [], ui_panel: Some(()))"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("ui_panel with all defaults should parse");
     let panel = scene.ui_panel.as_ref().unwrap();
     assert_eq!(panel.background_color, (0.1, 0.1, 0.1, 0.95));
@@ -711,7 +711,7 @@ fn test_ui_panel_background_color_defaults() {
 
 #[test]
 fn test_ui_panel_background_color_explicit() {
-    let ron_str = r#"(schema_version: 2, entities: [], ui: [], ui_panel: Some((
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [], ui_panel: Some((
         background_color: (0.2, 0.2, 0.2, 1.0),
     )))"#;
     let scene: GameSceneV2 = from_str(ron_str).expect("ui_panel with explicit color should parse");
@@ -777,11 +777,11 @@ fn test_asset_catalog_missing_schema_version_is_error() {
 fn test_prefab_catalog_validates_ok() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "hero": ( kind: "actor", model: "hero", components: () ),
-                "crate": ( kind: "prop", model: "crate", components: () ),
-                "cube": ( kind: "primitive", model: "Cuboid", components: () ),
+                "hero": ( kind: Actor, model: "hero", components: () ),
+                "crate": ( kind: Prop, model: "crate", components: () ),
+                "cube": ( kind: Primitive, model: "", shape: Cuboid, components: () ),
             },
         )
     "#;
@@ -803,16 +803,17 @@ fn test_prefab_catalog_wrong_version_is_invalid() {
 
 #[test]
 fn test_prefab_catalog_unknown_kind_is_invalid() {
+    // After the PrefabKind enum migration, unknown variants fail at RON parse time.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "hero": ( kind: "npc", model: "hero", components: () ),
+                "hero": ( kind: Npc, model: "hero", components: () ),
             },
         )
     "#;
-    let catalog: PrefabCatalog = from_str(ron_str).unwrap();
-    assert!(catalog.validate().is_err());
+    let result: Result<PrefabCatalog, _> = from_str(ron_str);
+    assert!(result.is_err(), "unknown PrefabKind variant must fail at parse time");
 }
 
 #[test]
@@ -832,7 +833,7 @@ fn test_prefab_catalog_missing_schema_version_is_error() {
 fn test_logic_rules_asset_validates_ok() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             rules: [
                 ( on: "ui.button_pressed:start", do_actions: [ Quit ] ),
             ],
@@ -846,7 +847,7 @@ fn test_logic_rules_asset_validates_ok() {
 fn test_logic_rules_set_variable_and_increment_variable_parse() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             rules: [
                 ( on: "scene.ready:main", do_actions: [ SetVariable("level", "1") ] ),
                 ( on: "entity.collected:coin_01", do_actions: [ IncrementVariable("score", 10) ] ),
@@ -970,11 +971,12 @@ fn test_prefab_catalog_with_player_movement_parses() {
     // Primitive player — collider dims come from primitive.radius/height, not movement
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     components: (
                         tags: ["player"],
                         movement: (
@@ -997,15 +999,15 @@ fn test_prefab_catalog_with_player_movement_parses() {
 
 #[test]
 fn test_glb_player_prefab_with_movement_parses() {
-    // GLB player (kind: "actor") — collider_radius/collider_height override capsule shape.
+    // GLB player (kind: Actor) — collider_radius/collider_height override capsule shape.
     // sounds map is still valid on PrefabComponents; designers use it in state_machine.ron
     // to wire player.jumped → PlaySound rather than hardcoding it in Rust.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player_warrior": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     animation_policy: "prefabs/animation/player_policy.ron",
                     components: (
@@ -1040,18 +1042,18 @@ fn test_nested_prefab_child_validates_ok() {
     // Two-level nesting: "village" → "well". Both keys exist; no cycle.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "well": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
-                        ( shape: "Cylinder", primitive: (radius: Some(0.7), height: Some(0.8)) ),
+                        ( shape: Cylinder, primitive: (radius: Some(0.7), height: Some(0.8)) ),
                     ],
                 ),
                 "village": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
@@ -1069,15 +1071,15 @@ fn test_nested_prefab_child_validates_ok() {
 fn test_nested_prefab_both_shape_and_prefab_is_invalid() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "well": ( kind: "primitive", model: "", components: () ),
+                "well": ( kind: Primitive, model: "", components: () ),
                 "village": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
-                        ( shape: "Cuboid", prefab: Some("well") ),
+                        ( shape: Cuboid, prefab: Some("well") ),
                     ],
                 ),
             },
@@ -1094,10 +1096,10 @@ fn test_nested_prefab_both_shape_and_prefab_is_invalid() {
 fn test_nested_prefab_neither_shape_nor_prefab_is_invalid() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "village": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
@@ -1118,10 +1120,10 @@ fn test_nested_prefab_neither_shape_nor_prefab_is_invalid() {
 fn test_nested_prefab_unknown_key_is_invalid() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "village": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
@@ -1143,16 +1145,16 @@ fn test_nested_prefab_cycle_is_invalid() {
     // a → b → a: circular reference must be caught at validation time.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "a": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [ ( prefab: Some("b") ) ],
                 ),
                 "b": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [ ( prefab: Some("a") ) ],
@@ -1173,20 +1175,20 @@ fn test_nested_prop_in_composite_validates_ok() {
     // must pass validation — the schema allows all kinds as nested children.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "oak_tree": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "some_glb_key",
                     components: (),
                 ),
                 "clearing": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
                         (
-                            shape: "Cuboid",
+                            shape: Cuboid,
                             primitive: (size: Some((10.0, 0.1, 10.0))),
                         ),
                         ( prefab: Some("oak_tree"), offset: (3.0, 0.0, 0.0) ),
@@ -1207,15 +1209,15 @@ fn test_colliders_field_parses_on_prefab() {
     // A prefab with colliders: [...] must deserialise cleanly, including multiple entries.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "chest": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "chest_key",
                     components: (),
                     colliders: [
-                        (shape: "Cuboid", size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0), rotation_euler_deg: (0.0, 45.0, 0.0)),
-                        (shape: "Cuboid", size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
+                        (shape: Cuboid, size: Some((0.70, 0.55, 1.00)), offset: (0.0, -0.125, 0.0), rotation_euler_deg: (0.0, 45.0, 0.0)),
+                        (shape: Cuboid, size: Some((0.68, 0.28, 0.98)), offset: (0.0,  0.275, 0.0)),
                     ],
                 ),
             },
@@ -1225,7 +1227,7 @@ fn test_colliders_field_parses_on_prefab() {
     assert!(catalog.validate().is_ok());
     let chest = &catalog.prefabs["chest"];
     assert_eq!(chest.colliders.len(), 2, "two collider shapes");
-    assert_eq!(chest.colliders[0].shape, "Cuboid");
+    assert_eq!(chest.colliders[0].shape, ColliderShapeKind::Cuboid);
     assert_eq!(chest.colliders[0].size, Some((0.70, 0.55, 1.00)));
     assert_eq!(chest.colliders[0].rotation_euler_deg, (0.0, 45.0, 0.0));
     assert_eq!(chest.colliders[1].offset, (0.0, 0.275, 0.0));
@@ -1237,19 +1239,19 @@ fn test_nested_actor_in_composite_validates_ok() {
     // kind:"actor" (e.g. an NPC) nested inside a composite primitive must pass validation.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "npc_guard": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "guard_glb_key",
                     components: (),
                 ),
                 "guard_post": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
-                        ( shape: "Cuboid", primitive: (size: Some((2.0, 0.1, 2.0))) ),
+                        ( shape: Cuboid, primitive: (size: Some((2.0, 0.1, 2.0))) ),
                         ( prefab: Some("npc_guard"), offset: (0.0, 0.1, 0.0) ),
                     ],
                 ),
@@ -1269,20 +1271,21 @@ fn test_nested_single_shape_primitive_validates_ok() {
     // must pass validation — the spawner will build a single mesh for it.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "beacon": (
-                    kind: "primitive",
-                    model: "Sphere",
+                    kind: Primitive,
+                    model: "",
+                    shape: Sphere,
                     components: (),
                     primitive: Some((radius: Some(0.3))),
                 ),
                 "outpost": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
-                        ( shape: "Cuboid", primitive: (size: Some((4.0, 0.1, 4.0))) ),
+                        ( shape: Cuboid, primitive: (size: Some((4.0, 0.1, 4.0))) ),
                         ( prefab: Some("beacon"), offset: (0.0, 1.5, 0.0) ),
                     ],
                 ),
@@ -1301,10 +1304,10 @@ fn test_colliders_empty_list_is_valid() {
     // colliders: [] (empty) must parse and validate — it means "no physics collider".
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "ghost_prop": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "some_key",
                     components: (),
                     colliders: [],
@@ -1322,15 +1325,15 @@ fn test_composite_child_physics_true_validates_ok() {
     // An inline primitive child with physics: true inside a composite must validate.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "platform": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
                         (
-                            shape: "Cuboid",
+                            shape: Cuboid,
                             primitive: (
                                 size: Some((4.0, 0.2, 4.0)),
                                 physics: true,
@@ -1352,22 +1355,22 @@ fn test_nested_glb_with_colliders_inside_composite_validates_ok() {
     // This is the intersection of GLB nesting (Feature 1) and colliders (Feature 2).
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "crate": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "crate_glb",
                     components: (),
                     colliders: [
-                        (shape: "Cuboid", size: Some((0.8, 0.8, 0.8))),
+                        (shape: Cuboid, size: Some((0.8, 0.8, 0.8))),
                     ],
                 ),
                 "storage_room": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     components: (),
                     children: [
-                        ( shape: "Cuboid", primitive: (size: Some((5.0, 0.1, 5.0))), ),
+                        ( shape: Cuboid, primitive: (size: Some((5.0, 0.1, 5.0))), ),
                         ( prefab: Some("crate"), offset: (1.0, 0.0, 0.0) ),
                         ( prefab: Some("crate"), offset: (-1.0, 0.0, 0.0) ),
                     ],
@@ -1390,10 +1393,10 @@ fn test_sounds_map_parses() {
     // sounds: { "event": "catalog_key" } must round-trip cleanly.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "hero": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero_glb",
                     components: (
                         sounds: {
@@ -1420,11 +1423,12 @@ fn test_jump_relative_to_height_parses() {
     // RelativeToHeight is the variant used by most prefabs; only Fixed was previously covered.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     components: (
                         tags: ["player"],
                         movement: (
@@ -1451,10 +1455,10 @@ fn test_npc_def_full_parses() {
     // Full NpcDef with all fields — round-trip every required and optional field.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "orc_patrol": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "orc_glb",
                     components: (
                         npc: Some((
@@ -1506,10 +1510,10 @@ fn test_npc_def_minimal_uses_defaults() {
     // Only required fields set — defaulted fields must resolve to their documented values.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "friendly_npc": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "villager_glb",
                     components: (
                         npc: Some((
@@ -1548,10 +1552,10 @@ fn test_npc_def_minimal_uses_defaults() {
 fn test_npc_def_physics_fields_explicit() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "hostile_npc": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "orc",
                     components: (
                         npc: Some((
@@ -1582,11 +1586,12 @@ fn test_world_stat_bar_color_bands_parse() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     components: (),
                     world_stat_bar: (
                         stat_key: "dummy_01.health",
@@ -1616,7 +1621,7 @@ fn test_world_stat_bar_color_bands_parse() {
 fn test_damage_popup_style_parses() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             initial_scene: "scenes/main.scene.ron",
             damage_popup_style: (
                 font_size: 28.0,
@@ -1642,7 +1647,7 @@ fn test_damage_popup_style_parses() {
 fn test_damage_popup_style_defaults() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             initial_scene: "scenes/main.scene.ron",
             damage_popup_style: (),
         )
@@ -1669,10 +1674,10 @@ fn test_npc_all_faction_and_behavior_variants_parse() {
     for (faction, behavior) in cases {
         let ron_str = format!(r#"
             (
-                schema_version: 1,
+                schema_version: 2,
                 prefabs: {{
                     "npc": (
-                        kind: "actor",
+                        kind: Actor,
                         model: "m",
                         components: (
                             npc: Some((
@@ -1699,9 +1704,9 @@ fn test_prefab_components_unknown_field_is_error() {
     // be rejected so designers see the error immediately rather than losing the field silently.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "hero": ( kind: "actor", model: "m", components: ( health: 100 ) ),
+                "hero": ( kind: Actor, model: "m", components: ( health: 100 ) ),
             },
         )
     "#;
@@ -1714,9 +1719,9 @@ fn test_prefab_components_typo_is_error() {
     // `movements` (typo for `movement`) must not silently vanish.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "hero": ( kind: "actor", model: "m", components: ( movements: () ) ),
+                "hero": ( kind: Actor, model: "m", components: ( movements: () ) ),
             },
         )
     "#;
@@ -1730,10 +1735,10 @@ fn test_prefab_components_typo_is_error() {
 fn test_player_prefab_inputs_all_keys_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1773,10 +1778,10 @@ fn test_player_prefab_inputs_optional_keys_default() {
     // `run` and `interact` have serde defaults; omitting them must not fail.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1807,10 +1812,10 @@ fn test_player_prefab_inputs_optional_keys_default() {
 fn test_player_prefab_inputs_strafe_mouse_button_explicit() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1838,10 +1843,10 @@ fn test_player_prefab_inputs_strafe_mouse_button_explicit() {
 fn test_player_prefab_inputs_strafe_mouse_button_none() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1870,10 +1875,10 @@ fn test_player_prefab_inputs_omitted_backward_compat() {
     // Existing prefabs without an inputs block must still parse cleanly.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: ( tags: ["player"] ),
                 ),
@@ -1891,10 +1896,10 @@ fn test_player_prefab_inputs_omitted_backward_compat() {
 fn test_player_prefab_camera_full_config_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1934,10 +1939,10 @@ fn test_player_prefab_camera_full_config_parses() {
 fn test_player_prefab_camera_pitch_and_orbit_explicit() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: (
                         tags: ["player"],
@@ -1975,10 +1980,10 @@ fn test_player_prefab_camera_omitted_backward_compat() {
     // Existing player prefabs without a camera block must still parse and default to None.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "player": (
-                    kind: "actor",
+                    kind: Actor,
                     model: "hero",
                     components: ( tags: ["player"] ),
                 ),
@@ -1996,10 +2001,10 @@ fn test_player_prefab_camera_omitted_backward_compat() {
 fn test_flycam_prefab_full_config_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "cam": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "",
                     components: (
                         tags: ["flycam"],
@@ -2027,10 +2032,10 @@ fn test_flycam_prefab_partial_config_uses_defaults() {
     // Any subset of fields may be provided; omitted fields fall back to compiled defaults.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "cam": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "",
                     components: (
                         tags: ["flycam"],
@@ -2052,10 +2057,10 @@ fn test_flycam_prefab_config_omitted_backward_compat() {
     // Existing flycam prefabs without a flycam block must still parse cleanly.
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "cam": (
-                    kind: "prop",
+                    kind: Prop,
                     model: "",
                     components: ( tags: ["flycam"] ),
                 ),
@@ -2251,7 +2256,7 @@ fn test_action_set_stat_parses() {
 fn test_project_config_stats_path_parses() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             initial_scene: "scenes/main.ron",
             stats_path: "stats/stats.ron",
         )
@@ -2264,7 +2269,7 @@ fn test_project_config_stats_path_parses() {
 fn test_project_config_without_stats_path_is_ok() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             initial_scene: "scenes/main.ron",
         )
     "#;
@@ -2279,11 +2284,12 @@ fn test_project_config_without_stats_path_is_ok() {
 fn test_prefab_stat_templates_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "goblin": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     stat_templates: [
                         (
                             key: "health",
@@ -2314,11 +2320,12 @@ fn test_prefab_stat_templates_parses() {
 fn test_prefab_stat_templates_self_in_emit_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "enemy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     stat_templates: [
                         ( key: "health",  base: 100.0, max: 100.0, thresholds: [ ( when: BelowOrEqual(0.0),    emit: "stat.{self}.health.depleted" ) ] ),
                         ( key: "stamina", base: 50.0,  max: 50.0,  thresholds: [ ( when: BelowPercent(0.25),   emit: "stat.{self}.stamina.low" ),
@@ -2341,9 +2348,9 @@ fn test_prefab_stat_templates_self_in_emit_parses() {
 fn test_prefab_without_stat_templates_defaults_to_empty() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
-                "coin": ( kind: "primitive", model: "Cylinder" ),
+                "coin": ( kind: Primitive, model: "", shape: Cylinder ),
             },
         )
     "#;
@@ -2358,11 +2365,12 @@ fn test_prefab_without_stat_templates_defaults_to_empty() {
 fn test_prefab_stat_label_full_fields_parses() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     stat_label: (
                         stat_key: "{self}.health",
                         offset: (0.0, 2.2, 0.0),
@@ -2387,11 +2395,12 @@ fn test_prefab_stat_label_full_fields_parses() {
 fn test_prefab_stat_label_defaults_applied() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     stat_label: (
                         stat_key: "player_health",
                     ),
@@ -2412,11 +2421,12 @@ fn test_prefab_stat_label_defaults_applied() {
 fn test_prefab_without_stat_label_is_none() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "plain": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                 ),
             },
         )
@@ -2432,11 +2442,12 @@ fn test_prefab_world_stat_bar_ascii_full_fields_parses() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         offset: (0.0, 2.4, 0.0),
@@ -2466,11 +2477,12 @@ fn test_prefab_world_stat_bar_ascii_defaults_applied() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "player_health",
                     ),
@@ -2495,11 +2507,12 @@ fn test_prefab_world_stat_bar_ascii_defaults_applied() {
 fn test_prefab_without_world_stat_bar_is_none() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "plain": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                 ),
             },
         )
@@ -2513,11 +2526,12 @@ fn test_world_stat_bar_pixel_style_parses() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         fill_color: (0.15, 0.85, 0.15, 1.0),
@@ -2554,11 +2568,12 @@ fn test_world_stat_bar_ascii_empty_variant_uses_defaults() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         style: Ascii(),
@@ -2582,11 +2597,12 @@ fn test_world_stat_bar_pixel_style_defaults() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         style: Pixel(),
@@ -2611,11 +2627,12 @@ fn test_world_stat_bar_pixel_minimal_parses() {
     use ironhold_core::schema::catalog::WorldStatBarStyle;
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: ( stat_key: "{self}.health", style: Pixel() ),
                 ),
             },
@@ -2630,11 +2647,12 @@ fn test_world_stat_bar_pixel_minimal_parses() {
 fn test_world_stat_bar_rejects_unknown_top_level_field() {
     let ron_str = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "dummy": (
-                    kind: "primitive",
-                    model: "Capsule3d",
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
                     world_stat_bar: (
                         stat_key: "{self}.health",
                         typo_field: 99,
@@ -2702,7 +2720,7 @@ fn test_action_emit_event_after_delay_parses() {
 fn test_stat_bar_minimal_round_trip() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatBar((
@@ -2728,7 +2746,7 @@ fn test_stat_bar_minimal_round_trip() {
 fn test_stat_bar_full_fields() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatBar((
@@ -2764,7 +2782,7 @@ fn test_stat_bar_full_fields() {
 fn test_stat_bar_unknown_field_is_error() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatBar((
@@ -2783,7 +2801,7 @@ fn test_stat_bar_unknown_field_is_error() {
 fn test_stat_spread_minimal_round_trip() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatSpread((
@@ -2810,7 +2828,7 @@ fn test_stat_spread_minimal_round_trip() {
 fn test_stat_spread_full_fields() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatSpread((
@@ -2845,7 +2863,7 @@ fn test_stat_spread_full_fields() {
 fn test_stat_spread_unknown_field_is_error() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatSpread((
@@ -2864,7 +2882,7 @@ fn test_stat_spread_unknown_field_is_error() {
 fn test_stat_bar_id_uniqueness_enforced() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatBar(( id: "hp", stat_key: "health" )),
@@ -2880,7 +2898,7 @@ fn test_stat_bar_id_uniqueness_enforced() {
 fn test_ui_node_def_size_helper_stat_bar() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatBar(( id: "hp", stat_key: "health", size: (150.0, 18.0) )),
@@ -2897,7 +2915,7 @@ fn test_ui_node_def_size_helper_stat_spread() {
     // label_width=80, bar_width=120 → width = 200
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatSpread((
@@ -2923,7 +2941,7 @@ fn test_ui_node_def_size_helper_stat_spread() {
 fn test_stat_radar_minimal_round_trip() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatRadar(( id: "radar", stats: ["hp", "mp"] )),
@@ -2942,7 +2960,7 @@ fn test_stat_radar_minimal_round_trip() {
 fn test_stat_radar_full_fields() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatRadar((
@@ -2975,7 +2993,7 @@ fn test_stat_radar_full_fields() {
 fn test_stat_radar_unknown_field_is_error() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatRadar(( id: "r", stats: ["hp"], unknown_xyz: true )),
@@ -2990,7 +3008,7 @@ fn test_stat_radar_unknown_field_is_error() {
 fn test_stat_radar_size_helper() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatRadar(( id: "r", stats: ["a"], size: (180.0, 180.0) )),
@@ -3005,7 +3023,7 @@ fn test_stat_radar_size_helper() {
 fn test_stat_radar_twelve_stats_round_trip() {
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             entities: [],
             ui: [
                 StatRadar((
@@ -3569,7 +3587,7 @@ fn test_action_spawn_effect_in_rules_asset_parses() {
     // SpawnEffect must round-trip inside a full LogicRulesAsset, as it would appear in rules.ron.
     let ron_str = r#"
         (
-            schema_version: 2,
+            schema_version: 1,
             rules: [
                 (
                     on: "entity.interacted:dummy_01",

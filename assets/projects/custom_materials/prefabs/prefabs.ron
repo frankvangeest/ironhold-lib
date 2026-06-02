@@ -1,9 +1,9 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
     // FlyCamera — no model, engine detects "flycam" tag
     "flycam": (
-      kind: "prop",
+      kind: Prop,
       model: "",
       components: (
         tags: ["flycam"],
@@ -13,8 +13,9 @@
     // ── Floor ─────────────────────────────────────────────────────────────────
     // 260 × 2 × 160 slab that covers the footprint of all four shape rows.
     "floor_slab": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       material: "mat_floor",
       components: (),
       primitive: (
@@ -24,8 +25,9 @@
 
     // ── Unlit solid colours ───────────────────────────────────────────────────
     "sphere_unlit_pink": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_unlit_pink",
       components: (),
       primitive: (
@@ -34,8 +36,9 @@
     ),
 
     "sphere_unlit_teal": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_unlit_teal",
       components: (),
       primitive: (
@@ -45,8 +48,9 @@
 
     // ── Procedural checkerboard ───────────────────────────────────────────────
     "sphere_checker_bw_world": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_checker_bw_world",
       components: (),
       primitive: (
@@ -55,8 +59,9 @@
     ),
 
     "sphere_checker_bw_uv": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_checker_bw_uv",
       components: (),
       primitive: (
@@ -65,8 +70,9 @@
     ),
 
     "sphere_checker_bw_local": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_checker_bw_local",
       components: (),
       primitive: (
@@ -75,8 +81,9 @@
     ),
 
     "cuboid_checker_color": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       material: "mat_checker_color",
       components: (),
       primitive: (
@@ -86,8 +93,9 @@
 
     // ── UV gradients ─────────────────────────────────────────────────────────
     "capsule_gradient_sky": (
-      kind: "primitive",
-      model: "Capsule3d",
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
       material: "mat_gradient_sky",
       components: (),
       primitive: (
@@ -97,8 +105,9 @@
     ),
 
     "cylinder_gradient_ember": (
-      kind: "primitive",
-      model: "Cylinder",
+      kind: Primitive,
+      model: "",
+      shape: Cylinder,
       material: "mat_gradient_ember",
       components: (),
       primitive: (
@@ -109,8 +118,9 @@
 
     // ── Fresnel rim ───────────────────────────────────────────────────────────
     "sphere_fresnel_blue": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_fresnel_blue",
       components: (),
       primitive: (
@@ -119,8 +129,9 @@
     ),
 
     "torus_fresnel_green": (
-      kind: "primitive",
-      model: "Torus",
+      kind: Primitive,
+      model: "",
+      shape: Torus,
       material: "mat_fresnel_green",
       components: (),
       primitive: (
@@ -131,8 +142,9 @@
 
     // ── World-space effects ───────────────────────────────────────────────────
     "cone_stripes": (
-      kind: "primitive",
-      model: "Cone",
+      kind: Primitive,
+      model: "",
+      shape: Cone,
       material: "mat_stripes_rw",
       components: (),
       primitive: (
@@ -143,8 +155,9 @@
 
     // ── Normal visualiser ─────────────────────────────────────────────────────
     "sphere_normals": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_normals",
       components: (),
       primitive: (
@@ -154,48 +167,54 @@
 
     // ── Full PBR ──────────────────────────────────────────────────────────────
     "sphere_pbr_plastic_red": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_plastic_red",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_pbr_plastic_white": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_plastic_white",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_pbr_metal_chrome": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_metal_chrome",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_pbr_metal_rough": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_metal_rough",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_pbr_gold": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_gold",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_pbr_water": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pbr_water",
       components: (),
       primitive: (radius: 4.0),
@@ -203,24 +222,27 @@
 
     // ── Emissive / transparent ────────────────────────────────────────────────
     "sphere_emissive_shield": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_emissive_shield",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_emissive_orb_orange": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_emissive_orb_orange",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "torus_emissive_plain": (
-      kind: "primitive",
-      model: "Torus",
+      kind: Primitive,
+      model: "",
+      shape: Torus,
       material: "mat_emissive_plain",
       components: (),
       primitive: (
@@ -231,16 +253,18 @@
 
     // ── Pulse ────────────────────────────────────────────────────────────────
     "sphere_pulse_cyan": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_pulse_cyan",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "torus_pulse_gold": (
-      kind: "primitive",
-      model: "Torus",
+      kind: Primitive,
+      model: "",
+      shape: Torus,
       material: "mat_pulse_gold",
       components: (),
       primitive: (
@@ -251,16 +275,18 @@
 
     // ── Texture tint ─────────────────────────────────────────────────────────
     "cuboid_crate_tint_red": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       material: "mat_crate_tint_red",
       components: (),
       primitive: (size: (6.0, 6.0, 6.0)),
     ),
 
     "cuboid_crate_tint_blue": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       material: "mat_crate_tint_blue",
       components: (),
       primitive: (size: (6.0, 6.0, 6.0)),
@@ -268,24 +294,27 @@
 
     // ── Dissolve ─────────────────────────────────────────────────────────────
     "sphere_dissolve_fire_uv": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_dissolve_fire_uv",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_dissolve_fire": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_dissolve_fire",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_dissolve_fire_local": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_dissolve_fire_local",
       components: (),
       primitive: (radius: 4.0),
@@ -293,40 +322,45 @@
 
     // ── Noise textures ────────────────────────────────────────────────────────
     "sphere_noise_perlin": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_noise_perlin",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_noise_voronoi": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_noise_voronoi",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_noise_value": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_noise_value",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_noise_gabor": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_noise_gabor",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_noise_blue": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_noise_blue",
       components: (),
       primitive: (radius: 4.0),
@@ -334,8 +368,9 @@
 
     // ── Sky dome ─────────────────────────────────────────────────────────────
     "sky_sphere": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_sky_gradient",
       components: (),
       primitive: (
@@ -345,32 +380,36 @@
 
     // ── Triplanar surface textures ────────────────────────────────────────────
     "sphere_triplanar_bricks": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_triplanar_bricks",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_triplanar_rock": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_triplanar_rock",
       components: (),
       primitive: (radius: 4.0),
     ),
 
     "sphere_triplanar_bark": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_triplanar_bark",
       components: (),
       primitive: (radius: 4.0),
     ),
     
     "sphere_triplanar_marbel": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       material: "mat_triplanar_marbel",
       components: (),
       primitive: (radius: 4.0),

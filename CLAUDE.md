@@ -188,8 +188,9 @@ Every code change must follow this order before committing code:
     - follows proper UX design - UX review for the feature plan
  2. **Make feature active in backlog and commit before coding** — If not already
  3. **Code changes** — implement the feature or fix and update tests
- 4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation`
+ 4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint`
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
+    - **Schema changes** — if any `schema/` type was added, renamed, or had a field type changed, also check `ironhold_cli` compiles (`cargo check -p ironhold_cli`) and that `query prefabs` / `query effects` output still formats correctly.
  6. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
  7. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  8. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser

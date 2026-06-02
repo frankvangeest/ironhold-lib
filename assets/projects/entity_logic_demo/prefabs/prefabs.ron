@@ -1,12 +1,13 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
 
     // ── Player ─────────────────────────────────────────────────────────────────
     // Capsule with eyes and nose so the front (-Z) is clearly visible.
     "player": (
-      kind: "primitive",
-      model: "Capsule3d",
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
       components: (
         tags: ["player"],
         movement: (
@@ -25,7 +26,7 @@
       children: [
         // Left eye
         (
-          shape: "Sphere",
+          shape: Sphere,
           primitive: (
             radius: 0.07,
             color: (0.03, 0.03, 0.05),
@@ -38,7 +39,7 @@
         ),
         // Right eye
         (
-          shape: "Sphere",
+          shape: Sphere,
           primitive: (
             radius: 0.07,
             color: (0.03, 0.03, 0.05),
@@ -51,7 +52,7 @@
         ),
         // Nose
         (
-          shape: "Sphere",
+          shape: Sphere,
           primitive: (
             radius: 0.07,
             color: (0.95, 0.58, 0.42),
@@ -66,8 +67,9 @@
 
     // ── Ground plane ───────────────────────────────────────────────────────────
     "ground": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       primitive: (
         size: (60.0, 1.0, 60.0),
         color: (0.30, 0.45, 0.25),
@@ -80,8 +82,9 @@
     // Press F while near it — the entity FSM (collectible_box.behavior.ron)
     // transitions to "collected" and despawns the box.
     "collectible_box": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       behavior: "behaviors/collectible_box.behavior.ron",
       interactable: ( radius: 2.5 ),
       primitive: (
@@ -100,8 +103,9 @@
     // Invisible sphere sensor. Walking through it fires entity.entered:score_zone_01
     // which the project rules.ron handles (IncrementVariable("score", 10) + PlaySound).
     "score_zone": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       trigger_zone: ( radius: 2.0 ),
       primitive: (
         radius: 0.05,

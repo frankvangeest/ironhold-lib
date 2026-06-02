@@ -51,7 +51,7 @@
     ],
 
     transitions: [
-        (from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead"),
-        (from: Some("dead"),  on: "entity.respawned:{self}",      to: "alive"),
+        (from: "alive", on: "stat.{self}.health.depleted", to: "dead"),
+        (from: "dead",  on: "entity.respawned:{self}",      to: "alive"),
     ],
 )

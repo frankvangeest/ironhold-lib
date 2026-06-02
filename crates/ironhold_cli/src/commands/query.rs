@@ -138,7 +138,7 @@ fn query_prefabs(
                 } else {
                     serde_json::json!({
                         "key": key,
-                        "kind": def.kind,
+                        "kind": format!("{:?}", def.kind),
                         "model": def.model,
                         "tags": def.components.tags,
                         "behavior": def.behavior,
@@ -169,7 +169,7 @@ fn query_prefabs(
     let col_width = prefabs.iter().map(|(k, _)| k.len()).max().unwrap_or(8) + 4;
 
     for (key, def) in &prefabs {
-        let mut parts = vec![format!("kind:{}", def.kind)];
+        let mut parts = vec![format!("kind:{:?}", def.kind)];
         if !def.model.is_empty() {
             parts.push(format!("model:{}", def.model));
         }
@@ -196,7 +196,7 @@ fn query_prefabs(
 
 fn prefab_matches(def: &PrefabDef, key: &str, val: &str) -> bool {
     match key {
-        "kind" => def.kind == val,
+        "kind" => format!("{:?}", def.kind).to_lowercase() == val.to_lowercase(),
         "model" => def.model.contains(val),
         "tag" | "tags" => def.components.tags.iter().any(|t| t == val),
         "behavior" => match val {

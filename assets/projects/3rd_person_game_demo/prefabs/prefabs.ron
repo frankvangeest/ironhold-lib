@@ -1,8 +1,8 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
     "player_warrior": (
-      kind: "actor",
+      kind: Actor,
       model: "hero",
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
@@ -20,7 +20,7 @@
     ),
 
     "enemy_orc_melee": (
-      kind: "actor",
+      kind: Actor,
       model: "orc",
       components: (
         tags: ["enemy"],
@@ -28,21 +28,21 @@
     ),
 
     "chest_01": (
-      kind: "prop",
+      kind: Prop,
       model: "chest_01",
       components: (
         tags: ["loot"],
       ),
       colliders: [
         // Base body of the chest
-        (shape: "Cuboid", size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
+        (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
         // Lid (slightly smaller and offset upward)
-        (shape: "Cuboid", size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
+        (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
       ],
     ),
 
     "chest_02": (
-      kind: "prop",
+      kind: Prop,
       model: "chest_02",
       components: (
         tags: ["loot"],
@@ -50,7 +50,7 @@
     ),
 
     "prop_anvil": (
-      kind: "prop",
+      kind: Prop,
       model: "anvil",
       components: (
         tags: [],
@@ -58,7 +58,7 @@
     ),
 
     "creature_alpaking": (
-      kind: "actor",
+      kind: Actor,
       model: "alpaking",
       components: (
         tags: ["creature"],
@@ -68,13 +68,13 @@
     // Composite prefab: wooden platform with a GLB chest nested on top.
     // Demonstrates kind:"prop" nesting inside a kind:"primitive" composite.
     "loot_display": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       children: [
         // Wooden platform base — inline Cuboid with a static physics collider
         (
-          shape: "Cuboid",
+          shape: Cuboid,
           primitive: (
             size: (3.0, 0.15, 3.0),
             color: (0.45, 0.28, 0.12),

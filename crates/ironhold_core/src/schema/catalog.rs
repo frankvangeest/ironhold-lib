@@ -5,7 +5,37 @@ use super::material::MaterialDef;
 use super::player::{CameraConfig, InputMap};
 
 pub const ASSET_CATALOG_SCHEMA_VERSION: u32 = 1;
-pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 1;
+pub const PREFAB_CATALOG_SCHEMA_VERSION: u32 = 2;
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum PrefabKind {
+    Actor,
+    Prop,
+    Primitive,
+}
+
+impl Default for PrefabKind {
+    fn default() -> Self { Self::Actor }
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum ColliderShapeKind {
+    Cuboid,
+    Sphere,
+    Cylinder,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum PrimitiveShapeKind {
+    Cuboid,
+    Sphere,
+    Cylinder,
+    Capsule3d,
+    Cone,
+    Torus,
+    ConicalFrustum,
+    Plane,
+}
 
 /// Maximum `particle_count` allowed in any `EffectDef`. Validated at catalog load time.
 pub const MAX_PARTICLES_PER_EFFECT: u32 = 256;
@@ -511,24 +541,27 @@ impl PrefabCatalog {
             ));
         }
         for (key, prefab) in &self.prefabs {
-            match prefab.kind.as_str() {
-                "actor" | "prop" | "primitive" => {}
-                other => {
-                    return Err(format!(
-                        "Prefab \"{}\" has unknown kind \"{}\" (expected \"actor\", \"prop\", or \"primitive\")",
-                        key, other
-                    ));
-                }
+            if prefab.kind == PrefabKind::Primitive && prefab.children.is_empty() && prefab.shape.is_none() {
+                return Err(format!(
+                    "Prefab \"{}\" has kind Primitive but no `shape` field (required for single-mesh primitives)",
+                    key
+                ));
+            }
+            if prefab.kind == PrefabKind::Primitive && !prefab.model.is_empty() {
+                return Err(format!(
+                    "Prefab \"{}\": `model` must be empty for Primitive prefabs; use `shape` instead",
+                    key
+                ));
             }
             for (i, child) in prefab.children.iter().enumerate() {
-                match (&child.prefab, child.shape.as_str()) {
-                    (Some(_), shape) if !shape.is_empty() => {
+                match (&child.prefab, &child.shape) {
+                    (Some(_), Some(_)) => {
                         return Err(format!(
                             "Prefab \"{}\", child {}: `shape` and `prefab` are mutually exclusive",
                             key, i
                         ));
                     }
-                    (None, "") => {
+                    (None, None) => {
                         return Err(format!(
                             "Prefab \"{}\", child {}: must set either `shape` or `prefab`",
                             key, i
@@ -598,8 +631,11 @@ impl Default for PrefabCatalog {
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct PrefabDef {
-    pub kind: String,   // "actor", "prop", or "primitive"
-    pub model: String,  // key into AssetCatalog.models; repurposed as shape name for "primitive" kind
+    pub kind: PrefabKind,
+    pub model: String,  // key into AssetCatalog.models; empty string for `kind: Primitive`
+    /// Shape for `kind: Primitive` prefabs. Required when kind is Primitive, None otherwise.
+    #[serde(default)]
+    pub shape: Option<PrimitiveShapeKind>,
     #[serde(default)]
     pub animation_policy: Option<String>,
     /// Optional material key from AssetCatalog.materials to override the model's embedded material.
@@ -662,8 +698,7 @@ pub struct PrefabDef {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ColliderDef {
-    /// `"Cuboid"`, `"Sphere"`, or `"Cylinder"`.
-    pub shape: String,
+    pub shape: ColliderShapeKind,
     /// Half-extents override for Cuboid: `(width, height, depth)` in world units.
     #[serde(default)]
     pub size: Option<(f32, f32, f32)>,
@@ -1143,17 +1178,15 @@ pub struct PrimitiveParams {
     pub sensor: bool,
 }
 
-/// One element within a composite `kind: "primitive"` prefab.
+/// One element within a composite `kind: Primitive` prefab.
 /// Either an inline primitive shape (`shape` set, `prefab` absent) or a nested prefab
 /// reference (`prefab` set, `shape` absent). The transform fields apply to both variants.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ChildPrimitiveDef {
-    /// Inline primitive shape — same vocabulary as the top-level `model` field:
-    /// `"Cuboid"`, `"Sphere"`, `"Cylinder"`, `"Capsule3d"`, `"Cone"`, `"Torus"`, `"ConicalFrustum"`.
-    /// Leave empty (or omit) when `prefab` is set.
+    /// Inline primitive shape. Leave `None` (or omit) when `prefab` is set.
     #[serde(default)]
-    pub shape: String,
+    pub shape: Option<PrimitiveShapeKind>,
     /// Appearance overrides for inline primitive children. All sub-fields optional.
     #[serde(default)]
     pub primitive: PrimitiveParams,

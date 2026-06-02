@@ -5,6 +5,7 @@ use bevy_rapier3d::prelude::{
     Friction, CoefficientCombineRule, Sensor, ActiveEvents,
 };
 use crate::schema::*;
+use crate::schema::catalog::{PrefabKind, PrimitiveShapeKind};
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::player::PlayerConfig;
 use crate::runtime::messages::*;
@@ -158,7 +159,7 @@ pub fn spawn_scene_v2(
         let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, String, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
+        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -191,11 +192,11 @@ pub fn spawn_scene_v2(
                 continue;
             }
 
-            if prefab.kind == "primitive" {
+            if prefab.kind == PrefabKind::Primitive {
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((entity_def.id.clone(), prefab.model.clone(), p, translation, prefab.components.clone(), prefab.children.clone()));
+                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone()));
                     continue;
                 }
 
@@ -371,13 +372,12 @@ pub fn spawn_scene_v2(
 
                 // ── Single primitive mesh ─────────────────────────────────────────────────
                 let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                match build_primitive_mesh(&prefab.model, &p) {
-                    Some(mesh) => {
-                        let mesh_handle = mats.meshes.add(mesh);
-                        let built_mat = prefab.material.as_ref()
-                            .and_then(|key| mats.built.0.get(key));
+                let prim_shape = prefab.shape.as_ref().unwrap();
+                let mesh_handle = mats.meshes.add(build_primitive_mesh(prim_shape, &p));
+                let built_mat = prefab.material.as_ref()
+                    .and_then(|key| mats.built.0.get(key));
 
-                        let spawned = match built_mat {
+                let spawned = match built_mat {
                             Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
                                 commands.spawn((
                                     Name::new(entity_def.id.clone()),
@@ -429,21 +429,21 @@ pub fn spawn_scene_v2(
 
                         // Sensor takes precedence; otherwise check for static physics collider.
                         if p.sensor {
-                            if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
+                            if let Some(collider) = build_primitive_collider(prim_shape, &p) {
                                 commands.entity(spawned).insert((Sensor, collider, ActiveEvents::COLLISION_EVENTS));
                             } else {
                                 load_errors.push(format!(
-                                    "entity '{}': sensor: true on shape '{}' — no collider builder, sensor skipped",
-                                    entity_def.id, prefab.model
+                                    "entity '{}': sensor: true on shape '{:?}' — no collider builder, sensor skipped",
+                                    entity_def.id, prim_shape
                                 ));
                             }
                         } else if p.physics {
-                            if let Some(collider) = build_primitive_collider(&prefab.model, &p) {
+                            if let Some(collider) = build_primitive_collider(prim_shape, &p) {
                                 commands.entity(spawned).insert((RigidBody::Fixed, collider));
                             } else {
                                 load_errors.push(format!(
-                                    "entity '{}': physics: true on shape '{}' — no collider builder, physics skipped",
-                                    entity_def.id, prefab.model
+                                    "entity '{}': physics: true on shape '{:?}' — no collider builder, physics skipped",
+                                    entity_def.id, prim_shape
                                 ));
                             }
                         }
@@ -590,12 +590,6 @@ pub fn spawn_scene_v2(
                             let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
                             pending_world_bars.push((spawned, resolved_key, wb.clone()));
                         }
-                    }
-                    None => load_errors.push(format!(
-                        "entity '{}': unknown primitive shape '{}', entity skipped",
-                        entity_def.id, prefab.model
-                    )),
-                }
                 continue;
             }
 
@@ -676,8 +670,7 @@ pub fn spawn_scene_v2(
                 jump_velocity
             };
 
-            let mesh = build_primitive_mesh(&shape, &params)
-                .unwrap_or_else(|| Capsule3d { radius: cap_radius, half_length: cap_half }.mesh().build());
+            let mesh = build_primitive_mesh(&shape, &params);
             let mesh_handle = mats.meshes.add(mesh);
             let mat_handle  = mats.standard.add(primitive_material(&params, project.primitive_default_color));
 
@@ -1707,8 +1700,8 @@ fn spawn_primitive_children(
                 continue;
             };
 
-            match nested_prefab.kind.as_str() {
-                "actor" | "prop" => {
+            match nested_prefab.kind {
+                PrefabKind::Actor | PrefabKind::Prop => {
                     // GLB branch: resolve model path and spawn via the shared instance spawner.
                     let Some(catalog_entry) = ctx.asset_catalog.models.get(&nested_prefab.model) else {
                         load_errors.push(format!(
@@ -1733,8 +1726,8 @@ fn spawn_primitive_children(
                     commands.entity(parent).add_child(model_entity);
                     visiting.remove(nested_key.as_str());
                 }
-                _ => {
-                    // "primitive" branch: anchor + children list or single shape.
+                PrefabKind::Primitive => {
+                    // Primitive branch: anchor + children list or single shape.
                     let anchor = commands.spawn((
                         Name::new(nested_key.clone()),
                         child_tf,
@@ -1750,87 +1743,71 @@ fn spawn_primitive_children(
                             prefab_catalog, ctx, load_errors, entity_id, depth + 1, visiting,
                         );
                         visiting.remove(nested_key.as_str());
-                    } else if !nested_prefab.model.is_empty() {
+                    } else if let Some(nested_shape) = nested_prefab.shape.as_ref() {
                         // Single-shape primitive: build one mesh child under the anchor.
                         let pparams = nested_prefab.primitive.as_ref().cloned().unwrap_or_default();
-                        match build_primitive_mesh(&nested_prefab.model, &pparams) {
-                            Some(mesh) => {
-                                let mesh_h = ctx.meshes.add(mesh);
-                                let built_mat = nested_prefab.material.as_ref()
-                                    .and_then(|k| ctx.built_mats.get(k));
-                                let mesh_entity = match built_mat {
-                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
-                                        commands.spawn((
-                                            Name::new(nested_prefab.model.clone()),
-                                            Mesh3d(mesh_h),
-                                            MeshMaterial3d(h.clone()),
-                                            Transform::IDENTITY,
-                                        )).id()
-                                    }
-                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
-                                        let e = commands.spawn((
-                                            Name::new(nested_prefab.model.clone()),
-                                            Mesh3d(mesh_h),
-                                            MeshMaterial3d(h.clone()),
-                                            Transform::IDENTITY,
-                                        )).id();
-                                        if ctx.custom_mats.get(h).map(|m| m.unlit).unwrap_or(false) {
-                                            commands.entity(e).insert(bevy::light::NotShadowCaster);
-                                        }
-                                        e
-                                    }
-                                    Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
-                                        commands.spawn((
-                                            Name::new(nested_prefab.model.clone()),
-                                            Mesh3d(mesh_h),
-                                            MeshMaterial3d(h.clone()),
-                                            Transform::IDENTITY,
-                                        )).id()
-                                    }
-                                    None => {
-                                        let mat_h = ctx.standard.add(
-                                            primitive_material(&pparams, ctx.primitive_default_color)
-                                        );
-                                        commands.spawn((
-                                            Name::new(nested_prefab.model.clone()),
-                                            Mesh3d(mesh_h),
-                                            MeshMaterial3d(mat_h),
-                                            Transform::IDENTITY,
-                                        )).id()
-                                    }
-                                };
-                                commands.entity(anchor).add_child(mesh_entity);
+                        let mesh_h = ctx.meshes.add(build_primitive_mesh(nested_shape, &pparams));
+                        let shape_name = format!("{:?}", nested_shape);
+                        let built_mat = nested_prefab.material.as_ref()
+                            .and_then(|k| ctx.built_mats.get(k));
+                        let mesh_entity = match built_mat {
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
+                                commands.spawn((
+                                    Name::new(shape_name),
+                                    Mesh3d(mesh_h),
+                                    MeshMaterial3d(h.clone()),
+                                    Transform::IDENTITY,
+                                )).id()
+                            }
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
+                                let e = commands.spawn((
+                                    Name::new(shape_name),
+                                    Mesh3d(mesh_h),
+                                    MeshMaterial3d(h.clone()),
+                                    Transform::IDENTITY,
+                                )).id();
+                                if ctx.custom_mats.get(h).map(|m| m.unlit).unwrap_or(false) {
+                                    commands.entity(e).insert(bevy::light::NotShadowCaster);
+                                }
+                                e
+                            }
+                            Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
+                                commands.spawn((
+                                    Name::new(shape_name),
+                                    Mesh3d(mesh_h),
+                                    MeshMaterial3d(h.clone()),
+                                    Transform::IDENTITY,
+                                )).id()
                             }
                             None => {
-                                load_errors.push(format!(
-                                    "entity '{}': nested prefab '{}' has unknown shape '{}', skipped",
-                                    entity_id, nested_key, nested_prefab.model
-                                ));
+                                let mat_h = ctx.standard.add(
+                                    primitive_material(&pparams, ctx.primitive_default_color)
+                                );
+                                commands.spawn((
+                                    Name::new(shape_name),
+                                    Mesh3d(mesh_h),
+                                    MeshMaterial3d(mat_h),
+                                    Transform::IDENTITY,
+                                )).id()
                             }
-                        }
+                        };
+                        commands.entity(anchor).add_child(mesh_entity);
                     }
-                    // else: primitive with no model and no children — valid empty anchor.
+                    // else: primitive with no shape and no children — valid empty anchor.
                 }
             }
             continue;
         }
 
         // ── Inline primitive shape ────────────────────────────────────────────
-        let Some(child_mesh) = build_primitive_mesh(&child_def.shape, &child_def.primitive) else {
-            load_errors.push(format!(
-                "entity '{}': unknown shape '{}' in composite prefab, child skipped",
-                entity_id, child_def.shape
-            ));
-            continue;
-        };
-
-        let child_mesh_h = ctx.meshes.add(child_mesh);
+        let child_shape = child_def.shape.as_ref().unwrap();
+        let child_mesh_h = ctx.meshes.add(build_primitive_mesh(child_shape, &child_def.primitive));
         let built_mat = child_def.material.as_ref().and_then(|key| ctx.built_mats.get(key));
 
         let child_entity = match built_mat {
             Some(crate::runtime::material_factory::BuiltMaterialHandle::Standard(h)) => {
                 commands.spawn((
-                    Name::new(child_def.shape.clone()),
+                    Name::new(format!("{:?}", child_shape)),
                     Mesh3d(child_mesh_h),
                     MeshMaterial3d(h.clone()),
                     child_tf,
@@ -1838,7 +1815,7 @@ fn spawn_primitive_children(
             }
             Some(crate::runtime::material_factory::BuiltMaterialHandle::Custom(h)) => {
                 let entity = commands.spawn((
-                    Name::new(child_def.shape.clone()),
+                    Name::new(format!("{:?}", child_shape)),
                     Mesh3d(child_mesh_h),
                     MeshMaterial3d(h.clone()),
                     child_tf,
@@ -1850,7 +1827,7 @@ fn spawn_primitive_children(
             }
             Some(crate::runtime::material_factory::BuiltMaterialHandle::Terrain(h)) => {
                 commands.spawn((
-                    Name::new(child_def.shape.clone()),
+                    Name::new(format!("{:?}", child_shape)),
                     Mesh3d(child_mesh_h),
                     MeshMaterial3d(h.clone()),
                     child_tf,
@@ -1861,7 +1838,7 @@ fn spawn_primitive_children(
                     primitive_material(&child_def.primitive, ctx.primitive_default_color)
                 );
                 commands.spawn((
-                    Name::new(child_def.shape.clone()),
+                    Name::new(format!("{:?}", child_shape)),
                     Mesh3d(child_mesh_h),
                     MeshMaterial3d(mat_h),
                     child_tf,
@@ -1873,7 +1850,7 @@ fn spawn_primitive_children(
         // Static physics collider: child entity gets the collider shape; parent gets
         // RigidBody::Fixed so Rapier treats the children as a compound static body.
         if child_def.primitive.physics {
-            if let Some(collider) = build_primitive_collider(&child_def.shape, &child_def.primitive) {
+            if let Some(collider) = build_primitive_collider(child_shape, &child_def.primitive) {
                 commands.entity(child_entity).insert(collider);
                 commands.entity(parent).insert(RigidBody::Fixed);
             }
@@ -1883,52 +1860,63 @@ fn spawn_primitive_children(
 
 // ─── Primitive shape helpers ───────────────────────────────────────────────────
 
-fn build_primitive_mesh(shape: &str, p: &crate::schema::catalog::PrimitiveParams) -> Option<Mesh> {
-    Some(match shape {
-        "Cuboid" => {
+fn build_primitive_mesh(shape: &PrimitiveShapeKind, p: &crate::schema::catalog::PrimitiveParams) -> Mesh {
+    use bevy::math::primitives as bmp;
+    match shape {
+        PrimitiveShapeKind::Cuboid => {
             let (x, y, z) = p.size.unwrap_or((3.0, 3.0, 3.0));
-            Cuboid::new(x, y, z).mesh().build()
+            bmp::Cuboid::new(x, y, z).mesh().build()
         }
-        "Sphere" => Sphere::new(p.radius.unwrap_or(2.0)).mesh().build(),
-        "Cylinder" => Cylinder::new(
+        PrimitiveShapeKind::Sphere => bmp::Sphere::new(p.radius.unwrap_or(2.0)).mesh().build(),
+        PrimitiveShapeKind::Cylinder => bmp::Cylinder::new(
             p.radius.unwrap_or(1.5),
             p.height.unwrap_or(4.0),
         ).mesh().build(),
-        "Capsule3d" => {
+        PrimitiveShapeKind::Capsule3d => {
             let radius = p.radius.unwrap_or(1.5);
             let total_height = p.height.unwrap_or(4.0);
             let half_length = (total_height / 2.0 - radius).max(0.0);
-            Capsule3d { radius, half_length }.mesh().build()
+            bmp::Capsule3d { radius, half_length }.mesh().build()
         }
-        "Cone" => Cone {
+        PrimitiveShapeKind::Cone => bmp::Cone {
             radius: p.radius.unwrap_or(2.0),
             height: p.height.unwrap_or(4.0),
         }.mesh().build(),
-        "Torus" => Torus::new(
+        PrimitiveShapeKind::Torus => bmp::Torus::new(
             p.radius_top.unwrap_or(0.5),  // inner radius
             p.radius.unwrap_or(2.0),      // outer radius
         ).mesh().build(),
-        "ConicalFrustum" => ConicalFrustum {
+        PrimitiveShapeKind::ConicalFrustum => bmp::ConicalFrustum {
             radius_top:    p.radius_top.unwrap_or(1.0),
             radius_bottom: p.radius.unwrap_or(2.0),
             height:        p.height.unwrap_or(4.0),
         }.mesh().build(),
-        _ => return None,
-    })
+        PrimitiveShapeKind::Plane => {
+            let (x, _, z) = p.size.unwrap_or((2.0, 0.0, 2.0));
+            bmp::Plane3d::default().mesh().size(x, z).build()
+        }
+    }
 }
 
-/// Returns a Rapier3D static collider matching the given shape, or `None` for unsupported shapes.
-fn build_primitive_collider(shape: &str, p: &crate::schema::catalog::PrimitiveParams) -> Option<Collider> {
+/// Returns a Rapier3D static collider matching the given shape, or `None` for shapes
+/// without a direct Rapier equivalent (Cone, Torus, ConicalFrustum, Plane).
+fn build_primitive_collider(shape: &PrimitiveShapeKind, p: &crate::schema::catalog::PrimitiveParams) -> Option<Collider> {
     match shape {
-        "Cuboid" => {
+        PrimitiveShapeKind::Cuboid => {
             let (x, y, z) = p.size.unwrap_or((3.0, 3.0, 3.0));
             Some(Collider::cuboid(x / 2.0, y / 2.0, z / 2.0))
         }
-        "Sphere" => Some(Collider::ball(p.radius.unwrap_or(2.0))),
-        "Cylinder" => Some(Collider::cylinder(
+        PrimitiveShapeKind::Sphere => Some(Collider::ball(p.radius.unwrap_or(2.0))),
+        PrimitiveShapeKind::Cylinder => Some(Collider::cylinder(
             p.height.unwrap_or(4.0) / 2.0,
             p.radius.unwrap_or(1.5),
         )),
+        PrimitiveShapeKind::Capsule3d => {
+            let radius = p.radius.unwrap_or(1.5);
+            let total_height = p.height.unwrap_or(4.0);
+            let half_length = (total_height / 2.0 - radius).max(0.0);
+            Some(Collider::capsule_y(half_length, radius))
+        }
         _ => None,
     }
 }

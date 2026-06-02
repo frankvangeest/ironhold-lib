@@ -1,11 +1,12 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
 
     // ── Player ────────────────────────────────────────────────────────────────
     "player_capsule": (
-      kind: "primitive",
-      model: "Capsule3d",
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
       components: (
         tags: ["player"],
         movement: (
@@ -23,17 +24,18 @@
         metallic: 0.15,
       ),
       children: [
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: (-0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: ( 0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40), offset: (0.0,  1.49, -0.40), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: (-0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: ( 0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40), offset: (0.0,  1.49, -0.40), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Arena floor ───────────────────────────────────────────────────────────
     // 80×80 dark slab — large enough that all stations have plenty of space.
     "demo_ground": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       components: (),
       primitive: (
         size: (80.0, 0.5, 80.0),
@@ -45,68 +47,69 @@
 
     // ── Campfire ──────────────────────────────────────────────────────────────
     "campfire_prop": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/campfire.behavior.ron",
       children: [
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.02, color: (0.10, 0.08, 0.06), roughness: 0.98), offset: (0.0, 0.01, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90), offset: ( 0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90), offset: (-0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90), offset: ( 0.0,  0.06,  0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90), offset: ( 0.0,  0.06, -0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0,  40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0, -40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10), offset: (0.0, 0.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.02, color: (0.10, 0.08, 0.06), roughness: 0.98), offset: (0.0, 0.01, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90), offset: ( 0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90), offset: (-0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90), offset: ( 0.0,  0.06,  0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90), offset: ( 0.0,  0.06, -0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0,  40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0, -40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10), offset: (0.0, 0.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Torch ─────────────────────────────────────────────────────────────────
     "torch_stake": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/torch.behavior.ron",
       children: [
-        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.40, color: (0.38, 0.35, 0.32), roughness: 0.90), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.04, height: 0.90, color: (0.30, 0.18, 0.07), roughness: 0.92), offset: (0.0, 0.85, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.07, height: 0.14, color: (0.28, 0.14, 0.05), roughness: 0.88), offset: (0.0, 1.37, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.065, color: (1.0, 0.55, 0.05), roughness: 0.15), offset: (0.0, 1.58, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.20, height: 0.40, color: (0.38, 0.35, 0.32), roughness: 0.90), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.04, height: 0.90, color: (0.30, 0.18, 0.07), roughness: 0.92), offset: (0.0, 0.85, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.07, height: 0.14, color: (0.28, 0.14, 0.05), roughness: 0.88), offset: (0.0, 1.37, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.065, color: (1.0, 0.55, 0.05), roughness: 0.15), offset: (0.0, 1.58, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Smoke tower ───────────────────────────────────────────────────────────
     "smoke_tower": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/smoke_tower.behavior.ron",
       children: [
-        ( shape: "Cylinder", primitive: (radius: 0.65, height: 0.40, color: (0.25, 0.23, 0.22), roughness: 0.92), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.30, height: 3.20, color: (0.28, 0.26, 0.24), roughness: 0.90), offset: (0.0, 2.00, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.12, color: (0.22, 0.20, 0.19), roughness: 0.88), offset: (0.0, 3.66, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.65, height: 0.40, color: (0.25, 0.23, 0.22), roughness: 0.92), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.30, height: 3.20, color: (0.28, 0.26, 0.24), roughness: 0.90), offset: (0.0, 2.00, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.12, color: (0.22, 0.20, 0.19), roughness: 0.88), offset: (0.0, 3.66, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Magic rune ────────────────────────────────────────────────────────────
     "magic_rune": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 3.0, hint_text: "F  Summon Nova"),
       behavior: "behaviors/magic_shrine.behavior.ron",
       motion: (rotate: (0.0, 0.30, 0.0)),
       children: [
-        ( shape: "Cylinder", primitive: (radius: 1.4, height: 0.07, color: (0.18, 0.12, 0.25), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.75, height: 0.09, color: (0.35, 0.15, 0.55), roughness: 0.55), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.22, color: (0.70, 0.30, 1.0), roughness: 0.08),              offset: (0.0, 0.38, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 1.4, height: 0.07, color: (0.18, 0.12, 0.25), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.75, height: 0.09, color: (0.35, 0.15, 0.55), roughness: 0.55), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.22, color: (0.70, 0.30, 1.0), roughness: 0.08),              offset: (0.0, 0.38, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Star emitter ──────────────────────────────────────────────────────────
     "star_emitter": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       components: (),
       behavior: "behaviors/star_shower.behavior.ron",
       primitive: (
@@ -118,94 +121,94 @@
 
     // ── Frost crystal ─────────────────────────────────────────────────────────
     "frost_crystal": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Frost Burst"),
       children: [
-        ( shape: "Cylinder", primitive: (radius: 0.28, height: 0.75, color: (0.35, 0.50, 0.68), roughness: 0.70), offset: (0.0, 0.375, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.30, color: (0.55, 0.80, 0.98), roughness: 0.08, metallic: 0.10), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.18, color: (0.82, 0.95, 1.0), roughness: 0.04), offset: (0.0, 1.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.28, height: 0.75, color: (0.35, 0.50, 0.68), roughness: 0.70), offset: (0.0, 0.375, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.30, color: (0.55, 0.80, 0.98), roughness: 0.08, metallic: 0.10), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.18, color: (0.82, 0.95, 1.0), roughness: 0.04), offset: (0.0, 1.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Healing fountain ──────────────────────────────────────────────────────
     "heal_fountain": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Heal Burst"),
       children: [
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.55, color: (0.28, 0.42, 0.30), roughness: 0.85), offset: (0.0, 0.275, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.08, color: (0.22, 0.35, 0.24), roughness: 0.80), offset: (0.0, 0.59, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.26, color: (0.20, 0.90, 0.40), roughness: 0.10), offset: (0.0, 0.78, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.55, color: (0.28, 0.42, 0.30), roughness: 0.85), offset: (0.0, 0.275, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.50, height: 0.08, color: (0.22, 0.35, 0.24), roughness: 0.80), offset: (0.0, 0.59, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.26, color: (0.20, 0.90, 0.40), roughness: 0.10), offset: (0.0, 0.78, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Explosion pad ─────────────────────────────────────────────────────────
     "explosion_pad": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 3.0),
       children: [
-        ( shape: "Cylinder", primitive: (radius: 2.8, height: 0.04, color: (0.60, 0.18, 0.04), roughness: 0.75), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.06, color: (1.0, 0.45, 0.05), roughness: 0.60), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 2.8, height: 0.04, color: (0.60, 0.18, 0.04), roughness: 0.75), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.50, height: 0.06, color: (1.0, 0.45, 0.05), roughness: 0.60), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Lightning orb ─────────────────────────────────────────────────────────
     // Slim pedestal with a glowing cyan orb. Continuous arc discharge via behavior.
     "lightning_orb": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/lightning_orb.behavior.ron",
       children: [
         // Stone plinth
-        ( shape: "Cylinder", primitive: (radius: 0.18, height: 1.2, color: (0.22, 0.28, 0.42), roughness: 0.72), offset: (0.0, 0.60, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.18, height: 1.2, color: (0.22, 0.28, 0.42), roughness: 0.72), offset: (0.0, 0.60, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Top cap
-        ( shape: "Sphere",   primitive: (radius: 0.20, color: (0.24, 0.32, 0.52), roughness: 0.65), offset: (0.0, 1.28, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.20, color: (0.24, 0.32, 0.52), roughness: 0.65), offset: (0.0, 1.28, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Outer corona
-        ( shape: "Sphere",   primitive: (radius: 0.22, color: (0.25, 0.62, 1.0), roughness: 0.30), offset: (0.0, 1.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.22, color: (0.25, 0.62, 1.0), roughness: 0.30), offset: (0.0, 1.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Inner glow
-        ( shape: "Sphere",   primitive: (radius: 0.12, color: (0.62, 0.90, 1.0), roughness: 0.05), offset: (0.0, 1.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.12, color: (0.62, 0.90, 1.0), roughness: 0.05), offset: (0.0, 1.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Void altar ────────────────────────────────────────────────────────────
     // Dark indigo pedestal + void orb (deep purple, near-black). Press F for void_nova.
     "void_altar": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Void Nova"),
       children: [
         // Base slab
-        ( shape: "Cuboid",   primitive: (size: (0.80, 0.12, 0.80), color: (0.12, 0.08, 0.18), roughness: 0.85), offset: (0.0, 0.06, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.80, 0.12, 0.80), color: (0.12, 0.08, 0.18), roughness: 0.85), offset: (0.0, 0.06, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Pedestal column
-        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.80, color: (0.14, 0.09, 0.22), roughness: 0.80), offset: (0.0, 0.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.20, height: 0.80, color: (0.14, 0.09, 0.22), roughness: 0.80), offset: (0.0, 0.52, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Outer haze
-        ( shape: "Sphere",   primitive: (radius: 0.38, color: (0.22, 0.08, 0.45), roughness: 0.40), offset: (0.0, 1.22, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.38, color: (0.22, 0.08, 0.45), roughness: 0.40), offset: (0.0, 1.22, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Void core
-        ( shape: "Sphere",   primitive: (radius: 0.26, color: (0.06, 0.02, 0.18), roughness: 0.04), offset: (0.0, 1.22, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.26, color: (0.06, 0.02, 0.18), roughness: 0.04), offset: (0.0, 1.22, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Ember geyser ──────────────────────────────────────────────────────────
     // Lava vent crack. TriggerZone radius 2.5 m — step on the warning ring to ignite.
     "ember_geyser": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 2.5),
       children: [
         // Warning ring
-        ( shape: "Cylinder", primitive: (radius: 2.2, height: 0.05, color: (0.35, 0.10, 0.02), roughness: 0.80), offset: (0.0, 0.025, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 2.2, height: 0.05, color: (0.35, 0.10, 0.02), roughness: 0.80), offset: (0.0, 0.025, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Vent disc
-        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.08, color: (0.55, 0.18, 0.03), roughness: 0.70), offset: (0.0, 0.04, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.50, height: 0.08, color: (0.55, 0.18, 0.03), roughness: 0.70), offset: (0.0, 0.04, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Hot core
-        ( shape: "Cylinder", primitive: (radius: 0.22, height: 0.12, color: (1.0, 0.55, 0.08), roughness: 0.15), offset: (0.0, 0.06, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.22, height: 0.12, color: (1.0, 0.55, 0.08), roughness: 0.15), offset: (0.0, 0.06, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 

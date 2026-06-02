@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::ProjectRoot;
 use crate::schema::*;
+use crate::schema::catalog::ColliderShapeKind;
 use crate::schema::player::{PlayerConfig, AnimationPolicy, CameraConfig, InputMap};
 use crate::runtime::model_spawner::ModelSpawner;
 use crate::runtime::material_factory::PendingMaterialOverride;
@@ -98,18 +99,17 @@ pub fn spawn_prefab_instance(
 
     if !prefab.colliders.is_empty() {
         let shapes: Vec<(Vec3, Quat, Collider)> = prefab.colliders.iter().filter_map(|cdef| {
-            let shape = match cdef.shape.as_str() {
-                "Cuboid" => {
+            let shape = match cdef.shape {
+                ColliderShapeKind::Cuboid => {
                     let (x, y, z) = cdef.size.unwrap_or((1.0, 1.0, 1.0));
-                    Some(Collider::cuboid(x / 2.0, y / 2.0, z / 2.0))
+                    Collider::cuboid(x / 2.0, y / 2.0, z / 2.0)
                 }
-                "Sphere" => Some(Collider::ball(cdef.radius.unwrap_or(0.5))),
-                "Cylinder" => Some(Collider::cylinder(
+                ColliderShapeKind::Sphere => Collider::ball(cdef.radius.unwrap_or(0.5)),
+                ColliderShapeKind::Cylinder => Collider::cylinder(
                     cdef.height.unwrap_or(1.0) / 2.0,
                     cdef.radius.unwrap_or(0.5),
-                )),
-                _ => None,
-            }?;
+                ),
+            };
             let (rx, ry, rz) = cdef.rotation_euler_deg;
             let rot = Quat::from_euler(EulerRot::XYZ, rx.to_radians(), ry.to_radians(), rz.to_radians());
             Some((Vec3::from(cdef.offset), rot, shape))

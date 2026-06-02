@@ -11,8 +11,8 @@
 
 ## Active
 
-- [ ] **Typed primitive shape field** — `shape: PrimitiveShapeKind` on `PrefabDef` and `ChildPrimitiveDef`; ships with enum casing change. See `planning/features/typed_primitive_shape_field.md`
-- [ ] **Consistent RON enum casing** — `PrefabDef.kind` → `PrefabKind`; `ColliderDef.shape` → `ColliderShapeKind`; `PREFAB_CATALOG_SCHEMA_VERSION` → 2; ships with typed shape change. See `planning/features/consistent_ron_enum_casing.md`
+- [x] **Typed primitive shape field** — `shape: PrimitiveShapeKind` on `PrefabDef` and `ChildPrimitiveDef`; ships with enum casing change. See `planning/features/done/typed_primitive_shape_field.md`
+- [x] **Consistent RON enum casing** — `PrefabDef.kind` → `PrefabKind`; `ColliderDef.shape` → `ColliderShapeKind`; `PREFAB_CATALOG_SCHEMA_VERSION` → 2; ships with typed shape change. See `planning/features/done/consistent_ron_enum_casing.md`
 
 ---
 

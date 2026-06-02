@@ -1,8 +1,8 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
     "player_warrior": (
-      kind: "actor",
+      kind: Actor,
       model: "hero",
       components: (
         movement: (walk_speed: 5.0, run_speed: 8.5),
@@ -12,7 +12,7 @@
     ),
 
     "enemy_orc_melee": (
-      kind: "actor",
+      kind: Actor,
       model: "orc",
       components: (
         tags: ["enemy"],
@@ -20,7 +20,7 @@
     ),
 
     "chest_01": (
-      kind: "prop",
+      kind: Prop,
       model: "chest_01",
       components: (
         tags: ["loot"],
@@ -28,7 +28,7 @@
     ),
 
     "chest_02": (
-      kind: "prop",
+      kind: Prop,
       model: "chest_02",
       components: (
         tags: ["loot"],
@@ -36,7 +36,7 @@
     ),
 
     "giant_npc": (
-      kind: "actor",
+      kind: Actor,
       model: "hero",
       material: "giant_green",
       animation_policy: "prefabs/animation/giant_npc_policy.ron",
@@ -46,7 +46,7 @@
     ),
 
     "prop_anvil": (
-      kind: "prop",
+      kind: Prop,
       model: "anvil",
       material: "wood_crate",
       components: (

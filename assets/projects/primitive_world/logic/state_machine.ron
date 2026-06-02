@@ -36,9 +36,9 @@
                 //   3. Quad  + AlphaMode::Blend + texture        — campfire_smoke (blend sprite)
                 // One SpawnEffect per variant is enough — all effects sharing a variant reuse the
                 // compiled pipeline. Position far below terrain keeps the warmup invisible.
-                SpawnEffect(key: "hit_spark",      position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_fire",  position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "campfire_smoke", position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_fire",  position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),
             ],
             exit_actions: [ StopMusic ],
             on: [

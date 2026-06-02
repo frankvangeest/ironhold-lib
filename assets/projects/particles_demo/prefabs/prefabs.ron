@@ -1,11 +1,12 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
 
     // ── Player ────────────────────────────────────────────────────────────────
     "player_capsule": (
-      kind: "primitive",
-      model: "Capsule3d",
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
       components: (
         tags: ["player"],
         movement: (
@@ -24,11 +25,11 @@
       ),
       children: [
         // Left eye (player faces −Z)
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: (-0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: (-0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Right eye
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: ( 0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20), offset: ( 0.18, 1.58, -0.37), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Nose
-        ( shape: "Sphere", primitive: (radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40), offset: (0.0,  1.49, -0.40), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40), offset: (0.0,  1.49, -0.40), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -36,8 +37,9 @@
     // Dark charcoal slab so every particle reads against a neutral background.
     // Centre at y=−0.25 → top surface at y=0.
     "demo_ground": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       components: (),
       primitive: (
         size: (60.0, 0.5, 60.0),
@@ -51,23 +53,23 @@
     // Identical construction to the primitive_world campfire.
     // Runs campfire.behavior.ron: fire every 0.2 s, smoke every 0.8 s.
     "campfire_prop": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/campfire.behavior.ron",
       children: [
         // Ash disk
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.02, color: (0.10, 0.08, 0.06), roughness: 0.98), offset: (0.0, 0.01, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.02, color: (0.10, 0.08, 0.06), roughness: 0.98), offset: (0.0, 0.01, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Stone ring
-        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90), offset: ( 0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90), offset: (-0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90), offset: ( 0.0,  0.06,  0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Sphere",   primitive: (radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90), offset: ( 0.0,  0.06, -0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.10, color: (0.45, 0.42, 0.40), roughness: 0.90), offset: ( 0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.11, color: (0.43, 0.41, 0.39), roughness: 0.90), offset: (-0.32, 0.06,  0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.10, color: (0.44, 0.42, 0.38), roughness: 0.90), offset: ( 0.0,  0.06,  0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.09, color: (0.42, 0.40, 0.38), roughness: 0.90), offset: ( 0.0,  0.06, -0.32), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Crossed logs
-        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0,  40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
-        ( shape: "Cuboid",   primitive: (size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0, -40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.50, 0.11, 0.11), color: (0.28, 0.14, 0.06), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0,  40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.50, 0.11, 0.11), color: (0.24, 0.12, 0.05), roughness: 0.92), offset: (0.0, 0.07, 0.0), rotation_euler_deg: (15.0, -40.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Ember glow
-        ( shape: "Sphere",   primitive: (radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10), offset: (0.0, 0.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.07, color: (1.0, 0.40, 0.05), roughness: 0.20, metallic: 0.10), offset: (0.0, 0.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -75,36 +77,36 @@
     // Stone base → wooden post → torch head → flame glow orb.
     // torch_flame effect offset (0, 1.7, 0) puts sparks above the glow orb.
     "torch_stake": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/torch.behavior.ron",
       children: [
         // Stone base
-        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.40, color: (0.38, 0.35, 0.32), roughness: 0.90), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.20, height: 0.40, color: (0.38, 0.35, 0.32), roughness: 0.90), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Wooden post
-        ( shape: "Cylinder", primitive: (radius: 0.04, height: 0.90, color: (0.30, 0.18, 0.07), roughness: 0.92), offset: (0.0, 0.85, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.04, height: 0.90, color: (0.30, 0.18, 0.07), roughness: 0.92), offset: (0.0, 0.85, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Torch head (widened top of post)
-        ( shape: "Cylinder", primitive: (radius: 0.07, height: 0.14, color: (0.28, 0.14, 0.05), roughness: 0.88), offset: (0.0, 1.37, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.07, height: 0.14, color: (0.28, 0.14, 0.05), roughness: 0.88), offset: (0.0, 1.37, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Flame glow orb
-        ( shape: "Sphere",   primitive: (radius: 0.065, color: (1.0, 0.55, 0.05), roughness: 0.15), offset: (0.0, 1.58, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.065, color: (1.0, 0.55, 0.05), roughness: 0.15), offset: (0.0, 1.58, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Industrial smoke tower ────────────────────────────────────────────────
     // Foundation + tall chimney + lip. Offset 3.8 m in smoke_column emits above lip.
     "smoke_tower": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       behavior: "behaviors/smoke_tower.behavior.ron",
       children: [
         // Foundation
-        ( shape: "Cylinder", primitive: (radius: 0.65, height: 0.40, color: (0.25, 0.23, 0.22), roughness: 0.92), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.65, height: 0.40, color: (0.25, 0.23, 0.22), roughness: 0.92), offset: (0.0, 0.20, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Chimney body — centre at y=2.0, spans y=0.4 to y=3.6
-        ( shape: "Cylinder", primitive: (radius: 0.30, height: 3.20, color: (0.28, 0.26, 0.24), roughness: 0.90), offset: (0.0, 2.00, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.30, height: 3.20, color: (0.28, 0.26, 0.24), roughness: 0.90), offset: (0.0, 2.00, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Chimney lip
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.12, color: (0.22, 0.20, 0.19), roughness: 0.88), offset: (0.0, 3.66, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.12, color: (0.22, 0.20, 0.19), roughness: 0.88), offset: (0.0, 3.66, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -113,7 +115,7 @@
     //   1. Behavior runs magic_orbit loop (sparkle swirl).
     //   2. Interactable fires entity.interacted → rules.ron → magic_nova burst.
     "magic_rune": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 3.0, hint_text: "F  Summon Nova"),
@@ -121,11 +123,11 @@
       motion: (rotate: (0.0, 0.30, 0.0)),
       children: [
         // Outer stone disc
-        ( shape: "Cylinder", primitive: (radius: 1.4, height: 0.07, color: (0.18, 0.12, 0.25), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 1.4, height: 0.07, color: (0.18, 0.12, 0.25), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Inner rune ring
-        ( shape: "Cylinder", primitive: (radius: 0.75, height: 0.09, color: (0.35, 0.15, 0.55), roughness: 0.55), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.75, height: 0.09, color: (0.35, 0.15, 0.55), roughness: 0.55), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Central orb
-        ( shape: "Sphere",   primitive: (radius: 0.22, color: (0.70, 0.30, 1.0), roughness: 0.08),              offset: (0.0, 0.38, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.22, color: (0.70, 0.30, 1.0), roughness: 0.08),              offset: (0.0, 0.38, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -133,17 +135,17 @@
     // Icy blue pedestal + glowing crystal sphere.
     // Press F to fire frost_burst (handled in rules.ron).
     "frost_crystal": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Frost Burst"),
       children: [
         // Pedestal
-        ( shape: "Cylinder", primitive: (radius: 0.28, height: 0.75, color: (0.35, 0.50, 0.68), roughness: 0.70), offset: (0.0, 0.375, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.28, height: 0.75, color: (0.35, 0.50, 0.68), roughness: 0.70), offset: (0.0, 0.375, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Crystal outer
-        ( shape: "Sphere",   primitive: (radius: 0.30, color: (0.55, 0.80, 0.98), roughness: 0.08, metallic: 0.10), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.30, color: (0.55, 0.80, 0.98), roughness: 0.08, metallic: 0.10), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Crystal inner glow
-        ( shape: "Sphere",   primitive: (radius: 0.18, color: (0.82, 0.95, 1.0), roughness: 0.04), offset: (0.0, 1.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.18, color: (0.82, 0.95, 1.0), roughness: 0.04), offset: (0.0, 1.12, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -151,17 +153,17 @@
     // Green stone pedestal + bowl rim + glowing water orb.
     // Press F to fire heal_pulse (handled in rules.ron).
     "heal_fountain": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Heal Burst"),
       children: [
         // Pedestal
-        ( shape: "Cylinder", primitive: (radius: 0.38, height: 0.55, color: (0.28, 0.42, 0.30), roughness: 0.85), offset: (0.0, 0.275, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.38, height: 0.55, color: (0.28, 0.42, 0.30), roughness: 0.85), offset: (0.0, 0.275, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Bowl rim
-        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.08, color: (0.22, 0.35, 0.24), roughness: 0.80), offset: (0.0, 0.59, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.50, height: 0.08, color: (0.22, 0.35, 0.24), roughness: 0.80), offset: (0.0, 0.59, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Glowing water orb
-        ( shape: "Sphere",   primitive: (radius: 0.26, color: (0.20, 0.90, 0.40), roughness: 0.10), offset: (0.0, 0.78, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.26, color: (0.20, 0.90, 0.40), roughness: 0.10), offset: (0.0, 0.78, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -169,15 +171,15 @@
     // TriggerZone sensor (radius 3 m) fires entity.entered → rules.ron → explosion_burst.
     // Visible orange disc warns the player they are standing on a danger zone.
     "explosion_pad": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 3.0),
       children: [
         // Warning disc
-        ( shape: "Cylinder", primitive: (radius: 2.8, height: 0.04, color: (0.60, 0.18, 0.04), roughness: 0.75), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 2.8, height: 0.04, color: (0.60, 0.18, 0.04), roughness: 0.75), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Centre hotspot marker
-        ( shape: "Cylinder", primitive: (radius: 0.50, height: 0.06, color: (1.0, 0.45, 0.05), roughness: 0.60), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.50, height: 0.06, color: (1.0, 0.45, 0.05), roughness: 0.60), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -185,17 +187,17 @@
     // TriggerZone (radius 3 m): walk on it → charge_burst (EaseIn velocity curve).
     // Electric teal colouring distinguishes it from the orange explosion pad.
     "charge_pad": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 3.0),
       children: [
         // Base disc
-        ( shape: "Cylinder", primitive: (radius: 2.8, height: 0.04, color: (0.06, 0.22, 0.38), roughness: 0.70), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 2.8, height: 0.04, color: (0.06, 0.22, 0.38), roughness: 0.70), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Inner ring
-        ( shape: "Cylinder", primitive: (radius: 0.70, height: 0.06, color: (0.15, 0.60, 1.0), roughness: 0.45), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.70, height: 0.06, color: (0.15, 0.60, 1.0), roughness: 0.45), offset: (0.0, 0.03, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Centre orb
-        ( shape: "Sphere",   primitive: (radius: 0.18, color: (0.55, 0.88, 1.0), roughness: 0.08), offset: (0.0, 0.26, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.18, color: (0.55, 0.88, 1.0), roughness: 0.08), offset: (0.0, 0.26, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -203,20 +205,20 @@
     // Interactable (radius 2.5 m): press F → sphere_nova (Sphere emitter + Pulse curve).
     // Golden colouring reflects the warm colour palette of sphere_nova.
     "energy_sphere": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 2.5, hint_text: "F  Sphere Nova"),
       motion: (rotate: (0.0, 0.50, 0.0)),
       children: [
         // Base disc
-        ( shape: "Cylinder", primitive: (radius: 0.55, height: 0.08, color: (0.22, 0.16, 0.06), roughness: 0.88), offset: (0.0, 0.04, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.55, height: 0.08, color: (0.22, 0.16, 0.06), roughness: 0.88), offset: (0.0, 0.04, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Pedestal
-        ( shape: "Cylinder", primitive: (radius: 0.20, height: 0.65, color: (0.28, 0.22, 0.08), roughness: 0.82), offset: (0.0, 0.405, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.20, height: 0.65, color: (0.28, 0.22, 0.08), roughness: 0.82), offset: (0.0, 0.405, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Outer sphere
-        ( shape: "Sphere",   primitive: (radius: 0.30, color: (0.88, 0.62, 0.08), roughness: 0.12, metallic: 0.20), offset: (0.0, 1.08, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.30, color: (0.88, 0.62, 0.08), roughness: 0.12, metallic: 0.20), offset: (0.0, 1.08, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Inner glow
-        ( shape: "Sphere",   primitive: (radius: 0.18, color: (1.0, 0.92, 0.40), roughness: 0.04), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.18, color: (1.0, 0.92, 0.40), roughness: 0.04), offset: (0.0, 1.10, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -225,8 +227,9 @@
     // Runs star_shower.behavior.ron: emits star_rain (offset 0,0,0) from that altitude.
     // Strong gravity in the effect curves all particles back down toward the ground.
     "star_emitter": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       components: (),
       behavior: "behaviors/star_shower.behavior.ron",
       primitive: (
@@ -240,21 +243,21 @@
     // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene particles2.
     // Blue glow disc + dark stone pillars hint at the bright magical destination.
     "portal_to_p2": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 1.5),
       children: [
         // Left pillar
-        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Right pillar
-        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Lintel
-        ( shape: "Cuboid", primitive: (size: (2.60, 0.25, 0.30), color: (0.18, 0.16, 0.22), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (2.60, 0.25, 0.30), color: (0.18, 0.16, 0.22), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Portal disc — blue (Arcane Observatory)
-        ( shape: "Cylinder", primitive: (radius: 0.85, height: 0.04, color: (0.42, 0.62, 1.0), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.42, 0.62, 1.0), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Glow orb
-        ( shape: "Sphere", primitive: (radius: 0.18, color: (0.65, 0.82, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.18, color: (0.65, 0.82, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -262,29 +265,30 @@
     // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene main.
     // Violet glow disc + light stone pillars hint at the dark night destination.
     "portal_to_main": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       trigger_zone: (radius: 1.5),
       children: [
         // Left pillar
-        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Right pillar
-        ( shape: "Cuboid", primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Lintel
-        ( shape: "Cuboid", primitive: (size: (2.60, 0.25, 0.30), color: (0.65, 0.62, 0.58), roughness: 0.88), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid, primitive: (size: (2.60, 0.25, 0.30), color: (0.65, 0.62, 0.58), roughness: 0.88), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Portal disc — violet (Night Arena)
-        ( shape: "Cylinder", primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.28, 0.82), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.28, 0.82), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Glow orb
-        ( shape: "Sphere", primitive: (radius: 0.18, color: (0.68, 0.42, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere, primitive: (radius: 0.18, color: (0.68, 0.42, 1.0), roughness: 0.05), offset: (0.0, 1.50, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
     // ── Dark grass platform (Arcane Observatory) ──────────────────────────────
     // Deep green slab — contrasts with the bright sky and violet accent lights.
     "ground_grass": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       components: (),
       primitive: (
         size: (60.0, 0.5, 60.0),
@@ -298,17 +302,17 @@
     // Orange-gold disc. Press F to fire explosion_flipbook.
     // Placed at (0, 0, -6) — just north of the spawn, first station visible on entry.
     "flipbook_pad": (
-      kind: "primitive",
+      kind: Primitive,
       model: "",
       components: (),
       interactable: (radius: 3.0, hint_text: "F  Flipbook Burst"),
       children: [
         // Outer disc — warm orange
-        ( shape: "Cylinder", primitive: (radius: 1.2, height: 0.07, color: (0.72, 0.38, 0.08), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 1.2, height: 0.07, color: (0.72, 0.38, 0.08), roughness: 0.75), offset: (0.0, 0.035, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Inner ring — bright gold
-        ( shape: "Cylinder", primitive: (radius: 0.65, height: 0.09, color: (1.0, 0.68, 0.12), roughness: 0.45), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.65, height: 0.09, color: (1.0, 0.68, 0.12), roughness: 0.45), offset: (0.0, 0.045, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         // Central glow orb — white-hot
-        ( shape: "Sphere",   primitive: (radius: 0.18, color: (1.0, 0.92, 0.60), roughness: 0.06, metallic: 0.05), offset: (0.0, 0.32, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Sphere,   primitive: (radius: 0.18, color: (1.0, 0.92, 0.60), roughness: 0.06, metallic: 0.05), offset: (0.0, 0.32, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 

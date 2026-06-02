@@ -76,9 +76,9 @@ No assets should be hardcoded in the runtime. All assets should be defined in th
 `runtime/scene_manager/scene_loader.rs` contains a free function `spawn_primitive_children` that handles both **inline primitive children** and **nested prefab references** (`ChildPrimitiveDef.prefab`). It takes a `ChildSpawnCtx` struct (split-out asset refs from `SceneMaterialParams` plus the GLB-dispatch refs) and recurses into referenced prefabs via the `PrefabCatalog`.
 
 When a nested prefab reference is resolved, the spawner dispatches on `nested_prefab.kind`:
-- **`"primitive"` with `children`** — spawns an anchor entity, recurses into children (existing path).
-- **`"primitive"` with no `children`** — spawns an anchor + one mesh child using `build_primitive_mesh`.
-- **`"actor"` / `"prop"`** — calls `spawn_prefab_instance` with the resolved GLB model path; the returned entity is parented directly under the composite parent at the child `offset`/`rotation_euler_deg`/`scale`.
+- **`Primitive` with `children`** — spawns an anchor entity, recurses into children (existing path).
+- **`Primitive` with no `children`** — spawns an anchor + one mesh child using `build_primitive_mesh` (reads `nested_prefab.shape`).
+- **`Actor` / `Prop`** — calls `spawn_prefab_instance` with the resolved GLB model path; the returned entity is parented directly under the composite parent at the child `offset`/`rotation_euler_deg`/`scale`.
 
 **`ChildSpawnCtx<'a>`** fields: `meshes`, `standard`, `built_mats`, `custom_mats`, `primitive_default_color` (material/mesh refs) plus `asset_server`, `model_spawner`, `fixes`, `asset_catalog`, `project_root` (needed for GLB dispatch).
 
@@ -117,7 +117,7 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 
 **New capabilities for entity logic:**
 
-**Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: "primitive"` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.
+**Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: Primitive` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.
 
 `TriggerZone` — set `trigger_zone: (radius: 2.0)` on a `PrefabDef`. A Rapier sphere sensor is spawned. Works on **all prefab kinds**: single-mesh primitives, composite primitives (those with `model: ""` and a non-empty `children` list), and GLB actor/prop prefabs. Emits:
 - `GameEvent::Trigger("entity.entered:{id}")` on player enter

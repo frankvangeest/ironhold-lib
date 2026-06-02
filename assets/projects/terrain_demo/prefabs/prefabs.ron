@@ -1,11 +1,11 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
     // FlyCamera prefab. No model — the engine detects the "flycam" tag and
     // spawns Camera3d + FlyCamera directly. The model field is required by the
     // schema but is ignored for flycam entities.
     "flycam": (
-      kind: "prop",
+      kind: Prop,
       model: "",
       components: (
         tags: ["flycam"],
@@ -34,8 +34,9 @@
 
     // No color set — uses project primitive_default_color (warm sand from terrain_demo.project.ron)
     "prim_cuboid": (
-      kind: "primitive",
-      model: "Cuboid",
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
       components: (),
       primitive: (
         size: (4.0, 4.0, 4.0),
@@ -44,8 +45,9 @@
     ),
 
     "prim_sphere": (
-      kind: "primitive",
-      model: "Sphere",
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
       components: (),
       primitive: (
         radius: 3.0,
@@ -56,8 +58,9 @@
     ),
 
     "prim_cylinder": (
-      kind: "primitive",
-      model: "Cylinder",
+      kind: Primitive,
+      model: "",
+      shape: Cylinder,
       components: (),
       primitive: (
         radius: 2.0,
@@ -68,8 +71,9 @@
     ),
 
     "prim_capsule": (
-      kind: "primitive",
-      model: "Capsule3d",
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
       components: (),
       primitive: (
         radius: 1.5,
@@ -80,8 +84,9 @@
     ),
 
     "prim_cone": (
-      kind: "primitive",
-      model: "Cone",
+      kind: Primitive,
+      model: "",
+      shape: Cone,
       components: (),
       primitive: (
         radius: 2.5,
@@ -92,8 +97,9 @@
     ),
 
     "prim_torus": (
-      kind: "primitive",
-      model: "Torus",
+      kind: Primitive,
+      model: "",
+      shape: Torus,
       components: (),
       primitive: (
         radius: 2.5,             // outer radius
@@ -105,8 +111,9 @@
     ),
 
     "prim_frustum": (
-      kind: "primitive",
-      model: "ConicalFrustum",
+      kind: Primitive,
+      model: "",
+      shape: ConicalFrustum,
       components: (),
       primitive: (
         radius: 2.5,             // bottom radius

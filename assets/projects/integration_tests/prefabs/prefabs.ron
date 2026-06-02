@@ -1,8 +1,8 @@
 (
-  schema_version: 1,
+  schema_version: 2,
   prefabs: {
     "player_warrior": (
-      kind: "actor",
+      kind: Actor,
       model: "hero",
       components: (
         tags: ["player"],
@@ -11,7 +11,7 @@
     ),
 
     "enemy_orc_melee": (
-      kind: "actor",
+      kind: Actor,
       model: "orc",
       components: (
         tags: ["enemy"],
