@@ -8,6 +8,10 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
+        # Required for cross-origin isolation — enables SharedArrayBuffer and
+        # allows wgpu to select the WebGPU backend instead of falling back to WebGL2.
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         super().end_headers()
 
     def log_message(self, format, *args):
