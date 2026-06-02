@@ -15,7 +15,7 @@ All shared assets follow a **stylized hand-painted** direction. Before adding or
 assets/
   shared/                 ← reusable across all projects
     shaders/              ← custom WGSL shaders (prefix: custom_*)
-    textures/             ← tileable PBR and stylized texture sets + noise utilities
+    textures/             ← see subfolder conventions below
     terrain/              ← shared terrain layers (grass, rock, dirt, snow, splatmap)
     audio/                ← music, UI sounds, footstep packs, ambient effects
     models/               ← shared GLB models (creatures, props)
@@ -27,6 +27,20 @@ assets/
     logic/
     terrain/              ← project-specific heightmap (heightmap.png + heightmap.json manifest)
 ```
+
+### Texture subfolder conventions
+
+| Folder | Contents |
+|---|---|
+| `{Name}_SD/` | PBR material set — one folder per set (basecolor, normal, roughness, AO, height) |
+| `particles/` | Particle billboard sprites (e.g. kenney-particle-pack) |
+| `noise/` | Seamlessly tiling greyscale utility textures for WGSL shaders (Perlin, Voronoi, blue noise …) |
+| `decals/` | Projected decal textures (rings, impact marks, splats) |
+| `foliage/` | Leaf alpha brush-stroke textures for the stylized foliage system |
+| `ui/` | UI icons, atlas sheets, and HUD elements |
+| `skybox/` | Skybox cubemaps and HDRIs |
+
+Do not dump new textures at the `textures/` root. Place them in the matching subfolder; create the subfolder with a `.gitkeep` if none exists yet. Delete the `.gitkeep` once real files land.
 
 ## Shared vs project-specific
 

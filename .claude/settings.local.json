@@ -57,7 +57,10 @@
       "Bash(Select-Object -First 100)",
       "PowerShell(Get-Item C:\\git\\rust\\ironhold-lib\\*)",
       "Bash(cargo info *)",
-      "Bash(cargo tree *)"
+      "Bash(cargo tree *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\git\\\\rust\\\\ironhold-lib\\\\assets\\\\shared\\\\textures\" -Recurse -File | ForEach-Object { $_.Name } | Sort-Object | Get-Unique)",
+      "Bash(Get-ChildItem C:/git/rust/ironhold-lib/assets/shared/textures -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)"
     ]
   }
 }
