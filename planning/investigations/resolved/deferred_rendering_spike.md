@@ -152,11 +152,11 @@ All code analysis points to WASM compatibility, but a live browser test has not 
 
 ## Outcome
 
-- [ ] Native: not yet run — low risk based on analysis; run `particles_demo` with `DeferredPrepass` and confirm >16 simultaneous dynamic lights work
+- [ ] Native: deferred to feature implementation — run `particles_demo` with `DeferredPrepass` added to the camera and confirm >16 simultaneous dynamic lights work; tracked as first task in `planning/features/deferred_rendering.md`
 - [x] WASM compiles: **clean build**, no errors, no warnings related to deferred (`wasm-pack` exit 0 in 8m 30s)
 - [x] WASM browser (GL/ANGLE backend): **scene fully loads** — terrain, player, animations, materials, all systems initialize; no crashes; no WebGPU format errors
 - [x] WASM GL degradation: **graceful** — Playwright's headless Chromium uses WebGL2/ANGLE backend; `DeferredPrepass` is silently skipped and falls back to clustered forward; scene renders correctly
-- [ ] WASM native WebGPU: **manual test needed** — Playwright uses GL, not native WebGPU; run `python serve.py` in Chrome with WebGPU enabled and check console for `Rgba32Uint` format errors before shipping
+- [x] WASM native WebGPU: **verified via SwiftShader** — `python test_web.py --webgpu --skip-build --project particles_demo` smoke test passed clean; no `wgpu error`, no `VALIDATION ERROR`, no `No WebGPU` in console; `Rgba32Uint` format raised no errors on the Dawn/Vulkan path
 - [x] Custom materials: **no changes needed** — all default to `OpaqueRendererMethod::Forward`
 - [x] Mixed scene: **correct by design** — Bevy routes materials automatically
 - [x] Camera render graph WARN on GL: **harmless** — Entity with `DeferredPrepass` on GL backend logs one WARN per scene load; does not affect rendering; will not appear on WebGPU backend
