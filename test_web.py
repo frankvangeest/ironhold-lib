@@ -16,6 +16,8 @@ Options:
     --update-baseline   Overwrite baseline for a specific target (repeatable)
     --project           Limit tests to one project (repeatable, e.g. --project entity_logic_demo)
     --screenshot-dir    Where to store current screenshots  [default: screenshots]
+    --webgpu            SwiftShader WebGPU (headless); exercises the WebGPU code path without a GPU
+    --real-gpu          Non-headless Chromium with real D3D12/Vulkan GPU; requires a display
 
 Screenshot layout:
     screenshot_baselines/scenes/      ← committed to git; scene baselines used in gallery
@@ -72,9 +74,24 @@ BASELINE_DIFF_THRESHOLD = 0.04   # 4 %
 # Per-channel tolerance before a pixel counts as "different"
 PIXEL_TOLERANCE = 15
 
-CHROMIUM_ARGS = [
+CHROMIUM_ARGS_GL = [
     "--enable-unsafe-webgpu",
     "--enable-features=Vulkan",
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+]
+
+CHROMIUM_ARGS_WEBGPU = [
+    "--enable-unsafe-webgpu",
+    "--enable-features=Vulkan,UseSkiaRenderer",
+    "--use-vulkan=swiftshader",
+    "--disable-vulkan-surface",
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+]
+
+CHROMIUM_ARGS_REAL_GPU = [
+    "--enable-unsafe-webgpu",
     "--no-sandbox",
     "--disable-setuid-sandbox",
 ]
@@ -474,13 +491,15 @@ async def run_all(
     update_baselines: bool,
     update_baseline_projects: set[str],
     filter_projects: set[str],
+    chromium_args: list[str] | None = None,
+    headless: bool = True,
 ) -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
     # When --project is given, restrict to those projects; otherwise run all.
     active_projects = [p for p in PROJECTS if not filter_projects or p in filter_projects]
 
     async with async_playwright() as pw:
-        browser: Browser = await pw.chromium.launch(headless=True, args=CHROMIUM_ARGS)
+        browser: Browser = await pw.chromium.launch(headless=headless, args=chromium_args or CHROMIUM_ARGS_GL)
         context: BrowserContext = await browser.new_context(viewport={"width": 1280, "height": 720})
 
         # --- Smoke tests ---
@@ -584,6 +603,12 @@ def main() -> None:
                         help="Limit tests to specific project(s) (repeatable). "
                              "Omit to run all projects.")
     parser.add_argument("--screenshot-dir", default="screenshots")
+    gpu_group = parser.add_mutually_exclusive_group()
+    gpu_group.add_argument("--webgpu", action="store_true",
+                           help="Use SwiftShader WebGPU (headless); exercises the WebGPU code path "
+                                "without requiring a display or physical GPU")
+    gpu_group.add_argument("--real-gpu", action="store_true",
+                           help="Use real GPU via non-headless Chromium; requires a display")
     args = parser.parse_args()
 
     screenshot_dir = Path(args.screenshot_dir)
@@ -607,8 +632,18 @@ def main() -> None:
     )
     time.sleep(1)
 
+    if args.real_gpu:
+        chromium_args = CHROMIUM_ARGS_REAL_GPU
+        headless = False
+    elif args.webgpu:
+        chromium_args = CHROMIUM_ARGS_WEBGPU
+        headless = True
+    else:
+        chromium_args = CHROMIUM_ARGS_GL
+        headless = True
+
     try:
-        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects))
+        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects, chromium_args, headless))
     finally:
         server.terminate()
         server.wait()

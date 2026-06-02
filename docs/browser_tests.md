@@ -24,6 +24,20 @@ Run `python test_web.py --update-baselines` after any intentional rendering chan
 Run `python test_web.py --update-baseline <name>` to update a single project or `pause_nav`.
 Run `python test_web.py --project <name>` to restrict all test categories to one project (repeatable). Useful when iterating on a single project: `python test_web.py --project entity_logic_demo --update-baselines --skip-build`.
 
+## Rendering backend flags
+
+By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two flags select alternative backends:
+
+| Flag | Backend | Headless | When to use |
+|------|---------|----------|-------------|
+| _(none)_ | GL/ANGLE (WebGL2) | yes | Everyday CI loop; fast, stable baselines |
+| `--webgpu` | SwiftShader via Vulkan/Dawn | yes | Verify the WebGPU code path (e.g. after enabling deferred rendering); no GPU required |
+| `--real-gpu` | Real D3D12/Vulkan GPU | **no** | Final hardware validation; requires a display |
+
+`--webgpu` and `--real-gpu` are mutually exclusive.
+
+> **Baseline note:** baselines were captured with the default GL/ANGLE backend. Running `--webgpu` or `--real-gpu` may produce pixel-level differences (different rendering path). Regenerate baselines with `--update-baselines` if you switch the default backend.
+
 ## `DebugState` resource
 
 The test harness reads a hidden `<div id="debug-state">` updated every frame by the WASM runtime:
