@@ -41,7 +41,7 @@ The sphere-normal technique is the key insight: without it, individual billboard
             leaf_scale_max: 0.60,
         ),
         material: (
-            leaf_texture: "textures/leaf_brush",  // asset catalog key; alpha-masked PNG
+            leaf_texture: "textures/foliage/leaf_brush_01",  // asset catalog key; alpha-masked PNG
             color_highlight: (0.45, 0.72, 0.25),
             color_midtone:   (0.28, 0.55, 0.15),
             color_shadow:    (0.12, 0.32, 0.08),

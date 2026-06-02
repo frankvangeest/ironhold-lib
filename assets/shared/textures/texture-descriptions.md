@@ -252,6 +252,16 @@ Clean, light white marble with thin diagonal gray-blue veining. The veins are fi
 
 ---
 
+## Foliage Brush Strokes (`foliage/`)
+
+Alpha-masked PNG textures for use as leaf card billboards in the stylized foliage system (`kind: Foliage` prefabs). Each file is a single brush stroke or leaf silhouette on a transparent background. Reference them via the `leaf_texture` field in a `FoliageMaterialDef`.
+
+| File | Asset key | Description |
+|---|---|---|
+| `leaf_brush_01.png` | `textures/foliage/leaf_brush_01` | Anime-style leaf brush stroke; alpha-masked silhouette for Ghibli foliage clusters |
+
+---
+
 ## Kenney Particle Pack (`particles/kenney-particle-pack/`)
 
 256×256 RGBA PNG sprites for use as particle billboards or effect overlays. Transparent background; white/light shapes on alpha. Downscaled from the original 512×512 release. Organized by visual category:
