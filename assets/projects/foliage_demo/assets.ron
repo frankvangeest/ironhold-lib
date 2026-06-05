@@ -1,0 +1,21 @@
+(
+    schema_version: 1,
+    models: {
+        "models/plants/trunk_with_branches_01": (
+            path: "shared/models/plants/trunk_with_branches_01.glb#Scene0",
+        ),
+    },
+    textures: {
+        "textures/foliage/leaf_brush_01": "shared/textures/foliage/leaf_brush_01.png",
+        "textures/foliage/leaf_brush_02": "shared/textures/foliage/leaf_brush_02.png",
+    },
+    materials: {
+        "mat_bark": (
+            kind: Custom((
+                shader: "shared/shaders/custom_pbr.wgsl",
+                colors: { "base_color": (r:0.28, g:0.16, b:0.07, a:1.0) },
+                floats: { "metallic": 0.0, "perceptual_roughness": 0.85 },
+            )),
+        ),
+    },
+)

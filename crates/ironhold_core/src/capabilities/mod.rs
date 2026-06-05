@@ -22,6 +22,7 @@ pub mod fading_light;
 pub mod flame_material;
 pub mod particle_renderer;
 pub mod decal;
+pub mod foliage;
 
 pub use player::*;
 pub use camera::*;
@@ -52,4 +53,5 @@ pub use particle_renderer::{
     ParticleRendererPlugin,
 };
 pub use decal::{FadingDecal, TrackedDecal, PendingDecalSpawns, spawn_decal_system, fading_decal_system};
+pub use foliage::{FoliageMaterial, FoliageMaterialParams, ATTRIBUTE_LEAF_CENTER, PendingFoliage, FoliagePlugin};
 

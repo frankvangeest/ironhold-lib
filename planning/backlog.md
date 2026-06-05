@@ -11,7 +11,8 @@
 
 ## Active
 
-- [ ] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; v2 adds GPU wind sway and particle leaf drop. See `planning/features/stylized_foliage.md`
+- [x] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; `height_bias` + `seed` for crown shape control. See `planning/features/done/stylized_foliage.md`
+- [ ] **Foliage demo — visual tuning** — refine cluster placement, leaf scale, and per-prefab parameters in `foliage_demo` to match the reference image quality. Blocked on live RON reload or live editor — parameter tuning without a tight feedback loop is impractical. Pick up after either ships.
 
 ---
 

@@ -1,0 +1,111 @@
+(
+    schema_version: 2,
+    prefabs: {
+
+        // ── Player (flycam for free exploration) ────────────────────────────────
+        "explorer": (
+            kind: Prop,
+            model: "",
+            components: (
+                tags: ["flycam"],
+                flycam: ( speed: 8.0, fast_speed: 20.0 ),
+            ),
+        ),
+
+        // ── Ground plane ────────────────────────────────────────────────────────
+        "ground_plane": (
+            kind: Primitive,
+            model: "",
+            shape: Cuboid,
+            primitive: (
+                size: (40.0, 0.1, 40.0),
+                color: (0.22, 0.28, 0.14),
+                roughness: 0.9,
+            ),
+        ),
+
+        // ── Oak-style tree — tall rounded crown ─────────────────────────────────
+        "oak_tree": (
+            kind: Foliage,
+            model: "",
+            material: "mat_bark",
+            foliage: (
+                trunk: "models/plants/trunk_with_branches_01",
+                clusters: (
+                    count: 7,
+                    emitter_radius: 1.6,
+                    leaves_per_cluster: 28,
+                    leaf_scale_min: 0.35,
+                    leaf_scale_max: 0.65,
+                    crown_height: 2.2,
+                    height_bias: 0.6,
+                    seed: 42,
+                ),
+                material: (
+                    leaf_texture: "textures/foliage/leaf_brush_01",
+                    color_highlight: (0.45, 0.72, 0.25),
+                    color_midtone:   (0.28, 0.55, 0.15),
+                    color_shadow:    (0.10, 0.30, 0.06),
+                    toon_bands: 3,
+                    ao_intensity: 0.45,
+                ),
+            ),
+        ),
+
+        // ── Compact bush — no trunk, just leaf clusters ─────────────────────────
+        // Omitting `trunk` is valid — set it only when you have a GLB trunk model.
+        // This is also the minimal foliage prefab; all fields shown are required.
+        "bush": (
+            kind: Foliage,
+            model: "",
+            foliage: (
+                clusters: (
+                    count: 5,
+                    emitter_radius: 0.7,
+                    leaves_per_cluster: 20,
+                    leaf_scale_min: 0.25,
+                    leaf_scale_max: 0.45,
+                    height_bias: 0.5,
+                    seed: 7,
+                ),
+                material: (
+                    leaf_texture: "textures/foliage/leaf_brush_01",
+                    color_highlight: (0.38, 0.65, 0.20),
+                    color_midtone:   (0.22, 0.48, 0.10),
+                    color_shadow:    (0.08, 0.25, 0.04),
+                    toon_bands: 2,
+                    ao_intensity: 0.5,
+                ),
+            ),
+        ),
+
+        // ── Autumn tree — warm amber tones ──────────────────────────────────────
+        "autumn_tree": (
+            kind: Foliage,
+            model: "",
+            material: "mat_bark",
+            foliage: (
+                trunk: "models/plants/trunk_with_branches_01",
+                clusters: (
+                    count: 6,
+                    emitter_radius: 1.4,
+                    leaves_per_cluster: 24,
+                    leaf_scale_min: 0.30,
+                    leaf_scale_max: 0.60,
+                    crown_height: 2.0,
+                    height_bias: 0.6,
+                    seed: 99,
+                ),
+                material: (
+                    // Different brush texture to show leaf_texture is swappable
+                    leaf_texture: "textures/foliage/leaf_brush_02",
+                    color_highlight: (0.95, 0.72, 0.18),
+                    color_midtone:   (0.75, 0.42, 0.08),
+                    color_shadow:    (0.40, 0.18, 0.03),
+                    toon_bands: 3,
+                    ao_intensity: 0.4,
+                ),
+            ),
+        ),
+    },
+)

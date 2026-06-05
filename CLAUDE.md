@@ -191,16 +191,20 @@ Every code change must follow this order before committing code:
  4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint`
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
     - **Schema changes** — if any `schema/` type was added, renamed, or had a field type changed, also check `ironhold_cli` compiles (`cargo check -p ironhold_cli`) and that `query prefabs` / `query effects` output still formats correctly.
- 6. **WASM build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+ 6. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev`
+    Fast (~2 min). For local play-testing only — never commit a `--dev` build.
  7. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  8. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
- 9. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
-10. **Commit** — only after Frank confirms; include a summary in git commit message format
-11. **Propose the next feature to add to active in the backlog**
+ 9. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+    Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 8.
+    ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**. Current size: ~91 MB.
+10. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
+11. **Commit** — only after Frank confirms; include a summary in git commit message format
+12. **Propose the next feature to add to active in the backlog**
 
 Do not start coding before the feature plan is finalized and reviewed.
-Once code changes have been made, do not commit before "User play-tests" are approved. 
-Do not skip the WASM build — new Rust code can compile natively but fail in WASM.
+Once code changes have been made, do not commit before steps 8 and 9 (play-test confirmed + release build) are complete.
+Do not commit a `--dev` WASM build — it bloats the repo and may exceed GitHub Pages limits.
 
 ### After changes
 When ever you make changes in the code, give the summery of the changes in a nice git commit message format.

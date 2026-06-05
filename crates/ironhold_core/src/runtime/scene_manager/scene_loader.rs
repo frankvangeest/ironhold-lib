@@ -192,6 +192,43 @@ pub fn spawn_scene_v2(
                 continue;
             }
 
+            if prefab.kind == PrefabKind::Foliage {
+                let foliage_def = prefab.foliage.clone().unwrap_or_default();
+                let root = commands.spawn((
+                    Name::new(entity_def.id.clone()),
+                    transform,
+                    Visibility::default(),
+                    LevelEntity,
+                    SpawnId(entity_def.id.clone()),
+                    crate::capabilities::foliage::PendingFoliage(foliage_def.clone()),
+                )).id();
+                spawn_registry.entities.insert(entity_def.id.clone(), root);
+
+                // Spawn trunk GLB as a child entity if defined.
+                if let Some(trunk_key) = &foliage_def.trunk {
+                    if let Some(catalog_entry) = params.asset_catalog.0.models.get(trunk_key) {
+                        let trunk = spawn_prefab_instance(
+                            &mut commands,
+                            &asset_server,
+                            &model_spawner,
+                            &merged_fixes.0,
+                            &params.project_root.0,
+                            prefab,
+                            catalog_entry.path.clone(),
+                            Transform::IDENTITY,
+                            trunk_key,
+                        );
+                        commands.entity(root).add_child(trunk);
+                    } else {
+                        load_errors.push(format!(
+                            "entity '{}': foliage trunk key '{}' not found in asset catalog, trunk skipped",
+                            entity_def.id, trunk_key
+                        ));
+                    }
+                }
+                continue;
+            }
+
             if prefab.kind == PrefabKind::Primitive {
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
@@ -1701,6 +1738,14 @@ fn spawn_primitive_children(
             };
 
             match nested_prefab.kind {
+                PrefabKind::Foliage => {
+                    // Foliage nested inside a composite is not supported — skip silently.
+                    load_errors.push(format!(
+                        "entity '{}': nested prefab '{}' has kind Foliage; foliage cannot be nested inside composite prefabs, skipped",
+                        entity_id, nested_key
+                    ));
+                    continue;
+                }
                 PrefabKind::Actor | PrefabKind::Prop => {
                     // GLB branch: resolve model path and spawn via the shared instance spawner.
                     let Some(catalog_entry) = ctx.asset_catalog.models.get(&nested_prefab.model) else {

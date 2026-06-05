@@ -15,6 +15,9 @@ bevy_common_assets = { git = "https://github.com/NiklasEi/bevy_common_assets", r
 bevy_framepace = "0.21"
 wasm-bindgen = "0.2"
 
+[profile.release]
+opt-level = "s"   # optimise for binary size; important for WASM GitHub Pages limit
+
 [profile.test]
 debug = true
 opt-level = 0

@@ -953,9 +953,10 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | `PrefabKind` | `Actor`, `Prop`, or `Primitive` (bare enum variant, no quotes) |
-| `model` | `String` | Key into `AssetCatalog.models` for `Actor`/`Prop`. Must be `""` (empty) for `Primitive` — use `shape` instead. |
-| `shape` | `Option<PrimitiveShapeKind>` | Required for `Primitive` prefabs. Write the bare variant: `Cuboid`, `Sphere`, etc. (`implicit_some` is active; no `Some()` wrapper needed). Omit for `Actor`/`Prop`. See [Primitive shapes](#primitive-shapes-) below. |
+| `kind` | `PrefabKind` | `Actor`, `Prop`, `Primitive`, or `Foliage` (bare enum variant, no quotes) |
+| `model` | `String` | Key into `AssetCatalog.models` for `Actor`/`Prop`. Must be `""` (empty) for `Primitive` and `Foliage` — use `shape` or `foliage.trunk` instead. |
+| `shape` | `Option<PrimitiveShapeKind>` | Required for `Primitive` prefabs. Write the bare variant: `Cuboid`, `Sphere`, etc. (`implicit_some` is active; no `Some()` wrapper needed). Omit for `Actor`/`Prop`/`Foliage`. See [Primitive shapes](#primitive-shapes-) below. |
+| `foliage` | `Option<FoliageDef>` | Required for `Foliage` prefabs. Defines the trunk model, cluster distribution, and leaf card material. See [kind: Foliage](#kind-foliage-) below. |
 | `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root |
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
@@ -1397,6 +1398,97 @@ When a `well` prefab at `offset: (5, 0, 0)` has its own children (a cylinder at 
 - If the village anchor is rotated 45° around Y, all of the above rotates with it — including the well's inner parts.
 
 **Scale inheritance caveat:**  Non-uniform scale on a parent entity (e.g., `scale: (2, 1, 1)`) combined with a rotation on a nested child causes shearing — the same limitation that applies in every 3D scene hierarchy. Keep scale uniform (or leave it at `(1, 1, 1)`) on any prefab that contains nested children.
+
+---
+
+### kind: Foliage ✅
+
+A procedural foliage prefab: no GLB geometry is loaded for the canopy. Instead the engine builds leaf-card cluster meshes at scene load from the parameters below. An optional trunk GLB is loaded as a child entity. Leaf cards are camera-facing billboards (always face the player) shaded with a cel/toon lighting model.
+
+```ron
+// Minimal foliage — bush with no trunk
+"my_bush": (
+    kind: Foliage,
+    foliage: (
+        clusters: (
+            count: 5,
+            emitter_radius: 0.7,
+            leaves_per_cluster: 20,
+            leaf_scale_min: 0.25,
+            leaf_scale_max: 0.45,
+        ),
+        material: (
+            leaf_texture: "textures/foliage/leaf_brush_01",
+            color_highlight: (0.38, 0.65, 0.20),
+            color_midtone:   (0.22, 0.48, 0.10),
+            color_shadow:    (0.08, 0.25, 0.04),
+            toon_bands: 3,
+            ao_intensity: 0.4,
+        ),
+    ),
+),
+
+// Full tree with trunk
+"oak_tree": (
+    kind: Foliage,
+    foliage: (
+        trunk: "models/plants/trunk_with_branches_01",
+        clusters: (
+            count: 7,
+            emitter_radius: 1.6,
+            leaves_per_cluster: 28,
+            leaf_scale_min: 0.35,
+            leaf_scale_max: 0.65,
+            height_bias: 0.75,
+            seed: 42,
+        ),
+        material: (
+            leaf_texture: "textures/foliage/leaf_brush_01",
+            color_highlight: (0.45, 0.72, 0.25),
+            color_midtone:   (0.28, 0.55, 0.15),
+            color_shadow:    (0.10, 0.30, 0.06),
+            toon_bands: 3,
+            ao_intensity: 0.45,
+        ),
+    ),
+),
+```
+
+**`FoliageDef` fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `trunk` | `Option<String>` | `None` | Asset catalog model key for the trunk GLB. Omit for bushes or pure foliage. |
+| `clusters` | `FoliageClustersDef` | see below | Controls how many clusters spawn and how leaf cards are sized. |
+| `material` | `FoliageMaterialDef` | see below | Leaf card texture and toon shading colours. |
+
+**`FoliageClustersDef` fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `count` | `u32` | `6` | Number of foliage clusters to spawn. |
+| `emitter_radius` | `f32` | `1.2` | Crown radius in metres — how far apart clusters are spread (not a particle emitter). |
+| `crown_height` | `f32` | `0.0` | Lifts the emitter sphere above the entity origin, in metres. Set this to roughly where the trunk meets the branches. Bushes use `0.0`; trees typically need `1.5`–`2.5`. |
+| `leaves_per_cluster` | `u32` | `24` | Number of leaf cards baked into each cluster mesh. Must be > 0. |
+| `leaf_scale_min` | `f32` | `0.3` | Minimum leaf card size in metres. |
+| `leaf_scale_max` | `f32` | `0.6` | Maximum leaf card size in metres. Cards are randomly sized between min and max. |
+| `height_bias` | `f32` | `0.7` | Biases cluster placement toward the top of the sphere. `0.0` = full sphere (clusters appear below the trunk base); `1.0` = upper hemisphere only. `0.7` is a good default for trees; `0.5` works well for bushes. |
+| `seed` | `u32` | `0` | Rotates the Fibonacci placement pattern. Two trees of the same prefab with different `seed` values will have different cluster arrangements. Change the seed to get a different silhouette. |
+
+**`FoliageMaterialDef` fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `leaf_texture` | `String` | Asset catalog texture key. Must be an **RGBA PNG** where the leaf shapes are opaque and the background is transparent (alpha = 0). RGB images have no transparency and render as solid rectangles. |
+| `color_highlight` | `(f32, f32, f32)` | RGB colour for the brightest lit areas (facing the sun). Linear sRGB 0–1. Note: **RGB, not RGBA** — no alpha component. |
+| `color_midtone` | `(f32, f32, f32)` | RGB colour for the mid-tone transition zone. |
+| `color_shadow` | `(f32, f32, f32)` | RGB colour for the darkest shadowed areas (facing away from the sun). |
+| `toon_bands` | `u8` | Number of discrete shading bands. **Must be 2, 3, or 4.** 3 is the standard anime look; 2 is more graphic; 4 adds a subtle extra highlight band. |
+| `ao_intensity` | `f32` | How much ambient occlusion darkens the shadow side. `0.0` = no AO; `1.0` = maximum darkening. Values around `0.4`–`0.5` look natural. |
+
+> **Validation:** the engine rejects a Foliage prefab at load time if `leaf_texture` is empty, `leaves_per_cluster` is 0, or `toon_bands` is outside 2–4.
+
+See `assets/projects/foliage_demo/` for a working demo with oak trees, autumn trees, and bushes.
 
 ---
 

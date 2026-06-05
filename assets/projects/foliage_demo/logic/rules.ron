@@ -1,0 +1,6 @@
+(
+    schema_version: 2,
+    // Foliage demo is static — no event-driven logic needed.
+    // Add rules here to respond to game events (e.g. button presses, trigger zones).
+    rules: [],
+)

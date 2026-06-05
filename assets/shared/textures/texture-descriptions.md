@@ -259,6 +259,7 @@ Alpha-masked PNG textures for use as leaf card billboards in the stylized foliag
 | File | Asset key | Description |
 |---|---|---|
 | `leaf_brush_01.png` | `textures/foliage/leaf_brush_01` | Anime-style leaf brush stroke; alpha-masked silhouette for Ghibli foliage clusters |
+| `leaf_brush_02.png` | `textures/foliage/leaf_brush_02` | Soft cloud/puff brush stroke; produces a rounder, fuller canopy look |
 
 ---
 

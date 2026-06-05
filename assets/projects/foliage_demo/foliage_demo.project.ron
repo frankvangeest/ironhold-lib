@@ -1,0 +1,9 @@
+(
+    schema_version: 3,
+    project_id: "foliage_demo",
+    display_name: "Foliage Demo",
+    initial_scene: "scenes/main.scene.ron",
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+)

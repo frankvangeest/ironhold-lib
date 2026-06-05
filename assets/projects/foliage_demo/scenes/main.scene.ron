@@ -1,0 +1,59 @@
+(
+    schema_version: 2,
+    entities: [
+        // Flycam — use WASD + mouse to explore the foliage from all angles
+        ( id: "explorer", prefab: "explorer", transform: (
+            translation: (0.0, 3.0, 10.0),
+        )),
+
+        // Ground
+        ( id: "ground", prefab: "ground_plane", transform: (
+            translation: (0.0, -0.05, 0.0),
+        )),
+
+        // Oak trees
+        ( id: "oak_01", prefab: "oak_tree", transform: (
+            translation: (-4.0, 0.0, -2.0),
+        )),
+        ( id: "oak_02", prefab: "oak_tree", transform: (
+            translation: (4.0, 0.0, 1.0),
+            scale: (1.2, 1.2, 1.2),
+        )),
+        ( id: "oak_03", prefab: "oak_tree", transform: (
+            translation: (0.0, 0.0, -6.0),
+            scale: (0.9, 0.9, 0.9),
+        )),
+
+        // Bushes
+        ( id: "bush_01", prefab: "bush", transform: (
+            translation: (-2.0, 0.0, 2.0),
+        )),
+        ( id: "bush_02", prefab: "bush", transform: (
+            translation: (2.5, 0.0, 3.5),
+            scale: (1.3, 1.3, 1.3),
+        )),
+        ( id: "bush_03", prefab: "bush", transform: (
+            translation: (-6.0, 0.0, 0.5),
+        )),
+
+        // Autumn trees
+        ( id: "autumn_01", prefab: "autumn_tree", transform: (
+            translation: (-7.0, 0.0, -4.0),
+        )),
+        ( id: "autumn_02", prefab: "autumn_tree", transform: (
+            translation: (7.5, 0.0, -3.0),
+            scale: (1.1, 1.1, 1.1),
+        )),
+    ],
+    lighting: (
+        ambient: (0.18, 0.20, 0.25),
+        ambient_brightness: 1.2,
+        directional: (
+            color: (1.0, 0.95, 0.85),
+            intensity: 25000.0,
+            rotation_euler_deg: (42.0, 210.0, 0.0),
+            shadows_enabled: true,
+            shadow_distance: 60.0,
+        ),
+    ),
+)

@@ -220,7 +220,8 @@ fn inspect_texture(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::er
     let img = reader.decode()?;
 
     let (width, height) = img.dimensions();
-    let channels = color_type_name(img.color());
+    let channels  = color_type_channels(img.color());
+    let bit_depth = color_type_bit_depth(img.color());
     let format_str = format.map(image_format_name).unwrap_or("Unknown");
 
     if mode.json {
@@ -230,6 +231,7 @@ fn inspect_texture(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::er
             "height": height,
             "format": format_str,
             "channels": channels,
+            "bit_depth": bit_depth,
             "file_size_bytes": file_size,
         });
         println!("{}", serde_json::to_string_pretty(&val).unwrap());
@@ -239,6 +241,7 @@ fn inspect_texture(path: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::er
         println!("  Dimensions   {} × {}", width, height);
         println!("  Format       {}", format_str);
         println!("  Channels     {}", channels);
+        println!("  Bit depth    {}", bit_depth);
         println!("  File size    {}", human_file_size(file_size));
     }
 
@@ -258,12 +261,23 @@ fn image_format_name(fmt: image::ImageFormat) -> &'static str {
     }
 }
 
-fn color_type_name(ct: image::ColorType) -> &'static str {
+fn color_type_channels(ct: image::ColorType) -> &'static str {
     match ct {
-        image::ColorType::L8 | image::ColorType::L16 => "Grayscale",
-        image::ColorType::La8 | image::ColorType::La16 => "Grayscale+Alpha",
-        image::ColorType::Rgb8 | image::ColorType::Rgb16 | image::ColorType::Rgb32F => "RGB",
-        image::ColorType::Rgba8 | image::ColorType::Rgba16 | image::ColorType::Rgba32F => "RGBA",
+        image::ColorType::L8   | image::ColorType::L16   => "Grayscale",
+        image::ColorType::La8  | image::ColorType::La16  => "Grayscale+Alpha",
+        image::ColorType::Rgb8 | image::ColorType::Rgb16 | image::ColorType::Rgb32F  => "RGB",
+        image::ColorType::Rgba8| image::ColorType::Rgba16| image::ColorType::Rgba32F => "RGBA",
+        _ => "Unknown",
+    }
+}
+
+fn color_type_bit_depth(ct: image::ColorType) -> &'static str {
+    match ct {
+        image::ColorType::L8   | image::ColorType::La8
+        | image::ColorType::Rgb8  | image::ColorType::Rgba8  => "8 bpc",
+        image::ColorType::L16  | image::ColorType::La16
+        | image::ColorType::Rgb16 | image::ColorType::Rgba16 => "16 bpc",
+        image::ColorType::Rgb32F | image::ColorType::Rgba32F => "32 bpc (float)",
         _ => "Unknown",
     }
 }

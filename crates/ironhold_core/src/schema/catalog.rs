@@ -12,10 +12,89 @@ pub enum PrefabKind {
     Actor,
     Prop,
     Primitive,
+    Foliage,
 }
 
 impl Default for PrefabKind {
     fn default() -> Self { Self::Actor }
+}
+
+// ─── Foliage structs ──────────────────────────────────────────────────────────
+
+/// Full foliage definition for `kind: Foliage` prefabs.
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct FoliageDef {
+    /// Asset catalog model key for the trunk GLB. `None` for bushes / pure foliage.
+    #[serde(default)]
+    pub trunk: Option<String>,
+    pub clusters: FoliageClustersDef,
+    pub material: FoliageMaterialDef,
+}
+
+/// Controls how leaf card clusters are distributed.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FoliageClustersDef {
+    /// Number of foliage clusters to spawn.
+    pub count: u32,
+    /// Sphere radius used to distribute cluster centres (Fibonacci sphere).
+    pub emitter_radius: f32,
+    /// Number of leaf cards baked into each cluster mesh.
+    pub leaves_per_cluster: u32,
+    pub leaf_scale_min: f32,
+    pub leaf_scale_max: f32,
+    /// Lifts the emitter sphere above the entity origin, in metres.
+    /// Set this to roughly the height where the trunk meets the branches.
+    /// Default `0.0` places the sphere at ground level which is correct
+    /// only for bushes — trees typically need `1.5`–`2.5`.
+    #[serde(default)]
+    pub crown_height: f32,
+    /// Biases cluster placement toward the top of the sphere.
+    /// `0.0` = full sphere, `0.5` = upper hemisphere only,
+    /// `0.75` = upper quarter.  `0.6` is a good default for trees.
+    #[serde(default)]
+    pub height_bias: f32,
+    /// Seed for the Fibonacci spiral offset.  Different seeds rotate the
+    /// cluster arrangement so two trees of the same prefab look varied.
+    #[serde(default)]
+    pub seed: u32,
+}
+
+impl Default for FoliageClustersDef {
+    fn default() -> Self {
+        Self { count: 6, emitter_radius: 1.2, leaves_per_cluster: 24,
+               leaf_scale_min: 0.3, leaf_scale_max: 0.6,
+               crown_height: 0.0, height_bias: 0.6, seed: 0 }
+    }
+}
+
+/// Visual appearance of the foliage material.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FoliageMaterialDef {
+    /// Asset catalog texture key — alpha-masked PNG brush stroke.
+    pub leaf_texture: String,
+    pub color_highlight: (f32, f32, f32),
+    pub color_midtone:   (f32, f32, f32),
+    pub color_shadow:    (f32, f32, f32),
+    /// Discrete toon bands: 2, 3, or 4.
+    pub toon_bands: u8,
+    /// Darkens the shadow side (0.0 = off, 1.0 = full AO).
+    pub ao_intensity: f32,
+}
+
+impl Default for FoliageMaterialDef {
+    fn default() -> Self {
+        Self {
+            leaf_texture: String::new(),
+            color_highlight: (0.45, 0.72, 0.25),
+            color_midtone:   (0.28, 0.55, 0.15),
+            color_shadow:    (0.12, 0.32, 0.08),
+            toon_bands: 3,
+            ao_intensity: 0.4,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -541,6 +620,33 @@ impl PrefabCatalog {
             ));
         }
         for (key, prefab) in &self.prefabs {
+            if prefab.kind == PrefabKind::Foliage && prefab.foliage.is_none() {
+                return Err(format!(
+                    "Prefab \"{}\" has kind Foliage but no `foliage` block",
+                    key
+                ));
+            }
+            if prefab.kind == PrefabKind::Foliage {
+                let def = prefab.foliage.as_ref().unwrap();
+                if def.material.leaf_texture.is_empty() {
+                    return Err(format!(
+                        "Prefab \"{}\": `foliage.material.leaf_texture` must not be empty",
+                        key
+                    ));
+                }
+                if def.clusters.leaves_per_cluster == 0 {
+                    return Err(format!(
+                        "Prefab \"{}\": `foliage.clusters.leaves_per_cluster` must be > 0",
+                        key
+                    ));
+                }
+                if !(2..=4).contains(&def.material.toon_bands) {
+                    return Err(format!(
+                        "Prefab \"{}\": `foliage.material.toon_bands` must be 2, 3, or 4",
+                        key
+                    ));
+                }
+            }
             if prefab.kind == PrefabKind::Primitive && prefab.children.is_empty() && prefab.shape.is_none() {
                 return Err(format!(
                     "Prefab \"{}\" has kind Primitive but no `shape` field (required for single-mesh primitives)",
@@ -632,10 +738,14 @@ impl Default for PrefabCatalog {
 #[serde(deny_unknown_fields)]
 pub struct PrefabDef {
     pub kind: PrefabKind,
-    pub model: String,  // key into AssetCatalog.models; empty string for `kind: Primitive`
+    #[serde(default)]
+    pub model: String,  // key into AssetCatalog.models; empty for Primitive and Foliage
     /// Shape for `kind: Primitive` prefabs. Required when kind is Primitive, None otherwise.
     #[serde(default)]
     pub shape: Option<PrimitiveShapeKind>,
+    /// Foliage definition for `kind: Foliage` prefabs.
+    #[serde(default)]
+    pub foliage: Option<FoliageDef>,
     #[serde(default)]
     pub animation_policy: Option<String>,
     /// Optional material key from AssetCatalog.materials to override the model's embedded material.
