@@ -54,6 +54,12 @@ impl Material for FoliageMaterial {
     fn fragment_shader() -> ShaderRef {
         "shared/shaders/foliage.wgsl".into()
     }
+    fn prepass_vertex_shader() -> ShaderRef {
+        "shared/shaders/foliage_prepass.wgsl".into()
+    }
+    fn prepass_fragment_shader() -> ShaderRef {
+        "shared/shaders/foliage_prepass.wgsl".into()
+    }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Opaque
     }
@@ -127,11 +133,15 @@ pub fn foliage_setup_system(
             ) * def.clusters.emitter_radius;
             let cluster_pos = sphere_offset + Vec3::Y * def.clusters.crown_height;
             let mesh_handle = build_cluster_mesh(ci, n_clusters, def, &mut meshes);
-            let child = commands.spawn((
+            let mut child_cmd = commands.spawn((
                 Mesh3d(mesh_handle),
                 MeshMaterial3d(mat_handle.clone()),
                 Transform::from_translation(cluster_pos),
-            )).id();
+            ));
+            if !def.cast_shadows {
+                child_cmd.insert(bevy::light::NotShadowCaster);
+            }
+            let child = child_cmd.id();
             commands.entity(entity).add_child(child);
         }
 

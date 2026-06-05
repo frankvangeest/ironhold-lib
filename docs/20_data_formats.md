@@ -1461,6 +1461,7 @@ A procedural foliage prefab: no GLB geometry is loaded for the canopy. Instead t
 | `trunk` | `Option<String>` | `None` | Asset catalog model key for the trunk GLB. Omit for bushes or pure foliage. |
 | `clusters` | `FoliageClustersDef` | see below | Controls how many clusters spawn and how leaf cards are sized. |
 | `material` | `FoliageMaterialDef` | see below | Leaf card texture and toon shading colours. |
+| `cast_shadows` | `bool` | `true` | `true` = alpha-clipped depth prepass produces leaf-shaped shadows. `false` = `NotShadowCaster` inserted — no shadows at all (cheaper; useful for dense bushes). |
 
 **`FoliageClustersDef` fields:**
 

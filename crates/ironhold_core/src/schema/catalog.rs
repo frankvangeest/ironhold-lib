@@ -30,7 +30,15 @@ pub struct FoliageDef {
     pub trunk: Option<String>,
     pub clusters: FoliageClustersDef,
     pub material: FoliageMaterialDef,
+    /// Whether clusters cast shadows. Default `true` uses an alpha-clipped
+    /// depth prepass so shadows match the leaf card silhouettes. Set `false`
+    /// to disable shadow casting entirely (cheaper; useful for dense bushes
+    /// or when the square-shadow artefact is acceptable).
+    #[serde(default = "foliage_cast_shadows_default")]
+    pub cast_shadows: bool,
 }
+
+fn foliage_cast_shadows_default() -> bool { true }
 
 /// Controls how leaf card clusters are distributed.
 #[derive(Deserialize, Debug, Clone)]
