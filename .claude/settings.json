@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/schema_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/action_executor_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/assets_ron_reminder.py"
+          }
+        ]
+      }
+    ]
+  }
+}
