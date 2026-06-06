@@ -1,4 +1,54 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(cargo test:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo clean:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo info:*)",
+      "Bash(cargo tree:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(wasm-pack build:*)",
+
+      "Bash(python test_web.py:*)",
+      "Bash(python -m py_compile test_web.py)",
+      "Bash(python -c:*)",
+      "Bash(python tools/asset_checker/check.py:*)",
+      "Bash(python tools/build_asset_manifest.py)",
+      "Bash(python tools/glb_inspector/inspect_glb.py:*)",
+      "Bash(python tools/glb_preview/preview.py:*)",
+      "Bash(python tools/texture_gen/generate.py:*)",
+      "Bash(python tools/avif2png/convert.py:*)",
+      "Bash(python tools/migrate_implicit_some.py)",
+
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(xargs:*)",
+      "Bash(awk:*)",
+      "Bash(echo:*)",
+      "Bash(dir:*)",
+
+      "Bash(git -C C:\\git\\rust\\ironhold-lib rev-parse --short HEAD)",
+      "Bash(git -C C:/git/rust/ironhold-lib rev-parse --short HEAD)",
+
+      "Bash(Get-ChildItem:*)",
+      "Bash(Get-Content:*)",
+      "Bash(Select-Object:*)",
+      "Bash(Sort-Object:*)",
+      "Bash(Measure-Object:*)",
+
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

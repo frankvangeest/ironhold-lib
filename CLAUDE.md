@@ -177,6 +177,12 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 
 ---
 
+## Shell tool preference
+
+Always prefer the **Bash tool** over the PowerShell tool for shell commands. Most commands in this project (`cargo`, `wasm-pack`, `python`, `git`, `ls`, `grep`, `find`) work correctly in Bash on Windows. Only fall back to the PowerShell tool when a command genuinely requires PowerShell-specific syntax (e.g. `Get-ChildItem -Recurse` pipelines, registry access, or `$env:` variables) and cannot be expressed in Bash.
+
+---
+
 ## Critical Rules
 
 ### Code change workflow
