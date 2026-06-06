@@ -457,6 +457,39 @@ pub fn action_executor_system(
                     warn!("Action::ShowDamagePopup: entity '{}' not found in spawn registry", entity_id);
                 }
             }
+            Action::ShowFloatingText { entity: entity_id, text } => {
+                let entity = spawn_params.registry.entities.get(&entity_id).copied();
+                if let Some(e) = entity {
+                    if let Ok(gtf) = scene_state.global_transforms.get(e) {
+                        let default_style = crate::schema::project::DamagePopupStyle::default();
+                        let style = scene_state.project_config
+                            .as_ref()
+                            .and_then(|pc| pc.damage_popup_style.as_ref())
+                            .unwrap_or(&default_style);
+                        let (ox, oy, oz) = style.spawn_offset;
+                        info!("Action::ShowFloatingText: '{}' \"{}\" at {:?}", entity_id, text, gtf.translation());
+                        commands.spawn((
+                            Text2d::new(text),
+                            TextFont { font_size: style.font_size, ..default() },
+                            TextColor(Color::srgba(1.0, 0.92, 0.3, 1.0)),
+                            Transform::from_xyz(0.0, 0.0, 10.0),
+                            WorldLabel {
+                                world_pos: Vec3::ZERO,
+                                tracked_entity: Some(e),
+                                offset: Vec3::new(ox, oy, oz),
+                                base_font_size: style.font_size,
+                                depth_scale: None,
+                            },
+                            DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                            LevelEntity,
+                        ));
+                    } else {
+                        warn!("Action::ShowFloatingText: entity '{}' has no GlobalTransform", entity_id);
+                    }
+                } else {
+                    warn!("Action::ShowFloatingText: entity '{}' not found in spawn registry", entity_id);
+                }
+            }
             Action::SetEntityVisible { entity: entity_id, visible } => {
                 let entity = spawn_params.registry.entities.get(&entity_id).copied();
                 if let Some(e) = entity {

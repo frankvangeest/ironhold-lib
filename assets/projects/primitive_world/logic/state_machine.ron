@@ -36,9 +36,12 @@
                 //   3. Quad  + AlphaMode::Blend + texture        — campfire_smoke (blend sprite)
                 // One SpawnEffect per variant is enough — all effects sharing a variant reuse the
                 // compiled pipeline. Position far below terrain keeps the warmup invisible.
-                SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "campfire_fire",  position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "hit_spark",        position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_fire",    position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_smoke",   position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "skill_heal",       position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "skill_speedboost", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "skill_fireburst",  position: (0.0, -100.0, 0.0)),
             ],
             exit_actions: [ StopMusic ],
             on: [
@@ -82,6 +85,18 @@
                 ( event: "stat.player_health.full",     do_actions: [ SetVariable("health", "100"), SetVariable("status", "") ] ),
                 // Clamp display to zero on death (avoids negative display from IncrementVariable).
                 ( event: "stat.player_health.depleted", do_actions: [ SetVariable("health", "0") ] ),
+
+                // ── Action bar feedback ──────────────────────────────────────────────
+                // Clear status after a short delay so these messages don't linger.
+                ( event: "action_bar.on_cooldown:1",              do_actions: [ SetVariable("status", "Heal on cooldown") ] ),
+                ( event: "action_bar.on_cooldown:2",              do_actions: [ SetVariable("status", "Speed Boost on cooldown") ] ),
+                ( event: "action_bar.on_cooldown:3",              do_actions: [ SetVariable("status", "Fire Burst on cooldown") ] ),
+                ( event: "action_bar.insufficient_resource:1",    do_actions: [ SetVariable("status", "Not enough mana") ] ),
+                ( event: "action_bar.insufficient_resource:2",    do_actions: [ SetVariable("status", "Not enough mana") ] ),
+                ( event: "action_bar.insufficient_resource:3",    do_actions: [ SetVariable("status", "Not enough mana") ] ),
+                ( event: "action_bar.activated:1",                do_actions: [ SetVariable("status", "") ] ),
+                ( event: "action_bar.activated:2",                do_actions: [ SetVariable("status", "") ] ),
+                ( event: "action_bar.activated:3",                do_actions: [ SetVariable("status", "") ] ),
             ],
         ),
         (

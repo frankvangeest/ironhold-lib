@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use ironhold_core::{PipelineWarmup, GameVariables};
 use ironhold_core::runtime::{UiEvent, GameEvent, ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, LoadedRules, LoadedStateMachine, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, LogicState, OverlayEntity, PendingSceneLoadMode, PreloadedScenes, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, BehaviorHandle, EntityFsmState};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, TransformFix, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding, GameSceneV2};
-use ironhold_core::capabilities::player::{CharacterController, player_movement_system};
+use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
 use ironhold_core::schema::player::{InputMap, AnimationPolicy, BaseAnimations};
 use ironhold_core::capabilities::animation_resolver::{AnimationPolicyComponent, LocomotionState, AnimationRequests, ActiveOverride};
@@ -140,6 +140,7 @@ fn test_input_abstraction_flow() {
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),
+        SpeedMultiplier(1.0),
     )).id();
 
     // 2. Simulate "W" key press
@@ -344,7 +345,7 @@ fn model_fixup_persists_reset() {
 
 #[test]
 fn test_spawn_action_assigns_spawn_id_and_registers() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
 
     let mut app = setup_test_app();
     app.update();
@@ -359,7 +360,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
-                kind: "actor".to_string(),
+                kind: PrefabKind::Actor,
                 model: "orc".to_string(),
                 ..Default::default()
             }),
@@ -388,7 +389,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
 #[test]
 fn test_spawn_auto_id_increments_counter() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
 
     let mut app = setup_test_app();
     app.update();
@@ -402,7 +403,7 @@ fn test_spawn_auto_id_increments_counter() {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
-                kind: "actor".to_string(),
+                kind: PrefabKind::Actor,
                 model: "orc".to_string(),
                 ..Default::default()
             }),
@@ -434,7 +435,7 @@ fn test_spawn_auto_id_increments_counter() {
 
 #[test]
 fn test_despawn_removes_entity_by_spawn_id() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
 
     let mut app = setup_test_app();
     app.update();
@@ -448,7 +449,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
-                kind: "actor".to_string(),
+                kind: PrefabKind::Actor,
                 model: "orc".to_string(),
                 ..Default::default()
             }),
@@ -1377,7 +1378,7 @@ fn test_key_bindings_do_not_bleed_across_scenes() {
 
 #[test]
 fn test_spawn_id_collision_orphans_old_entity() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
 
     let mut app = setup_test_app();
     app.update();
@@ -1393,7 +1394,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
             ("crate".to_string(), PrefabDef {
-                kind: "prop".to_string(),
+                kind: PrefabKind::Prop,
                 model: "box".to_string(),
                 ..Default::default()
             }),
@@ -1452,7 +1453,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
 
 #[test]
 fn test_spawn_yaw_deg_sets_transform_rotation() {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
 
     let mut app = setup_test_app();
     app.update();
@@ -1466,7 +1467,7 @@ fn test_spawn_yaw_deg_sets_transform_rotation() {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: HashMap::from([
             ("crate".to_string(), PrefabDef {
-                kind: "prop".to_string(),
+                kind: PrefabKind::Prop,
                 model: "box".to_string(),
                 ..Default::default()
             }),
@@ -2100,6 +2101,7 @@ fn test_player_jump_emits_game_event() {
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),
+        SpeedMultiplier(1.0),
     )).id();
 
     // RapierPhysicsPlugin runs (even in integration tests, cfg(test) does not apply to lib
@@ -2142,7 +2144,7 @@ fn test_player_jump_emits_game_event() {
 // â”€â”€â”€ PreloadPrefab + spawn queue tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn minimal_orc_catalogs(app: &mut App) {
-    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         models: std::collections::HashMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
@@ -2152,7 +2154,7 @@ fn minimal_orc_catalogs(app: &mut App) {
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
-                kind: "actor".to_string(),
+                kind: PrefabKind::Actor,
                 model: "orc".to_string(),
                 ..Default::default()
             }),
@@ -2240,10 +2242,11 @@ fn test_pending_spawns_cleared_on_load_scene() {
     // Pre-populate the queue directly (simulates spawns queued in a prior frame).
     {
         use ironhold_core::runtime::QueuedSpawn;
+        use ironhold_core::schema::catalog::PrefabKind;
         let mut pending = app.world_mut().resource_mut::<PendingEntitySpawns>();
         pending.0.push_back(QueuedSpawn {
             prefab_def: ironhold_core::schema::catalog::PrefabDef {
-                kind: "actor".to_string(),
+                kind: PrefabKind::Actor,
                 model: "orc".to_string(),
                 ..Default::default()
             },
@@ -2376,15 +2379,15 @@ fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
     // (ChildPrimitiveDef does not derive Default).
     let prefab_ron = r#"
         (
-            schema_version: 1,
+            schema_version: 2,
             prefabs: {
                 "danger_zone": (
-                    kind: "primitive",
+                    kind: Primitive,
                     model: "",
                     trigger_zone: (radius: 2.0),
                     children: [
                         (
-                            shape: "Cuboid",
+                            shape: Cuboid,
                             primitive: (size: (4.0, 0.1, 4.0)),
                         ),
                     ],

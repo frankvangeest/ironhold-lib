@@ -1,10 +1,17 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::schema::player::InputMap;
+use crate::schema::stats::{LoadedStats, LoadedModifiers}; // used by update_player_speed_system
 use crate::runtime::messages::*;
 use std::collections::HashMap;
 
 use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
+
+/// Multiplier applied to walk/run speed from the `player_speed` stat.
+/// Updated in `Update` by `update_player_speed_system`; consumed in `FixedUpdate`
+/// by `player_movement_system` — keeps stat reads out of the physics hot path.
+#[derive(Component)]
+pub struct SpeedMultiplier(pub f32);
 
 #[derive(Component)]
 pub struct CharacterController {
@@ -31,6 +38,30 @@ pub struct CharacterController {
     pub idle_drag: f32,
 }
 
+/// Reads the `player_speed` stat once per rendered frame (Update) and writes the resulting
+/// multiplier onto `SpeedMultiplier` — keeping all stat access out of FixedUpdate.
+pub fn update_player_speed_system(
+    loaded_stats: Option<Res<LoadedStats>>,
+    loaded_modifiers: Option<Res<LoadedModifiers>>,
+    mut query: Query<&mut SpeedMultiplier>,
+) {
+    let multiplier = loaded_stats.as_ref()
+        .and_then(|ls| ls.0.get("player_speed"))
+        .map(|s| {
+            let effective = loaded_modifiers.as_ref()
+                .map(|m| s.compute_effective(&m.0))
+                .unwrap_or(s.current);
+            effective / s.def.base.max(0.001)
+        })
+        .unwrap_or(1.0);
+
+    for mut sm in &mut query {
+        if (sm.0 - multiplier).abs() > 0.001 {
+            sm.0 = multiplier;
+        }
+    }
+}
+
 pub fn player_movement_system(
     time: Res<Time>,
     mut input_events: MessageReader<InputActionMessage>,
@@ -42,6 +73,7 @@ pub fn player_movement_system(
         &mut LocomotionState,
         &mut Velocity,
         &mut AnimationRequests,
+        &SpeedMultiplier,
     )>,
     rapier_context: Option<ReadRapierContext>,
     mut game_events: MessageWriter<GameEvent>,
@@ -54,7 +86,7 @@ pub fn player_movement_system(
     // Try to get the rapier context, but don't panic if it's missing (e.g. in headless tests)
     let rapier_context = rapier_context.as_ref().and_then(|rc| rc.single().ok());
 
-    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests) in &mut query {
+    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests, speed_mul) in &mut query {
         let mut move_vec = Vec3::ZERO;
         let mut rotation = 0.0;
         let mut jumping = false;
@@ -126,12 +158,12 @@ pub fn player_movement_system(
         // Apply Movement via Linear Velocity (XZ only to allow gravity to work on Y)
         if move_vec.length_squared() > 0.1 {
             move_vec = move_vec.normalize();
-            let speed = if controller.is_running { 
-                controller.run_speed 
-            } else { 
-                controller.walk_speed 
-            };
-            
+            let speed = if controller.is_running {
+                controller.run_speed
+            } else {
+                controller.walk_speed
+            } * speed_mul.0;
+
             velocity.linvel.x = move_vec.x * speed;
             velocity.linvel.z = move_vec.z * speed;
 

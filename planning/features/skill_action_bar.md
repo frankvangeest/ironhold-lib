@@ -146,21 +146,32 @@ Ticked by `cooldown_tick_system`: drains all entries by the elapsed time each ti
 
 ---
 
+## Implementation notes
+
+- Schema structs (`ActionBarDef`, `ActionSlotDef`, `SlotCost`) added to `schema/scene_v2.rs`.
+- `ActionBar(ActionBarDef)` variant added to `UiNodeDef`; all `id/size/position/absolute/align` match arms updated.
+- `capabilities/action_bar.rs` — `ActionBarPlugin`, `CooldownMap`, `CurrentTarget`, `ActionSlotUi`, `CooldownOverlay`, three systems.
+- Slot UI spawned directly in `spawn_ui_element_node` (scene_loader.rs); no separate spawn system needed.
+- `{target}` substitution resolved against `CurrentTarget` resource (always `None` until the targeting system ships).
+- Demo: 3-slot bar in `primitive_world` — Heal (1), Speed Boost (2), Fire Burst (3); mana bar added alongside.
+- `action_bar.*` pipeline events wired in `primitive_world/logic/state_machine.ron` to show status messages.
+- Cooldown visual: top-anchored dark overlay that shrinks to 0 as cooldown depletes (no clock-wipe shader needed).
+- Icon field exists in schema but not rendered in v1 (no icon assets yet in `assets/shared/textures/ui/`).
+
 ## Tasks
 
-- [ ] Decisions from pre-implementation checklist resolved and noted above
-- [ ] `ActionBarDef`, `ActionSlotDef`, `SlotCost` in `schema/ui.rs`
-- [ ] `ActionBar(ActionBarDef)` variant added to scene UI node enum
-- [ ] `CooldownMap` resource in `capabilities/action_bar.rs`
-- [ ] `action_bar_spawn_system` — spawn slot UI nodes from scene data
-- [ ] `action_bar_input_system` — key press → cooldown check → cost check → fire actions → emit events
-- [ ] `cooldown_tick_system` — drain `CooldownMap` each frame
-- [ ] `action_bar_visual_system` — greyed-out state + cooldown sweep overlay
-- [ ] `{target}` substitution wired in `message_interpreter.rs` (resolves from `CurrentTarget`)
-- [ ] `scene_loader.rs` handles `ActionBar` UI node
-- [ ] Demo: add a 3-slot action bar to `particles_demo` or `3rd_person_game_demo`
-- [ ] Integration tests: slot fires on key press, cooldown blocks re-fire, cost deducted, events emitted
-- [ ] Docs: add `ActionBar` to `docs/20_data_formats.md` UI node reference
+- [x] Decisions from pre-implementation checklist resolved and noted above
+- [x] `ActionBarDef`, `ActionSlotDef`, `SlotCost` in `schema/scene_v2.rs`
+- [x] `ActionBar(ActionBarDef)` variant added to scene UI node enum
+- [x] `CooldownMap` resource in `capabilities/action_bar.rs`
+- [x] Slot UI spawned in `scene_loader.rs` `spawn_ui_element_node`
+- [x] `action_bar_input_system` — key press → cooldown check → cost check → fire actions → emit events
+- [x] `cooldown_tick_system` — drain `CooldownMap` each frame
+- [x] `action_bar_visual_system` — dim overlay + cooldown fill height
+- [x] `CurrentTarget` resource defined (placeholder for targeting system)
+- [x] `scene_loader.rs` handles `ActionBar` UI node
+- [x] Demo: 3-slot action bar in `primitive_world`
+- [x] Docs: `ActionBar` documented in `docs/20_data_formats.md`
 
 ---
 

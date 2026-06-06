@@ -604,7 +604,7 @@
       text: "Score  0",
       bind: "score",
       format: "Score  {}",
-      position: (16.0, 90.0),
+      position: (16.0, 118.0),
       size: (180.0, 32.0),
     )),
     Label((
@@ -612,7 +612,7 @@
       text: "",
       bind: "status",
       format: "{}",
-      position: (16.0, 126.0),
+      position: (16.0, 154.0),
       size: (220.0, 32.0),
     )),
     // Active buff/debuff display — updated by shrine interaction and modifier expiry events.
@@ -621,8 +621,77 @@
       text: "",
       bind: "buff",
       format: "{}",
-      position: (16.0, 160.0),
+      position: (16.0, 188.0),
       size: (280.0, 32.0),
+    )),
+    // Mana bar — depleted by action bar skill costs; regenerates automatically.
+    StatBar((
+      id: "mana_bar",
+      stat_key: "player_mana",
+      position: (16.0, 84.0),
+      size: (200.0, 12.0),
+      fill_color:       (0.25, 0.50, 1.00, 1.0),
+      background_color: (0.06, 0.10, 0.22, 1.0),
+      absolute: true,
+    )),
+    // Speed bar — shows effective speed including active modifiers (e.g. Speed Boost ×1.5).
+    // Base value: 70 / 150. With speed_boost active: 105 / 150. Updates every frame.
+    StatBar((
+      id: "speed_bar",
+      stat_key: "player_speed",
+      position: (16.0, 100.0),
+      size: (200.0, 12.0),
+      fill_color:       (0.30, 0.85, 0.50, 1.0),
+      background_color: (0.06, 0.18, 0.10, 1.0),
+      show_value: true,
+      absolute: true,
+    )),
+    // Action bar — press keys 1–3 to activate skills.
+    // Slots show a darkened cooldown overlay while on cooldown.
+    // Cost: each skill deducts mana; slots block (dim) when mana is too low.
+    ActionBar((
+      id: "skill_bar",
+      position: (16.0, 580.0),
+      slot_size: 64.0,
+      slot_gap: 4.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "1",
+          icon: "",
+          do_actions: [
+            SpawnEffect(key: "skill_heal", entity: "player_01"),
+            ModifyStat(key: "player_health", delta: 30.0),
+            ShowFloatingText(entity: "player_01", text: "Heal +30"),
+          ],
+          cooldown_secs: 5.0,
+          cost: (stat: "player_mana", amount: 15.0),
+          label: "Heal",
+        ),
+        (
+          key: "2",
+          icon: "",
+          do_actions: [
+            ApplyModifier(modifier_key: "speed_boost"),
+            SpawnEffect(key: "skill_speedboost", entity: "player_01"),
+            ShowFloatingText(entity: "player_01", text: "Speed +50%"),
+          ],
+          cooldown_secs: 12.0,
+          cost: (stat: "player_mana", amount: 20.0),
+          label: "Speed Boost",
+        ),
+        (
+          key: "3",
+          icon: "",
+          do_actions: [
+            SpawnEffect(key: "skill_fireburst", entity: "player_01"),
+            ShowFloatingText(entity: "player_01", text: "Fire Burst!"),
+          ],
+          cooldown_secs: 3.0,
+          cost: (stat: "player_mana", amount: 10.0),
+          label: "Fire Burst",
+        ),
+      ],
     )),
   ],
 )

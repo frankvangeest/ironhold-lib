@@ -740,6 +740,7 @@ pub fn spawn_scene_v2(
                         ground_cast_length: mv.ground_cast_length,
                         idle_drag: mv.idle_drag,
                     },
+                    crate::capabilities::player::SpeedMultiplier(1.0),
                     LocomotionState::default(),
                     AnimationRequests::default(),
                     ActiveOverride::default(),
@@ -1502,6 +1503,82 @@ fn spawn_ui_element_node(
             } else {
                 warn!("StatRadar {:?}: no pre-created material handle — skipping spawn", radar.id);
             }
+        }
+        UiNodeDef::ActionBar(bar) => {
+            use crate::capabilities::action_bar::{ActionSlotUi, CooldownOverlay};
+            let (br, bg_c, bb, ba) = bar.background_color;
+            let slot_size = bar.slot_size;
+            let slot_gap = bar.slot_gap;
+            let mut bar_node = node;
+            bar_node.flex_direction = FlexDirection::Row;
+            bar_node.column_gap = Val::Px(slot_gap);
+            bar_node.padding = UiRect::all(Val::Px(4.0));
+            bar_node.align_items = AlignItems::Center;
+            let slots = bar.slots.clone();
+            parent
+                .spawn((
+                    Name::new(format!("ActionBar: {}", bar.id)),
+                    bar_node,
+                    BackgroundColor(Color::srgba(br, bg_c, bb, ba)),
+                ))
+                .with_children(|parent| {
+                    for slot in &slots {
+                        let key = slot.key.clone();
+                        parent
+                            .spawn((
+                                Name::new(format!("Slot:{}", key)),
+                                Button,
+                                Node {
+                                    width: Val::Px(slot_size),
+                                    height: Val::Px(slot_size),
+                                    position_type: PositionType::Relative,
+                                    overflow: Overflow::clip(),
+                                    justify_content: JustifyContent::FlexEnd,
+                                    align_items: AlignItems::FlexEnd,
+                                    border: UiRect::all(Val::Px(2.0)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgba(0.18, 0.18, 0.22, 0.95)),
+                                BorderColor::from(Color::srgba(0.45, 0.45, 0.55, 0.8)),
+                                ActionSlotUi {
+                                    slot_key: key.clone(),
+                                    do_actions: slot.do_actions.clone(),
+                                    cooldown_secs: slot.cooldown_secs,
+                                    cost: slot.cost.clone(),
+                                },
+                            ))
+                            .with_children(|parent| {
+                                // Full-slot overlay — alpha-fade only; no Node height writes
+                                // so Bevy's UI layout is never invalidated by the visual system.
+                                parent.spawn((
+                                    Name::new("CooldownOverlay"),
+                                    Node {
+                                        position_type: PositionType::Absolute,
+                                        top: Val::Px(0.0),
+                                        left: Val::Px(0.0),
+                                        right: Val::Px(0.0),
+                                        bottom: Val::Px(0.0),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+                                    CooldownOverlay { slot_key: key.clone() },
+                                ));
+                                // Keybind label — bottom-right corner.
+                                parent.spawn((
+                                    Name::new(format!("Key:{}", key)),
+                                    Node {
+                                        position_type: PositionType::Absolute,
+                                        bottom: Val::Px(3.0),
+                                        right: Val::Px(5.0),
+                                        ..default()
+                                    },
+                                    Text::new(key.clone()),
+                                    TextFont { font_size: 13.0, ..default() },
+                                    TextColor(Color::srgba(0.85, 0.85, 0.85, 0.75)),
+                                ));
+                            });
+                    }
+                });
         }
     }
 }

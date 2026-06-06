@@ -303,6 +303,7 @@ pub enum UiNodeDef {
     StatBar(StatBarDef),
     StatSpread(StatSpreadDef),
     StatRadar(StatRadarDef),
+    ActionBar(ActionBarDef),
 }
 
 impl UiNodeDef {
@@ -314,6 +315,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(d) => &d.id,
             UiNodeDef::StatSpread(d) => &d.id,
             UiNodeDef::StatRadar(d) => &d.id,
+            UiNodeDef::ActionBar(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -328,6 +330,11 @@ impl UiNodeDef {
                 (d.label_width + d.bar_width, h)
             }
             UiNodeDef::StatRadar(d) => d.size,
+            UiNodeDef::ActionBar(d) => {
+                let n = d.slots.len() as f32;
+                let w = n * d.slot_size + (n - 1.0).max(0.0) * d.slot_gap + 8.0;
+                (w, d.slot_size + 8.0)
+            }
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -338,6 +345,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(d) => d.position,
             UiNodeDef::StatSpread(d) => d.position,
             UiNodeDef::StatRadar(d) => d.position,
+            UiNodeDef::ActionBar(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -348,6 +356,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(d) => d.absolute,
             UiNodeDef::StatSpread(d) => d.absolute,
             UiNodeDef::StatRadar(d) => d.absolute,
+            UiNodeDef::ActionBar(_) => true,
         }
     }
     pub fn align(&self) -> UiTextAlign {
@@ -358,6 +367,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(_) => UiTextAlign::Center,
             UiNodeDef::StatSpread(_) => UiTextAlign::Center,
             UiNodeDef::StatRadar(_) => UiTextAlign::Center,
+            UiNodeDef::ActionBar(_) => UiTextAlign::Center,
         }
     }
 }
@@ -686,3 +696,66 @@ fn default_radar_fill_color() -> (f32, f32, f32, f32) { (0.35, 0.65, 1.0, 0.45) 
 fn default_radar_outline_color() -> (f32, f32, f32, f32) { (0.55, 0.85, 1.0, 1.0) }
 fn default_radar_grid_color() -> (f32, f32, f32, f32) { (0.40, 0.45, 0.55, 0.45) }
 fn default_radar_background_color() -> (f32, f32, f32, f32) { (0.10, 0.12, 0.20, 0.80) }
+
+// ─── Action bar ───────────────────────────────────────────────────────────────
+
+/// A row of up to 9 skill slots bound to keys 1–9.
+/// Pressing a slot key fires its `do_actions` through the existing pipeline,
+/// checks an optional cooldown, and deducts an optional stat cost.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ActionBarDef {
+    pub id: String,
+    /// Top-left corner in pixels (always absolute).
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width and height of each slot square in pixels. Default: 64.0.
+    #[serde(default = "default_slot_size")]
+    pub slot_size: f32,
+    /// Pixel gap between slots. Default: 4.0.
+    #[serde(default = "default_slot_gap")]
+    pub slot_gap: f32,
+    /// Background colour of the bar container as linear RGBA. Default: near-black, 70 % alpha.
+    #[serde(default = "default_bar_bg")]
+    pub background_color: (f32, f32, f32, f32),
+    pub slots: Vec<ActionSlotDef>,
+}
+
+/// One slot in an `ActionBar`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ActionSlotDef {
+    /// Key that activates this slot: `"1"` through `"9"`.
+    pub key: String,
+    /// Asset catalog texture key for the slot icon. Stored but not rendered in v1
+    /// (no icon asset folder yet). Wire up rendering once `assets/shared/textures/ui/`
+    /// contains real icon files.
+    #[serde(default)]
+    pub icon: String,
+    /// Actions fired through the pipeline when the slot activates.
+    pub do_actions: Vec<crate::schema::actions::Action>,
+    /// Seconds before this slot can be used again. Omit for no cooldown.
+    #[serde(default)]
+    pub cooldown_secs: Option<f32>,
+    /// Stat cost deducted at activation time. Activation is blocked if the stat is
+    /// below `amount`; emits `action_bar.insufficient_resource:{key}` instead.
+    #[serde(default)]
+    pub cost: Option<SlotCost>,
+    /// Optional tooltip label shown on hover (future use).
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// Stat cost for an `ActionSlotDef`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct SlotCost {
+    /// Key of the stat to check and deduct from (matches a key in `stats.ron`).
+    pub stat: String,
+    /// Amount to deduct. Activation is blocked if current value < amount.
+    pub amount: f32,
+}
+
+fn default_slot_size() -> f32 { 64.0 }
+fn default_slot_gap()  -> f32 { 4.0 }
+fn default_bar_bg() -> (f32, f32, f32, f32) { (0.0, 0.0, 0.0, 0.70) }

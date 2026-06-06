@@ -125,6 +125,15 @@ pub enum Action {
         entity: String,
         amount: f32,
     },
+    /// Show a floating text label above a named entity.
+    /// The label rises and fades using the same animation as `ShowDamagePopup`.
+    /// Colour is warm yellow; use `ShowDamagePopup` when you need green/red numeric feedback.
+    /// Inside behavior files, `{self}` in `entity` is resolved to the entity's spawn ID.
+    /// Example: `ShowFloatingText(entity: "player_01", text: "Speed Boost!")`.
+    ShowFloatingText {
+        entity: String,
+        text: String,
+    },
     /// Show or hide a spawned entity by its ID.
     /// `visible: true` restores the entity; `visible: false` hides it (entity remains in ECS).
     /// World labels (health bars, stat labels) tracking the entity are hidden automatically.

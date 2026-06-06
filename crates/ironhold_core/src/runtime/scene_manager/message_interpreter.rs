@@ -212,6 +212,10 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             entity: entity.replace("{self}", spawn_id),
             amount,
         },
+        Action::ShowFloatingText { entity, text } => Action::ShowFloatingText {
+            entity: entity.replace("{self}", spawn_id),
+            text,
+        },
         Action::SetEntityVisible { entity, visible } => Action::SetEntityVisible {
             entity: entity.replace("{self}", spawn_id),
             visible,

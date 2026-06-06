@@ -1,5 +1,8 @@
 import http.server
 import socketserver
+import mimetypes
+
+mimetypes.add_type("application/wasm", ".wasm")
 
 PORT = 8000
 

@@ -143,6 +143,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::particle_renderer::ParticleRendererPlugin)
             .add_plugins(capabilities::flame_material::FlameParticleMaterialPlugin)
             .add_plugins(capabilities::foliage::FoliagePlugin)
+            .add_plugins(capabilities::action_bar::ActionBarPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input
@@ -192,6 +193,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, fading_light_system.after(drain_particle_effects_system))
             .add_systems(Update, fading_decal_system.after(spawn_decal_system))
             .add_systems(Update, clear_pool_on_scene_unload_system)
+            .add_systems(Update, capabilities::player::update_player_speed_system)
             // Physics-driven input + movement must run in FixedUpdate for stable simulation
             .add_systems(FixedUpdate, (
                 input_translator_system,

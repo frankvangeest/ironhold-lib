@@ -477,6 +477,82 @@ StatSpread((
 )),
 ```
 
+#### `ActionBar((...))` ✅
+
+A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires the slot's `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier |
+| `position` | `(f32, f32)` | `(0.0, 0.0)` | Top-left corner in pixels (always absolute) |
+| `slot_size` | `f32` | `64.0` | Width and height of each slot square in pixels |
+| `slot_gap` | `f32` | `4.0` | Pixel gap between slots |
+| `background_color` | `(f32,f32,f32,f32)` | near-black 70 % | Bar container background as linear RGBA |
+| `slots` | `Vec<ActionSlotDef>` | required | Ordered list of slot definitions |
+
+**`ActionSlotDef` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `key` | `String` | required | Key that activates the slot: `"1"` through `"9"` |
+| `icon` | `String` | `""` | Asset catalog texture key for the icon (reserved for future rendering) |
+| `do_actions` | `Vec<Action>` | required | Actions fired through the pipeline on activation |
+| `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again |
+| `cost` | `Option<SlotCost>` | `None` | Stat cost checked and deducted at activation time |
+| `label` | `Option<String>` | `None` | Tooltip label (future use) |
+
+**`SlotCost` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stat` | `String` | Key of the stat to check and deduct from (matches a key in `stats.ron`) |
+| `amount` | `f32` | Amount to deduct. Slot blocks if `current < amount` |
+
+**Pipeline events emitted by the action bar:**
+
+| Event | When fired |
+|-------|-----------|
+| `action_bar.activated:{key}` | Slot fired successfully |
+| `action_bar.on_cooldown:{key}` | Key pressed while slot is on cooldown |
+| `action_bar.insufficient_resource:{key}` | Key pressed but cost stat too low |
+| `action_bar.no_target:{key}` | `{target}` used in `do_actions` but no target is selected |
+
+**`{target}` substitution:** Any occurrence of `{target}` in a slot's `do_actions` is replaced with the spawn ID of the entity in `CurrentTarget` resource. If `CurrentTarget` is `None` the slot emits `action_bar.no_target:{key}` and does not fire. The targeting system (planned) populates `CurrentTarget`.
+
+```ron
+ActionBar((
+  id: "skill_bar",
+  position: (16.0, 580.0),
+  slot_size: 64.0,
+  background_color: (0.05, 0.05, 0.08, 0.85),
+  slots: [
+    (
+      key: "1",
+      do_actions: [
+        SpawnEffect(key: "heal_burst", entity: "player_01"),
+        ModifyStat(key: "player_health", delta: 30.0),
+      ],
+      cooldown_secs: 5.0,
+      cost: (stat: "player_mana", amount: 15.0),
+      label: "Heal",
+    ),
+    (
+      key: "2",
+      do_actions: [ ApplyModifier(modifier_key: "speed_boost") ],
+      cooldown_secs: 12.0,
+      cost: (stat: "player_mana", amount: 20.0),
+    ),
+  ],
+))
+```
+
+Wire feedback events in `rules.ron` or `state_machine.ron` to surface cooldown or low-mana messages:
+
+```ron
+( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("status", "Skill on cooldown") ] ),
+( event: "action_bar.insufficient_resource:1", do_actions: [ SetVariable("status", "Not enough mana") ] ),
+```
+
 ### UI Panel (`UiPanelDef`) ✅
 
 When a scene includes a `ui_panel` block, all `ui` elements are arranged in a vertically-flowing centered panel instead of using absolute positioning. Elements with `absolute: true` are still positioned relative to the panel's top-left corner.
