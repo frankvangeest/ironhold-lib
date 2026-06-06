@@ -12,7 +12,7 @@
 ## Active
 
 - [x] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; `height_bias` + `seed` for crown shape control. See `planning/features/done/stylized_foliage.md`
-- [ ] **Skill action bar (1–9)** — `ActionBar` UI node; `ActionSlotUi` + `CooldownOverlay` components; `CooldownMap` + `CurrentTarget` resources; keys 1–9 fire `do_actions`, check cooldown, deduct stat cost; `action_bar.*` pipeline events; cooldown fill overlay; demo in `primitive_world` (Heal/Speed/Fire slots). See `planning/features/skill_action_bar.md`
+- [x] **Skill action bar (1–9)** — `ActionBar` UI node; `ActionSlotUi` + `CooldownOverlay` components; `CooldownMap` + `CurrentTarget` resources; keys 1–9 fire `do_actions`, check cooldown, deduct stat cost; `action_bar.*` pipeline events; alpha-fade cooldown overlay; `ShowFloatingText` action; demo in `primitive_world`. See `planning/features/done/skill_action_bar.md`
 - [ ] **Foliage demo — visual tuning** — refine cluster placement, leaf scale, and per-prefab parameters in `foliage_demo` to match the reference image quality. Blocked on live RON reload or live editor — parameter tuning without a tight feedback loop is impractical. Pick up after either ships.
 
 ---
