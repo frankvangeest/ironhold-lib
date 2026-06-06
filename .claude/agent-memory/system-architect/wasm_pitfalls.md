@@ -29,7 +29,7 @@ WebGPU validates buffer binding interfaces strictly; native wgpu is permissive. 
 
 ## Binary size limit
 
-GitHub Pages hard-blocks at 100 MB. Current WASM binary size ~91 MB (last checked 2026-06-04). Warn Frank at 95 MB. Every new capability adds to the binary. Large dependencies (physics, rendering) dominate; the marginal cost of a new capability is small but accumulates.
+GitHub Pages hard-blocks at 100 MB. Warn Frank at 95 MB. Every new capability adds to the binary. Large dependencies (physics, rendering) dominate; the marginal cost of a new capability is small but accumulates. For the current binary size, check the user project memory (`project_wasm_size_limit.md`) — it is updated after each release build and is the authoritative source.
 
 ## Asset loading on WASM
 

@@ -84,6 +84,14 @@
           {
             "type": "command",
             "command": "python .claude/hooks/ron_validation_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/action_docs_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/capability_registration_reminder.py"
           }
         ]
       }
