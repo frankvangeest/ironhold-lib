@@ -35,6 +35,10 @@
       "Bash(echo:*)",
       "Bash(dir:*)",
 
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git rev-parse:*)",
       "Bash(git -C C:\\git\\rust\\ironhold-lib rev-parse --short HEAD)",
       "Bash(git -C C:/git/rust/ironhold-lib rev-parse --short HEAD)",
 
@@ -50,6 +54,17 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/prevent_dev_wasm_commit.py"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
@@ -65,6 +80,10 @@
           {
             "type": "command",
             "command": "python .claude/hooks/assets_ron_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/ron_validation_reminder.py"
           }
         ]
       }

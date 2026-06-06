@@ -8,6 +8,8 @@ Steps:
 
 3. **Code changes implemented** — Confirm the implementation is complete. Ask the user to describe what was changed if it is not clear from context.
 
+3b. **Alignment review** — Invoke the `alignment-reviewer` agent to verify the change follows the data-driven design philosophy: designer-reachable from RON without recompiling, no hardcoded asset paths, no capability pushing directly to ActionQueue.
+
 4. **Tests pass** — Run:
    ```
    cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint
@@ -15,6 +17,8 @@ Steps:
    All must pass. Fix any failures before continuing.
 
 5. **Docs updated** — Check that `docs/20_data_formats.md` and any relevant `CLAUDE.md` files reflect the changes. New schema fields, new action types, and new events each need a doc entry. Also check `crates/ironhold_core/src/CLAUDE.md` for capability-level notes.
+
+5b. **UX review** — If any files in `assets/`, `docs/`, or schema RON files changed, invoke the `ux-gamedesigner-reviewer` agent to verify the designer experience is clear, documented, and consistent.
 
 6. **Schema/CLI check** — If any file in `crates/ironhold_core/src/schema/` was modified, run:
    ```

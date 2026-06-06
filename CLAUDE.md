@@ -177,6 +177,20 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 
 ---
 
+## Proactive Agent Reviews
+
+After implementing any feature, capability, or schema change, always invoke these specialized agents — do not wait to be asked:
+
+| Agent | When to invoke |
+|---|---|
+| **`alignment-reviewer`** | After any code change — verifies RON designer-reachability and no hardcoded behavior |
+| **`ux-gamedesigner-reviewer`** | After any change to `assets/`, `docs/`, or RON schema — verifies the designer experience is clear and documented |
+| **`system-architect`** | For architectural or schema changes — verifies crate boundaries, WASM compatibility, and long-term maintainability |
+
+Use `/review` to run all three agents in sequence and get a consolidated pre-commit verdict.
+
+---
+
 ## Shell tool preference
 
 Always prefer the **Bash tool** over the PowerShell tool for shell commands. Most commands in this project (`cargo`, `wasm-pack`, `python`, `git`, `ls`, `grep`, `find`) work correctly in Bash on Windows. Only fall back to the PowerShell tool when a command genuinely requires PowerShell-specific syntax (e.g. `Get-ChildItem -Recurse` pipelines, registry access, or `$env:` variables) and cannot be expressed in Bash.
@@ -196,20 +210,24 @@ Every code change must follow this order before committing code:
  3. **Code changes** — implement the feature or fix and update tests
  4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint`
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
-    - **Schema changes** — if any `schema/` type was added, renamed, or had a field type changed, also check `ironhold_cli` compiles (`cargo check -p ironhold_cli`) and that `query prefabs` / `query effects` output still formats correctly.
- 6. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev`
+ 6. **Schema/CLI check** — if any `schema/` type was added, renamed, or had a field type changed:
+    ```
+    cargo check -p ironhold_cli
+    ```
+    Also verify `query prefabs` / `query effects` / `query actions` output still formats correctly.
+ 7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev`
     Fast (~2 min). For local play-testing only — never commit a `--dev` build.
- 7. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
- 8. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
- 9. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
-    Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 8.
-    ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**. Current size: ~91 MB.
-10. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
-11. **Commit** — only after Frank confirms; include a summary in git commit message format
-12. **Propose the next feature to add to active in the backlog**
+ 8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
+ 9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
+10. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+    Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 9.
+    ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**.
+11. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
+12. **Commit** — only after Frank confirms; include a summary in git commit message format
+13. **Propose the next feature to add to active in the backlog**
 
 Do not start coding before the feature plan is finalized and reviewed.
-Once code changes have been made, do not commit before steps 8 and 9 (play-test confirmed + release build) are complete.
+Once code changes have been made, do not commit before steps 9 and 10 (play-test confirmed + release build) are complete.
 Do not commit a `--dev` WASM build — it bloats the repo and may exceed GitHub Pages limits.
 
 ### After changes
