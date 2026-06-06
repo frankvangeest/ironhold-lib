@@ -1,0 +1,237 @@
+(
+    schema_version: 2,
+    prefabs: {
+
+        // ── Player ─────────────────────────────────────────────────────────────────
+        // Primitive capsule with face features so the front is visible.
+        // tags: ["player"] auto-wires CharacterController, physics, and OrbitCamera.
+        "player_capsule": (
+            kind: Primitive,
+            model: "",
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                movement: (
+                    walk_speed: 5.5,
+                    run_speed: 10.0,
+                    jump: RelativeToHeight(percent: 100.0),
+                    double_jump: true,
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+                color: (0.22, 0.52, 0.88),
+                roughness: 0.30,
+                metallic: 0.15,
+            ),
+            children: [
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20, metallic: 0.10 ),
+                    offset: (-0.18, 1.58, -0.37),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.07, color: (0.03, 0.03, 0.05), roughness: 0.20, metallic: 0.10 ),
+                    offset: (0.18, 1.58, -0.37),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.07, color: (0.95, 0.58, 0.42), roughness: 0.40 ),
+                    offset: (0.0, 1.49, -0.40),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+        // ── Ground ─────────────────────────────────────────────────────────────────
+        // Static physics surface. Place at y = -0.5 so top face is at y = 0.
+        "ground_plane": (
+            kind: Primitive,
+            model: "",
+            shape: Cuboid,
+            components: (),
+            primitive: (
+                size: (60.0, 1.0, 60.0),
+                color: (0.28, 0.42, 0.22),
+                roughness: 0.95,
+                physics: true,
+            ),
+        ),
+
+        // ── Attack dummy ──────────────────────────────────────────────────────────
+        // Press F within 2 m to deal 25 damage. Floating HP label + pixel bar.
+        // Per-entity health is routed via "{self}.health" dotted stat keys.
+        // Behavior file drives the alive/dead respawn loop.
+        "attack_dummy": (
+            kind: Primitive,
+            model: "",
+            components: (),
+            interactable: (radius: 2.0, hint_text: "F  Strike"),
+            stat_templates: [
+                (
+                    key: "health",
+                    base: 100.0,
+                    min: 0.0,
+                    max: 100.0,
+                    regen_rate: 0.0,
+                    regen_delay: 0.0,
+                    thresholds: [
+                        ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+                    ],
+                ),
+            ],
+            stat_label: (
+                stat_key: "{self}.health",
+                offset: (0.0, 2.2, 0.0),
+                font_size: 14.0,
+                color: (0.88, 0.88, 0.88, 0.90),
+                show_max: true,
+            ),
+            world_stat_bar: (
+                stat_key: "{self}.health",
+                offset: (0.0, 2.55, 0.0),
+                fill_color: (0.15, 0.85, 0.15, 1.0),
+                bg_color:   (0.20, 0.05, 0.05, 0.85),
+                color_bands: [
+                    (0.0, (0.85, 0.12, 0.12, 1.0)),
+                    (0.3, (0.95, 0.75, 0.10, 1.0)),
+                    (0.6, (0.15, 0.85, 0.15, 1.0)),
+                ],
+                style: Pixel( size: (48.0, 6.0) ),
+            ),
+            behavior: "behaviors/attack_dummy.behavior.ron",
+            children: [
+                // Post
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.15, height: 1.5, color: (0.45, 0.32, 0.20), roughness: 0.92 ),
+                    offset: (0.0, 0.75, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                // Cross-arm
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.12, height: 0.9, color: (0.45, 0.32, 0.20), roughness: 0.92 ),
+                    offset: (0.0, 1.10, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 90.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                // Head
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.25, color: (0.72, 0.60, 0.38), roughness: 0.85 ),
+                    offset: (0.0, 1.65, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+        // ── Buff shrines ──────────────────────────────────────────────────────────
+
+        "shrine_overheal": (
+            kind: Primitive,
+            model: "",
+            components: (),
+            interactable: (radius: 2.0, hint_text: "F  Overheal"),
+            motion: (bob: (0.12, 0.7)),
+            children: [
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.28, height: 0.55, color: (0.55, 0.53, 0.50), roughness: 0.85 ),
+                    offset: (0.0, 0.275, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.22, color: (0.18, 0.88, 0.35), roughness: 0.10, metallic: 0.05 ),
+                    offset: (0.0, 0.77, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+        "shrine_speed": (
+            kind: Primitive,
+            model: "",
+            components: (),
+            interactable: (radius: 2.0, hint_text: "F  Speed Boost"),
+            motion: (bob: (0.12, 0.7)),
+            children: [
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.28, height: 0.55, color: (0.55, 0.53, 0.50), roughness: 0.85 ),
+                    offset: (0.0, 0.275, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.22, color: (1.00, 0.82, 0.10), roughness: 0.10, metallic: 0.05 ),
+                    offset: (0.0, 0.77, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+        "shrine_mana": (
+            kind: Primitive,
+            model: "",
+            components: (),
+            interactable: (radius: 2.0, hint_text: "F  Mana Surge"),
+            motion: (bob: (0.12, 0.7)),
+            children: [
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.28, height: 0.55, color: (0.55, 0.53, 0.50), roughness: 0.85 ),
+                    offset: (0.0, 0.275, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.22, color: (0.20, 0.45, 1.00), roughness: 0.10, metallic: 0.05 ),
+                    offset: (0.0, 0.77, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+        "shrine_poison": (
+            kind: Primitive,
+            model: "",
+            components: (),
+            interactable: (radius: 2.0, hint_text: "F  Poison"),
+            motion: (bob: (0.12, 0.7)),
+            children: [
+                (
+                    shape: Cylinder,
+                    primitive: ( radius: 0.28, height: 0.55, color: (0.55, 0.53, 0.50), roughness: 0.85 ),
+                    offset: (0.0, 0.275, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+                (
+                    shape: Sphere,
+                    primitive: ( radius: 0.22, color: (0.55, 0.06, 0.75), roughness: 0.10, metallic: 0.05 ),
+                    offset: (0.0, 0.77, 0.0),
+                    rotation_euler_deg: (0.0, 0.0, 0.0),
+                    scale: (1.0, 1.0, 1.0),
+                ),
+            ],
+        ),
+
+    }
+)

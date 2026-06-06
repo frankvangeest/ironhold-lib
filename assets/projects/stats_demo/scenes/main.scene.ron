@@ -1,0 +1,268 @@
+(
+    schema_version: 2,
+    name: "main",
+
+    tonemapping: AcesFitted,
+
+    label_depth_scale: (
+        reference_distance: 20.0,
+        min_scale: 0.5,
+    ),
+
+    lighting: (
+        ambient: (0.22, 0.25, 0.35),
+        ambient_brightness: 260.0,
+        directional: (
+            color: (1.0, 0.95, 0.82),
+            intensity: 30000.0,
+            rotation_euler_deg: (-45.0, 20.0, 0.0),
+            shadows_enabled: true,
+        ),
+    ),
+
+    spawn_points: {
+        "player_start": (0.0, 0.5, 8.0),
+    },
+
+    world_labels: [
+        (
+            id: "lbl_dummies",
+            text: "Attack Dummies  [F]",
+            translation: (8.0, 4.5, -1.0),
+            font_size: 18.0,
+            color: (1.0, 0.75, 0.30, 0.90),
+        ),
+        (
+            id: "lbl_shrines",
+            text: "Buff Shrines  [F]",
+            translation: (-8.0, 4.5, -1.0),
+            font_size: 18.0,
+            color: (0.55, 1.0, 0.70, 0.90),
+        ),
+    ],
+
+    entities: [
+
+        // ── Ground ────────────────────────────────────────────────────────────────
+        (
+            id: "ground",
+            prefab: "ground_plane",
+            transform: (
+                translation: (0.0, -0.5, 0.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        // ── Player ────────────────────────────────────────────────────────────────
+        (
+            id: "player_01",
+            prefab: "player_capsule",
+            transform: (
+                translation: (0.0, 0.5, 8.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        // ── Attack dummies (east — press F to deal 25 damage) ─────────────────────
+        (
+            id: "dummy_01",
+            prefab: "attack_dummy",
+            transform: (
+                translation: (8.0, 0.0, 3.0),
+                rotation_euler_deg: (0.0, 210.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+        (
+            id: "dummy_02",
+            prefab: "attack_dummy",
+            transform: (
+                translation: (8.0, 0.0, 0.0),
+                rotation_euler_deg: (0.0, 200.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+        (
+            id: "dummy_03",
+            prefab: "attack_dummy",
+            transform: (
+                translation: (8.0, 0.0, -3.0),
+                rotation_euler_deg: (0.0, 190.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        // ── Buff shrines (west — press F to apply a modifier) ─────────────────────
+        (
+            id: "shrine_overheal_01",
+            prefab: "shrine_overheal",
+            transform: (
+                translation: (-8.0, 0.0, 3.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            label: (text: "Overheal [F]", offset: (0.0, 1.5, 0.0), color: (0.18, 0.88, 0.35, 1.0)),
+        ),
+        (
+            id: "shrine_speed_01",
+            prefab: "shrine_speed",
+            transform: (
+                translation: (-8.0, 0.0, 0.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            label: (text: "Speed [F]", offset: (0.0, 1.5, 0.0), color: (1.0, 0.82, 0.10, 1.0)),
+        ),
+        (
+            id: "shrine_mana_01",
+            prefab: "shrine_mana",
+            transform: (
+                translation: (-8.0, 0.0, -3.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            label: (text: "Mana [F]", offset: (0.0, 1.5, 0.0), color: (0.20, 0.45, 1.0, 1.0)),
+        ),
+        (
+            id: "shrine_poison_01",
+            prefab: "shrine_poison",
+            transform: (
+                translation: (-8.0, 0.0, -6.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            label: (text: "Poison [F]", offset: (0.0, 1.5, 0.0), color: (0.70, 0.20, 0.90, 1.0)),
+        ),
+
+    ],
+
+    ui: [
+
+        // ── Left HUD — stat bars ──────────────────────────────────────────────────
+        StatBar((
+            id: "health_bar",
+            stat_key: "player_health",
+            position: (16.0, 16.0),
+            size: (200.0, 18.0),
+            fill_color:       (0.85, 0.15, 0.15, 1.0),
+            background_color: (0.20, 0.06, 0.06, 1.0),
+            show_value: true,
+            color_bands: [
+                ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),
+                ( above_percent: 0.25, color: (1.00, 0.55, 0.00, 1.0) ),
+                ( above_percent: 0.0,  color: (0.60, 0.00, 0.00, 1.0) ),
+            ],
+            absolute: true,
+        )),
+        StatBar((
+            id: "mana_bar",
+            stat_key: "player_mana",
+            position: (16.0, 38.0),
+            size: (200.0, 12.0),
+            fill_color:       (0.25, 0.50, 1.00, 1.0),
+            background_color: (0.06, 0.10, 0.22, 1.0),
+            show_value: true,
+            absolute: true,
+        )),
+        StatBar((
+            id: "stamina_bar",
+            stat_key: "player_stamina",
+            position: (16.0, 54.0),
+            size: (200.0, 12.0),
+            fill_color:       (0.25, 0.85, 0.45, 1.0),
+            background_color: (0.05, 0.18, 0.08, 1.0),
+            absolute: true,
+        )),
+        StatBar((
+            id: "speed_bar",
+            stat_key: "player_speed",
+            position: (16.0, 70.0),
+            size: (200.0, 10.0),
+            fill_color:       (0.30, 0.88, 0.92, 1.0),
+            background_color: (0.05, 0.16, 0.18, 1.0),
+            show_value: true,
+            absolute: true,
+        )),
+        Label((
+            id: "status_label",
+            text: "",
+            bind: "status",
+            format: "{}",
+            position: (16.0, 84.0),
+            size: (220.0, 28.0),
+        )),
+        Label((
+            id: "buff_label",
+            text: "",
+            bind: "buff",
+            format: "Buff: {}",
+            position: (16.0, 112.0),
+            size: (260.0, 28.0),
+        )),
+
+        // ── Radar chart — always visible, top-right ───────────────────────────────
+        StatRadar((
+            id: "stats_radar",
+            stats: ["player_health", "player_mana", "player_stamina", "player_strength", "player_speed"],
+            size: (220.0, 220.0),
+            absolute: true,
+            position: (560.0, 16.0),
+            grid_steps: 5,
+            outline_width: 2.0,
+            fill_color:       (0.35, 0.65, 1.00, 0.40),
+            outline_color:    (0.55, 0.85, 1.00, 1.0),
+            grid_color:       (0.40, 0.45, 0.55, 0.40),
+            background_color: (0.06, 0.08, 0.18, 0.80),
+        )),
+
+        // ── Action bar — keys 1-3 at bottom ──────────────────────────────────────
+        ActionBar((
+            id: "skill_bar",
+            position: (16.0, 560.0),
+            slot_size: 60.0,
+            slot_gap: 4.0,
+            background_color: (0.05, 0.05, 0.08, 0.85),
+            slots: [
+                (
+                    key: "1",
+                    icon: "",
+                    do_actions: [
+                        SpawnEffect(key: "heal_burst", entity: "player_01"),
+                        ModifyStat(key: "player_health", delta: 30.0),
+                        ShowFloatingText(entity: "player_01", text: "Heal +30"),
+                    ],
+                    cooldown_secs: 5.0,
+                    cost: (stat: "player_mana", amount: 15.0),
+                    label: "Heal",
+                ),
+                (
+                    key: "2",
+                    icon: "",
+                    do_actions: [
+                        ApplyModifier(modifier_key: "speed_boost"),
+                        SpawnEffect(key: "speed_burst", entity: "player_01"),
+                        ShowFloatingText(entity: "player_01", text: "Speed x1.5"),
+                    ],
+                    cooldown_secs: 12.0,
+                    cost: (stat: "player_mana", amount: 20.0),
+                    label: "Speed+",
+                ),
+                (
+                    key: "3",
+                    icon: "",
+                    do_actions: [
+                        ApplyModifier(modifier_key: "mana_surge"),
+                        SpawnEffect(key: "mana_burst", entity: "player_01"),
+                        ShowFloatingText(entity: "player_01", text: "Mana Surge!"),
+                    ],
+                    cooldown_secs: 8.0,
+                    cost: (stat: "player_stamina", amount: 20.0),
+                    label: "Mana+",
+                ),
+            ],
+        )),
+
+    ],
+)

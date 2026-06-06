@@ -1,0 +1,45 @@
+(
+    schema_version: 2,
+    name: "main",
+
+    lighting: (
+        ambient: (0.20, 0.22, 0.30),
+        ambient_brightness: 260.0,
+        directional: (
+            color: (1.0, 0.95, 0.82),
+            intensity: 28000.0,
+            rotation_euler_deg: (-42.0, 30.0, 0.0),
+            shadows_enabled: true,
+        ),
+    ),
+
+    spawn_points: {
+        "player_start": (0.0, 0.5, 5.0),
+    },
+
+    entities: [
+
+        (
+            id: "ground",
+            prefab: "ground",
+            transform: (
+                translation: (0.0, -0.5, 0.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        (
+            id: "player_01",
+            prefab: "player",
+            transform: (
+                translation: (0.0, 0.5, 5.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+    ],
+
+    ui: [],
+)

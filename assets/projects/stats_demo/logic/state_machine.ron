@@ -1,0 +1,76 @@
+(
+    schema_version: 1,
+
+    initial_state: "playing",
+
+    global_on: [
+        // ── Shrine interactions ──────────────────────────────────────────────────
+        ( event: "entity.interacted:shrine_overheal_01",
+          do_actions: [
+              ApplyModifier(modifier_key: "overheal"),
+              SpawnEffect(key: "overheal_glow", entity: "player_01"),
+              ShowFloatingText(entity: "player_01", text: "Overheal +30"),
+              SetVariable("buff", "Overheal +30 HP (15 s)"),
+          ],
+        ),
+        ( event: "entity.interacted:shrine_speed_01",
+          do_actions: [
+              ApplyModifier(modifier_key: "speed_boost"),
+              SpawnEffect(key: "speed_burst", entity: "player_01"),
+              ShowFloatingText(entity: "player_01", text: "Speed x1.5"),
+              SetVariable("buff", "Speed x1.5 (10 s)"),
+          ],
+        ),
+        ( event: "entity.interacted:shrine_mana_01",
+          do_actions: [
+              ApplyModifier(modifier_key: "mana_surge"),
+              SpawnEffect(key: "mana_burst", entity: "player_01"),
+              ShowFloatingText(entity: "player_01", text: "Mana Surge!"),
+              SetVariable("buff", "Mana Surge x1.8 (12 s)"),
+          ],
+        ),
+        ( event: "entity.interacted:shrine_poison_01",
+          do_actions: [
+              ApplyModifier(modifier_key: "poison"),
+              SpawnEffect(key: "poison_cloud", entity: "player_01"),
+              ShowFloatingText(entity: "player_01", text: "Poisoned!"),
+              SetVariable("buff", "Poisoned -30 HP (8 s)"),
+          ],
+        ),
+
+        // ── Action bar events ────────────────────────────────────────────────────
+        ( event: "action_bar.activated:1", do_actions: [ SetVariable("buff", "Heal activated") ] ),
+        ( event: "action_bar.activated:2", do_actions: [ SetVariable("buff", "Speed Boost activated") ] ),
+        ( event: "action_bar.activated:3", do_actions: [ SetVariable("buff", "Mana Surge activated") ] ),
+        ( event: "action_bar.on_cooldown:1", do_actions: [ SetVariable("buff", "Heal on cooldown") ] ),
+        ( event: "action_bar.on_cooldown:2", do_actions: [ SetVariable("buff", "Speed Boost on cooldown") ] ),
+        ( event: "action_bar.on_cooldown:3", do_actions: [ SetVariable("buff", "Mana Surge on cooldown") ] ),
+
+        // ── Stat thresholds ──────────────────────────────────────────────────────
+        ( event: "stat.player_health.low",
+          do_actions: [ SetVariable("status", "Health low!") ],
+        ),
+        ( event: "stat.player_health.full",
+          do_actions: [ SetVariable("status", "") ],
+        ),
+    ],
+
+    states: [
+        (
+            name: "playing",
+            entry_actions: [
+                // Warmup GPU pipelines for all effect variants used in this scene.
+                SpawnEffect(key: "heal_burst",    position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "speed_burst",   position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "poison_cloud",  position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "mana_burst",    position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "overheal_glow", position: Some((0.0, -100.0, 0.0))),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [],
+)

@@ -1,0 +1,43 @@
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            entry_actions: [
+                SetStat(key: "{self}.health", value: 100.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+                SpawnEffect(key: "heal_burst", entity: "{self}"),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "entity.interacted:{self}",
+                    do_actions: [
+                        ModifyStat(key: "{self}.health", delta: -25.0),
+                        ShowDamagePopup(entity: "{self}", amount: -25.0),
+                        SpawnEffect(key: "hit_spark", entity: "{self}"),
+                    ],
+                ),
+            ],
+        ),
+        (
+            name: "dead",
+            entry_actions: [
+                SpawnEffect(key: "hit_spark", entity: "{self}"),
+                SetEntityVisible(entity: "{self}", visible: false),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 8.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( from: "alive", on: "stat.{self}.health.depleted", to: "dead" ),
+        ( from: "dead",  on: "entity.respawned:{self}",      to: "alive" ),
+    ],
+)

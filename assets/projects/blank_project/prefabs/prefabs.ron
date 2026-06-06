@@ -1,0 +1,43 @@
+(
+    schema_version: 2,
+    prefabs: {
+
+        // Player capsule — tags: ["player"] wires up CharacterController,
+        // physics, and OrbitCamera automatically.
+        "player": (
+            kind: Primitive,
+            model: "",
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                movement: (
+                    walk_speed: 5.0,
+                    run_speed: 8.0,
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+                color: (0.22, 0.52, 0.88),
+                roughness: 0.30,
+                metallic: 0.10,
+            ),
+        ),
+
+        // Ground — static physics surface (physics: true in primitive).
+        // Cuboid(60, 1, 60): top surface at y = 0 when placed at y = -0.5.
+        "ground": (
+            kind: Primitive,
+            model: "",
+            shape: Cuboid,
+            components: (),
+            primitive: (
+                size: (60.0, 1.0, 60.0),
+                color: (0.30, 0.32, 0.28),
+                roughness: 0.95,
+                physics: true,
+            ),
+        ),
+
+    }
+)

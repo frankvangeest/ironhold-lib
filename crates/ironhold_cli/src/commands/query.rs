@@ -585,6 +585,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::SpawnEffect { .. } => "SpawnEffect",
         Action::ProjectDecal { .. } => "ProjectDecal",
         Action::SetParticleQuality(_) => "SetParticleQuality",
+        Action::ShowFloatingText { .. } => "ShowFloatingText",
     }
 }
 

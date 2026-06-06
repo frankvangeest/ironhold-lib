@@ -1,0 +1,121 @@
+(
+    schema_version: 1,
+    models: {},
+
+    textures: {
+        "particle/circle_01":  "shared/textures/particles/kenney-particle-pack/circle_01.png",
+        "particle/flare_01":   "shared/textures/particles/kenney-particle-pack/flare_01.png",
+        "particle/light_01":   "shared/textures/particles/kenney-particle-pack/light_01.png",
+        "particle/magic_01":   "shared/textures/particles/kenney-particle-pack/magic_01.png",
+        "particle/magic_04":   "shared/textures/particles/kenney-particle-pack/magic_04.png",
+        "particle/spark_01":   "shared/textures/particles/kenney-particle-pack/spark_01.png",
+        "particle/spark_02":   "shared/textures/particles/kenney-particle-pack/spark_02.png",
+        "particle/star_01":    "shared/textures/particles/kenney-particle-pack/star_01.png",
+        "particle/star_04":    "shared/textures/particles/kenney-particle-pack/star_04.png",
+        "particle/smoke_01":   "shared/textures/particles/kenney-particle-pack/smoke_01.png",
+        "particle/smoke_04":   "shared/textures/particles/kenney-particle-pack/smoke_04.png",
+    },
+
+    audio: {},
+
+    effects: {
+        // Heal burst — rising green sparkles.
+        "heal_burst": (
+            particle_count: 18,
+            lifetime_secs: 1.0,
+            speed: 2.5,
+            spread_deg: 70.0,
+            emit_radius: 0.3,
+            offset: (0.0, 1.0, 0.0),
+            size: 0.18,
+            size_end: 0.0,
+            color_start: (0.30, 1.00, 0.40, 1.0),
+            color_end:   (0.10, 0.80, 0.20, 0.0),
+            gravity: -1.0,
+            sprite: "particle/star_01",
+            additive: true,
+        ),
+
+        // Hit spark — sharp orange/white impact.
+        "hit_spark": (
+            particle_count: 12,
+            lifetime_secs: 0.5,
+            speed: 4.0,
+            spread_deg: 180.0,
+            offset: (0.0, 1.0, 0.0),
+            size: 0.12,
+            size_end: 0.0,
+            color_start: (1.0, 0.85, 0.30, 1.0),
+            color_end:   (1.0, 0.25, 0.0,  0.0),
+            gravity: -2.0,
+            sprite: "particle/spark_01",
+            additive: true,
+        ),
+
+        // Speed burst — cyan/yellow streaks around the player.
+        "speed_burst": (
+            particle_count: 20,
+            lifetime_secs: 0.8,
+            speed: 3.5,
+            spread_deg: 180.0,
+            emitter: Ring(radius: 0.5),
+            offset: (0.0, 0.9, 0.0),
+            size: 0.14,
+            size_end: 0.0,
+            color_start: (0.50, 1.00, 0.90, 1.0),
+            color_end:   (0.10, 0.60, 0.80, 0.0),
+            sprite: "particle/spark_02",
+            additive: true,
+        ),
+
+        // Poison cloud — purple/green smoke.
+        "poison_cloud": (
+            particle_count: 16,
+            lifetime_secs: 1.4,
+            speed: 1.2,
+            spread_deg: 120.0,
+            emit_radius: 0.4,
+            offset: (0.0, 0.8, 0.0),
+            size: 0.30,
+            size_end: 0.60,
+            color_start: (0.55, 0.10, 0.70, 0.9),
+            color_end:   (0.20, 0.55, 0.10, 0.0),
+            gravity: 0.5,
+            sprite: "particle/smoke_01",
+        ),
+
+        // Mana surge — blue sparkles expanding outward.
+        "mana_burst": (
+            particle_count: 22,
+            lifetime_secs: 0.9,
+            speed: 3.0,
+            spread_deg: 180.0,
+            emitter: Sphere(radius: 0.4),
+            offset: (0.0, 0.9, 0.0),
+            size: 0.16,
+            size_end: 0.0,
+            color_start: (0.40, 0.65, 1.00, 1.0),
+            color_end:   (0.10, 0.20, 0.90, 0.0),
+            sprite: "particle/magic_01",
+            additive: true,
+        ),
+
+        // Overheal glow — large soft white/green ring.
+        "overheal_glow": (
+            particle_count: 14,
+            lifetime_secs: 1.2,
+            speed: 1.5,
+            spread_deg: 40.0,
+            emitter: Ring(radius: 0.6),
+            offset: (0.0, 0.5, 0.0),
+            size: 0.28,
+            size_end: 0.0,
+            color_start: (0.80, 1.00, 0.60, 0.9),
+            color_end:   (0.30, 1.00, 0.40, 0.0),
+            sprite: "particle/light_01",
+            additive: true,
+        ),
+    },
+
+    materials: {},
+)

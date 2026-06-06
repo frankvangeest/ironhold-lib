@@ -1,0 +1,81 @@
+(
+    schema_version: 1,
+    stats: {
+        "player_health": (
+            base: 100.0,
+            min: 0.0,
+            max: 100.0,
+            soft_max: 130.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: [
+                ( when: BelowOrEqual(0.0),     emit: "stat.player_health.depleted" ),
+                ( when: BelowPercent(0.25),    emit: "stat.player_health.low" ),
+                ( when: AtOrAbovePercent(1.0), emit: "stat.player_health.full" ),
+            ],
+        ),
+        "player_mana": (
+            base: 80.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 5.0,
+            regen_delay: 2.0,
+            thresholds: [],
+        ),
+        "player_stamina": (
+            base: 100.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 15.0,
+            regen_delay: 0.5,
+            thresholds: [],
+        ),
+        "player_strength": (
+            base: 60.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: [],
+        ),
+        "player_speed": (
+            base: 70.0,
+            min: 0.0,
+            max: 150.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: [],
+        ),
+    },
+
+    modifiers: {
+        // Overheal: pushes health above max via soft_max (130).
+        "overheal": (
+            stat: "player_health",
+            kind: Additive(30.0),
+            duration_secs: 15.0,
+            stack_rule: Replace,
+        ),
+        // Poison: flat -30 effective health penalty.
+        "poison": (
+            stat: "player_health",
+            kind: Additive(-30.0),
+            duration_secs: 8.0,
+            stack_rule: Max,
+        ),
+        // Speed boost: x1.5 multiplicative — visually obvious in movement.
+        "speed_boost": (
+            stat: "player_speed",
+            kind: Multiplicative(1.5),
+            duration_secs: 10.0,
+            stack_rule: Replace,
+        ),
+        // Mana surge: x1.8 multiplicative on mana.
+        "mana_surge": (
+            stat: "player_mana",
+            kind: Multiplicative(1.8),
+            duration_secs: 12.0,
+            stack_rule: Replace,
+        ),
+    },
+)

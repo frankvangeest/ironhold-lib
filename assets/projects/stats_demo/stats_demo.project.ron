@@ -1,0 +1,31 @@
+(
+    schema_version: 3,
+    project_id: "stats_demo",
+    display_name: "Stats Demo",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    stats_path: "stats/stats.ron",
+
+    global_environment: (
+        intensity: 380.0,
+        fallback: (
+            top_color: (0.15, 0.22, 0.45),
+            bottom_color: (0.02, 0.02, 0.04),
+        ),
+    ),
+
+    primitive_default_color: (0.65, 0.63, 0.60),
+
+    damage_popup_style: (
+        font_size:     20.0,
+        duration_secs:  1.2,
+        rise_speed:     1.5,
+        spawn_offset:  (0.0, 2.0, 0.0),
+        damage_color:  (0.95, 0.25, 0.20, 1.0),
+        heal_color:    (0.20, 0.90, 0.20, 1.0),
+    ),
+)

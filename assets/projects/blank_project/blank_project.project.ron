@@ -1,0 +1,19 @@
+(
+    schema_version: 3,
+    project_id: "blank_project",
+    display_name: "Blank Starter",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+
+    global_environment: (
+        intensity: 400.0,
+        fallback: (
+            top_color: (0.10, 0.18, 0.38),
+            bottom_color: (0.01, 0.01, 0.01),
+        ),
+    ),
+)
