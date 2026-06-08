@@ -41,6 +41,9 @@
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
+### Animation
+- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
+
 ### Gameplay & Environment
 
 - [ ] **Status effect icon display** — HUD and/or above-entity icon strip showing active buffs and debuffs; icons are asset catalog texture keys declared on modifier templates; strip updates via change detection on `ActiveModifiers`; designer controls position (HUD panel vs. world-space above entity) and max visible icons in scene RON. See `planning/features/status_effect_icons.md`
@@ -49,6 +52,7 @@
 - [ ] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. See `planning/features/nameplate_system.md`
 - [ ] **Spawn wave / encounter system** — `WaveDef` in RON: an ordered sequence of spawn steps each with a prefab key, count, delay, and optional position list; fires on an event (`StartWave("wave_01")`), emits `wave.complete:{id}` when all spawned entities are dead; supports looping waves and inter-wave delays. Designer-friendly alternative to scripting individual `Spawn` + `EmitEventAfterDelay` chains. See `planning/features/spawn_wave_encounter.md`
 - [ ] **Day/night cycle** — `DayNightCycleDef` in scene RON: cycle duration, sun color/intensity keyframes at dawn/noon/dusk/midnight; `TimeOfDay` resource drives directional light + ambient each frame; `SetTimeOfDay(hour)` and `SetDaySpeed(multiplier)` actions; emits `time.dawn` / `time.noon` / `time.dusk` / `time.midnight` events designers can hook; WASM compatible (pure CPU, no post-process). See `planning/features/day_night_cycle.md`
+- [ ] **Mute audio by default + mute toggle action** — `mute_on_start: bool` on `ProjectConfig` (default `false`); new `ToggleMute` action that flips Bevy's `GlobalVolume` resource between 0 and 1; wire a mute toggle `Button` in `3rd_person_game_demo` scene RON that fires `ToggleMute`; no new systems — `GlobalVolume` already exists in Bevy.
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
 - [ ] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active camera; designer fires it from any rule or behavior file.
 
