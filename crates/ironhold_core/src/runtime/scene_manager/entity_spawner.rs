@@ -97,6 +97,13 @@ pub fn spawn_prefab_instance(
         ));
     }
 
+    if prefab.click_selectable {
+        ec.insert(crate::capabilities::targeting::ClickSelectable);
+    }
+    if prefab.targetable {
+        ec.insert(crate::capabilities::targeting::Targetable);
+    }
+
     if !prefab.colliders.is_empty() {
         let shapes: Vec<(Vec3, Quat, Collider)> = prefab.colliders.iter().filter_map(|cdef| {
             let shape = match cdef.shape {
@@ -326,6 +333,10 @@ pub(crate) fn spawn_player_entity(
         LocomotionState::default(),
         AnimationRequests::default(),
         ActiveOverride::default(),
+        // Required by player_movement_system's query. Without it the GLB player is
+        // silently filtered out of that query and never moves (the primitive player
+        // path inserts this at scene_loader.rs; the GLB path historically did not).
+        crate::capabilities::player::SpeedMultiplier(1.0),
         RigidBody::Dynamic,
         Collider::compound(vec![(
             Vec3::new(0.0, cap_half + cap_radius, 0.0),
@@ -421,5 +432,7 @@ pub(crate) fn default_input_map() -> InputMap {
         run: "ShiftLeft".to_string(),
         interact: "KeyF".to_string(),
         strafe_mouse_button: Some("Left".to_string()),
+        target_next: "Tab".to_string(),
+        target_range: 30.0,
     }
 }

@@ -183,6 +183,12 @@ pub struct WorldLabel {
 #[derive(Component, Debug, Clone)]
 pub struct SpawnId(pub String);
 
+/// The prefab catalog key this entity was spawned from (e.g. `"enemy_orc_melee"`).
+/// Distinct from `SpawnId` which is the per-instance id (e.g. `"orc_01"`). Lets systems
+/// show a human-readable type name alongside the instance id (targeting UI, debug, etc.).
+#[derive(Component, Debug, Clone)]
+pub struct PrefabKey(pub String);
+
 /// Temporary component inserted at spawn time when a prefab has a `behavior` path.
 /// Replaced by `BehaviorHandle` + `EntityFsmState` once the asset resolves.
 #[derive(Component)]
@@ -279,6 +285,9 @@ pub struct SceneStateParams<'w, 's> {
     pub global_transforms: Query<'w, 's, &'static GlobalTransform>,
     pub delayed_events: ResMut<'w, DelayedEventQueue>,
     pub project_config: Option<Res<'w, ProjectConfig>>,
+    pub current_target: ResMut<'w, crate::capabilities::action_bar::CurrentTarget>,
+    /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
+    pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

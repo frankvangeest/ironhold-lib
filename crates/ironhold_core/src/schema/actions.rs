@@ -204,6 +204,13 @@ pub enum Action {
     /// Persists across scene transitions — call again to restore full quality.
     /// Example: `SetParticleQuality(Low)`.
     SetParticleQuality(crate::schema::catalog::QualityLevel),
+    /// Set `CurrentTarget` to the given spawn ID and emit `target.changed:{id}`.
+    /// Cleared automatically on `LoadScene`. Use `ClearTarget` to remove the selection.
+    /// Example: `SetTarget("enemy_01")`.
+    SetTarget(String),
+    /// Clear `CurrentTarget` and emit `target.cleared`.
+    /// Also cleared automatically on `LoadScene`.
+    ClearTarget,
 }
 
 fn default_action_volume() -> f32 { 1.0 }

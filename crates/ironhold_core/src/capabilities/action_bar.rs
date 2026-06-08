@@ -6,6 +6,7 @@ use crate::schema::scene_v2::SlotCost;
 use crate::schema::stats::LoadedStats;
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::GameEvent;
+use crate::runtime::scene_manager::message_interpreter::rewrite_target;
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ pub fn action_bar_input_system(
     // Substitute {target} in actions if a target is available.
     let target_id = current_target.0.as_deref().unwrap_or("");
     for action in &slot.do_actions {
-        action_queue.push(substitute_target(action.clone(), target_id));
+        action_queue.push(rewrite_target(action.clone(), target_id));
     }
 
     // Deduct cost stat.
@@ -216,33 +217,11 @@ fn action_needs_target(action: &Action) -> bool {
         Action::SetStat { key, .. } => key.contains("{target}"),
         Action::SpawnEffect { entity, .. } => entity.as_deref() == Some("{target}"),
         Action::ShowDamagePopup { entity, .. } => entity.contains("{target}"),
+        Action::ShowFloatingText { entity, .. } => entity.contains("{target}"),
         Action::SetEntityVisible { entity, .. } => entity.contains("{target}"),
         Action::Despawn(s) => s.contains("{target}"),
         Action::EmitEvent(s) => s.contains("{target}"),
         Action::PlayAnimationOn { target, .. } => target.contains("{target}"),
         _ => false,
-    }
-}
-
-fn substitute_target(action: Action, target: &str) -> Action {
-    fn s(v: &str, t: &str) -> String { v.replace("{target}", t) }
-    match action {
-        Action::ModifyStat { key, delta } =>
-            Action::ModifyStat { key: s(&key, target), delta },
-        Action::SetStat { key, value } =>
-            Action::SetStat { key: s(&key, target), value },
-        Action::SpawnEffect { key, position, entity } =>
-            Action::SpawnEffect { key, position, entity: entity.map(|e| s(&e, target)) },
-        Action::ShowDamagePopup { entity, amount } =>
-            Action::ShowDamagePopup { entity: s(&entity, target), amount },
-        Action::SetEntityVisible { entity, visible } =>
-            Action::SetEntityVisible { entity: s(&entity, target), visible },
-        Action::Despawn(id) => Action::Despawn(s(&id, target)),
-        Action::EmitEvent(ev) => Action::EmitEvent(s(&ev, target)),
-        Action::PlayAnimationOn { target: tgt, clip } =>
-            Action::PlayAnimationOn { target: s(&tgt, target), clip },
-        Action::ShowFloatingText { entity, text } =>
-            Action::ShowFloatingText { entity: s(&entity, target), text },
-        other => other,
     }
 }

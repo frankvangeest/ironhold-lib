@@ -1,7 +1,13 @@
 # Feature: Targeting System (Click-to-Select + Tab Targeting)
 
-_Status: Draft_
+_Status: DONE (shipped 2026-06-08)_
 _Planned at: `7fde6ea` (2026-06-02)_
+
+> **Implemented-as note (deviations from this plan):**
+> - **Click selection is screen-space proximity** (`camera.world_to_viewport`, nearest entity within ~70px), **not** `bevy::picking` mesh raycast. Mesh picking raycasts bind-pose geometry and misses animated/skinned GLB characters, so it was abandoned mid-implementation.
+> - **No hover events** (`target.hovered`/`target.unhovered`) and **no `ProjectDecal` selection ring** were shipped — deferred as polish. Selection feedback is via the `target_display` HUD label + `ShowFloatingText`.
+> - Added beyond plan: `PrefabKey` component and `target_display`/`target_name`/`target_id` HUD variables; `SetTarget`/`ClearTarget` actions.
+> - Fixed two pre-existing spawn-path bugs surfaced by this work: GLB player missing `SpeedMultiplier` (movement) and GLB scene actors missing `SpawnId` (id-targeting). Follow-ups logged in `claude_suggestions.md` (spawn-site consolidation; `PrefabKey` on dynamic spawns).
 
 ---
 

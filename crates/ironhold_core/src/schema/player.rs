@@ -75,6 +75,13 @@ pub struct InputMap {
     /// Default: `"Left"` (preserves existing behavior).
     #[serde(default = "default_strafe_mouse_button")]
     pub strafe_mouse_button: Option<String>,
+    /// Key to cycle to the next nearest `targetable: true` entity (default: `"Tab"`).
+    /// Hold Shift while pressing to cycle in reverse (nearest-last).
+    #[serde(default = "default_target_next_key")]
+    pub target_next: String,
+    /// Maximum world-space distance (in units) to consider for Tab targeting (default: 30.0).
+    #[serde(default = "default_target_range")]
+    pub target_range: f32,
 }
 
 fn default_run_key() -> String {
@@ -86,6 +93,8 @@ fn default_interact_key() -> String {
 }
 
 fn default_strafe_mouse_button() -> Option<String> { Some("Left".to_string()) }
+fn default_target_next_key() -> String { "Tab".to_string() }
+fn default_target_range() -> f32 { 30.0 }
 
 impl InputMap {
     pub fn parse_mouse_button(s: &str) -> Option<MouseButton> {

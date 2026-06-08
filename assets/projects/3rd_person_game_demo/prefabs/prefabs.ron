@@ -7,14 +7,27 @@
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
-        // Orbit camera tuning. All fields optional — omit the block to use engine defaults.
         camera: (
-          offset:         (0.0, 2.5, 8.0),   // camera sits 2.5 m up, 8 m behind
-          look_at_offset: (0.0, 1.0, 0.0),   // look at chest height
+          offset:         (0.0, 2.5, 8.0),
+          look_at_offset: (0.0, 1.0, 0.0),
           zoom_speed:     8.0,
           orbit_speed:    0.4,
           min_radius:     3.0,
           max_radius:     18.0,
+          // RMB-only orbit frees LMB for click-to-select targeting.
+          orbit_button: "Right",
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          // "Tab" is intercepted by browsers for focus management.
+          // KeyT is reliable and won't fight the browser.
+          target_next:  "KeyT",
         ),
       ),
     ),
@@ -22,8 +35,20 @@
     "enemy_orc_melee": (
       kind: Actor,
       model: "orc",
+      animation_policy: "prefabs/animation/orc_policy.ron",
       components: (
         tags: ["enemy"],
+      ),
+      targetable: true,
+      click_selectable: true,
+    ),
+
+    "creature_alpaking": (
+      kind: Actor,
+      model: "alpaking",
+      animation_policy: "prefabs/animation/alpaking_policy.ron",
+      components: (
+        tags: ["creature"],
       ),
     ),
 
@@ -34,9 +59,7 @@
         tags: ["loot"],
       ),
       colliders: [
-        // Base body of the chest
         (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
-        // Lid (slightly smaller and offset upward)
         (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
       ],
     ),
@@ -57,39 +80,46 @@
       ),
     ),
 
-    "creature_alpaking": (
-      kind: Actor,
-      model: "alpaking",
-      components: (
-        tags: ["creature"],
+    // Large flat sand-coloured ground plane. physics: true so the player can walk on it.
+    "ground_plane": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      primitive: (
+        size: (100.0, 0.5, 100.0),
+        color: (0.71, 0.60, 0.38),  // warm sandy tan (linear RGB)
+        roughness: 0.90,
+        metallic: 0.0,
+        physics: true,
       ),
     ),
 
-    // Composite prefab: wooden platform with a GLB chest nested on top.
-    // Demonstrates kind:"prop" nesting inside a kind:"primitive" composite.
+    // Wooden display platform with a chest on top.
+    // Entity placed at y=0; platform bottom sits flush with the ground.
     "loot_display": (
       kind: Primitive,
       model: "",
       components: (),
       children: [
-        // Wooden platform base — inline Cuboid with a static physics collider
+        // Wooden platform — 0.2 units thick, center at y=0.1, bottom at y=0, top at y=0.2
         (
           shape: Cuboid,
           primitive: (
-            size: (3.0, 0.15, 3.0),
+            size: (3.0, 0.2, 3.0),
             color: (0.45, 0.28, 0.12),
             roughness: 0.85,
             physics: true,
           ),
-          offset: (0.0, -0.79, 0.0),
+          offset: (0.0, 0.1, 0.0),
           rotation_euler_deg: (0.0, 0.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
-        // GLB chest nested on top of the platform
+        // Chest_01 collider bottom is 0.4 below entity origin (see colliders def).
+        // Chest entity at y=0.6 → bottom at 0.6 - 0.4 = 0.2 = platform top. ✓
         (
           prefab: "chest_01",
-          offset: (0.0, 0.15, 0.0),
-          rotation_euler_deg: (0.0, 0.0, 0.0),
+          offset: (0.0, 0.6, 0.0),
+          rotation_euler_deg: (0.0, 20.0, 0.0),
           scale: (1.0, 1.0, 1.0),
         ),
       ],

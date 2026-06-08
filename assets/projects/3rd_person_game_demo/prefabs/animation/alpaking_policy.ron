@@ -1,0 +1,13 @@
+(
+    default_transition_ms: 300,
+
+    base: (
+        idle:      "CharacterArmature|Flying_Idle",
+        walk:      "CharacterArmature|Fast_Flying",
+        run:       "CharacterArmature|Fast_Flying",
+        jump_loop: "CharacterArmature|Flying_Idle",
+    ),
+
+    clips: {},
+    overrides: [],
+)

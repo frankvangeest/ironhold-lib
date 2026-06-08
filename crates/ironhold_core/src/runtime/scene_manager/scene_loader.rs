@@ -17,7 +17,7 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings, SpawnId, WorldLabel,
+    ProjectKeyBindings, LoadedKeyBindings, SpawnId, PrefabKey, WorldLabel,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     PendingBehavior, resolve_project_path,
 };
@@ -267,7 +267,10 @@ pub fn spawn_scene_v2(
 
                     // Register composite entities in the spawn registry so that
                     // Action::Despawn can locate them by id — same as single-mesh entities.
-                    commands.entity(parent).insert(SpawnId(entity_def.id.clone()));
+                    commands.entity(parent).insert((
+                        SpawnId(entity_def.id.clone()),
+                        PrefabKey(entity_def.prefab.clone()),
+                    ));
                     spawn_registry.entities.insert(entity_def.id.clone(), parent);
 
                     // ── NPC agent ────────────────────────────────────────────────────────
@@ -357,6 +360,14 @@ pub fn spawn_scene_v2(
                             Sensor,
                             ActiveEvents::COLLISION_EVENTS,
                         ));
+                    }
+
+                    // Targeting markers (composite path)
+                    if prefab.click_selectable {
+                        commands.entity(parent).insert(crate::capabilities::targeting::ClickSelectable);
+                    }
+                    if prefab.targetable {
+                        commands.entity(parent).insert(crate::capabilities::targeting::Targetable);
                     }
 
                     if !prefab.stat_templates.is_empty() {
@@ -487,7 +498,10 @@ pub fn spawn_scene_v2(
 
                         // Give every single-primitive scene entity a stable SpawnId so that
                         // Action::Despawn can locate it by the scene entity id.
-                        commands.entity(spawned).insert(SpawnId(entity_def.id.clone()));
+                        commands.entity(spawned).insert((
+                            SpawnId(entity_def.id.clone()),
+                            PrefabKey(entity_def.prefab.clone()),
+                        ));
                         spawn_registry.entities.insert(entity_def.id.clone(), spawned);
 
                         // Collectable marker: collision triggers GameEvent into the rules pipeline.
@@ -596,6 +610,14 @@ pub fn spawn_scene_v2(
                             ));
                         }
 
+                        // Targeting markers (single-mesh primitive path)
+                        if prefab.click_selectable {
+                            commands.entity(spawned).insert(crate::capabilities::targeting::ClickSelectable);
+                        }
+                        if prefab.targetable {
+                            commands.entity(spawned).insert(crate::capabilities::targeting::Targetable);
+                        }
+
                         if !prefab.stat_templates.is_empty() {
                             let spawn_id = &entity_def.id;
                             let mut stat_map = StatMap::default();
@@ -670,7 +692,16 @@ pub fn spawn_scene_v2(
                     transform,
                     &entity_def.id,
                 );
-                commands.entity(parent).insert(LevelEntity);
+                // GLB actor/prop scene entities need a SpawnId (and registry entry) just like
+                // the primitive/composite paths — otherwise id-targeted actions (Despawn,
+                // ProjectDecal) and the targeting systems (which query `&SpawnId`) can't find
+                // them. This branch historically omitted it.
+                commands.entity(parent).insert((
+                    LevelEntity,
+                    SpawnId(entity_def.id.clone()),
+                    PrefabKey(entity_def.prefab.clone()),
+                ));
+                spawn_registry.entities.insert(entity_def.id.clone(), parent);
                 if let Some(label_def) = &entity_def.label {
                     pending_labels.push((parent, label_def.clone()));
                 }

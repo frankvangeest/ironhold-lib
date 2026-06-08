@@ -586,6 +586,8 @@ fn action_kind(a: &Action) -> &'static str {
         Action::ProjectDecal { .. } => "ProjectDecal",
         Action::SetParticleQuality(_) => "SetParticleQuality",
         Action::ShowFloatingText { .. } => "ShowFloatingText",
+        Action::SetTarget(_) => "SetTarget",
+        Action::ClearTarget => "ClearTarget",
     }
 }
 

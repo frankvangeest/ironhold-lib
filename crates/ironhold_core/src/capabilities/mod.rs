@@ -24,6 +24,7 @@ pub mod particle_renderer;
 pub mod decal;
 pub mod foliage;
 pub mod action_bar;
+pub mod targeting;
 
 pub use player::*;
 pub use camera::*;
@@ -56,4 +57,5 @@ pub use particle_renderer::{
 pub use decal::{FadingDecal, TrackedDecal, PendingDecalSpawns, spawn_decal_system, fading_decal_system};
 pub use foliage::{FoliageMaterial, FoliageMaterialParams, ATTRIBUTE_LEAF_CENTER, PendingFoliage, FoliagePlugin};
 pub use action_bar::{ActionBarPlugin, CooldownMap, CurrentTarget, ActionSlotUi, CooldownOverlay};
+pub use targeting::{TargetingPlugin, ClickSelectable, Targetable, tab_targeting_system};
 

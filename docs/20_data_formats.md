@@ -392,6 +392,17 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
 
+**GameVariables auto-written by capabilities** (bind a `Label` to these — no rule wiring needed):
+
+| Key | Written by | Value |
+|-----|-----------|-------|
+| `target_display` | targeting | `"<prefab> <id>"` of the current target (e.g. `"enemy_orc_melee orc_01"`); empty string when no target |
+| `target_name` | targeting | prefab catalog key of the current target (e.g. `"enemy_orc_melee"`) |
+| `target_id` | targeting | spawn id of the current target (e.g. `"orc_01"`) |
+| `score` | action executor | running score, derived from `IncrementVariable("score", …)` |
+
+The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`. Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
+
 #### `Rect((...))`
 
 | Field | Type | Default | Description |
@@ -517,7 +528,7 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 | `action_bar.insufficient_resource:{key}` | Key pressed but cost stat too low |
 | `action_bar.no_target:{key}` | `{target}` used in `do_actions` but no target is selected |
 
-**`{target}` substitution:** Any occurrence of `{target}` in a slot's `do_actions` is replaced with the spawn ID of the entity in `CurrentTarget` resource. If `CurrentTarget` is `None` the slot emits `action_bar.no_target:{key}` and does not fire. The targeting system (planned) populates `CurrentTarget`.
+**`{target}` substitution:** Any occurrence of `{target}` in a slot's `do_actions` (and in all rule / FSM `do_actions`) is replaced with the spawn ID of the entity in `CurrentTarget`. For action bar slots, if `CurrentTarget` is `None` the slot emits `action_bar.no_target:{key}` and does not fire. `CurrentTarget` is populated by the targeting system — set `click_selectable: true` or `targetable: true` on a `PrefabDef` to enable.
 
 ```ron
 ActionBar((
@@ -1048,6 +1059,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `Primitive` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
 | `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). |
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
+| `click_selectable` | `bool` | `false` | When `true`, left-clicking near this entity on screen sets it as `CurrentTarget` and emits `target.clicked:{id}`, `target.changed:{id}`, and `target.changed`. Selection is screen-space proximity (the entity nearest the cursor within ~70px), so it works for animated/skinned GLB characters as well as primitives. Clicking empty space clears the target. |
+| `targetable` | `bool` | `false` | When `true`, this entity participates in Tab-cycle targeting. Pressing Tab selects the nearest `targetable` entity within `target_range` units and emits `target.changed:{id}` and `target.changed`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
@@ -1142,6 +1155,10 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | `run` | `String` | `"ShiftLeft"` | Hold to run |
 | `interact` | `String` | `"KeyF"` | Interact with nearby `interactable` entities |
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
+| `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
+| `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
+
+> **Selection is proximity-based, not a pixel-perfect mesh hit.** Left-clicking selects the `click_selectable` entity whose on-screen position is nearest the cursor (within a fixed radius), resolved from the entity's transform — so thin or animated/skinned characters are easy to click and never "fall through" to the geometry behind them. Clicking with nothing nearby clears the current target. For combat-style play, set the player camera's `orbit_button: "Right"` so left-click is free for selection (see `3rd_person_game_demo`).
 
 **Valid key name strings** — both the canonical form (`"KeyW"`) and the shorthand (`"W"`) are accepted for letters and digits:
 
@@ -1684,6 +1701,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `ModifyStat(key: "key", delta: f32)` | Add `delta` to a stat and clamp. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap`; no dot targets global `LoadedStats`. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID. |
 | `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
 | `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. |
+| `ShowFloatingText(entity: "id", text: "msg")` | Spawns a floating text label above the entity with the given spawn ID. Rises and fades using the same animation as `ShowDamagePopup`. Colour is warm yellow; use `ShowDamagePopup` for numeric health feedback. Uses `{self}` and `{target}` substitution. |
 | `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label) auto-hide automatically. Uses `{self}` in behavior files. |
 | `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. |
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
@@ -1692,6 +1710,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetVolume(0–100)` | Set the global audio volume (percent). 0 = mute, 100 = full. |
 | `ApplyModifier(modifier_key: "key")` | Apply a named stat modifier template to its target stat. |
 | `RemoveModifier(modifier_key: "key")` | Remove all active instances of a named modifier. |
+| `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |
+| `ClearTarget` | Clear `CurrentTarget`. Emits `target.cleared`. Also cleared automatically on `LoadScene`. |
 
 ---
 

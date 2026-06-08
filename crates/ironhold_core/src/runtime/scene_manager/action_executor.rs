@@ -39,6 +39,8 @@ pub fn action_executor_system(
                 if !debug.scene.is_empty() {
                     scene_events.write(SceneEvent::Unloading(debug.scene.clone()));
                 }
+                scene_state.current_target.0 = None;
+                crate::capabilities::targeting::clear_target_vars(&mut scene_state.game_vars);
                 scene_state.preloaded.0.clear();
                 scene_state.preloaded_glbs.0.clear();
                 scene_state.delayed_events.0.clear();
@@ -576,6 +578,27 @@ pub fn action_executor_system(
             Action::SetParticleQuality(level) => {
                 info!("Action::SetParticleQuality: {:?}", level);
                 spawn_params.particle_quality.level = level;
+            }
+            Action::SetTarget(id) => {
+                info!("Action::SetTarget: {:?}", id);
+                scene_state.current_target.0 = Some(id.clone());
+                // Update the target UI variables so a rule-driven SetTarget updates a bound
+                // label identically to click/Tab selection (resolve the prefab key via the
+                // spawn registry, falling back to id-only display if it isn't found).
+                let prefab = spawn_params.registry.entities.get(&id)
+                    .and_then(|e| scene_state.prefab_keys.get(*e).ok())
+                    .map(|p| p.0.clone());
+                crate::capabilities::targeting::write_target_vars(
+                    &mut scene_state.game_vars, prefab.as_deref(), &id,
+                );
+                game_events.write(GameEvent::Trigger(format!("target.changed:{}", id)));
+                game_events.write(GameEvent::Trigger("target.changed".to_string()));
+            }
+            Action::ClearTarget => {
+                info!("Action::ClearTarget");
+                scene_state.current_target.0 = None;
+                crate::capabilities::targeting::clear_target_vars(&mut scene_state.game_vars);
+                game_events.write(GameEvent::Trigger("target.cleared".to_string()));
             }
         }
     }

@@ -144,6 +144,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::flame_material::FlameParticleMaterialPlugin)
             .add_plugins(capabilities::foliage::FoliagePlugin)
             .add_plugins(capabilities::action_bar::ActionBarPlugin)
+            .add_plugins(capabilities::targeting::TargetingPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input

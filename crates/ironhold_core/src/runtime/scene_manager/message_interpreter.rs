@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::schema::Action;
+use crate::capabilities::action_bar::CurrentTarget;
 use super::{LoadedRules, LoadedStateMachine, LogicState, BehaviorHandle, EntityFsmState, SpawnId};
 
 pub fn message_interpreter_system(
@@ -11,12 +12,14 @@ pub fn message_interpreter_system(
     mut action_queue: ResMut<ActionQueue>,
     loaded_rules: Res<LoadedRules>,
     logic_state: Res<LogicState>,
+    current_target: Res<CurrentTarget>,
 ) {
+    let target_id = current_target.0.as_deref().unwrap_or("");
     for event in ui_events.read() {
         let event_name = match event {
             UiEvent::ButtonPressed(trigger) => format!("ui.button_pressed:{}", trigger),
         };
-        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
+        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue, target_id);
     }
 
     for event in game_events.read() {
@@ -25,7 +28,7 @@ pub fn message_interpreter_system(
             // (e.g. "entity.collected:coin_01", "zone.entered:checkpoint_1").
             GameEvent::Trigger(name) => name.clone(),
         };
-        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
+        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue, target_id);
     }
 
     for event in scene_events.read() {
@@ -35,7 +38,7 @@ pub fn message_interpreter_system(
             SceneEvent::Ready(path)     => format!("scene.ready:{}",     scene_path_stem(path)),
             SceneEvent::Unloading(path) => format!("scene.unloading:{}", scene_path_stem(path)),
         };
-        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue);
+        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue, target_id);
     }
 }
 
@@ -44,6 +47,7 @@ fn match_rules(
     loaded_rules: &LoadedRules,
     logic_state: &LogicState,
     action_queue: &mut ActionQueue,
+    target_id: &str,
 ) {
     if loaded_rules.0.is_empty() {
         return;
@@ -58,7 +62,7 @@ fn match_rules(
             matched = true;
             for action in &rule.do_actions {
                 info!("Rule Matched! Event: {} -> Action: {:?}", event_name, action);
-                action_queue.push(action.clone());
+                action_queue.push(rewrite_target(action.clone(), target_id));
             }
         }
     }
@@ -94,7 +98,9 @@ pub fn entity_fsm_interpreter_system(
     mut action_queue: ResMut<ActionQueue>,
     mut entities: Query<(&BehaviorHandle, &mut EntityFsmState, &SpawnId)>,
     state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
+    current_target: Res<CurrentTarget>,
 ) {
+    let target_id = current_target.0.as_deref().unwrap_or("");
     // Collect all events emitted this frame.
     let mut events: Vec<String> = Vec::new();
     for event in ui_events.read() {
@@ -128,7 +134,7 @@ pub fn entity_fsm_interpreter_system(
                 if pattern == *event_name {
                     for action in &binding.do_actions {
                         info!("Entity FSM [{}] global_on: {} -> {:?}", id, event_name, action);
-                        action_queue.push(rewrite_self(action.clone(), id));
+                        action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                     }
                 }
             }
@@ -142,7 +148,7 @@ pub fn entity_fsm_interpreter_system(
                         for action in &binding.do_actions {
                             info!("Entity FSM [{}] in-state on [{}]: {} -> {:?}",
                                 id, current, event_name, action);
-                            action_queue.push(rewrite_self(action.clone(), id));
+                            action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                         }
                     }
                 }
@@ -167,13 +173,13 @@ pub fn entity_fsm_interpreter_system(
                 if let Some(from_def) = fsm.states.iter().find(|s| s.name == from_name) {
                     for action in &from_def.exit_actions {
                         info!("Entity FSM [{}] exit [{}]: {:?}", id, from_name, action);
-                        action_queue.push(rewrite_self(action.clone(), id));
+                        action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                     }
                 }
                 if let Some(to_def) = fsm.states.iter().find(|s| s.name == to_name) {
                     for action in &to_def.entry_actions {
                         info!("Entity FSM [{}] entry [{}]: {:?}", id, to_name, action);
-                        action_queue.push(rewrite_self(action.clone(), id));
+                        action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                     }
                 }
 
@@ -233,6 +239,45 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
     }
 }
 
+/// Substitutes `{target}` in action fields with the current target's spawn ID.
+/// Called by all three interpreter systems before pushing actions onto the queue.
+/// If `target_id` is empty (no current target), `{target}` is left as-is and a
+/// debug message is logged — the action executor will likely fail gracefully.
+pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
+    fn s(v: &str, t: &str) -> String { v.replace("{target}", t) }
+    match action {
+        Action::ModifyStat { key, delta } =>
+            Action::ModifyStat { key: s(&key, target_id), delta },
+        Action::SetStat { key, value } =>
+            Action::SetStat { key: s(&key, target_id), value },
+        Action::SpawnEffect { key, position, entity } =>
+            Action::SpawnEffect { key, position, entity: entity.map(|e| s(&e, target_id)) },
+        Action::ShowDamagePopup { entity, amount } =>
+            Action::ShowDamagePopup { entity: s(&entity, target_id), amount },
+        Action::ShowFloatingText { entity, text } =>
+            Action::ShowFloatingText { entity: s(&entity, target_id), text },
+        Action::SetEntityVisible { entity, visible } =>
+            Action::SetEntityVisible { entity: s(&entity, target_id), visible },
+        Action::Despawn(id) => Action::Despawn(s(&id, target_id)),
+        Action::EmitEvent(ev) => Action::EmitEvent(s(&ev, target_id)),
+        Action::EmitEventAfterDelay { event, delay_secs } =>
+            Action::EmitEventAfterDelay { event: s(&event, target_id), delay_secs },
+        Action::PlayAnimationOn { target, clip } =>
+            Action::PlayAnimationOn { target: s(&target, target_id), clip },
+        Action::Spawn { prefab, id, position, spawn_point, yaw_deg } => Action::Spawn {
+            prefab,
+            id: id.map(|i| s(&i, target_id)),
+            position,
+            spawn_point: spawn_point.map(|sp| s(&sp, target_id)),
+            yaw_deg,
+        },
+        // Substitutes {target} in the value so rules can track the current target:
+        // SetVariable("target_name", "{target}") → SetVariable("target_name", "orc_01")
+        Action::SetVariable(key, value) => Action::SetVariable(key, s(&value, target_id)),
+        other => other,
+    }
+}
+
 /// Interprets events against a loaded `StateMachineAsset`, driving state transitions and
 /// queuing entry/exit actions.  Runs alongside `message_interpreter_system`; only one of
 /// the two will have data to act on for any given project (rules vs. FSM).
@@ -243,8 +288,10 @@ pub fn fsm_interpreter_system(
     mut action_queue: ResMut<ActionQueue>,
     loaded_fsm: Res<LoadedStateMachine>,
     mut logic_state: ResMut<LogicState>,
+    current_target: Res<CurrentTarget>,
 ) {
     let Some(fsm) = &loaded_fsm.0 else { return };
+    let target_id = current_target.0.as_deref().unwrap_or("");
 
     // Collect all events for this frame before mutating state.
     let mut events: Vec<String> = Vec::new();
@@ -273,7 +320,7 @@ pub fn fsm_interpreter_system(
             if binding.event == *event_name {
                 for action in &binding.do_actions {
                     info!("FSM global_on: {} -> {:?}", event_name, action);
-                    action_queue.push(action.clone());
+                    action_queue.push(rewrite_target(action.clone(), target_id));
                 }
             }
         }
@@ -284,7 +331,7 @@ pub fn fsm_interpreter_system(
                 if binding.event == *event_name {
                     for action in &binding.do_actions {
                         info!("FSM in-state on [{}]: {} -> {:?}", logic_state.0, event_name, action);
-                        action_queue.push(action.clone());
+                        action_queue.push(rewrite_target(action.clone(), target_id));
                     }
                 }
             }
@@ -310,14 +357,14 @@ pub fn fsm_interpreter_system(
             if let Some(from_def) = fsm.states.iter().find(|s| s.name == from_name) {
                 for action in &from_def.exit_actions {
                     info!("FSM exit [{}]: {:?}", from_name, action);
-                    action_queue.push(action.clone());
+                    action_queue.push(rewrite_target(action.clone(), target_id));
                 }
             }
 
             if let Some(to_def) = fsm.states.iter().find(|s| s.name == to_name) {
                 for action in &to_def.entry_actions {
                     info!("FSM entry [{}]: {:?}", to_name, action);
-                    action_queue.push(action.clone());
+                    action_queue.push(rewrite_target(action.clone(), target_id));
                 }
             }
 

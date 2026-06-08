@@ -3155,6 +3155,20 @@ fn test_action_remove_modifier_parses() {
 }
 
 #[test]
+fn test_action_set_target_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str(r#"SetTarget("orc_01")"#).expect("SetTarget should parse");
+    assert!(matches!(action, Action::SetTarget(ref id) if id == "orc_01"));
+}
+
+#[test]
+fn test_action_clear_target_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str("ClearTarget").expect("ClearTarget should parse");
+    assert!(matches!(action, Action::ClearTarget));
+}
+
+#[test]
 fn test_modifier_kind_override_parses() {
     let ron_str = r#"
         (

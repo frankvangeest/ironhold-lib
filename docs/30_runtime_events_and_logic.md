@@ -108,6 +108,11 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"npc.player_reached:<id>"` — NPC reached the player's position ✅
 - `"npc.player_lost:<id>"` — NPC lost sight of player and returned to idle ✅
 - `"collision.hit:<id>"` — impact event 🧭
+- `"target.clicked:<id>"` — player left-clicked a `click_selectable: true` entity (screen-space proximity) ✅
+- `"target.changed:<id>"` — fires only when that specific entity becomes the target; use for per-entity reactions (e.g. `target.changed:boss_01` → start a boss healthbar) ✅
+- `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. `ShowFloatingText(entity: "{target}", text: "Selected!")` — see `3rd_person_game_demo/logic/rules.ron`) ✅
+- `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, or `LoadScene`) ✅
+- The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 
@@ -283,9 +288,12 @@ Applies actions to the world. Key design points:
 - `ModifyStat { key, delta }` — adds `delta` to a stat, clamped to `[min, max]`; negative delta resets regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` → entity `StatMap`; no dot → global `LoadedStats`. `{self}` in `key` is substituted in behavior contexts.
 - `SetStat { key, value }` — sets a stat to an absolute value, clamped to `[min, max]`; decreasing resets regen cooldown. Same dot-routing and `{self}` substitution as `ModifyStat`.
 - `ShowDamagePopup { entity, amount }` — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style configured via `damage_popup_style` in `.project.ron`; `{self}` substituted in behavior contexts
+- `ShowFloatingText { entity, text }` — spawns a floating text label (warm yellow) above the entity; rises and fades like `ShowDamagePopup`; use for status messages, selection feedback, etc.; `{self}` and `{target}` substituted
 - `SetEntityVisible { entity, visible }` — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
 - `EmitEventAfterDelay { event, delay_secs }` — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene` so no delayed events survive scene transitions; `{self}` substituted in behavior contexts
 - `SpawnEffect { key, position, entity }` — bursts a particle effect from `AssetCatalog.effects`; `entity` (spawn ID) takes precedence over `position` (world coords); the effect def `offset` is added to the resolved position; `{self}` substituted in behavior contexts; silently skips on unknown key or unresolvable entity; see `docs/20_data_formats.md` for `EffectDef` fields. **WASM:** sphere particles and flame sprite particles (`uv_distort > 0` or `uv_scroll_speed > 0`) compile separate WebGPU pipelines — fire one warmup burst per variant on `scene.ready` at `position: Some((0.0, -100.0, 0.0))` to pre-compile both pipelines before the player can interact.
+- `SetTarget(String)` — sets `CurrentTarget` to the given spawn ID; emits `target.changed:{id}` and `target.changed`; `{target}` in subsequent rule actions resolves to this ID
+- `ClearTarget` — clears `CurrentTarget`; emits `target.cleared`; also cleared automatically on `LoadScene`
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)

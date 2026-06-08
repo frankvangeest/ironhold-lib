@@ -13,7 +13,12 @@
         ),
         (
             on: "scene.ready:main",
-            do_actions: [ EnterState("playing"), PlayMusicLoop(key: "bg_music"), PreloadScene("scenes/pause.scene.ron") ],
+            do_actions: [
+                EnterState("playing"),
+                PlayMusicLoop(key: "bg_music"),
+                PreloadScene("scenes/pause.scene.ron"),
+                SetVariable("target_display", ""),  // initialise target label empty
+            ],
         ),
         (
             on: "scene.unloading:main",
@@ -90,6 +95,24 @@
             on: "ui.button_pressed:toggle_pause",
             when: "playing",
             do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ],
+        ),
+
+        // ── Targeting ──────────────────────────────────────────────────
+        // The "Target: <prefab> <id>" UI label is driven directly by the targeting
+        // capability (it writes the `target_display` GameVariable on every select/clear),
+        // so no SetVariable wiring is needed here. These rules just add a floating-text
+        // flourish on select. `{target}` resolves to the selected entity's spawn_id.
+        (
+            on: "target.changed",
+            when: "playing",
+            do_actions: [
+                ShowFloatingText(entity: "{target}", text: "Selected!"),
+            ],
+        ),
+        (
+            on: "target.cleared",
+            when: "playing",
+            do_actions: [ Log("Target cleared") ],
         ),
 
         // ── "paused" state ─────────────────────────────────────────────

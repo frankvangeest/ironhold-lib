@@ -13,7 +13,11 @@ When new `Action` variants land in `crates/ironhold_core/src/schema/actions.rs`,
 There is an explicit reminder in `30_runtime_events_and_logic.md` at the end of the appendix:
 > "New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example."
 
-This is regularly ignored. Confirmed missing for: `ModifyStat`, `SetStat`, `ApplyModifier`, `RemoveModifier`, `ShowDamagePopup`, `SetEntityVisible`, `EmitEventAfterDelay`, `LoadSceneOverlay`, `UnloadOverlay`, `ToggleOverlay`, `PlayAnimationOn`, `EmitEvent`.
+This is regularly ignored. Confirmed missing for: `ModifyStat`, `SetStat`, `ApplyModifier`, `RemoveModifier`, `ShowDamagePopup`, `SetEntityVisible`, `EmitEventAfterDelay`, `LoadSceneOverlay`, `UnloadOverlay`, `ToggleOverlay`, `PlayAnimationOn`, `EmitEvent`, `ShowFloatingText`.
+
+`ShowFloatingText` (struct variant: `entity` + `text`, schema at actions.rs ~line 133) is the worst-case version of this pattern: it is the *visible payoff* in the 3rd_person_game_demo targeting demo (`rules.ron` `target.changed` rule → `ShowFloatingText(entity: "{target}", text: "Selected!")`) yet has ZERO occurrences anywhere in docs/. A designer sees the effect in WASM and cannot find the action.
+
+**Contrast (done right):** the targeting *fields* shipped with this same feature were documented correctly — `click_selectable`/`targetable` in the PrefabDef table (20_data_formats.md ~1051-1052), `target_next`/`target_range` in the InputMap table (~1147-1148), and all `target.*` events in 30_runtime_events_and_logic.md (~111-116). So the lag is action-table-specific, not feature-wide: schema FIELDS and EVENTS get documented, new struct-variant ACTIONS get missed.
 
 Per-entity `PrefabDef` fields are also missed: `stat_label` and `world_stat_bar` are in the schema and used in `primitive_world/prefabs/prefabs.ron` (attack_dummy) but absent from the `PrefabDef fields` table at line 606 of `20_data_formats.md`.
 

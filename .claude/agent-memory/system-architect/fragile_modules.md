@@ -11,6 +11,20 @@ metadata:
 
 Key invariant: all child-spawning goes through `spawn_primitive_children` — do not duplicate the mesh/material dispatch match arms. The two call sites are composite non-player prefabs and player cosmetic children.
 
+## Five-way spawn-site divergence (the recurring footgun)
+
+This is the single most recurring defect class in the spawner. Entity-identity components (`SpawnId`, `PrefabKey`, `SpawnRegistry` insertion) AND optional marker components (`ClickSelectable`, `Targetable`, `Interactable`, `TriggerZone`, `Motion`, `StatMap`, `PendingBehavior`, `npc`) are attached **independently in five spawn sites** with no shared helper and no compiler enforcement:
+
+1. Single-mesh primitive — `scene_loader.rs` ~line 501
+2. Composite primitive — `scene_loader.rs` ~line 270
+3. GLB actor/prop — `scene_loader.rs` ~line 699
+4. `spawn_prefab_instance` (used by foliage trunk + dynamic `Action::Spawn`) — `entity_spawner.rs` ~line 100; note `SpawnId` is added by the *caller* (`drain_spawn_queue_system` ~line 190), NOT inside the fn
+5. Primitive player / GLB player — `scene_loader.rs` ~line 753 / `entity_spawner.rs` ~line 316
+
+Failure mode is **silent** (no parse error, no warning) and only manifests for the prefab `kind` the author didn't test. History: TriggerZone (composite path), then composite markers, then targeting (2026-06 — GLB-actor path was missing `SpawnId` so `Query<&SpawnId, With<ClickSelectable>>` skipped GLB enemies; GLB *player* was missing `SpeedMultiplier` so it never moved). Known remaining gap as of 2026-06: dynamic `Action::Spawn` entities get `SpawnId` but no `PrefabKey` (`QueuedSpawn` doesn't carry the key).
+
+**Recommended durable fix (also independently proposed by alignment-reviewer):** extract `attach_standard_prefab_components(ec, registry, prefab, id, prefab_key, ...)` in `entity_spawner.rs`, called by every branch. Make `SpawnId`/`PrefabKey`/registry insertion unconditional inside it; move the pure-component markers (`ClickSelectable`, `Targetable`, `Interactable`, `TriggerZone`) in verbatim. Path-specific physics bodies (player capsule, NPC dynamic body) stay inline. When reviewing ANY new `PrefabDef` marker field, grep the field name across both files and expect it in every branch (or one shared helper call).
+
 ## EffectDef / LayerDef sync (`capabilities/particles.rs` or similar)
 
 `EffectDef` has `deny_unknown_fields`. Any new field added to `EffectDef` must also be added to `LayerDef` AND copied in `From<&EffectDef> for LayerDef`. A mismatch causes `deny_unknown_fields` to silently kill the entire asset catalog parse — no error is surfaced to the designer, the effect just never loads.

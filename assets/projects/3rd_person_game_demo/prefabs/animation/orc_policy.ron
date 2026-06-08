@@ -1,0 +1,13 @@
+(
+    default_transition_ms: 200,
+
+    base: (
+        idle:      "CharacterArmature|Idle",
+        walk:      "CharacterArmature|Walk",
+        run:       "CharacterArmature|Run",
+        jump_loop: "CharacterArmature|Jump_Idle",
+    ),
+
+    clips: {},
+    overrides: [],
+)

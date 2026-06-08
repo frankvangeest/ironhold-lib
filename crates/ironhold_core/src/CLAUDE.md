@@ -115,6 +115,21 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → event name with `{self}` filled in
 - `SpawnEffect(key: "hit_spark", entity: "{self}")` → entity becomes the entity's ID (burst spawns at that entity's position)
 
+**`{target}` substitution** — in global rules.ron, state_machine.ron, and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in all three interpreter systems before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
+
+**`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
+`click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
+proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the
+nearest to the cursor) — NOT mesh raycasting, which raycasts bind-pose geometry and misses
+animated/skinned GLB characters. Tab-cycle is nearest-first by world distance.
+- `target.clicked:{id}` / `target.changed:{id}` / `target.changed` — new target selected
+- `target.cleared` — target cleared (click on empty space, `ClearTarget` action, or `LoadScene`)
+
+The capability also writes three `GameVariables` for UI labels (bind whichever you need):
+`target_display` (`"<prefab> <id>"`), `target_name` (prefab key), `target_id` (spawn id).
+Entities carry a `PrefabKey` component (catalog key) alongside `SpawnId` (instance id) to
+support this.
+
 **New capabilities for entity logic:**
 
 **Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: Primitive` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.

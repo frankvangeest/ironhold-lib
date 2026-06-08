@@ -809,6 +809,18 @@ pub struct PrefabDef {
     /// + base). An empty list means no physics collider is attached.
     #[serde(default)]
     pub colliders: Vec<ColliderDef>,
+    /// When `true`, left-clicking near this entity on screen sets it as `CurrentTarget` and
+    /// emits `target.clicked:{id}` and `target.changed:{id}` into the pipeline. Selection is
+    /// screen-space proximity — the entity whose projected position is nearest the cursor
+    /// (within a fixed pixel radius) — resolved from the entity's `GlobalTransform`, NOT a
+    /// mesh raycast. This works for animated/skinned GLB characters as well as primitives.
+    #[serde(default)]
+    pub click_selectable: bool,
+    /// When `true`, this entity participates in Tab-cycle targeting (nearest-first within
+    /// `target_range`). Pressing Tab selects the next entity; Shift+Tab reverses.
+    /// Setting a target emits `target.changed:{id}` into the pipeline.
+    #[serde(default)]
+    pub targetable: bool,
 }
 
 /// One physics collider shape in a `PrefabDef.colliders` list.

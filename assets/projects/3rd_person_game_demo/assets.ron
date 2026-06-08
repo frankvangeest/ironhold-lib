@@ -19,16 +19,9 @@
     "alpaking": (
       path: "shared/models/creatures/alpaking.glb#Scene0",
     ),
-    "terrain_demo": (
-      path: "projects/3rd_person_game_demo/terrain/heightmap.png",
-    ),
   },
 
-  textures: {
-    "grass": "shared/terrain/grass.png",
-    "rock": "shared/terrain/rock.png",
-    "snow": "shared/terrain/snow.png",
-  },
+  textures: {},
 
   audio: {
     "click":     (path: "shared/audio/menu-button-click.wav"),
