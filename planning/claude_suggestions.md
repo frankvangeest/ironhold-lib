@@ -23,7 +23,7 @@
 
 ## Scene Loading
 
-- **Consolidate the 5 entity-spawn sites behind one "attach standard components" helper** _(observed at `728c997` 2026-06-08)_ — The GLB-actor, single-mesh-primitive, composite-primitive, primitive-player, and dynamic-`Action::Spawn` paths each independently insert the standard set (`SpawnId`, `PrefabKey`, `SpawnRegistry` entry, markers, `SpeedMultiplier` for players); divergence between them caused two real bugs this session (GLB actors missing `SpawnId`, GLB player missing `SpeedMultiplier`). Concrete basis: a shared `insert_standard_entity_components(ec, id, prefab_key, …)` helper (or `#[require]` component derives) called from all sites would make this class of "works for primitive, silently broken for GLB" footgun structurally impossible.
+- ~~**Consolidate the 5 entity-spawn sites behind one "attach standard components" helper**~~ _(observed at `728c997` 2026-06-08; promoted to backlog `34bc77d` 2026-06-08 → Queued ▸ Engine / Runtime)_
 
-- **Insert `PrefabKey` on dynamic `Action::Spawn` spawns** _(observed at `728c997` 2026-06-08)_ — `drain_spawn_queue_system` inserts `SpawnId` but not `PrefabKey`, so entities spawned at runtime show id-only in the targeting UI (`target_display` falls back to the bare id) and any future prefab-key-keyed logic misses them. Concrete basis: `QueuedSpawn` already carries `prefab_def`; threading the prefab catalog key (available at the `Action::Spawn` call site) into `QueuedSpawn` and inserting `PrefabKey` in `drain_spawn_queue_system` closes the gap (scene-spawned entities already get it).
+- ~~**Insert `PrefabKey` on dynamic `Action::Spawn` spawns**~~ _(observed at `728c997` 2026-06-08; promoted to backlog `34bc77d` 2026-06-08 → Queued ▸ Engine / Runtime)_
 

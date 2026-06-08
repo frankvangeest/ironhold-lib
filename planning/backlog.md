@@ -28,6 +28,11 @@
 
 ## Queued
 
+### Engine / Runtime
+
+- [ ] **Consolidate entity-spawn component insertion** — extract a shared helper (or `#[require]` component derives) so all five spawn paths — GLB actor/prop, single-mesh primitive, composite primitive, primitive player, and dynamic `Action::Spawn` — attach the standard component set (`SpawnId`, `PrefabKey`, `SpawnRegistry` entry, `ClickSelectable`/`Targetable` markers, player `SpeedMultiplier`) identically. Divergence between these sites caused two real bugs (GLB actors missing `SpawnId`; GLB player missing `SpeedMultiplier`); a shared helper makes the "works for primitive, silently broken for GLB" footgun structurally impossible. _(promoted from claude_suggestions `34bc77d`)_
+- [ ] **Insert `PrefabKey` on dynamic spawns** — `drain_spawn_queue_system` inserts `SpawnId` but not `PrefabKey`, so entities spawned at runtime via `Action::Spawn` show id-only in the targeting UI (`target_display` falls back to the bare id) and miss any future prefab-key-keyed logic. Thread the prefab catalog key into `QueuedSpawn` (available at the `Action::Spawn` call site) and insert `PrefabKey` in the drain system. Small; partially subsumed by the spawn-site consolidation above. _(promoted from claude_suggestions `34bc77d`)_
+
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 

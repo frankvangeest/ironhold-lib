@@ -186,8 +186,9 @@ After implementing any feature, capability, or schema change, always invoke thes
 | **`alignment-reviewer`** | After any code change — verifies RON designer-reachability and no hardcoded behavior |
 | **`ux-gamedesigner-reviewer`** | After any change to `assets/`, `docs/`, or RON schema — verifies the designer experience is clear and documented |
 | **`system-architect`** | For architectural or schema changes — verifies crate boundaries, WASM compatibility, and long-term maintainability |
+| **`wasm-perf-reviewer`** | For changes to runtime systems, rendering, the render/update hot path, asset-loading, per-frame work, new dependencies, or schema that drives per-frame processing — verifies no WASM frame-time or binary-size regressions |
 
-Use `/review` to run all three agents in sequence and get a consolidated pre-commit verdict.
+`alignment-reviewer` runs after every code change; the other three are **conditional** — invoke each only when its trigger applies (skip them for pure RON/asset/doc tweaks). Use `/review` to run all four in sequence for a consolidated pre-commit verdict.
 
 ---
 
