@@ -32,6 +32,8 @@
 ### Engine / Runtime
 
 - [ ] **Insert `PrefabKey` on dynamic spawns** — _(folded into "Consolidate entity-spawn component insertion", now Active)_
+- [ ] **Page visibility / focus-loss handling** — freeze delta time, pause audio, and drop render to zero when the browser tab loses focus; resume cleanly on tab restore without physics or audio desync; wire Bevy's `WindowFocused` / `ApplicationLifetime` events behind a `pause_on_focus_loss: bool` field on `ProjectConfig` (default `true`); opt-out lets streaming / spectator scenes keep running. Sourced from Phaser's focus-loss model.
+- [ ] **Optional `physics` Cargo feature** — gate Rapier3D behind a `physics` feature on `ironhold_core` so projects that don't use colliders skip the ~15 MB of Rapier symbols in the WASM binary; `ColliderDef` in RON becomes a validated-but-no-op field when the feature is absent; `PhysicsPlugin` conditionally compiled; `ironhold_web` enables `physics` by default but a future stripped build could omit it. Sourced from Phaser's Arcade vs Matter modular physics model.
 
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
@@ -110,6 +112,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Icebox
 
 ### Engine / Runtime
+- [ ] **Scene layer compositing** — `layer: Overlay | Base` field on `GameSceneV2`; overlay scenes render on top of the base scene without unloading it, enabling persistent pause menus, HUD layers, and cutscene overlays authored entirely in RON; renderer approach (two active Bevy worlds vs. `RenderLayer` masking) needs design investigation before coding. Sourced from Phaser's layered-scene architecture.
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
 - [ ] **Gamepad / controller input** — wire Bevy's built-in gamepad input through the existing `InputAction` system and RON key bindings; map stick axes to movement/camera and face buttons to `InputAction` variants; designers declare gamepad bindings in the same input config block as keyboard; needed for web builds targeting controller users
@@ -171,6 +174,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene — WASM-BLOCKED: same root cause as Bloom and water; HDR and multi-pass post-process break or perform poorly on WebGPU. Parked until Bevy's WebGPU backend matures.
 
 ### Performance
+- [ ] **Off-thread texture decode in WASM** — use the browser's `ImageBitmap` API to decode textures off the main WASM thread, eliminating main-thread stalls during asset loads; requires a `wasm32`-specific code path in the asset loading pipeline or a Bevy plugin that wraps `createImageBitmap`; investigate whether Bevy's current WASM asset pipeline already defers texture decode before implementing. Sourced from Phaser's web-optimised asset loader model.
 - [ ] **Extend pipeline warmup to Text2d and UI pipelines** — spawn hidden warmup entities for `Text2d` and UI `Node` at scene load to pre-compile the 2D/UI GPU pipelines, eliminating WASM frame spikes on first text/UI render; design: `planning/features/pipeline_warmup_2d_ui.md`
 - [ ] **Discrete LOD steps for depth-scaled label font sizes** — snap `base_font_size * scale` to a small fixed set (e.g. 100 %, 75 %, 50 %, 25 %) instead of rounding to every integer; bounds atlas slot count to ~4 per label regardless of depth range, at the cost of a slight stepping artefact on slow zoom. Integer rounding + 0.5-threshold guard already fix the per-frame atlas upload problem; this is a further atlas-memory micro-optimisation.
 - [x] Staggered entity spawning — `PendingEntitySpawns` queue drains at `SPAWNS_PER_FRAME = 2`/frame via `drain_spawn_queue_system`; spreads WebGPU pipeline compilations across frames for wave spawns
