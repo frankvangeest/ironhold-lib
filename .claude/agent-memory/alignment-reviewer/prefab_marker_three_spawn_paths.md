@@ -5,7 +5,23 @@ metadata:
   type: project
 ---
 
-When a new `PrefabDef` field (e.g. `click_selectable`, `targetable`, `trigger_zone`, `interactable`, `motion`, `behavior`, `stat_templates`) causes a component to be inserted at spawn time, the insertion logic lives in `entity_spawner.rs::spawn_prefab_instance` — but that function is **only called for GLB prefabs** (`kind: Actor` / `kind: Prop`) and nested-prefab references.
+**UPDATE (spawn-site consolidation, ~2026-06-08):** the *standard* per-entity metadata —
+`SpawnId` + `PrefabKey` + `LevelEntity` + `SpawnRegistry` registration + the `ClickSelectable`/
+`Targetable` markers — is now centralized in **`tag_spawned_entity(ec, registry, id, prefab_key,
+click_selectable, targetable)`** in `runtime/scene_manager/mod.rs`. All 7 spawn sites route through
+it (GLB actor/prop, single-mesh primitive, composite primitive, foliage root, primitive player, GLB
+player, dynamic `Action::Spawn` in `drain_spawn_queue_system`). `spawn_prefab_instance` no longer
+inserts those itself. So for the *targeting markers + SpawnId/PrefabKey/LevelEntity* class of field,
+the multi-path footgun is closed: add the field to the helper once. When reviewing a change to that
+helper, verify every call site still passes the right flags (players pass `false,false` for markers
+deliberately — selecting the player is nonsensical).
+
+BUT the footgun below STILL applies to **every other** spawn-time field that is NOT part of the
+standard metadata set — `trigger_zone`, `interactable`, `motion`, `behavior`, `stat_templates`,
+`npc`, `colliders`, `Collectable`, material override, etc. Those are still inserted per-path and are
+NOT in `tag_spawned_entity`. The insertion logic for them lives in `entity_spawner.rs::spawn_prefab_instance`
+— but that function is **only called for GLB prefabs** (`kind: Actor` / `kind: Prop`) and nested-prefab
+references.
 
 Two other spawn paths in `runtime/scene_manager/scene_loader.rs` manually re-implement component insertion and DO NOT call `spawn_prefab_instance`:
 

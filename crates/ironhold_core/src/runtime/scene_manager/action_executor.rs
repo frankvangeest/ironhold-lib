@@ -140,6 +140,7 @@ pub fn action_executor_system(
                     model_path,
                     transform,
                     spawn_id,
+                    prefab_key: prefab.clone(),
                     project_root: project_root.0.clone(),
                 });
             }

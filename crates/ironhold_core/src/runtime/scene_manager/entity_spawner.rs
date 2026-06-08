@@ -16,7 +16,7 @@ use bevy_rapier3d::prelude::*;
 use super::{
     LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
     PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
-    PendingEntitySpawns,
+    PendingEntitySpawns, tag_spawned_entity,
     resolve_project_path,
     scene_loader::resolve_jump_velocity,
 };
@@ -97,12 +97,9 @@ pub fn spawn_prefab_instance(
         ));
     }
 
-    if prefab.click_selectable {
-        ec.insert(crate::capabilities::targeting::ClickSelectable);
-    }
-    if prefab.targetable {
-        ec.insert(crate::capabilities::targeting::Targetable);
-    }
+    // Targeting markers (click_selectable/targetable) and the standard metadata
+    // (SpawnId/PrefabKey/LevelEntity/registry) are attached by the caller via
+    // `tag_spawned_entity`, so every spawn path stays consistent.
 
     if !prefab.colliders.is_empty() {
         let shapes: Vec<(Vec3, Quat, Collider)> = prefab.colliders.iter().filter_map(|cdef| {
@@ -187,8 +184,14 @@ pub fn drain_spawn_queue_system(
             queued.transform,
             &queued.spawn_id,
         );
-        commands.entity(parent).insert(SpawnId(queued.spawn_id.clone()));
-        registry.entities.insert(queued.spawn_id, parent);
+        tag_spawned_entity(
+            &mut commands.entity(parent),
+            &mut registry,
+            &queued.spawn_id,
+            &queued.prefab_key,
+            queued.prefab_def.click_selectable,
+            queued.prefab_def.targetable,
+        );
     }
 }
 
@@ -249,6 +252,7 @@ pub fn spawn_player_when_terrain_ready(
     model_spawner: Res<ModelSpawner>,
     merged_fixes: Res<MergedModelFixes>,
     project_root: Res<ProjectRoot>,
+    mut registry: ResMut<SpawnRegistry>,
 ) {
     if terrain_query.is_empty() {
         return;
@@ -267,6 +271,7 @@ pub fn spawn_player_when_terrain_ready(
             &pending.0,
             &project_root.0,
             tonemapping,
+            &mut registry,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -280,6 +285,7 @@ pub(crate) fn spawn_player_entity(
     player_config: &PlayerConfig,
     project_root: &str,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    registry: &mut SpawnRegistry,
 ) {
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
@@ -314,7 +320,7 @@ pub(crate) fn spawn_player_entity(
     };
     commands.entity(player_entity).insert((
         Name::new("Player"),
-        LevelEntity,
+        // LevelEntity attached by tag_spawned_entity below (sole owner).
         CharacterController {
             walk_speed: mv.walk_speed,
             run_speed: mv.run_speed,
@@ -348,6 +354,18 @@ pub(crate) fn spawn_player_entity(
         Velocity::default(),
         ExternalImpulse::default(),
     ));
+
+    // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper, so
+    // the GLB player is addressable by id like every other entity. Players are never
+    // click/Tab targets, so markers are off. Player-specific components are inserted above.
+    tag_spawned_entity(
+        &mut commands.entity(player_entity),
+        registry,
+        &player_config.spawn_id,
+        &player_config.prefab_key,
+        false,
+        false,
+    );
 
     if let Some(policy_handle) = policy_handle_opt {
         commands.entity(player_entity).insert((

@@ -20,6 +20,15 @@ pub struct PlayerConfig {
     /// Movement tuning read from `prefab.components.movement`.
     #[serde(default)]
     pub movement: MovementConfig,
+
+    /// Scene entity id (e.g. `"player_01"`) — set by the scene loader so the player gets a
+    /// `SpawnId` + `SpawnRegistry` entry like every other entity (enables id-targeted actions
+    /// such as `ShowDamagePopup(entity: "player_01")`). Defaults empty for any RON-loaded use.
+    #[serde(default)]
+    pub spawn_id: String,
+    /// Prefab catalog key (e.g. `"player_warrior"`) — set by the scene loader for `PrefabKey`.
+    #[serde(default)]
+    pub prefab_key: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -107,6 +107,8 @@ pub struct QueuedSpawn {
     pub model_path: String,
     pub transform: Transform,
     pub spawn_id: String,
+    /// Prefab catalog key (for `PrefabKey`), distinct from `spawn_id`.
+    pub prefab_key: String,
     pub project_root: String,
 }
 
@@ -188,6 +190,35 @@ pub struct SpawnId(pub String);
 /// show a human-readable type name alongside the instance id (targeting UI, debug, etc.).
 #[derive(Component, Debug, Clone)]
 pub struct PrefabKey(pub String);
+
+/// Single source of truth for the standard metadata every addressable spawned entity gets,
+/// and the only place that registers it in the `SpawnRegistry`. Every spawn site (GLB
+/// actor/prop, single-mesh primitive, composite primitive, foliage root, both player paths,
+/// and dynamic `Action::Spawn`) routes through this so the set can never drift per-path —
+/// the divergence it replaces caused real bugs (GLB actors missing `SpawnId`, GLB player
+/// missing `SpeedMultiplier`/`SpawnId`, dynamic spawns missing `PrefabKey`/`LevelEntity`).
+///
+/// Always inserts `SpawnId` + `PrefabKey` + `LevelEntity` and registers the entity by id.
+/// `ClickSelectable`/`Targetable` markers are inserted per the flags (players pass `false`).
+/// Player-specific components (CharacterController, physics, camera, …) stay at the call site.
+pub fn tag_spawned_entity(
+    ec: &mut bevy::ecs::system::EntityCommands,
+    registry: &mut SpawnRegistry,
+    id: &str,
+    prefab_key: &str,
+    click_selectable: bool,
+    targetable: bool,
+) {
+    let entity = ec.id();
+    ec.insert((SpawnId(id.to_string()), PrefabKey(prefab_key.to_string()), LevelEntity));
+    if click_selectable {
+        ec.insert(crate::capabilities::targeting::ClickSelectable);
+    }
+    if targetable {
+        ec.insert(crate::capabilities::targeting::Targetable);
+    }
+    registry.entities.insert(id.to_string(), entity);
+}
 
 /// Temporary component inserted at spawn time when a prefab has a `behavior` path.
 /// Replaced by `BehaviorHandle` + `EntityFsmState` once the asset resolves.

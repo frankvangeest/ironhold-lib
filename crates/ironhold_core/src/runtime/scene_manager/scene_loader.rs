@@ -17,7 +17,7 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings, SpawnId, PrefabKey, WorldLabel,
+    ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, WorldLabel,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     PendingBehavior, resolve_project_path,
 };
@@ -159,7 +159,7 @@ pub fn spawn_scene_v2(
         let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>)> = None;
+        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>, String)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -198,11 +198,13 @@ pub fn spawn_scene_v2(
                     Name::new(entity_def.id.clone()),
                     transform,
                     Visibility::default(),
-                    LevelEntity,
-                    SpawnId(entity_def.id.clone()),
                     crate::capabilities::foliage::PendingFoliage(foliage_def.clone()),
                 )).id();
-                spawn_registry.entities.insert(entity_def.id.clone(), root);
+                tag_spawned_entity(
+                    &mut commands.entity(root), &mut spawn_registry,
+                    &entity_def.id, &entity_def.prefab,
+                    prefab.click_selectable, prefab.targetable,
+                );
 
                 // Spawn trunk GLB as a child entity if defined.
                 if let Some(trunk_key) = &foliage_def.trunk {
@@ -233,17 +235,17 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone()));
+                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone(), entity_def.prefab.clone()));
                     continue;
                 }
 
                 // ── Composite prefab: non-empty `children` list ───────────────────────────
                 if !prefab.children.is_empty() {
+                    // LevelEntity is attached by tag_spawned_entity below (sole owner).
                     let parent = commands.spawn((
                         Name::new(entity_def.id.clone()),
                         transform,
                         Visibility::default(),
-                        LevelEntity,
                     )).id();
                     {
                         let mut ctx = ChildSpawnCtx {
@@ -267,11 +269,11 @@ pub fn spawn_scene_v2(
 
                     // Register composite entities in the spawn registry so that
                     // Action::Despawn can locate them by id — same as single-mesh entities.
-                    commands.entity(parent).insert((
-                        SpawnId(entity_def.id.clone()),
-                        PrefabKey(entity_def.prefab.clone()),
-                    ));
-                    spawn_registry.entities.insert(entity_def.id.clone(), parent);
+                    tag_spawned_entity(
+                        &mut commands.entity(parent), &mut spawn_registry,
+                        &entity_def.id, &entity_def.prefab,
+                        prefab.click_selectable, prefab.targetable,
+                    );
 
                     // ── NPC agent ────────────────────────────────────────────────────────
                     // Composite prefabs with an `npc` config get a dynamic physics body
@@ -362,13 +364,7 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
-                    // Targeting markers (composite path)
-                    if prefab.click_selectable {
-                        commands.entity(parent).insert(crate::capabilities::targeting::ClickSelectable);
-                    }
-                    if prefab.targetable {
-                        commands.entity(parent).insert(crate::capabilities::targeting::Targetable);
-                    }
+                    // (targeting markers attached above via tag_spawned_entity)
 
                     if !prefab.stat_templates.is_empty() {
                         let spawn_id = &entity_def.id;
@@ -496,13 +492,13 @@ pub fn spawn_scene_v2(
                             }
                         }
 
-                        // Give every single-primitive scene entity a stable SpawnId so that
-                        // Action::Despawn can locate it by the scene entity id.
-                        commands.entity(spawned).insert((
-                            SpawnId(entity_def.id.clone()),
-                            PrefabKey(entity_def.prefab.clone()),
-                        ));
-                        spawn_registry.entities.insert(entity_def.id.clone(), spawned);
+                        // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry + markers)
+                        // via the shared helper so this path can't drift from the others.
+                        tag_spawned_entity(
+                            &mut commands.entity(spawned), &mut spawn_registry,
+                            &entity_def.id, &entity_def.prefab,
+                            prefab.click_selectable, prefab.targetable,
+                        );
 
                         // Collectable marker: collision triggers GameEvent into the rules pipeline.
                         // What happens on collection (Despawn, PlaySound, IncrementVariable, etc.)
@@ -610,13 +606,7 @@ pub fn spawn_scene_v2(
                             ));
                         }
 
-                        // Targeting markers (single-mesh primitive path)
-                        if prefab.click_selectable {
-                            commands.entity(spawned).insert(crate::capabilities::targeting::ClickSelectable);
-                        }
-                        if prefab.targetable {
-                            commands.entity(spawned).insert(crate::capabilities::targeting::Targetable);
-                        }
+                        // (targeting markers attached above via tag_spawned_entity)
 
                         if !prefab.stat_templates.is_empty() {
                             let spawn_id = &entity_def.id;
@@ -679,6 +669,8 @@ pub fn spawn_scene_v2(
                     inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
                     animation_policy: prefab.animation_policy.clone(),
                     movement: prefab.components.movement.clone(),
+                    spawn_id: entity_def.id.clone(),
+                    prefab_key: entity_def.prefab.clone(),
                 });
             } else {
                 let parent = spawn_prefab_instance(
@@ -692,16 +684,11 @@ pub fn spawn_scene_v2(
                     transform,
                     &entity_def.id,
                 );
-                // GLB actor/prop scene entities need a SpawnId (and registry entry) just like
-                // the primitive/composite paths — otherwise id-targeted actions (Despawn,
-                // ProjectDecal) and the targeting systems (which query `&SpawnId`) can't find
-                // them. This branch historically omitted it.
-                commands.entity(parent).insert((
-                    LevelEntity,
-                    SpawnId(entity_def.id.clone()),
-                    PrefabKey(entity_def.prefab.clone()),
-                ));
-                spawn_registry.entities.insert(entity_def.id.clone(), parent);
+                tag_spawned_entity(
+                    &mut commands.entity(parent), &mut spawn_registry,
+                    &entity_def.id, &entity_def.prefab,
+                    prefab.click_selectable, prefab.targetable,
+                );
                 if let Some(label_def) = &entity_def.label {
                     pending_labels.push((parent, label_def.clone()));
                 }
@@ -720,7 +707,7 @@ pub fn spawn_scene_v2(
         let tonemapping = scene.tonemapping.to_bevy();
 
         // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((entity_id, shape, params, position, components, player_children)) = primitive_player {
+        if let Some((entity_id, shape, params, position, components, player_children, prefab_key)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
             // `height` always means total visual height (cylindrical body + two hemispheres).
             let player_height = params.height.unwrap_or(1.8);
@@ -750,10 +737,8 @@ pub fn spawn_scene_v2(
             let player_entity = commands.spawn((
                 (
                     Name::new("Player"),
-                    SpawnId(entity_id.clone()),
                     Transform::from_translation(position),
                     Visibility::default(),
-                    LevelEntity,
                 ),
                 (
                     CharacterController {
@@ -795,9 +780,13 @@ pub fn spawn_scene_v2(
                 ),
             )).id();
 
-            // Register the player in the spawn registry so SetEntityVisible and other
-            // entity-ID–targeted actions can reach it — same pattern as every other entity.
-            spawn_registry.entities.insert(entity_id.clone(), player_entity);
+            // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper
+            // so the player is addressable by id — same pattern as every other entity. Players
+            // are never click/Tab targets, so markers are off.
+            tag_spawned_entity(
+                &mut commands.entity(player_entity), &mut spawn_registry,
+                &entity_id, &prefab_key, false, false,
+            );
 
             // Visual body child — mesh centred at body_y above the feet so it aligns
             // with the compound collider above.
@@ -887,6 +876,7 @@ pub fn spawn_scene_v2(
                     &pc,
                     &params.project_root.0,
                     tonemapping,
+                    &mut spawn_registry,
                 );
             }
         } else if let Some((fc_transform, fc_def)) = flycam_start {

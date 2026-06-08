@@ -204,6 +204,23 @@ Short SFX (jumps, pickups, UI clicks) must have **no leading silence** in the au
 
 Use WAV for all short SFX — it is uncompressed PCM with zero decode overhead. OGG/Vorbis and MP3 incur a decoder initialisation cost that is especially noticeable on first play in WASM. Reserve compressed formats for long-form audio (background music, ambient loops) where the file-size saving is worth the decode cost.
 
+## Spawning: standard entity metadata
+
+**`tag_spawned_entity` (in `runtime/scene_manager/mod.rs`) is the single source of truth for the
+metadata every addressable spawned entity gets.** Every spawn site routes through it — GLB
+actor/prop, single-mesh primitive, composite primitive, foliage root, both player paths, and
+dynamic `Action::Spawn`. It always inserts `SpawnId` + `PrefabKey` + `LevelEntity` and registers
+the entity in `SpawnRegistry`; it inserts the `ClickSelectable`/`Targetable` markers per the
+prefab flags (players pass `false`). Player-specific components (CharacterController, physics,
+camera) stay at the call site.
+
+Do **not** hand-insert `SpawnId`/`PrefabKey`/`LevelEntity` or call `spawn_registry.entities.insert`
+at a spawn site — call `tag_spawned_entity`. The 5-way divergence this replaced caused real bugs
+(GLB actors missing `SpawnId`, the GLB player missing `SpeedMultiplier`/`SpawnId`, dynamic spawns
+missing `PrefabKey`/`LevelEntity`). Adding a new "every entity gets X" field means editing the
+helper once, not every site. `PrefabKey` (catalog key, e.g. `"enemy_orc_melee"`) is distinct from
+`SpawnId` (instance id, e.g. `"orc_01"`).
+
 ## Dynamic spawning
 
 ### Spawn queue

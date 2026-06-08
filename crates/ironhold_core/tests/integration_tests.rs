@@ -389,6 +389,52 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
     assert!(registry.entities.contains_key("orc_test"), "Registry should contain 'orc_test'");
 }
 
+/// Regression for the spawn-site consolidation (`tag_spawned_entity`): a dynamically-spawned
+/// entity must also get `PrefabKey` (drives the targeting `target_display`) and `LevelEntity`
+/// (scene-unload cleanup) — not just `SpawnId`. These were the dynamic-path gaps the shared
+/// helper closed; before it, runtime `Action::Spawn` entities had neither.
+#[test]
+fn test_spawn_action_attaches_prefab_key_and_level_entity() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
+    use ironhold_core::runtime::PrefabKey;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("enemy_orc_melee".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "orc".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_meta".to_string()), position: None, spawn_point: None, yaw_deg: None }
+    );
+    app.update();
+
+    let mut q = app.world_mut().query::<(&SpawnId, Option<&PrefabKey>, Option<&LevelEntity>)>();
+    let world = app.world();
+    let (_, prefab_key, level) = q.iter(world)
+        .find(|(id, _, _)| id.0 == "orc_meta")
+        .expect("spawned entity 'orc_meta' should exist");
+    assert_eq!(
+        prefab_key.map(|p| p.0.as_str()), Some("enemy_orc_melee"),
+        "dynamic spawn must attach PrefabKey = prefab catalog key",
+    );
+    assert!(level.is_some(), "dynamic spawn must attach LevelEntity for scene-unload cleanup");
+}
+
 #[test]
 fn test_spawn_auto_id_increments_counter() {
     use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
@@ -2257,6 +2303,7 @@ fn test_pending_spawns_cleared_on_load_scene() {
             model_path: "shared/models/creatures/orc.glb#Scene0".to_string(),
             transform: Transform::default(),
             spawn_id: "should_be_cancelled".to_string(),
+            prefab_key: "enemy_orc_melee".to_string(),
             project_root: String::new(),
         });
     }

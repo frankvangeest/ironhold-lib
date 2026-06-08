@@ -1,6 +1,6 @@
 # Feature: Consolidate entity-spawn component insertion
 
-_Status: Draft — awaiting design decisions before coding_
+_Status: DONE (shipped 2026-06-08) — D1–D5 all accepted as recommended_
 _Planned at: `661ecd1` (2026-06-08)_
 
 ---
