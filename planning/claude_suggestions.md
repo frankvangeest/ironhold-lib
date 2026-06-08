@@ -27,5 +27,5 @@
 
 - ~~**Insert `PrefabKey` on dynamic `Action::Spawn` spawns**~~ _(observed at `728c997` 2026-06-08; promoted to backlog `34bc77d` 2026-06-08 → Queued ▸ Engine / Runtime)_
 
-- **Consolidate conditional prefab-feature application (the sibling divergence)** _(observed at `cef818a` 2026-06-08)_ — After `tag_spawned_entity` unified the *metadata* set, the *feature* set is still applied per-path: `interactable` / `trigger_zone` / `behavior` / `stat_templates` are inserted in `spawn_prefab_instance` (`entity_spawner.rs:53-74`) for GLB prefabs but re-implemented inline in the single-mesh and composite primitive branches (`scene_loader.rs`). Concrete basis: this is the same "works for one kind, silently missing for another" bug class one level down — a future helper (taking `&PrefabDef`) applied at the primitive branches and inside `spawn_prefab_instance` would close it; deliberately left out of the metadata-consolidation commit to keep that change's boundary clean (per system-architect review).
+- ~~**Consolidate conditional prefab-feature application (the sibling divergence)**~~ _(observed at `cef818a` 2026-06-08; promoted to backlog `cdee26b` 2026-06-08 → Queued ▸ Engine / Runtime)_
 
