@@ -461,3 +461,30 @@ fn test_resolve_stat_returns_none_for_missing_entity_key() {
         "resolve_stat must return None when entity does not exist"
     );
 }
+
+// ── Per-instance stat overrides (SceneEntityDef.stat_overrides) ───────────────
+
+#[test]
+fn test_stat_override_sets_initial_current_value() {
+    // Mirrors the scene loader logic: override value becomes `base` in StatDef,
+    // so LiveStat::new starts at the overridden value.
+    let live = LiveStat::new(make_stat_def(30.0, 100.0)); // 30.0 = override applied by loader
+    assert_eq!(live.current, 30.0, "entity must start at the overridden value, not the template base");
+    assert_eq!(live.def.max, 100.0, "max must remain from the prefab template");
+}
+
+#[test]
+fn test_stat_override_zero_starts_at_zero() {
+    // An entity that starts fully depleted (e.g. an inactive shrine with health = 0).
+    let live = LiveStat::new(make_stat_def(0.0, 100.0));
+    assert_eq!(live.current, 0.0);
+    assert_eq!(live.def.max, 100.0);
+}
+
+#[test]
+fn test_stat_no_override_uses_template_base() {
+    // When stat_overrides is empty the loader falls back to tpl.base.
+    let template_base = 100.0f32;
+    let live = LiveStat::new(make_stat_def(template_base, 100.0));
+    assert_eq!(live.current, template_base, "no override → must use template base");
+}

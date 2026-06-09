@@ -224,6 +224,37 @@ File extension must be `.scene.ron`.
 )
 ```
 
+### Scene entities (`SceneEntityDef`) ✅
+
+Each entry in the `entities` list places one prefab instance into the scene.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique spawn ID for this instance (used in rules, behaviors, and stat addressing) |
+| `prefab` | `String` | required | Key into `PrefabCatalog.prefabs` |
+| `transform` | `SceneTransformV2` | `()` | Position, rotation, and scale. All sub-fields optional; defaults to origin, no rotation, scale `(1,1,1)`. |
+| `label` | `Option<EntityLabelDef>` | `None` | Floating text annotation above the entity. See [Label depth scaling](#label-depth-scaling-labeldepthscaledef) for per-label `depth_scale` options. |
+| `stat_overrides` | `Map<String, f32>` | `{}` | Override the initial value for named stats from the prefab's `stat_templates`. Keys are stat names; unknown keys log a warning. `min`/`max`/`regen`/`thresholds` are unchanged — only the starting value differs. |
+
+**`stat_overrides` example** — place a wounded enemy and an inactive shrine from the same prefabs, without forking them:
+
+```ron
+entities: [
+    // Full-health enemy
+    ( id: "orc_01", prefab: "enemy_orc_melee", transform: ( translation: (10.0, 0.0, 5.0) ) ),
+
+    // Already-wounded enemy — same prefab, starts at 30 HP instead of 100
+    ( id: "orc_wounded", prefab: "enemy_orc_melee", transform: ( translation: (15.0, 0.0, 5.0) ),
+      stat_overrides: { "health": 30 } ),
+
+    // Inactive shrine — health starts at 0 so its "depleted" threshold fires immediately
+    ( id: "shrine_inactive", prefab: "shrine", transform: ( translation: (0.0, 0.0, 10.0) ),
+      stat_overrides: { "health": 0 } ),
+],
+```
+
+> **Note:** `stat_overrides` only applies to scene-placed entities. Dynamically spawned entities via `Action::Spawn` always start at the template `base` value.
+
 ### Tonemapping (`TonemappingOption`)
 
 Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fallback camera). Omit the field to get the default.

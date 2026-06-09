@@ -368,10 +368,19 @@ pub fn spawn_scene_v2(
 
                     if !prefab.stat_templates.is_empty() {
                         let spawn_id = &entity_def.id;
+                        for key in entity_def.stat_overrides.keys() {
+                            if !prefab.stat_templates.iter().any(|t| &t.key == key) {
+                                warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
+                            }
+                        }
                         let mut stat_map = StatMap::default();
                         for tpl in &prefab.stat_templates {
+                            let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+                            if base > tpl.max {
+                                warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
+                            }
                             let def = crate::schema::stats::StatDef {
-                                base: tpl.base, min: tpl.min, max: tpl.max,
+                                base, min: tpl.min, max: tpl.max,
                                 soft_max: None,
                                 regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
                                 thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
@@ -610,10 +619,19 @@ pub fn spawn_scene_v2(
 
                         if !prefab.stat_templates.is_empty() {
                             let spawn_id = &entity_def.id;
+                            for key in entity_def.stat_overrides.keys() {
+                                if !prefab.stat_templates.iter().any(|t| &t.key == key) {
+                                    warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
+                                }
+                            }
                             let mut stat_map = StatMap::default();
                             for tpl in &prefab.stat_templates {
+                                let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+                                if base > tpl.max {
+                                    warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
+                                }
                                 let def = crate::schema::stats::StatDef {
-                                    base: tpl.base, min: tpl.min, max: tpl.max,
+                                    base, min: tpl.min, max: tpl.max,
                                     soft_max: None,
                                     regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
                                     thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {

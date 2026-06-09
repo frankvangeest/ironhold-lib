@@ -66,6 +66,7 @@
         ),
 
         // ── Attack dummies (east — press F to deal 25 damage) ─────────────────────
+        // dummy_01/02/03: full health (100). dummy_wounded: starts at 30 via stat_overrides.
         (
             id: "dummy_01",
             prefab: "attack_dummy",
@@ -92,6 +93,16 @@
                 rotation_euler_deg: (0.0, 190.0, 0.0),
                 scale: (1.0, 1.0, 1.0),
             ),
+        ),
+        (
+            id: "dummy_wounded",
+            prefab: "attack_dummy",
+            transform: (
+                translation: (8.0, 0.0, -6.0),
+                rotation_euler_deg: (0.0, 185.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            stat_overrides: { "health": 30 },
         ),
 
         // ── Buff shrines (west — press F to apply a modifier) ─────────────────────

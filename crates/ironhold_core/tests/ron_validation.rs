@@ -4093,3 +4093,61 @@ fn test_flipbook_and_uv_distort_is_validation_error_in_layer() {
     let err = catalog.validate().expect_err("flipbook + uv_distort in layer must fail");
     assert!(err.contains("flipbook") && err.contains("uv_distort"), "error: {err}");
 }
+
+// ── SceneEntityDef stat_overrides ─────────────────────────────────────────────
+
+#[test]
+fn test_scene_entity_def_stat_overrides_parse() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [
+                (
+                    id: "orc_wounded",
+                    prefab: "enemy_orc_melee",
+                    transform: (),
+                    stat_overrides: { "health": 30 },
+                ),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).unwrap();
+    let entity = &scene.entities[0];
+    assert_eq!(entity.id, "orc_wounded");
+    assert_eq!(entity.stat_overrides.get("health"), Some(&30.0f32));
+}
+
+#[test]
+fn test_scene_entity_def_stat_overrides_empty_by_default() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [
+                ( id: "orc_01", prefab: "enemy_orc_melee", transform: () ),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).unwrap();
+    assert!(scene.entities[0].stat_overrides.is_empty(), "stat_overrides must default to empty");
+}
+
+#[test]
+fn test_scene_entity_def_multiple_stat_overrides_parse() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            entities: [
+                (
+                    id: "boss",
+                    prefab: "enemy_orc_melee",
+                    transform: (),
+                    stat_overrides: { "health": 200, "mana": 50 },
+                ),
+            ],
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).unwrap();
+    let overrides = &scene.entities[0].stat_overrides;
+    assert_eq!(overrides.get("health"), Some(&200.0f32));
+    assert_eq!(overrides.get("mana"), Some(&50.0f32));
+}

@@ -252,6 +252,11 @@ pub struct SceneEntityDef {
     /// The label floats `offset` world units above the entity's origin.
     #[serde(default)]
     pub label: Option<EntityLabelDef>,
+    /// Override the initial `base` value for named stats from the prefab's `stat_templates`.
+    /// Keys are stat names (e.g. `"health"`); unknown keys emit a `warn!` at load time.
+    /// `min`/`max`/`regen`/`thresholds` are unchanged — only the starting value differs.
+    #[serde(default)]
+    pub stat_overrides: HashMap<String, f32>,
 }
 
 /// A text annotation attached to a scene entity.
