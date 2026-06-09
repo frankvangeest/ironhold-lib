@@ -35,6 +35,7 @@ Steps:
     wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev
     ```
     Report the size of `pkg/ironhold_web_bg.wasm`. Warn if ≥ 95 MB.
+    ⚠️ **Never commit a `--dev` build** — it is ~180 MB and will exceed GitHub Pages' 100 MB hard limit. The `pkg/` directory must not be staged after a dev build.
 
 12. **Play-test checklist** — Provide a concrete checklist for Frank to verify the feature in the browser: which project to load, what to interact with, what to look for. Include golden path and at least one edge case.
 
@@ -46,14 +47,18 @@ Steps:
     - Then return to **step 12** (updated play-test checklist) and **step 13** (await confirmation again)
     - Repeat this loop until Frank confirms all is well.
 
+    The same fix loop applies after step 15 if the release build reveals a regression.
+
 14. **WASM release build** — Run:
     ```
     cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
     ```
     Report binary size. If ≥ 95 MB, warn Frank clearly — GitHub Pages hard-blocks at 100 MB.
 
-15. **Move feature to Done** — In `planning/backlog.md`, mark the item `[x]` and move its feature file from `planning/features/` to `planning/features/done/` if one exists.
+15. **Await release play-test confirmation** — Stop here. Ask Frank to do a quick smoke-test of the release build (`python serve.py`) — confirm no console errors and the feature still works. Do not proceed to step 16 until Frank confirms. This is a separate gate from step 13: the dev and release builds can behave differently (optimisation, size-dependent loading, missing assets).
 
-16. **Commit** — Stage all changed files and commit with a descriptive message in conventional-commit format. Include a summary of what changed and why.
+16. **Move feature to Done** — In `planning/backlog.md`, mark the item `[x]` and move its feature file from `planning/features/` to `planning/features/done/` if one exists.
+
+17. **Commit** — Stage all changed files and commit with a descriptive message in conventional-commit format. Include a summary of what changed and why.
 
 After all steps are complete, propose the next feature to activate from the backlog `## Queued` section.

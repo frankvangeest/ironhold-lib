@@ -223,9 +223,10 @@ Every code change must follow this order before committing code:
 10. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
     Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 9.
     ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**.
-11. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
-12. **Commit** — only after Frank confirms; include a summary in git commit message format
-13. **Propose the next feature to add to active in the backlog**
+11. **Simple user play-test release build** — Just to confirm there are no errors in the console and basics are working. Frank confirms.
+12. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
+13. **Commit** — only after Frank confirms; include a summary in git commit message format
+14. **Propose the next feature to add to active in the backlog**
 
 Do not start coding before the feature plan is finalized and reviewed.
 Once code changes have been made, do not commit before steps 9 and 10 (play-test confirmed + release build) are complete.
