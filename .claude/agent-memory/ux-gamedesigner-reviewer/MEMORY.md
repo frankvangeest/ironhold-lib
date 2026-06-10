@@ -6,3 +6,4 @@
 - [{self} substitution pattern](project_self_substitution_pattern.md) — Entity-targeted actions accept {self} in .behavior.ron; canonical example is primitive_world/behaviors/attack_dummy.behavior.ron
 - [EffectDef `layers` field](project_effectdef_layers.md) — multi-layer emitter list; canonical multi-layer example is particles_demo `campfire_fire`; canonical single-layer is primitive_world `campfire_fire`
 - [Auto-written GameVariables undocumented](project_auto_written_gamevariables_undocumented.md) — capability-populated bind keys (targeting's target_display/target_name/target_id) live only in core CLAUDE.md, not docs/
+- [Audio writes no GameVariable](project_audio_no_gamevariable.md) — ToggleMute/SetVolume only emit events; mute state must be bridged to a variable via SetVariable on audio.muted/unmuted for a Label to show it

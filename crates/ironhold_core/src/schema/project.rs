@@ -213,7 +213,31 @@ pub struct ProjectConfig {
     /// Omit to use the built-in defaults (22 px font, 1.2 s duration, 1.5 m/s rise).
     #[serde(default)]
     pub damage_popup_style: Option<DamagePopupStyle>,
+
+    /// Project-level audio settings. Omit to use defaults (`max_volume: 1.0, mute_on_start: false`).
+    #[serde(default)]
+    pub audio: AudioConfig,
 }
+
+/// Project-level audio configuration. All fields have data-driven defaults so existing projects
+/// that omit the `audio:` block behave identically to `max_volume: 1.0, mute_on_start: false`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct AudioConfig {
+    /// Master volume ceiling for this project (0.0–1.0). Effective `GlobalVolume` is
+    /// `active_fraction * max_volume` when unmuted. Default: 1.0.
+    #[serde(default = "default_max_volume")]
+    pub max_volume: f32,
+    /// Start the project muted. Default: false.
+    #[serde(default)]
+    pub mute_on_start: bool,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self { Self { max_volume: default_max_volume(), mute_on_start: false } }
+}
+
+fn default_max_volume() -> f32 { 1.0 }
 
 /// Visual style for `Action::ShowDamagePopup` popups. Set once per project in `.project.ron`.
 /// All fields are optional — omit any to use the built-in default shown in the comment.

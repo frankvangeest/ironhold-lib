@@ -113,6 +113,9 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. `ShowFloatingText(entity: "{target}", text: "Selected!")` — see `3rd_person_game_demo/logic/rules.ron`) ✅
 - `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, or `LoadScene`) ✅
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
+- `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
+- `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
+- `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 
@@ -150,7 +153,8 @@ Actions represent explicit operations the runtime can execute.
 - `PlaySound(key: audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `PlayMusicLoop(key: audio_key)` ✅ — starts a looping background music track by `AssetCatalog` audio key; stops any currently playing music; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` ✅ — stops the current background music
-- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); applied as a master multiplier on top of per-sound volumes
+- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); scales against the project's `max_volume` ceiling so `SetVolume(100)` equals `max_volume`, not 1.0; emits `audio.volume_changed`
+- `ToggleMute` ✅ — toggles muted state; muting emits `audio.muted`, unmuting restores the previous volume and emits `audio.unmuted`
 
 #### State/variables actions
 - `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default

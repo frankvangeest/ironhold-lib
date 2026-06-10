@@ -10,7 +10,7 @@ use crate::runtime::messages::*;
 use super::{
     MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings, ProjectKeyBindings,
     LoadedAssetCatalog, LoadedPrefabCatalog, PendingProjectLoads, SceneHandleV2,
-    LogicState, resolve_project_path,
+    LogicState, AudioState, resolve_project_path,
 };
 
 pub fn check_project_loaded(
@@ -115,6 +115,11 @@ pub fn check_project_loaded(
         }
         commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
         commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
+        commands.insert_resource(AudioState {
+            max_volume: config.audio.max_volume,
+            active_fraction: 1.0,
+            muted: config.audio.mute_on_start,
+        });
     } else {
         // Phase 2: wait for all pending loads to complete.
         let Some(pending) = pending else { return; };
@@ -272,6 +277,11 @@ pub fn check_project_loaded(
         };
         commands.insert_resource(loaded_stats);
         commands.insert_resource(loaded_modifiers);
+        commands.insert_resource(AudioState {
+            max_volume: config.audio.max_volume,
+            active_fraction: 1.0,
+            muted: config.audio.mute_on_start,
+        });
     }
 
     let initial = scene_override

@@ -101,6 +101,7 @@ Entry point for a project. References all other files.
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
+| `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
@@ -1738,7 +1739,9 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
 | `SetParticleQuality(Level)` | Set the global quality tier (`High`, `Medium`, `Low`, `Minimal`). Persists across scene transitions. Affects all subsequent `SpawnEffect` calls. |
-| `SetVolume(0–100)` | Set the global audio volume (percent). 0 = mute, 100 = full. |
+| `SetVolume(0–100)` | Set the global audio volume (percent). Scales against the project's `max_volume` ceiling — `SetVolume(100)` equals `max_volume`. Emits `audio.volume_changed`. |
+| `ToggleMute` | Toggle muted state. Muting emits `audio.muted`; unmuting restores the previous volume and emits `audio.unmuted`. |
+| `SyncAudioState` | Re-emit the current mute state (`audio.muted` or `audio.unmuted`) without changing it. Use in state `entry_actions` to initialise bound audio labels on first load — combine with a `global_on` bridge that maps the event to `SetVariable`. |
 | `ApplyModifier(modifier_key: "key")` | Apply a named stat modifier template to its target stat. |
 | `RemoveModifier(modifier_key: "key")` | Remove all active instances of a named modifier. |
 | `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |
@@ -2115,6 +2118,37 @@ Optional block in `{name}.project.ron` that controls how `Action::ShowDamagePopu
 | `spawn_offset` | `(f32,f32,f32)` | `(0.0, 1.2, 0.0)` | World-space offset from the entity origin where the popup appears. Increase Y for tall entities. |
 | `damage_color` | `(f32,f32,f32,f32)` | `(0.95, 0.25, 0.20, 1.0)` | Linear RGBA colour for negative amounts (damage) |
 | `heal_color` | `(f32,f32,f32,f32)` | `(0.20, 0.90, 0.20, 1.0)` | Linear RGBA colour for positive amounts (healing) |
+
+---
+
+## `AudioConfig`
+
+Optional block in `{name}.project.ron` that controls project-level audio volume. All fields have built-in defaults — omit the block entirely to use them.
+
+```ron
+// {name}.project.ron
+(
+    schema_version: 3,
+    ...
+    audio: (
+        max_volume:    0.8,    // project ceiling; 0.0–1.0, default 1.0
+        mute_on_start: false,  // default false
+    ),
+)
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_volume` | `f32` | `1.0` | Master volume ceiling (0.0–1.0). `SetVolume(100)` equals this value, not 1.0. Lets you tune overall project volume without touching individual audio source files. |
+| `mute_on_start` | `bool` | `false` | Start the project muted. Equivalent to firing `ToggleMute` once immediately on project load. |
+
+**Pipeline events** emitted by audio actions:
+
+| Event | Trigger |
+|-------|---------|
+| `audio.muted` | `ToggleMute` transitions to muted, or `SyncAudioState` while already muted |
+| `audio.unmuted` | `ToggleMute` transitions to unmuted, or `SyncAudioState` while not muted |
+| `audio.volume_changed` | `SetVolume` changes the active fraction |
 
 ---
 

@@ -20,6 +20,20 @@ opt-level = "s"   # optimise for binary size; important for WASM GitHub Pages li
 
 [profile.test]
 debug = true
-opt-level = 0
+opt-level = 3
 debug-assertions = true
 overflow-checks = true
+split-debuginfo = "packed" # Extracts symbols into a separate .dwp file
+
+[profile.test.package."*"]
+opt-level = 3       # Match release performance for Bevy engine code
+
+[profile.dev]
+opt-level = 3       # Match release performance for local code
+debug = true        # Retain full debugging info (symbols, line tables)
+debug-assertions = true
+overflow-checks = true # Keep panic safety features active for dev
+split-debuginfo = "packed" # Extracts symbols into a separate .dwp file
+
+[profile.dev.package."*"]
+opt-level = 3       # Match release performance for Bevy engine code

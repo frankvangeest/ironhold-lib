@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::audio::AudioSinkPlayback;
 use crate::ProjectRoot;
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
@@ -26,7 +27,7 @@ pub fn action_executor_system(
     mut spawn_params: SpawnParams,
     mut debug: ResMut<crate::DebugState>,
     mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
-    bg_music_query: Query<Entity, With<BackgroundMusic>>,
+    mut bg_music_query: Query<(Entity, Option<&mut bevy::audio::AudioSink>, Option<&bevy::audio::PlaybackSettings>), With<BackgroundMusic>>,
     overlay_entities: Query<Entity, With<OverlayEntity>>,
     mut scene_state: SceneStateParams,
     mut game_events: MessageWriter<GameEvent>,
@@ -183,13 +184,13 @@ pub fn action_executor_system(
             }
             Action::StopMusic => {
                 info!("Executing Action::StopMusic");
-                for entity in bg_music_query.iter() {
+                for (entity, _, _) in bg_music_query.iter_mut() {
                     commands.entity(entity).despawn();
                 }
             }
             Action::PlayMusicLoop { key, volume: action_volume } => {
                 // Stop any currently playing background music.
-                for entity in bg_music_query.iter() {
+                for (entity, _, _) in bg_music_query.iter_mut() {
                     commands.entity(entity).despawn();
                 }
                 if let Some(entry) = asset_catalog.0.audio.get(&key) {
@@ -223,13 +224,45 @@ pub fn action_executor_system(
                 }
             }
             Action::SetVolume(pct) => {
-                let linear = (pct.min(100) as f32) / 100.0;
-                info!("Action::SetVolume: {}% (linear {:.2})", pct, linear);
+                let fraction = (pct.min(100) as f32) / 100.0;
+                scene_state.audio_state.active_fraction = fraction;
+                let effective = scene_state.audio_state.effective_volume();
+                info!("Action::SetVolume: {}% (effective {:.2}, max {:.2})", pct, effective, scene_state.audio_state.max_volume);
                 if let Some(ref mut gv) = global_volume {
-                    gv.volume = bevy::audio::Volume::Linear(linear);
+                    gv.volume = bevy::audio::Volume::Linear(effective);
                 } else {
                     warn!("Action::SetVolume: GlobalVolume resource not available");
                 }
+                // Update already-playing sinks: GlobalVolume only applies at sink creation time.
+                for (_, sink_opt, settings_opt) in bg_music_query.iter_mut() {
+                    if let (Some(mut sink), Some(settings)) = (sink_opt, settings_opt) {
+                        sink.set_volume(bevy::audio::Volume::Linear(settings.volume.to_linear() * effective));
+                    }
+                }
+                game_events.write(GameEvent::Trigger("audio.volume_changed".to_string()));
+            }
+            Action::ToggleMute => {
+                scene_state.audio_state.muted = !scene_state.audio_state.muted;
+                let effective = scene_state.audio_state.effective_volume();
+                let event_name = if scene_state.audio_state.muted { "audio.muted" } else { "audio.unmuted" };
+                info!("Action::ToggleMute: muted={} (effective {:.2})", scene_state.audio_state.muted, effective);
+                if let Some(ref mut gv) = global_volume {
+                    gv.volume = bevy::audio::Volume::Linear(effective);
+                } else {
+                    warn!("Action::ToggleMute: GlobalVolume resource not available");
+                }
+                // Update already-playing sinks: GlobalVolume only applies at sink creation time.
+                for (_, sink_opt, settings_opt) in bg_music_query.iter_mut() {
+                    if let (Some(mut sink), Some(settings)) = (sink_opt, settings_opt) {
+                        sink.set_volume(bevy::audio::Volume::Linear(settings.volume.to_linear() * effective));
+                    }
+                }
+                game_events.write(GameEvent::Trigger(event_name.to_string()));
+            }
+            Action::SyncAudioState => {
+                let event_name = if scene_state.audio_state.muted { "audio.muted" } else { "audio.unmuted" };
+                info!("Action::SyncAudioState: emitting {}", event_name);
+                game_events.write(GameEvent::Trigger(event_name.to_string()));
             }
             Action::PreloadScene(path) => {
                 let resolved = resolve_project_path(&project_root.0, &path);

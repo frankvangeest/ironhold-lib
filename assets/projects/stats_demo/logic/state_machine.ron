@@ -60,12 +60,12 @@
             name: "playing",
             entry_actions: [
                 // Warmup GPU pipelines for all effect variants used in this scene.
-                SpawnEffect(key: "heal_burst",    position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "speed_burst",   position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "poison_cloud",  position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "mana_burst",    position: Some((0.0, -100.0, 0.0))),
-                SpawnEffect(key: "overheal_glow", position: Some((0.0, -100.0, 0.0))),
+                SpawnEffect(key: "heal_burst",    position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "hit_spark",     position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "speed_burst",   position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "poison_cloud",  position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "mana_burst",    position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "overheal_glow", position: (0.0, -100.0, 0.0)),
             ],
             exit_actions: [],
             on: [],

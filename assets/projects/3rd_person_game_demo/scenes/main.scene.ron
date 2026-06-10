@@ -125,21 +125,21 @@
       text: "Start Menu",
       action: "ui.start_menu",
       position: (16.0, 16.0),
-      size: (180.0, 52.0),
+      size: (220.0, 52.0),
     )),
     Button((
       id: "dance_button",
       text: "Dance",
       action: "ui.dance",
       position: (16.0, 84.0),
-      size: (180.0, 52.0),
+      size: (220.0, 52.0),
     )),
     Button((
       id: "test_actions_button",
       text: "Spawn Chest",
       action: "ui.test_actions",
       position: (16.0, 152.0),
-      size: (180.0, 52.0),
+      size: (220.0, 52.0),
     )),
 
     // ── Target frame ────────────────────────────────────────────────────────────
@@ -151,10 +151,29 @@
       id: "target_label",
       text: "",
       bind: "target_display",
-      format: "Target: {}",
-      position: (16.0, 230.0),
-      size: (320.0, 36.0),
+      format: " Target: {}",
+      position: (256.0, 16.0),
+      size: (500.0, 36.0),
       align: Left,
+    )),
+
+    // ── Audio HUD ───────────────────────────────────────────────────────────────
+    // Shows live mute state (bound to "audio_state" GameVariable, set by global_on bridge).
+    Label((
+      id: "audio_state_hud",
+      text: "",
+      bind: "audio_state",
+      format: " Audio: {}",
+      position: (800.0, 16.0),
+      size: (220.0, 30.0),
+      align: Left,
+    )),
+    Button((
+      id: "hud_mute_button",
+      text: "Toggle Mute",
+      action: "ui.toggle_mute",
+      position: (16.0, 230.0),
+      size: (220.0, 52.0),
     )),
   ],
 )

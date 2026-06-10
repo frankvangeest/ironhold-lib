@@ -52,8 +52,20 @@ pub enum Action {
     /// If an overlay is currently active: unload it. Otherwise: load the given path as an overlay.
     /// Use this for ESC-style toggles so the same key/button opens and closes the overlay.
     ToggleOverlay(String),
-    /// Set global audio volume. Value is 0–100 (percent). 0 = mute, 100 = full.
+    /// Set global audio volume. Value is 0–100 (percent).
+    /// Scales against the project's `max_volume` ceiling — `SetVolume(100)` equals `max_volume`, not 1.0.
+    /// Emits the `audio.volume_changed` pipeline event.
     SetVolume(u8),
+    /// Toggle the global mute state.
+    /// Muting sets `GlobalVolume` to 0 and emits `audio.muted`.
+    /// Unmuting restores `GlobalVolume` to `active_fraction * max_volume` and emits `audio.unmuted`.
+    ToggleMute,
+    /// Re-emit the current audio mute state as a pipeline event without changing it.
+    /// Emits `audio.muted` if currently muted, `audio.unmuted` if not.
+    /// Use in state `entry_actions` alongside a `global_on` bridge to ensure bound labels
+    /// reflect the true state on every state entry — including the first project load where
+    /// no toggle has yet fired.
+    SyncAudioState,
     /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
     /// Takes a project-relative path to a `.scene.ron`. Does not spawn or transition; purely
     /// warms the cache so a subsequent `LoadScene` resolves instantly.

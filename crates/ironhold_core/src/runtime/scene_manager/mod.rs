@@ -67,6 +67,45 @@ pub struct LoadedKeyBindings(pub HashMap<String, String>);
 #[derive(Resource, Default)]
 pub struct PreloadedScenes(pub Vec<Handle<GameSceneV2>>);
 
+/// Runtime audio state — tracks the project-level volume ceiling, the current active fraction,
+/// and whether the game is muted. Initialized from `ProjectConfig.audio` at project load.
+/// Written by `Action::ToggleMute`, `Action::SetVolume`, and `Action::SyncAudioState`;
+/// `audio_state_system` applies the effective volume to Bevy's `GlobalVolume` on each change.
+#[derive(Resource)]
+pub struct AudioState {
+    /// Master volume ceiling from `ProjectConfig.audio.max_volume`. Default: 1.0.
+    pub max_volume: f32,
+    /// Current volume fraction (0.0–1.0), set by `Action::SetVolume`. Default: 1.0.
+    pub active_fraction: f32,
+    /// Whether the game is currently muted. Toggled by `Action::ToggleMute`. Default: false.
+    pub muted: bool,
+}
+
+impl Default for AudioState {
+    fn default() -> Self { Self { max_volume: 1.0, active_fraction: 1.0, muted: false } }
+}
+
+impl AudioState {
+    pub fn effective_volume(&self) -> f32 {
+        if self.muted { 0.0 } else { (self.active_fraction * self.max_volume).clamp(0.0, 1.0) }
+    }
+}
+
+/// Watches `AudioState` for changes and writes the computed effective volume to `GlobalVolume`.
+/// Label updates are handled through the RON pipeline: `Action::SyncAudioState` emits
+/// `audio.muted` / `audio.unmuted` events which the `global_on` bridge in `state_machine.ron`
+/// maps to `SetVariable` — keeping label text in RON where designers can change it.
+pub fn audio_state_system(
+    audio_state: Res<AudioState>,
+    mut global_volume: Option<ResMut<bevy::audio::GlobalVolume>>,
+) {
+    if !audio_state.is_changed() { return; }
+    let effective = audio_state.effective_volume();
+    if let Some(ref mut gv) = global_volume {
+        gv.volume = bevy::audio::Volume::Linear(effective);
+    }
+}
+
 /// Holds pre-loaded audio asset handles so the asset server cache is warm before first play.
 /// Populated by `preload_audio_system` on each `SceneEvent::Ready`. Keeping these handles alive
 /// prevents the asset server from evicting audio between scene loads, eliminating first-play I/O
@@ -319,6 +358,7 @@ pub struct SceneStateParams<'w, 's> {
     pub current_target: ResMut<'w, crate::capabilities::action_bar::CurrentTarget>,
     /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
     pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
+    pub audio_state: ResMut<'w, AudioState>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

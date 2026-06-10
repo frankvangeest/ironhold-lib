@@ -53,40 +53,52 @@
       position: (100.0, 230.0),
       size: (300.0, 35.0),
     )),
-    Button((
-      id: "vol_mute",
-      text: "Mute",
-      action: "ui.set_volume_0",
-      position: (100.0, 270.0),
-      size: (90.0, 50.0),
-    )),
+    // Volume preset buttons — 25 / 50 / 75 / 100 (no hard-mute; use Toggle Mute below)
     Button((
       id: "vol_25",
       text: "25%",
       action: "ui.set_volume_25",
-      position: (200.0, 270.0),
+      position: (100.0, 270.0),
       size: (90.0, 50.0),
     )),
     Button((
       id: "vol_50",
       text: "50%",
       action: "ui.set_volume_50",
-      position: (300.0, 270.0),
+      position: (200.0, 270.0),
       size: (90.0, 50.0),
     )),
     Button((
       id: "vol_75",
       text: "75%",
       action: "ui.set_volume_75",
-      position: (400.0, 270.0),
+      position: (300.0, 270.0),
       size: (90.0, 50.0),
     )),
     Button((
       id: "vol_100",
       text: "100%",
       action: "ui.set_volume_100",
-      position: (500.0, 270.0),
+      position: (400.0, 270.0),
       size: (90.0, 50.0),
+    )),
+
+    // Mute toggle — shows live state via bound label.
+    Label((
+      id: "options_audio_state",
+      text: "",
+      bind: "audio_state",
+      format: "Audio: {}",
+      position: (100.0, 335.0),
+      size: (300.0, 30.0),
+      align: Left,
+    )),
+    Button((
+      id: "toggle_mute",
+      text: "Toggle Mute",
+      action: "ui.toggle_mute",
+      position: (100.0, 375.0),
+      size: (200.0, 50.0),
     )),
 
     // --- Navigation ---
@@ -94,7 +106,7 @@
       id: "back_button",
       text: "< Back",
       action: "ui.back_to_start_menu",
-      position: (100.0, 360.0),
+      position: (100.0, 445.0),
       size: (300.0, 65.0),
     )),
   ],

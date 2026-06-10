@@ -18,6 +18,10 @@
         ),
     ),
 
+    audio: (
+        mute_on_start: true,
+    ),
+
     global_key_bindings: {
         "Escape": "toggle_pause",
     },

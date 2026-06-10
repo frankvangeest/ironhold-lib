@@ -23,6 +23,19 @@
       action: "ui.resume",
       size: (280.0, 65.0),
     )),
+    Label((
+      id: "pause_audio_state",
+      text: "",
+      bind: "audio_state",
+      size: (280.0, 36.0),
+      align: Center,
+    )),
+    Button((
+      id: "pause_mute_button",
+      text: "Toggle Mute",
+      action: "ui.toggle_mute",
+      size: (280.0, 65.0),
+    )),
     Button((
       id: "quit_button",
       text: "Quit Game",

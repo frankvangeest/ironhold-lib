@@ -113,6 +113,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
+            .init_resource::<crate::runtime::scene_manager::AudioState>()
             .init_resource::<crate::capabilities::decal::PendingDecalSpawns>()
             .init_resource::<crate::capabilities::particle_budget::ParticleQuality>()
             .init_resource::<crate::capabilities::particle_budget::ParticleBudget>()
@@ -173,6 +174,9 @@ impl Plugin for GamePlugin {
                 stat_regen_system,
                 stat_effective_value_system,
             ).chain().before(message_interpreter_system))
+            // Apply AudioState changes (mute_on_start, ToggleMute, SetVolume) to GlobalVolume
+            // before any actions fire so mute_on_start is respected before PlayMusicLoop runs.
+            .add_systems(Update, audio_state_system.before(message_interpreter_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
             // stat_threshold_system runs after action_executor to detect crossings from
             // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.

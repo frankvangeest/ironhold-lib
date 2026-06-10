@@ -6,3 +6,4 @@
 - [Particle quality/budget pattern](particle_quality_budget_pattern.md) — six-touchpoint checklist for global-state Actions that mutate persistent resources, plus backward-compat rules for adding fields to EffectDef/LayerDef
 - [PrefabDef markers need all 3 spawn paths](prefab_marker_three_spawn_paths.md) — spawn-time marker fields wired only into spawn_prefab_instance silently break primitive/composite prefabs; grep scene_loader.rs for the field
 - [Targeting capability + {target} pattern](targeting_capability_pattern.md) — click/Tab selection, screen-space not raycast, 3-spawn-path markers, and the SetTarget-vs-capability GameVariable asymmetry footgun
+- [Audio state pattern](audio_state_pattern.md) — AudioConfig/AudioState/SetVolume/ToggleMute six touchpoints; two project_loader insert sites; dual-write-to-GlobalVolume footgun
