@@ -218,9 +218,10 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             entity: entity.replace("{self}", spawn_id),
             amount,
         },
-        Action::ShowFloatingText { entity, text } => Action::ShowFloatingText {
+        Action::ShowFloatingText { entity, text, offset } => Action::ShowFloatingText {
             entity: entity.replace("{self}", spawn_id),
-            text,
+            text: text.replace("{self}", spawn_id),
+            offset,
         },
         Action::SetEntityVisible { entity, visible } => Action::SetEntityVisible {
             entity: entity.replace("{self}", spawn_id),
@@ -254,8 +255,8 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
             Action::SpawnEffect { key, position, entity: entity.map(|e| s(&e, target_id)) },
         Action::ShowDamagePopup { entity, amount } =>
             Action::ShowDamagePopup { entity: s(&entity, target_id), amount },
-        Action::ShowFloatingText { entity, text } =>
-            Action::ShowFloatingText { entity: s(&entity, target_id), text },
+        Action::ShowFloatingText { entity, text, offset } =>
+            Action::ShowFloatingText { entity: s(&entity, target_id), text: text.replace("{target}", target_id), offset },
         Action::SetEntityVisible { entity, visible } =>
             Action::SetEntityVisible { entity: s(&entity, target_id), visible },
         Action::Despawn(id) => Action::Despawn(s(&id, target_id)),

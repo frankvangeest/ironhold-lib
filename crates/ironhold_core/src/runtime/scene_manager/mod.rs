@@ -217,6 +217,9 @@ pub struct WorldLabel {
     /// `None` means no depth scaling — font size is always `base_font_size`.
     /// `min_scale_floor` is 0.0 when the designer omitted `min_scale`.
     pub depth_scale: Option<(f32, f32)>,
+    /// Screen-space pixel offset applied after world→viewport projection.
+    /// Used for drop-shadow duplicates. Zero for all standard labels.
+    pub screen_offset: Vec2,
 }
 
 /// Stable handle attached to every entity spawned via `Action::Spawn`.

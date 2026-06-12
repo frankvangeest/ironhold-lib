@@ -38,13 +38,35 @@
         ),
         (
             name: "playing",
-            entry_actions: [ PlayMusicLoop(key: "bg_music"), PreloadScene("scenes/pause.scene.ron"), SyncAudioState ],
+            entry_actions: [
+                PlayMusicLoop(key: "bg_music"),
+                PreloadScene("scenes/pause.scene.ron"),
+                SyncAudioState,
+                // Reset player stats on each play session.
+                SetStat(key: "player_health", value: 100.0),
+                SetStat(key: "player_mana",   value: 60.0),
+                SetVariable("combat_status", ""),
+                // Warm WebGPU particle pipelines during the loading window.
+                SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "respawn_glow", position: (0.0, -100.0, 0.0)),
+            ],
             exit_actions:  [ StopMusic ],
             on: [
                 ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimation("dance")                   ] ),
                 ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02")                ] ),
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_mute", do_actions: [ ToggleMute                               ] ),
+
+                // ── Action bar feedback ──────────────────────────────────────────
+                ( event: "action_bar.no_target:1",             do_actions: [ SetVariable("combat_status", "No target selected")       ] ),
+                ( event: "action_bar.no_target:2",             do_actions: [ SetVariable("combat_status", "No target selected")       ] ),
+                ( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("combat_status", "Attack on cooldown")       ] ),
+                ( event: "action_bar.on_cooldown:2",           do_actions: [ SetVariable("combat_status", "Heavy Strike on cooldown") ] ),
+                ( event: "action_bar.insufficient_resource:2", do_actions: [ SetVariable("combat_status", "Not enough mana")          ] ),
+                ( event: "action_bar.activated:1",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Attack!")        ] ),
+                ( event: "action_bar.activated:2",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Heavy Strike!")  ] ),
+                ( event: "action_bar.activated:3",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Poke!")  ] ),
             ],
         ),
         (

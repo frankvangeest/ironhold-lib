@@ -33,3 +33,7 @@
 
 - ~~**Consolidate conditional prefab-feature application (the sibling divergence)**~~ _(observed at `cef818a` 2026-06-08; promoted to backlog `cdee26b` 2026-06-08 → Queued ▸ Engine / Runtime)_
 
+- **Push `stat_overrides` into `spawn_prefab_instance` so the StatMap is built once** _(observed at `5df25da` 2026-06-11)_ — The GLB actor path currently builds `StatMap` twice: `spawn_prefab_instance` builds at template defaults, then `scene_loader` overwrites with override values; the feature only works by accidental last-write-wins, not by design. Add `stat_overrides: &HashMap<String, f32>` to `spawn_prefab_instance` (callers without an `entity_def` pass `&HashMap::new()`), move the override-aware build there, and delete the second insert from the scene_loader GLB else-branch.
+
+- **Dynamic `Action::Spawn` entities miss `motion`, `stat_label`, and `world_stat_bar`** _(observed at `5df25da` 2026-06-11)_ — `spawn_prefab_instance` (called by `drain_spawn_queue_system`) handles behavior/stats/interactable/trigger_zone but not motion, stat_label, or world_stat_bar — so a rule-spawned `Spawn(prefab: "enemy_orc_melee")` produces an enemy with no floating health bar or motion, while a scene-placed entity has both. Fix: absorb `motion` into `spawn_prefab_instance` (it's prefab-derived, not entity_def-derived); `stat_label`/`world_stat_bar` need a separate mechanism for dynamic spawns (e.g. an `Added<StatMap>` observer) since they push onto scene-load-time deferred vectors.
+

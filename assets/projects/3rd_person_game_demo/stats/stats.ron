@@ -1,0 +1,36 @@
+(
+    schema_version: 1,
+    stats: {
+        "player_health": (
+            base: 100.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: [
+                (
+                    when: BelowOrEqual(0.0),
+                    emit: "stat.player_health.depleted",
+                ),
+                (
+                    when: BelowPercent(0.25),
+                    emit: "stat.player_health.low",
+                ),
+                (
+                    when: AtOrAbovePercent(1.0),
+                    emit: "stat.player_health.full",
+                ),
+            ],
+        ),
+        "player_mana": (
+            base: 60.0,
+            min: 0.0,
+            max: 60.0,
+            regen_rate: 5.0,
+            regen_delay: 2.0,
+            thresholds: [],
+        ),
+    },
+
+    modifiers: {},
+)

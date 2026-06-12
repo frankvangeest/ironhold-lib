@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use crate::runtime::messages::GameEvent;
-use crate::runtime::scene_manager::{SpawnId, PrefabKey};
+use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
 use crate::capabilities::action_bar::CurrentTarget;
 use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
@@ -36,7 +36,7 @@ impl Plugin for TargetingPlugin {
         // match the visible pose of skinned/animated GLB characters — clicks on an animated
         // orc would pass through to the ground. Projecting the entity origin to the screen
         // and measuring cursor distance is pose-independent and works for every prefab kind.
-        app.add_systems(Update, (click_select_system, tab_targeting_system));
+        app.add_systems(Update, (click_select_system, tab_targeting_system, target_auto_clear_system));
     }
 }
 
@@ -87,7 +87,8 @@ fn click_select_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
-    selectables: Query<(&SpawnId, &GlobalTransform, Option<&PrefabKey>), With<ClickSelectable>>,
+    selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>), With<ClickSelectable>>,
+    visibility_q: Query<&Visibility>,
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
@@ -99,9 +100,12 @@ fn click_select_system(
     let Some(cursor) = window.cursor_position() else { return };
     let Some((camera, cam_tf)) = cameras.iter().find(|(c, _)| c.is_active) else { return };
 
-    // Find the nearest selectable to the cursor in screen space.
+    // Find the nearest visible selectable to the cursor in screen space.
     let mut best: Option<(f32, String, Option<String>)> = None;
-    for (spawn_id, gt, prefab) in &selectables {
+    for (entity, spawn_id, gt, prefab) in &selectables {
+        if visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
+            continue;
+        }
         let world = gt.translation() + Vec3::Y * SELECT_AIM_HEIGHT;
         let Ok(screen) = camera.world_to_viewport(cam_tf, world) else { continue };
         let dist = screen.distance(cursor);
@@ -134,6 +138,7 @@ pub fn tab_targeting_system(
     controllers: Query<(&CharacterController, &GlobalTransform)>,
     targetable: Query<(Entity, &SpawnId, &GlobalTransform), With<Targetable>>,
     prefab_keys: Query<&PrefabKey>,
+    visibility_q: Query<&Visibility>,
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
@@ -153,6 +158,9 @@ pub fn tab_targeting_system(
     let mut candidates: Vec<(Entity, String, f32)> = targetable
         .iter()
         .filter_map(|(entity, spawn_id, gt)| {
+            if visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
+                return None;
+            }
             let dist = gt.translation().distance(player_pos);
             if dist <= range { Some((entity, spawn_id.0.clone(), dist)) } else { None }
         })
@@ -178,4 +186,24 @@ pub fn tab_targeting_system(
     let prefab = prefab_keys.get(*next_entity).ok().map(|p| p.0.clone());
 
     apply_target(&next_id, prefab.as_deref(), &mut current_target, &mut game_vars, &mut game_events);
+}
+
+/// Clears `CurrentTarget` when the targeted entity becomes hidden (e.g. dead/despawned).
+/// Prevents the action bar from firing at invisible enemies and keeps the target UI clean.
+pub fn target_auto_clear_system(
+    mut current_target: ResMut<CurrentTarget>,
+    mut game_vars: ResMut<GameVariables>,
+    mut game_events: MessageWriter<GameEvent>,
+    registry: Res<SpawnRegistry>,
+    visibility_q: Query<&Visibility>,
+) {
+    let Some(target_id) = current_target.0.clone() else { return };
+    let Some(&entity) = registry.entities.get(&target_id) else { return };
+    let Ok(vis) = visibility_q.get(entity) else { return };
+    if *vis == Visibility::Hidden {
+        current_target.0 = None;
+        clear_target_vars(&mut game_vars);
+        game_events.write(GameEvent::Trigger("target.cleared".to_string()));
+        info!("Targeting: auto-cleared '{}' (entity hidden)", target_id);
+    }
 }

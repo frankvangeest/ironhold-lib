@@ -710,6 +710,60 @@ pub fn spawn_scene_v2(
                 if let Some(label_def) = &entity_def.label {
                     pending_labels.push((parent, label_def.clone()));
                 }
+
+                // behavior/interactable/trigger_zone/StatMap are already inserted by
+                // spawn_prefab_instance above. Only apply stat_overrides here — spawn_prefab_instance
+                // builds StatMap at template defaults with no override knowledge, so we rebuild it
+                // with the scene entity's per-instance overrides.
+                // TODO: push stat_overrides into spawn_prefab_instance so the map is built once.
+                if !prefab.stat_templates.is_empty() {
+                    let spawn_id = &entity_def.id;
+                    for key in entity_def.stat_overrides.keys() {
+                        if !prefab.stat_templates.iter().any(|t| &t.key == key) {
+                            warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
+                        }
+                    }
+                    let mut stat_map = StatMap::default();
+                    for tpl in &prefab.stat_templates {
+                        let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+                        if base > tpl.max {
+                            warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
+                        }
+                        let def = crate::schema::stats::StatDef {
+                            base, min: tpl.min, max: tpl.max,
+                            soft_max: None,
+                            regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
+                            thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                                when: t.when.clone(),
+                                emit: t.emit.replace("{self}", spawn_id),
+                            }).collect(),
+                        };
+                        stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+                    }
+                    commands.entity(parent).insert(stat_map);
+                }
+
+                if let Some(sl) = &prefab.stat_label {
+                    let resolved_key = sl.stat_key.replace("{self}", &entity_def.id);
+                    pending_stat_labels.push((parent, resolved_key, sl.clone()));
+                }
+
+                if let Some(wb) = &prefab.world_stat_bar {
+                    let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
+                    pending_world_bars.push((parent, resolved_key, wb.clone()));
+                }
+
+                // Motion: continuous rotation and/or vertical bob.
+                if let Some(motion_def) = &prefab.motion {
+                    let rotate = motion_def.rotate
+                        .map(|(x, y, z)| Vec3::new(x, y, z))
+                        .unwrap_or(Vec3::ZERO);
+                    commands.entity(parent).insert(Motion {
+                        rotate,
+                        bob: motion_def.bob,
+                        bob_origin_y: Some(translation.y),
+                    });
+                }
             }
         }
 
@@ -969,6 +1023,7 @@ pub fn spawn_scene_v2(
                         scene.label_depth_scale.as_ref(),
                         label.depth_scale,
                     ),
+                    screen_offset: Vec2::ZERO,
                 },
                 LevelEntity,
             ));
@@ -992,6 +1047,7 @@ pub fn spawn_scene_v2(
                         scene.label_depth_scale.as_ref(),
                         label_def.depth_scale,
                     ),
+                    screen_offset: Vec2::ZERO,
                 },
                 LevelEntity,
             ));
@@ -1014,6 +1070,7 @@ pub fn spawn_scene_v2(
                     offset: Vec3::from(sl.offset),
                     base_font_size: sl.font_size,
                     depth_scale: resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None),
+                    screen_offset: Vec2::ZERO,
                 },
                 StatLabelMarker { stat_key, show_max: sl.show_max },
                 LevelEntity,
@@ -1048,6 +1105,7 @@ pub fn spawn_scene_v2(
                             offset: offset_v3,
                             base_font_size: font_size,
                             depth_scale,
+                            screen_offset: Vec2::ZERO,
                         },
                         LevelEntity,
                     ));
@@ -1065,6 +1123,7 @@ pub fn spawn_scene_v2(
                             offset: offset_v3,
                             base_font_size: font_size,
                             depth_scale,
+                            screen_offset: Vec2::ZERO,
                         },
                         WorldStatBarFillMarker { stat_key, cells, fill_color, color_bands },
                         LevelEntity,
@@ -1089,6 +1148,7 @@ pub fn spawn_scene_v2(
                             offset: offset_v3,
                             base_font_size: 1.0,
                             depth_scale: None,
+                            screen_offset: Vec2::ZERO,
                         },
                         LevelEntity,
                     )).id();

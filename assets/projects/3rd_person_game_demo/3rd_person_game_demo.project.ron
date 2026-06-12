@@ -8,6 +8,7 @@
     asset_catalog: "assets.ron",
     prefab_catalog: "prefabs/prefabs.ron",
     state_machine_path: "logic/state_machine.ron",
+    stats_path: "stats/stats.ron",
     model_fixes_path: "overrides/model_fixes.ron",
 
     global_environment: (

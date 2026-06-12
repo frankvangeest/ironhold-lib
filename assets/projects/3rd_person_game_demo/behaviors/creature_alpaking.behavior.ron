@@ -1,0 +1,40 @@
+// Alive/dead/respawn cycle for the alpaking creature.
+// Damage arrives from the player's action bar via ModifyStat(key: "{target}.health", ...).
+// When health hits 0 the stat threshold fires "stat.{self}.health.depleted" → dead state.
+// After 10 seconds the alpaking reappears at full health in the same position.
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            // SetStat before SetEntityVisible: entity must never be briefly visible at 0 HP.
+            entry_actions: [
+                SetStat(key: "{self}.health", value: 60.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+                SpawnEffect(key: "respawn_glow", entity: "{self}"),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+        (
+            name: "dead",
+            entry_actions: [
+                SpawnEffect(key: "death_poof", entity: "{self}"),
+                ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
+                SetEntityVisible(entity: "{self}", visible: false),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 10.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        (from: "alive", on: "stat.{self}.health.depleted", to: "dead"),
+        (from: "dead",  on: "entity.respawned:{self}",      to: "alive"),
+    ],
+)

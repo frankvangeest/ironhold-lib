@@ -140,11 +140,14 @@ pub enum Action {
     /// Show a floating text label above a named entity.
     /// The label rises and fades using the same animation as `ShowDamagePopup`.
     /// Colour is warm yellow; use `ShowDamagePopup` when you need green/red numeric feedback.
-    /// Inside behavior files, `{self}` in `entity` is resolved to the entity's spawn ID.
-    /// Example: `ShowFloatingText(entity: "player_01", text: "Speed Boost!")`.
+    /// Inside behavior files, `{self}` in both `entity` and `text` is resolved to the spawn ID.
+    /// `offset` overrides `DamagePopupStyle.spawn_offset` when set — use to avoid stacking.
+    /// Example: `ShowFloatingText(entity: "player_01", text: "Speed Boost!", offset: (0.0, 2.5, 0.0))`.
     ShowFloatingText {
         entity: String,
         text: String,
+        #[serde(default)]
+        offset: Option<(f32, f32, f32)>,
     },
     /// Show or hide a spawned entity by its ID.
     /// `visible: true` restores the entity; `visible: false` hides it (entity remains in ECS).

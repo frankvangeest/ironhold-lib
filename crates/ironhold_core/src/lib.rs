@@ -398,8 +398,8 @@ fn world_label_screen_pos_system(
 
         match camera.world_to_viewport(cam_global, world_pos) {
             Ok(vp) => {
-                t.translation.x = vp.x - half_w;
-                t.translation.y = half_h - vp.y;
+                t.translation.x = vp.x - half_w + label.screen_offset.x;
+                t.translation.y = half_h - vp.y + label.screen_offset.y;
                 if *vis != Visibility::Visible { *vis = Visibility::Visible; }
             }
             Err(_) => {

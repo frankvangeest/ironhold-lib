@@ -120,33 +120,80 @@
   ],
 
   ui: [
+    // ── Menu / utility buttons ─────────────────────────────────────────────────
     Button((
       id: "start_menu_button",
-      text: "Start Menu",
+      text: "Menu",
       action: "ui.start_menu",
       position: (16.0, 16.0),
-      size: (220.0, 52.0),
+      size: (80.0, 36.0),
     )),
     Button((
       id: "dance_button",
       text: "Dance",
       action: "ui.dance",
-      position: (16.0, 84.0),
-      size: (220.0, 52.0),
+      position: (16.0, 176.0),
+      size: (200.0, 44.0),
     )),
     Button((
       id: "test_actions_button",
       text: "Spawn Chest",
       action: "ui.test_actions",
-      position: (16.0, 152.0),
-      size: (220.0, 52.0),
+      position: (16.0, 228.0),
+      size: (200.0, 44.0),
+    )),
+    Button((
+      id: "hud_mute_button",
+      text: "Toggle Mute",
+      action: "ui.toggle_mute",
+      position: (16.0, 280.0),
+      size: (200.0, 44.0),
+    )),
+
+    // ── Player stat bars ───────────────────────────────────────────────────────
+    // Reads from LoadedStats (populated via stats/stats.ron + stats_path in project.ron).
+    StatBar((
+      id: "health_bar",
+      stat_key: "player_health",
+      position: (16.0, 62.0),
+      size: (200.0, 16.0),
+      fill_color:       (0.85, 0.15, 0.15, 1.0),
+      background_color: (0.20, 0.06, 0.06, 1.0),
+      show_value: true,
+      color_bands: [
+        ( above_percent: 0.5,  color: (0.85, 0.15, 0.15, 1.0) ),
+        ( above_percent: 0.25, color: (1.0,  0.55, 0.0,  1.0) ),
+        ( above_percent: 0.0,  color: (0.6,  0.0,  0.0,  1.0) ),
+      ],
+      absolute: true,
+    )),
+    StatBar((
+      id: "mana_bar",
+      stat_key: "player_mana",
+      position: (16.0, 82.0),
+      size: (200.0, 10.0),
+      fill_color:       (0.25, 0.50, 1.00, 1.0),
+      background_color: (0.06, 0.10, 0.22, 1.0),
+      absolute: true,
+    )),
+
+    // ── Combat status line ─────────────────────────────────────────────────────
+    // Shows transient messages: cooldown, not enough mana, etc.
+    Label((
+      id: "combat_status_label",
+      text: "",
+      bind: "combat_status",
+      format: "{}",
+      position: (16.0, 100.0),
+      size: (280.0, 22.0),
+      align: Left,
     )),
 
     // ── Target frame ────────────────────────────────────────────────────────────
     // Shows the currently selected target as "<prefab> <id>" (e.g. "enemy_orc_melee orc_01").
     // The "target_display" GameVariable is written directly by the targeting capability
     // (capabilities/targeting.rs) on every select/clear — no rule wiring required.
-    // Controls: LMB click enemy to select | T cycle (Shift+T reverse) | LMB empty ground to clear.
+    // Controls: LMB click enemy to select | T cycle (Shift+T reverse) | LMB empty to clear.
     Label((
       id: "target_label",
       text: "",
@@ -158,7 +205,6 @@
     )),
 
     // ── Audio HUD ───────────────────────────────────────────────────────────────
-    // Shows live mute state (bound to "audio_state" GameVariable, set by global_on bridge).
     Label((
       id: "audio_state_hud",
       text: "",
@@ -168,12 +214,58 @@
       size: (220.0, 30.0),
       align: Left,
     )),
-    Button((
-      id: "hud_mute_button",
-      text: "Toggle Mute",
-      action: "ui.toggle_mute",
-      position: (16.0, 230.0),
-      size: (220.0, 52.0),
+
+    // ── Action bar ─────────────────────────────────────────────────────────────
+    // Press 1 to attack the current target (select with LMB or T).
+    // Press 2 for a heavy strike that deals double damage (costs mana, longer cooldown).
+    // {target} in do_actions is substituted with the current target's spawn ID at runtime.
+    // If no target is selected the substitution becomes the literal "{target}" which
+    // resolves to no matching entity — the stat modify no-ops silently.
+    ActionBar((
+      id: "skill_bar",
+      position: (416.0, 580.0),
+      slot_size: 48.0,
+      slot_gap: 4.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "1",
+          icon: "",
+          do_actions: [
+            PlaySound(key: "swing"),
+            ModifyStat(key: "{target}.health", delta: -30.0),
+            ShowDamagePopup(entity: "{target}", amount: -30.0),
+            SpawnEffect(key: "hit_spark", entity: "{target}"),
+          ],
+          cooldown_secs: 1.0,
+          label: "Attack",
+        ),
+        (
+          key: "2",
+          icon: "",
+          do_actions: [
+            PlaySound(key: "swing"),
+            ModifyStat(key: "{target}.health", delta: -60.0),
+            ShowDamagePopup(entity: "{target}", amount: -60.0),
+            SpawnEffect(key: "hit_spark", entity: "{target}"),
+          ],
+          cooldown_secs: 6.0,
+          cost: (stat: "player_mana", amount: 20.0),
+          label: "Heavy Strike",
+        ),
+        (
+          key: "3",
+          icon: "",
+          do_actions: [
+            PlaySound(key: "swing"),
+            ModifyStat(key: "{target}.health", delta: -1.0),
+            ShowDamagePopup(entity: "{target}", amount: -1.0),
+            SpawnEffect(key: "hit_spark", entity: "{target}"),
+          ],
+          cooldown_secs: 0.2,
+          label: "Poke",
+        ),
+      ],
     )),
   ],
 )

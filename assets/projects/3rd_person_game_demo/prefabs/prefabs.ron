@@ -41,6 +41,41 @@
       ),
       targetable: true,
       click_selectable: true,
+      behavior: "behaviors/enemy_orc.behavior.ron",
+      stat_templates: [
+        (
+          key: "health",
+          base: 80.0,
+          min: 0.0,
+          max: 80.0,
+          regen_rate: 0.0,
+          regen_delay: 0.0,
+          thresholds: [
+            ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+          ],
+        ),
+      ],
+      // Floating HP label above the orc's head.
+      stat_label: (
+        stat_key: "{self}.health",
+        offset: (0.0, 2.8, 0.0),
+        font_size: 14.0,
+        color: (1.0, 0.4, 0.3, 0.9),
+        show_max: true,
+      ),
+      // World-space health bar above the model.
+      world_stat_bar: (
+        stat_key: "{self}.health",
+        offset: (0.0, 3.1, 0.0),
+        fill_color: (0.85, 0.15, 0.15, 1.0),
+        bg_color:   (0.20, 0.05, 0.05, 0.85),
+        color_bands: [
+          (0.0,  (0.85, 0.12, 0.12, 1.0)),
+          (0.3,  (0.95, 0.75, 0.10, 1.0)),
+          (0.6,  (0.15, 0.85, 0.15, 1.0)),
+        ],
+        style: Pixel( size: (52.0, 7.0) ),
+      ),
     ),
 
     "creature_alpaking": (
@@ -49,6 +84,42 @@
       animation_policy: "prefabs/animation/alpaking_policy.ron",
       components: (
         tags: ["creature"],
+      ),
+      targetable: true,
+      click_selectable: true,
+      behavior: "behaviors/creature_alpaking.behavior.ron",
+      stat_templates: [
+        (
+          key: "health",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          regen_rate: 0.0,
+          regen_delay: 0.0,
+          thresholds: [
+            ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+          ],
+        ),
+      ],
+      // Floating HP label (entity hovers at y=2.5 in the scene — offset adds on top).
+      stat_label: (
+        stat_key: "{self}.health",
+        offset: (0.0, 1.5, 0.0),
+        font_size: 14.0,
+        color: (0.7, 0.9, 1.0, 0.9),
+        show_max: true,
+      ),
+      world_stat_bar: (
+        stat_key: "{self}.health",
+        offset: (0.0, 1.8, 0.0),
+        fill_color: (0.25, 0.65, 1.00, 1.0),
+        bg_color:   (0.05, 0.10, 0.22, 0.85),
+        color_bands: [
+          (0.0,  (0.85, 0.12, 0.12, 1.0)),
+          (0.3,  (0.95, 0.75, 0.10, 1.0)),
+          (0.6,  (0.25, 0.65, 1.00, 1.0)),
+        ],
+        style: Pixel( size: (48.0, 6.0) ),
       ),
     ),
 

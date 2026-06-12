@@ -209,13 +209,18 @@ Every code change must follow this order before committing code:
     - follows proper UX design - UX review for the feature plan
  2. **Make feature active in backlog and commit before coding** — If not already
  3. **Code changes** — implement the feature or fix and update tests
- 4. **Tests pass** — `cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint`
- 5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
- 6. **Schema/CLI check** — if any `schema/` type was added, renamed, or had a field type changed:
+ 4. **Tests pass** — run both together every time:
     ```
+    cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint
     cargo check -p ironhold_cli
     ```
-    Also verify `query prefabs` / `query effects` / `query actions` output still formats correctly.
+    The CLI check is unconditional — new `Action` variants and schema changes silently break `query.rs` without it.
+ 5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
+ 6. **Schema/CLI verify** — if any `schema/` type was added, renamed, or had a field type changed, also spot-check the query output:
+    ```
+    cargo run -p ironhold_cli -- query actions assets/projects/3rd_person_game_demo
+    ```
+    Verify new action kinds appear in the output and nothing crashes.
  7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev`
     Fast (~2 min). For local play-testing only — never commit a `--dev` build.
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.

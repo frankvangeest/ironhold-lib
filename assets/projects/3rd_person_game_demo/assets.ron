@@ -21,12 +21,73 @@
     ),
   },
 
-  textures: {},
+  textures: {
+    // Kenney Particle Pack sprites used by combat effects
+    "particle/spark_01": "shared/textures/particles/kenney-particle-pack/spark_01.png",
+    "particle/spark_02": "shared/textures/particles/kenney-particle-pack/spark_02.png",
+    "particle/spark_03": "shared/textures/particles/kenney-particle-pack/spark_03.png",
+    "particle/smoke_01": "shared/textures/particles/kenney-particle-pack/smoke_01.png",
+    "particle/smoke_02": "shared/textures/particles/kenney-particle-pack/smoke_02.png",
+    "particle/magic_04": "shared/textures/particles/kenney-particle-pack/magic_04.png",
+    "particle/magic_05": "shared/textures/particles/kenney-particle-pack/magic_05.png",
+  },
 
   audio: {
     "click":     (path: "shared/audio/menu-button-click.wav"),
     "walk":      (path: "shared/audio/walk.wav"),
     "run_grass": (path: "shared/audio/run-grass.wav"),
     "bg_music":  (path: "shared/audio/bg-music-balance.mp3"),
+    "swing":     (path: "shared/audio/combat/heave-male.wav", volume: 0.7),
+    "hit":       (path: "shared/audio/combat/punch-01.wav",   volume: 0.9),
+  },
+
+  effects: {
+    // Short orange-red spark burst on a successful attack hit.
+    "hit_spark": (
+      particle_count: 10,
+      lifetime_secs: 0.40,
+      speed: 3.0,
+      speed_jitter: 0.9,
+      spread_deg: 180.0,
+      offset: (0.0, 1.2, 0.0),
+      size: 0.06,
+      size_end: 0.0,
+      color_start: (1.0, 0.75, 0.2, 1.0),
+      color_end:   (1.0, 0.1,  0.0, 0.0),
+      gravity: -4.5,
+      sprites: ["particle/spark_01", "particle/spark_02", "particle/spark_03"],
+    ),
+
+    // Soft grey smoke puff on enemy death — brief visual "poof".
+    "death_poof": (
+      particle_count: 8,
+      lifetime_secs: 0.70,
+      speed: 1.2,
+      speed_jitter: 0.4,
+      spread_deg: 60.0,
+      offset: (0.0, 1.0, 0.0),
+      size: 0.18,
+      size_end: 0.40,
+      color_start: (0.55, 0.55, 0.55, 0.9),
+      color_end:   (0.30, 0.30, 0.30, 0.0),
+      gravity: -0.5,
+      sprites: ["particle/smoke_01", "particle/smoke_02"],
+    ),
+
+    // Soft cyan/white shimmer on enemy respawn.
+    "respawn_glow": (
+      particle_count: 16,
+      lifetime_secs: 0.90,
+      speed: 1.8,
+      speed_jitter: 0.5,
+      spread_deg: 50.0,
+      offset: (0.0, 1.0, 0.0),
+      size: 0.07,
+      size_end: 0.14,
+      color_start: (0.5, 0.95, 1.0, 1.0),
+      color_end:   (0.1, 0.50, 0.9, 0.0),
+      gravity: 0.8,
+      sprites: ["particle/magic_04", "particle/magic_05"],
+    ),
   },
 )

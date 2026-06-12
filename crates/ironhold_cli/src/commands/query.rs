@@ -588,6 +588,8 @@ fn action_kind(a: &Action) -> &'static str {
         Action::ShowFloatingText { .. } => "ShowFloatingText",
         Action::SetTarget(_) => "SetTarget",
         Action::ClearTarget => "ClearTarget",
+        Action::ToggleMute => "ToggleMute",
+        Action::SyncAudioState => "SyncAudioState",
     }
 }
 

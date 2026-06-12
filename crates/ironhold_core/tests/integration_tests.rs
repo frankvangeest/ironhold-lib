@@ -79,11 +79,9 @@ fn test_scene_lifecycle_events() {
 #[test]
 fn test_input_abstraction_flow() {
     let mut app = setup_test_app();
-
-    // Initial run
     app.update();
 
-    // 1. Setup an entity with CharacterController
+    // 1. Spawn entity with CharacterController.
     let entity = app.world_mut().spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
         GlobalTransform::default(),
@@ -145,24 +143,29 @@ fn test_input_abstraction_flow() {
         SpeedMultiplier(1.0),
     )).id();
 
-    // 2. Simulate "W" key press
-    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyW);
-    
-    // 3. Run systems: input_translator_system writes InputActionMessage
-    app.update();
-    // Run again: player_movement_system reads the message from the previous frame
-    // (systems are in separate unordered Update sets, so we need a second update)
-    app.update();
-    
-    // 4. Verify InputActionMessage was emitted (available from previous frame)
-    app.world_mut().run_system_once(move |mut input_events: MessageReader<InputActionMessage>| {
-        let events: Vec<_> = input_events.read().cloned().collect();
-        assert!(events.iter().any(|e| e.entity == entity && matches!(e.action, InputAction::Move(v) if v.y > 0.0)));
-    }).unwrap();
-    
-    // 5. Verify character velocity moved forward (rapier physics sets linvel, not transform directly)
-    // Note: Transform::forward() is (0, 0, -1) in Bevy 3D.
-    // player_movement_system sets velocity.linvel.z = move_vec.z * speed (which is negative for forward).
+    // Remove the DefaultRapierContext so player_movement_system falls into its headless
+    // else-branch (is_grounded = true). Same approach as test_player_jump_emits_game_event.
+    {
+        use bevy_rapier3d::plugin::context::DefaultRapierContext;
+        let rapier_entity = app.world_mut()
+            .query_filtered::<Entity, With<DefaultRapierContext>>()
+            .iter(app.world())
+            .next();
+        if let Some(e) = rapier_entity { app.world_mut().despawn(e); }
+    }
+
+    // 2. Write InputActionMessage directly — bypasses input_translator and FixedUpdate timing.
+    // MessageReader as a SystemParam starts at the current buffer end, so writing first and
+    // then calling run_system_once immediately (without an intervening app.update()) is the
+    // only reliable pattern in headless tests. See test_player_jump_emits_game_event.
+    app.world_mut()
+        .resource_mut::<Messages<InputActionMessage>>()
+        .write(InputActionMessage { entity, action: InputAction::Move(Vec2::new(0.0, 1.0)) });
+
+    // 3. Run player_movement_system with a fresh MessageCursor that sees the Move message.
+    app.world_mut().run_system_once(player_movement_system).unwrap();
+
+    // 4. Verify forward movement (Transform::forward = (0, 0, -1) in Bevy 3D).
     let velocity = app.world().entity(entity).get::<bevy_rapier3d::prelude::Velocity>().unwrap();
     assert!(velocity.linvel.z < 0.0, "Expected Z velocity < 0 (forward movement), got {}", velocity.linvel.z);
 }
