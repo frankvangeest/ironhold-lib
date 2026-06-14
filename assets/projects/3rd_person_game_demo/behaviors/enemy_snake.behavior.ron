@@ -1,0 +1,67 @@
+// Snake enemy — patrol → chase → bite loop.
+// The NPC system handles all movement. This behavior drives attack state and the alive/dead cycle.
+// npc.player_reached:{self}  fires when the snake closes to approach_distance (1.5 m).
+// npc.player_lost:{self}     fires when the player exits chase_radius or line-of-sight is broken.
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            // Reset health and make visible on each respawn.
+            // SetStat before SetEntityVisible so the stat bar never briefly shows 0 HP.
+            entry_actions: [
+                SetStat(key: "{self}.health", value: 50.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+                SpawnEffect(key: "respawn_glow", entity: "{self}"),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+        (
+            name: "attacking",
+            // Start the bite loop with a short wind-up so the animation has time to begin
+            // before the first damage tick.
+            entry_actions: [
+                EmitEventAfterDelay(event: "snake.bite_tick:{self}", delay_secs: 0.8),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "snake.bite_tick:{self}",
+                    do_actions: [
+                        PlayAnimationOn(target: "{self}", clip: "bite"),
+                        PlaySound(key: "hit"),
+                        ModifyStat(key: "player_health", delta: -8.0),
+                        ShowDamagePopup(entity: "player_01", amount: -8.0),
+                        SpawnEffect(key: "venom_splash", entity: "player_01"),
+                        // Re-arm the loop. Dropped automatically when state changes.
+                        EmitEventAfterDelay(event: "snake.bite_tick:{self}", delay_secs: 3.0),
+                    ],
+                ),
+            ],
+        ),
+        (
+            name: "dead",
+            entry_actions: [
+                SpawnEffect(key: "death_poof", entity: "{self}"),
+                ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
+                SetEntityVisible(entity: "{self}", visible: false),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 8.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( from: "alive",     on: "npc.player_reached:{self}",  to: "attacking" ),
+        ( from: "attacking", on: "npc.player_lost:{self}",     to: "alive"     ),
+        ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"      ),
+        ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"      ),
+        ( from: "dead",      on: "entity.respawned:{self}",     to: "alive"     ),
+    ],
+)

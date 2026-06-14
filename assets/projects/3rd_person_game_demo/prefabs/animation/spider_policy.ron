@@ -1,0 +1,21 @@
+(
+    default_transition_ms: 150,
+
+    base: (
+        idle:      "Idle",
+        walk:      "Walk",
+        run:       "Walk",
+        jump_loop: "Jump",
+    ),
+
+    clips: {
+        "attack":  "Attack",
+        "bite":    "Bite",
+        "hit":     "Hit",
+        "death":   "Death",
+        "death_2": "Death 2",
+        "jump":    "Jump",
+        "eating":  "Eating",
+    },
+    overrides: [],
+)

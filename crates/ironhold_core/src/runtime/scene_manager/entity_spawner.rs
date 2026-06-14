@@ -23,6 +23,7 @@ use super::{
 use crate::runtime::actions::ActionQueue;
 use super::message_interpreter::rewrite_self;
 use crate::schema::stats::{LiveStat, StatMap};
+use crate::capabilities::npc::{NpcAgent, NpcState};
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
 /// animation components based on what the PrefabDef declares. Called from both
@@ -141,6 +142,67 @@ pub fn spawn_prefab_instance(
             stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
         }
         commands.entity(spawned.parent).insert(stat_map);
+    }
+
+    // NPC agent: GLB Actor/Prop prefabs can declare `components.npc` to gain NPC AI and
+    // movement. A capsule physics body is added here (sized conservatively); designers tune
+    // behaviour radius and approach via the NpcDef fields.
+    if let Some(npc_def) = &prefab.components.npc {
+        let waypoints: Vec<Vec3> = npc_def.patrol_waypoints.iter()
+            .map(|(x, y, z)| transform.translation + Vec3::new(*x, *y, *z))
+            .collect();
+
+        let fov_cos = npc_def.fov_degrees
+            .map(|deg| (deg.to_radians() / 2.0).cos())
+            .unwrap_or(-1.0);
+
+        let initial_state = if waypoints.is_empty() { NpcState::Idle } else { NpcState::Patrol };
+
+        // Conservative capsule — 0.35 m radius, 1.6 m total height.
+        // Keeps GLB enemy colliders out of each other without requiring designer-specified sizes.
+        let cap_radius = 0.35_f32;
+        let cap_half   = (1.6_f32 / 2.0 - cap_radius).max(0.0);
+        let body_y     = cap_half + cap_radius;
+
+        commands.entity(spawned.parent).insert((
+            NpcAgent {
+                npc_id:            name.to_string(),
+                faction:           npc_def.faction.clone(),
+                on_player_near:    npc_def.on_player_near.clone(),
+                detection_radius:  npc_def.detection_radius,
+                chase_radius:      npc_def.chase_radius,
+                fov_cos,
+                requires_los:      npc_def.requires_los,
+                approach_distance: npc_def.approach_distance,
+                patrol_speed:      npc_def.patrol_speed,
+                chase_speed:       npc_def.chase_speed,
+                waypoints,
+                current_waypoint:  0,
+                state:             initial_state,
+                target:            None,
+                state_timer:       0.0,
+                origin:            transform.translation,
+                eye_height:        npc_def.eye_height,
+                alerted_duration:  npc_def.alerted_duration,
+                drag:              npc_def.drag,
+                waypoint_reach_radius:    npc_def.waypoint_reach_radius,
+                interact_leave_factor:    npc_def.interact_leave_factor,
+                home_arrival_radius:      npc_def.home_arrival_radius,
+            },
+            RigidBody::Dynamic,
+            Collider::compound(vec![(
+                Vec3::new(0.0, body_y, 0.0),
+                Quat::IDENTITY,
+                Collider::capsule_y(cap_half, cap_radius),
+            )]),
+            LockedAxes::ROTATION_LOCKED,
+            Damping {
+                linear_damping:  npc_def.linear_damping,
+                angular_damping: npc_def.angular_damping,
+            },
+            Velocity::default(),
+            Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
+        ));
     }
 
     spawned.parent

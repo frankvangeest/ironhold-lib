@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::schema::catalog::{NpcFaction, NpcOnPlayerNear};
 use crate::capabilities::player::CharacterController;
+use crate::capabilities::animation_resolver::LocomotionState;
 use crate::runtime::messages::GameEvent;
 
 // ── Runtime state enum ────────────────────────────────────────────────────────
@@ -143,6 +144,7 @@ pub fn npc_behavior_system(
         &mut Transform,
         &GlobalTransform,
         &mut Velocity,
+        Option<&mut LocomotionState>,
     )>,
     player_query: Query<(Entity, &GlobalTransform), With<CharacterController>>,
     rapier_context: Option<ReadRapierContext>,
@@ -157,7 +159,7 @@ pub fn npc_behavior_system(
         .map(|(e, gt)| (e, gt.translation()))
         .collect();
 
-    for (npc_entity, mut npc, mut transform, global_tf, mut velocity) in &mut npc_query {
+    for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt) in &mut npc_query {
         let npc_pos = global_tf.translation();
         let npc_forward = Vec3::from(transform.forward());
 
@@ -302,6 +304,16 @@ pub fn npc_behavior_system(
                 let dir = (npc.origin - npc_pos).with_y(0.0);
                 apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
             }
+        }
+
+        // Update LocomotionState for GLB NPC entities that have an animation policy.
+        // Primitive NPCs have no AnimationPolicyComponent so loco_opt is None for them.
+        if let Some(mut loco) = loco_opt {
+            let moving = velocity.linvel.x.powi(2) + velocity.linvel.z.powi(2) > 0.1;
+            let running = matches!(npc.state, NpcState::Chase) && moving;
+            if loco.moving != moving { loco.moving = moving; }
+            if loco.running != running { loco.running = running; }
+            if !loco.is_grounded { loco.is_grounded = true; }
         }
     }
 }

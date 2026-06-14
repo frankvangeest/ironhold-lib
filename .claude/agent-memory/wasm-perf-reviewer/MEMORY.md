@@ -2,3 +2,5 @@
 - [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — update_dynamic_labels_system runs unconditionally every frame; builds String per label per frame; render-write guarded by text.0 != new_text
 - [rewrite_target string substitution](project_rewrite_target.md) — runs per action pushed; .replace allocations only when actions fire (not per-frame); canonical copy now in message_interpreter.rs
 - [WASM binary size](project_wasm_size.md) — release ~90.7 MB (2026-06), warn 95, hard block 100; dev builds ~190 MB (ignore); targeting added zero deps
+- [NPC locomotion bridge](project_npc_locomotion_bridge.md) — npc_behavior_system (FixedUpdate) writes LocomotionState read by animation_resolver (Update); is_grounded written unconditionally (latent footgun)
+- [NPC physics spawn](project_npc_physics_spawn.md) — spawn_prefab_instance adds Dynamic body for components.npc; per-spawn not per-frame; Rapier WASM-safe; risk is never-sleeping body count

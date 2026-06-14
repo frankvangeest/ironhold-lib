@@ -1252,7 +1252,11 @@ on: [
 
 ### NPC behaviour (`components.npc`) ✅
 
-Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic Rapier capsule body and runs the behaviour system each physics tick. Events emitted:
+Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic Rapier capsule body and runs the behaviour system each physics tick.
+
+> **GLB Actor capsule size:** For `kind: Primitive` NPCs the physics capsule is sized from the primitive's `radius`/`height` parameters. For `kind: Actor` (GLB model) NPCs the capsule is fixed at **0.35 m radius, 1.6 m total height** — there is currently no RON field to override this. Tune `approach_distance` and `eye_height` to compensate for very large or very small creatures until configurable capsule dimensions are added (see backlog suggestion).
+
+Events emitted:
 
 - `npc.player_spotted:{id}` — player entered detection range and the alerted pause has elapsed
 - `npc.player_reached:{id}` — NPC is within `approach_distance` of the player

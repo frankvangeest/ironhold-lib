@@ -72,6 +72,50 @@
       ),
     ),
 
+    // ── Snakes ─────────────────────────────────────────────────────────────────
+    // snake_01 — left flank, patrolling; will detect and chase the player.
+    (
+      id: "snake_01",
+      prefab: "enemy_snake",
+      transform: (
+        translation: (-10.0, 0.0, -4.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    // snake_02 — deep back-right, an ambush position behind the orcs.
+    (
+      id: "snake_02",
+      prefab: "enemy_snake",
+      transform: (
+        translation: (6.0, 0.0, -12.0),
+        rotation_euler_deg: (0.0, 200.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // ── Spiders ────────────────────────────────────────────────────────────────
+    // spider_01 — rear-left. Wide patrol; fast chase makes it dangerous at range.
+    (
+      id: "spider_01",
+      prefab: "enemy_spider",
+      transform: (
+        translation: (-6.0, 0.0, -12.0),
+        rotation_euler_deg: (0.0, 135.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    // spider_02 — far right, patrolling near the chest area — a loot guardian.
+    (
+      id: "spider_02",
+      prefab: "enemy_spider",
+      transform: (
+        translation: (12.0, 0.0, -3.0),
+        rotation_euler_deg: (0.0, 190.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // ── Creatures ──────────────────────────────────────────────────────────────
     // Alpaking hovers 2.5 units above the ground using Flying_Idle animation.
     (

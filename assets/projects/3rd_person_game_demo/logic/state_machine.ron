@@ -46,10 +46,15 @@
                 SetStat(key: "player_health", value: 100.0),
                 SetStat(key: "player_mana",   value: 60.0),
                 SetVariable("combat_status", ""),
+                // Preload GLB models so first-encounter spawns don't stall on WASM.
+                PreloadPrefab("enemy_snake"),
+                PreloadPrefab("enemy_spider"),
                 // Warm WebGPU particle pipelines during the loading window.
                 SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
                 SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
                 SpawnEffect(key: "respawn_glow", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "venom_splash", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "web_burst",    position: (0.0, -100.0, 0.0)),
             ],
             exit_actions:  [ StopMusic ],
             on: [

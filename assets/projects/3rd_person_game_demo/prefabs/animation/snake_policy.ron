@@ -1,0 +1,21 @@
+(
+    default_transition_ms: 200,
+
+    base: (
+        // "Side winding" is the only locomotion clip on this model.
+        // Both walk (patrol) and run (chase) map to it; the NPC system varies actual speed.
+        idle:      "Idle",
+        walk:      "Side winding",
+        run:       "Side winding",
+        jump_loop: "Coiled",
+    ),
+
+    clips: {
+        "bite":   "Bite",
+        "hit":    "Hit",
+        "death":  "Death",
+        "coiled": "Coiled",
+        "dance":  "Dance",
+    },
+    overrides: [],
+)
