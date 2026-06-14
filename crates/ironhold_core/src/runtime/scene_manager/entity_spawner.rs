@@ -41,6 +41,7 @@ pub fn spawn_prefab_instance(
     model_path: String,
     transform: Transform,
     name: &str,
+    stat_overrides: &HashMap<String, f32>,
 ) -> Entity {
     let spawned =
         model_spawner.spawn_instance(commands, asset_server, fixes, model_path.clone(), transform);
@@ -125,10 +126,19 @@ pub fn spawn_prefab_instance(
     }
 
     if !prefab.stat_templates.is_empty() {
+        for key in stat_overrides.keys() {
+            if !prefab.stat_templates.iter().any(|t| &t.key == key) {
+                warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab)", name, key);
+            }
+        }
         let mut stat_map = StatMap::default();
         for tpl in &prefab.stat_templates {
+            let base = stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+            if base > tpl.max {
+                warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", name, tpl.key, base, tpl.max);
+            }
             let def = crate::schema::stats::StatDef {
-                base: tpl.base,
+                base,
                 min: tpl.min,
                 max: tpl.max,
                 soft_max: None,
@@ -158,10 +168,9 @@ pub fn spawn_prefab_instance(
 
         let initial_state = if waypoints.is_empty() { NpcState::Idle } else { NpcState::Patrol };
 
-        // Conservative capsule — 0.35 m radius, 1.6 m total height.
-        // Keeps GLB enemy colliders out of each other without requiring designer-specified sizes.
-        let cap_radius = 0.35_f32;
-        let cap_half   = (1.6_f32 / 2.0 - cap_radius).max(0.0);
+        let cap_radius = npc_def.collider_radius.unwrap_or(0.35_f32);
+        let cap_height = npc_def.collider_height.unwrap_or(1.6_f32);
+        let cap_half   = (cap_height / 2.0 - cap_radius).max(0.0);
         let body_y     = cap_half + cap_radius;
 
         commands.entity(spawned.parent).insert((
@@ -245,6 +254,7 @@ pub fn drain_spawn_queue_system(
             queued.model_path,
             queued.transform,
             &queued.spawn_id,
+            &Default::default(),
         );
         tag_spawned_entity(
             &mut commands.entity(parent),

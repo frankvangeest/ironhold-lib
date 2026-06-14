@@ -21,6 +21,8 @@ This is regularly ignored. Confirmed missing for: `ModifyStat`, `SetStat`, `Appl
 
 Per-entity `PrefabDef` fields are also missed: `stat_label` and `world_stat_bar` are in the schema and used in `primitive_world/prefabs/prefabs.ron` (attack_dummy) but absent from the `PrefabDef fields` table at line 606 of `20_data_formats.md`.
 
+`NpcDef` collider fields are missed too: `collider_radius` / `collider_height` (schema in catalog.rs ~line 1078/1082, optional `Option<f32>`, humanoid defaults 0.35 m / 1.6 m for sizing non-humanoid GLB NPCs) are absent from the `NpcDef` fields table in `20_data_formats.md` (table at ~line 1268, ends at `angular_damping`). Note the file already has `collider_radius`/`collider_height` rows for the PLAYER/movement block (~line 1218, defaults 0.4/1.8) — same field names, different block, different defaults; do not confuse the two when reviewing. The `NpcDef` table uses a `None (effective value)` default-column convention (see `fov_degrees` row) — new optional NPC rows should follow it.
+
 New prefab KINDS are missed too: `kind: Foliage` (with `FoliageDef`/`FoliageClustersDef`/`FoliageMaterialDef`, schema in catalog.rs ~line 11-92) landed in foliage_demo with ZERO entries in `docs/20_data_formats.md` — no Foliage section, and the PrefabDef `kind` row (~line 956) still lists only `Actor`/`Prop`/`Primitive`. The `foliage` field is also absent from the PrefabDef fields table. Designer cannot author foliage from docs alone.
 
 **Why:** the schema is the source of truth (Rust); designers only see the docs. A new Action that exists only in Rust + an example RON file is essentially un-discoverable for a designer building a new project from scratch.

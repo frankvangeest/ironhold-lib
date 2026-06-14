@@ -219,6 +219,7 @@ pub fn spawn_scene_v2(
                             catalog_entry.path.clone(),
                             Transform::IDENTITY,
                             trunk_key,
+                            &Default::default(),
                         );
                         commands.entity(root).add_child(trunk);
                     } else {
@@ -701,6 +702,7 @@ pub fn spawn_scene_v2(
                     model_path,
                     transform,
                     &entity_def.id,
+                    &entity_def.stat_overrides,
                 );
                 tag_spawned_entity(
                     &mut commands.entity(parent), &mut spawn_registry,
@@ -709,38 +711,6 @@ pub fn spawn_scene_v2(
                 );
                 if let Some(label_def) = &entity_def.label {
                     pending_labels.push((parent, label_def.clone()));
-                }
-
-                // behavior/interactable/trigger_zone/StatMap are already inserted by
-                // spawn_prefab_instance above. Only apply stat_overrides here — spawn_prefab_instance
-                // builds StatMap at template defaults with no override knowledge, so we rebuild it
-                // with the scene entity's per-instance overrides.
-                // TODO: push stat_overrides into spawn_prefab_instance so the map is built once.
-                if !prefab.stat_templates.is_empty() {
-                    let spawn_id = &entity_def.id;
-                    for key in entity_def.stat_overrides.keys() {
-                        if !prefab.stat_templates.iter().any(|t| &t.key == key) {
-                            warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
-                        }
-                    }
-                    let mut stat_map = StatMap::default();
-                    for tpl in &prefab.stat_templates {
-                        let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
-                        if base > tpl.max {
-                            warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
-                        }
-                        let def = crate::schema::stats::StatDef {
-                            base, min: tpl.min, max: tpl.max,
-                            soft_max: None,
-                            regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
-                            thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
-                                when: t.when.clone(),
-                                emit: t.emit.replace("{self}", spawn_id),
-                            }).collect(),
-                        };
-                        stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
-                    }
-                    commands.entity(parent).insert(stat_map);
                 }
 
                 if let Some(sl) = &prefab.stat_label {
@@ -1943,6 +1913,7 @@ fn spawn_primitive_children(
                         model_path,
                         child_tf,
                         nested_key,
+                        &Default::default(),
                     );
                     commands.entity(parent).add_child(model_entity);
                     visiting.remove(nested_key.as_str());

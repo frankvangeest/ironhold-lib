@@ -2590,3 +2590,79 @@ fn test_show_floating_text_offset_overrides_default_spawn_offset() {
     }
 }
 
+/// Regression guard for the GLB Actor NPC spawn path added in df8c94b.
+/// A prefab with `kind: Actor` + `components.npc` must receive `NpcAgent` on
+/// the spawned entity. With `animation_policy` set, `LocomotionState` must also
+/// be inserted so `npc_behavior_system` can update locomotion without a panic.
+#[test]
+fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
+    use ironhold_core::schema::catalog::{
+        AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind,
+        PrefabComponents, NpcDef, NpcFaction, NpcOnPlayerNear,
+    };
+    use ironhold_core::capabilities::npc::NpcAgent;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: HashMap::from([
+            ("snake".to_string(), ModelCatalogEntry { path: "shared/models/creatures/snake01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: HashMap::from([
+            ("enemy_snake".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "snake".to_string(),
+                animation_policy: Some("fake_policy.ron".to_string()),
+                components: PrefabComponents {
+                    npc: Some(NpcDef {
+                        faction: NpcFaction::Hostile,
+                        on_player_near: NpcOnPlayerNear::Chase,
+                        detection_radius: 7.0,
+                        chase_radius: 14.0,
+                        fov_degrees: None,
+                        requires_los: false,
+                        approach_distance: 1.5,
+                        patrol_speed: 1.5,
+                        chase_speed: 3.5,
+                        patrol_waypoints: vec![],
+                        eye_height: 0.3,
+                        alerted_duration: 0.3,
+                        drag: 0.8,
+                        waypoint_reach_radius: 0.5,
+                        interact_leave_factor: 1.5,
+                        home_arrival_radius: 0.5,
+                        linear_damping: 0.5,
+                        angular_damping: 0.5,
+                        collider_radius: None,
+                        collider_height: None,
+                    }),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_snake".to_string(), id: Some("snake_01".to_string()), position: None, spawn_point: None, yaw_deg: None }
+    );
+    app.update();
+
+    let has_npc_agent = app.world_mut()
+        .query::<(&SpawnId, &NpcAgent)>()
+        .iter(app.world())
+        .any(|(id, _)| id.0 == "snake_01");
+    assert!(has_npc_agent, "GLB Actor with components.npc must attach NpcAgent");
+
+    let has_locomotion = app.world_mut()
+        .query::<(&SpawnId, &LocomotionState)>()
+        .iter(app.world())
+        .any(|(id, _)| id.0 == "snake_01");
+    assert!(has_locomotion, "GLB Actor with animation_policy must attach LocomotionState");
+}
+

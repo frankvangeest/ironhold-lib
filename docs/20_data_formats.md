@@ -1254,7 +1254,7 @@ on: [
 
 Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic Rapier capsule body and runs the behaviour system each physics tick.
 
-> **GLB Actor capsule size:** For `kind: Primitive` NPCs the physics capsule is sized from the primitive's `radius`/`height` parameters. For `kind: Actor` (GLB model) NPCs the capsule is fixed at **0.35 m radius, 1.6 m total height** — there is currently no RON field to override this. Tune `approach_distance` and `eye_height` to compensate for very large or very small creatures until configurable capsule dimensions are added (see backlog suggestion).
+> **GLB Actor capsule size:** For `kind: Primitive` NPCs the physics capsule is sized from the primitive's `radius`/`height` parameters. For `kind: Actor` (GLB model) NPCs the capsule defaults to **0.35 m radius, 1.6 m total height**; set `collider_radius` and `collider_height` in the `npc:` block to override these for non-humanoid creatures.
 
 Events emitted:
 
@@ -1284,6 +1284,8 @@ Events emitted:
 | `home_arrival_radius` | `f32` | `0.5` | Metres from spawn origin at which the NPC considers itself home and ends Return state |
 | `linear_damping` | `f32` | `0.5` | Rapier `linear_damping` on the NPC capsule rigid body |
 | `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the NPC capsule rigid body |
+| `collider_radius` | `Option<f32>` | `None` (0.35 m) | Radius of the NPC's physics capsule; tune up for large creatures (e.g. dragon) or down for small ones (e.g. imp). Omit to keep the humanoid default. |
+| `collider_height` | `Option<f32>` | `None` (1.6 m) | Total height of the NPC's physics capsule; tune for creatures significantly taller or shorter than a humanoid. Omit to keep the humanoid default. |
 
 ```ron
 // Hostile patrol guard — full configuration

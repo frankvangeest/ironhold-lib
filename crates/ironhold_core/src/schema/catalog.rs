@@ -1072,6 +1072,14 @@ pub struct NpcDef {
     /// Rapier `angular_damping` on the NPC capsule rigid body. Default: 0.5.
     #[serde(default = "default_angular_damping")]
     pub angular_damping: f32,
+    /// Radius of the physics capsule collider. Default: 0.35 m (humanoid).
+    /// Tune for very large (dragon) or very small (imp) creatures.
+    #[serde(default)]
+    pub collider_radius: Option<f32>,
+    /// Total height of the physics capsule collider. Default: 1.6 m (humanoid).
+    /// Tune for creatures significantly taller or shorter than a humanoid.
+    #[serde(default)]
+    pub collider_height: Option<f32>,
 }
 
 fn default_approach_distance() -> f32 { 2.0 }

@@ -41,3 +41,5 @@
 
 - ~~**Dynamic `Action::Spawn` entities miss `motion`, `stat_label`, and `world_stat_bar`**~~ _(promoted to backlog `df8c94b` 2026-06-14 → Queued ▸ Engine / Runtime; see `planning/features/dynamic_spawn_components.md`)_
 
+- **Tune `collider_radius`/`collider_height` on `enemy_snake` and `enemy_spider` prefabs** _(observed at `36dd927` 2026-06-14)_ — The snake and spider currently use the default 0.35 m / 1.6 m humanoid capsule; `snake01.glb` is a low ground-hugging model and its 1.6 m capsule will visibly mismatch its body, potentially blocking approach at `approach_distance: 1.5 m`. Tune after in-game observation — suggested starting values: snake `collider_height: 0.8, collider_radius: 0.3`; spider `collider_height: 1.2, collider_radius: 0.4`.
+
