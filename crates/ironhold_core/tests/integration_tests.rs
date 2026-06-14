@@ -2502,3 +2502,91 @@ fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
         "composite prefab with trigger_zone must produce exactly one entity with a TriggerZone component");
 }
 
+// ─── ShowFloatingText tests ───────────────────────────────────────────────────
+
+#[test]
+fn test_show_floating_text_spawns_world_label() {
+    // ShowFloatingText must spawn WorldLabel entities (main + shadow) when the
+    // target entity exists in the SpawnRegistry with a GlobalTransform.
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::capabilities::damage_popup::DamagePopup;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let entity = app.world_mut().spawn((
+        SpawnId("hero".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("hero".to_string(), entity);
+
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::ShowFloatingText {
+            entity: "hero".to_string(),
+            text: "Hello!".to_string(),
+            offset: None,
+        });
+    app.update();
+
+    // Expect exactly 2 WorldLabel entities with DamagePopup (shadow + main).
+    let count = app
+        .world_mut()
+        .query::<(&WorldLabel, &DamagePopup)>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 2,
+        "ShowFloatingText must spawn 2 WorldLabel+DamagePopup entities (shadow + main)");
+}
+
+#[test]
+fn test_show_floating_text_offset_overrides_default_spawn_offset() {
+    // When ShowFloatingText is given an explicit offset, the WorldLabel world_pos
+    // must use that offset rather than the DamagePopupStyle default.
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::capabilities::damage_popup::DamagePopup;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let entity = app.world_mut().spawn((
+        SpawnId("hero".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("hero".to_string(), entity);
+
+    // Use a distinctive Y value that differs from the default (1.2).
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::ShowFloatingText {
+            entity: "hero".to_string(),
+            text: "Custom!".to_string(),
+            offset: Some((0.0, 3.5, 0.0)),
+        });
+    app.update();
+
+    let labels: Vec<_> = app
+        .world_mut()
+        .query::<(&WorldLabel, &DamagePopup)>()
+        .iter(app.world())
+        .map(|(l, _)| l.offset)
+        .collect();
+
+    assert_eq!(labels.len(), 2, "shadow + main must both be spawned");
+    for offset in &labels {
+        assert!(
+            (offset.y - 3.5_f32).abs() < 0.001,
+            "ShowFloatingText offset override must set WorldLabel.offset.y to 3.5, got {}",
+            offset.y
+        );
+    }
+}
+

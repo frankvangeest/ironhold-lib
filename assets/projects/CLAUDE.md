@@ -63,6 +63,8 @@ SetStat(key: "health", value: 100.0)
 ApplyModifier(modifier_key: "speed_boost")
 RemoveModifier(modifier_key: "poison")
 ShowDamagePopup(entity: "{self}", amount: -25.0)
+ShowFloatingText(entity: "{self}", text: "Critical hit!")
+ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))
 SetEntityVisible(entity: "{self}", visible: false)
 ```
 
