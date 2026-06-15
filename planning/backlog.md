@@ -11,7 +11,7 @@
 
 ## Active
 
-_(nothing active)_
+- [ ] **GLB Splitter tool** — `tools/glb_splitter/split.py`; split a monolithic GLB into a mesh-only file and named animation-group files; prerequisite for multi-source animations workflow. See `tools/glb_splitter/CLAUDE.md`.
 
 ---
 
@@ -35,7 +35,7 @@ _(nothing active)_
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
 ### Animation
-- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
+- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). _Prereq: GLB Splitter tool (Active)._ See `planning/features/multi_source_animations.md`
 
 ### Gameplay & Environment
 
