@@ -51,6 +51,17 @@ The warmup SpawnEffect calls consume ParticleBudget — scenes with tight budget
 
 Terrain mesh generation is async (AsyncComputeTaskPool). Never block the main thread. The shader is embedded via `include_str!` as a deliberate WebGPU bootstrapping exception — the asset loader and pipeline compiler race on WASM; embedding the shader avoids that race. This means terrain shader changes require recompiling (known constraint, documented).
 
+Current vertex layout (as of 2026-06): single-mesh, indexed `TriangleList`, attributes = POSITION (vec3 f32) + NORMAL (vec3 f32) + UV_0 (vec2 f32) = 32 B/vertex. No custom vertex shader — `TerrainMaterial` overrides fragment only. `chunk_size: u32` exists in `TerrainConfigV2` (default 64) but the generator does NOT use it — terrain is one giant mesh (no per-chunk culling, one collider).
+
+### Terrain optimisation: the custom-vertex-shader gate
+Most "terrain GPU optimisation" wins (procedural XZ from `@builtin(vertex_index)`, octahedral normal compression, geo-sink LOD) REQUIRE a custom vertex shader. Per core CLAUDE.md, vertex-shader override is "planned but not yet implemented" for `CustomMaterial` and unproven for `TerrainMaterial`. **Treat a custom-vertex-shader PoC (does it pass WebGPU validation in this Bevy 0.18 setup?) as the gate for all those features.** Without it, the only safe vertex-memory win is dropping UV_0 (derive from world_position.xz in fragment) ≈ 25%, plus U16 indices when verts < 65536.
+
+Realistic-win framing (the Vercidium "10×" figure is for an unoptimised non-indexed OpenGL renderer): Ironhold already indexes meshes and Bevy already auto-batches, so batching/strips give little here. The high-value structural change is **mesh chunking** (wire up the existing `chunk_size`): enables per-chunk frustum culling, granular colliders, incremental async generation (mitigates the WASM first-frame `block_on` stall), and unblocks queued backlog items 77 (pre-baked LOD swap) and 179 (chunked streaming). Chunking needs no custom shader and is the recommended first structural step.
+
+Collider trap for procedural-XZ phase: if positions live only in the vertex shader, Rapier `Collider::from_bevy_mesh` has no geometry — must keep a CPU-only position/height array for collider build.
+
+`TerrainMaterial.uv_scale: Vec4` is documented in THREE doc sites as "only .x used; padded for alignment." Any repurposing of `.yzw` (e.g. packing terrain world-extent for fragment UV derivation) must update all three or future readers assume they're dead.
+
 ## Spawn queue (`runtime/scene_manager/action_executor.rs`)
 
 `Action::Spawn` does not call `spawn_prefab_instance` inline. It pushes to `PendingEntitySpawns`; `drain_spawn_queue_system` processes at most `SPAWNS_PER_FRAME = 2` per frame. This caps WebGPU pipeline-compile stalls on WASM. Do not change this cap without testing large wave spawns in a WASM build.

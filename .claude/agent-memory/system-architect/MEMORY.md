@@ -5,3 +5,4 @@
 - [Capability patterns](capability_patterns.md) — how to add capabilities/actions/events, rules.ron vs state_machine.ron, schema stability rules, physics/inspector constraints
 - [WASM pitfalls](wasm_pitfalls.md) — pipeline compilation latency, no threading, 16-byte alignment, binary size limit, asset preloading
 - [Scene/prefab boundary](scene_prefab_boundary.md) — how scene vs prefab responsibilities diverge from engine canon; no per-instance overrides; recommended direction
+- [GPU physics / wgrapier](gpu_physics_wgrapier.md) — wgrapier is WIP/throwaway prototype, no Bevy bridge; CPU height-array is correct for terrain ground queries; defer GPU physics

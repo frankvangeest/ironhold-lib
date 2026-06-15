@@ -125,6 +125,9 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 
 ## Icebox
 
+### Physics
+- [ ] **wgrapier — GPU physics watch item** — `wgrapier3d` v0.2.0 (Dimforge, Nov 2024) is a WebGPU compute-shader dynamic-body simulator; not usable for terrain height queries (requires async GPU→CPU readback); no Bevy integration; Dimforge has announced a full rewrite on `rust-gpu`. Revisit when the rust-gpu rewrite ships with real releases, an official Bevy bridge exists, and a dense dynamic-body workload justifies it.
+
 ### Engine / Runtime
 - [ ] **Camera/input configuration → scene layer** — `orbit_camera`, `flycam`, and `player` blocks on `PrefabDef` are scene singletons consumed as such by the runtime; architecturally they belong on the scene (or project config); migration path: introduce optional scene-level camera/input fields first, deprecate-but-keep prefab fields, then clean up in a `PREFAB_CATALOG_SCHEMA_VERSION` bump; lower urgency once per-instance overrides ship since that reduces the pressure on prefab forks. From scene/prefab boundary analysis.
 - [ ] **Scene layer compositing** — `layer: Overlay | Base` field on `GameSceneV2`; overlay scenes render on top of the base scene without unloading it, enabling persistent pause menus, HUD layers, and cutscene overlays authored entirely in RON; renderer approach (two active Bevy worlds vs. `RenderLayer` masking) needs design investigation before coding. Sourced from Phaser's layered-scene architecture.
@@ -177,7 +180,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ### Terrain
 - [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
 - [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
-- [ ] **Improved terrain rendering** — reduce terrain vertex memory and bandwidth (drop redundant UV channels, use position-derived UVs, encode normals as 16-bit, use indexed meshes); target: 50–70 % reduction in per-mesh GPU footprint. Investigation: `planning/investigations/Terrain-rendering-optimisations-investigation.md`
+- [ ] **Improved terrain rendering** — 4-phase pipeline: UV elimination + U16 indices (~25 % vertex memory), mesh chunking (per-chunk culling + incremental async generation, kills WASM first-frame stall), GPU-derived XZ positions, compressed normals; CPU height-array shared between GPU and Rapier. See `planning/features/improved_terrain_rendering.md`
 - [x] **Terrain path consolidation** — `TerrainConfigV2` is now the single struct (schema + runtime `Component`); `TerrainConfig` removed. Scene loader spawns `terrain_v2.clone()` directly. Fixed **scale.z bug**: `generate_terrain_mesh_raw` now takes separate `scale_x`/`scale_z` so asymmetric terrain is no longer distorted.
 
 ### Rendering & Assets
