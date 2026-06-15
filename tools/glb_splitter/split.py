@@ -201,6 +201,18 @@ def _print_animation_list(gltf: GLTF2) -> None:
         print(f"{i:<4}  {auto_prefix(name):<20}  {name}")
 
 
+def _sanitize_filename(name: str) -> str:
+    """Convert an animation name to a safe filename stem (lowercase, spaces to underscores)."""
+    clean = strip_blender_prefix(name)
+    clean = clean.lower()
+    for ch in (' ', '-', '/', '\\', ':', '*', '?', '"', '<', '>', '|'):
+        clean = clean.replace(ch, '_')
+    # Collapse multiple underscores
+    while '__' in clean:
+        clean = clean.replace('__', '_')
+    return clean.strip('_') or 'anim'
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Split a GLB into a mesh-only file and animation-group files.",
@@ -210,6 +222,8 @@ def main() -> None:
     ap.add_argument("input", help="Source .glb file")
     ap.add_argument("--list", action="store_true",
                     help="Print animation names and auto-prefixes, then exit")
+    ap.add_argument("--one-per-clip", action="store_true",
+                    help="Write one GLB per animation clip (one file per clip, named by clip)")
     ap.add_argument("--by-prefix", action="store_true",
                     help="Auto-group animations by name prefix (part before first _ or .)")
     ap.add_argument("--group", nargs=2, metavar=("NAME", "CLIPS"), action="append",
@@ -230,7 +244,7 @@ def main() -> None:
     out_dir = Path(args.out_dir).resolve() if args.out_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Loading {src.name} …")
+    print(f"Loading {src.name} ...")
     gltf = GLTF2().load(str(src))
 
     if args.list:
@@ -239,6 +253,15 @@ def main() -> None:
 
     # ── build groups ──────────────────────────────────────────────────────────
     groups: dict = {}
+
+    if args.one_per_clip:
+        for i, anim in enumerate(gltf.animations):
+            name = anim.name or f'anim{i}'
+            key = _sanitize_filename(name)
+            # Avoid collisions if two clips sanitize to the same name
+            if key in groups:
+                key = f"{key}_{i}"
+            groups[key] = [i]
 
     if args.by_prefix:
         for i, anim in enumerate(gltf.animations):
@@ -264,31 +287,39 @@ def main() -> None:
             if indices:
                 groups[group_name] = indices
             else:
-                print(f"  Warning: group '{group_name}' has no valid clips — skipped",
+                print(f"  Warning: group '{group_name}' has no valid clips -- skipped",
                       file=sys.stderr)
 
     if not groups and not args.no_mesh:
         ap.error("No animation groups specified and --no-mesh not set.\n"
-                 "Use --by-prefix, --group NAME CLIPS, or --list to inspect animations.")
+                 "Use --one-per-clip, --by-prefix, --group NAME CLIPS, or --list.")
 
     stem = src.stem
 
     # ── write mesh-only file ──────────────────────────────────────────────────
     if not args.no_mesh:
         out = out_dir / f"{stem}{args.mesh_suffix}.glb"
-        print(f"Writing mesh-only      -> {out.name}")
+        print(f"Writing mesh-only ({len(gltf.meshes)} mesh(es)) -> {out.name}")
         make_mesh_only(gltf).save(str(out))
 
-    # ── write animation group files ───────────────────────────────────────────
-    for group_name, anim_indices in groups.items():
-        out = out_dir / f"{stem}_{group_name}.glb"
+    # ── write animation group / per-clip files ────────────────────────────────
+    total = len(groups)
+    for idx, (group_name, anim_indices) in enumerate(groups.items(), 1):
+        out = out_dir / f"{group_name}.glb"
         clip_names = [gltf.animations[i].name or f'anim{i}' for i in anim_indices]
-        print(f"Writing anim group '{group_name}' ({len(anim_indices)} clips) -> {out.name}")
-        for cn in clip_names:
-            print(f"  {cn}")
+        if len(anim_indices) == 1:
+            print(f"[{idx:>3}/{total}] {out.name}  ({clip_names[0]})")
+        else:
+            print(f"[{idx:>3}/{total}] {out.name}  ({len(anim_indices)} clips)")
+            for cn in clip_names:
+                print(f"         {cn}")
         make_anim_group(gltf, anim_indices, group_name).save(str(out))
 
-    print("\nDone.")
+    print(f"\nDone. {total} animation file(s) + {'0' if args.no_mesh else '1'} mesh file written to {out_dir}")
+
+
+if __name__ == '__main__':
+    main()
 
 
 if __name__ == '__main__':
