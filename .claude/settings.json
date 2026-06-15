@@ -61,6 +61,10 @@
           {
             "type": "command",
             "command": "python .claude/hooks/prevent_dev_wasm_commit.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check_glb_previews.py"
           }
         ]
       }

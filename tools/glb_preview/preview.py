@@ -28,6 +28,10 @@ Usage:
     # Override Blender path (or set BLENDER_EXE env var)
     python tools/glb_preview/preview.py model.glb --blender "C:/path/to/blender.exe"
 
+    # Check for blank/failed previews (no Blender needed)
+    python tools/glb_preview/preview.py assets/shared/models/props/ --check
+    python tools/glb_preview/preview.py assets/shared/models/ --check
+
 Blender path resolution order:
     1. --blender CLI flag
     2. BLENDER_EXE environment variable
@@ -56,6 +60,96 @@ def _find_blender(cli_override: str | None) -> str:
     if BLENDER_PATH_FILE.exists():
         return BLENDER_PATH_FILE.read_text().strip()
     return "blender"  # hope it's on PATH
+
+
+def _collect_previews(sources: list[str]) -> list[Path]:
+    """Find all *-preview.avif (falling back to *-preview.png) files in the given sources."""
+    paths = []
+    for src in sources:
+        p = Path(src)
+        if p.is_dir():
+            avifs = sorted(p.rglob("*-preview.avif"))
+            pngs  = sorted(p.rglob("*-preview.png"))
+            # Include PNGs that have no matching AVIF (so we catch both formats)
+            avif_stems = {a.stem for a in avifs}
+            extra_pngs = [p2 for p2 in pngs if p2.stem not in avif_stems]
+            paths.extend(avifs + extra_pngs)
+        elif p.is_file() and p.suffix.lower() in (".avif", ".png"):
+            paths.append(p)
+        elif p.suffix.lower() == ".glb" and p.is_file():
+            # Accept a GLB path — check its preview siblings
+            for ext in (".avif", ".png"):
+                candidate = p.parent / f"{p.stem}-preview{ext}"
+                if candidate.exists():
+                    paths.append(candidate)
+                    break
+    return paths
+
+
+# Files under this size are definitely empty AVIF/PNG headers with no content.
+_EMPTY_BYTES = 500
+# Renders with fewer visible (non-transparent) pixels than this are blank.
+# Thin/narrow models on a transparent background can compress to <3 KB and still be valid.
+_MIN_VISIBLE_PIXELS = 150
+
+
+def _check_preview(path: Path) -> tuple[bool, str]:
+    """Return (is_blank, reason). Empty string reason means image is OK."""
+    if path.stat().st_size < _EMPTY_BYTES:
+        return True, f"empty file ({path.stat().st_size} B)"
+    try:
+        from PIL import Image
+        img = Image.open(path).convert("RGBA")
+        data = img.getdata()
+        visible = sum(1 for _r, _g, _b, a in data if a > 10)
+        if visible < _MIN_VISIBLE_PIXELS:
+            return True, f"only {visible} visible pixels"
+    except Exception as e:
+        return True, f"unreadable ({e})"
+    return False, ""
+
+
+def _run_check(sources: list[str]) -> int:
+    """Check all preview images for blank/failed renders. Returns exit code."""
+    previews = _collect_previews(sources)
+    if not previews:
+        print("No preview files found.", file=sys.stderr)
+        return 1
+
+    blank: list[Path] = []
+    ok = 0
+    for path in previews:
+        is_blank, reason = _check_preview(path)
+        rel = path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path
+        if is_blank:
+            print(f"  BLANK  {rel}  ({reason})")
+            blank.append(path)
+        else:
+            ok += 1
+
+    print(f"\nChecked {len(previews)}: {ok} ok, {len(blank)} blank.")
+
+    if blank:
+        # Derive the matching GLB for each blank preview so we can print the fix command.
+        glbs = []
+        for p in blank:
+            # stem is e.g. "anvil-preview" → glb stem is "anvil"
+            glb_stem = p.stem.removesuffix("-preview")
+            glb = p.parent / f"{glb_stem}.glb"
+            if glb.exists():
+                rel = glb.relative_to(Path.cwd()) if glb.is_relative_to(Path.cwd()) else glb
+                glbs.append(str(rel))
+            else:
+                print(f"  Warning: no GLB found for {p.name}", file=sys.stderr)
+
+        if glbs:
+            # Use forward slashes so the command is paste-safe in both Bash and PowerShell.
+            glbs_fwd = [g.replace("\\", "/") for g in glbs]
+            args_str = " ".join(f'"{g}"' if " " in g else g for g in glbs_fwd)
+            print(f"\nTo regenerate:\n  python tools/glb_preview/preview.py {args_str} --avif-only --force")
+        return 1
+
+    return 0
 
 
 def _collect_glbs(sources: list[str]) -> list[Path]:
@@ -121,6 +215,8 @@ def main():
     )
     p.add_argument("sources", nargs="+", metavar="SOURCE",
                    help="GLB file(s), directory, or glob pattern")
+    p.add_argument("--check", action="store_true",
+                   help="Scan for blank/failed preview images and print a fix command (no Blender needed)")
     p.add_argument("--blender", metavar="EXE", default=None,
                    help="Path to blender executable (overrides BLENDER_EXE and blender_path.txt)")
     p.add_argument("--output-dir", metavar="DIR", default=None,
@@ -142,6 +238,9 @@ def main():
     p.add_argument("--force", action="store_true",
                    help="Overwrite existing preview files")
     args = p.parse_args()
+
+    if args.check:
+        sys.exit(_run_check(args.sources))
     if args.avif_only:
         args.avif = True  # avif-only implies avif
 

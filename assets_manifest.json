@@ -739,6 +739,46 @@
     "description": ""
   },
   {
+    "name": "character-animations",
+    "path": "shared/models/characters/character-animations.glb",
+    "dir": "shared/models/characters",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/characters/character-animations-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "character-female-01",
+    "path": "shared/models/characters/character-female-01.glb",
+    "dir": "shared/models/characters",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/characters/character-female-01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "character-male-01",
+    "path": "shared/models/characters/character-male-01.glb",
+    "dir": "shared/models/characters",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/characters/character-male-01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "zombie-01",
+    "path": "shared/models/characters/zombie-01.glb",
+    "dir": "shared/models/characters",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/characters/zombie-01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "alien-rrlisqbp7r",
     "path": "shared/models/creatures/alien-rrlisqbp7r.glb",
     "dir": "shared/models/creatures",
@@ -858,6 +898,7 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/cat-preview.avif",
       "assets/shared/models/creatures/cat-preview.png"
     ],
     "description": ""
@@ -868,6 +909,7 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/chicken-preview.avif",
       "assets/shared/models/creatures/chicken-preview.png"
     ],
     "description": ""
@@ -1027,6 +1069,7 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/green-blob-preview.avif",
       "assets/shared/models/creatures/green-blob-preview.png"
     ],
     "description": ""
@@ -1118,6 +1161,7 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/orc-enemy-preview.avif",
       "assets/shared/models/creatures/orc-enemy-preview.png"
     ],
     "description": ""
@@ -1138,6 +1182,7 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/pigeon-preview.avif",
       "assets/shared/models/creatures/pigeon-preview.png"
     ],
     "description": ""
@@ -1148,8 +1193,25 @@
     "dir": "shared/models/creatures",
     "type": "glb",
     "previews": [
+      "assets/shared/models/creatures/pink-blob-preview.avif",
       "assets/shared/models/creatures/pink-blob-preview.png"
     ],
+    "description": ""
+  },
+  {
+    "name": "snake01",
+    "path": "shared/models/creatures/snake01.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "spider01",
+    "path": "shared/models/creatures/spider01.glb",
+    "dir": "shared/models/creatures",
+    "type": "glb",
+    "previews": [],
     "description": ""
   },
   {
@@ -1238,6 +1300,37 @@
     "description": ""
   },
   {
+    "name": "3_point_shuriken",
+    "path": "shared/models/props/3_point_shuriken.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/3_point_shuriken-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "4_point_shuriken",
+    "path": "shared/models/props/4_point_shuriken.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/4_point_shuriken-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "9mm_cartridge",
+    "path": "shared/models/props/9mm_cartridge.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/9mm_cartridge-preview.avif",
+      "assets/shared/models/props/9mm_cartridge-preview.png"
+    ],
+    "description": ""
+  },
+  {
     "name": "anvil",
     "path": "shared/models/props/anvil.glb",
     "dir": "shared/models/props",
@@ -1249,13 +1342,366 @@
     "description": ""
   },
   {
+    "name": "arrow_01",
+    "path": "shared/models/props/arrow_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/arrow_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "arrow_02",
+    "path": "shared/models/props/arrow_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/arrow_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "axe",
+    "path": "shared/models/props/axe.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/axe-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "baluster_colchester",
+    "path": "shared/models/props/baluster_colchester.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/baluster_colchester-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "baluster_oxford",
+    "path": "shared/models/props/baluster_oxford.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/baluster_oxford-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "baluster_pembroke",
+    "path": "shared/models/props/baluster_pembroke.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/baluster_pembroke-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "baluster_york",
+    "path": "shared/models/props/baluster_york.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/baluster_york-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "banana",
+    "path": "shared/models/props/banana.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/banana-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "banner_01",
+    "path": "shared/models/props/banner_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/banner_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "baseball_bat",
+    "path": "shared/models/props/baseball_bat.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/baseball_bat-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "battle_axe",
+    "path": "shared/models/props/battle_axe.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/battle_axe-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "boomerang",
+    "path": "shared/models/props/boomerang.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/boomerang-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "bronze_age_sword",
+    "path": "shared/models/props/bronze_age_sword.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/bronze_age_sword-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "candle_holder_03",
+    "path": "shared/models/props/candle_holder_03.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/candle_holder_03-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "cartoon_bomb",
+    "path": "shared/models/props/cartoon_bomb.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/cartoon_bomb-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "checkmark",
+    "path": "shared/models/props/checkmark.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/checkmark-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "chest_of_drawers_01",
+    "path": "shared/models/props/chest_of_drawers_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/chest_of_drawers_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "cleaver",
+    "path": "shared/models/props/cleaver.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/cleaver-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "coin_pile_01",
+    "path": "shared/models/props/coin_pile_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/coin_pile_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "compass_pouch",
+    "path": "shared/models/props/compass_pouch.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/compass_pouch-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "crystal",
+    "path": "shared/models/props/crystal.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/crystal-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "d12_dice",
+    "path": "shared/models/props/d12_dice.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/d12_dice-preview.avif",
+      "assets/shared/models/props/d12_dice-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "d6_dice",
+    "path": "shared/models/props/d6_dice.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/d6_dice-preview.avif",
+      "assets/shared/models/props/d6_dice-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "d6_rounded_dice",
+    "path": "shared/models/props/d6_rounded_dice.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/d6_rounded_dice-preview.avif",
+      "assets/shared/models/props/d6_rounded_dice-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "d8_dice",
+    "path": "shared/models/props/d8_dice.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/d8_dice-preview.avif",
+      "assets/shared/models/props/d8_dice-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dagger_01",
+    "path": "shared/models/props/dagger_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dagger_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dagger_02",
+    "path": "shared/models/props/dagger_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dagger_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dashed_torus_01",
+    "path": "shared/models/props/dashed_torus_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dashed_torus_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "diamond",
+    "path": "shared/models/props/diamond.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/diamond-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dome",
+    "path": "shared/models/props/dome.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dome-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dynamite_stick",
+    "path": "shared/models/props/dynamite_stick.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dynamite_stick-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "dynamite_stick_bundle",
+    "path": "shared/models/props/dynamite_stick_bundle.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/dynamite_stick_bundle-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "eighth_note",
+    "path": "shared/models/props/eighth_note.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/eighth_note-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "emerald",
+    "path": "shared/models/props/emerald.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/emerald-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "exclamation_mark",
+    "path": "shared/models/props/exclamation_mark.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/exclamation_mark-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "firewood_01",
     "path": "shared/models/props/firewood_01.glb",
     "dir": "shared/models/props",
     "type": "glb",
     "previews": [
-      "assets/shared/models/props/firewood_01-preview.avif",
-      "assets/shared/models/props/firewood_01-preview.png"
+      "assets/shared/models/props/firewood_01-preview.avif"
     ],
     "description": ""
   },
@@ -1265,8 +1711,58 @@
     "dir": "shared/models/props",
     "type": "glb",
     "previews": [
-      "assets/shared/models/props/firewood_02-preview.avif",
-      "assets/shared/models/props/firewood_02-preview.png"
+      "assets/shared/models/props/firewood_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "fishing_hook_01",
+    "path": "shared/models/props/fishing_hook_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/fishing_hook_01-preview.avif",
+      "assets/shared/models/props/fishing_hook_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "fishing_rod",
+    "path": "shared/models/props/fishing_rod.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/fishing_rod-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "flat_bottomed_flask",
+    "path": "shared/models/props/flat_bottomed_flask.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/flat_bottomed_flask-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "flower_pot_01",
+    "path": "shared/models/props/flower_pot_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/flower_pot_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "game_cartridge_01",
+    "path": "shared/models/props/game_cartridge_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/game_cartridge_01-preview.avif"
     ],
     "description": ""
   },
@@ -1278,6 +1774,246 @@
     "previews": [
       "assets/shared/models/props/garden_bridge_01-preview.avif",
       "assets/shared/models/props/garden_bridge_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "gem",
+    "path": "shared/models/props/gem.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/gem-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "gladius_01",
+    "path": "shared/models/props/gladius_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/gladius_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "gladius_02",
+    "path": "shared/models/props/gladius_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/gladius_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "gold_ring",
+    "path": "shared/models/props/gold_ring.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/gold_ring-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "greek_column_01",
+    "path": "shared/models/props/greek_column_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/greek_column_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "greek_column_02",
+    "path": "shared/models/props/greek_column_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/greek_column_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "greek_spear_head_01",
+    "path": "shared/models/props/greek_spear_head_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/greek_spear_head_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "greek_spear_head_02",
+    "path": "shared/models/props/greek_spear_head_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/greek_spear_head_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "halberd",
+    "path": "shared/models/props/halberd.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/halberd-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "hand_bell",
+    "path": "shared/models/props/hand_bell.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/hand_bell-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "health_pickup",
+    "path": "shared/models/props/health_pickup.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/health_pickup-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "heart_icon_01",
+    "path": "shared/models/props/heart_icon_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/heart_icon_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "hex_tile",
+    "path": "shared/models/props/hex_tile.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/hex_tile-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "ingot",
+    "path": "shared/models/props/ingot.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/ingot-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "iron_brazier_01",
+    "path": "shared/models/props/iron_brazier_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/iron_brazier_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "iron_flambeaux_01",
+    "path": "shared/models/props/iron_flambeaux_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/iron_flambeaux_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "key_01",
+    "path": "shared/models/props/key_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/key_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "khukuri",
+    "path": "shared/models/props/khukuri.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/khukuri-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lamp_post_01",
+    "path": "shared/models/props/lamp_post_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/lamp_post_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lantern_01",
+    "path": "shared/models/props/lantern_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/lantern_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lantern_02",
+    "path": "shared/models/props/lantern_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/lantern_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lightning_bolt",
+    "path": "shared/models/props/lightning_bolt.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/lightning_bolt-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "lightning_icon",
+    "path": "shared/models/props/lightning_icon.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/lightning_icon-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "location_marker",
+    "path": "shared/models/props/location_marker.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/location_marker-preview.avif"
     ],
     "description": ""
   },
@@ -1315,6 +2051,96 @@
     "description": ""
   },
   {
+    "name": "pick_axe",
+    "path": "shared/models/props/pick_axe.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/pick_axe-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "pill_bottle_01",
+    "path": "shared/models/props/pill_bottle_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/pill_bottle_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "plumbers_pipe",
+    "path": "shared/models/props/plumbers_pipe.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/plumbers_pipe-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "potion_bottle_01",
+    "path": "shared/models/props/potion_bottle_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/potion_bottle_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "quarter_note",
+    "path": "shared/models/props/quarter_note.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/quarter_note-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "question_mark",
+    "path": "shared/models/props/question_mark.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/question_mark-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "radioactive_symbol",
+    "path": "shared/models/props/radioactive_symbol.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/radioactive_symbol-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rocket_toy_01",
+    "path": "shared/models/props/rocket_toy_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/rocket_toy_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "rocket_toy_02",
+    "path": "shared/models/props/rocket_toy_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/rocket_toy_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "rounded_picket_fence",
     "path": "shared/models/props/rounded_picket_fence.glb",
     "dir": "shared/models/props",
@@ -1322,6 +2148,136 @@
     "previews": [
       "assets/shared/models/props/rounded_picket_fence-preview.avif",
       "assets/shared/models/props/rounded_picket_fence-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "round_gem",
+    "path": "shared/models/props/round_gem.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/round_gem-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "round_shield",
+    "path": "shared/models/props/round_shield.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/round_shield-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "saber_01",
+    "path": "shared/models/props/saber_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/saber_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "scroll_01",
+    "path": "shared/models/props/scroll_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/scroll_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "scroll_03",
+    "path": "shared/models/props/scroll_03.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/scroll_03-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "scroll_04",
+    "path": "shared/models/props/scroll_04.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/scroll_04-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "short_sword",
+    "path": "shared/models/props/short_sword.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/short_sword-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "speech_bubble_01",
+    "path": "shared/models/props/speech_bubble_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/speech_bubble_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "speech_bubble_02",
+    "path": "shared/models/props/speech_bubble_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/speech_bubble_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "spiked_club_02",
+    "path": "shared/models/props/spiked_club_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/spiked_club_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "stack_of_coins_01",
+    "path": "shared/models/props/stack_of_coins_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/stack_of_coins_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "star_01",
+    "path": "shared/models/props/star_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/star_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "star_02",
+    "path": "shared/models/props/star_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/star_02-preview.avif"
     ],
     "description": ""
   },
@@ -1337,6 +2293,67 @@
     "description": ""
   },
   {
+    "name": "stone_archway_01",
+    "path": "shared/models/props/stone_archway_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/stone_archway_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "stone_archway_02",
+    "path": "shared/models/props/stone_archway_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/stone_archway_02-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "stone_archway_03",
+    "path": "shared/models/props/stone_archway_03.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/stone_archway_03-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "stone_archway_04",
+    "path": "shared/models/props/stone_archway_04.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/stone_archway_04-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "sword",
+    "path": "shared/models/props/sword.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/sword-preview.avif",
+      "assets/shared/models/props/sword-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "throwing_knife",
+    "path": "shared/models/props/throwing_knife.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/throwing_knife-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "tiered_fountain_01",
     "path": "shared/models/props/tiered_fountain_01.glb",
     "dir": "shared/models/props",
@@ -1344,6 +2361,26 @@
     "previews": [
       "assets/shared/models/props/tiered_fountain_01-preview.avif",
       "assets/shared/models/props/tiered_fountain_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "torii_gate_01",
+    "path": "shared/models/props/torii_gate_01.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/torii_gate_01-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "torii_gate_02",
+    "path": "shared/models/props/torii_gate_02.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/torii_gate_02-preview.avif"
     ],
     "description": ""
   },
@@ -1370,6 +2407,26 @@
     "description": ""
   },
   {
+    "name": "trophy",
+    "path": "shared/models/props/trophy.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/trophy-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "volleyball",
+    "path": "shared/models/props/volleyball.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/volleyball-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "walking_trail_fence",
     "path": "shared/models/props/walking_trail_fence.glb",
     "dir": "shared/models/props",
@@ -1381,6 +2438,47 @@
     "description": ""
   },
   {
+    "name": "water_drip",
+    "path": "shared/models/props/water_drip.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/water_drip-preview.avif",
+      "assets/shared/models/props/water_drip-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "whiskey_bottle",
+    "path": "shared/models/props/whiskey_bottle.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/whiskey_bottle-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "whiskey_glass",
+    "path": "shared/models/props/whiskey_glass.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/whiskey_glass-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "wine_bottle",
+    "path": "shared/models/props/wine_bottle.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/wine_bottle-preview.avif"
+    ],
+    "description": ""
+  },
+  {
     "name": "wooden_gate_01",
     "path": "shared/models/props/wooden_gate_01.glb",
     "dir": "shared/models/props",
@@ -1388,6 +2486,26 @@
     "previews": [
       "assets/shared/models/props/wooden_gate_01-preview.avif",
       "assets/shared/models/props/wooden_gate_01-preview.png"
+    ],
+    "description": ""
+  },
+  {
+    "name": "wooden_mallet",
+    "path": "shared/models/props/wooden_mallet.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/wooden_mallet-preview.avif"
+    ],
+    "description": ""
+  },
+  {
+    "name": "x",
+    "path": "shared/models/props/x.glb",
+    "dir": "shared/models/props",
+    "type": "glb",
+    "previews": [
+      "assets/shared/models/props/x-preview.avif"
     ],
     "description": ""
   },
@@ -1598,6 +2716,22 @@
   {
     "name": "custom_world_stripes",
     "path": "shared/shaders/custom_world_stripes.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "foliage",
+    "path": "shared/shaders/foliage.wgsl",
+    "dir": "shared/shaders",
+    "type": "wgsl",
+    "previews": [],
+    "description": ""
+  },
+  {
+    "name": "foliage_prepass",
+    "path": "shared/shaders/foliage_prepass.wgsl",
     "dir": "shared/shaders",
     "type": "wgsl",
     "previews": [],

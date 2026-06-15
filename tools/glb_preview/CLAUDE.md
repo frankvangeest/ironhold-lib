@@ -36,6 +36,10 @@ python tools/glb_preview/preview.py assets/shared/models/
 # Force regenerate all previews
 python tools/glb_preview/preview.py assets/shared/models/props/ --force
 
+# Check for blank/failed previews (no Blender needed; prints a --force fix command)
+python tools/glb_preview/preview.py assets/shared/models/props/ --check
+python tools/glb_preview/preview.py assets/shared/models/ --check
+
 # Custom size (default 512) or AVIF quality (default 80)
 python tools/glb_preview/preview.py model.glb --size 256 --avif --avif-quality 90
 ```

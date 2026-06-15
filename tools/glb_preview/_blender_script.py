@@ -48,12 +48,37 @@ def _import_glb(path: str) -> list:
     return [o for o in bpy.context.scene.objects if o not in before]
 
 
+def _assign_fallback_materials(objects):
+    """Assign a default diffuse material to any mesh with no materials."""
+    fallback = None
+    for obj in objects:
+        if obj.type != "MESH":
+            continue
+        if obj.data.materials and any(m is not None for m in obj.data.materials):
+            continue
+        if fallback is None:
+            fallback = bpy.data.materials.new("_Fallback")
+            fallback.use_nodes = True
+            bsdf = fallback.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                bsdf.inputs["Base Color"].default_value = (0.75, 0.75, 0.75, 1.0)
+                bsdf.inputs["Roughness"].default_value = 0.6
+        if not obj.data.materials:
+            obj.data.materials.append(fallback)
+        else:
+            for i, m in enumerate(obj.data.materials):
+                if m is None:
+                    obj.data.materials[i] = fallback
+
+
 def _scene_bounds(objects):
     """Return (center Vector, radius float) of all imported objects."""
     inf = float("inf")
     lo = mathutils.Vector(( inf,  inf,  inf))
     hi = mathutils.Vector((-inf, -inf, -inf))
-    for obj in objects:
+    # Armatures and empties have zero or misleading extents — use meshes only.
+    mesh_objects = [o for o in objects if o.type == "MESH"] or objects
+    for obj in mesh_objects:
         for corner in obj.bound_box:
             w = obj.matrix_world @ mathutils.Vector(corner)
             lo.x, lo.y, lo.z = min(lo.x, w.x), min(lo.y, w.y), min(lo.z, w.z)
@@ -78,6 +103,9 @@ def _add_camera(center: mathutils.Vector, radius: float,
 
     cam_data = bpy.data.cameras.new("PreviewCam")
     cam_data.lens = 50
+    # Scale clip planes to scene — prevents tiny models being clipped by Blender's 0.1m default.
+    cam_data.clip_start = max(dist * 0.001, 1e-6)
+    cam_data.clip_end   = dist * 10.0
     cam_obj = bpy.data.objects.new("PreviewCam", cam_data)
     bpy.context.scene.collection.objects.link(cam_obj)
     cam_obj.location = loc
@@ -161,6 +189,7 @@ def main():
         print(f"ERROR: no objects imported from {glb_path}", file=sys.stderr)
         sys.exit(1)
 
+    _assign_fallback_materials(objects)
     strength = float(args.get("light-strength", "1.0"))
     az_deg   = float(args.get("camera-az", "45.0"))
     el_deg   = float(args.get("camera-el", "30.0"))

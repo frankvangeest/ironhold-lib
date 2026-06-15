@@ -34,6 +34,14 @@ python tools/glb_preview/preview.py assets/shared/models/props/
 python tools/glb_preview/preview.py assets/shared/models/props/ --avif
 ```
 
+**After generating, always verify no previews are blank** (no Blender needed):
+
+```bash
+python tools/glb_preview/preview.py assets/shared/models/ --check
+```
+
+If any are listed as blank, the output prints the exact `--force` command to regenerate them. Common causes: model has no embedded material (fallback grey is applied automatically), model is extremely small-scale (clip plane issue — fixed in the script), or rigged character with armature inflating the bounding box (also fixed). Re-run `--check` after regenerating to confirm.
+
 **Convert existing AVIF previews to PNG** (when PNG is missing or gitignored):
 
 ```bash

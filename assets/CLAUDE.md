@@ -60,6 +60,18 @@ Visual descriptions of all shared textures live in `shared/textures/texture-desc
 python tools/asset_checker/check.py
 ```
 
+**After adding new GLB models** to `shared/models/`, generate AVIF previews and verify none are blank:
+
+```bash
+# Generate AVIF previews for any new GLBs (skips existing)
+python tools/glb_preview/preview.py assets/shared/models/ --avif-only
+
+# Verify all previews rendered correctly — prints a --force fix command for any blanks
+python tools/glb_preview/preview.py assets/shared/models/ --check
+```
+
+Always run `--check` after generating; blank previews are silently written when a model has no embedded material, is very small-scale, or is a rigged character. The script handles all three automatically on re-render.
+
 **After adding, removing, or renaming any asset files**, regenerate the asset browser manifest so `assets.html` stays current:
 
 ```bash
