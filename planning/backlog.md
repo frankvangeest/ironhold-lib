@@ -26,12 +26,11 @@
 ### Engine / Runtime
 
 - [ ] **Overlay modal backdrop (click-blocking)** — when `LoadSceneOverlay` loads a scene, spawn a full-screen transparent UI rect (z-index above all base-scene UI) that absorbs pointer events; despawn it on `UnloadOverlay`; prevents base-scene buttons from remaining clickable through overlay panels. Currently overlays allow click-through — acceptable for `paused` (base-scene events are silently dropped) but broken for overlays where base-scene buttons are actively harmful (e.g. start menu showing through options panel).
-
-- [ ] **Insert `PrefabKey` on dynamic spawns** — _(folded into "Consolidate entity-spawn component insertion", now Active)_
 - [ ] **Promote magic `tags` to typed prefab fields** — add `collectable: bool`, `player: bool`, and `flycam: bool` as `#[serde(default)]` fields on `PrefabDef`; `tags` remains for free-form designer labels but control-flow semantics move to typed fields; consistent with the `PrefabKind` enum casing work that cleaned up `kind`. Additive, no migration required.
 - [ ] **Consolidate conditional prefab-feature application (sibling divergence)** — `interactable` / `trigger_zone` / `behavior` / `stat_templates` are still applied per-path in `scene_loader.rs` for single-mesh and composite primitive branches but only centrally in `spawn_prefab_instance` for GLB prefabs; introduce a `apply_prefab_features(ec, &PrefabDef)` helper (parallel to `tag_spawned_entity`) called at all primitive branches; closes the same "works for one kind, silently missing for another" bug class one level down. See `claude_suggestions.md`.
 - [ ] **Page visibility / focus-loss handling** — freeze delta time, pause audio, and drop render to zero when the browser tab loses focus; resume cleanly on tab restore without physics or audio desync; wire Bevy's `WindowFocused` / `ApplicationLifetime` events behind a `pause_on_focus_loss: bool` field on `ProjectConfig` (default `true`); opt-out lets streaming / spectator scenes keep running. Sourced from Phaser's focus-loss model.
 - [ ] **Optional `physics` Cargo feature** — gate Rapier3D behind a `physics` feature on `ironhold_core` so projects that don't use colliders skip the ~15 MB of Rapier symbols in the WASM binary; `ColliderDef` in RON becomes a validated-but-no-op field when the feature is absent; `PhysicsPlugin` conditionally compiled; `ironhold_web` enables `physics` by default but a future stripped build could omit it. Sourced from Phaser's Arcade vs Matter modular physics model.
+
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
@@ -49,20 +48,31 @@
 - [ ] **Audio channels (volume buses)** — `channels: HashMap<String, f32>` on `AudioConfig`; each audio entry in `assets.ron` declares a `channel` key; `SetChannelVolume(channel, f32)` action scales that category within the master ceiling; enables independent music/sfx/ambient balance without touching source files. _Depends on mute toggle + master volume._
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
 - [ ] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active camera; designer fires it from any rule or behavior file.
+- [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
+- [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
+- [ ] **Dialogue system** — RON-defined conversation trees between the player and NPCs; standalone `.dialogue.ron` asset files referenced by `PrefabDef.dialogue`; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` actions; `{self}` / `{target}` substitution in text; branching via `jump_to: node_id` on choices; `do_actions` on choices fire through the existing pipeline; events `dialogue.started`, `dialogue.node`, `dialogue.choice`, `dialogue.ended`; auto-wired to `entity.interacted` when `dialogue` is set on prefab. See `planning/features/dialogue_system.md` _Soft dep: Quest system (for quest.state conditions), Targeting (for {target} in text)._
+- [ ] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). See `planning/features/inventory_item_system.md`
+- [ ] **Equipment system** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion; visual mesh attachment deferred to v2. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
+- [ ] **Quest system** — `quests/quests.ron` catalog; `QuestLog` resource (persists across scenes); objectives: `KillCount` (via `PrefabKey`+`entity.died`), `Collect`, `ReachLocation`, `TalkTo`, `Custom`; `auto_complete` flag; reward types: `GiveItem`, `GiveStat`, `UnlockQuest`, `RunActions`; `quest_giver` on `PrefabDef`; `QuestTracker` UI node; nameplate indicator patch. See `planning/features/quest_system.md` _Deps: Inventory, Dialogue, Save/load (soft); Stat templates (shipped)._
+- [ ] **Loot system** — `loot/loot_tables.ron` catalog; `RollEach`/`RollOne` strategies; `loot_table` on `PrefabDef`; `LootTableRef` component; `RollLootTable(entity)`/`PickupLoot`/`ClearLootBag` actions; designer-wired via behavior file; `auto_loot` on scene RON; `ItemQuality` for icon border tinting; nested tables deferred. See `planning/features/loot_system.md` _Deps: Inventory (hard); Quest, Equipment (soft)._
+- [ ] Timeline / sequencer — scripted cutscene playback from a RON timeline asset
 
 ### Particle System v2
 
 - [ ] **Bloom / post-processing in scene RON** — WASM-BLOCKED: Bevy's `Bloom` requires `#[require(Hdr)]`; HDR breaks the WASM build. Parked until performant HDR/post-process support is available in Bevy's WebGPU backend. Do not implement a native-only workaround — that splits the runtime model. See `planning/features/particle_bloom.md`
-- [x] **Dynamic effect lights** — `light` block on EffectDef spawns a temporary fading PointLight. See `planning/features/particle_dynamic_lights.md`
-- [x] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves. See `planning/features/done/particle_extended_behaviours.md`
-- [x] **Ground decals / AoE projections** — `ProjectDecal` action for AoE circles, impact splats, cast indicators. See `planning/features/done/particle_ground_decals.md`
-- [x] **Flipbook / sprite sheet animation** — UV sub-rect baked per-frame in CPU pool renderer; `explosion_4x4.png` sheet; Flipbook Pad station in particles_demo. See `planning/features/done/particle_flipbook.md`
 - [ ] **Shared effect library** — `assets/shared/effects/` with reusable effects and per-project overrides. See `planning/features/particle_shared_library.md`
 
 ### Rendering & Assets
 
 - [ ] **LOD — pre-baked mesh swap** — distance-based LOD switching using offline-generated LOD GLB files; `lod_levels: [(distance, model)]` on `PrefabDef` declares swap thresholds; a system watches camera distance and swaps `SceneRoot` handle; LOD meshes generated offline (Blender / `meshopt`) and referenced in `assets.ron`; no runtime compute required — fully WASM-compatible. See `planning/features/lod_prebaked_mesh_swap.md`
 - [ ] **Channel-packed ORM texture shader** — new WGSL shader variant (`custom_texture_triplanar_pbr_packed.wgsl`) that reads a single packed ORM texture (R=occlusion, G=roughness, B=metallic) instead of three separate textures; matches the default export format from Substance Painter; frees two sampler slots and halves texture bandwidth for PBR properties; no schema changes — designers swap the shader key and point one texture at `texture_1` instead of three.
+- [ ] **Deferred rendering** — replace clustered forward with Bevy's deferred pipeline to remove the `MAX_FADING_LIGHTS = 16` cap and efficiently handle large numbers of dynamic lights (torches, particle lights, explosions); transparent/additive materials (particles, decals) stay on the forward path automatically. Investigation complete — WASM builds clean, GL degrades gracefully; one remaining step: manual Chrome WebGPU console check. See `planning/features/deferred_rendering.md`
+- [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
+- [ ] **LOD — runtime generation + caching** — WASM-BLOCKED: generating simplified meshes at runtime requires offthread compute (web workers + `SharedArrayBuffer`); Bevy's WASM build does not support this today. Also covers IndexedDB caching of generated LODs and Bevy meshlets (GPU-driven micro-mesh rendering — not WASM-stable). Parked until Bevy's WASM offthread compute support matures.
+- [ ] Decal system — project a texture onto geometry without modifying meshes
+- [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
+- [ ] Water / reflective plane primitive with animated normal map — WASM-BLOCKED: reflection passes require multi-pass rendering or screen-space sampling; not performantly supported in Bevy's WebGPU backend yet. Parked until WASM support matures.
+- [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene — WASM-BLOCKED: same root cause as Bloom and water; HDR and multi-pass post-process break or perform poorly on WebGPU. Parked until Bevy's WebGPU backend matures.
 
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] Fixed-tick schedule for gameplay systems (separate from render tick)
@@ -82,6 +92,15 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
 - [ ] LAN co-op demo scene
 - [ ] Network protocol doc + integration tests
 
+### Beta 0.7 — Loading & Preloading
+- [ ] Loading screen overlay during `LoadingScene` / `LoadingProject` states
+- [ ] `scene.loading_progress:{0-100}` milestone events from loader and terrain task
+- [ ] `loading_scene` field in project config for custom splash scenes
+- [ ] `preload_poll_system`: watch `PreloadedScenes` handles, emit `scene.preloaded:{name}`
+- [ ] `LoadScene` fast-path when handle is already loaded in `PreloadedScenes`
+- [ ] Docs + tests
+- [ ] Design: `planning/features/loading_screen.md`, `planning/features/scene_preloading.md`
+
 ### Beta 0.8 — Multiplayer Form 2: Internet Player-Hosted
 See `planning/features/networking_multiplayer.md`. Gate: Beta 0.6 (LAN) must ship first.
 - [ ] Relay/signaling service decision and deployment (Matchbox recommended — see feature file)
@@ -99,14 +118,43 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] Server admin actions (kick, change_scene)
 - [ ] Dedicated server demo + deployment guide
 
-### Beta 0.7 — Loading & Preloading
-- [ ] Loading screen overlay during `LoadingScene` / `LoadingProject` states
-- [ ] `scene.loading_progress:{0-100}` milestone events from loader and terrain task
-- [ ] `loading_scene` field in project config for custom splash scenes
-- [ ] `preload_poll_system`: watch `PreloadedScenes` handles, emit `scene.preloaded:{name}`
-- [ ] `LoadScene` fast-path when handle is already loaded in `PreloadedScenes`
-- [ ] Docs + tests
-- [ ] Design: `planning/features/loading_screen.md`, `planning/features/scene_preloading.md`
+### Terrain
+- [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
+- [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
+- [ ] **Improved terrain rendering** — 4-phase pipeline: UV elimination + U16 indices (~25 % vertex memory), mesh chunking (per-chunk culling + incremental async generation, kills WASM first-frame stall), GPU-derived XZ positions, compressed normals; CPU height-array shared between GPU and Rapier. See `planning/features/improved_terrain_rendering.md`
+
+### Performance
+- [ ] **Off-thread texture decode in WASM** — use the browser's `ImageBitmap` API to decode textures off the main WASM thread, eliminating main-thread stalls during asset loads; requires a `wasm32`-specific code path in the asset loading pipeline or a Bevy plugin that wraps `createImageBitmap`; investigate whether Bevy's current WASM asset pipeline already defers texture decode before implementing. Sourced from Phaser's web-optimised asset loader model.
+- [ ] **Extend pipeline warmup to Text2d and UI pipelines** — spawn hidden warmup entities for `Text2d` and UI `Node` at scene load to pre-compile the 2D/UI GPU pipelines, eliminating WASM frame spikes on first text/UI render; design: `planning/features/pipeline_warmup_2d_ui.md`
+- [ ] **Discrete LOD steps for depth-scaled label font sizes** — snap `base_font_size * scale` to a small fixed set (e.g. 100 %, 75 %, 50 %, 25 %) instead of rounding to every integer; bounds atlas slot count to ~4 per label regardless of depth range, at the cost of a slight stepping artefact on slow zoom. Integer rounding + 0.5-threshold guard already fix the per-frame atlas upload problem; this is a further atlas-memory micro-optimisation.
+- [ ] **Scene transition material cache** — `scene_loader` rebuilds all materials in the asset catalog on every `LoadScene`, including materials already built for the previous scene; cache built handles per-project in a persistent resource and only rebuild when the catalog key set changes; estimated 50–200 ms saving per transition on large projects (`scene_loader.rs` material rebuild block)
+- [ ] **WASM terrain generation first-frame stall** — `AsyncComputeTaskPool` degrades to `block_on` on the main thread in WASM, causing 100–500 ms jank on first frame for large heightmaps; fix by splitting mesh generation across multiple frames (progressive tile-by-tile build) or pre-baking terrain meshes as GLB assets; requires `#[cfg(target_arch = "wasm32")]` code path (`terrain.rs` poll system)
+- [ ] **Per-frame collection allocations in hot systems** — `stat_modifier_system` (key clone Vec), `message_interpreter_system` (event Vec rebuilt each frame), and `player_movement_system` (input HashMap) each allocate new collections every frame; refactor to reuse pre-allocated collections via `.clear()` on a `Local` resource or avoid the intermediate collection entirely; WASM GC pressure is higher than native so the gain is larger there
+
+### Profiling & Diagnostics
+- [ ] Diagnostics HUD — F3 overlay: FPS, frame time, entity count, draw calls, triangles, CPU/RAM (native); design: `planning/features/diagnostics_hud.md`
+- [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
+
+### Designer Experience
+- [ ] **Extend `entity_logic_demo`** — add one clearly labeled station per behavior concept: multi-state FSM behavior file with `EmitEventAfterDelay` loop (goblin-guard pattern), a timed-door sequence (`EmitEventAfterDelay` chain), side-by-side trigger zone enter vs. interactable [F] comparison, and a `global_on` example showing project-wide vs. entity-local events; modeled on the station-per-concept layout of `particles_demo`
+- [ ] **`ui_demo` project** — standalone demo project for every UI capability: buttons, data-bound labels with `SetVariable`/`IncrementVariable`, overlays, pause-menu pattern, and all stat display widget types; gives designers a single project to copy patterns from
+- [ ] **`audio_demo` project** — standalone demo project focused on audio authoring: `PlaySound`, `PlayMusicLoop`, `SetVolume`, stop/loop patterns, and how audio is triggered from RON rules; no existing project makes audio its primary focus
+- [ ] **`scene_transitions_demo` project** — standalone demo project with 3–4 scenes wired through a state machine, demonstrating portal navigation, scene overlays, preloading, and multi-scene project config; distinct from `particles_demo` where portal navigation is a side feature
+- [ ] **Schema version v2→v3 migration guide** — add a "Migrating from v2 to v3" section in `docs/20_data_formats.md` covering: rename `rules_path` → `state_machine_path`, bump `schema_version` to `3`, convert `rules.ron` to the FSM format, and the warning to expect if both files coexist
+- [ ] **Magic-string event/action validator** — `tools/ron_validator/` CLI that cross-checks event names used in `rules.ron` / `state_machine.ron` against the set emitted by capabilities and reports unknown event keys before runtime; eliminates silent no-ops from typos in event names
+
+### UI
+- [ ] UI element types beyond `Button`: `Label`, `Image`, `ProgressBar`, `Panel`
+- [ ] UI layout — stack/flex layout or anchor-based positioning replacing raw pixel coords
+- [ ] Font + theme config per project
+- [ ] Drop shadow support for UI text
+- [ ] Drop shadow support for world entity text labels
+
+### Tools
+- [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)
+- [ ] Live reload server — watch `assets/` and push scene reload to running native build via IPC
+- [ ] GLB batch inspector — produce a markdown table of node names, animations, and materials for a whole folder
+- [ ] **Live project editor** — `crates/ironhold_editor`; axum server on port 3001 serving React frontend + WASM game preview + REST API; `schemars`-derived JSON Schema → RJSF forms; RON ↔ JSON bridge with validation gate; WebSocket-triggered iframe reload on save; v1 edit-only, v2 create/delete. See `planning/features/live_project_editor.md`
 
 ---
 
@@ -126,10 +174,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] **Per-instance stat overrides on `Action::Spawn` (v2)** — extend `stat_overrides` support to dynamic `Action::Spawn` so runtime-spawned entities can also start with non-default stats; requires threading the override map through `QueuedSpawn` and `drain_spawn_queue_system`; depends on per-instance overrides v1 (scene-placed) shipping first.
 - [ ] **`ChildOf` hierarchy migration** — migrate from `Children`/`Parent` (Bevy pre-0.16 API) to the `ChildOf` relationship component (Bevy 0.16+); the animation system queries `&Children` to walk GLB hierarchies and all spawners use `with_children()` — these need updating to the forward-looking API before a future Bevy upgrade removes the compat shim
 - [ ] **Required components on project-defined components** — adopt `#[require(...)]` (Bevy 0.15+) on project-defined marker components (e.g. `TriggerZone`, `FadingLight`, `LevelEntity`) so that inserting the primary component automatically inserts its mandatory companions; reduces manual bundle construction in spawners and makes component contracts explicit at the type level
-- [>] **Typed primitive shape field** — add `shape: PrimitiveShapeKind` (typed enum) to `PrefabDef` and promote `ChildPrimitiveDef.shape` from `String` to the same enum; `model:` must be empty for primitives; `PREFAB_CATALOG_SCHEMA_VERSION` → 2; ship with enum casing change. See `planning/features/typed_primitive_shape_field.md`
-- [>] **Consistent RON enum casing** — change `PrefabDef.kind: String` → `PrefabKind` enum and `ColliderDef.shape: String` → `ColliderShapeKind` enum; all other categorical fields already use bare variants; `PREFAB_CATALOG_SCHEMA_VERSION` → 2; ship with typed shape change. See `planning/features/consistent_ron_enum_casing.md`
 - [ ] **Consistent `assets.ron` entry shapes** — `models` entries use `(path: "...")`, `textures` are bare strings, `audio` uses `(path: "...", volume: ...)`; unifying the shapes reduces copy-paste errors and parse confusion; requires schema version bump
-- [x] `Action::SetVariable` / `Action::IncrementVariable` — write to named runtime variables from RON rules
 - [ ] `Condition` expressions in rules (`score >= 10`, `variable == "value"`) — currently only event matching
 - [ ] Hot-reload for `.scene.ron` and `rules.ron` in native debug builds
 
@@ -138,113 +183,57 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 
 ### Gameplay Capabilities
 - [ ] **Grid system** — square, hexagonal (flat-top / pointy-top), and triangular cell layouts; `grid: GridDef` on scene RON; `(col, row)` addressing for all types (axial for hex); `PlaceOnGrid` / `StartGridMove` / `SetCellPassable` / `FindPath` actions; A* with node cap; `GridPosition` component; `grid.cell_entered` / `grid.move_complete` / `grid.path_blocked` events; Gizmos debug overlay; WASM-compatible. See `planning/features/grid_system.md`
-- [x] **Game stats — Phase 2a: stat templates** — `stat_templates` on `PrefabDef`; `StatMap` component (IndexMap, Clone); dot-routing `ModifyStat`/`SetStat`; threshold/regen for instance stats; `{self}` in stat keys; goblin guard moves to behavior file; composite primitive `behavior` field fixed; integration tests + docs; design: `planning/features/stat_templates.md`
-- [x] **Game stats — Phase 1: core stat model** — `StatDef` (base/min/max/regen/thresholds), `LoadedStats` resource, `ModifyStat`/`SetStat` actions, threshold events into existing pipeline; design: `planning/features/game_stats_core.md`
-- [x] **Game stats — Phase 2: buffs and modifiers** — named modifier templates, additive/multiplicative/override kinds, stacking rules, soft_max, `ApplyModifier`/`RemoveModifier` actions; design: `planning/features/game_stats_buffs.md` _(depends on Phase 1)_
-- [x] **Stat display — health bars and stat spreads** — `StatBar` and `StatSpread` UI node types in scene RON, colour bands, change-detection update; design: `planning/features/game_stats_display.md` _(depends on Phase 1)_
-- [x] **Stat display — radar chart** — `StatRadar` UI node (3–12 axes), WGSL polar-coordinate shader via `UiMaterial`, straight-edged polygon grid (no circles), `stat_radar_update_system`; `primitive_world` demo: 5-stat pentagon (health/mana/stamina/strength/speed) on Key C overlay
-- [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
-- [x] **Stat display — per-entity stat routing** — `resolve_stat(key, &LoadedStats, &Query<(&SpawnId, &StatMap)>)` shared helper; dotted keys route to entity `StatMap`, plain keys to global `LoadedStats`; all three update systems (`StatBar`, `StatSpread`, `StatRadar`) + new `stat_label_update_system` use it; `StatLabelMarker` component enables floating world-space health labels; `primitive_world` attack dummies demonstrate the feature
-- [x] **World-space stat bar — Pixel style** — see `planning/features/world_pixel_stat_bar.md` _(design done, ready to implement)_
-- [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
-- [ ] **Skill action bar (1–9)** — a configurable 9-slot action bar defined in scene RON as a new `ActionBar` UI node; each slot declares a keybind (1–9), icon (asset catalog texture key), one or more `do_actions` fired through the existing pipeline, optional `cooldown_secs`, and optional `cost` stat deduction; slot actions support `{target}` and `{self}` substitution; cooldown state tracked in a new `CooldownMap` resource; greyed-out visual state when on cooldown or when a cost stat is insufficient; slot state events `action_bar.activated:{slot}` / `action_bar.on_cooldown:{slot}` into the pipeline. See `planning/features/skill_action_bar.md`
-- [ ] **Dialogue system** — RON-defined conversation trees between the player and NPCs; standalone `.dialogue.ron` asset files referenced by `PrefabDef.dialogue`; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` actions; `{self}` / `{target}` substitution in text; branching via `jump_to: node_id` on choices; `do_actions` on choices fire through the existing pipeline; events `dialogue.started`, `dialogue.node`, `dialogue.choice`, `dialogue.ended`; auto-wired to `entity.interacted` when `dialogue` is set on prefab. See `planning/features/dialogue_system.md` _Soft dep: Quest system (for quest.state conditions), Targeting (for {target} in text)._
-- [ ] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). See `planning/features/inventory_item_system.md`
-- [ ] **Equipment system** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion; visual mesh attachment deferred to v2. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
-- [ ] **Quest system** — `quests/quests.ron` catalog; `QuestLog` resource (persists across scenes); objectives: `KillCount` (via `PrefabKey`+`entity.died`), `Collect`, `ReachLocation`, `TalkTo`, `Custom`; `auto_complete` flag; reward types: `GiveItem`, `GiveStat`, `UnlockQuest`, `RunActions`; `quest_giver` on `PrefabDef`; `QuestTracker` UI node; nameplate indicator patch. See `planning/features/quest_system.md` _Deps: Inventory, Dialogue, Save/load (soft); Stat templates (shipped)._
-- [ ] **Loot system** — `loot/loot_tables.ron` catalog; `RollEach`/`RollOne` strategies; `loot_table` on `PrefabDef`; `LootTableRef` component; `RollLootTable(entity)`/`PickupLoot`/`ClearLootBag` actions; designer-wired via behavior file; `auto_loot` on scene RON; `ItemQuality` for icon border tinting; nested tables deferred. See `planning/features/loot_system.md` _Deps: Inventory (hard); Quest, Equipment (soft)._
-- [x] Particle effect spawning via `Action::SpawnEffect` — see `planning/features/particle_effects.md`
-- [ ] Timeline / sequencer — scripted cutscene playback from a RON timeline asset
-
-### UI
-- [ ] UI element types beyond `Button`: `Label`, `Image`, `ProgressBar`, `Panel`
-- [x] Data-bound UI labels — `bind`/`format` fields on labels + `GameVariables` resource; `Action::SetVariable` / `Action::IncrementVariable` let designers write arbitrary variables from RON; `DebugState.score` derived from `GameVariables["score"]`
-- [ ] UI layout — stack/flex layout or anchor-based positioning replacing raw pixel coords
-- [ ] Font + theme config per project
-- [ ] Drop shadow support for UI text
-- [ ] Drop shadow support for world entity text labels
-
-### Terrain
-- [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
-- [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
-- [ ] **Improved terrain rendering** — 4-phase pipeline: UV elimination + U16 indices (~25 % vertex memory), mesh chunking (per-chunk culling + incremental async generation, kills WASM first-frame stall), GPU-derived XZ positions, compressed normals; CPU height-array shared between GPU and Rapier. See `planning/features/improved_terrain_rendering.md`
-- [x] **Terrain path consolidation** — `TerrainConfigV2` is now the single struct (schema + runtime `Component`); `TerrainConfig` removed. Scene loader spawns `terrain_v2.clone()` directly. Fixed **scale.z bug**: `generate_terrain_mesh_raw` now takes separate `scale_x`/`scale_z` so asymmetric terrain is no longer distorted.
-
-### Rendering & Assets
-- [ ] **Deferred rendering** — replace clustered forward with Bevy's deferred pipeline to remove the `MAX_FADING_LIGHTS = 16` cap and efficiently handle large numbers of dynamic lights (torches, particle lights, explosions); transparent/additive materials (particles, decals) stay on the forward path automatically. Investigation complete — WASM builds clean, GL degrades gracefully; one remaining step: manual Chrome WebGPU console check. See `planning/features/deferred_rendering.md`
-- [>] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; v2 adds GPU wind sway and particle leaf drop. See `planning/features/stylized_foliage.md`
-- [ ] **Toon / cel shading (3-tone, 4-tone, 5-tone)** — WGSL-only `CustomMaterial` shaders for stylized discrete light bands; 3- and 4-tone fit current uniform budget; 5-tone uses a ramp texture; design: `planning/features/toon_shading.md`
-- [ ] **LOD — runtime generation + caching** — WASM-BLOCKED: generating simplified meshes at runtime requires offthread compute (web workers + `SharedArrayBuffer`); Bevy's WASM build does not support this today. Also covers IndexedDB caching of generated LODs and Bevy meshlets (GPU-driven micro-mesh rendering — not WASM-stable). Parked until Bevy's WASM offthread compute support matures.
-- [ ] Decal system — project a texture onto geometry without modifying meshes
-- [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
-- [ ] Water / reflective plane primitive with animated normal map — WASM-BLOCKED: reflection passes require multi-pass rendering or screen-space sampling; not performantly supported in Bevy's WebGPU backend yet. Parked until WASM support matures.
-- [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene — WASM-BLOCKED: same root cause as Bloom and water; HDR and multi-pass post-process break or perform poorly on WebGPU. Parked until Bevy's WebGPU backend matures.
-
-### Performance
-- [ ] **Off-thread texture decode in WASM** — use the browser's `ImageBitmap` API to decode textures off the main WASM thread, eliminating main-thread stalls during asset loads; requires a `wasm32`-specific code path in the asset loading pipeline or a Bevy plugin that wraps `createImageBitmap`; investigate whether Bevy's current WASM asset pipeline already defers texture decode before implementing. Sourced from Phaser's web-optimised asset loader model.
-- [ ] **Extend pipeline warmup to Text2d and UI pipelines** — spawn hidden warmup entities for `Text2d` and UI `Node` at scene load to pre-compile the 2D/UI GPU pipelines, eliminating WASM frame spikes on first text/UI render; design: `planning/features/pipeline_warmup_2d_ui.md`
-- [ ] **Discrete LOD steps for depth-scaled label font sizes** — snap `base_font_size * scale` to a small fixed set (e.g. 100 %, 75 %, 50 %, 25 %) instead of rounding to every integer; bounds atlas slot count to ~4 per label regardless of depth range, at the cost of a slight stepping artefact on slow zoom. Integer rounding + 0.5-threshold guard already fix the per-frame atlas upload problem; this is a further atlas-memory micro-optimisation.
-- [x] Staggered entity spawning — `PendingEntitySpawns` queue drains at `SPAWNS_PER_FRAME = 2`/frame via `drain_spawn_queue_system`; spreads WebGPU pipeline compilations across frames for wave spawns
-- [ ] **Scene transition material cache** — `scene_loader` rebuilds all materials in the asset catalog on every `LoadScene`, including materials already built for the previous scene; cache built handles per-project in a persistent resource and only rebuild when the catalog key set changes; estimated 50–200 ms saving per transition on large projects (`scene_loader.rs` material rebuild block)
-- [ ] **WASM terrain generation first-frame stall** — `AsyncComputeTaskPool` degrades to `block_on` on the main thread in WASM, causing 100–500 ms jank on first frame for large heightmaps; fix by splitting mesh generation across multiple frames (progressive tile-by-tile build) or pre-baking terrain meshes as GLB assets; requires `#[cfg(target_arch = "wasm32")]` code path (`terrain.rs` poll system)
-- [x] **Particle mesh buffer recreation** — the pool renderer rebuilds full `Vec<[f32;3]>` vertex buffers and re-inserts mesh attributes every frame for every active particle group; replace with in-place attribute mutation (`Mesh::attribute_mut`) to avoid per-frame allocations and reduce GPU upload overhead; particularly impactful on WASM where buffer uploads block the main thread (`particle_renderer.rs`)
-- [x] **Animation player entity lookup cache** — `animation_playback_system` recurses through the entity hierarchy every frame to locate the `AnimationPlayer` child; `AnimationController` already has a `last_player_entity` field — use it as a fast-path cache and only re-walk the tree on cache miss; reduces O(tree_depth) lookups to O(1) for the common case (`animation.rs`)
-- [ ] **Per-frame collection allocations in hot systems** — `stat_modifier_system` (key clone Vec), `message_interpreter_system` (event Vec rebuilt each frame), and `player_movement_system` (input HashMap) each allocate new collections every frame; refactor to reuse pre-allocated collections via `.clear()` on a `Local` resource or avoid the intermediate collection entirely; WASM GC pressure is higher than native so the gain is larger there
-
-### Profiling & Diagnostics
-- [ ] Diagnostics HUD — F3 overlay: FPS, frame time, entity count, draw calls, triangles, CPU/RAM (native); design: `planning/features/diagnostics_hud.md`
-- [ ] Tracy integration — `--features trace_tracy` on native runner; per-system CPU timeline; design: `planning/features/tracy_integration.md`
-
-### Designer Experience
-- [ ] **Extend `entity_logic_demo`** — add one clearly labeled station per behavior concept: multi-state FSM behavior file with `EmitEventAfterDelay` loop (goblin-guard pattern), a timed-door sequence (`EmitEventAfterDelay` chain), side-by-side trigger zone enter vs. interactable [F] comparison, and a `global_on` example showing project-wide vs. entity-local events; modeled on the station-per-concept layout of `particles_demo`
-- [x] **`stats_demo` project** — standalone demo project showcasing the full stats system in one place: health/mana bars, stat spread widget, radar chart, world-space pixel bars, buffs and modifiers, damage popups, and per-entity stat routing; the current `primitive_world` mixes all of this with geometry and AI work making it hard to use as a reference
-- [ ] **`ui_demo` project** — standalone demo project for every UI capability: buttons, data-bound labels with `SetVariable`/`IncrementVariable`, overlays, pause-menu pattern, and all stat display widget types; gives designers a single project to copy patterns from
-- [ ] **`audio_demo` project** — standalone demo project focused on audio authoring: `PlaySound`, `PlayMusicLoop`, `SetVolume`, stop/loop patterns, and how audio is triggered from RON rules; no existing project makes audio its primary focus
-- [ ] **`scene_transitions_demo` project** — standalone demo project with 3–4 scenes wired through a state machine, demonstrating portal navigation, scene overlays, preloading, and multi-scene project config; distinct from `particles_demo` where portal navigation is a side feature
-- [x] **Blank starter project template** — a minimal `blank_project` under `assets/projects/` containing only the required files (project config, one empty scene, empty prefab catalog, empty asset catalog, empty rules), no terrain, no models, and no dummy fields; the canonical copy-and-rename starting point so new projects do not inherit `quick_scene` noise
-- [ ] **Schema version v2→v3 migration guide** — add a "Migrating from v2 to v3" section in `docs/20_data_formats.md` covering: rename `rules_path` → `state_machine_path`, bump `schema_version` to `3`, convert `rules.ron` to the FSM format, and the warning to expect if both files coexist
-- [ ] **Magic-string event/action validator** — `tools/ron_validator/` CLI that cross-checks event names used in `rules.ron` / `state_machine.ron` against the set emitted by capabilities and reports unknown event keys before runtime; eliminates silent no-ops from typos in event names
-
-### Tools
-- [ ] `tools/ron_formatter/` — auto-format `.ron` files (indentation, trailing commas)
-- [ ] Live reload server — watch `assets/` and push scene reload to running native build via IPC
-- [ ] GLB batch inspector — produce a markdown table of node names, animations, and materials for a whole folder
-- [ ] **Live project editor** — `crates/ironhold_editor`; axum server on port 3001 serving React frontend + WASM game preview + REST API; `schemars`-derived JSON Schema → RJSF forms; RON ↔ JSON bridge with validation gate; WebSocket-triggered iframe reload on save; v1 edit-only, v2 create/delete. See `planning/features/live_project_editor.md`
 
 ---
 
 ## Done (reference)
 
-- [x] **Stylized foliage (anime / Ghibli-style trees)** — `kind: Foliage` prefab type; procedural leaf card clusters with camera-facing billboard vertex shader; sphere-mapped normals for unbroken toon shading volumes; alpha-clip brush-stroke texture; `FoliageMaterial` WGSL shader; `height_bias` + `seed` for crown shape control. See `planning/features/done/stylized_foliage.md`
-- [x] **Skill action bar (1–9)** — `ActionBar` UI node; `ActionSlotUi` + `CooldownOverlay` components; `CooldownMap` + `CurrentTarget` resources; keys 1–9 fire `do_actions`, check cooldown, deduct stat cost; `action_bar.*` pipeline events; alpha-fade cooldown overlay; `ShowFloatingText` action; demo in `primitive_world`. See `planning/features/done/skill_action_bar.md`
-- [x] **Consolidate entity-spawn component insertion** — shared `tag_spawned_entity` helper (sole owner of `SpawnId`/`PrefabKey`/`LevelEntity`/registry entry + targeting markers); all 7 spawn sites route through it. Closed GLB-player (no SpawnId/PrefabKey/registry) and dynamic-spawn (no PrefabKey/LevelEntity) gaps; dynamic spawns now despawn on `LoadScene`. Sibling divergence (per-path `interactable`/`trigger_zone`/`stat_templates`) logged as follow-up. See `planning/features/done/spawn_site_consolidation.md`
-- [x] **Mouse click-to-select + Tab targeting** — `click_selectable` / `targetable` on `PrefabDef`; `CurrentTarget` resource; screen-space proximity click selection (`camera.world_to_viewport`, not mesh raycast — works on skinned GLB characters); Tab/Shift-Tab cycles nearest-first (configurable `target_next`/`target_range`); `{target}` substitution in rules/FSM/behaviors; `SetTarget`/`ClearTarget` actions; `target.*` events; `PrefabKey` component + `target_display`/`target_name`/`target_id` HUD vars; demo + flat-ground redesign in `3rd_person_game_demo`. See `planning/features/targeting_system.md`
-- [x] **Per-instance stat overrides on `SceneEntityDef`** — `stat_overrides: HashMap<String, f32>` on placed scene entities; overrides the initial `base` value for named stats from the prefab's `stat_templates`; unknown keys warn at load time; allows placing wounded enemies, inactive shrines, or boss-tier HP variants without forking prefabs; scene-placed entities only (dynamic spawn v2 in Icebox).
-- [x] **Mute audio toggle + master volume** — `AudioConfig` on `ProjectConfig` with `max_volume: f32` (project ceiling, default 1.0) and `mute_on_start: bool`; `ToggleMute` and `SetVolume(f32)` actions; `AudioState` resource; `GlobalVolume` = `active_fraction * max_volume` (or 0 when muted); `audio.muted` / `audio.unmuted` / `audio.volume_changed` pipeline events; `SyncAudioState` action for label initialisation on state entry; mute button + bound label demo in `3rd_person_game_demo`. See `planning/features/audio_mute_toggle.md`
-- [x] **Snake and spider enemies in 3rd_person_game_demo** — GLB Actor NPC support: extended `spawn_prefab_instance` to attach `NpcAgent` + capsule physics body to `kind: Actor` prefabs with `components.npc`, and updated `npc_behavior_system` to write `LocomotionState` for animated GLB NPCs; added `enemy_snake` (50 HP, 7 m detection, 3.5 m/s chase, bites 8 dmg/3 s) and `enemy_spider` (75 HP, 10 m detection, 5 m/s chase, strikes 12 dmg/2 s); `venom_splash` + `web_burst` particle hit effects; 4 enemy instances placed in `main.scene.ron` with patrol waypoints.
-- [x] **Push `stat_overrides` into `spawn_prefab_instance`** — `spawn_prefab_instance` now accepts `stat_overrides: &HashMap<String, f32>`, validates unknown keys, and applies overrides when building `StatMap`; redundant re-insert block removed from `scene_loader.rs` GLB actor path. From `claude_suggestions.md`.
-- [x] **Add `collider_radius`/`collider_height` to `NpcDef`** — two optional `Option<f32>` fields added to `NpcDef` (defaults 0.35 m / 1.6 m); `entity_spawner.rs` reads them via `unwrap_or`; docs updated. From `claude_suggestions.md`.
-- [x] **Integration test: GLB Actor `components.npc` attaches `NpcAgent` + `LocomotionState`** — `test_glb_actor_npc_attaches_npc_agent_and_locomotion_state` added to `integration_tests.rs`; all 184 tests pass. From `claude_suggestions.md`.
-- [x] **Dynamic `Action::Spawn` entities miss `motion`, `stat_label`, and `world_stat_bar`** — `motion` moved into `spawn_prefab_instance` (covers all spawn paths); `DynamicStatUiQueue` resource + `drain_dynamic_stat_ui_system` handle stat_label/world_stat_bar for dynamic spawns with one-frame deferral. See `planning/features/done/dynamic_spawn_components.md`.
-- [x] **Foliage square shadows** — `NotShadowCaster` inserted on each cluster entity in `foliage_setup_system`; removes square shadow silhouettes (standard stylised-foliage approach).
-- [x] **`PrefabComponents` silently drops unknown fields** — added `#[serde(deny_unknown_fields)]`; RON parse now fails with a clear field name on typos or unknown fields; two regression tests added.
-- [x] **no diagnostic when a rule event is never matched** — `match_rules` emits `debug!` when rules are loaded but none fire; silent on FSM projects where `LoadedRules` is empty.
-- [x] **`rules.ron` silently ignored when `state_machine_path` is set** — `project_loader` warns at Phase 1 if both `rules_path` and `state_machine_path` are set.
-- [x] **`Spawn` `position`/`spawn_point` conflict is silent** — `action_executor` warns with the spawn ID when both fields are set; `position` wins.
-- [x] **quick_scene web spawn hang** — `Action::PreloadPrefab("enemy_orc_melee")` fires on `scene.ready:main` so the orc GLB is decoded during scene load before the button is reachable; `PreloadedGlbHandles` resource keeps the handle alive. A `PendingEntitySpawns` queue (drained at 2/frame) was added simultaneously — it doesn't eliminate the remaining ~300 ms WebGPU pipeline-compile stall on first render, but caps per-frame stalls to 2 entities for wave spawns.
-- [x] **animation T-pose on landing** — Root cause: Bevy's `SceneSpawner` re-spawns the GLTF hierarchy mid-session. `animation_playback_system` now detects when the `AnimationPlayer` entity changes and resets `graph_initialized`. See `planning/investigations/resolved/animation_tpose.md`.
-- [x] **`implicit_some` RON extension** — `ImplicitRonPlugin` in `schema/ron_loader.rs` enables `implicit_some` globally via `ron::Options`; 671 `Some()` wrappers removed from all project `.ron` files; `tools/migrate_implicit_some.py` one-shot migration script included; no per-file directives needed
-- [x] **Nested prefabs — mesh support** — `spawn_primitive_children` dispatches on `kind`: actor/prop loads GLB via `spawn_prefab_instance`, single-shape primitive builds one mesh; `rock_deco` GLB prop nested in `village` demo; design: `planning/features/nested_prefabs_mesh_support.md`
-- [x] **Nested prefabs** — `children` entries reference named prefabs by key; multiplicative Bevy hierarchy; cycle detection; `village` prefab demo in `primitive_world`; design: `planning/features/nested_prefabs.md`
-- [x] Beta 0.1 — Baseline Runtime
-- [x] Beta 0.2 — Event/Action Bus refactor
-- [x] Beta 0.3 — Global Logic (FSM v1)
-- [x] Beta 0.4 — Entity Logic (FSM v1): per-entity `.behavior.ron`, `{self}` substitution, `TriggerZone`, `Interactable`, `PlayAnimationOn`/`EmitEvent`, `entity_logic_demo` project
-- [x] Three-point warm lighting defaults for GLB preview tool (`--light-strength 0.3`)
-- [x] **World-space pixel stat bar** — see `planning/features/done/world_pixel_stat_bar.md`
-- [x] **Particle effect spawning v1** — campfire, torch, explosions, triggers, UV distort/scroll complete. See `planning/features/done/particle_effects.md`
-- [x] **Particle System v2 — Pool Renderer** — CPU pool + one mesh entity per (blend_mode, texture) group; O(distinct textures) draw calls; `PoolFlameMaterial` for UV-animated flames. See `planning/features/done/particle_instanced_renderer.md`
-- [x] **Multi-layer EffectDef** — compose effects from multiple emitter layers in one RON key. See `planning/features/done/particle_multi_layer.md`
-- [x] **Quality tiers & particle budget** — `SetParticleQuality` action, per-effect priority (`Player`/`Npc`/`Ambient`), live-count cap, multi-layer running counter, portal navigation, Arcane Observatory demo scene. See `planning/features/done/particle_quality_budget.md`
-- [x] **Ironhold CLI** — `validate`, `inspect glb/texture/audio`, `query prefabs/effects/scenes/rules`; `--json` flag throughout; all example projects pass validate. See `planning/features/ironhold_cli.md`
-- [x] **Ironhold CLI enhancements** — `watch`, `stats`, `query actions/events`, `validate --strict` (orphan detection), `after_help` examples across all 14 help pages, exit-code docs, `--json` placement note, missing `--filter` values.
+### June 2026
+- [x] **100+ shared GLB models + AVIF previews** — props, characters, creatures; GLB preview tool fixes (fallback materials, mesh-only bounds, proportional clip planes, pixel-count blank detection) — `7486104`
+- [x] **Snake and spider GLB enemies** — `kind: Actor` NPC support; `enemy_snake` + `enemy_spider` with AI, hit effects, patrol waypoints in `3rd_person_game_demo` — `df8c94b`
+- [x] **NpcDef collider sizing + stat_overrides in spawn** — `collider_radius`/`collider_height` on `NpcDef`; `spawn_prefab_instance` validates and applies stat overrides; NPC integration test — `1112fc4`
+- [x] **Dynamic spawn missing components** — `motion`, `stat_label`, `world_stat_bar` now attach on dynamic `Action::Spawn` entities via `DynamicStatUiQueue` — `8005606`
+- [x] **Mute audio toggle + master volume** — `ToggleMute`/`SetVolume` actions; `AudioConfig` on `ProjectConfig`; `SyncAudioState` for label init — `5df25da`
+- [x] **Per-instance stat overrides on SceneEntityDef** — `stat_overrides: HashMap<String, f32>` on placed scene entities; unknown keys warn at load time — `4416545`
+- [x] **Mouse click-to-select + Tab targeting** — screen-space proximity selection; Tab/Shift-Tab nearest-first cycling; `{target}` substitution; `SetTarget`/`ClearTarget` actions; `target.*` events — `34bc77d`
+- [x] **Consolidate entity-spawn component insertion** — `tag_spawned_entity` helper owns all spawn metadata; all 7 spawn sites route through it — `0afd6a0`
+- [x] **Skill action bar (1–9)** — `ActionBar` UI node; cooldown overlay; `CooldownMap`; `ShowFloatingText` action; demo in `primitive_world` — `187463d`
+- [x] **stats_demo + blank_project starter** — standalone stats showcase; minimal copy-and-rename starter project — `fb30a6d`
+- [x] **Foliage square shadows fix** — `NotShadowCaster` on cluster entities; `cast_shadows` RON opt-in — `c4b1ef8`
+- [x] **Stylized foliage** — `kind: Foliage` prefab type; billboard leaf cards; `FoliageMaterial` WGSL; `height_bias`/`seed` for crown shape — `a1e7ffd`
+- [x] **PrefabCatalog schema v2** — `PrefabKind` enum; `PrimitiveShapeKind` typed enum; `PREFAB_CATALOG_SCHEMA_VERSION` → 2 — `fba367e`
+
+### May 2026
+- [x] **Particle mesh buffer recreation** — in-place `Mesh::attribute_mut` replaces per-frame Vec rebuild; eliminates per-frame allocations in pool renderer — `e03c945`
+- [x] **Animation player entity lookup cache** — `last_player_entity` fast-path in `animation_playback_system`; O(1) common case — `c72c57b`
+- [x] **Flipbook / sprite sheet animation** — UV sub-rect baked per-frame in CPU pool renderer; `explosion_4x4.png` sheet — `9d76d59`
+- [x] **Quality tiers + particle budget** — `SetParticleQuality` action; priority (`Player`/`Npc`/`Ambient`); live-count cap; portal navigation; Arcane Observatory demo — `1bc97d9`
+- [x] **Ground decals / AoE projections** — `ProjectDecal` action; AoE circles, impact splats, cast indicators — `786800f`
+- [x] **Extended particle behaviours** — rotation over lifetime, non-uniform scale, Ring/Sphere/Line/Arc emitters, velocity curves — `d14d1b3`
+- [x] **Dynamic effect lights** — `light` block on `EffectDef` spawns a temporary fading `PointLight` — `7a87684`
+- [x] **Ironhold CLI enhancements** — `watch`, `stats`, `query actions/events`, `validate --strict` orphan detection; `--json` throughout — `a67c450`
+- [x] **Ironhold CLI** — `validate`, `inspect glb/texture/audio`, `query prefabs/effects/scenes/rules`; cross-file checks; exit codes — `61bbc26`
+- [x] **Staggered entity spawning + web spawn hang fix** — `PendingEntitySpawns` drains 2/frame; `PreloadPrefab` on `scene.ready` eliminates the quick_scene hang — `b812b26`
+- [x] **Stat display — per-entity stat routing** — `resolve_stat` helper; dotted keys route to `StatMap`, plain to global `LoadedStats`; `StatLabelMarker` floating labels — `2015a1e`
+- [x] **World-space pixel stat bar** — unified `WorldStatBar` with Ascii and Pixel styles — `98ca5d0`
+- [x] **Game stats Phase 2: buffs and modifiers** — named modifier templates; additive/multiplicative/override kinds; stacking rules; `ApplyModifier`/`RemoveModifier` actions — `84b5d15`
+- [x] **Stat display — StatRadar** — `StatRadar` UI node (3–12 axes); WGSL polar-coordinate shader via `UiMaterial`; polygon grid — `763ac72`
+- [x] **Stat display — StatBar + StatSpread** — `StatBar`/`StatSpread` UI node types; colour bands; change-detection update — `57e1628`
+- [x] **Game stats Phase 2a: stat templates** — `stat_templates` on `PrefabDef`; `StatMap` component; dot-routing `ModifyStat`/`SetStat`; threshold/regen — `5292961`
+- [x] **Animation T-pose on landing** — `animation_playback_system` detects `AnimationPlayer` entity change and resets `graph_initialized`; investigation resolved — `9ed1917`
+- [x] **PrefabComponents deny_unknown_fields** — `#[serde(deny_unknown_fields)]` on `PrefabComponents`; clear field-name error on typos — `7144420`
+- [x] **Terrain path consolidation** — `TerrainConfigV2` is now single struct (schema + runtime `Component`); `TerrainConfig` removed; `scale.z` bug fixed — `ece80c1`
+- [x] **`implicit_some` RON extension** — `ImplicitRonPlugin` enables `implicit_some` globally; 671 `Some()` wrappers removed — `4590d77`
+- [x] **Nested prefabs — mesh support** — `spawn_primitive_children` dispatches on `kind`; GLB props nestable in composite prefabs — `d8d0ed5`
+- [x] **Nested prefabs** — `children: [key, ...]` references; cycle detection; `village` demo in `primitive_world` — `6625775`
+- [x] **Particle effect spawning v1** — campfire, torch, explosions, UV distort/scroll; pool renderer; multi-layer `EffectDef` — `27f097d`
+- [x] **Silent failure diagnostics** — warn when `rules.ron` is skipped by `state_machine_path`; warn on `Spawn` position+spawn_point conflict; debug log when no rule matches an event — `762dfc1`
+- [x] **Game stats Phase 1: core stat model** — `StatDef` (base/min/max/regen/thresholds); `LoadedStats` resource; `ModifyStat`/`SetStat` actions; threshold events — `270ff7e`
+
+### April 2026
+- [x] **Beta 0.4 — Entity Logic FSM** — per-entity `.behavior.ron`; `{self}` substitution; `TriggerZone`; `Interactable`; `SetVariable`/`IncrementVariable`; data-bound UI labels; `GameVariables` resource; `entity_logic_demo` project — `2235add`
+- [x] **Beta 0.3 — Global Logic FSM v1** — `state_machine.ron`; state transitions; FSM-driven scene loading — `dca4fd0`
+
+### January 2026
+- [x] **Beta 0.2 — Event/Action Bus refactor** — `Action` enum moved to schema layer; rule-based bindings in RON; `message_interpreter_system` data-driven — `9ef2547`
+- [x] **Beta 0.1 — Baseline Runtime** — declarative RON schemas for project config and scenes; `schema_version` enforcement; native + WASM builds stable — `434fb9a`

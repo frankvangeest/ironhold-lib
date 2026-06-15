@@ -7,6 +7,7 @@ assets:
   - https://www.thebasemesh.com/model-library
   - https://poly.pizza/bundle/Ultimate-Monsters-Bundle-5oyGWAmOB6
   - https://github.com/Mesh2Motion/mesh2motion-assets/
+  - https://quaternius.com/ - Many CC0 assets packs and animations
 - textures:
   - https://polyhaven.com/textures
   - https://ambientcg.com/
