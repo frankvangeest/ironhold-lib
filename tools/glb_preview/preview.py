@@ -39,12 +39,30 @@ Blender path resolution order:
 """
 
 import argparse
+import json
 import os
+import struct
 import subprocess
 import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
+
+
+def _glb_has_meshes(path: Path) -> bool:
+    """Return False for animation-only GLBs (no mesh objects). Reads only the JSON chunk."""
+    try:
+        with open(path, "rb") as f:
+            if f.read(4) != b"glTF":
+                return True  # not a GLB — assume renderable
+            f.read(8)  # version (4) + total length (4)
+            chunk_len = struct.unpack("<I", f.read(4))[0]
+            if f.read(4) != b"JSON":
+                return True
+            data = json.loads(f.read(chunk_len))
+            return len(data.get("meshes") or []) > 0
+    except Exception:
+        return True  # on error, assume renderable (safe default)
 BLENDER_SCRIPT = SCRIPT_DIR / "_blender_script.py"
 BLENDER_PATH_FILE = SCRIPT_DIR / "blender_path.txt"
 
@@ -116,24 +134,28 @@ def _run_check(sources: list[str]) -> int:
         print("No preview files found.", file=sys.stderr)
         return 1
 
-    blank: list[Path] = []
+    real_blank: list[Path] = []
     ok = 0
     for path in previews:
         is_blank, reason = _check_preview(path)
         rel = path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path
-        if is_blank:
-            print(f"  BLANK  {rel}  ({reason})")
-            blank.append(path)
-        else:
+        if not is_blank:
             ok += 1
+            continue
+        # Blank preview — check whether the GLB is animation-only (expected blank).
+        glb_stem = path.stem.removesuffix("-preview")
+        glb = path.parent / f"{glb_stem}.glb"
+        if glb.exists() and not _glb_has_meshes(glb):
+            ok += 1  # animation-only GLB: blank preview is expected
+            continue
+        print(f"  BLANK  {rel}  ({reason})")
+        real_blank.append(path)
 
-    print(f"\nChecked {len(previews)}: {ok} ok, {len(blank)} blank.")
+    print(f"\nChecked {len(previews)}: {ok} ok, {len(real_blank)} blank.")
 
-    if blank:
-        # Derive the matching GLB for each blank preview so we can print the fix command.
+    if real_blank:
         glbs = []
-        for p in blank:
-            # stem is e.g. "anvil-preview" → glb stem is "anvil"
+        for p in real_blank:
             glb_stem = p.stem.removesuffix("-preview")
             glb = p.parent / f"{glb_stem}.glb"
             if glb.exists():
@@ -255,6 +277,12 @@ def main():
     skipped = rendered = failed = 0
 
     for glb in glbs:
+        if not _glb_has_meshes(glb):
+            rel = glb.relative_to(Path.cwd()) if glb.is_relative_to(Path.cwd()) else glb
+            print(f"  skip  {rel}  (no mesh — animation-only)")
+            skipped += 1
+            continue
+
         dest_dir = output_dir if output_dir is not None else glb.parent
         png = dest_dir / f"{glb.stem}-preview.png"
         avif = dest_dir / f"{glb.stem}-preview.avif"

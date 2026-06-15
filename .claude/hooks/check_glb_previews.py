@@ -1,7 +1,25 @@
-import sys
 import json
-import subprocess
+import struct
+import sys
 from pathlib import Path
+import subprocess
+
+
+def _glb_has_meshes(path: str) -> bool:
+    """Return False for animation-only GLBs (no mesh objects). Reads only the JSON chunk."""
+    try:
+        with open(path, "rb") as f:
+            if f.read(4) != b"glTF":
+                return True
+            f.read(8)  # version + total length
+            chunk_len = struct.unpack("<I", f.read(4))[0]
+            if f.read(4) != b"JSON":
+                return True
+            data = json.loads(f.read(chunk_len))
+            return len(data.get("meshes") or []) > 0
+    except Exception:
+        return True  # safe default: assume renderable
+
 
 try:
     data = json.load(sys.stdin)
@@ -15,7 +33,9 @@ try:
         capture_output=True, text=True
     )
     staged = result.stdout.strip().splitlines()
-    glbs = [f for f in staged if f.endswith(".glb")]
+    # Only check GLBs that actually contain mesh geometry — animation-only GLBs
+    # have no renderable content so no AVIF preview is required for them.
+    glbs = [f for f in staged if f.endswith(".glb") and _glb_has_meshes(f)]
 
     if not glbs:
         sys.exit(0)
