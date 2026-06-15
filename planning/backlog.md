@@ -177,6 +177,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ### Terrain
 - [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
 - [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
+- [ ] **Improved terrain rendering** — reduce terrain vertex memory and bandwidth (drop redundant UV channels, use position-derived UVs, encode normals as 16-bit, use indexed meshes); target: 50–70 % reduction in per-mesh GPU footprint. Investigation: `planning/investigations/Terrain-rendering-optimisations-investigation.md`
 - [x] **Terrain path consolidation** — `TerrainConfigV2` is now the single struct (schema + runtime `Component`); `TerrainConfig` removed. Scene loader spawns `terrain_v2.clone()` directly. Fixed **scale.z bug**: `generate_terrain_mesh_raw` now takes separate `scale_x`/`scale_z` so asymmetric terrain is no longer distorted.
 
 ### Rendering & Assets
