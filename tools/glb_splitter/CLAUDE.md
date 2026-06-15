@@ -84,11 +84,8 @@ python tools/glb_splitter/split.py assets/shared/models/characters/character-ani
 python tools/glb_splitter/split.py assets/shared/models/characters/character-animations.glb --by-prefix --out-dir /tmp/split_test
 ```
 
-## Known limitations (v1)
+## Known limitations
 
-- The mesh-only GLB retains animation byte data in its binary buffer (the JSON
-  animation array is stripped but the buffer is not compacted). File size is unchanged
-  from the source. A future `--compact-mesh` flag will address this.
 - Sparse accessors are not handled; inputs with sparse accessor data will produce
   incorrect output. Standard Blender / game-tool exports do not use sparse accessors.
 - Assumes a single embedded buffer (standard GLB). Multi-buffer GLTF files are not

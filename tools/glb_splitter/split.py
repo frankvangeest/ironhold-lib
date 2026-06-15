@@ -65,6 +65,24 @@ def skin_accessor_set(gltf: GLTF2) -> set:
             if s.inverseBindMatrices is not None}
 
 
+def mesh_accessor_set(gltf: GLTF2) -> set:
+    s = set()
+    for mesh in gltf.meshes:
+        for prim in mesh.primitives:
+            if prim.indices is not None:
+                s.add(prim.indices)
+            s |= _attr_accessor_set(prim.attributes)
+            for target in (prim.targets or []):
+                s |= _attr_accessor_set(target)
+    return s
+
+
+def image_bufferview_set(gltf: GLTF2) -> set:
+    """Images reference bufferViews directly (not via accessors)."""
+    return {img.bufferView for img in gltf.images
+            if getattr(img, 'bufferView', None) is not None}
+
+
 def anim_accessor_set(gltf: GLTF2, anim_indices) -> set:
     s = set()
     for i in anim_indices:
@@ -74,9 +92,11 @@ def anim_accessor_set(gltf: GLTF2, anim_indices) -> set:
     return s
 
 
-def compact_buffer(gltf: GLTF2, keep_acc: set) -> dict:
+def compact_buffer(gltf: GLTF2, keep_acc: set, keep_bv_extra: set = None) -> dict:
     """
-    Rebuild the binary buffer keeping only the bufferViews used by keep_acc.
+    Rebuild the binary buffer keeping only the bufferViews used by keep_acc
+    plus any bufferViews in keep_bv_extra (e.g. directly-referenced image bufferViews).
+    Remaps image.bufferView references in-place.
     Mutates gltf in-place.  Returns {old_accessor_idx: new_accessor_idx}.
     Assumes a single embedded buffer (standard for GLB).
     """
@@ -85,6 +105,8 @@ def compact_buffer(gltf: GLTF2, keep_acc: set) -> dict:
     # Determine which bufferViews to retain
     keep_bv = {gltf.accessors[i].bufferView for i in keep_acc
                if gltf.accessors[i].bufferView is not None}
+    if keep_bv_extra:
+        keep_bv |= keep_bv_extra
 
     # Build bufferView old->new index map; shallow-copy each kept view
     bv_map: dict = {}
@@ -114,12 +136,33 @@ def compact_buffer(gltf: GLTF2, keep_acc: set) -> dict:
                 new_acc.bufferView = bv_map[new_acc.bufferView]
             new_accs.append(new_acc)
 
+    # Remap image bufferView references (images reference bufferViews directly)
+    for img in gltf.images:
+        if getattr(img, 'bufferView', None) is not None and img.bufferView in bv_map:
+            img.bufferView = bv_map[img.bufferView]
+
     gltf.bufferViews = new_bvs
     gltf.accessors = new_accs
     if gltf.buffers:
         gltf.buffers[0].byteLength = len(new_blob)
     gltf.set_binary_blob(bytes(new_blob))
     return acc_map
+
+
+def _remap_mesh_accessors(gltf: GLTF2, acc_map: dict) -> None:
+    for mesh in gltf.meshes:
+        for prim in mesh.primitives:
+            if prim.indices is not None:
+                prim.indices = acc_map[prim.indices]
+            for k in vars(prim.attributes):
+                v = getattr(prim.attributes, k)
+                if isinstance(v, int):
+                    setattr(prim.attributes, k, acc_map[v])
+            for target in (prim.targets or []):
+                td = target if isinstance(target, dict) else vars(target)
+                for k in list(td):
+                    if isinstance(td[k], int):
+                        td[k] = acc_map[td[k]]
 
 
 def _remap_anim_accessors(gltf: GLTF2, acc_map: dict) -> None:
@@ -139,11 +182,25 @@ def _remap_skin_accessors(gltf: GLTF2, acc_map: dict) -> None:
 
 def make_mesh_only(gltf: GLTF2) -> GLTF2:
     """
-    Return a deep copy with all animations stripped.
-    The binary buffer is unchanged (may retain unused animation bytes — acceptable for v1).
+    Return a deep copy with all animations stripped and the binary buffer
+    compacted to contain only mesh geometry, skin, and embedded image data.
     """
     g = copy.deepcopy(gltf)
     g.animations = []
+
+    keep_acc = mesh_accessor_set(g) | skin_accessor_set(g)
+    keep_bv_extra = image_bufferview_set(g)
+
+    if keep_acc or keep_bv_extra:
+        acc_map = compact_buffer(g, keep_acc, keep_bv_extra=keep_bv_extra)
+        _remap_mesh_accessors(g, acc_map)
+        _remap_skin_accessors(g, acc_map)
+    else:
+        g.accessors = []
+        g.bufferViews = []
+        g.buffers = []
+        g.set_binary_blob(b'')
+
     return g
 
 
@@ -233,6 +290,8 @@ def main() -> None:
                     help="Output directory (default: same directory as input file)")
     ap.add_argument("--mesh-suffix", default="_mesh",
                     help="Suffix appended to the stem for the mesh-only file (default: _mesh)")
+    ap.add_argument("--mesh-only", action="store_true",
+                    help="Generate only the mesh-only file, skip all animation groups")
     ap.add_argument("--no-mesh", action="store_true",
                     help="Skip generating the mesh-only file")
     args = ap.parse_args()
@@ -290,9 +349,13 @@ def main() -> None:
                 print(f"  Warning: group '{group_name}' has no valid clips -- skipped",
                       file=sys.stderr)
 
-    if not groups and not args.no_mesh:
+    if args.mesh_only:
+        args.no_mesh = False
+        groups = {}  # skip all animation output
+
+    if not groups and not args.no_mesh and not args.mesh_only:
         ap.error("No animation groups specified and --no-mesh not set.\n"
-                 "Use --one-per-clip, --by-prefix, --group NAME CLIPS, or --list.")
+                 "Use --mesh-only, --one-per-clip, --by-prefix, --group NAME CLIPS, or --list.")
 
     stem = src.stem
 
@@ -316,10 +379,6 @@ def main() -> None:
         make_anim_group(gltf, anim_indices, group_name).save(str(out))
 
     print(f"\nDone. {total} animation file(s) + {'0' if args.no_mesh else '1'} mesh file written to {out_dir}")
-
-
-if __name__ == '__main__':
-    main()
 
 
 if __name__ == '__main__':
