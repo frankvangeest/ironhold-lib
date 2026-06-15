@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
+
 ---
 
 ## Bugs
