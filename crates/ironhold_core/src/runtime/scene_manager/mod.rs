@@ -151,6 +151,24 @@ pub struct QueuedSpawn {
     pub project_root: String,
 }
 
+/// One entry queued by `drain_spawn_queue_system` for each dynamic spawn that has a
+/// `stat_label` and/or `world_stat_bar` on its `PrefabDef`. Drained each frame by
+/// `drain_dynamic_stat_ui_system` in scene_loader.rs, which contains all the mesh/
+/// material spawning code for those widgets.
+pub struct DynamicStatUiEntry {
+    /// The spawned entity the widget should track.
+    pub entity: Entity,
+    /// Pre-resolved (with `{self}` replaced) stat key and label def.
+    pub stat_label: Option<(String, StatLabelDef)>,
+    /// Pre-resolved (with `{self}` replaced) stat key and bar def.
+    pub world_stat_bar: Option<(String, WorldStatBarDef)>,
+}
+
+/// Pending stat-label and world-stat-bar spawns for entities created by `Action::Spawn`.
+/// Populated by `drain_spawn_queue_system`, drained by `drain_dynamic_stat_ui_system`.
+#[derive(Resource, Default)]
+pub struct DynamicStatUiQueue(pub Vec<DynamicStatUiEntry>);
+
 #[derive(Resource)]
 pub struct SceneHandleV2(pub Handle<GameSceneV2>);
 

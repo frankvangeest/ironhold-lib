@@ -20,6 +20,7 @@ use super::{
     ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, WorldLabel,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     PendingBehavior, resolve_project_path,
+    DynamicStatUiQueue,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
@@ -723,17 +724,6 @@ pub fn spawn_scene_v2(
                     pending_world_bars.push((parent, resolved_key, wb.clone()));
                 }
 
-                // Motion: continuous rotation and/or vertical bob.
-                if let Some(motion_def) = &prefab.motion {
-                    let rotate = motion_def.rotate
-                        .map(|(x, y, z)| Vec3::new(x, y, z))
-                        .unwrap_or(Vec3::ZERO);
-                    commands.entity(parent).insert(Motion {
-                        rotate,
-                        bob: motion_def.bob,
-                        bob_origin_y: Some(translation.y),
-                    });
-                }
             }
         }
 
@@ -1763,6 +1753,143 @@ fn apply_lighting_v2(
 // ─── Label depth scale helper ─────────────────────────────────────────────────
 
 /// Resolves the effective depth-scale config for a single label.
+/// Drains `DynamicStatUiQueue` and spawns `stat_label` / `world_stat_bar` entities for each
+/// entry. These are entities created by `Action::Spawn`; scene-placed entities still go through
+/// the inline path in `spawn_scene_v2`. Dynamic spawns never have a `label_depth_scale` scene
+/// config so depth scaling is always `None` here (matching projects that don't configure it).
+pub fn drain_dynamic_stat_ui_system(
+    mut commands: Commands,
+    mut queue: ResMut<DynamicStatUiQueue>,
+    mut mats: SceneMaterialParams,
+) {
+    for entry in queue.0.drain(..) {
+        if let Some((stat_key, sl)) = entry.stat_label {
+            let (r, g, b, a) = sl.color;
+            commands.spawn((
+                Name::new(format!("StatLabel: {}", stat_key)),
+                Text2d::new(String::new()),
+                TextFont { font_size: sl.font_size, ..default() },
+                TextColor(Color::srgba(r, g, b, a)),
+                Transform::from_xyz(0.0, 0.0, 1.0),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(entry.entity),
+                    offset: Vec3::from(sl.offset),
+                    base_font_size: sl.font_size,
+                    depth_scale: None,
+                    screen_offset: Vec2::ZERO,
+                },
+                StatLabelMarker { stat_key, show_max: sl.show_max },
+                LevelEntity,
+            ));
+        }
+
+        if let Some((stat_key, wb)) = entry.world_stat_bar {
+            let offset_v3 = Vec3::from(wb.offset);
+            let fill_color = wb.fill_color;
+            let (fr, fg, fb, fa) = fill_color;
+            let (bgr, bgg, bgb, bga) = wb.bg_color;
+            let color_bands = wb.color_bands;
+
+            match wb.style {
+                WorldStatBarStyle::Ascii { cells, font_size } => {
+                    let cells_clamped = cells.max(1) as usize;
+                    let bg_chars = " ".repeat(cells_clamped);
+
+                    commands.spawn((
+                        Name::new(format!("StatBarBg: {}", stat_key)),
+                        Text2d::new(bg_chars),
+                        TextFont { font_size, ..default() },
+                        TextColor(Color::srgba(bgr, bgg, bgb, bga)),
+                        Transform::from_xyz(0.0, 0.0, 1.0),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(entry.entity),
+                            offset: offset_v3,
+                            base_font_size: font_size,
+                            depth_scale: None,
+                            screen_offset: Vec2::ZERO,
+                        },
+                        LevelEntity,
+                    ));
+
+                    commands.spawn((
+                        Name::new(format!("StatBarFill: {}", stat_key)),
+                        Text2d::new(String::new()),
+                        TextFont { font_size, ..default() },
+                        TextColor(Color::srgba(fr, fg, fb, fa)),
+                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(entry.entity),
+                            offset: offset_v3,
+                            base_font_size: font_size,
+                            depth_scale: None,
+                            screen_offset: Vec2::ZERO,
+                        },
+                        WorldStatBarFillMarker { stat_key, cells, fill_color, color_bands },
+                        LevelEntity,
+                    ));
+                }
+                WorldStatBarStyle::Pixel { size, border, border_color } => {
+                    let w = size.0.max(1.0);
+                    let h = size.1.max(1.0);
+                    let b = border.clamp(0.0, h / 2.0);
+                    let (bdr, bdg, bdb, bda) = border_color;
+                    let color_mats = mats.color_materials.as_mut()
+                        .expect("ColorMaterial assets must be available to spawn pixel stat bars");
+
+                    let anchor = commands.spawn((
+                        Name::new(format!("PixelBarAnchor: {}", stat_key)),
+                        Transform::default(),
+                        Visibility::default(),
+                        WorldLabel {
+                            world_pos: Vec3::ZERO,
+                            tracked_entity: Some(entry.entity),
+                            offset: offset_v3,
+                            base_font_size: 1.0,
+                            depth_scale: None,
+                            screen_offset: Vec2::ZERO,
+                        },
+                        LevelEntity,
+                    )).id();
+
+                    if b > 0.0 {
+                        let border_child = commands.spawn((
+                            Name::new(format!("PixelBarBorder: {}", stat_key)),
+                            Mesh2d(mats.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
+                            MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
+                            Transform::from_xyz(0.0, 0.0, 1.0),
+                            LevelEntity,
+                        )).id();
+                        commands.entity(anchor).add_child(border_child);
+                    }
+
+                    let bg_child = commands.spawn((
+                        Name::new(format!("PixelBarBg: {}", stat_key)),
+                        Mesh2d(mats.meshes.add(Rectangle::new(w, h))),
+                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
+                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(bg_child);
+
+                    let fill_child = commands.spawn((
+                        Name::new(format!("PixelBarFill: {}", stat_key)),
+                        Mesh2d(mats.meshes.add(Rectangle::new(1.0, h))),
+                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
+                        Transform::from_xyz(-w / 2.0, 0.0, 3.0)
+                            .with_scale(Vec3::new(0.0, 1.0, 1.0)),
+                        WorldPixelBarFillMarker { stat_key, full_width: w, fill_color, color_bands },
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(fill_child);
+                }
+            }
+        }
+    }
+}
+
 /// Returns `Some((reference_distance, min_scale_floor))` when scaling is active,
 /// or `None` when the label should always render at its authored font size.
 ///

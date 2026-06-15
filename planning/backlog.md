@@ -22,7 +22,7 @@
 - [x] **Push `stat_overrides` into `spawn_prefab_instance`** — `spawn_prefab_instance` now accepts `stat_overrides: &HashMap<String, f32>`, validates unknown keys, and applies overrides when building `StatMap`; redundant re-insert block removed from `scene_loader.rs` GLB actor path. From `claude_suggestions.md`.
 - [x] **Add `collider_radius`/`collider_height` to `NpcDef`** — two optional `Option<f32>` fields added to `NpcDef` (defaults 0.35 m / 1.6 m); `entity_spawner.rs` reads them via `unwrap_or`; docs updated. From `claude_suggestions.md`.
 - [x] **Integration test: GLB Actor `components.npc` attaches `NpcAgent` + `LocomotionState`** — `test_glb_actor_npc_attaches_npc_agent_and_locomotion_state` added to `integration_tests.rs`; all 184 tests pass. From `claude_suggestions.md`.
-- [ ] **Dynamic `Action::Spawn` entities miss `motion`, `stat_label`, and `world_stat_bar`** — rule-spawned entities silently skip three prefab-derived components that scene-placed entities receive: rotate/bob `motion`, floating `stat_label`, and `world_stat_bar`; `motion` moves into `spawn_prefab_instance`; label/bar need an `Added<StatMap>` observer. See `planning/features/dynamic_spawn_components.md`.
+- [x] **Dynamic `Action::Spawn` entities miss `motion`, `stat_label`, and `world_stat_bar`** — `motion` moved into `spawn_prefab_instance` (covers all spawn paths); `DynamicStatUiQueue` resource + `drain_dynamic_stat_ui_system` handle stat_label/world_stat_bar for dynamic spawns with one-frame deferral. See `planning/features/done/dynamic_spawn_components.md`.
 
 ---
 

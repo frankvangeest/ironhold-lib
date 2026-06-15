@@ -43,3 +43,5 @@
 
 - **Tune `collider_radius`/`collider_height` on `enemy_snake` and `enemy_spider` prefabs** _(observed at `36dd927` 2026-06-14)_ — The snake and spider currently use the default 0.35 m / 1.6 m humanoid capsule; `snake01.glb` is a low ground-hugging model and its 1.6 m capsule will visibly mismatch its body, potentially blocking approach at `approach_distance: 1.5 m`. Tune after in-game observation — suggested starting values: snake `collider_height: 0.8, collider_radius: 0.3`; spider `collider_height: 1.2, collider_radius: 0.4`.
 
+- **Per-prefab `depth_scale: Some(true)` override silently ignored on dynamic spawns** _(observed at `7e9eb47` 2026-06-15)_ — `StatLabelDef.depth_scale` and `WorldStatBarDef.depth_scale` let designers force depth scaling on a per-label basis, but `drain_dynamic_stat_ui_system` hardcodes `depth_scale: None` because no scene context is available; the fix is to carry a resolved `Option<(f32,f32)>` into `DynamicStatUiEntry` by storing the current scene's `label_depth_scale` in a resource (e.g. `LoadedLabelDepthScale`) at scene load time so the dynamic path can read it.
+

@@ -225,17 +225,22 @@ Every code change must follow this order before committing code:
     Fast (~2 min). For local play-testing only — never commit a `--dev` build.
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
+    - If the user requests changes or changes are required we go back to step **Code changes** to implement them.
 10. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
     Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 9.
     ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**.
 11. **Simple user play-test release build** — Just to confirm there are no errors in the console and basics are working. Frank confirms.
+    - If the user requests changes or changes are required we go back to step **Code changes** to implement them.
 12. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
 13. **Commit** — only after Frank confirms; include a summary in git commit message format
-14. **Propose the next feature to add to active in the backlog**
+14. **Compact session** — Do a /compact before  
+15. **Propose the next feature to add to active in the backlog**
 
 Do not start coding before the feature plan is finalized and reviewed.
 Once code changes have been made, do not commit before steps 9 and 10 (play-test confirmed + release build) are complete.
 Do not commit a `--dev` WASM build — it bloats the repo and may exceed GitHub Pages limits.
+
+If any code changes are made to the ironhold_core, check that we are using the code workflow properly.
 
 ### After changes
 When ever you make changes in the code, give the summery of the changes in a nice git commit message format.

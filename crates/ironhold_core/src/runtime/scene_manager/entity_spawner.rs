@@ -24,6 +24,8 @@ use crate::runtime::actions::ActionQueue;
 use super::message_interpreter::rewrite_self;
 use crate::schema::stats::{LiveStat, StatMap};
 use crate::capabilities::npc::{NpcAgent, NpcState};
+use crate::capabilities::motion::Motion;
+use super::DynamicStatUiQueue;
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
 /// animation components based on what the PrefabDef declares. Called from both
@@ -154,6 +156,19 @@ pub fn spawn_prefab_instance(
         commands.entity(spawned.parent).insert(stat_map);
     }
 
+    // Motion: continuous rotation and/or vertical bob. Inserting here (rather than at each
+    // call site) ensures dynamic Action::Spawn entities get the same behaviour as scene-placed ones.
+    if let Some(motion_def) = &prefab.motion {
+        let rotate = motion_def.rotate
+            .map(|(x, y, z)| Vec3::new(x, y, z))
+            .unwrap_or(Vec3::ZERO);
+        commands.entity(spawned.parent).insert(Motion {
+            rotate,
+            bob: motion_def.bob,
+            bob_origin_y: Some(transform.translation.y),
+        });
+    }
+
     // NPC agent: GLB Actor/Prop prefabs can declare `components.npc` to gain NPC AI and
     // movement. A capsule physics body is added here (sized conservatively); designers tune
     // behaviour radius and approach via the NpcDef fields.
@@ -234,6 +249,7 @@ pub fn drain_spawn_queue_system(
     mut registry: ResMut<SpawnRegistry>,
     model_spawner: Res<ModelSpawner>,
     fixes: Res<MergedModelFixes>,
+    mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -264,6 +280,18 @@ pub fn drain_spawn_queue_system(
             queued.prefab_def.click_selectable,
             queued.prefab_def.targetable,
         );
+
+        let stat_label = queued.prefab_def.stat_label.as_ref().map(|sl| {
+            let key = sl.stat_key.replace("{self}", &queued.spawn_id);
+            (key, sl.clone())
+        });
+        let world_stat_bar = queued.prefab_def.world_stat_bar.as_ref().map(|wb| {
+            let key = wb.stat_key.replace("{self}", &queued.spawn_id);
+            (key, wb.clone())
+        });
+        if stat_label.is_some() || world_stat_bar.is_some() {
+            stat_ui_queue.0.push(super::DynamicStatUiEntry { entity: parent, stat_label, world_stat_bar });
+        }
     }
 }
 

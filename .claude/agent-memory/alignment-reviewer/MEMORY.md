@@ -9,3 +9,4 @@
 - [Audio state pattern](audio_state_pattern.md) — AudioConfig/AudioState/SetVolume/ToggleMute six touchpoints; two project_loader insert sites; dual-write-to-GlobalVolume footgun
 - [NPC GLB Actor capsule pattern](npc_glb_actor_pattern.md) — components.npc works on GLB Actors via entity_spawner.rs; capsule dims now data-driven (NpcDef.collider_radius/height); npc.rs emits GameEvent not ActionQueue (correct)
 - [stat_overrides flow](stat_overrides_pattern.md) — SceneEntityDef.stat_overrides correctly covers all 3 non-player spawn paths (positive reference); StatMap-build is triplicated (refactor candidate)
+- [WorldLabel stat UI pattern](world_label_stat_ui_pattern.md) — stat_label/world_stat_bar dynamic-spawn route via DynamicStatUiQueue; depth_scale:None on dynamic spawns is accepted (popup precedent); widget-spawn block triplicated

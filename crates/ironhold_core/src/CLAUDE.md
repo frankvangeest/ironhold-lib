@@ -68,6 +68,7 @@ Do not add a general condition system to the interpreter unless the above patter
 ## Before coding
 
 No assets should be hardcoded in the runtime. All assets should be defined in the `assets/projects/{name}/assets.ron` file. Audio catalog keys (not file paths) are passed to `Action::PlaySound`; the executor resolves the path.
+When making code changes to the ironhold_core make sure we are using the code workflow properly.
 
 ---
 
@@ -231,6 +232,16 @@ This caps wave-spawn WebGPU pipeline-compile stalls. On WASM, every new mesh+mat
 For single-entity spawns the queue is transparent: action_executor pushes, drain_spawn_queue processes, all within the same `app.update()` call.
 
 `PendingEntitySpawns` is cleared on `Action::LoadScene` so no orphaned spawns execute after a scene transition.
+
+### Component parity with scene-placed entities
+
+Dynamically spawned entities (via `Action::Spawn`) receive the same prefab-driven components as scene-placed entities:
+
+- **`motion`** — inserted inside `spawn_prefab_instance` (GLB path), so any prefab with `motion:` gets rotation/bob automatically on dynamic spawn.
+- **`stat_label` / `world_stat_bar`** — `drain_spawn_queue_system` pushes a `DynamicStatUiEntry` to `DynamicStatUiQueue` for each spawn whose prefab declares these widgets. `drain_dynamic_stat_ui_system` (runs in the same chained set, one slot after `drain_spawn_queue_system`) drains the queue and spawns the label/bar entities. The net result is a one-frame deferral — imperceptible in practice.
+- **`interactable` / `trigger_zone` / `colliders` / `stat_templates` / `behavior`** — all inserted inside `spawn_prefab_instance` for both scene and dynamic paths.
+
+**Known limitation:** `depth_scale: Some(true)` on a `StatLabelDef` or `WorldStatBarDef` is silently ignored for dynamic spawns — `depth_scale` is always `None` because no scene context is available at queue time. See `planning/claude_suggestions.md` for the planned fix (store active scene's `label_depth_scale` in a resource).
 
 ### GLB preloading
 `Action::PreloadPrefab(key)` takes a prefab key, resolves it to a model path, calls `asset_server.load::<Scene>()`, and stores the `Handle<Scene>` in `PreloadedGlbHandles`. This prevents the ~1–2 s WASM stall caused by HTTP fetch + GLTF decode on first spawn of an uncached GLB.

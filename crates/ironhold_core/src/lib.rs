@@ -110,6 +110,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()
             .init_resource::<crate::runtime::scene_manager::PreloadedGlbHandles>()
             .init_resource::<crate::runtime::scene_manager::PendingEntitySpawns>()
+            .init_resource::<crate::runtime::scene_manager::DynamicStatUiQueue>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
@@ -190,6 +191,7 @@ impl Plugin for GamePlugin {
                 stat_effective_value_system, // recompute after ModifyStat/SetStat/ApplyModifier/RemoveModifier
                 stat_threshold_system,
                 drain_spawn_queue_system,
+                drain_dynamic_stat_ui_system,
                 drain_particle_effects_system,
                 simulate_pool_system,
                 rebuild_pool_meshes_system,
