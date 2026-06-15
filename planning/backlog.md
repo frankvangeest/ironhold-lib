@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **GLB Splitter tool** — `tools/glb_splitter/split.py`; split a monolithic GLB into a mesh-only file and named animation-group files; prerequisite for multi-source animations workflow. See `tools/glb_splitter/CLAUDE.md`.
-
 ---
 
 ## Bugs
@@ -35,7 +33,7 @@
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
 ### Animation
-- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). _Prereq: GLB Splitter tool (Active)._ See `planning/features/multi_source_animations.md`
+- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
 
 ### Gameplay & Environment
 
@@ -190,6 +188,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **GLB Splitter tool** — `tools/glb_splitter/split.py`; splits a monolithic GLB into a mesh-only file (buffer-compacted) and named animation-group files; `--mesh-only`, `--one-per-clip`, `--by-prefix`, `--group` modes; preview tool + commit hook skip animation-only GLBs — `96326d7`
 - [x] **100+ shared GLB models + AVIF previews** — props, characters, creatures; GLB preview tool fixes (fallback materials, mesh-only bounds, proportional clip planes, pixel-count blank detection) — `7486104`
 - [x] **Snake and spider GLB enemies** — `kind: Actor` NPC support; `enemy_snake` + `enemy_spider` with AI, hit effects, patrol waypoints in `3rd_person_game_demo` — `df8c94b`
 - [x] **NpcDef collider sizing + stat_overrides in spawn** — `collider_radius`/`collider_height` on `NpcDef`; `spawn_prefab_instance` validates and applies stat overrides; NPC integration test — `1112fc4`
