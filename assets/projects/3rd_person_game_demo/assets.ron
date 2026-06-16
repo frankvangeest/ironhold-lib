@@ -25,6 +25,22 @@
     "spider": (
       path: "shared/models/creatures/spider01.glb#Scene0",
     ),
+
+    // ── Selectable player characters ───────────────────────────────────────────
+    // Each GLB is the full rigged character with at least one embedded animation
+    // (Idle_Loop). Bevy only creates an AnimationPlayer when a GLTF contains
+    // animation data, so every character model MUST include at least one clip —
+    // without it, animation_sources retargeting silently does nothing.
+    // Additional clips (Walk, Run, attacks, etc.) come from animation_sources.
+    "character_male":   ( path: "shared/models/characters/character-male-01.glb#Scene0" ),
+    "character_female": ( path: "shared/models/characters/character-female-01.glb#Scene0" ),
+    "zombie":           ( path: "shared/models/characters/zombie-01.glb#Scene0" ),
+
+    // ── Animation packs (shared rig — no mesh/material data) ──────────────────
+    "anim_locomotion": ( path: "shared/models/characters/character-animations/locomotion.glb#Scene0" ),
+    "anim_melee":      ( path: "shared/models/characters/character-animations/melee.glb#Scene0" ),
+    "anim_emotes":     ( path: "shared/models/characters/character-animations/emotes.glb#Scene0" ),
+    "anim_zombie":     ( path: "shared/models/characters/character-animations/zombie.glb#Scene0" ),
   },
 
   textures: {

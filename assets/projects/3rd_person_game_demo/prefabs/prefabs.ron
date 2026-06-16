@@ -32,6 +32,118 @@
       ),
     ),
 
+    // ── Selectable player characters ───────────────────────────────────────────
+    // All three use the character-animations pack via animation_sources.
+    // Male and female share player_policy_human.ron (same rig, same clips).
+    // Zombie uses player_policy_zombie.ron (zombie-specific clips only).
+    "player_male": (
+      kind: Actor,
+      model: "character_male",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 2.5, 8.0),
+          look_at_offset: (0.0, 1.0, 0.0),
+          zoom_speed:     8.0,
+          orbit_speed:    0.4,
+          min_radius:     3.0,
+          max_radius:     18.0,
+          orbit_button: "Right",
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          target_next:  "KeyT",
+        ),
+      ),
+    ),
+
+    "player_female": (
+      kind: Actor,
+      model: "character_female",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 2.5, 8.0),
+          look_at_offset: (0.0, 1.0, 0.0),
+          zoom_speed:     8.0,
+          orbit_speed:    0.4,
+          min_radius:     3.0,
+          max_radius:     18.0,
+          orbit_button: "Right",
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          target_next:  "KeyT",
+        ),
+      ),
+    ),
+
+    "player_zombie": (
+      kind: Actor,
+      model: "zombie",
+      animation_policy: "prefabs/animation/player_policy_zombie.ron",
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 2.5, 8.0),
+          look_at_offset: (0.0, 1.0, 0.0),
+          zoom_speed:     8.0,
+          orbit_speed:    0.4,
+          min_radius:     3.0,
+          max_radius:     18.0,
+          orbit_button: "Right",
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          target_next:  "KeyT",
+        ),
+      ),
+    ),
+
+    // ── Character select preview props ────────────────────────────────────────
+    // Display-only props on the character select screen: same models as the
+    // selectable players but NO tags: ["player"], no camera, and no inputs.
+    // Use full GLBs (not mesh-only) so Bevy creates an AnimationPlayer on the
+    // armature root — required for idle animation to play via animation_sources.
+    "preview_male": (
+      kind: Actor,
+      model: "character_male",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      components: (),
+    ),
+    "preview_female": (
+      kind: Actor,
+      model: "character_female",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      components: (),
+    ),
+    "preview_zombie": (
+      kind: Actor,
+      model: "zombie",
+      animation_policy: "prefabs/animation/player_policy_zombie.ron",
+      components: (),
+    ),
+
     "enemy_orc_melee": (
       kind: Actor,
       model: "orc",

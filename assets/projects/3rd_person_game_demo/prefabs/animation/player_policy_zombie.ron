@@ -1,0 +1,30 @@
+(
+    default_transition_ms: 200,
+
+    // Zombie clips come from anim_zombie; Jump_Loop is shared with the human
+    // rig via anim_locomotion — works because zombie GLBs were renamed from
+    // "characterMedium" to "Mannequin" so AnimationTargetId paths now match.
+    animation_sources: ["anim_zombie", "anim_locomotion"],
+
+    base: (
+        idle:      "Zombie_Idle_Loop",
+        walk:      "Zombie_Walk_Fwd_Loop",
+        run:       "Zombie_Walk_Fwd_Loop",
+        jump_loop: "Jump_Loop",
+    ),
+
+    clips: {
+        "attack_light": "Zombie_Scratch",
+    },
+
+    overrides: [
+        (
+            id: "attack_light",
+            clip: "Zombie_Scratch",
+            priority: 100,
+            looping: false,
+            duration: 1.0,
+            cancel_on_move: false,
+        ),
+    ],
+)

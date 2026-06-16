@@ -1,0 +1,102 @@
+(
+  schema_version: 2,
+  name: "character_select",
+
+  lighting: (
+    ambient: (0.35, 0.32, 0.40),
+    ambient_brightness: 80.0,
+    directional: (
+      color: (1.0, 0.95, 0.88),
+      intensity: 20000.0,
+      rotation_euler_deg: (-25.0, 30.0, 0.0),
+      shadows_enabled: true,
+      shadow_distance: 40.0,
+    ),
+  ),
+
+  entities: [
+    // ── Stage platform ─────────────────────────────────────────────────────────
+    (
+      id: "stage",
+      prefab: "ground_plane",
+      transform: (
+        translation: (0.0, -0.25, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (0.4, 1.0, 0.3),
+      ),
+    ),
+
+    // ── Character previews ─────────────────────────────────────────────────────
+    // Standing side-by-side on the stage facing the camera.
+    (
+      id: "preview_male",
+      prefab: "preview_male",
+      transform: (
+        translation: (-3.5, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 190.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "preview_female",
+      prefab: "preview_female",
+      transform: (
+        translation: (0.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 180.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "preview_zombie",
+      prefab: "preview_zombie",
+      transform: (
+        translation: (3.5, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 170.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+  ],
+
+  ui: [
+    Button((
+      id: "back_button",
+      text: "< Back",
+      action: "ui.back_to_menu",
+      position: (16.0, 16.0),
+      size: (120.0, 44.0),
+    )),
+
+    // ── Character select buttons ───────────────────────────────────────────────
+    Button((
+      id: "select_male_button",
+      text: "Male Warrior",
+      action: "ui.select_male",
+      position: (200.0, 520.0),
+      size: (220.0, 56.0),
+    )),
+    Button((
+      id: "select_female_button",
+      text: "Female Warrior",
+      action: "ui.select_female",
+      position: (440.0, 520.0),
+      size: (220.0, 56.0),
+    )),
+    Button((
+      id: "select_zombie_button",
+      text: "Zombie",
+      action: "ui.select_zombie",
+      position: (680.0, 520.0),
+      size: (220.0, 56.0),
+    )),
+
+    Label((
+      id: "title_label",
+      text: "Choose Your Character",
+      bind: "",
+      format: "Choose Your Character",
+      position: (320.0, 48.0),
+      size: (560.0, 52.0),
+      align: Center,
+    )),
+  ],
+)

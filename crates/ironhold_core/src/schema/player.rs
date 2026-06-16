@@ -42,7 +42,7 @@ pub struct CameraConfig {
     /// Minimum pitch in radians (looking up). Default: 0.1.
     #[serde(default = "default_min_pitch")]
     pub min_pitch: f32,
-    /// Maximum pitch in radians (looking down). Default: 1.5.
+    /// Maximum pitch in radians (looking down). Default: 0.9.
     #[serde(default = "default_max_pitch")]
     pub max_pitch: f32,
     /// Mouse button that orbits the camera. `"Left"`, `"Right"`, or `"Either"`. Default: `"Either"`.
@@ -61,7 +61,7 @@ pub struct CameraConfig {
 }
 
 fn default_min_pitch() -> f32 { 0.1 }
-fn default_max_pitch() -> f32 { 1.5 }
+fn default_max_pitch() -> f32 { 0.9 }
 fn default_orbit_button() -> String { "Either".to_string() }
 fn default_character_rotate_button() -> Option<String> { Some("Right".to_string()) }
 fn default_initial_pitch() -> f32 { 0.5 }
@@ -230,6 +230,13 @@ pub struct AnimationPolicy {
     /// If omitted, transitions are instant.
     #[serde(default)]
     pub default_transition_ms: Option<u64>,
+
+    /// Extra GLB catalog keys whose `named_animations` are merged into this character's
+    /// animation graph alongside the model GLB's own clips.
+    /// All listed GLBs must share the same bone names as the model GLB.
+    /// Last entry wins on duplicate clip names.
+    #[serde(default)]
+    pub animation_sources: Vec<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

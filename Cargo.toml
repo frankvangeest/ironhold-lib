@@ -16,7 +16,12 @@ bevy_framepace = "0.21"
 wasm-bindgen = "0.2"
 
 [profile.release]
-opt-level = "s"   # optimise for binary size; important for WASM GitHub Pages limit
+opt-level = "s"     # optimise for binary size; important for WASM GitHub Pages limit
+lto = "thin"        # Link-Time Optimization across crates
+codegen-units = 1   # Restricts code generation blocks for better compression, but can hurt performance; this is a tradeoff for smaller binary size
+debug = false       # Strip debug info for smaller binary size
+# overflow-checks = false # Disable overflow checks for maximum performance
+
 
 [profile.test]
 debug = true

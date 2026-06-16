@@ -175,6 +175,18 @@ Named modes are registered via the prefab catalog or a new `camera_modes` block 
 
 ---
 
+## Notes
+
+### Runtime player spawn and the default camera
+
+When a player character is spawned at runtime via `Action::Spawn` (e.g. from a character-select screen), the orbit camera spawns as part of that path. If the scene has no player entity in its RON, no 3D camera exists until the spawn fires — which causes at least one black frame.
+
+**Clean solution**: `Camera::is_active = false` on the default camera (Bevy supports this natively without despawning). A "fallback" scene camera can sit deactivated, then the orbit camera takes over at full priority (`Camera::order`) when it spawns. No despawn/respawn needed.
+
+**Open design question for camera modes implementation**: should the fallback camera be a standard part of every scene that omits a player entity, or should the camera-modes system make the primary camera persistent across scene loads and simply switch its `ActiveCameraMode`? The persistent-camera approach avoids the one-black-frame problem entirely and is architecturally cleaner for scene transitions. Consider this when implementing the unified `camera_system`.
+
+---
+
 ## Open questions
 
 - **Named mode registry**: should named modes live in the prefab catalog, in a new `camera_modes:` block at scene level, or as inline RON in the action argument? Inline is simplest but prevents reuse across scenes. A scene-level `camera_modes:` map (key → `CameraModeDef`) feels right — small and local to the scene.

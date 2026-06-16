@@ -11,12 +11,11 @@
 
 ## Active
 
-- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
-
 ---
 
 ## Bugs
 
+- [x] **3rd-person orbit camera — sky shows tan ground on steep pan** — reduced `max_pitch` from 1.5 → 0.9 rad (86° → 52°) in `player.rs` default and `entity_spawner.rs` `default_camera_config`; also removed redundant fallback camera spawn when `scene.spawn_points` is non-empty (main scene's FSM already spawns the orbit camera). Root cause: no skybox, so the large 100×100 sand plane filled the entire view at near-vertical camera angles. A proper sky/atmosphere is tracked in `claude_suggestions.md`.
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
 
 ---
@@ -35,7 +34,7 @@
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
 ### Animation
-- [ ] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; the animation graph merges `named_animations` from all listed GLBs plus the model GLB; enables splitting a character's clips across domain-specific files (locomotion, magic, gun) and sharing one animation pack across multiple mesh variants (male / female) that use identical bone names; backwards-compatible (field defaults to empty). See `planning/features/multi_source_animations.md`
+- [x] **Multi-source animations (animation packs + shared-rig mesh variants)** — Done. See Active above.
 
 ### Gameplay & Environment
 
@@ -190,6 +189,10 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; animation graph merges clips from all listed GLBs plus the model GLB; enables splitting clips across domain packs (locomotion, magic, gun) and sharing one pack across mesh variants with identical bone names; backwards-compatible.
+- [x] **Character select + runtime player spawn via `Action::Spawn`** — WoW-style character selection screen in `3rd_person_game_demo`; player prefabs spawned at runtime via `Action::Spawn` with camera + controller assembled from prefab RON; `ActiveTonemapping` threads scene tonemapping to the orbit camera; FSM states carry character choice across the scene load boundary; display-only `preview_*` prefabs prevent stray cameras.
+- [x] **Character select idle animations + model consolidation** — all three preview characters play idle animations on the select screen; model orientation fixed via `model_fixes.ron` (180° Y); zombie GLB scene root renamed to match animation pack root for `animation_sources` retargeting; mesh-only duplicate GLB subfolders removed (character_female, zombie); catalog keys unified (`character_male_mesh` → `character_male` etc.); docs updated: minimum-1-animation GLB requirement and 180° Y rotation convention.
+- [x] **3rd-person orbit camera — sky shows tan ground on steep pan** — reduced `max_pitch` from 1.5 → 0.9 rad; removed redundant fallback camera spawn when `spawn_points` present; docs updated.
 - [x] **GLB Splitter tool** — `tools/glb_splitter/split.py`; splits a monolithic GLB into a mesh-only file (buffer-compacted) and named animation-group files; `--mesh-only`, `--one-per-clip`, `--by-prefix`, `--group` modes; preview tool + commit hook skip animation-only GLBs — `96326d7`
 - [x] **100+ shared GLB models + AVIF previews** — props, characters, creatures; GLB preview tool fixes (fallback materials, mesh-only bounds, proportional clip planes, pixel-count blank detection) — `7486104`
 - [x] **Snake and spider GLB enemies** — `kind: Actor` NPC support; `enemy_snake` + `enemy_spider` with AI, hit effects, patrol waypoints in `3rd_person_game_demo` — `df8c94b`

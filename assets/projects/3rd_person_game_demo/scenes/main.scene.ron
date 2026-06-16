@@ -38,17 +38,6 @@
       ),
     ),
 
-    // ── Player ─────────────────────────────────────────────────────────────────
-    (
-      id: "player_01",
-      prefab: "player_warrior",
-      transform: (
-        translation: (0.0, 1.0, 0.0),
-        rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
     // ── Enemies ────────────────────────────────────────────────────────────────
     // Orc_01 — front-left. Both orcs play idle animation via orc_policy.ron.
     // Click or Tab to select (targetable + click_selectable on prefab).

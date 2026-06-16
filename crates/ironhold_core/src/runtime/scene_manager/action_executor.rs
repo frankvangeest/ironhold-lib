@@ -3,6 +3,7 @@ use bevy::audio::AudioSinkPlayback;
 use crate::ProjectRoot;
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
+use crate::schema::player::PlayerConfig;
 use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
@@ -136,6 +137,31 @@ pub fn action_executor_system(
                     "Action::Spawn: queued '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",
                     spawn_id, prefab, sx, sy, sz
                 );
+
+                // Detect player-tagged prefabs and assemble a PlayerConfig so the drain
+                // system calls spawn_player_entity (camera + controller) instead of the
+                // normal spawn_prefab_instance path.
+                let player_config = if prefab_def.components.tags.contains(&"player".to_string()) {
+                    use crate::runtime::scene_manager::entity_spawner::{default_camera_config, default_input_map};
+                    if prefab_def.animation_policy.is_none() {
+                        warn!("Action::Spawn: player prefab '{}' has no animation_policy; spawned player will have no animations", prefab);
+                    }
+                    let cam = prefab_def.components.camera.clone().unwrap_or_else(default_camera_config);
+                    let inputs = prefab_def.components.inputs.clone().unwrap_or_else(default_input_map);
+                    Some(PlayerConfig {
+                        model_path: model_path.clone(),
+                        initial_position: (sx, sy, sz),
+                        camera: cam,
+                        inputs,
+                        animation_policy: prefab_def.animation_policy.clone(),
+                        movement: prefab_def.components.movement.clone(),
+                        spawn_id: spawn_id.clone(),
+                        prefab_key: prefab.clone(),
+                    })
+                } else {
+                    None
+                };
+
                 spawn_params.pending_spawns.0.push_back(super::QueuedSpawn {
                     prefab_def,
                     model_path,
@@ -143,6 +169,7 @@ pub fn action_executor_system(
                     spawn_id,
                     prefab_key: prefab.clone(),
                     project_root: project_root.0.clone(),
+                    player_config,
                 });
             }
             Action::Despawn(target_id) => {

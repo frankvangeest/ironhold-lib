@@ -22,5 +22,22 @@
             rotation_deg: (0.0, 180.0, 0.0),
             scale: (1.0, 1.0, 1.0),
         ),
+
+        // ── Selectable player characters ───────────────────────────────────────
+        "shared/models/characters/character-male-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
+        "shared/models/characters/character-female-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
+        "shared/models/characters/zombie-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
     },
 )

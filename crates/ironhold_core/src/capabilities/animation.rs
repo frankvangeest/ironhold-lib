@@ -18,6 +18,9 @@ pub struct AnimationController {
     pub last_played: String,
     pub gltf_path: String,
     pub gltf_handle: Handle<Gltf>,
+    /// Extra animation-pack GLBs loaded from `AnimationPolicy.animation_sources`.
+    /// Graph init waits until all of these are loaded before building the merged graph.
+    pub source_handles: Vec<Handle<Gltf>>,
     pub node_indices: HashMap<String, AnimationNodeIndex>,
     pub graph_initialized: bool,
     pub transition_ms: u64,
@@ -43,6 +46,11 @@ pub fn animation_playback_system(
         // 1. Initialize Graph if not done and GLTF is ready
         if !controller.graph_initialized {
             if let Some(gltf) = gltfs.get(&controller.gltf_handle) {
+                // Wait until every animation-source GLB is also loaded.
+                if controller.source_handles.iter().any(|h| gltfs.get(h).is_none()) {
+                    continue;
+                }
+
                 let policy = &policy_comp.0;
                 let mut graph = AnimationGraph::new();
                 let mut indices = HashMap::new();
@@ -60,15 +68,32 @@ pub fn animation_playback_system(
                     clip_names.insert(ov.clip.clone());
                 }
 
-                // Add each named clip into the graph (if present in GLTF).
+                // Build merged named_animations: model GLB first, then each source in order.
+                // Later entries win on duplicate clip names.
+                let mut merged = gltf.named_animations.clone();
+                for source_handle in &controller.source_handles {
+                    if let Some(src) = gltfs.get(source_handle) {
+                        for (name, clip) in &src.named_animations {
+                            if merged.contains_key(name) {
+                                warn!(
+                                    "[{}] animation_sources: clip '{}' overrides an earlier definition",
+                                    entity_name, name
+                                );
+                            }
+                            merged.insert(name.clone(), clip.clone());
+                        }
+                    }
+                }
+
+                // Add each named clip into the graph (if present in any source).
                 for name in &clip_names {
-                    if let Some(clip) = gltf.named_animations.get(name.as_str()) {
+                    if let Some(clip) = merged.get(name.as_str()) {
                         let index = graph.add_clip(clip.clone(), 1.0, graph.root);
                         indices.insert(name.clone(), index);
                     }
                 }
 
-                // Warn about clips declared in the policy that don't exist in the GLB.
+                // Warn about clips declared in the policy that don't exist in any GLB.
                 let mut missing: Vec<&str> = clip_names
                     .iter()
                     .filter(|n| !indices.contains_key(n.as_str()))
@@ -76,14 +101,12 @@ pub fn animation_playback_system(
                     .collect();
                 if !missing.is_empty() {
                     missing.sort();
-                    let mut available: Vec<&str> =
-                        gltf.named_animations.keys().map(|s| s.as_ref()).collect();
+                    let mut available: Vec<&str> = merged.keys().map(|s| s.as_ref()).collect();
                     available.sort();
                     warn!(
-                        "[{}] AnimationPolicy: {} clip(s) not found in \"{}\": [{}]. Available: [{}]",
+                        "[{}] AnimationPolicy: {} clip(s) not found in model or sources: [{}]. Available: [{}]",
                         entity_name,
                         missing.len(),
-                        controller.gltf_path,
                         missing.join(", "),
                         available.join(", ")
                     );

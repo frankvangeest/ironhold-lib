@@ -139,8 +139,9 @@ pub struct DelayedEventQueue(pub Vec<(f32, String)>);
 #[derive(Resource, Default)]
 pub struct PendingEntitySpawns(pub std::collections::VecDeque<QueuedSpawn>);
 
-/// All data `drain_spawn_queue_system` needs to call `spawn_prefab_instance`.
-/// Resolved upfront by the action executor so the drain system needs no catalog access.
+/// All data `drain_spawn_queue_system` needs to call `spawn_prefab_instance` or, when
+/// `player_config` is `Some`, `spawn_player_entity`. Resolved upfront by the action executor
+/// so the drain system needs no catalog access.
 pub struct QueuedSpawn {
     pub prefab_def: crate::schema::catalog::PrefabDef,
     pub model_path: String,
@@ -149,6 +150,21 @@ pub struct QueuedSpawn {
     /// Prefab catalog key (for `PrefabKey`), distinct from `spawn_id`.
     pub prefab_key: String,
     pub project_root: String,
+    /// When the prefab has `tags: ["player"]`, the executor assembles a `PlayerConfig` here.
+    /// `drain_spawn_queue_system` calls `spawn_player_entity` instead of `spawn_prefab_instance`.
+    pub player_config: Option<crate::schema::player::PlayerConfig>,
+}
+
+/// Stores the tonemapping setting from the most recently loaded scene.
+/// Read by `drain_spawn_queue_system` when spawning a player via `Action::Spawn`
+/// (the orbit camera needs the same tonemapping as the rest of the scene).
+#[derive(Resource, Clone, Copy)]
+pub struct ActiveTonemapping(pub bevy::core_pipeline::tonemapping::Tonemapping);
+
+impl Default for ActiveTonemapping {
+    fn default() -> Self {
+        Self(bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted)
+    }
 }
 
 /// One entry queued by `drain_spawn_queue_system` for each dynamic spawn that has a

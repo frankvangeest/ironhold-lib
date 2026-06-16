@@ -1928,7 +1928,7 @@ fn test_player_prefab_camera_full_config_parses() {
     assert_eq!(cam.max_radius,     15.0);
     // New fields default correctly when not specified
     assert_eq!(cam.min_pitch, 0.1);
-    assert_eq!(cam.max_pitch, 1.5);
+    assert_eq!(cam.max_pitch, 0.9);
     assert_eq!(cam.orbit_button, "Either");
     assert_eq!(cam.character_rotate_button, Some("Right".to_string()));
     assert_eq!(cam.initial_pitch, 0.5);

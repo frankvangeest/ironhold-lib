@@ -737,6 +737,7 @@ pub fn spawn_scene_v2(
         }
 
         let tonemapping = scene.tonemapping.to_bevy();
+        commands.insert_resource(crate::runtime::scene_manager::ActiveTonemapping(tonemapping));
 
         // ── Primitive player ─────────────────────────────────────────────────────────
         if let Some((entity_id, shape, params, position, components, player_children, prefab_key)) = primitive_player {
@@ -948,6 +949,10 @@ pub fn spawn_scene_v2(
                     }
                 },
             ));
+        } else if !scene.spawn_points.is_empty() {
+            // Spawn points exist → the FSM will spawn the player (and orbit camera).
+            // Do not create a redundant fallback camera that would waste GPU time.
+            info!("No direct player entity but spawn_points present — skipping fallback camera; expecting FSM to spawn player.");
         } else {
             info!("No player entity in v2 scene, spawning default camera...");
             commands.spawn((

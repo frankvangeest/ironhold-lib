@@ -126,12 +126,14 @@ fn test_input_abstraction_flow() {
             clips: std::collections::HashMap::new(),
             overrides: vec![],
             default_transition_ms: None,
+            animation_sources: vec![],
         }),
         AnimationController {
             current: "idle".to_string(),
             last_played: String::new(),
             gltf_path: String::new(),
             gltf_handle: Default::default(),
+            source_handles: vec![],
             node_indices: Default::default(),
             graph_initialized: false,
             transition_ms: 0,
@@ -1240,6 +1242,7 @@ fn test_animation_graph_only_includes_present_clips() {
         clips: HashMap::new(),
         overrides: vec![],
         default_transition_ms: None,
+        animation_sources: vec![],
     };
 
     // Spawn with AnimationPlayer on the same entity so find_player_entity_recursive
@@ -1253,6 +1256,7 @@ fn test_animation_graph_only_includes_present_clips() {
             last_played: String::new(),
             gltf_path: "test.glb".to_string(),
             gltf_handle,
+            source_handles: vec![],
             node_indices: Default::default(),
             graph_initialized: false,
             transition_ms: 0,
@@ -1302,12 +1306,14 @@ fn test_animation_missing_clip_stops_retrying() {
             clips: HashMap::new(),
             overrides: vec![],
             default_transition_ms: None,
+            animation_sources: vec![],
         }),
         AnimationController {
             current: "missing_clip".to_string(),
             last_played: String::new(),
             gltf_path: String::new(),
             gltf_handle: Default::default(),
+            source_handles: vec![],
             node_indices: Default::default(),
             graph_initialized: true,
             transition_ms: 0,
@@ -2140,12 +2146,14 @@ fn test_player_jump_emits_game_event() {
             clips: std::collections::HashMap::new(),
             overrides: vec![],
             default_transition_ms: None,
+            animation_sources: vec![],
         }),
         AnimationController {
             current: "idle".to_string(),
             last_played: String::new(),
             gltf_path: String::new(),
             gltf_handle: Default::default(),
+            source_handles: vec![],
             node_indices: Default::default(),
             graph_initialized: false,
             transition_ms: 0,
@@ -2308,6 +2316,7 @@ fn test_pending_spawns_cleared_on_load_scene() {
             spawn_id: "should_be_cancelled".to_string(),
             prefab_key: "enemy_orc_melee".to_string(),
             project_root: String::new(),
+            player_config: None,
         });
     }
 

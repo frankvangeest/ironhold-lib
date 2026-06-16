@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::gltf::Gltf;
 use std::collections::HashMap;
 use crate::ProjectRoot;
 use crate::schema::*;
@@ -14,7 +15,8 @@ use crate::capabilities::animation_resolver::{
 };
 use bevy_rapier3d::prelude::*;
 use super::{
-    LevelEntity, MergedModelFixes, PendingAnimationPolicy, PendingPlayerConfig, PendingTonemapping,
+    LevelEntity, LoadedAssetCatalog, MergedModelFixes, PendingAnimationPolicy,
+    PendingPlayerConfig, PendingTonemapping,
     PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
     PendingEntitySpawns, tag_spawned_entity,
     resolve_project_path,
@@ -89,6 +91,7 @@ pub fn spawn_prefab_instance(
                 last_played: String::new(),
                 gltf_path,
                 gltf_handle,
+                source_handles: Vec::new(),
                 node_indices: HashMap::new(),
                 graph_initialized: false,
                 transition_ms: 0,
@@ -250,6 +253,7 @@ pub fn drain_spawn_queue_system(
     model_spawner: Res<ModelSpawner>,
     fixes: Res<MergedModelFixes>,
     mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
+    active_tonemapping: Res<super::ActiveTonemapping>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -260,6 +264,22 @@ pub fn drain_spawn_queue_system(
             queued.transform.translation.y,
             queued.transform.translation.z,
         );
+
+        // Player-tagged prefabs spawn a full character: capsule physics + orbit camera.
+        if let Some(player_config) = queued.player_config {
+            spawn_player_entity(
+                &mut commands,
+                &asset_server,
+                &fixes.0,
+                &model_spawner,
+                &player_config,
+                &queued.project_root,
+                active_tonemapping.0,
+                &mut registry,
+            );
+            continue;
+        }
+
         let parent = spawn_prefab_instance(
             &mut commands,
             &asset_server,
@@ -299,15 +319,34 @@ pub fn animation_policy_loader_system(
     mut commands: Commands,
     mut pending: Query<(Entity, &PendingAnimationPolicy, &mut AnimationController)>,
     policies: Res<Assets<AnimationPolicy>>,
+    asset_catalog: Res<LoadedAssetCatalog>,
+    asset_server: Res<AssetServer>,
 ) {
     for (entity, pending_policy, mut controller) in &mut pending {
         if let Some(policy) = policies.get(&pending_policy.0) {
             controller.current = policy.base.idle.clone();
+
+            // Load animation-source GLBs declared in the policy.
+            let mut source_handles: Vec<Handle<Gltf>> = Vec::new();
+            for key in &policy.animation_sources {
+                if let Some(entry) = asset_catalog.0.models.get(key.as_str()) {
+                    let gltf_path = entry.path.split('#').next().unwrap_or("").to_string();
+                    source_handles.push(asset_server.load(gltf_path));
+                } else {
+                    warn!("animation_sources: catalog key '{}' not found", key);
+                }
+            }
+            controller.source_handles = source_handles;
+
             commands
                 .entity(entity)
                 .insert(AnimationPolicyComponent(policy.clone()))
                 .remove::<PendingAnimationPolicy>();
-            info!("AnimationPolicy loaded — initial animation: {}", policy.base.idle);
+            info!(
+                "AnimationPolicy loaded — initial: '{}', {} animation source(s)",
+                policy.base.idle,
+                policy.animation_sources.len()
+            );
         }
     }
 }
@@ -475,6 +514,7 @@ pub(crate) fn spawn_player_entity(
                 last_played: String::new(),
                 gltf_path,
                 gltf_handle,
+                source_handles: Vec::new(),
                 node_indices: HashMap::new(),
                 graph_initialized: false,
                 transition_ms: 0,
@@ -530,7 +570,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         min_radius: 2.0,
         max_radius: 20.0,
         min_pitch: 0.1,
-        max_pitch: 1.5,
+        max_pitch: 0.9,
         orbit_button: "Either".to_string(),
         character_rotate_button: Some("Right".to_string()),
         initial_pitch: 0.5,

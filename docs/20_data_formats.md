@@ -1237,7 +1237,7 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `min_radius` | `f32` | `2.0` | Minimum zoom distance in metres |
 | `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |
 | `min_pitch` | `f32` | `0.1` | Minimum pitch in radians (looking up limit) |
-| `max_pitch` | `f32` | `1.5` | Maximum pitch in radians (looking down limit) |
+| `max_pitch` | `f32` | `0.9` | Maximum pitch in radians (looking down limit) |
 | `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, or `"Either"` |
 | `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable |
 | `initial_pitch` | `f32` | `0.5` | Camera pitch at scene start in radians |
@@ -1628,6 +1628,11 @@ See `assets/projects/foliage_demo/` for a working demo with oak trees, autumn tr
 
 Defines the locomotion clips and override animations for a character type.
 
+> **GLB animation requirement** — Bevy creates an `AnimationPlayer` on a GLTF scene root only
+> when the GLB contains at least one animation clip. Every character model GLB **must** include
+> at least one embedded clip (typically `Idle_Loop`). Without it, `animation_sources` retargeting
+> silently does nothing — the character will load visually but will never animate.
+
 ```ron
 (
     default_transition_ms: 150,
@@ -1781,6 +1786,18 @@ Per-asset transform corrections applied to every spawned instance of a model. Us
 | `scale` | `(1,1,1)` | Local scale |
 
 Instances are spawned with a parent (instance transform) + child (GLB scene). The fix is applied to the child so gameplay transforms remain clean.
+
+**Convention — 180° Y rotation for Blender-origin character models**
+
+Character models exported from Blender (and most other DCCs) face **+Z** by default. The engine moves characters in the **-Z** direction (Bevy's internal "forward"), so Blender-origin characters need a 180° Y flip to appear facing the right way in-game:
+
+```ron
+"shared/models/characters/character-male-01.glb#Scene0": (
+    rotation_deg: (0.0, 180.0, 0.0),
+),
+```
+
+This is expected and normal — nearly every character model in `shared/models/characters/` carries this fix. Props and creatures may differ (e.g. a treasure chest at 90° because it was authored facing sideways in the DCC).
 
 ---
 

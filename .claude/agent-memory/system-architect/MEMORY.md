@@ -6,3 +6,4 @@
 - [WASM pitfalls](wasm_pitfalls.md) — pipeline compilation latency, no threading, 16-byte alignment, binary size limit, asset preloading
 - [Scene/prefab boundary](scene_prefab_boundary.md) — how scene vs prefab responsibilities diverge from engine canon; no per-instance overrides; recommended direction
 - [GPU physics / wgrapier](gpu_physics_wgrapier.md) — wgrapier is WIP/throwaway prototype, no Bevy bridge; CPU height-array is correct for terrain ground queries; defer GPU physics
+- [Player spawn paths](player_spawn_paths.md) — three player-construction sites; shared-helper rule; executor-side tag detection; dual-camera/tonemapping/terrain-timing caveats for runtime player spawn
