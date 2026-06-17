@@ -274,10 +274,14 @@
       slot_size: 48.0,
       slot_gap: 4.0,
       background_color: (0.05, 0.05, 0.08, 0.85),
+      icon_sheet: "icons_basic_skills",
+      icon_cols: 4,
+      icon_rows: 4,
+      icon_cell_size: 64,
       slots: [
         (
           key: "1",
-          icon: "",
+          icon_index: 0,
           do_actions: [
             PlaySound(key: "swing"),
             ModifyStat(key: "{target}.health", delta: -30.0),
@@ -289,7 +293,7 @@
         ),
         (
           key: "2",
-          icon: "",
+          icon_index: 1,
           do_actions: [
             PlaySound(key: "swing"),
             ModifyStat(key: "{target}.health", delta: -60.0),
@@ -302,7 +306,7 @@
         ),
         (
           key: "3",
-          icon: "",
+          icon_index: 2,
           do_actions: [
             PlaySound(key: "swing"),
             ModifyStat(key: "{target}.health", delta: -1.0),
@@ -311,6 +315,19 @@
           ],
           cooldown_secs: 0.2,
           label: "Poke",
+        ),
+        (
+          key: "4",
+          icon_index: 3,
+          do_actions: [
+            PlaySound(key: "swing"),
+            ModifyStat(key: "{target}.health", delta: -15.0),
+            ShowDamagePopup(entity: "{target}", amount: -15.0),
+            SpawnEffect(key: "hit_spark", entity: "{target}"),
+          ],
+          cooldown_secs: 0.3,
+          cost: (stat: "player_mana", amount: 18.0),
+          label: "Mana Blast",
         ),
       ],
     )),

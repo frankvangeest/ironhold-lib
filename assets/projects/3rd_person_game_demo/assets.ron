@@ -44,6 +44,8 @@
   },
 
   textures: {
+    // Skill bar icon atlas — 4×4 grid, 64 px per cell, 256×256 total
+    "icons_basic_skills": "shared/ui/iconsheet-basic-skills.png",
     // Kenney Particle Pack sprites used by combat effects
     "particle/spark_01": "shared/textures/particles/kenney-particle-pack/spark_01.png",
     "particle/spark_02": "shared/textures/particles/kenney-particle-pack/spark_02.png",

@@ -1289,7 +1289,7 @@ pub fn spawn_scene_v2(
                                     ..default()
                                 }
                             };
-                            spawn_ui_element_node(parent, el, node, &radar_handles);
+                            spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0);
                         }
                     });
             });
@@ -1320,7 +1320,7 @@ pub fn spawn_scene_v2(
                         top: Val::Px(el.position().1),
                         ..default()
                     };
-                    spawn_ui_element_node(parent, el, node, &radar_handles);
+                    spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0);
                 }
             });
         }
@@ -1345,6 +1345,9 @@ fn spawn_ui_element_node(
     el: &crate::schema::scene_v2::UiNodeDef,
     node: Node,
     radar_handles: &HashMap<String, Handle<RadarMaterial>>,
+    asset_server: &AssetServer,
+    mut atlas_layouts: Option<&mut Assets<TextureAtlasLayout>>,
+    asset_catalog: &crate::schema::catalog::AssetCatalog,
 ) {
     use crate::schema::scene_v2::UiNodeDef;
     match el {
@@ -1599,6 +1602,34 @@ fn spawn_ui_element_node(
             bar_node.column_gap = Val::Px(slot_gap);
             bar_node.padding = UiRect::all(Val::Px(4.0));
             bar_node.align_items = AlignItems::Center;
+            // Build one shared atlas layout for the whole bar (all slots share the same grid).
+            // Per-slot overrides reuse the same layout since they use the same icon_cell_size.
+            let shared_layout: Option<Handle<TextureAtlasLayout>> = atlas_layouts.as_mut()
+                .map(|layouts| layouts.add(TextureAtlasLayout::from_grid(
+                    UVec2::splat(bar.icon_cell_size),
+                    bar.icon_cols,
+                    bar.icon_rows,
+                    None,
+                    None,
+                )));
+
+            // Pre-resolve (texture, layout) for every slot before entering closures so we
+            // don't need atlas_layouts captured mutably inside with_children.
+            let slot_atlases: Vec<Option<(Handle<Image>, Handle<TextureAtlasLayout>)>> =
+                bar.slots.iter().map(|slot| {
+                    let sheet_key = if !slot.icon.is_empty() {
+                        Some(slot.icon.as_str())
+                    } else {
+                        bar.icon_sheet.as_deref().filter(|s| !s.is_empty())
+                    };
+                    sheet_key
+                        .and_then(|key| asset_catalog.textures.get(key))
+                        .and_then(|path| {
+                            let tex: Handle<Image> = asset_server.load(path.clone());
+                            shared_layout.clone().map(|layout| (tex, layout))
+                        })
+                }).collect();
+
             let slots = bar.slots.clone();
             parent
                 .spawn((
@@ -1607,8 +1638,9 @@ fn spawn_ui_element_node(
                     BackgroundColor(Color::srgba(br, bg_c, bb, ba)),
                 ))
                 .with_children(|parent| {
-                    for slot in &slots {
+                    for (slot, resolved_atlas) in slots.iter().zip(slot_atlases) {
                         let key = slot.key.clone();
+                        let icon_index = slot.icon_index as usize;
                         parent
                             .spawn((
                                 Name::new(format!("Slot:{}", key)),
@@ -1633,6 +1665,28 @@ fn spawn_ui_element_node(
                                 },
                             ))
                             .with_children(|parent| {
+                                // Icon image — rendered first (bottom z-layer).
+                                if let Some((tex, layout)) = resolved_atlas {
+                                    parent.spawn((
+                                        Name::new("Icon"),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            top: Val::Px(0.0),
+                                            left: Val::Px(0.0),
+                                            right: Val::Px(0.0),
+                                            bottom: Val::Px(0.0),
+                                            ..default()
+                                        },
+                                        ImageNode {
+                                            image: tex,
+                                            texture_atlas: Some(TextureAtlas {
+                                                layout,
+                                                index: icon_index,
+                                            }),
+                                            ..default()
+                                        },
+                                    ));
+                                }
                                 // Full-slot overlay — alpha-fade only; no Node height writes
                                 // so Bevy's UI layout is never invalidated by the visual system.
                                 parent.spawn((

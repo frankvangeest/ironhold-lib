@@ -754,6 +754,19 @@ pub struct ActionBarDef {
     #[serde(default = "default_bar_bg")]
     pub background_color: (f32, f32, f32, f32),
     pub slots: Vec<ActionSlotDef>,
+    /// Texture catalog key for the icon atlas sheet shared by all slots in this bar.
+    /// When set, slots with `icon_index` show the corresponding cell from this atlas.
+    #[serde(default)]
+    pub icon_sheet: Option<String>,
+    /// Columns in the icon atlas grid. Default: 4.
+    #[serde(default = "default_icon_cols")]
+    pub icon_cols: u32,
+    /// Rows in the icon atlas grid. Default: 4.
+    #[serde(default = "default_icon_rows")]
+    pub icon_rows: u32,
+    /// Pixel size of each square cell in the atlas. Default: 64.
+    #[serde(default = "default_icon_cell_size")]
+    pub icon_cell_size: u32,
 }
 
 /// One slot in an `ActionBar`.
@@ -762,11 +775,14 @@ pub struct ActionBarDef {
 pub struct ActionSlotDef {
     /// Key that activates this slot: `"1"` through `"9"`.
     pub key: String,
-    /// Asset catalog texture key for the slot icon. Stored but not rendered in v1
-    /// (no icon asset folder yet). Wire up rendering once `assets/shared/textures/ui/`
-    /// contains real icon files.
+    /// Per-slot texture catalog key override. When non-empty, overrides the bar's `icon_sheet`
+    /// for this slot. Leave empty to use the bar-level `icon_sheet`.
     #[serde(default)]
     pub icon: String,
+    /// Zero-based index into the icon atlas (row-major). `icon_sheet` on the bar must be set.
+    /// Row 0 = top row; index `col + row * icon_cols`. Default: 0.
+    #[serde(default)]
+    pub icon_index: u32,
     /// Actions fired through the pipeline when the slot activates.
     pub do_actions: Vec<crate::schema::actions::Action>,
     /// Seconds before this slot can be used again. Omit for no cooldown.
@@ -794,3 +810,6 @@ pub struct SlotCost {
 fn default_slot_size() -> f32 { 64.0 }
 fn default_slot_gap()  -> f32 { 4.0 }
 fn default_bar_bg() -> (f32, f32, f32, f32) { (0.0, 0.0, 0.0, 0.70) }
+fn default_icon_cols() -> u32 { 4 }
+fn default_icon_rows() -> u32 { 4 }
+fn default_icon_cell_size() -> u32 { 64 }
