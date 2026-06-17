@@ -182,6 +182,20 @@
       position: (16.0, 280.0),
       size: (200.0, 44.0),
     )),
+    Button((
+      id: "hitbox_debug_on_button",
+      text: "Hitbox Debug: ON",
+      action: "ui.toggle_hitboxes_on",
+      position: (16.0, 332.0),
+      size: (200.0, 44.0),
+    )),
+    Button((
+      id: "hitbox_debug_off_button",
+      text: "Hitbox Debug: OFF",
+      action: "ui.toggle_hitboxes_off",
+      position: (16.0, 380.0),
+      size: (200.0, 44.0),
+    )),
 
     // ── Player stat bars ───────────────────────────────────────────────────────
     // Reads from LoadedStats (populated via stats/stats.ron + stats_path in project.ron).

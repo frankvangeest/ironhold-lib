@@ -109,7 +109,9 @@
                 ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimation("dance")                   ] ),
                 ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02")                ] ),
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
-                ( event: "ui.button_pressed:toggle_mute", do_actions: [ ToggleMute                               ] ),
+                ( event: "ui.button_pressed:toggle_mute",        do_actions: [ ToggleMute                                              ] ),
+                ( event: "ui.button_pressed:toggle_hitboxes_on",  do_actions: [ SetVariable("debug_target_hitboxes", "true")            ] ),
+                ( event: "ui.button_pressed:toggle_hitboxes_off", do_actions: [ SetVariable("debug_target_hitboxes", "false")           ] ),
 
                 // ── Action bar feedback ──────────────────────────────────────────
                 ( event: "action_bar.no_target:1",             do_actions: [ SetVariable("combat_status", "No target selected")       ] ),

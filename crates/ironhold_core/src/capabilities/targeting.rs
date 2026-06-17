@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::math::Isometry3d;
 use bevy::window::PrimaryWindow;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
@@ -36,7 +37,12 @@ impl Plugin for TargetingPlugin {
         // match the visible pose of skinned/animated GLB characters — clicks on an animated
         // orc would pass through to the ground. Projecting the entity origin to the screen
         // and measuring cursor distance is pose-independent and works for every prefab kind.
-        app.add_systems(Update, (click_select_system, tab_targeting_system, target_auto_clear_system));
+        app.add_systems(Update, (
+            click_select_system,
+            tab_targeting_system,
+            target_auto_clear_system,
+            debug_selectables_system.run_if(resource_exists::<GizmoConfigStore>),
+        ));
     }
 }
 
@@ -186,6 +192,23 @@ pub fn tab_targeting_system(
     let prefab = prefab_keys.get(*next_entity).ok().map(|p| p.0.clone());
 
     apply_target(&next_id, prefab.as_deref(), &mut current_target, &mut game_vars, &mut game_events);
+}
+
+/// Draws a yellow wireframe sphere at each `ClickSelectable` entity's aim point
+/// (world origin + `SELECT_AIM_HEIGHT`) when the `"debug_target_hitboxes"` GameVariable is `"true"`.
+/// Toggle via `SetVariable("debug_target_hitboxes", "true"/"false")` in RON rules — no recompile needed.
+fn debug_selectables_system(
+    game_vars: Res<GameVariables>,
+    selectables: Query<&GlobalTransform, With<ClickSelectable>>,
+    mut gizmos: Gizmos,
+) {
+    if game_vars.0.get("debug_target_hitboxes").map(String::as_str) != Some("true") {
+        return;
+    }
+    for gt in &selectables {
+        let aim = gt.translation() + Vec3::Y * SELECT_AIM_HEIGHT;
+        gizmos.sphere(Isometry3d::from_translation(aim), 0.5, Color::srgba(1.0, 1.0, 0.0, 0.85));
+    }
 }
 
 /// Clears `CurrentTarget` when the targeted entity becomes hidden (e.g. dead/despawned).
