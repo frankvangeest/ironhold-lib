@@ -544,7 +544,7 @@ pub struct TargetIndicatorDef {
 }
 
 fn default_indicator_radius() -> f32 { 1.0 }
-fn default_indicator_color() -> (f32, f32, f32, f32) { (0.3, 0.8, 1.0, 0.75) }
+fn default_indicator_color() -> (f32, f32, f32, f32) { (1.0, 0.15, 0.15, 0.85) }
 fn default_indicator_offset_y() -> f32 { 0.05 }
 
 /// Scene-level depth-scale configuration for all labels.
