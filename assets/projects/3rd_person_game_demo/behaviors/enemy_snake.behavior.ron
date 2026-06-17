@@ -11,9 +11,10 @@
     states: [
         (
             name: "alive",
-            // Reset health and make visible on each respawn.
+            // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
             // SetStat before SetEntityVisible so the stat bar never briefly shows 0 HP.
             entry_actions: [
+                ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 50.0),
                 SetEntityVisible(entity: "{self}", visible: true),
                 SpawnEffect(key: "respawn_glow", entity: "{self}"),

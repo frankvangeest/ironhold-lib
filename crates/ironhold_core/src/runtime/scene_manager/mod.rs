@@ -396,6 +396,12 @@ pub struct SceneStateParams<'w, 's> {
     /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
     pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
     pub audio_state: ResMut<'w, AudioState>,
+    /// Used by `Action::ResetToSpawn` to read the NPC's stored spawn origin.
+    pub npc_agents: Query<'w, 's, &'static crate::capabilities::npc::NpcAgent>,
+    /// Used by `Action::ResetToSpawn` to teleport the entity's transform.
+    pub transforms: Query<'w, 's, &'static mut Transform>,
+    /// Used by `Action::ResetToSpawn` to zero residual velocity after teleport.
+    pub npc_velocities: Query<'w, 's, &'static mut bevy_rapier3d::prelude::Velocity>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

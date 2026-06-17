@@ -3169,6 +3169,13 @@ fn test_action_clear_target_parses() {
 }
 
 #[test]
+fn test_action_reset_to_spawn_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str(r#"ResetToSpawn("npc_01")"#).expect("ResetToSpawn should parse");
+    assert!(matches!(action, Action::ResetToSpawn(ref id) if id == "npc_01"));
+}
+
+#[test]
 fn test_modifier_kind_override_parses() {
     let ron_str = r#"
         (

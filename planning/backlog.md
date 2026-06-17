@@ -11,9 +11,6 @@
 
 ## Active
 
-- [ ] **Creature collider sizing — snake & spider** — tune `collider_height`/`collider_radius` on `enemy_snake` (→ 0.8 / 0.3) and `enemy_spider` (→ 1.2 / 0.4); default humanoid capsule overshoots both models and blocks approach. Pure RON change. See `planning/features/collider_tuning_creatures.md`
-- [ ] **NPC dead-state fix + `ResetToSpawn` action** — hidden NPCs still run AI and chase the player (ghost hitbox bug); fix: visibility guard in `npc_behavior_system`. New `ResetToSpawn(entity)` action teleports NPC to `NpcAgent.origin` before respawn; opt-in per behavior file. See `planning/features/npc_dead_state_and_respawn_origin.md`
-
 ---
 
 ## Bugs
@@ -194,6 +191,9 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Creature collider sizing — snake & spider** — `collider_height`/`collider_radius` tuned on `enemy_snake` (0.8/0.3) and `enemy_spider` (1.2/0.4); eliminates oversized humanoid capsule blocking player approach.
+- [x] **NPC dead-state fix + `ResetToSpawn` action** — visibility guard in `npc_behavior_system` stops ghost hitboxes; new `ResetToSpawn(entity)` action teleports NPC to origin on respawn; wired in all three enemy behavior files.
+- [x] **Hitbox debug toggle** — `debug_target_hitboxes` GameVariable draws 0.5 m yellow gizmo spheres at `ClickSelectable` aim points; toggled via two HUD buttons in `3rd_person_game_demo`.
 - [x] **Multi-source animations (animation packs + shared-rig mesh variants)** — `animation_sources: [catalog_key, ...]` on `AnimationPolicy.ron`; animation graph merges clips from all listed GLBs plus the model GLB; enables splitting clips across domain packs (locomotion, magic, gun) and sharing one pack across mesh variants with identical bone names; backwards-compatible.
 - [x] **Character select + runtime player spawn via `Action::Spawn`** — WoW-style character selection screen in `3rd_person_game_demo`; player prefabs spawned at runtime via `Action::Spawn` with camera + controller assembled from prefab RON; `ActiveTonemapping` threads scene tonemapping to the orbit camera; FSM states carry character choice across the scene load boundary; display-only `preview_*` prefabs prevent stray cameras.
 - [x] **Character select idle animations + model consolidation** — all three preview characters play idle animations on the select screen; model orientation fixed via `model_fixes.ron` (180° Y); zombie GLB scene root renamed to match animation pack root for `animation_sources` retargeting; mesh-only duplicate GLB subfolders removed (character_female, zombie); catalog keys unified (`character_male_mesh` → `character_male` etc.); docs updated: minimum-1-animation GLB requirement and 180° Y rotation convention.

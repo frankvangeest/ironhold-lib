@@ -226,6 +226,12 @@ pub enum Action {
     /// Clear `CurrentTarget` and emit `target.cleared`.
     /// Also cleared automatically on `LoadScene`.
     ClearTarget,
+    /// Instantly teleport a spawned NPC entity back to its scene-placed origin and zero its velocity.
+    /// Call before `SetEntityVisible(visible: true)` so the entity appears at its spawn point
+    /// rather than wherever it died. Warns and no-ops for non-NPC entities (requires `NpcAgent`).
+    /// Inside behavior files, `{self}` is substituted with the entity's spawn ID.
+    /// Example: `ResetToSpawn("{self}")`
+    ResetToSpawn(String),
 }
 
 fn default_action_volume() -> f32 { 1.0 }

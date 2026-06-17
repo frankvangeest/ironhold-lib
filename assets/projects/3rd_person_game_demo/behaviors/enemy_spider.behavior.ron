@@ -10,7 +10,9 @@
     states: [
         (
             name: "alive",
+            // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
             entry_actions: [
+                ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 75.0),
                 SetEntityVisible(entity: "{self}", visible: true),
                 SpawnEffect(key: "respawn_glow", entity: "{self}"),

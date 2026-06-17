@@ -236,6 +236,7 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             position,
             entity: entity.map(|e| e.replace("{self}", spawn_id)),
         },
+        Action::ResetToSpawn(id) => Action::ResetToSpawn(id.replace("{self}", spawn_id)),
         other => other,
     }
 }
@@ -275,6 +276,7 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         // Substitutes {target} in the value so rules can track the current target:
         // SetVariable("target_name", "{target}") → SetVariable("target_name", "orc_01")
         Action::SetVariable(key, value) => Action::SetVariable(key, s(&value, target_id)),
+        Action::ResetToSpawn(id) => Action::ResetToSpawn(s(&id, target_id)),
         other => other,
     }
 }

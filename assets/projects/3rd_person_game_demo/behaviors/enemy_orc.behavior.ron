@@ -11,9 +11,11 @@
     states: [
         (
             name: "alive",
+            // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
             // SetStat before SetEntityVisible: entity must never be briefly visible at 0 HP
             // (that would immediately re-trigger the depleted threshold).
             entry_actions: [
+                ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 80.0),
                 SetEntityVisible(entity: "{self}", visible: true),
                 SpawnEffect(key: "respawn_glow", entity: "{self}"),

@@ -590,6 +590,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::ClearTarget => "ClearTarget",
         Action::ToggleMute => "ToggleMute",
         Action::SyncAudioState => "SyncAudioState",
+        Action::ResetToSpawn(_) => "ResetToSpawn",
     }
 }
 

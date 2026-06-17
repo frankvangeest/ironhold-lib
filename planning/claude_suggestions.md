@@ -51,3 +51,5 @@
 
 - **Add skybox or procedural atmosphere to remove "all ground" background** _(observed at `d9d0232` 2026-06-16)_ — Without a skybox the ClearColor (dark grey) fills any area not covered by geometry; the large 100×100 sand ground plane covers the entire screen at max camera pitch, making the whole background sandy. A Bevy `EnvironmentMapLight` cube map or a procedural sky dome (gradient blue) would fill the background correctly at any pitch angle and dramatically improve scene readability at steep camera angles.
 
+- **Add collider-tuning doc example + discovery hint for NPC capsules** _(observed at `be229b7` 2026-06-17)_ — `docs/20_data_formats.md` NpcDef table has `collider_radius`/`collider_height` but no worked example in the doc prefab; the `enemy_snake`/`enemy_spider` prefabs are now the only live examples of non-humanoid capsule sizing. Adding a `rat` example to the doc table and a one-liner ("start from the model's visual height, or run `ironhold inspect glb` to read bounds") near line 1288 would make capsule tuning self-discoverable for designers authoring new creatures.
+

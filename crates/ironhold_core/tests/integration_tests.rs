@@ -2424,6 +2424,63 @@ fn test_set_entity_visible_hides_then_shows_spawned_entity() {
     assert_eq!(vis, Visibility::Visible, "entity must be visible after SetEntityVisible(true)");
 }
 
+#[test]
+fn test_reset_to_spawn_teleports_npc_to_origin_and_zeros_velocity() {
+    use ironhold_core::capabilities::npc::{NpcAgent, NpcState};
+    use ironhold_core::schema::catalog::{NpcFaction, NpcOnPlayerNear};
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let origin = Vec3::new(5.0, 0.0, 3.0);
+
+    let entity = app.world_mut().spawn((
+        SpawnId("npc_01".to_string()),
+        Transform::from_translation(Vec3::new(20.0, 0.0, 15.0)),
+        Velocity { linvel: Vec3::new(3.0, 0.0, 2.0), angvel: Vec3::ZERO },
+        NpcAgent {
+            npc_id: "npc_01".to_string(),
+            faction: NpcFaction::Hostile,
+            on_player_near: NpcOnPlayerNear::Chase,
+            detection_radius: 8.0,
+            chase_radius: 16.0,
+            fov_cos: -1.0,
+            requires_los: false,
+            approach_distance: 2.0,
+            patrol_speed: 2.0,
+            chase_speed: 4.0,
+            waypoints: vec![],
+            current_waypoint: 0,
+            state: NpcState::Idle,
+            target: None,
+            state_timer: 0.0,
+            origin,
+            eye_height: 1.0,
+            alerted_duration: 0.3,
+            drag: 0.8,
+            waypoint_reach_radius: 0.5,
+            interact_leave_factor: 1.5,
+            home_arrival_radius: 0.5,
+        },
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("npc_01".to_string(), entity);
+
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::ResetToSpawn("npc_01".to_string()));
+    app.update();
+
+    let tf = app.world().entity(entity).get::<Transform>().unwrap();
+    assert_eq!(tf.translation, origin, "entity must be teleported to NpcAgent.origin");
+
+    let vel = app.world().entity(entity).get::<Velocity>().unwrap();
+    assert_eq!(vel.linvel, Vec3::ZERO, "entity velocity must be zeroed after ResetToSpawn");
+}
+
 // â”€â”€ Composite-prefab TriggerZone test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]

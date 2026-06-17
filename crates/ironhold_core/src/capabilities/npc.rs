@@ -145,6 +145,7 @@ pub fn npc_behavior_system(
         &GlobalTransform,
         &mut Velocity,
         Option<&mut LocomotionState>,
+        Option<&Visibility>,
     )>,
     player_query: Query<(Entity, &GlobalTransform), With<CharacterController>>,
     rapier_context: Option<ReadRapierContext>,
@@ -159,7 +160,13 @@ pub fn npc_behavior_system(
         .map(|(e, gt)| (e, gt.translation()))
         .collect();
 
-    for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt) in &mut npc_query {
+    for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt, visibility) in &mut npc_query {
+        // Skip hidden entities (dead/despawned) — avoids ghost colliders chasing the player.
+        if visibility.is_some_and(|v| *v == Visibility::Hidden) {
+            velocity.linvel.x = 0.0;
+            velocity.linvel.z = 0.0;
+            continue;
+        }
         let npc_pos = global_tf.translation();
         let npc_forward = Vec3::from(transform.forward());
 

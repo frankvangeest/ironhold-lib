@@ -677,6 +677,24 @@ pub fn action_executor_system(
                 info!("Action::SetParticleQuality: {:?}", level);
                 spawn_params.particle_quality.level = level;
             }
+            Action::ResetToSpawn(entity_id) => {
+                let Some(&entity) = spawn_params.registry.entities.get(&entity_id) else {
+                    warn!("Action::ResetToSpawn: entity '{}' not found in spawn registry", entity_id);
+                    continue;
+                };
+                let Ok(npc) = scene_state.npc_agents.get(entity) else {
+                    warn!("Action::ResetToSpawn: entity '{}' has no NpcAgent — ResetToSpawn only works on NPC entities", entity_id);
+                    continue;
+                };
+                let origin = npc.origin;
+                if let Ok(mut tf) = scene_state.transforms.get_mut(entity) {
+                    tf.translation = origin;
+                    info!("Action::ResetToSpawn: '{}' teleported to ({:.1}, {:.1}, {:.1})", entity_id, origin.x, origin.y, origin.z);
+                }
+                if let Ok(mut vel) = scene_state.npc_velocities.get_mut(entity) {
+                    vel.linvel = Vec3::ZERO;
+                }
+            }
             Action::SetTarget(id) => {
                 info!("Action::SetTarget: {:?}", id);
                 scene_state.current_target.0 = Some(id.clone());
