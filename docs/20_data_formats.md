@@ -165,6 +165,7 @@ File extension must be `.scene.ron`.
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: false` or `depth_scale: true`. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
+| `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
 
 **Example:**
 ```ron
@@ -355,6 +356,40 @@ label_depth_scale: (
 
 // In entities — a nearby header pinned at full size:
 label: (text: "Header", depth_scale: false),
+```
+
+### Target indicator (`TargetIndicatorDef`)
+
+A flat, double-sided, unlit ground-ring decal that tracks the selected entity's XZ position each frame.
+Add a `target_indicator:` block to a scene RON to enable it; omit the field to disable silently.
+The texture key must exist in the scene's `assets.ron` `decals:` map.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `texture` | `String` | *(required)* | Decal catalog key from `assets.ron` `decals:` section — **not** the `textures:` section. |
+| `radius` | `f32` | `1.0` | Ring radius in metres. The quad is scaled to `radius × 2` in X and Z. |
+| `color` | `(f32, f32, f32, f32)` | `(0.3, 0.8, 1.0, 0.75)` | RGBA tint applied to the decal texture. |
+| `offset_y` | `f32` | `0.05` | Y lift above ground to avoid z-fighting. |
+
+The indicator only appears when an entity is selected (via click or Tab). It disappears on `ClearTarget`,
+when the target entity is hidden (e.g. dead), or when a new scene loads.
+Entities must have `click_selectable: true` or `targetable: true` in their `PrefabDef` to be selectable.
+
+**`assets.ron` entry:**
+```ron
+decals: {
+  "target_ring": "shared/textures/decals/ring_thick.png",
+},
+```
+
+**`scene.ron` usage:**
+```ron
+target_indicator: (
+  texture: "target_ring",
+  radius: 1.2,
+  color: (0.3, 0.8, 1.0, 0.75),
+  offset_y: 0.05,
+),
 ```
 
 ### Terrain (`TerrainConfigV2`)

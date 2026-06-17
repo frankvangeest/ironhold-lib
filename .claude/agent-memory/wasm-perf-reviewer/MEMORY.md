@@ -4,3 +4,4 @@
 - [WASM binary size](project_wasm_size.md) — release ~90.7 MB (2026-06), warn 95, hard block 100; dev builds ~190 MB (ignore); targeting added zero deps
 - [NPC locomotion bridge](project_npc_locomotion_bridge.md) — npc_behavior_system (FixedUpdate) writes LocomotionState read by animation_resolver (Update); is_grounded written unconditionally (latent footgun)
 - [NPC physics spawn](project_npc_physics_spawn.md) — spawn_prefab_instance adds Dynamic body for components.npc; per-spawn not per-frame; Rapier WASM-safe; risk is never-sleeping body count
+- [Target indicator system](project_target_indicator_system.md) — Update, 0/1 entity, epsilon-guarded move; Local cache reset cleanly on LoadScene(None); Blend/depth_bias parity w/ decal — no new pipeline compile

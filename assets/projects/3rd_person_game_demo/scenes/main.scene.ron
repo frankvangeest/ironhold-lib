@@ -315,4 +315,12 @@
       ],
     )),
   ],
+
+  // Cyan ring decal shown under the selected target entity.
+  target_indicator: (
+    texture: "target_ring",
+    radius: 1.2,
+    color: (0.3, 0.8, 1.0, 0.75),
+    offset_y: 0.05,
+  ),
 )

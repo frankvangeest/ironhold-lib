@@ -144,4 +144,7 @@
       sprites: ["particle/magic_04", "particle/magic_05"],
     ),
   },
+  decals: {
+    "target_ring": "shared/textures/decals/ring_thick.png",
+  },
 )

@@ -1169,6 +1169,27 @@ pub fn spawn_scene_v2(
             max_count: scene.particle_budget.unwrap_or(2000),
         });
 
+        // Resolve target indicator config from the decal catalog key.
+        {
+            use crate::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
+            let resolved = scene.target_indicator.as_ref().and_then(|def| {
+                let Some(path) = params.asset_catalog.0.decals.get(&def.texture).cloned() else {
+                    warn!(
+                        "target_indicator: unknown decal key {:?} — indicator disabled for this scene",
+                        def.texture
+                    );
+                    return None;
+                };
+                Some(ResolvedTargetIndicator {
+                    texture_path: path,
+                    radius: def.radius,
+                    color: def.color,
+                    offset_y: def.offset_y,
+                })
+            });
+            commands.insert_resource(LoadedTargetIndicator(resolved));
+        }
+
         next_state.set(AppState::InGame);
     } // end if !is_overlay
 

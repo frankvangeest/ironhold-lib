@@ -4158,3 +4158,32 @@ fn test_scene_entity_def_multiple_stat_overrides_parse() {
     assert_eq!(overrides.get("health"), Some(&200.0f32));
     assert_eq!(overrides.get("mana"), Some(&50.0f32));
 }
+#[test]
+fn test_scene_target_indicator_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            target_indicator: (
+                texture: "target_ring",
+                radius: 1.2,
+                color: (0.3, 0.8, 1.0, 0.75),
+                offset_y: 0.05,
+            ),
+        )
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("target_indicator must parse");
+    let ind = scene.target_indicator.as_ref().expect("target_indicator must be Some");
+    assert_eq!(ind.texture, "target_ring");
+    assert!((ind.radius - 1.2).abs() < 0.001);
+    assert_eq!((ind.color.0 * 10.0).round() as i32, 3); // 0.3
+    assert!((ind.offset_y - 0.05).abs() < 0.001);
+}
+
+#[test]
+fn test_scene_no_target_indicator_defaults_to_none() {
+    let ron_str = r#"
+        (schema_version: 2)
+    "#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("bare scene must parse");
+    assert!(scene.target_indicator.is_none(), "omitting target_indicator must default to None");
+}

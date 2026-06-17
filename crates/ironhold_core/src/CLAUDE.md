@@ -132,6 +132,13 @@ The capability also writes three `GameVariables` for UI labels (bind whichever y
 Entities carry a `PrefabKey` component (catalog key) alongside `SpawnId` (instance id) to
 support this.
 
+**Target indicator** (`capabilities/target_indicator.rs`) — a ground-ring decal that tracks the
+selected entity. Activated via `target_indicator:` in scene RON (references a `decals:` catalog key).
+The `target_indicator_system` runs in `Update`, watches `CurrentTarget` and `LoadedTargetIndicator`
+via change detection, and manages one `TrackingTarget` entity. Mesh + material are cached in a `Local`
+and only rebuilt when the scene changes — no per-switch allocation. The indicator is tagged `LevelEntity`
+and does NOT go through the action pipeline (it is a pure cosmetic side-effect of the target state).
+
 **New capabilities for entity logic:**
 
 **Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: Primitive` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.

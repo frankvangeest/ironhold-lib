@@ -8,3 +8,4 @@
 - [Auto-written GameVariables undocumented](project_auto_written_gamevariables_undocumented.md) — capability-populated bind keys (targeting's target_display/target_name/target_id) live only in core CLAUDE.md, not docs/
 - [Audio writes no GameVariable](project_audio_no_gamevariable.md) — ToggleMute/SetVolume only emit events; mute state must be bridged to a variable via SetVariable on audio.muted/unmuted for a Label to show it
 - [NPC collider canonical example](project_npc_collider_canonical_example.md) — collider_height/radius worked example lives in 3rd_person_game_demo snake/spider prefabs, not docs' own orc_guard/rat examples
+- [decals: map has two consumers](project_decals_map_two_consumers.md) — assets.ron decals: feeds BOTH Action::ProjectDecal and scene target_indicator; doc sections don't cross-link; texture: field resolves against decals not textures

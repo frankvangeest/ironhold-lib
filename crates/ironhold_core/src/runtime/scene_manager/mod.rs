@@ -119,6 +119,20 @@ pub struct LoadedAudioHandles(pub Vec<Handle<bevy::audio::AudioSource>>);
 #[derive(Resource, Default)]
 pub struct LoadedDecalHandles(pub Vec<Handle<Image>>);
 
+/// Resolved target-indicator config for the current scene.
+/// `None` means no indicator is configured — the system early-exits silently.
+/// Populated by `spawn_scene_v2` on scene load; cleared on full `LoadScene`.
+#[derive(Resource, Default)]
+pub struct LoadedTargetIndicator(pub Option<ResolvedTargetIndicator>);
+
+/// Resolved (catalog key → texture path) target indicator config for the current scene.
+pub struct ResolvedTargetIndicator {
+    pub texture_path: String,
+    pub radius: f32,
+    pub color: (f32, f32, f32, f32),
+    pub offset_y: f32,
+}
+
 /// Holds pre-loaded GLTF scene handles for prefab models, populated by `Action::PreloadPrefab`.
 /// Keeping handles alive prevents the asset server from evicting the decoded GLB between scene
 /// loads, so the first `Action::Spawn` of that prefab doesn't block the WASM main thread with

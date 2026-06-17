@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Selected target indicator (ground decal)** — configurable ring decal tracks selected entity; appears on `SetTarget`, disappears on `ClearTarget` or entity death; `target_indicator:` block on scene RON (texture catalog key, radius, colour, Y offset); no hardcoded visuals. See `planning/features/target_indicator.md`
-
 ---
 
 ## Bugs

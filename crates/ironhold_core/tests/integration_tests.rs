@@ -2731,4 +2731,53 @@ fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
         .any(|(id, _)| id.0 == "snake_01");
     assert!(has_locomotion, "GLB Actor with animation_policy must attach LocomotionState");
 }
+#[test]
+fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::action_bar::CurrentTarget;
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
 
+    let mut app = setup_test_app();
+    app.update();
+
+    // Register a world entity with a GlobalTransform in the SpawnRegistry.
+    let entity = app.world_mut().spawn((
+        SpawnId("target_01".to_string()),
+        Transform::from_translation(Vec3::new(3.0, 0.0, 5.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(3.0, 0.0, 5.0))),
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("target_01".to_string(), entity);
+
+    // Configure a target indicator (texture path need not resolve in tests).
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.2,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+    })));
+
+    // Selecting a target must spawn a TrackingTarget indicator entity.
+    app.world_mut().resource_mut::<CurrentTarget>().0 = Some("target_01".to_string());
+    app.update();
+
+    let indicator_count = app.world_mut()
+        .query::<&TrackingTarget>()
+        .iter(app.world())
+        .count();
+    assert_eq!(indicator_count, 1, "one TrackingTarget entity must exist after selecting a target");
+
+    // Clearing the target must despawn the indicator within one frame.
+    app.world_mut().resource_mut::<CurrentTarget>().0 = None;
+    app.update();
+    // Despawn is deferred (Commands); run one more update to flush.
+    app.update();
+
+    let indicator_count_after = app.world_mut()
+        .query::<&TrackingTarget>()
+        .iter(app.world())
+        .count();
+    assert_eq!(indicator_count_after, 0, "TrackingTarget entity must be despawned after clearing the target");
+}

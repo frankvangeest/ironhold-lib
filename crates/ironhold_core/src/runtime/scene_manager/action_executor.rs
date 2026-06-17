@@ -47,6 +47,7 @@ pub fn action_executor_system(
                 scene_state.preloaded_glbs.0.clear();
                 scene_state.delayed_events.0.clear();
                 spawn_params.pending_spawns.0.clear();
+                commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);

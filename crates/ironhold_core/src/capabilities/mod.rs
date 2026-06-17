@@ -25,6 +25,7 @@ pub mod decal;
 pub mod foliage;
 pub mod action_bar;
 pub mod targeting;
+pub mod target_indicator;
 
 pub use player::*;
 pub use camera::*;

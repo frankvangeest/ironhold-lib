@@ -88,6 +88,12 @@ pub struct GameSceneV2 {
     /// Applied to `ParticleBudget` on scene load. Defaults to 2000 when omitted.
     #[serde(default)]
     pub particle_budget: Option<u32>,
+    /// Ground-ring decal shown under the currently selected target entity.
+    /// When set, a flat unlit quad tracks the selected entity's XZ position each frame.
+    /// Disappears on `ClearTarget` or when the targeted entity is hidden/despawned.
+    /// Omit this field to disable the indicator for this scene (no ring, no error).
+    #[serde(default)]
+    pub target_indicator: Option<TargetIndicatorDef>,
 }
 
 impl GameSceneV2 {
@@ -516,6 +522,30 @@ pub struct WorldLabelDef {
     #[serde(default)]
     pub depth_scale: Option<bool>,
 }
+
+/// Ground-ring decal configuration for the selected-target indicator.
+/// The indicator is a flat, double-sided, unlit `StandardMaterial` quad (alpha blend)
+/// that tracks the selected entity's XZ position each frame. Not parented to the target
+/// so it doesn't inherit animation scale transforms.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct TargetIndicatorDef {
+    /// Decal texture catalog key (from `assets.ron` `decals:` section).
+    pub texture: String,
+    /// Ring radius in metres (the quad is scaled to `radius * 2` in X and Z). Default: 1.0.
+    #[serde(default = "default_indicator_radius")]
+    pub radius: f32,
+    /// RGBA tint applied to the decal texture. Default: cyan-white `(0.3, 0.8, 1.0, 0.75)`.
+    #[serde(default = "default_indicator_color")]
+    pub color: (f32, f32, f32, f32),
+    /// Y lift above ground to avoid z-fighting. Default: 0.05.
+    #[serde(default = "default_indicator_offset_y")]
+    pub offset_y: f32,
+}
+
+fn default_indicator_radius() -> f32 { 1.0 }
+fn default_indicator_color() -> (f32, f32, f32, f32) { (0.3, 0.8, 1.0, 0.75) }
+fn default_indicator_offset_y() -> f32 { 0.05 }
 
 /// Scene-level depth-scale configuration for all labels.
 /// Labels shrink as camera distance increases; `font_size` is the size at `reference_distance`.

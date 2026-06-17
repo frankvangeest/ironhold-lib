@@ -334,3 +334,15 @@ Seamlessly tiling greyscale utility textures for use in custom WGSL shaders. Ass
 - `seamless-voronoi-noise-1024x1024-12-cells.png` — 1024×1024, 12 cells. Same feature size, higher resolution.
 - `seamless-voronoi-noise-1024x1024-24-cells.png` — 1024×1024, 24 cells. Finest variant; suitable for detailed scales or small-cell mosaic effects.
 
+
+## decals/
+
+Ground-projected decal textures. Used by `Action::ProjectDecal` and the scene-level `target_indicator:` field. Reference by catalog key in `assets.ron` under `decals:`.
+
+| File | Description |
+|------|-------------|
+| `circle_filled.png` | Solid filled disc — AoE radius fill, area-of-effect ground highlight |
+| `ring_thick.png` | Thick ring outline — target selection ring, ability range indicator |
+| `ring_thin.png` | Thin ring outline — subtle targeting accent, precision range marker |
+| `shockwave.png` | Expanding ring burst — shockwave hit, explosion ring, pulse effect |
+| `splat_01.png` | Organic splatter mark — blood impact, mud puddle, ground stain |

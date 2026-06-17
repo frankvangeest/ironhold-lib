@@ -113,6 +113,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::DynamicStatUiQueue>()
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
+            .init_resource::<crate::runtime::scene_manager::LoadedTargetIndicator>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
             .init_resource::<crate::runtime::scene_manager::AudioState>()
             .init_resource::<crate::runtime::scene_manager::ActiveTonemapping>()
@@ -148,6 +149,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::foliage::FoliagePlugin)
             .add_plugins(capabilities::action_bar::ActionBarPlugin)
             .add_plugins(capabilities::targeting::TargetingPlugin)
+            .add_plugins(capabilities::target_indicator::TargetIndicatorPlugin)
             .add_systems(Startup, setup)
             .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
             // Scene + UI + input
