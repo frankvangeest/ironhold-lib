@@ -1,9 +1,13 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
-use bevy::shader::ShaderRef;
+use bevy::shader::{Shader, ShaderRef};
+use bevy::asset::uuid_handle;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::runtime::scene_manager::SpawnId;
 use crate::capabilities::stat_display::resolve_stat;
+
+pub const STAT_RADAR_SHADER_HANDLE: Handle<Shader> =
+    uuid_handle!("73746172-6164-4172-8172-737461726101");
 
 // ---------------------------------------------------------------------------
 // Uniform layout
@@ -55,7 +59,7 @@ impl Default for RadarMaterial {
 
 impl UiMaterial for RadarMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shared/shaders/custom_stat_radar.wgsl".into()
+        STAT_RADAR_SHADER_HANDLE.into()
     }
 }
 
@@ -116,5 +120,14 @@ pub struct StatRadarPlugin;
 impl Plugin for StatRadarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<RadarMaterial>::default());
+        app.add_systems(Startup, setup_stat_radar_shader);
     }
+}
+
+fn setup_stat_radar_shader(mut shaders: ResMut<Assets<Shader>>) {
+    let shader = Shader::from_wgsl(
+        include_str!("../../../../assets/shared/shaders/custom_stat_radar.wgsl"),
+        "shared/shaders/custom_stat_radar.wgsl",
+    );
+    let _ = shaders.insert(&STAT_RADAR_SHADER_HANDLE, shader);
 }

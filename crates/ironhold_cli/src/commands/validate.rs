@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::stats::StatCatalog;
@@ -266,6 +266,24 @@ fn cross_file_checks(
                         ),
                         error_type: "missing_file",
                     });
+                }
+            }
+
+            if def.kind == PrefabKind::Foliage {
+                if let Some(foliage) = &def.foliage {
+                    if let Some(ac) = asset_catalog {
+                        let tex_key = &foliage.material.leaf_texture;
+                        if !tex_key.is_empty() && !ac.textures.contains_key(tex_key) {
+                            errors.push(CrossFileError {
+                                source_file: "prefabs/prefabs.ron".to_string(),
+                                message: format!(
+                                    "prefab {:?}: foliage leaf_texture key {:?} not found in assets.ron textures",
+                                    key, tex_key
+                                ),
+                                error_type: "missing_catalog_key",
+                            });
+                        }
+                    }
                 }
             }
         }

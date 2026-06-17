@@ -23,14 +23,17 @@ use bevy::render::render_resource::{
     PrimitiveTopology,
 };
 use bevy::pbr::{Material, MaterialPipeline, MaterialPipelineKey};
-use bevy::shader::ShaderRef;
+use bevy::shader::{Shader, ShaderRef};
+use bevy::asset::{uuid_handle, RenderAssetUsages};
 use bevy_mesh::MeshVertexBufferLayoutRef;
 use bevy::camera::visibility::NoFrustumCulling;
-use bevy::asset::RenderAssetUsages;
 use std::collections::HashMap;
 use crate::runtime::scene_manager::LevelEntity;
 use crate::runtime::messages::SceneEvent;
 use crate::schema::catalog::VelocityCurve;
+
+pub const POOL_FLAME_SHADER_HANDLE: Handle<Shader> =
+    uuid_handle!("706f6f6c-666c-4061-8061-706f6f6c6101");
 
 // ─── Pool particle state ──────────────────────────────────────────────────────
 
@@ -165,7 +168,7 @@ pub struct PoolFlameMaterial {
 
 impl Material for PoolFlameMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shared/shaders/pool_flame_particle.wgsl".into()
+        POOL_FLAME_SHADER_HANDLE.into()
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Add
@@ -535,6 +538,17 @@ impl Plugin for ParticleRendererPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ParticlePool>()
             .init_resource::<ParticlePoolGroups>()
-            .add_plugins(MaterialPlugin::<PoolFlameMaterial>::default());
+            .add_plugins(MaterialPlugin::<PoolFlameMaterial>::default())
+            .add_systems(Startup, setup_pool_flame_shader);
     }
+}
+
+fn setup_pool_flame_shader(mut shaders: ResMut<Assets<Shader>>) {
+    let _ = shaders.insert(
+        &POOL_FLAME_SHADER_HANDLE,
+        Shader::from_wgsl(
+            include_str!("../../../../assets/shared/shaders/pool_flame_particle.wgsl"),
+            "shared/shaders/pool_flame_particle.wgsl",
+        ),
+    );
 }

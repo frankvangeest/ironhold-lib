@@ -30,6 +30,25 @@ assets/
 
 Shared shaders are prefixed `custom_` by convention (e.g. `custom_pbr.wgsl`, `custom_fresnel.wgsl`).
 
+### Engine-internal vs designer-facing shaders
+
+There are two categories of shaders in `assets/shared/shaders/`:
+
+**Designer-facing** — loaded at runtime via the `CustomMaterial` extension point. Referenced by file path in `assets.ron`, so a designer can swap them or put a copy in their project folder and point `shader:` at the local path.
+
+**Engine-internal** — compiled into the WASM/native binary at build time via `include_str!()`. These are not accessible through the `CustomMaterial` system. Designers configure them through RON fields on the capability that owns them (e.g. `EffectDef` for particles). The files live in `assets/shared/shaders/` as the source of record, but the engine does not load them from disk at runtime — they are always available even in projects that omit `assets/shared/`.
+
+Engine-internal shaders:
+
+| File | Owned by | Configured via |
+|------|----------|---------------|
+| `terrain.wgsl` | `TerrainMaterial` | `TerrainDef` in scene RON |
+| `custom_material_default.wgsl` | `CustomMaterial` fallback | (magenta — indicates missing shader) |
+| `foliage.wgsl` + `foliage_prepass.wgsl` | `FoliageMaterial` | `FoliageDef` in scene RON |
+| `custom_flame_particle.wgsl` | `FlameParticleMaterial` | `EffectDef` fields (`uv_distort`, `uv_scroll_speed`) |
+| `pool_flame_particle.wgsl` | `PoolFlameMaterial` | Same as above |
+| `custom_stat_radar.wgsl` | `RadarMaterial` | `StatRadar` UI node fields |
+
 ---
 
 ## How WGSL shaders plug in ✅

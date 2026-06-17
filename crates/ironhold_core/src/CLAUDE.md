@@ -170,6 +170,13 @@ All shaders in this project are authored in WGSL. WGSL is the native language of
 - `CustomMaterial` currently overrides the **fragment shader only**. Vertex shader override is planned but not yet implemented — do not attempt to swap the vertex shader via `specialize()`.
 - Always test WGSL changes in a web build (`python test_web.py`). WebGPU validates binding interfaces strictly; native wgpu is more permissive and will not catch all errors.
 
+**Engine-internal shaders (capability-owned) must be embedded at build time, not runtime-loaded:**
+- Engine capabilities that own their own `Material`/`UiMaterial` types (`FoliageMaterial`, `FlameParticleMaterial`, `PoolFlameMaterial`, `RadarMaterial`, `TerrainMaterial`) embed their shaders via `include_str!()` in a `Startup` system and register them at a stable `Handle<Shader>` using `uuid_handle!()`.
+- The `Material`/`UiMaterial` impl returns `ShaderRef::Handle(HANDLE)`, never a `"shared/shaders/..."` path string.
+- Do NOT use a `ShaderRef` path string for engine-owned shaders — it creates a runtime file dependency that breaks projects that do not ship `assets/shared/`. See `terrain.rs` + `terrain_material.rs` for the canonical pattern.
+- The `CustomMaterial` system is the only place where path-based `ShaderRef` strings are acceptable, because there the path is explicitly designer-authored in `assets.ron`.
+- Similarly, never fabricate asset paths in code as catalog fallbacks (e.g. `format!("shared/textures/{}.png", key)`). If a catalog key is missing, warn once and use a 1×1 white fallback or skip the entity — never construct a `shared/` path silently.
+
 See `docs/25_custom_shaders.md` for the full shader authoring guide.
 
 ## Physics & movement must use `FixedUpdate`

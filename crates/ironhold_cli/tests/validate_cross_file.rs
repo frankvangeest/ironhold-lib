@@ -91,6 +91,16 @@ fn missing_behavior_file_exits_1() {
     );
 }
 
+#[test]
+fn missing_foliage_leaf_texture_exits_1() {
+    let (code, stdout) = validate("bad_foliage_texture");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("nonexistent_leaf"),
+        "expected 'nonexistent_leaf' in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

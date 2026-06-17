@@ -1,0 +1,25 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "oak_tree": (
+            kind: Foliage,
+            foliage: (
+                clusters: (
+                    count: 6,
+                    emitter_radius: 1.2,
+                    leaves_per_cluster: 24,
+                    leaf_scale_min: 0.3,
+                    leaf_scale_max: 0.6,
+                ),
+                material: (
+                    leaf_texture: "nonexistent_leaf",
+                    color_highlight: (0.5, 0.8, 0.3),
+                    color_midtone: (0.3, 0.6, 0.2),
+                    color_shadow: (0.1, 0.3, 0.1),
+                    toon_bands: 3,
+                    ao_intensity: 0.4,
+                ),
+            ),
+        ),
+    },
+)

@@ -4,8 +4,12 @@ use bevy::render::render_resource::{
     AsBindGroup, RenderPipelineDescriptor, ShaderType,
     SpecializedMeshPipelineError,
 };
-use bevy::shader::ShaderRef;
+use bevy::shader::{Shader, ShaderRef};
 use bevy::pbr::Material;
+use bevy::asset::uuid_handle;
+
+pub const FLAME_PARTICLE_SHADER_HANDLE: Handle<Shader> =
+    uuid_handle!("666c616d-6570-4172-8172-666c616d6101");
 
 // ─── Uniforms ────────────────────────────────────────────────────────────────
 
@@ -44,7 +48,7 @@ pub struct FlameParticleMaterial {
 
 impl Material for FlameParticleMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shared/shaders/custom_flame_particle.wgsl".into()
+        FLAME_PARTICLE_SHADER_HANDLE.into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
@@ -69,5 +73,16 @@ pub struct FlameParticleMaterialPlugin;
 impl Plugin for FlameParticleMaterialPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<FlameParticleMaterial>::default());
+        app.add_systems(Startup, setup_flame_particle_shader);
     }
+}
+
+fn setup_flame_particle_shader(mut shaders: ResMut<Assets<Shader>>) {
+    let _ = shaders.insert(
+        &FLAME_PARTICLE_SHADER_HANDLE,
+        Shader::from_wgsl(
+            include_str!("../../../../assets/shared/shaders/custom_flame_particle.wgsl"),
+            "shared/shaders/custom_flame_particle.wgsl",
+        ),
+    );
 }

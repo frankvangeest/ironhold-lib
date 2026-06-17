@@ -5,11 +5,17 @@ use bevy::render::render_resource::{
     AsBindGroup, PrimitiveTopology, RenderPipelineDescriptor, ShaderType,
     SpecializedMeshPipelineError, VertexFormat,
 };
-use bevy::shader::ShaderRef;
+use bevy::shader::{Shader, ShaderRef};
+use bevy::asset::uuid_handle;
 use bevy_mesh::{Indices, MeshVertexAttribute, MeshVertexBufferLayoutRef};
 
 use crate::schema::catalog::{FoliageDef, FoliageMaterialDef};
 use crate::runtime::scene_manager::LoadedAssetCatalog;
+
+pub const FOLIAGE_SHADER_HANDLE: Handle<Shader> =
+    uuid_handle!("666f6c69-6167-4065-8165-666f6c696101");
+pub const FOLIAGE_PREPASS_SHADER_HANDLE: Handle<Shader> =
+    uuid_handle!("666f6c69-6167-4073-8073-707265703101");
 
 // ─── Custom vertex attribute ──────────────────────────────────────────────────
 
@@ -49,16 +55,16 @@ pub struct FoliageMaterial {
 
 impl Material for FoliageMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shared/shaders/foliage.wgsl".into()
+        FOLIAGE_SHADER_HANDLE.into()
     }
     fn fragment_shader() -> ShaderRef {
-        "shared/shaders/foliage.wgsl".into()
+        FOLIAGE_SHADER_HANDLE.into()
     }
     fn prepass_vertex_shader() -> ShaderRef {
-        "shared/shaders/foliage_prepass.wgsl".into()
+        FOLIAGE_PREPASS_SHADER_HANDLE.into()
     }
     fn prepass_fragment_shader() -> ShaderRef {
-        "shared/shaders/foliage_prepass.wgsl".into()
+        FOLIAGE_PREPASS_SHADER_HANDLE.into()
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Opaque
@@ -88,8 +94,26 @@ pub struct FoliagePlugin;
 impl Plugin for FoliagePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<FoliageMaterial>::default())
+            .add_systems(Startup, setup_foliage_shaders)
             .add_systems(Update, (foliage_setup_system, foliage_lighting_sync_system));
     }
+}
+
+fn setup_foliage_shaders(mut shaders: ResMut<Assets<Shader>>) {
+    let _ = shaders.insert(
+        &FOLIAGE_SHADER_HANDLE,
+        Shader::from_wgsl(
+            include_str!("../../../../assets/shared/shaders/foliage.wgsl"),
+            "shared/shaders/foliage.wgsl",
+        ),
+    );
+    let _ = shaders.insert(
+        &FOLIAGE_PREPASS_SHADER_HANDLE,
+        Shader::from_wgsl(
+            include_str!("../../../../assets/shared/shaders/foliage_prepass.wgsl"),
+            "shared/shaders/foliage_prepass.wgsl",
+        ),
+    );
 }
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -116,10 +140,14 @@ pub fn foliage_setup_system(
         let def = &pending_foliage.0;
 
         // Resolve leaf texture path from the asset catalog.
-        let texture_path = asset_catalog.0.textures
-            .get(&def.material.leaf_texture)
-            .cloned()
-            .unwrap_or_else(|| format!("shared/textures/{}.png", def.material.leaf_texture));
+        let Some(texture_path) = asset_catalog.0.textures.get(&def.material.leaf_texture) else {
+            warn!(
+                "foliage: leaf_texture key '{}' not found in asset catalog; skipping foliage entity (add it to assets.ron textures)",
+                def.material.leaf_texture
+            );
+            commands.entity(entity).remove::<PendingFoliage>();
+            continue;
+        };
         let leaf_texture: Handle<Image> = asset_server.load(texture_path.clone());
 
         // Build a shared material handle for all clusters of this tree.

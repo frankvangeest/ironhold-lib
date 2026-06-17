@@ -2,11 +2,11 @@
     schema_version: 1,
     prefabs: {
         "box": (
-            kind: "primitive",
+            kind: Primitive,
             model: "Cuboid",
         ),
         "orphan_prop": (
-            kind: "primitive",
+            kind: Primitive,
             model: "Sphere",
         ),
     },
