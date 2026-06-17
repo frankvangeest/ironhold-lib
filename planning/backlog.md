@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Creature collider sizing — snake & spider** — tune `collider_height`/`collider_radius` on `enemy_snake` (→ 0.8 / 0.3) and `enemy_spider` (→ 1.2 / 0.4); default humanoid capsule overshoots both models and blocks approach. Pure RON change. See `planning/features/collider_tuning_creatures.md`
+
 ---
 
 ## Bugs
@@ -39,7 +41,6 @@
 
 ### Gameplay & Environment
 
-- [ ] **Creature collider sizing — snake & spider** — tune `collider_height`/`collider_radius` on `enemy_snake` (→ 0.8 / 0.3) and `enemy_spider` (→ 1.2 / 0.4); default humanoid capsule overshoots both models and blocks approach. Pure RON change. See `planning/features/collider_tuning_creatures.md`
 - [ ] **Selected target indicator (ground decal)** — a configurable ring decal that tracks the selected entity; appears on `SetTarget`, disappears on `ClearTarget` or entity death; `target_indicator:` block on scene RON (texture catalog key, radius, colour, Y offset); no hardcoded visuals. See `planning/features/target_indicator.md`
 - [ ] **Status effect icon display** — HUD and/or above-entity icon strip showing active buffs and debuffs; icons are asset catalog texture keys declared on modifier templates; strip updates via change detection on `ActiveModifiers`; designer controls position (HUD panel vs. world-space above entity) and max visible icons in scene RON. See `planning/features/status_effect_icons.md`
 - [ ] **Layered icon UI node** — new `LayeredIcon` UI node type; each layer declares a texture key, tint color (r,g,b,a), and opacity; layers are alpha-composited in declaration order (bottom → top); v1 alpha-stack only — additive blend mode deferred to a future `blend:` field per layer; feeds action bar slot icons and status effect icon strips directly.
