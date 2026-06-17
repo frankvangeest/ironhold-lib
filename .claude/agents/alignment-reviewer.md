@@ -54,6 +54,8 @@ Flag any of the following as **BLOCKING** issues:
 - Schema types that are not `#[derive(Deserialize)]` or not included in any RON-loadable parent type
 - Platform-specific code leaked into `ironhold_core`
 - New required parameters that have no default and no RON representation
+- Hardcoded `ShaderRef` path literals inside `Material` or `UiMaterial` impls that reference `"shared/shaders/..."` as a runtime asset path — these create a file-on-disk dependency that breaks projects without `assets/shared/`. Engine-owned shaders (where the designer authors parameters, not the GPU program) must be embedded via `include_str!()` and registered with a stable `Handle` at startup, following the `CUSTOM_MATERIAL_FALLBACK_HANDLE` / `TERRAIN_SHADER_HANDLE` pattern. The only exception is the `CustomMaterial` system, where the shader path is explicitly designer-authored in `assets.ron`.
+- Fabricated asset paths constructed in code (e.g., `format!("shared/textures/{}.png", key)`) used as fallbacks when a catalog lookup fails — all asset resolution must go through the `LoadedAssetCatalog`; missing keys should warn and use a 1×1 white fallback texture, never silently construct a path outside the catalog.
 
 Flag the following as **WARNINGS** (should fix, not blocking):
 - Schema types that are serializable but have no documentation comment explaining their RON usage
