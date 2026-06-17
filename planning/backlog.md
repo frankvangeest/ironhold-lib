@@ -12,6 +12,7 @@
 ## Active
 
 - [ ] **Creature collider sizing — snake & spider** — tune `collider_height`/`collider_radius` on `enemy_snake` (→ 0.8 / 0.3) and `enemy_spider` (→ 1.2 / 0.4); default humanoid capsule overshoots both models and blocks approach. Pure RON change. See `planning/features/collider_tuning_creatures.md`
+- [ ] **NPC dead-state fix + `ResetToSpawn` action** — hidden NPCs still run AI and chase the player (ghost hitbox bug); fix: visibility guard in `npc_behavior_system`. New `ResetToSpawn(entity)` action teleports NPC to `NpcAgent.origin` before respawn; opt-in per behavior file. See `planning/features/npc_dead_state_and_respawn_origin.md`
 
 ---
 
