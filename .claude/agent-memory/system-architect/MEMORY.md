@@ -9,3 +9,5 @@
 - [Player spawn paths](player_spawn_paths.md) — three player-construction sites; shared-helper rule; executor-side tag detection; dual-camera/tonemapping/terrain-timing caveats for runtime player spawn
 - [Render-only reactive capabilities](render_only_reactive_capabilities.md) — cosmetic capabilities (target_indicator) react to state without ActionQueue; intentionally skip tag_spawned_entity; don't flag as violations
 - [Shader resolution pattern](shader_resolution_pattern.md) — engine-owned shaders embed via include_str!+UUID handle (CUSTOM_MATERIAL_FALLBACK_HANDLE); designer shaders resolve through catalog; don't hardcode ShaderRef literals
+- [Time & animation advance](time_and_animation_advance.md) — Bevy (not our system) advances AnimationPlayer off Time<Virtual>; freeze/pause/slow features act on the clock, not by skipping our systems; harness modes go URL-param→start_app→Resource
+- [Determinism & networking](determinism_networking.md) — static mode is orthogonal to net determinism; Rapier cross-platform float divergence is the hard blocker; recommend SimClock chokepoint + run-mode enum
