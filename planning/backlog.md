@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Target indicator color by category and per-prefab override** — layered color resolution: (1) prefab `indicator_color: Option<(f32,f32,f32,f32)>` (direct RGBA, highest precedence), (2) prefab `indicator_category: Option<String>` key looked up in scene-level `target_indicator.named_colors: HashMap<String, (f32,f32,f32,f32)>`, (3) scene-level `target_indicator.color` fallback; material memo keyed by resolved `[u32;4]` colour bits so same-colour alternation never reallocates; PrefabKey lookup at target-switch time — no new spawn plumbing. Schema changes: `TargetIndicatorDef` + `PrefabDef`. See `planning/features/target_indicator_color.md`.
+- [ ] **Per-prefab `select_aim_height` for click targeting** — add `select_aim_height: f32` (default 1.0) to `PrefabDef`; `SelectAimHeight(f32)` component inserted at spawn; `click_select_system` and `debug_selectables_system` read per-entity height instead of global constant; fixes snake/spider hitboxes floating 0.4–0.6 m above actual body centre. See `planning/features/select_aim_height_per_prefab.md`.
 
 ---
 
@@ -195,6 +195,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Target indicator color by category and per-prefab override** — layered color resolution: prefab `indicator_color` (direct RGBA) > `indicator_category` key in scene `named_colors` > scene `color` fallback; material memo keyed by resolved colour bits — `d945ea9`
 - [x] **Embed capability shaders & fix hardcoded shared asset paths** — `stat_radar`, `foliage` (×2), `flame_material`, `pool_flame` shaders embedded via `include_str!()`; foliage fabricated texture fallback removed; CLI validate now cross-checks foliage `leaf_texture` keys; fixture RON kind-field format fixed — `planned at b1ca9b6`
 - [x] **Creature collider sizing — snake & spider** — `collider_height`/`collider_radius` tuned on `enemy_snake` (0.8/0.3) and `enemy_spider` (1.2/0.4); eliminates oversized humanoid capsule blocking player approach.
 - [x] **NPC dead-state fix + `ResetToSpawn` action** — visibility guard in `npc_behavior_system` stops ghost hitboxes; new `ResetToSpawn(entity)` action teleports NPC to origin on respawn; wired in all three enemy behavior files.
