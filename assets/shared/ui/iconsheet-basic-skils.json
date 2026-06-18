@@ -1,0 +1,109 @@
+{
+  "sheet": {
+    "size": "256x256",
+    "iconSize": "64x64",
+    "columns": 4,
+    "rows": 4
+  },
+  "icons": [
+    {
+      "id": 0,
+      "name": "Fist Attack",
+      "type": "attack",
+      "description": "Basic melee punch or brawler skill."
+    },
+    {
+      "id": 1,
+      "name": "Sword Slash",
+      "type": "attack",
+      "description": "Standard sword attack or slash ability."
+    },
+    {
+      "id": 2,
+      "name": "Spell Attack",
+      "type": "magic",
+      "description": "Offensive magic projectile or cast."
+    },
+    {
+      "id": 3,
+      "name": "Heal",
+      "type": "heal",
+      "description": "Instant healing or recovery spell."
+    },
+
+    {
+      "id": 4,
+      "name": "Holy Heal",
+      "type": "heal",
+      "description": "Enhanced healing or resurrection effect."
+    },
+    {
+      "id": 5,
+      "name": "Sprint",
+      "type": "buff",
+      "description": "Temporary movement speed increase."
+    },
+    {
+      "id": 6,
+      "name": "Cleanse",
+      "type": "utility",
+      "description": "Removes curses, poison, or debuffs."
+    },
+    {
+      "id": 7,
+      "name": "Curse",
+      "type": "curse",
+      "description": "Applies a harmful debuff or hex."
+    },
+
+    {
+      "id": 8,
+      "name": "Buff Up",
+      "type": "buff",
+      "description": "General stat increase or empowerment."
+    },
+    {
+      "id": 9,
+      "name": "AOE Blast",
+      "type": "aoe",
+      "description": "Area-of-effect explosion or burst damage."
+    },
+    {
+      "id": 10,
+      "name": "Dual Axe",
+      "type": "attack",
+      "description": "Heavy melee dual-wield attack."
+    },
+    {
+      "id": 11,
+      "name": "Ranged Shot",
+      "type": "attack",
+      "description": "Bow or ranged projectile attack."
+    },
+
+    {
+      "id": 12,
+      "name": "Tornado",
+      "type": "aoe",
+      "description": "Whirlwind or cyclone damage skill."
+    },
+    {
+      "id": 13,
+      "name": "Reveal",
+      "type": "utility",
+      "description": "Detection, stealth reveal, or scouting ability."
+    },
+    {
+      "id": 14,
+      "name": "Trap",
+      "type": "debuff",
+      "description": "Immobilizes or snares enemies."
+    },
+    {
+      "id": 15,
+      "name": "Stealth Step",
+      "type": "buff",
+      "description": "Improves evasion, stealth, or mobility."
+    }
+  ]
+}
