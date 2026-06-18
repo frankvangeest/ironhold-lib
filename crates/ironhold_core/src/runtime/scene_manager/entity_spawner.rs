@@ -299,6 +299,7 @@ pub fn drain_spawn_queue_system(
             &queued.prefab_key,
             queued.prefab_def.click_selectable,
             queued.prefab_def.targetable,
+            queued.prefab_def.select_aim_height,
         );
 
         let stat_label = queued.prefab_def.stat_label.as_ref().map(|sl| {
@@ -504,6 +505,7 @@ pub(crate) fn spawn_player_entity(
         &player_config.prefab_key,
         false,
         false,
+        1.0,
     );
 
     if let Some(policy_handle) = policy_handle_opt {

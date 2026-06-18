@@ -293,8 +293,8 @@ pub struct PrefabKey(pub String);
 /// missing `SpeedMultiplier`/`SpawnId`, dynamic spawns missing `PrefabKey`/`LevelEntity`).
 ///
 /// Always inserts `SpawnId` + `PrefabKey` + `LevelEntity` and registers the entity by id.
-/// `ClickSelectable`/`Targetable` markers are inserted per the flags (players pass `false`).
-/// Player-specific components (CharacterController, physics, camera, …) stay at the call site.
+/// `ClickSelectable`/`Targetable`/`SelectAimHeight` markers are inserted per the flags
+/// (players pass `false, false, 1.0`). Player-specific components stay at the call site.
 pub fn tag_spawned_entity(
     ec: &mut bevy::ecs::system::EntityCommands,
     registry: &mut SpawnRegistry,
@@ -302,11 +302,13 @@ pub fn tag_spawned_entity(
     prefab_key: &str,
     click_selectable: bool,
     targetable: bool,
+    select_aim_height: f32,
 ) {
     let entity = ec.id();
     ec.insert((SpawnId(id.to_string()), PrefabKey(prefab_key.to_string()), LevelEntity));
     if click_selectable {
         ec.insert(crate::capabilities::targeting::ClickSelectable);
+        ec.insert(crate::capabilities::targeting::SelectAimHeight(select_aim_height));
     }
     if targetable {
         ec.insert(crate::capabilities::targeting::Targetable);

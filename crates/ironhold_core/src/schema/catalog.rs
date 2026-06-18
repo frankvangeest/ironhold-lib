@@ -831,7 +831,15 @@ pub struct PrefabDef {
     /// `target_indicator.color` when the key is absent from the map.
     #[serde(default)]
     pub indicator_category: Option<String>,
+    /// Vertical offset (metres) from the entity world origin used when projecting to screen
+    /// space for click-selection. Defaults to 1.0 (body centre for human-scale characters).
+    /// Set lower for ground-hugging creatures (e.g. 0.4 for a snake, 0.6 for a spider).
+    /// Only meaningful when `click_selectable: true`.
+    #[serde(default = "default_select_aim_height")]
+    pub select_aim_height: f32,
 }
+
+pub(crate) fn default_select_aim_height() -> f32 { 1.0 }
 
 /// One physics collider shape in a `PrefabDef.colliders` list.
 /// All geometry fields are optional; reasonable defaults apply.

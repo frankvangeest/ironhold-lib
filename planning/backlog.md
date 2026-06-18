@@ -11,7 +11,6 @@
 
 ## Active
 
-- [ ] **Per-prefab `select_aim_height` for click targeting** — add `select_aim_height: f32` (default 1.0) to `PrefabDef`; `SelectAimHeight(f32)` component inserted at spawn; `click_select_system` and `debug_selectables_system` read per-entity height instead of global constant; fixes snake/spider hitboxes floating 0.4–0.6 m above actual body centre. See `planning/features/select_aim_height_per_prefab.md`.
 
 ---
 
@@ -195,6 +194,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Per-prefab `select_aim_height` for click targeting** — `select_aim_height: f32` (default 1.0) on `PrefabDef`; `SelectAimHeight(f32)` component; fixes snake/spider click hitboxes floating 0.6–1 m above the visible body; orc/zombie unaffected (no field set → default 1.0)
 - [x] **Target indicator color by category and per-prefab override** — layered color resolution: prefab `indicator_color` (direct RGBA) > `indicator_category` key in scene `named_colors` > scene `color` fallback; material memo keyed by resolved colour bits — `d945ea9`
 - [x] **Embed capability shaders & fix hardcoded shared asset paths** — `stat_radar`, `foliage` (×2), `flame_material`, `pool_flame` shaders embedded via `include_str!()`; foliage fabricated texture fallback removed; CLI validate now cross-checks foliage `leaf_texture` keys; fixture RON kind-field format fixed — `planned at b1ca9b6`
 - [x] **Creature collider sizing — snake & spider** — `collider_height`/`collider_radius` tuned on `enemy_snake` (0.8/0.3) and `enemy_spider` (1.2/0.4); eliminates oversized humanoid capsule blocking player approach.

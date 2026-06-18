@@ -21,6 +21,12 @@ const SELECT_AIM_HEIGHT: f32 = 1.0;
 #[derive(Component, Default)]
 pub struct ClickSelectable;
 
+/// Per-entity vertical offset (metres) for click-selection screen projection.
+/// Inserted alongside `ClickSelectable`. Defaults to `SELECT_AIM_HEIGHT` (1.0).
+/// Set via `select_aim_height` on `PrefabDef`.
+#[derive(Component)]
+pub struct SelectAimHeight(pub f32);
+
 /// Marker: entity participates in Tab-cycle targeting (nearest-first).
 /// Insert via `targetable: true` on `PrefabDef`.
 #[derive(Component, Default)]
@@ -93,7 +99,7 @@ fn click_select_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
-    selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>), With<ClickSelectable>>,
+    selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>, Option<&SelectAimHeight>), With<ClickSelectable>>,
     visibility_q: Query<&Visibility>,
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
@@ -108,11 +114,12 @@ fn click_select_system(
 
     // Find the nearest visible selectable to the cursor in screen space.
     let mut best: Option<(f32, String, Option<String>)> = None;
-    for (entity, spawn_id, gt, prefab) in &selectables {
+    for (entity, spawn_id, gt, prefab, aim_height) in &selectables {
         if visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
             continue;
         }
-        let world = gt.translation() + Vec3::Y * SELECT_AIM_HEIGHT;
+        let height = aim_height.map_or(SELECT_AIM_HEIGHT, |h| h.0);
+        let world = gt.translation() + Vec3::Y * height;
         let Ok(screen) = camera.world_to_viewport(cam_tf, world) else { continue };
         let dist = screen.distance(cursor);
         if dist <= SELECT_PIXEL_RADIUS && best.as_ref().map_or(true, |(bd, _, _)| dist < *bd) {
@@ -199,14 +206,15 @@ pub fn tab_targeting_system(
 /// Toggle via `SetVariable("debug_target_hitboxes", "true"/"false")` in RON rules — no recompile needed.
 fn debug_selectables_system(
     game_vars: Res<GameVariables>,
-    selectables: Query<&GlobalTransform, With<ClickSelectable>>,
+    selectables: Query<(&GlobalTransform, Option<&SelectAimHeight>), With<ClickSelectable>>,
     mut gizmos: Gizmos,
 ) {
     if game_vars.0.get("debug_target_hitboxes").map(String::as_str) != Some("true") {
         return;
     }
-    for gt in &selectables {
-        let aim = gt.translation() + Vec3::Y * SELECT_AIM_HEIGHT;
+    for (gt, aim_height) in &selectables {
+        let height = aim_height.map_or(SELECT_AIM_HEIGHT, |h| h.0);
+        let aim = gt.translation() + Vec3::Y * height;
         gizmos.sphere(Isometry3d::from_translation(aim), 0.5, Color::srgba(1.0, 1.0, 0.0, 0.85));
     }
 }

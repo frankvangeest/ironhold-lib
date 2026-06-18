@@ -299,6 +299,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      select_aim_height: 0.4,
       indicator_category: "hostile",
       behavior: "behaviors/enemy_snake.behavior.ron",
       stat_templates: [
@@ -366,6 +367,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      select_aim_height: 0.6,
       indicator_category: "hostile",
       behavior: "behaviors/enemy_spider.behavior.ron",
       stat_templates: [
@@ -413,6 +415,7 @@
         (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
       ],
       click_selectable: true,
+      select_aim_height: 0.1,
       indicator_category: "neutral",
     ),
 
@@ -429,6 +432,7 @@
       model: "anvil",
       targetable: true,
       click_selectable: true,
+      select_aim_height: 0.1,
       components: (
         tags: [],
       ),

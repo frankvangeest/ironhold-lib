@@ -124,6 +124,9 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the
 nearest to the cursor) — NOT mesh raycasting, which raycasts bind-pose geometry and misses
 animated/skinned GLB characters. Tab-cycle is nearest-first by world distance.
+`select_aim_height: f32` (default `1.0`) on `PrefabDef` controls how many metres above the entity
+origin the click-projection aim point sits. Set lower for ground-hugging creatures (e.g. `0.4` for
+a snake, `0.6` for a spider) so the selectable zone aligns with the visible body.
 - `target.clicked:{id}` / `target.changed:{id}` / `target.changed` — new target selected
 - `target.cleared` — target cleared (click on empty space, `ClearTarget` action, or `LoadScene`)
 

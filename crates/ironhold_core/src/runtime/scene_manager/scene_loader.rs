@@ -205,6 +205,7 @@ pub fn spawn_scene_v2(
                     &mut commands.entity(root), &mut spawn_registry,
                     &entity_def.id, &entity_def.prefab,
                     prefab.click_selectable, prefab.targetable,
+                    prefab.select_aim_height,
                 );
 
                 // Spawn trunk GLB as a child entity if defined.
@@ -275,6 +276,7 @@ pub fn spawn_scene_v2(
                         &mut commands.entity(parent), &mut spawn_registry,
                         &entity_def.id, &entity_def.prefab,
                         prefab.click_selectable, prefab.targetable,
+                        prefab.select_aim_height,
                     );
 
                     // ── NPC agent ────────────────────────────────────────────────────────
@@ -509,6 +511,7 @@ pub fn spawn_scene_v2(
                             &mut commands.entity(spawned), &mut spawn_registry,
                             &entity_def.id, &entity_def.prefab,
                             prefab.click_selectable, prefab.targetable,
+                            prefab.select_aim_height,
                         );
 
                         // Collectable marker: collision triggers GameEvent into the rules pipeline.
@@ -709,6 +712,7 @@ pub fn spawn_scene_v2(
                     &mut commands.entity(parent), &mut spawn_registry,
                     &entity_def.id, &entity_def.prefab,
                     prefab.click_selectable, prefab.targetable,
+                    prefab.select_aim_height,
                 );
                 if let Some(label_def) = &entity_def.label {
                     pending_labels.push((parent, label_def.clone()));
@@ -818,7 +822,7 @@ pub fn spawn_scene_v2(
             // are never click/Tab targets, so markers are off.
             tag_spawned_entity(
                 &mut commands.entity(player_entity), &mut spawn_registry,
-                &entity_id, &prefab_key, false, false,
+                &entity_id, &prefab_key, false, false, 1.0,
             );
 
             // Visual body child — mesh centred at body_y above the feet so it aligns
