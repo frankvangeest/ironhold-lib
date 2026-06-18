@@ -319,6 +319,16 @@ pub fn action_executor_system(
                 let handle: Handle<bevy::scene::Scene> = asset_server.load(model_path);
                 scene_state.preloaded_glbs.0.push(handle);
             }
+            Action::PreloadGlb(model_key) => {
+                let Some(model_entry) = asset_catalog.0.models.get(&model_key) else {
+                    warn!("Action::PreloadGlb: model key {:?} not found in asset catalog", model_key);
+                    continue;
+                };
+                let model_path = model_entry.path.clone();
+                info!("Action::PreloadGlb: warming GLB cache for model '{}' -> {}", model_key, model_path);
+                let handle: Handle<bevy::scene::Scene> = asset_server.load(model_path);
+                scene_state.preloaded_glbs.0.push(handle);
+            }
             Action::PlaySound { key, volume: action_volume } => {
                 if let Some(entry) = asset_catalog.0.audio.get(&key) {
                     const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];

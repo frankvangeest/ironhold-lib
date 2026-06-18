@@ -783,6 +783,9 @@ pub struct ActionSlotDef {
     /// Row 0 = top row; index `col + row * icon_cols`. Default: 0.
     #[serde(default)]
     pub icon_index: u32,
+    /// Linear RGBA tint multiplied onto the icon image. Omit for no tint; `(1,1,1,1)` is equivalent.
+    #[serde(default)]
+    pub icon_color: Option<(f32, f32, f32, f32)>,
     /// Actions fired through the pipeline when the slot activates.
     pub do_actions: Vec<crate::schema::actions::Action>,
     /// Seconds before this slot can be used again. Omit for no cooldown.

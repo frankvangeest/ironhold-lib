@@ -7,11 +7,6 @@
             rotation_deg: (0.0, 180.0, 0.0),
             scale: (1.0, 1.0, 1.0),
         ),
-        "shared/models/props/treasure-chest-01.glb#Scene0": (
-            pivot_offset: (0.0, 0.0, 0.0),
-            rotation_deg: (0.0, 90.0, 0.0),
-            scale: (2.2, 2.2, 2.2),
-        ),
         "shared/models/creatures/spider01.glb#Scene0": (
             pivot_offset: (0.0, 0.0, 0.0),
             rotation_deg: (0.0, 180.0, 0.0),

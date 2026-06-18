@@ -41,6 +41,8 @@
     "anim_melee":      ( path: "shared/models/characters/character-animations/melee.glb#Scene0" ),
     "anim_emotes":     ( path: "shared/models/characters/character-animations/emotes.glb#Scene0" ),
     "anim_zombie":     ( path: "shared/models/characters/character-animations/zombie.glb#Scene0" ),
+    "anim_magic":      ( path: "shared/models/characters/character-animations/magic.glb#Scene0" ),
+    "anim_hit_death":  ( path: "shared/models/characters/character-animations/hit_death.glb#Scene0" ),
   },
 
   textures: {

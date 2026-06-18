@@ -46,7 +46,6 @@
             on: [
                 ( event: "ui.button_pressed:select_male",   do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
                 ( event: "ui.button_pressed:select_female", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
-                ( event: "ui.button_pressed:select_zombie", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
                 ( event: "ui.button_pressed:back_to_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
             ],
         ),
@@ -75,16 +74,6 @@
             ],
         ),
         (
-            name: "spawning_zombie",
-            entry_actions: [],
-            exit_actions: [],
-            on: [
-                ( event: "scene.ready:main", do_actions: [
-                    Spawn(prefab: "player_zombie", id: "player_01", spawn_point: "player_start"),
-                ]),
-            ],
-        ),
-        (
             name: "playing",
             entry_actions: [
                 PlayMusicLoop(key: "bg_music"),
@@ -94,9 +83,19 @@
                 SetStat(key: "player_health", value: 100.0),
                 SetStat(key: "player_mana",   value: 60.0),
                 SetVariable("combat_status", ""),
+                // Preload animation source GLBs so the player's animation graph is fully
+                // decoded before the first attack/death clip fires. Without this, each GLB
+                // triggers an async GLTF decode stall the first time its clips are needed.
+                PreloadGlb("anim_locomotion"),
+                PreloadGlb("anim_melee"),
+                PreloadGlb("anim_emotes"),
+                PreloadGlb("anim_magic"),
+                PreloadGlb("anim_hit_death"),
+                PreloadGlb("anim_zombie"),
                 // Preload GLB models so first-encounter spawns don't stall on WASM.
                 PreloadPrefab("enemy_snake"),
                 PreloadPrefab("enemy_spider"),
+                PreloadPrefab("enemy_zombie"),
                 // Warm WebGPU particle pipelines during the loading window.
                 SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
                 SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
@@ -114,14 +113,22 @@
                 ( event: "ui.button_pressed:toggle_hitboxes_off", do_actions: [ SetVariable("debug_target_hitboxes", "false")           ] ),
 
                 // ── Action bar feedback ──────────────────────────────────────────
-                ( event: "action_bar.no_target:1",             do_actions: [ SetVariable("combat_status", "No target selected")       ] ),
-                ( event: "action_bar.no_target:2",             do_actions: [ SetVariable("combat_status", "No target selected")       ] ),
-                ( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("combat_status", "Attack on cooldown")       ] ),
-                ( event: "action_bar.on_cooldown:2",           do_actions: [ SetVariable("combat_status", "Heavy Strike on cooldown") ] ),
-                ( event: "action_bar.insufficient_resource:2", do_actions: [ SetVariable("combat_status", "Not enough mana")          ] ),
+                ( event: "action_bar.no_target:1",             do_actions: [ SetVariable("combat_status", "No target selected")          ] ),
+                ( event: "action_bar.no_target:2",             do_actions: [ SetVariable("combat_status", "No target selected")          ] ),
+                ( event: "action_bar.no_target:3",             do_actions: [ SetVariable("combat_status", "No target selected")          ] ),
+                ( event: "action_bar.no_target:4",             do_actions: [ SetVariable("combat_status", "No target selected")          ] ),
+                ( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("combat_status", "Attack on cooldown")          ] ),
+                ( event: "action_bar.on_cooldown:2",           do_actions: [ SetVariable("combat_status", "Heavy Strike on cooldown")    ] ),
+                ( event: "action_bar.on_cooldown:3",           do_actions: [ SetVariable("combat_status", "Poke on cooldown")            ] ),
+                ( event: "action_bar.on_cooldown:4",           do_actions: [ SetVariable("combat_status", "Mana Blast on cooldown")      ] ),
+                ( event: "action_bar.insufficient_resource:2", do_actions: [ SetVariable("combat_status", "Not enough mana")             ] ),
+                ( event: "action_bar.insufficient_resource:4", do_actions: [ SetVariable("combat_status", "Not enough mana")             ] ),
                 ( event: "action_bar.activated:1",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Attack!")        ] ),
                 ( event: "action_bar.activated:2",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Heavy Strike!")  ] ),
-                ( event: "action_bar.activated:3",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Poke!")  ] ),
+                ( event: "action_bar.activated:3",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Poke!")          ] ),
+                ( event: "action_bar.activated:4",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Mana Blast!")    ] ),
+                // ── Player death ─────────────────────────────────────────────────
+                ( event: "stat.player_health.depleted",        do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
             ],
         ),
         (
@@ -144,14 +151,12 @@
         // Character selection → spawning intermediate state.
         ( from: "selecting", on: "ui.button_pressed:select_male",   to: "spawning_male"   ),
         ( from: "selecting", on: "ui.button_pressed:select_female", to: "spawning_female" ),
-        ( from: "selecting", on: "ui.button_pressed:select_zombie", to: "spawning_zombie" ),
 
         // Main scene ready in spawning_* state → advance to playing.
         // (scene.ready:main fires AFTER the on: Spawn rule in each spawning_* state,
         //  so the player entity is queued before playing's entry_actions fire.)
         ( from: "spawning_male",   on: "scene.ready:main", to: "playing" ),
         ( from: "spawning_female", on: "scene.ready:main", to: "playing" ),
-        ( from: "spawning_zombie", on: "scene.ready:main", to: "playing" ),
 
         // Pause overlay transitions.
         ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused"  ),

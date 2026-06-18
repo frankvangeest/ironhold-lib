@@ -27,12 +27,12 @@
     ),
 
     // ── Character previews ─────────────────────────────────────────────────────
-    // Standing side-by-side on the stage facing the camera.
+    // Two warriors standing side-by-side on the stage facing the camera.
     (
       id: "preview_male",
       prefab: "preview_male",
       transform: (
-        translation: (-3.5, 0.0, 0.0),
+        translation: (-2.0, 0.0, 0.0),
         rotation_euler_deg: (0.0, 190.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -41,16 +41,7 @@
       id: "preview_female",
       prefab: "preview_female",
       transform: (
-        translation: (0.0, 0.0, 0.0),
-        rotation_euler_deg: (0.0, 180.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-    (
-      id: "preview_zombie",
-      prefab: "preview_zombie",
-      transform: (
-        translation: (3.5, 0.0, 0.0),
+        translation: (2.0, 0.0, 0.0),
         rotation_euler_deg: (0.0, 170.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -67,25 +58,19 @@
     )),
 
     // ── Character select buttons ───────────────────────────────────────────────
+    // Two buttons centred around x=600 (220 wide, 40 gap → span=480, start=360).
     Button((
       id: "select_male_button",
       text: "Male Warrior",
       action: "ui.select_male",
-      position: (200.0, 520.0),
+      position: (360.0, 520.0),
       size: (220.0, 56.0),
     )),
     Button((
       id: "select_female_button",
       text: "Female Warrior",
       action: "ui.select_female",
-      position: (440.0, 520.0),
-      size: (220.0, 56.0),
-    )),
-    Button((
-      id: "select_zombie_button",
-      text: "Zombie",
-      action: "ui.select_zombie",
-      position: (680.0, 520.0),
+      position: (620.0, 520.0),
       size: (220.0, 56.0),
     )),
 

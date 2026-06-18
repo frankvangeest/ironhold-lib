@@ -1641,6 +1641,7 @@ fn spawn_ui_element_node(
                     for (slot, resolved_atlas) in slots.iter().zip(slot_atlases) {
                         let key = slot.key.clone();
                         let icon_index = slot.icon_index as usize;
+                        let icon_color = slot.icon_color.map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a));
                         parent
                             .spawn((
                                 Name::new(format!("Slot:{}", key)),
@@ -1683,6 +1684,7 @@ fn spawn_ui_element_node(
                                                 layout,
                                                 index: icon_index,
                                             }),
+                                            color: icon_color.unwrap_or(Color::WHITE),
                                             ..default()
                                         },
                                     ));

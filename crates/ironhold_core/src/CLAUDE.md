@@ -261,14 +261,20 @@ Dynamically spawned entities (via `Action::Spawn`) receive the same prefab-drive
 ### GLB preloading
 `Action::PreloadPrefab(key)` takes a prefab key, resolves it to a model path, calls `asset_server.load::<Scene>()`, and stores the `Handle<Scene>` in `PreloadedGlbHandles`. This prevents the ~1–2 s WASM stall caused by HTTP fetch + GLTF decode on first spawn of an uncached GLB.
 
-**Usage pattern:** fire `PreloadPrefab` on `scene.ready` (before the player can interact) so the asset is decoded during the natural loading pause.
+`Action::PreloadGlb(key)` is the model-catalog equivalent — it takes a **model catalog key** (from `assets.ron` `models:`), looks up the path, and loads it as `Handle<Scene>`. Use this for animation-source GLBs that have no prefab entry (e.g. `"anim_magic"`, `"anim_zombie"`). Loading as `Scene` triggers the full GLTF loader, which also decodes all animation clips and stores them as sub-assets — so the `Handle<Gltf>` the animation system needs is warm in the cache. The handle is stored in `PreloadedGlbHandles` alongside `PreloadPrefab` handles.
+
+**Usage pattern:** fire both in `entry_actions` of the playing state (before the player can interact) so all GLBs are decoded during the natural loading pause.
 
 ```ron
-// logic/rules.ron
-( on: "scene.ready:main", do_actions: [ PreloadPrefab("enemy_orc_melee") ] ),
+// logic/state_machine.ron — playing state entry_actions
+PreloadGlb("anim_locomotion"),
+PreloadGlb("anim_melee"),
+PreloadGlb("anim_magic"),
+PreloadGlb("anim_zombie"),
+PreloadPrefab("enemy_orc_melee"),
 ```
 
-`PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first spawn.
+`PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first use.
 
 ### Particle pipeline warmup
 `Action::SpawnEffect` uses GPU-compiled render pipelines. WebGPU compiles a pipeline for each material+blend combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Pool group entities (`NoFrustumCulling` + `LevelEntity`) are created lazily on first use, so the existing `pipeline_warmup_system` cannot pre-warm them on its own.

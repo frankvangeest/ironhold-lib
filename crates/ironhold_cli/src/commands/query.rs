@@ -570,6 +570,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::SetVolume(_) => "SetVolume",
         Action::PreloadScene(_) => "PreloadScene",
         Action::PreloadPrefab(_) => "PreloadPrefab",
+        Action::PreloadGlb(_) => "PreloadGlb",
         Action::EnterState(_) => "EnterState",
         Action::SetVariable(_, _) => "SetVariable",
         Action::IncrementVariable(_, _) => "IncrementVariable",

@@ -219,6 +219,17 @@ fn cross_file_checks(
                     }
                 }
             }
+            Action::PreloadGlb(key) => {
+                if let Some(c) = asset_catalog {
+                    if !c.models.contains_key(key) {
+                        errors.push(CrossFileError {
+                            source_file: source.clone(),
+                            message: format!("model key {:?} not found in assets.ron", key),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
             Action::ApplyModifier { modifier_key } | Action::RemoveModifier { modifier_key } => {
                 if let Some(c) = stat_catalog {
                     if !c.modifiers.contains_key(modifier_key) {

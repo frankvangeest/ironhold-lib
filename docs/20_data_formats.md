@@ -566,6 +566,10 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 | `slot_size` | `f32` | `64.0` | Width and height of each slot square in pixels |
 | `slot_gap` | `f32` | `4.0` | Pixel gap between slots |
 | `background_color` | `(f32,f32,f32,f32)` | near-black 70 % | Bar container background as linear RGBA |
+| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for a shared icon atlas (4×4 grid by default) |
+| `icon_cols` | `u32` | `4` | Columns in the icon atlas grid |
+| `icon_rows` | `u32` | `4` | Rows in the icon atlas grid |
+| `icon_cell_size` | `u32` | `64` | Pixel size of each square atlas cell |
 | `slots` | `Vec<ActionSlotDef>` | required | Ordered list of slot definitions |
 
 **`ActionSlotDef` fields:**
@@ -573,7 +577,9 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `key` | `String` | required | Key that activates the slot: `"1"` through `"9"` |
-| `icon` | `String` | `""` | Asset catalog texture key for the icon (reserved for future rendering) |
+| `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
+| `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
+| `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | Linear RGBA tint multiplied onto the icon image. Omit for no tint |
 | `do_actions` | `Vec<Action>` | required | Actions fired through the pipeline on activation |
 | `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again |
 | `cost` | `Option<SlotCost>` | `None` | Stat cost checked and deducted at activation time |
@@ -603,10 +609,17 @@ ActionBar((
   position: (16.0, 580.0),
   slot_size: 64.0,
   background_color: (0.05, 0.05, 0.08, 0.85),
+  icon_sheet: "icons_basic_skills",  // optional; 4x4 atlas, 64 px cells
+  icon_cols: 4,
+  icon_rows: 4,
+  icon_cell_size: 64,
   slots: [
     (
       key: "1",
+      icon_index: 0,
+      icon_color: (0.3, 0.5, 1.0, 1.0),  // blue tint; omit for no tint
       do_actions: [
+        PlayAnimationOn(target: "player_01", clip: "heal"),
         SpawnEffect(key: "heal_burst", entity: "player_01"),
         ModifyStat(key: "player_health", delta: 30.0),
       ],
@@ -616,6 +629,7 @@ ActionBar((
     ),
     (
       key: "2",
+      icon_index: 1,
       do_actions: [ ApplyModifier(modifier_key: "speed_boost") ],
       cooldown_secs: 12.0,
       cost: (stat: "player_mana", amount: 20.0),
@@ -1672,6 +1686,16 @@ Defines the locomotion clips and override animations for a character type.
 (
     default_transition_ms: 150,
 
+    // Extra GLB catalog keys whose clips are merged into this character's animation graph.
+    // A clip referenced in `clips:` or `overrides[].clip` must come from a GLB listed here,
+    // or it silently won't play. The model GLB is always included automatically.
+    // Last source wins on duplicate clip names. See player_policy_human.ron for a live example.
+    animation_sources: [
+        "anim_locomotion",
+        "anim_melee",
+        "anim_magic",
+    ],
+
     base: (
         idle:      "Idle_Loop",
         walk:      "Walk_Loop",
@@ -1694,16 +1718,33 @@ Defines the locomotion clips and override animations for a character type.
             stop_action: "stop_dance",
         ),
         (
-            id: "attack_light",
-            clip: "Sword_Attack",
+            id: "attack_light",   // semantic override id — use this in PlayAnimationOn(clip: "attack_light")
+            clip: "Sword_Regular_A",  // exact glTF clip name from one of the animation_sources
             priority: 100,
             looping: false,
-            duration: 0.6,
+            duration: 0.4,
+            cancel_on_move: false,
+        ),
+        (
+            id: "attack_magic",
+            clip: "Two-hand Blast",
+            priority: 100,
+            looping: false,
+            duration: 0.5,
             cancel_on_move: false,
         ),
     ],
 )
 ```
+
+**Adding a new combat animation (step-by-step):**
+
+1. Add the animation GLB to `assets.ron` as a catalog key: `"anim_magic": ( path: "shared/models/characters/character-animations/magic.glb#Scene0" )`
+2. Add the catalog key to `animation_sources` in the character's `.ron` policy file
+3. Add an `overrides` entry with a semantic `id` and the exact glTF clip name (check with `ironhold inspect glb <path>`)
+4. Reference the semantic `id` in action RON: `PlayAnimationOn(target: "player_01", clip: "attack_magic")`
+
+**`PlayAnimationOn(clip:)` resolution order:** override `id` → `clips:` alias → raw glTF clip name. The `clip:` argument is matched first against `overrides[].id`, then against `clips:` keys, then as a literal glTF animation name. Always use an override `id` for one-shot skills — only overrides support `duration` and `cancel_on_move`.
 
 **AnimationOverrideDef fields:**
 
@@ -1766,8 +1807,10 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `LoadScene("path")` | Load a `.scene.ron` file relative to the project root |
 | `Spawn { prefab, id, position, spawn_point, yaw_deg }` | Enqueue a prefab spawn (max 2/frame); `id` auto-generated if omitted; `spawn_point` looks up a scene-defined named point; `yaw_deg` rotates around Y axis |
 | `PreloadPrefab("key")` | Load a prefab's GLB early and cache the handle; fire on `scene.ready` to eliminate the first-spawn WASM decode stall |
+| `PreloadGlb("key")` | Load a **model catalog** GLB (from `assets.ron` `models:`) early — use for animation-source GLBs that have no prefab entry. The full GLTF including all clips is decoded and cached; the handle is kept alive in `PreloadedGlbHandles` until the next scene load. Validates that the key exists in `assets.ron` |
 | `Despawn("id")` | Remove a previously spawned entity by its spawn ID |
-| `PlayAnimation("id")` | Play an animation by semantic ID (see AnimationPolicy) |
+| `PlayAnimation("id")` | Broadcast an animation to **all** animated entities. Use for global emotes (dance). Resolves via AnimationPolicy — see override `id` / `clips:` alias / raw clip name order above |
+| `PlayAnimationOn(target: "id", clip: "name")` | Play an animation on a **specific** spawned entity by spawn ID. Use this from skill-bar `do_actions`, FSM rules, and behavior files whenever you want to target one entity. `{self}` / `{target}` substitution applies in `target`. Clip resolves via the entity's AnimationPolicy (override `id` → `clips:` alias → raw glTF name) |
 | `PlaySound(key: "key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume |
 | `PlayMusicLoop(key: "key")` | Start a looping background track by audio catalog key; stops any currently playing music; optional `volume: f32` multiplies the per-entry catalog volume |
 | `Log("message")` | Emit an `info!` log line |
@@ -1958,10 +2001,17 @@ Threshold events are **edge-triggered**: they fire once when the condition trans
 
 **Reacting to threshold events in rules:**
 ```ron
-// logic/rules.ron
-( on: "stat.health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
-( on: "stat.health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
+// logic/rules.ron or state_machine.ron
+( on: "stat.player_health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
+( on: "stat.player_health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
+
+// Play a death animation when the player's health hits zero (global stat, no {self}):
+( on: "stat.player_health.depleted", do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
 ```
+
+> The global-stat event name is `stat.<key>.<threshold-emit-value>` — no `{self}` substitution since
+> global stats are not owned by a specific entity. Per-entity stat events (from `stat_templates`) do
+> include `{self}` in the `emit` string; see the Instance Stats section below.
 
 ---
 

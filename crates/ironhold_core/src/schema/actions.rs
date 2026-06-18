@@ -75,6 +75,12 @@ pub enum Action {
     /// `prefabs.ron`). Fire on `scene.ready:{name}` so the GLB is warm before the player
     /// can trigger a spawn. Does not create any visible entity.
     PreloadPrefab(String),
+    /// Pre-load a model catalog GLB so the GLTF file (and all animation clips inside it) is
+    /// decoded before it is first needed. Takes a model catalog key (as defined in `assets.ron`
+    /// under `models:`). Especially useful for animation-source GLBs that have no prefab entry.
+    /// Stores the handle in `PreloadedGlbHandles` alongside `PreloadPrefab` handles; cleared on
+    /// `LoadScene`. Does not create any visible entity.
+    PreloadGlb(String),
     /// Transition the interpreter to a named logic state.
     /// Rules with a matching `when` field become active; rules in other states are suppressed.
     /// Use an empty string `""` to return to the stateless (always-fire) default.

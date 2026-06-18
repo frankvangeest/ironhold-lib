@@ -5,6 +5,8 @@
         "anim_locomotion",
         "anim_melee",
         "anim_emotes",
+        "anim_magic",
+        "anim_hit_death",
     ],
 
     base: (
@@ -15,8 +17,11 @@
     ),
 
     clips: {
-        "dance":        "Dance_Loop",
-        "attack_light": "Sword_Attack",
+        "dance":          "Dance_Loop",
+        "attack_light":   "Sword_Regular_A",
+        "attack_heavy":   "Sword_Regular_C",
+        "attack_magic":   "Two-hand Blast",
+        "death":          "Death01",
     },
 
     overrides: [
@@ -47,10 +52,34 @@
         ),
         (
             id: "attack_light",
-            clip: "Sword_Attack",
+            clip: "Sword_Regular_A",
             priority: 100,
             looping: false,
-            duration: 0.6,
+            duration: 0.4,
+            cancel_on_move: false,
+        ),
+        (
+            id: "attack_heavy",
+            clip: "Sword_Regular_C",
+            priority: 100,
+            looping: false,
+            duration: 2.0,
+            cancel_on_move: false,
+        ),
+        (
+            id: "attack_magic",
+            clip: "Two-hand Blast",
+            priority: 100,
+            looping: false,
+            duration: 0.5,
+            cancel_on_move: false,
+        ),
+        (
+            id: "death",
+            clip: "Death01",
+            priority: 150,
+            looping: false,
+            duration: 3.0,
             cancel_on_move: false,
         ),
     ],

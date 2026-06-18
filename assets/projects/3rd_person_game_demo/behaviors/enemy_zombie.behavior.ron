@@ -1,0 +1,64 @@
+// Zombie enemy — slow patrol → shamble → scratch loop.
+// The NPC system handles all movement. This behavior drives the attack state and alive/dead cycle.
+// npc.player_reached:{self}  fires when the zombie closes to approach_distance (1.8 m).
+// npc.player_lost:{self}     fires when the player exits chase_radius or detection is lost.
+// Zombies are tough but slow — they scratch hard every 4 s and take 15 damage per hit.
+(
+    schema_version: 1,
+    initial_state: "alive",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "alive",
+            entry_actions: [
+                ResetToSpawn("{self}"),
+                SetStat(key: "{self}.health", value: 120.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+                SpawnEffect(key: "respawn_glow", entity: "{self}"),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+        (
+            name: "attacking",
+            entry_actions: [
+                EmitEventAfterDelay(event: "zombie.scratch_tick:{self}", delay_secs: 1.2),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "zombie.scratch_tick:{self}",
+                    do_actions: [
+                        PlayAnimationOn(target: "{self}", clip: "attack_light"),
+                        PlaySound(key: "hit"),
+                        ModifyStat(key: "player_health", delta: -15.0),
+                        ShowDamagePopup(entity: "player_01", amount: -15.0),
+                        SpawnEffect(key: "hit_spark", entity: "player_01"),
+                        EmitEventAfterDelay(event: "zombie.scratch_tick:{self}", delay_secs: 4.0),
+                    ],
+                ),
+            ],
+        ),
+        (
+            name: "dead",
+            entry_actions: [
+                SpawnEffect(key: "death_poof", entity: "{self}"),
+                ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
+                SetEntityVisible(entity: "{self}", visible: false),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 12.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( from: "alive",     on: "npc.player_reached:{self}",   to: "attacking" ),
+        ( from: "attacking", on: "npc.player_lost:{self}",      to: "alive"     ),
+        ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"      ),
+        ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"      ),
+        ( from: "dead",      on: "entity.respawned:{self}",     to: "alive"     ),
+    ],
+)
