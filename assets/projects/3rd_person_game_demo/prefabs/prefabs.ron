@@ -140,6 +140,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      indicator_category: "hostile",
       behavior: "behaviors/enemy_zombie.behavior.ron",
       stat_templates: [
         (
@@ -184,6 +185,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      indicator_category: "hostile",
       behavior: "behaviors/enemy_orc.behavior.ron",
       stat_templates: [
         (
@@ -230,6 +232,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      indicator_category: "neutral",
       behavior: "behaviors/creature_alpaking.behavior.ron",
       stat_templates: [
         (
@@ -296,6 +299,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      indicator_category: "hostile",
       behavior: "behaviors/enemy_snake.behavior.ron",
       stat_templates: [
         (
@@ -362,6 +366,7 @@
       ),
       targetable: true,
       click_selectable: true,
+      indicator_category: "hostile",
       behavior: "behaviors/enemy_spider.behavior.ron",
       stat_templates: [
         (
@@ -407,6 +412,8 @@
         (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
         (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
       ],
+      click_selectable: true,
+      indicator_category: "neutral",
     ),
 
     "chest_02": (
@@ -420,9 +427,22 @@
     "prop_anvil": (
       kind: Prop,
       model: "anvil",
+      targetable: true,
+      click_selectable: true,
       components: (
         tags: [],
       ),
+    ),
+
+    // Friendly male NPC — silver metallic look, idles near the player start.
+    // Selectable with a green indicator ring (indicator_category: "friendly").
+    "friendly_npc_male": (
+      kind: Actor,
+      model: "character_male",
+      material: "mat_silver",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      click_selectable: true,
+      indicator_category: "friendly",
     ),
 
     // Large flat sand-coloured ground plane. physics: true so the player can walk on it.

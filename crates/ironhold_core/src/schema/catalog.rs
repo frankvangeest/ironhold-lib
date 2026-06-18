@@ -821,6 +821,16 @@ pub struct PrefabDef {
     /// Setting a target emits `target.changed:{id}` into the pipeline.
     #[serde(default)]
     pub targetable: bool,
+    /// Per-prefab target-indicator ring colour override (RGBA), highest precedence.
+    /// When set, this colour is used directly regardless of `indicator_category` or the
+    /// scene `target_indicator.color`. Only meaningful when the prefab is selectable.
+    #[serde(default)]
+    pub indicator_color: Option<(f32, f32, f32, f32)>,
+    /// Category key looked up in the scene's `target_indicator.named_colors` map to pick
+    /// the ring colour. Ignored if `indicator_color` is set. Falls through to scene
+    /// `target_indicator.color` when the key is absent from the map.
+    #[serde(default)]
+    pub indicator_category: Option<String>,
 }
 
 /// One physics collider shape in a `PrefabDef.colliders` list.

@@ -48,6 +48,8 @@
   textures: {
     // Skill bar icon atlas — 4×4 grid, 64 px per cell, 256×256 total
     "icons_basic_skills": "shared/ui/iconsheet-basic-skills.png",
+    // Status effect icon atlas — 8×8 grid, 64 px per cell, 512×512 total
+    "icons_status_effects": "shared/ui/iconsheet-status-effects-01.png",
     // Kenney Particle Pack sprites used by combat effects
     "particle/spark_01": "shared/textures/particles/kenney-particle-pack/spark_01.png",
     "particle/spark_02": "shared/textures/particles/kenney-particle-pack/spark_02.png",
@@ -150,5 +152,20 @@
   },
   decals: {
     "target_ring": "shared/textures/decals/ring_inverse_gradient.png",
+  },
+
+  materials: {
+    // High-metallic silver — applied to the friendly NPC character model.
+    "mat_silver": (
+      kind: Standard((
+        base_color: (r: 0.72, g: 0.73, b: 0.78, a: 1.0),
+        metallic: 0.95,
+        perceptual_roughness: 0.12,
+        reflectance: 0.9,
+      )),
+      alpha_mode: Opaque,
+      double_sided: false,
+      unlit: false,
+    ),
   },
 )

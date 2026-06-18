@@ -64,14 +64,14 @@
       text: "Male Warrior",
       action: "ui.select_male",
       position: (360.0, 520.0),
-      size: (220.0, 56.0),
+      size: (230.0, 56.0),
     )),
     Button((
       id: "select_female_button",
       text: "Female Warrior",
       action: "ui.select_female",
       position: (620.0, 520.0),
-      size: (220.0, 56.0),
+      size: (230.0, 56.0),
     )),
 
     Label((

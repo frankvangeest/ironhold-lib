@@ -19,6 +19,11 @@
                 ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/character_select.scene.ron") ] ),
                 ( event: "ui.button_pressed:options",    do_actions: [ LoadScene("scenes/options.scene.ron") ] ),
                 ( event: "ui.button_pressed:quit",       do_actions: [ Quit ] ),
+                // Fallback: main scene loaded directly (e.g. browser screenshot test bypassing
+                // character select). Spawn the male character so the scene is never playerless.
+                ( event: "scene.ready:main", do_actions: [
+                    Spawn(prefab: "player_male", id: "player_01", spawn_point: "player_start"),
+                ]),
             ],
         ),
         (
@@ -144,9 +149,12 @@
 
     transitions: [
         // Scene lifecycle → state entry.
-        ( on: "scene.ready:start_menu",      to: "menu"      ),
-        ( on: "scene.ready:options",         to: "options"   ),
+        ( on: "scene.ready:start_menu",       to: "menu"      ),
+        ( on: "scene.ready:options",          to: "options"   ),
         ( on: "scene.ready:character_select", to: "selecting" ),
+        // Direct-to-main fallback (no character select): menu state handles the spawn,
+        // then this transition advances to playing so all entry_actions fire normally.
+        ( from: "menu", on: "scene.ready:main", to: "playing" ),
 
         // Character selection → spawning intermediate state.
         ( from: "selecting", on: "ui.button_pressed:select_male",   to: "spawning_male"   ),

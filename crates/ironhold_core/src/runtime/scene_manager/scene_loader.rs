@@ -1185,6 +1185,7 @@ pub fn spawn_scene_v2(
                     radius: def.radius,
                     color: def.color,
                     offset_y: def.offset_y,
+                    named_colors: def.named_colors.clone(),
                 })
             });
             commands.insert_resource(LoadedTargetIndicator(resolved));

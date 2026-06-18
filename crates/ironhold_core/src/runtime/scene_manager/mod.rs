@@ -129,8 +129,12 @@ pub struct LoadedTargetIndicator(pub Option<ResolvedTargetIndicator>);
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,
     pub radius: f32,
+    /// Scene-level fallback colour used when a prefab has no `indicator_color` or
+    /// `indicator_category`, or when the category key is absent from `named_colors`.
     pub color: (f32, f32, f32, f32),
     pub offset_y: f32,
+    /// Named colour palette from `TargetIndicatorDef.named_colors`. Keyed by category string.
+    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>,
 }
 
 /// Holds pre-loaded GLTF scene handles for prefab models, populated by `Action::PreloadPrefab`.

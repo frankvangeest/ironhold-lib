@@ -368,14 +368,24 @@ The texture key must exist in the scene's `assets.ron` `decals:` map.
 |-------|------|---------|-------------|
 | `texture` | `String` | *(required)* | Decal catalog key from `assets.ron` `decals:` section — **not** the `textures:` section. |
 | `radius` | `f32` | `1.0` | Ring radius in metres. The quad is scaled to `radius × 2` in X and Z. |
-| `color` | `(f32, f32, f32, f32)` | `(0.3, 0.8, 1.0, 0.75)` | RGBA tint applied to the decal texture. |
+| `color` | `(f32, f32, f32, f32)` | `(0.3, 0.8, 1.0, 0.75)` | RGBA tint — scene-level fallback used when a prefab has no `indicator_color` or `indicator_category`. |
 | `offset_y` | `f32` | `0.05` | Y lift above ground to avoid z-fighting. |
+| `named_colors` | `HashMap<String, (f32,f32,f32,f32)>` | `{}` | Named colour palette for per-prefab `indicator_category` lookups. Keys are arbitrary strings (e.g. `"enemy"`, `"ally"`); values are RGBA. A category key absent from this map falls through to `color`. |
+
+**Ring colour resolution** (highest precedence first):
+1. Prefab `indicator_color` — direct RGBA override on the selected entity's `PrefabDef`
+2. Prefab `indicator_category` — string key looked up in `named_colors`
+3. Scene-level `color` — fallback for any prefab that declares neither
+
+> **Silent fallthrough:** if a prefab's `indicator_category` key is not present in `named_colors`
+> (including a typo or case mismatch), the ring silently falls back to the scene-level `color`.
+> There is no error at load time. Double-check key spelling if the wrong colour appears.
 
 The indicator only appears when an entity is selected (via click or Tab). It disappears on `ClearTarget`,
 when the target entity is hidden (e.g. dead), or when a new scene loads.
 Entities must have `click_selectable: true` or `targetable: true` in their `PrefabDef` to be selectable.
 
-**`assets.ron` entry:**
+**`assets.ron` entry** (`texture:` must be in the `decals:` section, not `textures:`):
 ```ron
 decals: {
   "target_ring": "shared/textures/decals/ring_thick.png",
@@ -385,10 +395,36 @@ decals: {
 **`scene.ron` usage:**
 ```ron
 target_indicator: (
-  texture: "target_ring",
+  texture: "target_ring",  // key from assets.ron decals:, NOT textures:
   radius: 1.2,
-  color: (0.3, 0.8, 1.0, 0.75),
+  color: (0.3, 0.8, 1.0, 0.75),  // cyan fallback for prefabs with no category
   offset_y: 0.05,
+  named_colors: {
+    "enemy":    (1.0, 0.15, 0.15, 0.85),  // red
+    "creature": (1.0, 0.75, 0.15, 0.85),  // gold
+  },
+),
+```
+
+**`prefabs.ron` usage:**
+```ron
+// Category-driven colour (key must match a named_colors entry in the scene):
+"enemy_orc_melee": (
+  targetable: true,
+  click_selectable: true,
+  indicator_category: "enemy",
+  ...
+),
+// Direct per-prefab RGBA override (bypasses named_colors entirely):
+"special_boss": (
+  targetable: true,
+  indicator_color: (0.8, 0.0, 0.9, 0.95),  // unique purple ring
+  ...
+),
+// No fields set → uses scene-level color fallback:
+"neutral_npc": (
+  targetable: true,
+  ...
 ),
 ```
 
@@ -1142,6 +1178,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
 | `click_selectable` | `bool` | `false` | When `true`, left-clicking near this entity on screen sets it as `CurrentTarget` and emits `target.clicked:{id}`, `target.changed:{id}`, and `target.changed`. Selection is screen-space proximity (the entity nearest the cursor within ~70px), so it works for animated/skinned GLB characters as well as primitives. Clicking empty space clears the target. |
 | `targetable` | `bool` | `false` | When `true`, this entity participates in Tab-cycle targeting. Pressing Tab selects the nearest `targetable` entity within `target_range` units and emits `target.changed:{id}` and `target.changed`. |
+| `indicator_color` | `Option<(f32,f32,f32,f32)>` | `None` | Direct RGBA override for the target-indicator ring colour when this entity is selected. Takes precedence over `indicator_category` and the scene-level `target_indicator.color`. Only meaningful when the prefab is selectable. |
+| `indicator_category` | `Option<String>` | `None` | Category key (e.g. `"enemy"`, `"ally"`) looked up in the scene's `target_indicator.named_colors` map. Used only when `indicator_color` is unset; falls through to scene-level `color` if the key is absent. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |

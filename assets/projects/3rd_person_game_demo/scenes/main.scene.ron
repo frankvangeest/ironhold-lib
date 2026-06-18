@@ -139,6 +139,18 @@
       ),
     ),
 
+    // ── Friendly NPC ───────────────────────────────────────────────────────────
+    // Silver-clad male character near the anvil. Selectable with a green indicator.
+    (
+      id: "npc_01",
+      prefab: "friendly_npc_male",
+      transform: (
+        translation: (6.0, 0.0, 6.0),
+        rotation_euler_deg: (0.0, 160.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // ── Props ──────────────────────────────────────────────────────────────────
     // Standalone chest to the player's right. Chest collider bottom = entity_y − 0.4,
     // so placing at y=0.4 puts the bottom flush with the ground.
@@ -206,14 +218,14 @@
     )),
     Button((
       id: "hitbox_debug_on_button",
-      text: "Hitbox Debug: ON",
+      text: "Hitbox: ON",
       action: "ui.toggle_hitboxes_on",
       position: (16.0, 332.0),
       size: (200.0, 44.0),
     )),
     Button((
       id: "hitbox_debug_off_button",
-      text: "Hitbox Debug: OFF",
+      text: "Hitbox: OFF",
       action: "ui.toggle_hitboxes_off",
       position: (16.0, 380.0),
       size: (200.0, 44.0),
@@ -296,14 +308,14 @@
       slot_size: 48.0,
       slot_gap: 4.0,
       background_color: (0.05, 0.05, 0.08, 0.85),
-      icon_sheet: "icons_basic_skills",
-      icon_cols: 4,
-      icon_rows: 4,
+      icon_sheet: "icons_status_effects",
+      icon_cols: 8,
+      icon_rows: 8,
       icon_cell_size: 64,
       slots: [
         (
           key: "1",
-          icon_index: 0,
+          icon_index: 0,   // Sword Slash
           icon_color: (0.9, 0.75, 0.6, 1.0),
           do_actions: [
             PlayAnimationOn(target: "player_01", clip: "attack_light"),
@@ -317,7 +329,7 @@
         ),
         (
           key: "2",
-          icon_index: 1,
+          icon_index: 2,   // Dual Strike
           icon_color: (0.75, 0.80, 0.85, 1.0),
           do_actions: [
             PlayAnimationOn(target: "player_01", clip: "attack_heavy"),
@@ -332,8 +344,7 @@
         ),
         (
           key: "3",
-          icon_index: 2,
-          // No icon_color: uses the raw atlas icon (no tint). Demonstrates the default.
+          icon_index: 25,  // Fist Attack
           do_actions: [
             PlaySound(key: "swing"),
             ModifyStat(key: "{target}.health", delta: -1.0),
@@ -345,7 +356,7 @@
         ),
         (
           key: "4",
-          icon_index: 3,
+          icon_index: 63,  // Arcane Burst
           icon_color: (0.3, 0.5, 1.0, 1.0),
           do_actions: [
             PlayAnimationOn(target: "player_01", clip: "attack_magic"),
@@ -358,15 +369,34 @@
           cost: (stat: "player_mana", amount: 18.0),
           label: "Mana Blast",
         ),
+        (
+          key: "5",
+          icon_index: 27,  // Heart Heal
+          icon_color: (1.0, 0.80, 0.20, 1.0),
+          do_actions: [
+            ModifyStat(key: "player_health", delta: 25.0),
+            ShowFloatingText(entity: "player_01", text: "+25 HP"),
+          ],
+          cooldown_secs: 8.0,
+          cost: (stat: "player_mana", amount: 15.0),
+          label: "Heal",
+        ),
       ],
     )),
   ],
 
-  // Red ring decal shown under the selected target entity.
+  // Ground-ring decal shown under the selected target entity.
+  // Color resolves per prefab: indicator_color > indicator_category > color fallback.
+  // Fallback cyan = generic use/interact target with no explicit category.
   target_indicator: (
     texture: "target_ring",
     radius: 1.2,
-    color: (1.0, 0.15, 0.15, 0.85),
+    color: (0.3, 0.8, 1.0, 0.75),  // cyan — default fallback (use / interact)
     offset_y: 0.05,
+    named_colors: {
+      "hostile":  (1.0, 0.15, 0.15, 0.85),  // red    — enemies
+      "neutral":  (1.0, 0.80, 0.15, 0.85),  // yellow — neutral creatures and chests
+      "friendly": (0.2, 1.0,  0.3,  0.85),  // green  — friendly NPCs
+    },
   ),
 )

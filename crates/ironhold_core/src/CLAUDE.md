@@ -135,9 +135,18 @@ support this.
 **Target indicator** (`capabilities/target_indicator.rs`) — a ground-ring decal that tracks the
 selected entity. Activated via `target_indicator:` in scene RON (references a `decals:` catalog key).
 The `target_indicator_system` runs in `Update`, watches `CurrentTarget` and `LoadedTargetIndicator`
-via change detection, and manages one `TrackingTarget` entity. Mesh + material are cached in a `Local`
-and only rebuilt when the scene changes — no per-switch allocation. The indicator is tagged `LevelEntity`
+via change detection, and manages one `TrackingTarget` entity. The indicator is tagged `LevelEntity`
 and does NOT go through the action pipeline (it is a pure cosmetic side-effect of the target state).
+
+Ring colour is resolved per-target at target-switch time via three-tier precedence:
+1. `PrefabDef.indicator_color` — direct RGBA override on the prefab (highest priority)
+2. `PrefabDef.indicator_category` — string key looked up in `TargetIndicatorDef.named_colors`
+3. `TargetIndicatorDef.color` — scene-level fallback
+
+The system reads the target entity's `PrefabKey` component, looks up the prefab in `LoadedPrefabCatalog`,
+and applies the precedence chain. Material handles are memoised by resolved `[u32;4]` colour bits —
+alternating between two targets of the same colour creates no new `StandardMaterial`. The mesh handle
+(radius-driven, colour-independent) is a single cached `Local`; both caches clear on scene change.
 
 **New capabilities for entity logic:**
 

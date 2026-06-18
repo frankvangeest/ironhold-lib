@@ -11,12 +11,15 @@
 
 ## Active
 
+- [ ] **Target indicator color by category and per-prefab override** — layered color resolution: (1) prefab `indicator_color: Option<(f32,f32,f32,f32)>` (direct RGBA, highest precedence), (2) prefab `indicator_category: Option<String>` key looked up in scene-level `target_indicator.named_colors: HashMap<String, (f32,f32,f32,f32)>`, (3) scene-level `target_indicator.color` fallback; material memo keyed by resolved `[u32;4]` colour bits so same-colour alternation never reallocates; PrefabKey lookup at target-switch time — no new spawn plumbing. Schema changes: `TargetIndicatorDef` + `PrefabDef`. See `planning/features/target_indicator_color.md`.
+
 ---
 
 ## Bugs
 
 - [x] **3rd-person orbit camera — sky shows tan ground on steep pan** — reduced `max_pitch` from 1.5 → 0.9 rad (86° → 52°) in `player.rs` default and `entity_spawner.rs` `default_camera_config`; also removed redundant fallback camera spawn when `scene.spawn_points` is non-empty (main scene's FSM already spawns the orbit camera). Root cause: no skybox, so the large 100×100 sand plane filled the entire view at near-vertical camera angles. A proper sky/atmosphere is tracked in `claude_suggestions.md`.
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
+- [ ] **composite prefab child positions wrong with mixed-sign translation** — in `loot_display` (composite prefab with model+children), children spawn at incorrect world positions when the scene entity has a translation like `(-7.0, 0.0, 4.0)`, but look correct at `(7.0, 0.0, 4.0)` or `(-7.0, 0.0, -4.0)`. Bug only manifests when X and Z have opposite signs. Suspected cause: sign handling in the composite branch of `scene_loader.rs` when accumulating parent+child transforms — possibly a negation or component-wise multiply rather than a proper matrix/quat composition for the child offset. Reproduce: 3rd_person_game_demo, observe `loot_display_01` at `(-7.0, 0.0, 4.0)`.
 
 ---
 
@@ -39,7 +42,7 @@
 
 ### Gameplay & Environment
 
-- [ ] **Target indicator color by category and per-prefab override** — layered color resolution: (1) prefab `indicator_color: Option<(f32,f32,f32,f32)>` (direct RGBA, highest precedence), (2) prefab `indicator_category: Option<String>` key looked up in scene-level `target_indicator.named_colors: HashMap<String, (f32,f32,f32,f32)>`, (3) scene-level `target_indicator.color` fallback; material rebuilt only when resolved color changes between target switches; allows red for enemies, green for allies, gold for loot — all authored in RON. Schema changes on both `TargetIndicatorDef` and `PrefabDef`; needs arch review before coding.
+_(moved to Active)_
 - [ ] **Status effect icon display** — HUD and/or above-entity icon strip showing active buffs and debuffs; icons are asset catalog texture keys declared on modifier templates; strip updates via change detection on `ActiveModifiers`; designer controls position (HUD panel vs. world-space above entity) and max visible icons in scene RON. See `planning/features/status_effect_icons.md`
 - [ ] **Layered icon UI node** — new `LayeredIcon` UI node type; each layer declares a texture key, tint color (r,g,b,a), and opacity; layers are alpha-composited in declaration order (bottom → top); v1 alpha-stack only — additive blend mode deferred to a future `blend:` field per layer; feeds action bar slot icons and status effect icon strips directly.
 - [ ] **AoE ground targeting** — `TargetingMode: GroundAoE(radius)` on skill action bar slots; pressing the slot enters a placement mode showing a circle decal under the cursor; confirming fires the slot's `do_actions` with `{aoe_position}` substitution; cancelling (right-click / Escape) exits without firing. See `planning/features/aoe_ground_targeting.md` _Hard dep: Skill action bar._

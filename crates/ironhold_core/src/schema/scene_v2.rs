@@ -541,6 +541,11 @@ pub struct TargetIndicatorDef {
     /// Y lift above ground to avoid z-fighting. Default: 0.05.
     #[serde(default = "default_indicator_offset_y")]
     pub offset_y: f32,
+    /// Named colour palette for `indicator_category` lookups on prefabs.
+    /// Key = category string (e.g. `"enemy"`, `"ally"`, `"loot"`); value = RGBA tint.
+    /// A prefab whose category key is absent falls through to `color`.
+    #[serde(default)]
+    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>,
 }
 
 fn default_indicator_radius() -> f32 { 1.0 }

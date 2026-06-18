@@ -2757,6 +2757,7 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
         radius: 1.2,
         color: (0.3, 0.8, 1.0, 0.75),
         offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
     })));
 
     // Selecting a target must spawn a TrackingTarget indicator entity.
