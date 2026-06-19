@@ -213,6 +213,8 @@ pub fn spawn_prefab_instance(
                 alerted_duration:  npc_def.alerted_duration,
                 drag:              npc_def.drag,
                 waypoint_reach_radius:      npc_def.waypoint_reach_radius,
+                waypoint_wait_secs:         npc_def.waypoint_wait_secs,
+                waypoint_wait_timer:        0.0,
                 interact_leave_factor:      npc_def.interact_leave_factor,
                 home_arrival_radius:        npc_def.home_arrival_radius,
                 investigate_timeout_secs:   npc_def.investigate_timeout_secs,

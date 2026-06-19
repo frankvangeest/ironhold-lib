@@ -355,6 +355,7 @@
           approach_distance: 2.0,
           patrol_speed: 2.0,
           chase_speed: 5.0,
+          waypoint_wait_secs: 2.0,
           eye_height: 0.5,
           alerted_duration: 0.1,
           collider_height: 1.2,

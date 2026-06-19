@@ -2463,6 +2463,8 @@ fn test_reset_to_spawn_teleports_npc_to_origin_and_zeros_velocity() {
             interact_leave_factor: 1.5,
             home_arrival_radius: 0.5,
             investigate_timeout_secs: 5.0,
+            waypoint_wait_secs: 0.0,
+            waypoint_wait_timer: 0.0,
             last_known_attacker_pos: None,
             investigate_timer: 0.0,
         },
@@ -2709,6 +2711,7 @@ fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
                         collider_radius: None,
                         collider_height: None,
                         investigate_timeout_secs: 5.0,
+                        waypoint_wait_secs: 0.0,
                     }),
                     ..Default::default()
                 },
@@ -2833,6 +2836,8 @@ fn npc_aggro_test_npc_agent(id: &str, on_player_near: ironhold_core::schema::cat
         interact_leave_factor: 1.5,
         home_arrival_radius: 0.5,
         investigate_timeout_secs: 5.0,
+        waypoint_wait_secs: 0.0,
+        waypoint_wait_timer: 0.0,
         last_known_attacker_pos: None,
         investigate_timer: 0.0,
     }

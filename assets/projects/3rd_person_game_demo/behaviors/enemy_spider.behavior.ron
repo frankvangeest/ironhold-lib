@@ -12,6 +12,8 @@
             name: "alive",
             // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
             entry_actions: [
+                PlayAnimationOn(target: "{self}", clip: "npc_revive"),
+                EmitEvent("npc.revive:{self}"),
                 ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 75.0),
                 SetEntityVisible(entity: "{self}", visible: true),
@@ -44,13 +46,22 @@
         (
             name: "dead",
             entry_actions: [
+                EmitEvent("npc.dead:{self}"),
+                PlayAnimationOn(target: "{self}", clip: "death"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
-                SetEntityVisible(entity: "{self}", visible: false),
-                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 12.0),
+                EmitEventAfterDelay(event: "spider.hide:{self}", delay_secs: 15.0),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 30.0),
             ],
             exit_actions: [],
-            on: [],
+            on: [
+                (
+                    event: "spider.hide:{self}",
+                    do_actions: [
+                        SetEntityVisible(entity: "{self}", visible: false),
+                    ],
+                ),
+            ],
         ),
     ],
 

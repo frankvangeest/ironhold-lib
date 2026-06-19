@@ -121,6 +121,8 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::capabilities::particle_budget::ParticleQuality>()
             .init_resource::<crate::capabilities::particle_budget::ParticleBudget>()
             .init_resource::<crate::capabilities::npc::NpcHitQueue>()
+            .init_resource::<crate::capabilities::npc::NpcDeadQueue>()
+            .init_resource::<crate::capabilities::npc::NpcReviveQueue>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()

@@ -195,6 +195,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Spider NPC behavior polish** — death animation holds last frame (no `duration`, `stop_action: "npc_revive"`); respawn clears death pose via `PlayAnimationOn(clip: "npc_revive")` in "alive" entry_actions; spider stops instantly on death (direct `StatMap` health check in `npc_behavior_system` eliminates 2-frame relay delay); patrol walk/idle/waypoint-pause working; attack override fires only on player reach; corpse hide/respawn timing designer-configurable via `EmitEventAfterDelay` in behavior RON.
 - [x] **Per-prefab `select_aim_height` for click targeting** — `select_aim_height: f32` (default 1.0) on `PrefabDef`; `SelectAimHeight(f32)` component; fixes snake/spider click hitboxes floating 0.6–1 m above the visible body; orc/zombie unaffected (no field set → default 1.0)
 - [x] **Target indicator color by category and per-prefab override** — layered color resolution: prefab `indicator_color` (direct RGBA) > `indicator_category` key in scene `named_colors` > scene `color` fallback; material memo keyed by resolved colour bits — `d945ea9`
 - [x] **Embed capability shaders & fix hardcoded shared asset paths** — `stat_radar`, `foliage` (×2), `flame_material`, `pool_flame` shaders embedded via `include_str!()`; foliage fabricated texture fallback removed; CLI validate now cross-checks foliage `leaf_texture` keys; fixture RON kind-field format fixed — `planned at b1ca9b6`

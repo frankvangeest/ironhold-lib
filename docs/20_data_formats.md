@@ -1796,8 +1796,34 @@ Defines the locomotion clips and override animations for a character type.
 | `looping` | `bool` | `true` | Whether to loop |
 | `cancel_on_move` | `bool` | `false` | Cancel this override when the player moves |
 | `stop_action` | `Option<String>` | — | `PlayAnimation` ID that cancels this override |
-| `duration` | `Option<f32>` | — | Auto-expire after N seconds (one-shots) |
+| `duration` | `Option<f32>` | — | Auto-expire after N seconds (one-shots). Omit to hold the last frame indefinitely. |
 | `transition_ms` | `Option<u64>` | — | Per-override blend duration; overrides `default_transition_ms` |
+
+> **Death-pose pattern** — to keep an NPC frozen in its death pose until it respawns, omit `duration` and set `stop_action` to the clip ID that fires on respawn. With `looping: false` and no `duration`, the override plays once and holds the final frame forever. The `stop_action` clip cancels it when the revive happens:
+>
+> ```ron
+> // spider_policy.ron — death override holds pose until "npc_revive" is played
+> (
+>     id: "death",
+>     clip: "Death",
+>     priority: 150,
+>     looping: false,
+>     cancel_on_move: false,
+>     stop_action: "npc_revive",
+> ),
+> ```
+>
+> ```ron
+> // enemy_spider.behavior.ron — "alive" entry_actions clear the death pose on respawn
+> entry_actions: [
+>     PlayAnimationOn(target: "{self}", clip: "npc_revive"),
+>     EmitEvent("npc.revive:{self}"),
+>     SetEntityVisible(entity: "{self}", visible: true),
+>     ...
+> ],
+> ```
+>
+> The `"npc_revive"` clip does not need to exist in the GLB — if it resolves to nothing, the animation system simply clears the override with no visual transition, which is the intended result for an instant-revive effect.
 
 ---
 

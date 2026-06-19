@@ -1,16 +1,27 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::schema::catalog::{NpcFaction, NpcOnPlayerNear};
+use crate::schema::stats::StatMap;
 use crate::capabilities::player::CharacterController;
 use crate::capabilities::animation_resolver::LocomotionState;
 use crate::runtime::messages::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Populated by `npc_hit_relay_system` (Update, after `action_executor_system`) when an
 /// `entity.attacked:*` event fires. Maps NPC id → attacker world position.
 /// Drained by `npc_behavior_system` (FixedUpdate) via `std::mem::take`.
 #[derive(Resource, Default)]
 pub struct NpcHitQueue(pub HashMap<String, Vec3>);
+
+/// Populated by `npc_hit_relay_system` when `stat.{id}.health.depleted` fires.
+/// Drained by `npc_behavior_system` to transition NPCs into `NpcState::Dead`.
+#[derive(Resource, Default)]
+pub struct NpcDeadQueue(pub HashSet<String>);
+
+/// Populated by `npc_hit_relay_system` when `npc.revive:{id}` fires (emitted by
+/// behavior "alive" entry_actions). Drained by `npc_behavior_system` to reset Dead NPCs.
+#[derive(Resource, Default)]
+pub struct NpcReviveQueue(pub HashSet<String>);
 
 // ── Runtime state enum ────────────────────────────────────────────────────────
 
@@ -31,6 +42,8 @@ pub enum NpcState {
     Return,
     /// Within `approach_distance` of a friendly player.
     Interact,
+    /// Health depleted — entity stops moving and ignores all state transitions until revived.
+    Dead,
 }
 
 // ── NpcAgent component ────────────────────────────────────────────────────────
@@ -78,6 +91,10 @@ pub struct NpcAgent {
     /// Seconds to walk toward the last-known attacker position before giving up.
     /// Resets on each subsequent hit (kiting). From `NpcDef.investigate_timeout_secs`.
     pub investigate_timeout_secs: f32,
+    /// Seconds to idle at each patrol waypoint. 0.0 = advance immediately.
+    pub waypoint_wait_secs: f32,
+    /// Countdown timer for waypoint idle pause. Positive = waiting; 0 = not waiting.
+    pub waypoint_wait_timer: f32,
     /// Last position the attacker was known to occupy; set on hit, cleared on Return.
     pub last_known_attacker_pos: Option<Vec3>,
     /// Seconds spent in Investigating state; reset on each new hit.
@@ -148,14 +165,14 @@ fn find_nearest_visible_player<'r>(
 // ── Hit relay (Update) ────────────────────────────────────────────────────────
 
 /// Runs in Update, after `action_executor_system`.
-/// Reads `GameEvent::Trigger("entity.attacked:*")` messages written in the same Update tick
-/// and populates `NpcHitQueue` so `npc_behavior_system` (FixedUpdate) can react next tick.
-/// Keeping this in Update (same schedule as the writer) avoids cross-schedule double-buffer
-/// timing issues entirely.
+/// Reads GameEvent messages written in the same Update tick and populates the three NPC queues
+/// so `npc_behavior_system` (FixedUpdate) can react next tick.
 pub fn npc_hit_relay_system(
     mut reader: MessageReader<GameEvent>,
     player_query: Query<&GlobalTransform, With<CharacterController>>,
     mut hit_queue: ResMut<NpcHitQueue>,
+    mut dead_queue: ResMut<NpcDeadQueue>,
+    mut revive_queue: ResMut<NpcReviveQueue>,
 ) {
     let attacker_pos = player_query.iter().next().map(|gt| gt.translation());
     for GameEvent::Trigger(name) in reader.read() {
@@ -163,6 +180,14 @@ pub fn npc_hit_relay_system(
             if let Some(pos) = attacker_pos {
                 hit_queue.0.insert(id.to_string(), pos);
             }
+        } else if let Some(id) = name.strip_prefix("npc.dead:") {
+            dead_queue.0.insert(id.to_string());
+        } else if let Some(rest) = name.strip_prefix("stat.") {
+            if let Some(id) = rest.strip_suffix(".health.depleted") {
+                dead_queue.0.insert(id.to_string());
+            }
+        } else if let Some(id) = name.strip_prefix("npc.revive:") {
+            revive_queue.0.insert(id.to_string());
         }
     }
 }
@@ -185,17 +210,22 @@ pub fn npc_behavior_system(
         &mut Velocity,
         Option<&mut LocomotionState>,
         Option<&Visibility>,
+        Option<&StatMap>,
     )>,
     player_query: Query<(Entity, &GlobalTransform), With<CharacterController>>,
     rapier_context: Option<ReadRapierContext>,
     mut hit_queue: ResMut<NpcHitQueue>,
+    mut dead_queue: ResMut<NpcDeadQueue>,
+    mut revive_queue: ResMut<NpcReviveQueue>,
     mut game_events: MessageWriter<GameEvent>,
 ) {
     let rapier = rapier_context.as_ref().and_then(|rc| rc.single().ok());
     let dt = time.delta_secs();
 
-    // Drain the hit map populated by npc_hit_relay_system (Update) in the previous frame.
+    // Drain queues populated by npc_hit_relay_system (Update) in the previous frame.
     let hit_map: HashMap<String, Vec3> = std::mem::take(&mut hit_queue.0);
+    let dead_set: HashSet<String> = std::mem::take(&mut dead_queue.0);
+    let revive_set: HashSet<String> = std::mem::take(&mut revive_queue.0);
 
     // Snapshot all player positions once per tick.
     let players: Vec<(Entity, Vec3)> = player_query
@@ -203,13 +233,44 @@ pub fn npc_behavior_system(
         .map(|(e, gt)| (e, gt.translation()))
         .collect();
 
-    for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt, visibility) in &mut npc_query {
+    for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt, visibility, stat_map_opt) in &mut npc_query {
         // Skip hidden entities (dead/despawned).
         if visibility.is_some_and(|v| *v == Visibility::Hidden) {
             velocity.linvel.x = 0.0;
             velocity.linvel.z = 0.0;
             continue;
         }
+
+        // Direct health check — catches death in the same FixedUpdate tick that follows the
+        // Update where ModifyStat ran, without waiting for the relay queue's extra hop.
+        if stat_map_opt
+            .and_then(|sm| sm.0.get("health"))
+            .is_some_and(|s| s.current <= 0.0)
+            && !matches!(npc.state, NpcState::Dead)
+        {
+            npc.state = NpcState::Dead;
+        }
+
+        // Belt-and-suspenders: relay queue also catches death (e.g. from npc.dead:* events).
+        if dead_set.contains(&npc.npc_id) {
+            npc.state = NpcState::Dead;
+        }
+        if revive_set.contains(&npc.npc_id) && matches!(npc.state, NpcState::Dead) {
+            npc.state = if npc.waypoints.is_empty() { NpcState::Idle } else { NpcState::Patrol };
+            npc.waypoint_wait_timer = 0.0;
+        }
+
+        // Dead NPCs halt immediately — the behavior file handles the visual (hide + respawn).
+        if matches!(npc.state, NpcState::Dead) {
+            velocity.linvel.x = 0.0;
+            velocity.linvel.z = 0.0;
+            if let Some(mut loco) = loco_opt {
+                if loco.moving { loco.moving = false; }
+                if loco.running { loco.running = false; }
+            }
+            continue;
+        }
+
         let npc_pos = global_tf.translation();
         let npc_forward = Vec3::from(transform.forward());
 
@@ -319,6 +380,7 @@ pub fn npc_behavior_system(
 
             NpcState::Interact => {
                 if dist_opt.map(|d| d > npc.approach_distance * npc.interact_leave_factor).unwrap_or(true) {
+                    pending_event = Some(format!("npc.player_lost:{}", npc.npc_id));
                     next_state = Some(if npc.waypoints.is_empty() {
                         NpcState::Idle
                     } else {
@@ -346,6 +408,9 @@ pub fn npc_behavior_system(
                     });
                 }
             }
+
+            // Dead is handled above via the `continue` — this arm satisfies exhaustive matching.
+            NpcState::Dead => {}
         }
 
         if let Some(state) = next_state {
@@ -372,13 +437,31 @@ pub fn npc_behavior_system(
                     velocity.linvel.z *= drag;
                 } else {
                     let wp = npc.waypoints[npc.current_waypoint];
-                    if npc_pos.distance(wp) < npc.waypoint_reach_radius {
-                        npc.current_waypoint =
-                            (npc.current_waypoint + 1) % npc.waypoints.len();
+                    if npc.waypoint_wait_timer > 0.0 {
+                        // Counting down idle pause at waypoint.
+                        npc.waypoint_wait_timer -= dt;
+                        if npc.waypoint_wait_timer <= 0.0 {
+                            npc.waypoint_wait_timer = 0.0;
+                            npc.current_waypoint =
+                                (npc.current_waypoint + 1) % npc.waypoints.len();
+                        }
+                        velocity.linvel.x *= drag;
+                        velocity.linvel.z *= drag;
+                    } else if npc_pos.distance(wp) < npc.waypoint_reach_radius {
+                        if npc.waypoint_wait_secs > 0.0 {
+                            npc.waypoint_wait_timer = npc.waypoint_wait_secs;
+                            velocity.linvel.x *= drag;
+                            velocity.linvel.z *= drag;
+                        } else {
+                            npc.current_waypoint =
+                                (npc.current_waypoint + 1) % npc.waypoints.len();
+                            let dir = (npc.waypoints[npc.current_waypoint] - npc_pos).with_y(0.0);
+                            apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
+                        }
+                    } else {
+                        let dir = (wp - npc_pos).with_y(0.0);
+                        apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
                     }
-                    let target_wp = npc.waypoints[npc.current_waypoint];
-                    let dir = (target_wp - npc_pos).with_y(0.0);
-                    apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
                 }
             }
 
@@ -406,6 +489,9 @@ pub fn npc_behavior_system(
                 let dir = (npc.origin - npc_pos).with_y(0.0);
                 apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
             }
+
+            // Unreachable: Dead NPCs `continue` before reaching this match.
+            NpcState::Dead => {}
         }
 
         // Update LocomotionState for GLB NPC entities that have an animation policy.

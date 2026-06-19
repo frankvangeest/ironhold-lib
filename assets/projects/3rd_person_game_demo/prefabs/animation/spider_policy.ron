@@ -9,13 +9,28 @@
     ),
 
     clips: {
-        "attack":  "Attack",
         "bite":    "Bite",
         "hit":     "Hit",
-        "death":   "Death",
         "death_2": "Death 2",
         "jump":    "Jump",
         "eating":  "Eating",
     },
-    overrides: [],
+    overrides: [
+        (
+            id: "attack",
+            clip: "Attack",
+            priority: 100,
+            looping: false,
+            duration: 0.9,
+            cancel_on_move: true,
+        ),
+        (
+            id: "death",
+            clip: "Death",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+            stop_action: "npc_revive",
+        ),
+    ],
 )

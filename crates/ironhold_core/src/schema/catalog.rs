@@ -1075,6 +1075,9 @@ pub struct NpcDef {
     /// Metres from a waypoint at which the NPC advances to the next one. Default: 0.5 m.
     #[serde(default = "default_npc_waypoint_reach_radius")]
     pub waypoint_reach_radius: f32,
+    /// Seconds to stand idle at each waypoint before moving on. 0.0 = advance immediately.
+    #[serde(default)]
+    pub waypoint_wait_secs: f32,
     /// Multiplier applied to `approach_distance` to define the leave-interact threshold.
     /// The NPC exits Interact state when `distance > approach_distance * interact_leave_factor`.
     /// Default: 1.5.
