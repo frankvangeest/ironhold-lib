@@ -22,7 +22,7 @@
 
   spawn_points: {
     // Player spawns slightly above ground; physics capsule settles immediately.
-    "player_start": (0.0, 1.0, 0.0),
+    "player_start": (0.0, 1.0, 10.0),
   },
 
   entities: [
@@ -34,29 +34,6 @@
       transform: (
         translation: (0.0, -0.25, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
-    // ── Enemies ────────────────────────────────────────────────────────────────
-    // Orc_01 — front-left. Both orcs play idle animation via orc_policy.ron.
-    // Click or Tab to select (targetable + click_selectable on prefab).
-    (
-      id: "orc_01",
-      prefab: "enemy_orc_melee",
-      transform: (
-        translation: (-4.0, 0.0, -5.0),
-        rotation_euler_deg: (0.0, 150.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-    // Orc_02 — front-right, flanking from the other side.
-    (
-      id: "orc_02",
-      prefab: "enemy_orc_melee",
-      transform: (
-        translation: (4.5, 0.0, -5.5),
-        rotation_euler_deg: (0.0, 215.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
     ),
@@ -94,7 +71,7 @@
         scale: (1.0, 1.0, 1.0),
       ),
     ),
-    // snake_02 — deep back-right, an ambush position behind the orcs.
+    // snake_02 — deep back-right ambush position.
     (
       id: "snake_02",
       prefab: "enemy_snake",
@@ -123,18 +100,6 @@
       transform: (
         translation: (12.0, 0.0, -3.0),
         rotation_euler_deg: (0.0, 190.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
-    // ── Creatures ──────────────────────────────────────────────────────────────
-    // Alpaking hovers 2.5 units above the ground using Flying_Idle animation.
-    (
-      id: "alpaking_01",
-      prefab: "creature_alpaking",
-      transform: (
-        translation: (9.0, 2.5, -1.5),
-        rotation_euler_deg: (0.0, 220.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
     ),

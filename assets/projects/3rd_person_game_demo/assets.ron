@@ -4,9 +4,6 @@
     "hero": (
       path: "shared/models/character-01.glb#Scene0",
     ),
-    "orc": (
-      path: "shared/models/creatures/orc.glb#Scene0",
-    ),
     "chest_01": (
       path: "shared/models/props/treasure-chest-01.glb#Scene0",
     ),
@@ -15,9 +12,6 @@
     ),
     "anvil": (
       path: "shared/models/props/anvil.glb#Scene0",
-    ),
-    "alpaking": (
-      path: "shared/models/creatures/alpaking.glb#Scene0",
     ),
     "snake": (
       path: "shared/models/creatures/snake01.glb#Scene0",
