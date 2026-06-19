@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active camera; designer fires it from any rule or behavior file. See `planning/features/camera_shake.md`
+
 - [x] **NPC aggro-on-hit + Investigating state** — relay system populates `NpcHitQueue(HashMap<String,Vec3>)`; `Investigating` state walks toward attacker's last-known position at patrol speed; kiting works (each hit resets the timer); configurable `investigate_timeout_secs` per prefab (snake 15 s, zombie 20 s, default 10 s); `npc.investigating` / `npc.investigation_failed` events. See `planning/features/npc_aggro_on_hit.md`.
 
 ---
@@ -52,7 +54,6 @@ _(moved to Active)_
 - [ ] **Day/night cycle** — `DayNightCycleDef` in scene RON: cycle duration, sun color/intensity keyframes at dawn/noon/dusk/midnight; `TimeOfDay` resource drives directional light + ambient each frame; `SetTimeOfDay(hour)` and `SetDaySpeed(multiplier)` actions; emits `time.dawn` / `time.noon` / `time.dusk` / `time.midnight` events designers can hook; WASM compatible (pure CPU, no post-process). See `planning/features/day_night_cycle.md`
 - [ ] **Audio channels (volume buses)** — `channels: HashMap<String, f32>` on `AudioConfig`; each audio entry in `assets.ron` declares a `channel` key; `SetChannelVolume(channel, f32)` action scales that category within the master ceiling; enables independent music/sfx/ambient balance without touching source files. _Depends on mute toggle + master volume._
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
-- [ ] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active camera; designer fires it from any rule or behavior file.
 - [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
 - [ ] **Dialogue system** — RON-defined conversation trees between the player and NPCs; standalone `.dialogue.ron` asset files referenced by `PrefabDef.dialogue`; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` actions; `{self}` / `{target}` substitution in text; branching via `jump_to: node_id` on choices; `do_actions` on choices fire through the existing pipeline; events `dialogue.started`, `dialogue.node`, `dialogue.choice`, `dialogue.ended`; auto-wired to `entity.interacted` when `dialogue` is set on prefab. See `planning/features/dialogue_system.md` _Soft dep: Quest system (for quest.state conditions), Targeting (for {target} in text)._
