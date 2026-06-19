@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **NPC aggro-on-hit** — when the player damages an enemy from outside its `detection_radius`, the enemy enters Alerted → Chase; `aggroed: bool` transient flag on `NpcAgent`; cleared on state transition; designer-triggered via `EmitEvent("entity.attacked:{target}")` in RON skill rules. See `planning/features/npc_aggro_on_hit.md`.
+- [ ] **NPC aggro-on-hit + Investigating state** — phase 1 done (relay system, NpcHitQueue, aggro→Alerted→Chase); phase 2 adds `Investigating` NPC state: walk toward attacker's last-known position, give up after configurable timeout, emit `npc.investigating/investigation_failed` events; enables kiting gameplay. See `planning/features/npc_aggro_on_hit.md`.
 
 ---
 

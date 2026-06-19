@@ -11,3 +11,5 @@
 - [Shader resolution pattern](shader_resolution_pattern.md) — engine-owned shaders embed via include_str!+UUID handle (CUSTOM_MATERIAL_FALLBACK_HANDLE); designer shaders resolve through catalog; don't hardcode ShaderRef literals
 - [Time & animation advance](time_and_animation_advance.md) — Bevy (not our system) advances AnimationPlayer off Time<Virtual>; freeze/pause/slow features act on the clock, not by skipping our systems; harness modes go URL-param→start_app→Resource
 - [Determinism & networking](determinism_networking.md) — static mode is orthogonal to net determinism; Rapier cross-platform float divergence is the hard blocker; recommend SimClock chokepoint + run-mode enum
+- [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow
+- [NPC state machine design](npc_state_machine_design.md) — NpcState is runtime-only (not schema); Investigating-state split from Chase lets you delete the dist_opt.or hack; centralize hit-handling
