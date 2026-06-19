@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **NPC aggro-on-hit** — when the player damages an enemy from outside its `detection_radius`, the enemy enters Alerted → Chase; `aggroed: bool` transient flag on `NpcAgent`; cleared on state transition; designer-triggered via `EmitEvent("entity.attacked:{target}")` in RON skill rules. See `planning/features/npc_aggro_on_hit.md`.
 
 ---
 
