@@ -104,9 +104,12 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.interacted:<id>"` — player within radius + pressed the interact key (default: `"KeyF"`; override via `inputs.interact` on the player prefab) ✅
-- `"npc.player_spotted:<id>"` — NPC entered alert state after detecting player ✅
-- `"npc.player_reached:<id>"` — NPC reached the player's position ✅
-- `"npc.player_lost:<id>"` — NPC lost sight of player and returned to idle ✅
+- `"entity.attacked:<id>"` — emitted from skill slot `do_actions` (alongside `ModifyStat`) when the player hits an enemy; causes NPCs with `on_player_near: Chase | Interact` to enter `Investigating` state (walks toward attacker's last-known position); `on_player_near: Flee` NPCs are immune ✅
+- `"npc.player_spotted:<id>"` — NPC transitioned from Alerted to Chase after detecting player ✅
+- `"npc.player_reached:<id>"` — NPC reached the player's position (entered Interact) ✅
+- `"npc.player_lost:<id>"` — NPC lost visual contact with player and began Investigating ✅
+- `"npc.investigating:<id>"` — NPC entered Investigating state (walking toward last-known attacker position); fires on hit from range, on Chase LOS loss, and on hit while returning ✅
+- `"npc.investigation_failed:<id>"` — NPC gave up investigating (timeout elapsed or arrived at destination without spotting player); transitions to Return ✅
 - `"collision.hit:<id>"` — impact event 🧭
 - `"target.clicked:<id>"` — player left-clicked a `click_selectable: true` entity (screen-space proximity) ✅
 - `"target.changed:<id>"` — fires only when that specific entity becomes the target; use for per-entity reactions (e.g. `target.changed:boss_01` → start a boss healthbar) ✅

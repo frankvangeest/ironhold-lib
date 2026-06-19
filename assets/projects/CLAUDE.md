@@ -109,6 +109,7 @@ Common event name patterns:
 | TriggerZone exit | `entity.exited:{entity_id}` |
 | Interactable [F] | `entity.interacted:{entity_id}` |
 | EmitEvent / EmitEventAfterDelay | whatever string was passed |
+| Skill slot `do_actions` hit | `entity.attacked:{target}` — triggers NPC aggro |
 
 ---
 

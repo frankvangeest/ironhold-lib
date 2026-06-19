@@ -2462,6 +2462,9 @@ fn test_reset_to_spawn_teleports_npc_to_origin_and_zeros_velocity() {
             waypoint_reach_radius: 0.5,
             interact_leave_factor: 1.5,
             home_arrival_radius: 0.5,
+            investigate_timeout_secs: 5.0,
+            last_known_attacker_pos: None,
+            investigate_timer: 0.0,
         },
     )).id();
     app.world_mut()
@@ -2705,6 +2708,7 @@ fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
                         angular_damping: 0.5,
                         collider_radius: None,
                         collider_height: None,
+                        investigate_timeout_secs: 5.0,
                     }),
                     ..Default::default()
                 },
@@ -2781,4 +2785,276 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
         .iter(app.world())
         .count();
     assert_eq!(indicator_count_after, 0, "TrackingTarget entity must be despawned after clearing the target");
+}
+
+// ── NPC aggro-on-hit tests ────────────────────────────────────────────────────
+
+fn npc_aggro_test_player_controller() -> CharacterController {
+    use ironhold_core::schema::player::InputMap;
+    CharacterController {
+        walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+        inputs: InputMap {
+            forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+            left: "KeyA".to_string(), right: "KeyD".to_string(),
+            strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+            jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+            interact: "KeyF".to_string(), strafe_mouse_button: None,
+            target_next: "Tab".to_string(), target_range: 30.0,
+        },
+        is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+        double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+        collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+    }
+}
+
+fn npc_aggro_test_npc_agent(id: &str, on_player_near: ironhold_core::schema::catalog::NpcOnPlayerNear, pos: Vec3) -> ironhold_core::capabilities::NpcAgent {
+    use ironhold_core::schema::catalog::NpcFaction;
+    ironhold_core::capabilities::NpcAgent {
+        npc_id: id.to_string(),
+        faction: NpcFaction::Hostile,
+        on_player_near,
+        detection_radius: 8.0,
+        chase_radius: 20.0,
+        fov_cos: -1.0,
+        requires_los: false,
+        approach_distance: 2.0,
+        patrol_speed: 2.0,
+        chase_speed: 4.0,
+        waypoints: vec![],
+        current_waypoint: 0,
+        state: ironhold_core::capabilities::NpcState::Idle,
+        target: None,
+        state_timer: 0.0,
+        origin: pos,
+        eye_height: 1.0,
+        alerted_duration: 0.3,
+        drag: 0.8,
+        waypoint_reach_radius: 0.5,
+        interact_leave_factor: 1.5,
+        home_arrival_radius: 0.5,
+        investigate_timeout_secs: 5.0,
+        last_known_attacker_pos: None,
+        investigate_timer: 0.0,
+    }
+}
+
+/// Chase-faction NPC in Idle, outside detection radius → receives hit event → transitions to
+/// Investigating so it walks toward the attacker's last-known position.
+#[test]
+fn test_npc_aggro_on_hit_idle_to_investigating() {
+    use ironhold_core::capabilities::{NpcAgent, NpcState, npc_behavior_system};
+    use ironhold_core::capabilities::npc::NpcHitQueue;
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Player at origin — 50 m from NPC, outside detection_radius (8.0).
+    let player_pos = Vec3::ZERO;
+    app.world_mut().spawn((
+        Transform::from_translation(player_pos),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+    ));
+
+    // NPC at (50, 0, 0) — Idle, Chase faction, outside detection_radius.
+    let npc_pos = Vec3::new(50.0, 0.0, 0.0);
+    let npc_entity = app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        Velocity { linvel: Vec3::ZERO, angvel: Vec3::ZERO },
+        npc_aggro_test_npc_agent("enemy_01", NpcOnPlayerNear::Chase, npc_pos),
+    )).id();
+
+    // Populate NpcHitQueue with attacker position (mirrors npc_hit_relay_system).
+    app.world_mut()
+        .resource_mut::<NpcHitQueue>()
+        .0.insert("enemy_01".to_string(), player_pos);
+    let _ = app.world_mut().run_system_once(npc_behavior_system);
+
+    let npc = app.world().entity(npc_entity).get::<NpcAgent>().unwrap();
+    assert!(
+        matches!(npc.state, NpcState::Investigating),
+        "Chase NPC should transition Idle → Investigating when hit outside detection radius"
+    );
+    assert_eq!(
+        npc.last_known_attacker_pos, Some(player_pos),
+        "last_known_attacker_pos should be set to the attacker position"
+    );
+}
+
+/// Flee NPC hit outside detection radius must stay Idle — gated by `on_player_near`.
+#[test]
+fn test_npc_flee_does_not_aggro_on_hit() {
+    use ironhold_core::capabilities::{NpcAgent, NpcState, npc_behavior_system};
+    use ironhold_core::capabilities::npc::NpcHitQueue;
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn((
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+    ));
+
+    let npc_pos = Vec3::new(50.0, 0.0, 0.0);
+    let mut agent = npc_aggro_test_npc_agent("alpaka_01", NpcOnPlayerNear::Flee, npc_pos);
+    agent.npc_id = "alpaka_01".to_string();
+    let npc_entity = app.world_mut().spawn((
+        SpawnId("alpaka_01".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        Velocity { linvel: Vec3::ZERO, angvel: Vec3::ZERO },
+        agent,
+    )).id();
+
+    app.world_mut()
+        .resource_mut::<NpcHitQueue>()
+        .0.insert("alpaka_01".to_string(), Vec3::ZERO);
+    let _ = app.world_mut().run_system_once(npc_behavior_system);
+
+    let npc = app.world().entity(npc_entity).get::<NpcAgent>().unwrap();
+    assert!(
+        matches!(npc.state, NpcState::Idle),
+        "Flee NPC must not aggro on hit — should remain Idle"
+    );
+}
+
+/// Hit event for an unknown NPC id must not crash or affect unrelated NPCs.
+#[test]
+fn test_npc_aggro_unknown_id_is_noop() {
+    use ironhold_core::capabilities::{NpcAgent, NpcState, npc_behavior_system};
+    use ironhold_core::capabilities::npc::NpcHitQueue;
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn((
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+    ));
+
+    let npc_pos = Vec3::new(50.0, 0.0, 0.0);
+    let npc_entity = app.world_mut().spawn((
+        SpawnId("orc_01".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        Velocity { linvel: Vec3::ZERO, angvel: Vec3::ZERO },
+        npc_aggro_test_npc_agent("orc_01", NpcOnPlayerNear::Chase, npc_pos),
+    )).id();
+
+    // Hit event for a completely different id — must not affect orc_01.
+    app.world_mut()
+        .resource_mut::<NpcHitQueue>()
+        .0.insert("does_not_exist".to_string(), Vec3::ZERO);
+    let _ = app.world_mut().run_system_once(npc_behavior_system);
+
+    let npc = app.world().entity(npc_entity).get::<NpcAgent>().unwrap();
+    assert!(
+        matches!(npc.state, NpcState::Idle),
+        "Unknown hit id must not affect unrelated NPCs — orc_01 should remain Idle"
+    );
+}
+
+/// Investigating NPC that times out with no new hit transitions to Return.
+#[test]
+fn test_npc_investigating_timeout_returns() {
+    use ironhold_core::capabilities::{NpcAgent, NpcState, npc_behavior_system};
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn((
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+    ));
+
+    let npc_pos = Vec3::new(50.0, 0.0, 0.0);
+    let mut agent = npc_aggro_test_npc_agent("snake_01", NpcOnPlayerNear::Chase, npc_pos);
+    agent.state = NpcState::Investigating;
+    agent.last_known_attacker_pos = Some(Vec3::new(45.0, 0.0, 0.0));
+    // Set timer to just past the timeout — no new hit arrives, player not visible.
+    agent.investigate_timer = 5.1;
+    agent.investigate_timeout_secs = 5.0;
+
+    let npc_entity = app.world_mut().spawn((
+        SpawnId("snake_01".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        Velocity { linvel: Vec3::ZERO, angvel: Vec3::ZERO },
+        agent,
+    )).id();
+
+    let _ = app.world_mut().run_system_once(npc_behavior_system);
+
+    let npc = app.world().entity(npc_entity).get::<NpcAgent>().unwrap();
+    assert!(
+        matches!(npc.state, NpcState::Return),
+        "Investigating NPC should transition to Return after timeout with no new hit"
+    );
+}
+
+/// Hit during Investigating resets the timer and updates the last-known position.
+#[test]
+fn test_npc_investigating_hit_refresh_resets_timer() {
+    use ironhold_core::capabilities::{NpcAgent, NpcState, npc_behavior_system};
+    use ironhold_core::capabilities::npc::NpcHitQueue;
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+    use bevy_rapier3d::prelude::Velocity;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let player_pos = Vec3::new(30.0, 0.0, 0.0);
+    app.world_mut().spawn((
+        Transform::from_translation(player_pos),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+    ));
+
+    let npc_pos = Vec3::new(50.0, 0.0, 0.0);
+    let mut agent = npc_aggro_test_npc_agent("snake_02", NpcOnPlayerNear::Chase, npc_pos);
+    agent.state = NpcState::Investigating;
+    agent.last_known_attacker_pos = Some(Vec3::new(45.0, 0.0, 0.0));
+    agent.investigate_timer = 3.5; // near timeout but not past it
+    agent.investigate_timeout_secs = 5.0;
+
+    let npc_entity = app.world_mut().spawn((
+        SpawnId("snake_02".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        Velocity { linvel: Vec3::ZERO, angvel: Vec3::ZERO },
+        agent,
+    )).id();
+
+    // Another hit arrives — should update position and reset timer.
+    app.world_mut()
+        .resource_mut::<NpcHitQueue>()
+        .0.insert("snake_02".to_string(), player_pos);
+    let _ = app.world_mut().run_system_once(npc_behavior_system);
+
+    let npc = app.world().entity(npc_entity).get::<NpcAgent>().unwrap();
+    assert!(
+        matches!(npc.state, NpcState::Investigating),
+        "NPC should remain Investigating after a hit refreshes the timer"
+    );
+    assert_eq!(
+        npc.last_known_attacker_pos, Some(player_pos),
+        "last_known_attacker_pos should be updated to the new hit position"
+    );
+    assert!(
+        npc.investigate_timer < 0.1,
+        "investigate_timer should be reset to ~0 after a new hit"
+    );
 }

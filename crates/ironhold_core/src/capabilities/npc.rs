@@ -3,7 +3,14 @@ use bevy_rapier3d::prelude::*;
 use crate::schema::catalog::{NpcFaction, NpcOnPlayerNear};
 use crate::capabilities::player::CharacterController;
 use crate::capabilities::animation_resolver::LocomotionState;
-use crate::runtime::messages::GameEvent;
+use crate::runtime::messages::*;
+use std::collections::HashMap;
+
+/// Populated by `npc_hit_relay_system` (Update, after `action_executor_system`) when an
+/// `entity.attacked:*` event fires. Maps NPC id → attacker world position.
+/// Drained by `npc_behavior_system` (FixedUpdate) via `std::mem::take`.
+#[derive(Resource, Default)]
+pub struct NpcHitQueue(pub HashMap<String, Vec3>);
 
 // ── Runtime state enum ────────────────────────────────────────────────────────
 
@@ -13,10 +20,13 @@ pub enum NpcState {
     Idle,
     /// Walking between patrol waypoints.
     Patrol,
-    /// Player spotted — brief pause (0.3 s) before acting.
+    /// Player spotted — brief pause before acting.
     Alerted,
-    /// Moving toward (Chase/Interact) or away from (Flee) the player.
+    /// Moving toward (Chase/Interact) or away from (Flee) a visible player.
     Chase,
+    /// Walking toward the attacker's last-known position to get them in visual range.
+    /// Transitions to Alerted if detection succeeds, or Return on timeout/arrival.
+    Investigating,
     /// Player escaped; walking back to the patrol origin.
     Return,
     /// Within `approach_distance` of a friendly player.
@@ -65,6 +75,13 @@ pub struct NpcAgent {
     pub interact_leave_factor: f32,
     /// Metres from spawn origin at which Return state ends. From `NpcDef.home_arrival_radius`.
     pub home_arrival_radius: f32,
+    /// Seconds to walk toward the last-known attacker position before giving up.
+    /// Resets on each subsequent hit (kiting). From `NpcDef.investigate_timeout_secs`.
+    pub investigate_timeout_secs: f32,
+    /// Last position the attacker was known to occupy; set on hit, cleared on Return.
+    pub last_known_attacker_pos: Option<Vec3>,
+    /// Seconds spent in Investigating state; reset on each new hit.
+    pub investigate_timer: f32,
 }
 
 // ── Visibility helper ─────────────────────────────────────────────────────────
@@ -128,6 +145,28 @@ fn find_nearest_visible_player<'r>(
     best
 }
 
+// ── Hit relay (Update) ────────────────────────────────────────────────────────
+
+/// Runs in Update, after `action_executor_system`.
+/// Reads `GameEvent::Trigger("entity.attacked:*")` messages written in the same Update tick
+/// and populates `NpcHitQueue` so `npc_behavior_system` (FixedUpdate) can react next tick.
+/// Keeping this in Update (same schedule as the writer) avoids cross-schedule double-buffer
+/// timing issues entirely.
+pub fn npc_hit_relay_system(
+    mut reader: MessageReader<GameEvent>,
+    player_query: Query<&GlobalTransform, With<CharacterController>>,
+    mut hit_queue: ResMut<NpcHitQueue>,
+) {
+    let attacker_pos = player_query.iter().next().map(|gt| gt.translation());
+    for GameEvent::Trigger(name) in reader.read() {
+        if let Some(id) = name.strip_prefix("entity.attacked:") {
+            if let Some(pos) = attacker_pos {
+                hit_queue.0.insert(id.to_string(), pos);
+            }
+        }
+    }
+}
+
 // ── Behaviour system ──────────────────────────────────────────────────────────
 
 /// Runs every physics tick (FixedUpdate).
@@ -149,19 +188,23 @@ pub fn npc_behavior_system(
     )>,
     player_query: Query<(Entity, &GlobalTransform), With<CharacterController>>,
     rapier_context: Option<ReadRapierContext>,
+    mut hit_queue: ResMut<NpcHitQueue>,
     mut game_events: MessageWriter<GameEvent>,
 ) {
     let rapier = rapier_context.as_ref().and_then(|rc| rc.single().ok());
     let dt = time.delta_secs();
 
-    // Snapshot all player positions once per tick (avoids repeated query access).
+    // Drain the hit map populated by npc_hit_relay_system (Update) in the previous frame.
+    let hit_map: HashMap<String, Vec3> = std::mem::take(&mut hit_queue.0);
+
+    // Snapshot all player positions once per tick.
     let players: Vec<(Entity, Vec3)> = player_query
         .iter()
         .map(|(e, gt)| (e, gt.translation()))
         .collect();
 
     for (npc_entity, mut npc, mut transform, global_tf, mut velocity, loco_opt, visibility) in &mut npc_query {
-        // Skip hidden entities (dead/despawned) — avoids ghost colliders chasing the player.
+        // Skip hidden entities (dead/despawned).
         if visibility.is_some_and(|v| *v == Visibility::Hidden) {
             velocity.linvel.x = 0.0;
             velocity.linvel.z = 0.0;
@@ -171,20 +214,20 @@ pub fn npc_behavior_system(
         let npc_forward = Vec3::from(transform.forward());
 
         let visible = find_nearest_visible_player(
-            npc_entity,
-            npc_pos,
-            npc_forward,
-            npc.fov_cos,
-            npc.requires_los,
-            npc.eye_height,
-            &players,
-            rapier.as_ref(),
+            npc_entity, npc_pos, npc_forward,
+            npc.fov_cos, npc.requires_los, npc.eye_height,
+            &players, rapier.as_ref(),
         );
 
-        let dist_opt   = visible.map(|(_, _, d)| d);
-        let in_detect  = dist_opt.map(|d| d <= npc.detection_radius).unwrap_or(false);
-        let in_chase   = dist_opt.map(|d| d <= npc.chase_radius).unwrap_or(false);
+        let dist_opt    = visible.map(|(_, _, d)| d);
+        let in_detect   = dist_opt.map(|d| d <= npc.detection_radius).unwrap_or(false);
+        // Chase is visibility-only: player must be seen and within chase_radius.
+        let in_chase    = dist_opt.map(|d| d <= npc.chase_radius).unwrap_or(false);
         let in_approach = dist_opt.map(|d| d <= npc.approach_distance).unwrap_or(false);
+
+        // Pre-match: resolve hit and aggro eligibility for all states.
+        let hit_pos: Option<Vec3> = hit_map.get(npc.npc_id.as_str()).copied();
+        let can_aggro = matches!(npc.on_player_near, NpcOnPlayerNear::Chase | NpcOnPlayerNear::Interact);
 
         // ── State machine ──────────────────────────────────────────────────────
         let mut next_state: Option<NpcState> = None;
@@ -196,6 +239,12 @@ pub fn npc_behavior_system(
                     if let Some((e, _, _)) = visible { npc.target = Some(e); }
                     npc.state_timer = 0.0;
                     next_state = Some(NpcState::Alerted);
+                } else if let Some(pos) = hit_pos.filter(|_| can_aggro) {
+                    // Hit from outside detection radius — walk toward attacker to get visual.
+                    npc.last_known_attacker_pos = Some(pos);
+                    npc.investigate_timer = 0.0;
+                    pending_event = Some(format!("npc.investigating:{}", npc.npc_id));
+                    next_state = Some(NpcState::Investigating);
                 }
             }
 
@@ -204,7 +253,6 @@ pub fn npc_behavior_system(
                 if npc.state_timer >= npc.alerted_duration {
                     pending_event = Some(format!("npc.player_spotted:{}", npc.npc_id));
                     next_state = Some(match npc.on_player_near {
-                        // Alert NPCs just acknowledge and resume — no movement.
                         NpcOnPlayerNear::Alert => {
                             if npc.waypoints.is_empty() { NpcState::Idle } else { NpcState::Patrol }
                         }
@@ -214,7 +262,7 @@ pub fn npc_behavior_system(
             }
 
             NpcState::Chase => {
-                // Continuously refresh target while the player is visible.
+                // Refresh target while player is visible.
                 if let Some((e, _, _)) = visible { npc.target = Some(e); }
 
                 let flee = matches!(npc.on_player_near, NpcOnPlayerNear::Flee);
@@ -223,13 +271,53 @@ pub fn npc_behavior_system(
                     npc.state_timer = 0.0;
                     next_state = Some(NpcState::Interact);
                 } else if !in_chase {
-                    pending_event = Some(format!("npc.player_lost:{}", npc.npc_id));
+                    // Player left visual range — investigate their last known position
+                    // rather than snapping straight home.
+                    let last_pos = visible.map(|(_, p, _)| p)
+                        .or_else(|| npc.target
+                            .and_then(|t| players.iter().find(|(e, _)| *e == t))
+                            .map(|(_, p)| *p));
+                    if let Some(pos) = last_pos.filter(|_| can_aggro) {
+                        npc.last_known_attacker_pos = Some(pos);
+                        npc.investigate_timer = 0.0;
+                        pending_event = Some(format!("npc.investigating:{}", npc.npc_id));
+                        next_state = Some(NpcState::Investigating);
+                    } else {
+                        pending_event = Some(format!("npc.player_lost:{}", npc.npc_id));
+                        next_state = Some(NpcState::Return);
+                    }
+                } else if let Some(pos) = hit_pos {
+                    // Fresh hit while chasing — keep last-known position current.
+                    npc.last_known_attacker_pos = Some(pos);
+                }
+            }
+
+            NpcState::Investigating => {
+                npc.investigate_timer += dt;
+
+                if in_detect {
+                    // Spotted the player — escalate to Alerted → Chase.
+                    if let Some((e, _, _)) = visible { npc.target = Some(e); }
+                    npc.state_timer = 0.0;
+                    next_state = Some(NpcState::Alerted);
+                } else if let Some(pos) = hit_pos {
+                    // Another hit: update direction, reset timer (kiting).
+                    npc.last_known_attacker_pos = Some(pos);
+                    npc.investigate_timer = 0.0;
+                } else if npc.investigate_timer >= npc.investigate_timeout_secs {
+                    // Timeout — gave up without finding the player.
+                    pending_event = Some(format!("npc.investigation_failed:{}", npc.npc_id));
+                    next_state = Some(NpcState::Return);
+                } else if npc.last_known_attacker_pos
+                    .is_some_and(|dest| npc_pos.distance(dest) < npc.waypoint_reach_radius)
+                {
+                    // Reached destination without spotting player.
+                    pending_event = Some(format!("npc.investigation_failed:{}", npc.npc_id));
                     next_state = Some(NpcState::Return);
                 }
             }
 
             NpcState::Interact => {
-                // Leave interact range → resume patrol / idle.
                 if dist_opt.map(|d| d > npc.approach_distance * npc.interact_leave_factor).unwrap_or(true) {
                     next_state = Some(if npc.waypoints.is_empty() {
                         NpcState::Idle
@@ -240,11 +328,16 @@ pub fn npc_behavior_system(
             }
 
             NpcState::Return => {
-                // Re-engage if player wanders back into range during the return walk.
                 if in_detect {
                     if let Some((e, _, _)) = visible { npc.target = Some(e); }
                     npc.state_timer = 0.0;
                     next_state = Some(NpcState::Alerted);
+                } else if let Some(pos) = hit_pos.filter(|_| can_aggro) {
+                    // Hit while returning — investigate again.
+                    npc.last_known_attacker_pos = Some(pos);
+                    npc.investigate_timer = 0.0;
+                    pending_event = Some(format!("npc.investigating:{}", npc.npc_id));
+                    next_state = Some(NpcState::Investigating);
                 } else if npc_pos.distance(npc.origin) < npc.home_arrival_radius {
                     next_state = Some(if npc.waypoints.is_empty() {
                         NpcState::Idle
@@ -265,7 +358,6 @@ pub fn npc_behavior_system(
         // ── Movement & facing ──────────────────────────────────────────────────
         let drag = npc.drag;
         match npc.state {
-            // Standing still states — just face the player if visible.
             NpcState::Idle | NpcState::Interact | NpcState::Alerted => {
                 if let Some((_, player_pos, _)) = visible {
                     face_toward(&mut transform, npc_pos, player_pos);
@@ -280,7 +372,6 @@ pub fn npc_behavior_system(
                     velocity.linvel.z *= drag;
                 } else {
                     let wp = npc.waypoints[npc.current_waypoint];
-                    // Advance to next waypoint when close enough.
                     if npc_pos.distance(wp) < npc.waypoint_reach_radius {
                         npc.current_waypoint =
                             (npc.current_waypoint + 1) % npc.waypoints.len();
@@ -293,18 +384,22 @@ pub fn npc_behavior_system(
 
             NpcState::Chase => {
                 let move_dir = match npc.on_player_near {
-                    // Flee: run in the opposite direction.
                     NpcOnPlayerNear::Flee => visible
                         .map(|(_, p, _)| (npc_pos - p).with_y(0.0))
                         .unwrap_or(Vec3::ZERO),
-
-                    // Chase/Interact: move toward the last known player position.
                     _ => npc.target
                         .and_then(|t| players.iter().find(|(e, _)| *e == t))
                         .map(|(_, p)| (*p - npc_pos).with_y(0.0))
                         .unwrap_or(Vec3::ZERO),
                 };
                 apply_movement(&mut velocity, &mut transform, move_dir, npc.chase_speed, drag);
+            }
+
+            NpcState::Investigating => {
+                let dir = npc.last_known_attacker_pos
+                    .map(|dest| (dest - npc_pos).with_y(0.0))
+                    .unwrap_or(Vec3::ZERO);
+                apply_movement(&mut velocity, &mut transform, dir, npc.patrol_speed, drag);
             }
 
             NpcState::Return => {
@@ -314,7 +409,6 @@ pub fn npc_behavior_system(
         }
 
         // Update LocomotionState for GLB NPC entities that have an animation policy.
-        // Primitive NPCs have no AnimationPolicyComponent so loco_opt is None for them.
         if let Some(mut loco) = loco_opt {
             let moving = velocity.linvel.x.powi(2) + velocity.linvel.z.powi(2) > 0.1;
             let running = matches!(npc.state, NpcState::Chase) && moving;

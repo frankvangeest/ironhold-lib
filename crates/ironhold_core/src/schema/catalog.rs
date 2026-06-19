@@ -1098,6 +1098,10 @@ pub struct NpcDef {
     /// Tune for creatures significantly taller or shorter than a humanoid.
     #[serde(default)]
     pub collider_height: Option<f32>,
+    /// Seconds the NPC walks toward the last-known attacker position before giving up.
+    /// Resets on each subsequent hit — enables kiting. Default: 5.0 s.
+    #[serde(default = "default_npc_investigate_timeout")]
+    pub investigate_timeout_secs: f32,
 }
 
 fn default_approach_distance() -> f32 { 2.0 }
@@ -1109,6 +1113,7 @@ fn default_npc_drag() -> f32 { 0.8 }
 fn default_npc_waypoint_reach_radius() -> f32 { 0.5 }
 fn default_npc_interact_leave_factor() -> f32 { 1.5 }
 fn default_npc_home_arrival_radius() -> f32 { 0.5 }
+fn default_npc_investigate_timeout() -> f32 { 10.0 }
 
 /// Speed, sensitivity, and key-binding tuning for a free-flying camera.
 /// All fields are optional — omitting them keeps the compiled-in defaults.

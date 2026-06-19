@@ -130,6 +130,7 @@
           eye_height: 1.7,
           collider_height: 1.8,
           collider_radius: 0.3,
+          investigate_timeout_secs: 20.0,
           patrol_waypoints: [
             ( 3.0, 0.0,  0.0),
             ( 0.0, 0.0,  3.0),
@@ -289,6 +290,7 @@
           eye_height: 0.3,
           collider_height: 0.8,
           collider_radius: 0.3,
+          investigate_timeout_secs: 15.0,
           patrol_waypoints: [
             ( 4.0, 0.0,  0.0),
             ( 0.0, 0.0,  4.0),

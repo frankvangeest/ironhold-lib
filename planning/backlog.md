@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **NPC aggro-on-hit + Investigating state** — phase 1 done (relay system, NpcHitQueue, aggro→Alerted→Chase); phase 2 adds `Investigating` NPC state: walk toward attacker's last-known position, give up after configurable timeout, emit `npc.investigating/investigation_failed` events; enables kiting gameplay. See `planning/features/npc_aggro_on_hit.md`.
+- [x] **NPC aggro-on-hit + Investigating state** — relay system populates `NpcHitQueue(HashMap<String,Vec3>)`; `Investigating` state walks toward attacker's last-known position at patrol speed; kiting works (each hit resets the timer); configurable `investigate_timeout_secs` per prefab (snake 15 s, zombie 20 s, default 10 s); `npc.investigating` / `npc.investigation_failed` events. See `planning/features/npc_aggro_on_hit.md`.
 
 ---
 

@@ -120,6 +120,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::capabilities::decal::PendingDecalSpawns>()
             .init_resource::<crate::capabilities::particle_budget::ParticleQuality>()
             .init_resource::<crate::capabilities::particle_budget::ParticleBudget>()
+            .init_resource::<crate::capabilities::npc::NpcHitQueue>()
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()
@@ -204,7 +205,12 @@ impl Plugin for GamePlugin {
             .add_systems(Update, fading_decal_system.after(spawn_decal_system))
             .add_systems(Update, clear_pool_on_scene_unload_system)
             .add_systems(Update, capabilities::player::update_player_speed_system)
-            // Physics-driven input + movement must run in FixedUpdate for stable simulation
+            // Relay: reads GameEvent messages written by action_executor_system in the same
+            // Update tick and populates NpcHitQueue for npc_behavior_system (FixedUpdate).
+            // Staying in Update avoids all cross-schedule double-buffer timing complexity.
+            .add_systems(Update, npc_hit_relay_system.after(action_executor_system))
+            // Physics-driven input + movement must run in FixedUpdate for stable simulation.
+            // npc_behavior_system reads NpcHitQueue drained at the start of each FixedUpdate tick.
             .add_systems(FixedUpdate, (
                 input_translator_system,
                 player_movement_system,

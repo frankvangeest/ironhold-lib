@@ -1374,6 +1374,7 @@ Events emitted:
 | `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the NPC capsule rigid body |
 | `collider_radius` | `Option<f32>` | `None` (0.35 m) | Radius of the NPC's physics capsule; tune up for large creatures (e.g. dragon) or down for small ones (e.g. imp). Omit to keep the humanoid default. |
 | `collider_height` | `Option<f32>` | `None` (1.6 m) | Total height of the NPC's physics capsule; tune for creatures significantly taller or shorter than a humanoid. Omit to keep the humanoid default. |
+| `investigate_timeout_secs` | `f32` | `5.0` | Seconds the NPC walks toward the attacker's last-known position before giving up and returning to spawn. Resets on each subsequent hit — enabling kiting. See `npc.investigating` / `npc.investigation_failed` events. |
 
 ```ron
 // Hostile patrol guard — full configuration
