@@ -592,6 +592,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::ToggleMute => "ToggleMute",
         Action::SyncAudioState => "SyncAudioState",
         Action::ResetToSpawn(_) => "ResetToSpawn",
+        Action::CameraShake { .. } => "CameraShake",
     }
 }
 

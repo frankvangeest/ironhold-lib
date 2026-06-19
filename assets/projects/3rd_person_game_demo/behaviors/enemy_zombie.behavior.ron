@@ -36,6 +36,7 @@
                         ModifyStat(key: "player_health", delta: -15.0),
                         ShowDamagePopup(entity: "player_01", amount: -15.0),
                         SpawnEffect(key: "hit_spark", entity: "player_01"),
+                        CameraShake(duration_secs: 0.30, intensity: 0.13),
                         EmitEventAfterDelay(event: "zombie.scratch_tick:{self}", delay_secs: 4.0),
                     ],
                 ),

@@ -238,6 +238,15 @@ pub enum Action {
     /// Inside behavior files, `{self}` is substituted with the entity's spawn ID.
     /// Example: `ResetToSpawn("{self}")`
     ResetToSpawn(String),
+    /// Apply a procedural position shake to the active orbit camera for `duration_secs` seconds.
+    /// `intensity` is the peak displacement in world-space metres (typically 0.05–0.3).
+    /// Re-triggering while a shake is active restarts it with the new parameters.
+    /// No-op (with a warning) in scenes that use a flycam instead of an orbit camera.
+    /// Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)`
+    CameraShake {
+        duration_secs: f32,
+        intensity: f32,
+    },
 }
 
 fn default_action_volume() -> f32 { 1.0 }

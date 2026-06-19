@@ -66,6 +66,7 @@ ShowDamagePopup(entity: "{self}", amount: -25.0)
 ShowFloatingText(entity: "{self}", text: "Critical hit!")
 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))
 SetEntityVisible(entity: "{self}", visible: false)
+CameraShake(duration_secs: 0.4, intensity: 0.15)
 ```
 
 **Rule of thumb**: if it looks like `Foo(String)` or `Foo(String, i32)` in `schema/actions.rs`, use positional. If it has named fields (`Foo { key: String, ... }`), use named fields. When in doubt, check `crates/ironhold_core/src/schema/actions.rs`.

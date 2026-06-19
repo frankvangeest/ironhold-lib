@@ -11,3 +11,4 @@
 - [stat_overrides flow](stat_overrides_pattern.md) — SceneEntityDef.stat_overrides correctly covers all 3 non-player spawn paths (positive reference); StatMap-build is triplicated (refactor candidate)
 - [WorldLabel stat UI pattern](world_label_stat_ui_pattern.md) — stat_label/world_stat_bar dynamic-spawn route via DynamicStatUiQueue; depth_scale:None on dynamic spawns is accepted (popup precedent); widget-spawn block triplicated
 - [Player spawn via Action::Spawn](player_spawn_via_action_pattern.md) — tags:["player"] prefab → full player on Action::Spawn; PlayerConfig assembly duplicated in scene_loader.rs + action_executor.rs (must stay in sync)
+- [Camera shake / singleton-targeted action](camera_shake_pattern.md) — CameraShake targets OrbitCamera singleton via SceneStateParams query (not spawn-ID); decay system mutates only Transform, no ActionQueue; chain AFTER camera_orbit_system

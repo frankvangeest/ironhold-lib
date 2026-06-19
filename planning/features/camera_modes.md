@@ -187,6 +187,13 @@ When a player character is spawned at runtime via `Action::Spawn` (e.g. from a c
 
 ---
 
+## Implementation notes
+
+### CameraShake coupling
+`Action::CameraShake` (shipped `b8723ec` 2026-06-19) inserts a `CameraShakeState` component onto `OrbitCamera` entities; `camera_shake_system` filters `With<OrbitCamera>`. When camera_modes lands and replaces `OrbitCamera` with a unified `ActiveCameraMode` component, both the executor query (`scene_state.orbit_cameras`) and the system filter must be re-homed onto the new component — probably via a shared `ActiveOrbitCamera` marker, or by moving shake to a mode-agnostic camera entity tag.
+
+---
+
 ## Open questions
 
 - **Named mode registry**: should named modes live in the prefab catalog, in a new `camera_modes:` block at scene level, or as inline RON in the action argument? Inline is simplest but prevents reuse across scenes. A scene-level `camera_modes:` map (key → `CameraModeDef`) feels right — small and local to the scene.

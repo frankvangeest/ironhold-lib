@@ -39,6 +39,7 @@
                         ModifyStat(key: "player_health", delta: -8.0),
                         ShowDamagePopup(entity: "player_01", amount: -8.0),
                         SpawnEffect(key: "venom_splash", entity: "player_01"),
+                        CameraShake(duration_secs: 0.25, intensity: 0.08),
                         // Re-arm the loop. Dropped automatically when state changes.
                         EmitEventAfterDelay(event: "snake.bite_tick:{self}", delay_secs: 3.0),
                     ],

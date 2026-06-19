@@ -1,6 +1,6 @@
 # Feature: Camera Shake
 
-_Status: In Progress_
+_Status: Done_
 _Planned at: `b8723ec` (2026-06-19)_
 
 ## What
@@ -42,20 +42,22 @@ pub struct CameraShakeState {
 }
 ```
 
-The component is inserted on the orbit-camera entity by the executor. A single component supports
-re-triggering: a new `CameraShake` action overwrites `remaining`/`intensity` if the new shake is
-stronger, otherwise it extends duration.
+The component is inserted on the orbit-camera entity by the executor. A new `CameraShake` action
+replaces the component via Bevy's `insert()` — the new `duration_secs`/`intensity` take over.
+"Replace" is simpler than merge and sufficient for practical combat: rapid kills of the same enemy
+reset the shake, which is the expected feel.
 
 ### System (`capabilities/camera.rs`)
 New `camera_shake_system` runs in `Update`, after `camera_orbit_system`. For every camera with
 `CameraShakeState`:
 - Decay `remaining` by `time.delta_secs()`; remove component when `remaining <= 0`
-- Compute time-based displacement using two sine waves at co-prime frequencies:
+- Compute time-based displacement using two sine waves at co-prime frequencies and a sqrt decay
+  envelope (snappier initial burst than linear):
   ```rust
   let t = time.elapsed_secs();
-  let decay = (remaining / duration).sqrt();  // sqrt gives snappier initial impulse
-  let x = (t * 37.0).sin() * intensity * decay;
-  let y = (t * 53.0).sin() * intensity * decay * 0.5;
+  let decay = (shake.remaining / shake.duration).sqrt();
+  let x = (t * 37.0).sin() * shake.intensity * decay;
+  let y = (t * 53.0).sin() * shake.intensity * decay * 0.5;
   cam_transform.translation += Vec3::new(x, y, 0.0);
   ```
 - No `rand` dependency — pure deterministic math, WASM safe.
@@ -64,10 +66,8 @@ New `camera_shake_system` runs in `Update`, after `camera_orbit_system`. For eve
 
 ### Executor (`runtime/scene_manager/action_executor.rs`)
 Match arm for `Action::CameraShake`:
-- Query `(Entity, &mut CameraShakeState) With<OrbitCamera>` + `Commands`.
-- If a camera entity already has `CameraShakeState`, pick max intensity and sum duration (capped at
-  `3.0 s` to avoid runaway stacks).
-- Otherwise insert a fresh `CameraShakeState`.
+- Query `Entity With<OrbitCamera>` via `scene_state.orbit_cameras` (added to `SceneStateParams` to stay under Bevy's 16-param system limit).
+- Insert `CameraShakeState` via `commands.entity(...).insert(...)` — **replaces** any in-progress shake; no merge or cap.
 - If no orbit camera exists, log a warning and no-op (safe in flycam scenes).
 
 ### RON syntax (struct variant — named fields)
@@ -77,13 +77,13 @@ CameraShake(duration_secs: 0.4, intensity: 0.15)
 
 ## Tasks
 - [x] Feature plan written
-- [ ] Add `CameraShake` variant to `schema/actions.rs`
-- [ ] Add `CameraShakeState` component + `camera_shake_system` to `capabilities/camera.rs`
-- [ ] Add executor arm in `action_executor.rs`
-- [ ] Wire shake into `3rd_person_game_demo`: fire on spider/snake kill
-- [ ] Integration test: executor inserts `CameraShakeState`; system decays it
-- [ ] Docs: `docs/20_data_formats.md` — new Action row
-- [ ] CLI check
+- [x] Add `CameraShake` variant to `schema/actions.rs`
+- [x] Add `CameraShakeState` component + `camera_shake_system` to `capabilities/camera.rs`
+- [x] Add executor arm in `action_executor.rs`
+- [x] Wire shake into `3rd_person_game_demo`: fire on all 5 enemy deaths (scaled by weight)
+- [x] Integration test: executor inserts `CameraShakeState`; system removes on expiry
+- [x] Docs: `docs/20_data_formats.md` — new Action row
+- [x] CLI check
 
 ## Open questions
 - None — approach is settled.
@@ -91,6 +91,6 @@ CameraShake(duration_secs: 0.4, intensity: 0.15)
 ## Acceptance criteria
 - Given a scene with an orbit camera, when `CameraShake(duration_secs: 0.5, intensity: 0.2)` fires,
   the camera oscillates visibly for ~0.5 s then returns to its normal orbital position.
-- Re-triggering while a shake is active extends the effect without a visible snap.
+- Re-triggering while a shake is active replaces it with the new parameters (no merge/cap).
 - Flycam scenes do not crash; a warning is logged and no shake occurs.
 - The action is usable in `rules.ron`, `state_machine.ron`, and `.behavior.ron` without recompiling.

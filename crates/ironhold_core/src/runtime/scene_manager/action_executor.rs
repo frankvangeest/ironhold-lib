@@ -727,6 +727,23 @@ pub fn action_executor_system(
                 crate::capabilities::targeting::clear_target_vars(&mut scene_state.game_vars);
                 game_events.write(GameEvent::Trigger("target.cleared".to_string()));
             }
+            Action::CameraShake { duration_secs, intensity } => {
+                info!("Action::CameraShake: duration={:.2}s intensity={:.3}", duration_secs, intensity);
+                let mut found = false;
+                for camera_entity in scene_state.orbit_cameras.iter() {
+                    commands.entity(camera_entity).insert(
+                        crate::capabilities::camera::CameraShakeState {
+                            remaining: duration_secs,
+                            duration: duration_secs,
+                            intensity,
+                        },
+                    );
+                    found = true;
+                }
+                if !found {
+                    warn!("Action::CameraShake: no orbit camera in scene — shake ignored");
+                }
+            }
         }
     }
 }

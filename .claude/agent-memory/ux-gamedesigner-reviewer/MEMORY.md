@@ -11,3 +11,4 @@
 - [decals: map has two consumers](project_decals_map_two_consumers.md) — assets.ron decals: feeds BOTH Action::ProjectDecal and scene target_indicator; doc sections don't cross-link; texture: field resolves against decals not textures
 - [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — animation_sources undocumented as a field; PlayAnimationOn missing from actions table; clip-vs-id distinction unexplained
 - [Target indicator color tiers](project_target_indicator_color_tiers.md) — 3-tier ring color (indicator_color > category > scene color); silent fallthrough undocumented; indicator_color & "ally" have no shipped example
+- [CameraShake re-trigger ambiguity](project_camera_shake_retrigger_ambiguity.md) — re-trigger semantics documented 3 contradictory ways (restart vs merge+cap vs replace); verify doc against shipped executor

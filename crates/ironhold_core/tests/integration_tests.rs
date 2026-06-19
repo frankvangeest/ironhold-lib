@@ -3063,3 +3063,122 @@ fn test_npc_investigating_hit_refresh_resets_timer() {
         "investigate_timer should be reset to ~0 after a new hit"
     );
 }
+
+// ─── Camera Shake ─────────────────────────────────────────────────────────────
+
+#[test]
+fn test_camera_shake_inserts_component_on_orbit_camera() {
+    use ironhold_core::capabilities::camera::{OrbitCamera, CameraShakeState};
+
+    let mut app = setup_test_app();
+
+    // Spawn a stub player so OrbitCamera's target exists.
+    let player = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+        SpeedMultiplier(1.0),
+    )).id();
+
+    // Spawn an orbit camera targeting the player.
+    let camera_entity = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        OrbitCamera {
+            target: player,
+            radius: 5.0,
+            offset: bevy::math::Vec3::ZERO,
+            zoom_speed: 1.0,
+            orbit_speed: 1.0,
+            min_radius: 1.0,
+            max_radius: 20.0,
+            pitch: 0.3,
+            yaw: 0.0,
+            look_at_offset: bevy::math::Vec3::ZERO,
+            min_pitch: -0.5,
+            max_pitch: 1.0,
+            orbit_lmb: false,
+            orbit_rmb: true,
+            character_rotate_rmb: false,
+            character_rotate_lmb: false,
+        },
+    )).id();
+
+    app.update();
+
+    // Fire CameraShake through the action queue.
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::CameraShake { duration_secs: 0.5, intensity: 0.2 });
+
+    app.update();
+
+    let shake = app.world().entity(camera_entity).get::<CameraShakeState>();
+    assert!(shake.is_some(), "CameraShakeState should be inserted on the orbit camera entity");
+    let shake = shake.unwrap();
+    assert!((shake.remaining - 0.5).abs() < 0.05, "remaining should be ~0.5 s");
+    assert!((shake.intensity - 0.2).abs() < 0.001, "intensity should be 0.2");
+}
+
+#[test]
+fn test_camera_shake_no_orbit_camera_is_noop() {
+    // No orbit camera in the scene — the action should log a warning and not panic.
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::CameraShake { duration_secs: 0.3, intensity: 0.1 });
+
+    // Should not panic.
+    app.update();
+}
+
+#[test]
+fn test_camera_shake_component_removed_after_expiry() {
+    use ironhold_core::capabilities::camera::{OrbitCamera, CameraShakeState, camera_shake_system};
+
+    let mut app = setup_test_app();
+
+    let player = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        npc_aggro_test_player_controller(),
+        SpeedMultiplier(1.0),
+    )).id();
+
+    let camera_entity = app.world_mut().spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        OrbitCamera {
+            target: player,
+            radius: 5.0,
+            offset: bevy::math::Vec3::ZERO,
+            zoom_speed: 1.0,
+            orbit_speed: 1.0,
+            min_radius: 1.0,
+            max_radius: 20.0,
+            pitch: 0.3,
+            yaw: 0.0,
+            look_at_offset: bevy::math::Vec3::ZERO,
+            min_pitch: -0.5,
+            max_pitch: 1.0,
+            orbit_lmb: false,
+            orbit_rmb: true,
+            character_rotate_rmb: false,
+            character_rotate_lmb: false,
+        },
+        // Insert an already-expired shake (remaining <= 0) to trigger removal.
+        CameraShakeState {
+            remaining: -0.01,
+            duration: 0.1,
+            intensity: 0.1,
+        },
+    )).id();
+
+    // One system tick should remove the expired component.
+    let _ = app.world_mut().run_system_once(camera_shake_system);
+
+    let shake = app.world().entity(camera_entity).get::<CameraShakeState>();
+    assert!(shake.is_none(), "CameraShakeState should be removed when remaining <= 0");
+}

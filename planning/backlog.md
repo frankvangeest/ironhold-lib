@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active camera; designer fires it from any rule or behavior file. See `planning/features/camera_shake.md`
+- [x] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active orbit camera; wired to player-hit events in `3rd_person_game_demo` (snake 0.08, spider 0.10, zombie 0.13 intensity). See `planning/features/done/camera_shake.md`
 
 - [x] **NPC aggro-on-hit + Investigating state** — relay system populates `NpcHitQueue(HashMap<String,Vec3>)`; `Investigating` state walks toward attacker's last-known position at patrol speed; kiting works (each hit resets the timer); configurable `investigate_timeout_secs` per prefab (snake 15 s, zombie 20 s, default 10 s); `npc.investigating` / `npc.investigation_failed` events. See `planning/features/npc_aggro_on_hit.md`.
 

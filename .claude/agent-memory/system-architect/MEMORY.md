@@ -13,3 +13,4 @@
 - [Determinism & networking](determinism_networking.md) — static mode is orthogonal to net determinism; Rapier cross-platform float divergence is the hard blocker; recommend SimClock chokepoint + run-mode enum
 - [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow
 - [NPC state machine design](npc_state_machine_design.md) — NpcState is runtime-only (not schema); Investigating-state split from Chase lets you delete the dist_opt.or hack; centralize hit-handling
+- [Camera architecture](camera_architecture.md) — OrbitCamera/FlyCamera siloed; camera systems run in Update (not FixedUpdate); shake must be additive AFTER camera_orbit_system; camera_modes will unify both

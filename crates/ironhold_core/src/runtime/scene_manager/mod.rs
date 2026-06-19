@@ -422,6 +422,8 @@ pub struct SceneStateParams<'w, 's> {
     pub transforms: Query<'w, 's, &'static mut Transform>,
     /// Used by `Action::ResetToSpawn` to zero residual velocity after teleport.
     pub npc_velocities: Query<'w, 's, &'static mut bevy_rapier3d::prelude::Velocity>,
+    /// Used by `Action::CameraShake` to insert `CameraShakeState` on the active orbit camera.
+    pub orbit_cameras: Query<'w, 's, Entity, With<crate::capabilities::camera::OrbitCamera>>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

@@ -230,6 +230,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 animation_resolver_system,
                 camera_orbit_system,
+                camera_shake_system,
                 fly_camera_system,
                 animation_playback_system,
             ).chain())

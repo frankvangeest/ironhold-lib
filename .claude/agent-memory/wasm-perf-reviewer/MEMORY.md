@@ -5,3 +5,4 @@
 - [NPC locomotion bridge](project_npc_locomotion_bridge.md) — npc_behavior_system (FixedUpdate) writes LocomotionState read by animation_resolver (Update); is_grounded written unconditionally (latent footgun)
 - [NPC physics spawn](project_npc_physics_spawn.md) — spawn_prefab_instance adds Dynamic body for components.npc; per-spawn not per-frame; Rapier WASM-safe; risk is never-sleeping body count
 - [Target indicator system](project_target_indicator_system.md) — Update, 0/1 entity, epsilon-guarded move; Local cache reset cleanly on LoadScene(None); Blend/depth_bias parity w/ decal — no new pipeline compile
+- [Camera shake system](project_camera_shake_system.md) — Update-chained after orbit; query gated by CameraShakeState component; idle frames iterate 0 entities (no change-detection); sine/sqrt WASM-safe, zero deps

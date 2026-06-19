@@ -2,6 +2,18 @@ use bevy::prelude::*;
 use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
 
+/// Inserted by `Action::CameraShake` on the active orbit camera entity.
+/// Removed automatically when `remaining` reaches zero.
+#[derive(Component)]
+pub struct CameraShakeState {
+    /// Seconds of shake remaining.
+    pub remaining: f32,
+    /// Initial duration — used to compute the sqrt decay envelope.
+    pub duration: f32,
+    /// Peak displacement in world-space metres.
+    pub intensity: f32,
+}
+
 #[derive(Component)]
 pub struct OrbitCamera {
     pub target: Entity,
@@ -103,4 +115,27 @@ pub fn parse_orbit_button(s: &str) -> (bool, bool) {
 /// Parse `InputMap.strafe_mouse_button` to a `MouseButton`.
 pub fn parse_strafe_button(s: &str) -> Option<MouseButton> {
     InputMap::parse_mouse_button(s)
+}
+
+/// Applies and decays a procedural camera shake after `camera_orbit_system` has set the
+/// orbital position. The shake is a deterministic sine-wave offset (no RNG — WASM safe).
+/// Removes `CameraShakeState` when the remaining time reaches zero.
+pub fn camera_shake_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut camera_query: Query<(Entity, &mut Transform, &mut CameraShakeState), With<OrbitCamera>>,
+) {
+    for (entity, mut cam_transform, mut shake) in &mut camera_query {
+        shake.remaining -= time.delta_secs();
+        if shake.remaining <= 0.0 {
+            commands.entity(entity).remove::<CameraShakeState>();
+            continue;
+        }
+        let t = time.elapsed_secs();
+        // sqrt decay: fast initial burst that tapers — feels snappier than linear.
+        let decay = (shake.remaining / shake.duration).sqrt();
+        let x = (t * 37.0).sin() * shake.intensity * decay;
+        let y = (t * 53.0).sin() * shake.intensity * decay * 0.5;
+        cam_transform.translation += Vec3::new(x, y, 0.0);
+    }
 }

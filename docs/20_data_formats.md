@@ -1902,6 +1902,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |
 | `ClearTarget` | Clear `CurrentTarget`. Emits `target.cleared`. Also cleared automatically on `LoadScene`. |
 | `ResetToSpawn("{self}")` | Teleport an NPC entity to its scene-placed origin and zero its velocity. Call before `SetEntityVisible(visible: true)` in respawn entry_actions so the entity appears at its spawn point instead of where it died. Warns and no-ops for non-NPC entities. `{self}` is substituted in behavior files. |
+| `CameraShake(duration_secs: f32, intensity: f32)` | Apply a procedural position shake to the active orbit camera. `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead of an orbit camera — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
 
 ---
 

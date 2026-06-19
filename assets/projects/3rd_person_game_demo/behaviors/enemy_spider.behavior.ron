@@ -38,6 +38,7 @@
                         ModifyStat(key: "player_health", delta: -12.0),
                         ShowDamagePopup(entity: "player_01", amount: -12.0),
                         SpawnEffect(key: "web_burst", entity: "player_01"),
+                        CameraShake(duration_secs: 0.28, intensity: 0.10),
                         EmitEventAfterDelay(event: "spider.attack_tick:{self}", delay_secs: 2.0),
                     ],
                 ),

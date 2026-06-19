@@ -3176,6 +3176,18 @@ fn test_action_reset_to_spawn_parses() {
 }
 
 #[test]
+fn test_action_camera_shake_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str("CameraShake(duration_secs: 0.4, intensity: 0.15)")
+        .expect("CameraShake should parse");
+    assert!(matches!(
+        action,
+        Action::CameraShake { duration_secs, intensity }
+            if (duration_secs - 0.4).abs() < 0.001 && (intensity - 0.15).abs() < 0.001
+    ));
+}
+
+#[test]
 fn test_modifier_kind_override_parses() {
     let ron_str = r#"
         (
