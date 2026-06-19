@@ -4,7 +4,7 @@
     // Zombie clips come from anim_zombie; Jump_Loop is shared with the human
     // rig via anim_locomotion — works because zombie GLBs were renamed from
     // "characterMedium" to "Mannequin" so AnimationTargetId paths now match.
-    animation_sources: ["anim_zombie", "anim_locomotion"],
+    animation_sources: ["anim_zombie", "anim_locomotion", "anim_hit_death"],
 
     base: (
         idle:      "Zombie_Idle_Loop",
@@ -15,6 +15,7 @@
 
     clips: {
         "attack_light": "Zombie_Scratch",
+        "death":        "Death01",
     },
 
     overrides: [
@@ -25,6 +26,14 @@
             looping: false,
             duration: 1.0,
             cancel_on_move: false,
+        ),
+        (
+            id: "death",
+            clip: "Death01",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+            stop_action: "npc_revive",
         ),
     ],
 )

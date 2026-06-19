@@ -11,9 +11,13 @@
     states: [
         (
             name: "alive",
-            // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
-            // SetStat before SetEntityVisible so the stat bar never briefly shows 0 HP.
+            // npc_revive clears the death-pose override (stop_action sentinel) so the snake
+            // returns to idle rather than staying frozen in its death frame after respawn.
+            // ResetToSpawn before SetEntityVisible so the snake never briefly appears at the
+            // death spot. SetStat before visible so the stat bar never briefly shows 0 HP.
             entry_actions: [
+                PlayAnimationOn(target: "{self}", clip: "npc_revive"),
+                EmitEvent("npc.revive:{self}"),
                 ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 50.0),
                 SetEntityVisible(entity: "{self}", visible: true),
@@ -48,20 +52,32 @@
         ),
         (
             name: "dead",
+            // npc.dead stops the NPC system from moving the corpse.
+            // Death animation is 2.25 s; hide at 3 s so it completes before disappearing.
+            // Respawn at 15 s from death so the area has a brief rest window.
             entry_actions: [
+                EmitEvent("npc.dead:{self}"),
+                PlayAnimationOn(target: "{self}", clip: "death"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
-                SetEntityVisible(entity: "{self}", visible: false),
-                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 8.0),
+                EmitEventAfterDelay(event: "snake.hide:{self}", delay_secs: 10.0),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 25.0),
             ],
             exit_actions: [],
-            on: [],
+            on: [
+                (
+                    event: "snake.hide:{self}",
+                    do_actions: [
+                        SetEntityVisible(entity: "{self}", visible: false),
+                    ],
+                ),
+            ],
         ),
     ],
 
     transitions: [
-        ( from: "alive",     on: "npc.player_reached:{self}",  to: "attacking" ),
-        ( from: "attacking", on: "npc.player_lost:{self}",     to: "alive"     ),
+        ( from: "alive",     on: "npc.player_reached:{self}",   to: "attacking" ),
+        ( from: "attacking", on: "npc.player_lost:{self}",      to: "alive"     ),
         ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"      ),
         ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"      ),
         ( from: "dead",      on: "entity.respawned:{self}",     to: "alive"     ),

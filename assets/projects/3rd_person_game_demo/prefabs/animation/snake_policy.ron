@@ -17,5 +17,14 @@
         "coiled": "Coiled",
         "dance":  "Dance",
     },
-    overrides: [],
+    overrides: [
+        (
+            id: "death",
+            clip: "Death",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+            stop_action: "npc_revive",
+        ),
+    ],
 )

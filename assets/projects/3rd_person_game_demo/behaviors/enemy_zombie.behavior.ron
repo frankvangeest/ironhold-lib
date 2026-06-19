@@ -12,7 +12,11 @@
     states: [
         (
             name: "alive",
+            // npc_revive clears the death-pose override (stop_action sentinel) so the zombie
+            // returns to idle rather than staying frozen in its death frame after respawn.
             entry_actions: [
+                PlayAnimationOn(target: "{self}", clip: "npc_revive"),
+                EmitEvent("npc.revive:{self}"),
                 ResetToSpawn("{self}"),
                 SetStat(key: "{self}.health", value: 120.0),
                 SetEntityVisible(entity: "{self}", visible: true),
@@ -44,14 +48,26 @@
         ),
         (
             name: "dead",
+            // npc.dead stops the NPC system from moving the corpse.
+            // Death01 animation is 3.0 s; hide at 4 s so it completes before disappearing.
+            // Respawn at 20 s — zombie is the toughest ground enemy so the rest window is longer.
             entry_actions: [
+                EmitEvent("npc.dead:{self}"),
+                PlayAnimationOn(target: "{self}", clip: "death"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
-                SetEntityVisible(entity: "{self}", visible: false),
-                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 12.0),
+                EmitEventAfterDelay(event: "zombie.hide:{self}", delay_secs: 10.0),
+                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 20.0),
             ],
             exit_actions: [],
-            on: [],
+            on: [
+                (
+                    event: "zombie.hide:{self}",
+                    do_actions: [
+                        SetEntityVisible(entity: "{self}", visible: false),
+                    ],
+                ),
+            ],
         ),
     ],
 
