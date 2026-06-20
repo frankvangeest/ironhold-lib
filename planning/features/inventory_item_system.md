@@ -1,23 +1,23 @@
 # Feature: Inventory & Item System
 
-_Status: Draft_
+_Status: Active_
 _Planned at: `6adb6bf` (2026-06-02)_
 
 ---
 
 > ## Pre-implementation checklist
 >
-> - [ ] **Decide: player inventory persistence across scenes.** The player entity is tagged `LevelEntity` and despawned on `LoadScene`. An `Inventory` component on the player would reset every scene. Solution: a `PlayerInventory` resource (parallel to `LoadedStats`) that persists across scenes. At player spawn time, the scene loader copies `PlayerInventory` into the player's `Inventory` component. Scene-specific containers (chests, crates) use entity-attached `Inventory` components only and reset on scene load. Confirm this split before coding.
+> - [x] **Decide: player inventory persistence across scenes.** The player entity is tagged `LevelEntity` and despawned on `LoadScene`. An `Inventory` component on the player would reset every scene. Solution: a `PlayerInventory` resource (parallel to `LoadedStats`) that persists across scenes. At player spawn time, the scene loader copies `PlayerInventory` into the player's `Inventory` component. Scene-specific containers (chests, crates) use entity-attached `Inventory` components only and reset on scene load. Confirm this split before coding.
 >
-> - [ ] **Decide: `ItemCatalog` file location.** Options: (a) `items/items.ron` per project; (b) `items` map in `assets.ron`. Recommendation: **separate `items/items.ron`** — items are gameplay data, not rendering assets; separate file keeps `assets.ron` focused on paths; mirrors the pattern for `groups.ron` and `stats.ron`.
+> - [x] **Decide: `ItemCatalog` file location.** Options: (a) `items/items.ron` per project; (b) `items` map in `assets.ron`. Recommendation: **separate `items/items.ron`** — items are gameplay data, not rendering assets; separate file keeps `assets.ron` focused on paths; mirrors the pattern for `groups.ron` and `stats.ron`.
 >
-> - [ ] **Decide: inventory slot model — indexed vs. unordered bag.** Options: (a) fixed-size indexed grid (`Vec<Option<ItemStack>>`, `max_slots`) — visual grid UI, easy drag-and-drop; (b) unordered bag (`HashMap<String, u32>`) — no visual grid but simpler query. Recommendation: **indexed slots** (`Vec<Option<ItemStack>>`) — v1 UI will be a grid; stackable items fill the first available slot with the same key; non-stackable items each occupy one slot.
+> - [x] **Decide: inventory slot model — indexed vs. unordered bag.** Options: (a) fixed-size indexed grid (`Vec<Option<ItemStack>>`, `max_slots`) — visual grid UI, easy drag-and-drop; (b) unordered bag (`HashMap<String, u32>`) — no visual grid but simpler query. Recommendation: **indexed slots** (`Vec<Option<ItemStack>>`) — v1 UI will be a grid; stackable items fill the first available slot with the same key; non-stackable items each occupy one slot.
 >
-> - [ ] **Decide: `AddItem` target — player only or any entity.** Chests, crates, and merchants all have inventories. `AddItem` takes an `entity: String` (spawn ID) parameter. When `entity` is `"player"` (a reserved ID), it routes to `PlayerInventory`. For other entities, it targets the entity's `Inventory` component. Confirm this routing before coding.
+> - [x] **Decide: `AddItem` target — player only or any entity.** Chests, crates, and merchants all have inventories. `AddItem` takes an `entity: String` (spawn ID) parameter. When `entity` is `"player"` (a reserved ID), it routes to `PlayerInventory`. For other entities, it targets the entity's `Inventory` component. Confirm this routing before coding.
 >
-> - [ ] **Decide: `HasItem` condition scope for v1.** Rule-level `Condition` expressions don't exist yet (icebox). `HasItem` as a dialogue choice condition will be added to `DialogueCondition` when this feature ships (a small patch to the dialogue system). Quest objectives handle their own item checks internally. Do not add a general rule-level `HasItem` in v1.
+> - [x] **Decide: `HasItem` condition scope for v1.** Rule-level `Condition` expressions don't exist yet (icebox). `HasItem` as a dialogue choice condition will be added to `DialogueCondition` when this feature ships (a small patch to the dialogue system). Quest objectives handle their own item checks internally. Do not add a general rule-level `HasItem` in v1.
 >
-> - [ ] **Decide: merchant UI — inline shop panel or scene overlay.** Options: (a) `OpenShop` action opens a full-screen overlay scene; (b) a `ShopPanel` UI node declared in the scene. Recommendation: **`ShopPanel` UI node in scene RON** — consistent with `DialoguePanel`; declared once per scene, reused by any `OpenShop` action.
+> - [x] **Decide: merchant UI — inline shop panel or scene overlay.** Options: (a) `OpenShop` action opens a full-screen overlay scene; (b) a `ShopPanel` UI node declared in the scene. Recommendation: **`ShopPanel` UI node in scene RON** — consistent with `DialoguePanel`; declared once per scene, reused by any `OpenShop` action.
 
 ---
 
