@@ -119,6 +119,8 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅
+- `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅
+- `"dialogue.ended:{dialogue_path}"` — dialogue panel closed; payload is the project-relative `.dialogue.ron` path; emitted by `Action::EndDialogue` and cleared on `LoadScene` ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 

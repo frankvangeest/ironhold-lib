@@ -14,3 +14,4 @@
 - [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow
 - [NPC state machine design](npc_state_machine_design.md) — NpcState is runtime-only (not schema); Investigating-state split from Chase lets you delete the dist_opt.or hack; centralize hit-handling
 - [Camera architecture](camera_architecture.md) — OrbitCamera/FlyCamera siloed; camera systems run in Update (not FixedUpdate); shake must be additive AFTER camera_orbit_system; camera_modes will unify both
+- [Dialogue system](dialogue_system.md) — catalog-vs-structural-file rule; auto-wire seam; dual condition system; auto-advance-only-when-no-choices invariant; portrait must use catalog

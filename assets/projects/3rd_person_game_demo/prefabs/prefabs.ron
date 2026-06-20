@@ -350,6 +350,7 @@
 
     // Friendly male NPC — silver metallic look, idles near the player start.
     // Selectable with a green indicator ring (indicator_category: "friendly").
+    // Walk up and press F to start a conversation.
     "friendly_npc_male": (
       kind: Actor,
       model: "character_male",
@@ -357,6 +358,11 @@
       animation_policy: "prefabs/animation/player_policy_human.ron",
       click_selectable: true,
       indicator_category: "friendly",
+      interactable: (
+        radius: 3.0,
+        hint_text: "Talk",
+      ),
+      dialogue: "dialogues/npc_intro.dialogue.ron",
     ),
 
     // Large flat sand-coloured ground plane. physics: true so the player can walk on it.

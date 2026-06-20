@@ -47,6 +47,7 @@ pub fn action_executor_system(
                 scene_state.preloaded_glbs.0.clear();
                 scene_state.delayed_events.0.clear();
                 spawn_params.pending_spawns.0.clear();
+                scene_state.active_dialogue.clear();
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
@@ -742,6 +743,36 @@ pub fn action_executor_system(
                 }
                 if !found {
                     warn!("Action::CameraShake: no orbit camera in scene — shake ignored");
+                }
+            }
+            Action::StartDialogue { npc_id, dialogue_path } => {
+                info!("Action::StartDialogue: npc='{}' path='{}'", npc_id, dialogue_path);
+                let resolved = resolve_project_path(&project_root.0, &dialogue_path);
+                let handle: Handle<crate::schema::dialogue::DialogueDef> = asset_server.load(resolved);
+                scene_state.active_dialogue.npc_id = npc_id.clone();
+                scene_state.active_dialogue.dialogue_path = dialogue_path.clone();
+                scene_state.active_dialogue.current_node_index = 0;
+                scene_state.active_dialogue.last_rendered_node = None;
+                scene_state.active_dialogue.auto_advance_timer = None;
+                scene_state.active_dialogue.handle = Some(handle);
+                game_events.write(GameEvent::Trigger(format!("dialogue.started:{}", npc_id)));
+            }
+            Action::AdvanceDialogue => {
+                if scene_state.active_dialogue.is_active() {
+                    info!("Action::AdvanceDialogue");
+                    scene_state.active_dialogue.current_node_index += 1;
+                    scene_state.active_dialogue.last_rendered_node = None;
+                    scene_state.active_dialogue.auto_advance_timer = None;
+                } else {
+                    warn!("Action::AdvanceDialogue: no dialogue active — ignored");
+                }
+            }
+            Action::EndDialogue => {
+                if scene_state.active_dialogue.is_active() {
+                    let path = scene_state.active_dialogue.dialogue_path.clone();
+                    info!("Action::EndDialogue: closing '{}'", path);
+                    scene_state.active_dialogue.clear();
+                    game_events.write(GameEvent::Trigger(format!("dialogue.ended:{}", path)));
                 }
             }
         }

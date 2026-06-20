@@ -261,6 +261,19 @@
       align: Left,
     )),
 
+    // ── Dialogue panel ─────────────────────────────────────────────────────────
+    // Starts hidden; revealed by dialogue_tick_system when a conversation begins.
+    // Walk up to the silver guard NPC and press F to start a conversation.
+    DialoguePanel((
+      id: "npc_dialogue_panel",
+      position: (16.0, 440.0),
+      size: (1220.0, 200.0),
+      background_color: (0.04, 0.04, 0.07, 0.93),
+      speaker_font_size: 18.0,
+      body_font_size: 15.0,
+      choice_font_size: 13.0,
+    )),
+
     // ── Action bar ─────────────────────────────────────────────────────────────
     // Press 1 to attack the current target (select with LMB or T).
     // Press 2 for a heavy strike that deals double damage (costs mana, longer cooldown).

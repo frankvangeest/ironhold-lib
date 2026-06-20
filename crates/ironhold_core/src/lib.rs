@@ -126,6 +126,7 @@ impl Plugin for GamePlugin {
             .init_resource::<GameVariables>()
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()
+            .init_resource::<crate::capabilities::dialogue::ActiveDialogue>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -142,6 +143,7 @@ impl Plugin for GamePlugin {
             .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::AssetCatalog>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::stats::StatCatalog>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::dialogue::DialogueDef>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
             .add_plugins(capabilities::stat_radar::StatRadarPlugin)
@@ -223,6 +225,12 @@ impl Plugin for GamePlugin {
             // Interactable input runs before all interpreters so all three readers
             // see the emitted GameEvent in the same frame.
             .add_systems(Update, interactable_system.before(message_interpreter_system))
+            // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
+            // Runs after button_system and interactable_system so all events are in the buffer.
+            .add_systems(Update, dialogue_tick_system
+                .after(button_system)
+                .after(interactable_system)
+                .before(message_interpreter_system))
             // Delayed events tick down each frame; emitted GameEvents are visible to all
             // three interpreter systems in the same frame they fire.
             .add_systems(Update, tick_delayed_events_system.before(message_interpreter_system))

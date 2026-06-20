@@ -17,6 +17,7 @@ Every RON file must start with `schema_version`. Use these values:
 | `logic/rules.ron` | 2 |
 | `logic/state_machine.ron` | 1 |
 | `behaviors/*.behavior.ron` | 1 |
+| `dialogues/*.dialogue.ron` | 1 |
 | `stats/stats.ron` | 1 |
 
 ---

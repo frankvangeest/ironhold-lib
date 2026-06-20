@@ -74,8 +74,9 @@ The engine identifies files by their path (as set in the project config) and by 
 | State machine | `.ron` | `logic/state_machine.ron` |
 | Model overrides | `.ron` | `overrides/model_fixes.ron` |
 | Stat catalog | `.ron` | `stats/stats.ron` |
+| Dialogue | `.dialogue.ron` | `dialogues/{name}.dialogue.ron` |
 
-`.scene.ron`, `.project.ron`, and `.behavior.ron` use a double extension so the engine can discover them by suffix. All other `.ron` files are found by their exact path, which is set in the project config — the filename itself is not significant to the runtime.
+`.scene.ron`, `.project.ron`, `.behavior.ron`, and `.dialogue.ron` use a double extension so the engine can discover them by suffix. All other `.ron` files are found by their exact path, which is set in the project config — the filename itself is not significant to the runtime.
 
 ---
 
@@ -681,6 +682,35 @@ Wire feedback events in `rules.ron` or `state_machine.ron` to surface cooldown o
 ( event: "action_bar.insufficient_resource:1", do_actions: [ SetVariable("status", "Not enough mana") ] ),
 ```
 
+#### `DialoguePanel((...))` ✅
+
+A full-width conversation panel that displays NPC speaker name, body text, and dynamically spawned choice buttons. Always positioned absolutely. Hidden by default; shown when `StartDialogue` executes, hidden when `EndDialogue` fires or `LoadScene` occurs.
+
+Each scene that needs NPC dialogue must include exactly one `DialoguePanel`. If multiple NPCs share a scene, they all use the same panel.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `position` | `(f32, f32)` | `(0, 0)` | Top-left corner in pixels (always absolute) |
+| `size` | `(f32, f32)` | `(1200.0, 200.0)` | Width and height in pixels |
+| `background_color` | `(f32,f32,f32,f32)` | dark blue-black | Panel background as linear RGBA |
+| `speaker_font_size` | `f32` | `18.0` | Font size for the speaker name label |
+| `body_font_size` | `f32` | `15.0` | Font size for the body text |
+| `choice_font_size` | `f32` | `13.0` | Font size for each choice button label |
+| `initially_hidden` | `bool` | `true` | Whether the panel starts hidden. Should always be `true` in practice. |
+
+```ron
+DialoguePanel((
+    id: "npc_dialogue_panel",
+    position: (16.0, 440.0),
+    size: (1220.0, 200.0),
+    background_color: (0.04, 0.04, 0.07, 0.93),
+    speaker_font_size: 18.0,
+    body_font_size: 15.0,
+    choice_font_size: 13.0,
+)),
+```
+
 ### UI Panel (`UiPanelDef`) ✅
 
 When a scene includes a `ui_panel` block, all `ui` elements are arranged in a vertically-flowing centered panel instead of using absolute positioning. Elements with `absolute: true` are still positioned relative to the panel's top-left corner.
@@ -1184,6 +1214,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
+| `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 
 ### Special tag: `"flycam"` ✅
 
@@ -1903,6 +1934,145 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `ClearTarget` | Clear `CurrentTarget`. Emits `target.cleared`. Also cleared automatically on `LoadScene`. |
 | `ResetToSpawn("{self}")` | Teleport an NPC entity to its scene-placed origin and zero its velocity. Call before `SetEntityVisible(visible: true)` in respawn entry_actions so the entity appears at its spawn point instead of where it died. Warns and no-ops for non-NPC entities. `{self}` is substituted in behavior files. |
 | `CameraShake(duration_secs: f32, intensity: f32)` | Apply a procedural position shake to the active orbit camera. `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead of an orbit camera — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
+| `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `rules.ron` or `state_machine.ron`. |
+| `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
+| `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
+
+---
+
+## `dialogues/*.dialogue.ron` — DialogueDef ✅
+
+Defines a branching NPC conversation tree. File extension must be `.dialogue.ron`.
+Reference from a `PrefabDef` via the `dialogue` field (project-relative path); pair with `interactable` so the player can trigger the conversation.
+
+**Fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | `u32` | Must be `1` |
+| `nodes` | `Vec<DialogueNodeDef>` | Ordered list of conversation nodes |
+
+**`DialogueNodeDef` fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | `String` | required | Stable node identifier used as a `jump_to` target. Must be unique within this file. |
+| `speaker` | `String` | required | Display name shown in the speaker label. `{self}` is replaced with the NPC's spawn ID. |
+| `portrait` | `Option<String>` | `None` | Reserved — parsed and stored but not yet rendered in v1. |
+| `body` | `String` | required | Dialogue body text shown to the player. `{self}` is replaced with the NPC's spawn ID. |
+| `advance_delay_secs` | `Option<f32>` | `None` | When set and the node has **no choices**, auto-advances after this many seconds. Ignored when choices are present. |
+| `choices` | `Vec<DialogueChoiceDef>` | `[]` | Player response buttons. Empty = auto-advance node (waits for `advance_delay_secs` or an `AdvanceDialogue` action). |
+
+**`DialogueChoiceDef` fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | `String` | required | Button text shown to the player. `{self}` is replaced with the NPC's spawn ID. |
+| `condition` | `Option<DialogueCondition>` | `None` | Choice is hidden if the condition evaluates to false. |
+| `do_actions` | `Vec<Action>` | `[]` | Actions queued when this choice is selected. `{self}` is substituted with the NPC's spawn ID before each action is pushed. |
+| `jump_to` | `Option<String>` | `None` | Node `id` to jump to after `do_actions` fire. `None` = advance to the next node. `"__end__"` = close the dialogue. |
+
+**`DialogueCondition` variants:**
+
+| Variant | Description |
+|---|---|
+| `HasVariable { key, value }` | Choice visible only when `GameVariables[key] == value`. |
+| `VariableGte { key, min }` | Choice visible only when `GameVariables[key]` parses as `i32` and is `>= min`. |
+| `StatAtLeast { stat_key, min }` | Choice visible only when the named global stat's effective value is `>= min`. |
+
+**Pipeline events emitted:**
+
+| Event | When |
+|---|---|
+| `dialogue.started:{npc_id}` | `StartDialogue` executed — panel opened |
+| `dialogue.ended:{dialogue_path}` | `EndDialogue` executed or dialogue closed — panel hidden |
+
+**Example:**
+
+```ron
+// dialogues/npc_intro.dialogue.ron
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "greeting",
+            speaker: "Guard",
+            body: "Hail, traveller! The undead are restless — stay sharp.",
+            choices: [
+                ( label: "Tell me more.", jump_to: "lore" ),
+                ( label: "Any reward?",   jump_to: "reward" ),
+                ( label: "Thanks.",       jump_to: "__end__" ),
+            ],
+        ),
+        (
+            id: "lore",
+            speaker: "Guard",
+            body: "A sorcerer was spotted near the northern ruins three nights ago.",
+            choices: [
+                ( label: "I'll investigate.",
+                  do_actions: [ SetVariable("quest_ruins", "accepted") ],
+                  jump_to: "accepted" ),
+                ( label: "Good luck.", jump_to: "__end__" ),
+            ],
+        ),
+        (
+            id: "reward",
+            speaker: "Guard",
+            body: "The elder offers gold for proof the sorcerer has been dealt with.",
+            // condition: only shows if the quest isn't already accepted
+            choices: [
+                ( label: "Consider it done.",
+                  condition: HasVariable(key: "quest_ruins", value: ""),
+                  do_actions: [ SetVariable("quest_ruins", "accepted") ],
+                  jump_to: "accepted" ),
+                ( label: "I'll think about it.", jump_to: "__end__" ),
+            ],
+        ),
+        (
+            id: "accepted",
+            speaker: "Guard",
+            body: "Good luck, warrior. The ruins lie north-east, past the stone bridge.",
+            advance_delay_secs: 3.0,  // auto-closes after 3 s; no choices needed
+        ),
+    ],
+)
+```
+
+**Wiring in `prefabs/prefabs.ron`:**
+
+```ron
+"guard_npc": (
+    kind: Actor,
+    model: "character_male",
+    interactable: ( radius: 3.0, hint_text: "Talk" ),
+    dialogue: "dialogues/npc_intro.dialogue.ron",
+),
+```
+
+**Placing the panel in `scenes/main.scene.ron`:**
+
+```ron
+ui: [
+    DialoguePanel((
+        id: "npc_dialogue_panel",
+        position: (16.0, 440.0),
+        size: (1220.0, 200.0),
+        background_color: (0.04, 0.04, 0.07, 0.93),
+        speaker_font_size: 18.0,
+        body_font_size: 15.0,
+        choice_font_size: 13.0,
+    )),
+],
+```
+
+The panel is `Visibility::Hidden` at spawn (`initially_hidden: true` is the default). It becomes visible when `StartDialogue` is processed and returns to hidden on `EndDialogue` or `LoadScene`.
+
+**Reacting to dialogue events in `rules.ron`:**
+
+```ron
+( on: "dialogue.started:npc_guard_01", do_actions: [ SetVariable("talking_to_guard", "true") ] ),
+( on: "dialogue.ended:dialogues/npc_intro.dialogue.ron", do_actions: [ SetVariable("talking_to_guard", "") ] ),
+```
 
 ---
 

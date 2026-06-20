@@ -247,6 +247,21 @@ pub enum Action {
         duration_secs: f32,
         intensity: f32,
     },
+    /// Open the dialogue panel and begin playing a `.dialogue.ron` conversation.
+    /// `npc_id` is the spawn ID of the NPC entity; `dialogue_path` is the project-relative path
+    /// to the `.dialogue.ron` file. The dialogue_tick_system handles this via the
+    /// auto-wire path (entity.interacted:{id} on entities with `PrefabDef.dialogue` set) but
+    /// designers can also fire it directly from rules.ron or state_machine.ron.
+    StartDialogue {
+        npc_id: String,
+        dialogue_path: String,
+    },
+    /// Advance the current dialogue to the next node.
+    /// No-op when no dialogue is active or when the current node has unresolved choices.
+    AdvanceDialogue,
+    /// Close the current dialogue panel immediately.
+    /// No-op when no dialogue is active. Emits `dialogue.ended:{path}` into the pipeline.
+    EndDialogue,
 }
 
 fn default_action_volume() -> f32 { 1.0 }

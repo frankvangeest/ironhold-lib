@@ -164,6 +164,24 @@ alternating between two targets of the same colour creates no new `StandardMater
 
 `interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
 
+### Dialogue system (`capabilities/dialogue.rs`)
+
+**`DialoguePath(String)` component** — inserted by the scene loader on entities whose `PrefabDef.dialogue` is set. `dialogue_tick_system` reads `entity.interacted:{id}` events and matches them against `DialoguePath` entities to auto-fire `Action::StartDialogue`.
+
+**`ActiveDialogue` resource** — tracks the current conversation: `npc_id`, `dialogue_path`, `current_node_index`, `auto_advance_timer`, `handle: Option<Handle<DialogueDef>>`, `last_rendered_node`. Cleared on `EndDialogue` and `LoadScene`.
+
+**System ordering**: `dialogue_tick_system` runs `.after(button_system).after(interactable_system).before(message_interpreter_system)`.
+
+**Auto-advance guard**: `advance_delay_secs` only applies when `node.choices.is_empty()`. Nodes with choices never auto-advance.
+
+**`do_actions` substitution**: `{self}` in choice `do_actions` is replaced with `active.npc_id` by `substitute_self_in_action()` before pushing to `ActionQueue`. Mirrors behavior-file substitution so dialogue choices and behaviors behave consistently.
+
+**Pipeline events emitted:**
+- `dialogue.started:{npc_id}` — fired by `Action::StartDialogue` in the executor
+- `dialogue.ended:{dialogue_path}` — fired by `Action::EndDialogue` and on `LoadScene`
+
+**`portrait` field**: reserved in `DialogueNodeDef`, not yet rendered. Mark as not-implemented in authoring docs.
+
 ---
 
 ## WebGPU 16-byte alignment

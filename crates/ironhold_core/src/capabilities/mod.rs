@@ -26,6 +26,7 @@ pub mod foliage;
 pub mod action_bar;
 pub mod targeting;
 pub mod target_indicator;
+pub mod dialogue;
 
 pub use player::*;
 pub use camera::*;
@@ -59,4 +60,8 @@ pub use decal::{FadingDecal, TrackedDecal, PendingDecalSpawns, spawn_decal_syste
 pub use foliage::{FoliageMaterial, FoliageMaterialParams, ATTRIBUTE_LEAF_CENTER, PendingFoliage, FoliagePlugin};
 pub use action_bar::{ActionBarPlugin, CooldownMap, CurrentTarget, ActionSlotUi, CooldownOverlay};
 pub use targeting::{TargetingPlugin, ClickSelectable, Targetable, tab_targeting_system};
+pub use dialogue::{
+    ActiveDialogue, DialoguePath, DialoguePanelMarker, DialogueTextMarker, DialogueTextRole,
+    DialogueChoicesContainer, DialogueChoiceBtn, dialogue_tick_system,
+};
 

@@ -70,6 +70,10 @@ pub fn spawn_prefab_instance(
         });
     }
 
+    if let Some(dialogue_path) = &prefab.dialogue {
+        ec.insert(crate::capabilities::dialogue::DialoguePath(dialogue_path.clone()));
+    }
+
     if let Some(zone_def) = &prefab.trigger_zone {
         ec.insert((
             crate::capabilities::trigger_zone::TriggerZone,

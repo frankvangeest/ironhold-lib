@@ -837,6 +837,13 @@ pub struct PrefabDef {
     /// Only meaningful when `click_selectable: true`.
     #[serde(default = "default_select_aim_height")]
     pub select_aim_height: f32,
+    /// Project-relative path to a `.dialogue.ron` file that drives conversation with this entity.
+    /// When set, the scene loader inserts a `DialoguePath` component on the spawned entity.
+    /// The `dialogue_tick_system` detects `entity.interacted:{id}` for entities with this component
+    /// and automatically fires `Action::StartDialogue` — no rule wiring required.
+    /// Example: `"dialogues/npc_intro.dialogue.ron"`.
+    #[serde(default)]
+    pub dialogue: Option<String>,
 }
 
 pub(crate) fn default_select_aim_height() -> f32 { 1.0 }

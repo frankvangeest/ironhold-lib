@@ -15,7 +15,7 @@
 
 - [x] **NPC aggro-on-hit + Investigating state** — relay system populates `NpcHitQueue(HashMap<String,Vec3>)`; `Investigating` state walks toward attacker's last-known position at patrol speed; kiting works (each hit resets the timer); configurable `investigate_timeout_secs` per prefab (snake 15 s, zombie 20 s, default 10 s); `npc.investigating` / `npc.investigation_failed` events. See `planning/features/npc_aggro_on_hit.md`.
 
-- [ ] **Dialogue system** — RON-defined conversation trees; standalone `.dialogue.ron` asset files; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` / `AdvanceDialogue` actions; `{self}` / `{target}` substitution; branching via `jump_to` on choices; `do_actions` on choices; `dialogue.started/node/choice/ended` events; auto-wired to `entity.interacted` when `dialogue` set on prefab; demo via friendly NPC in `3rd_person_game_demo`. See `planning/features/dialogue_system.md`
+- [x] **Dialogue system** — RON-defined conversation trees; standalone `.dialogue.ron` asset files; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` / `AdvanceDialogue` actions; `{self}` / `{target}` substitution; branching via `jump_to` on choices; `do_actions` on choices; `dialogue.started/node/choice/ended` events; auto-wired to `entity.interacted` when `dialogue` set on prefab; demo via friendly NPC in `3rd_person_game_demo`. See `planning/features/done/dialogue_system.md`
 
 ---
 

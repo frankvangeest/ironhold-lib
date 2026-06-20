@@ -12,3 +12,4 @@
 - [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — animation_sources undocumented as a field; PlayAnimationOn missing from actions table; clip-vs-id distinction unexplained
 - [Target indicator color tiers](project_target_indicator_color_tiers.md) — 3-tier ring color (indicator_color > category > scene color); silent fallthrough undocumented; indicator_color & "ally" have no shipped example
 - [CameraShake re-trigger ambiguity](project_camera_shake_retrigger_ambiguity.md) — re-trigger semantics documented 3 contradictory ways (restart vs merge+cap vs replace); verify doc against shipped executor
+- [Dialogue system doc gaps](project_dialogue_system_doc_gaps.md) — hint_text undocumented on InteractableDef; dialogue.started payload is spawn id not prefab; condition absent-key semantics unexplained; canonical example 3rd_person_game_demo

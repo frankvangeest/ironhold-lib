@@ -424,6 +424,8 @@ pub struct SceneStateParams<'w, 's> {
     pub npc_velocities: Query<'w, 's, &'static mut bevy_rapier3d::prelude::Velocity>,
     /// Used by `Action::CameraShake` to insert `CameraShakeState` on the active orbit camera.
     pub orbit_cameras: Query<'w, 's, Entity, With<crate::capabilities::camera::OrbitCamera>>,
+    /// Cleared on `LoadScene` so stale dialogue state doesn't bleed across scene transitions.
+    pub active_dialogue: ResMut<'w, crate::capabilities::dialogue::ActiveDialogue>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

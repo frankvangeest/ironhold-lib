@@ -363,6 +363,13 @@ pub fn spawn_scene_v2(
                         });
                     }
 
+                    // DialoguePath: auto-wires entity.interacted → StartDialogue
+                    if let Some(dialogue_path) = &prefab.dialogue {
+                        commands.entity(parent).insert(
+                            crate::capabilities::dialogue::DialoguePath(dialogue_path.clone())
+                        );
+                    }
+
                     // TriggerZone: Rapier sensor → entity.entered/exited:{id}
                     if let Some(zone_def) = &prefab.trigger_zone {
                         commands.entity(parent).insert((
@@ -618,6 +625,13 @@ pub fn spawn_scene_v2(
                                 radius: interactable_def.radius,
                                 hint_text: interactable_def.hint_text.clone(),
                             });
+                        }
+
+                        // DialoguePath: auto-wires entity.interacted → StartDialogue
+                        if let Some(dialogue_path) = &prefab.dialogue {
+                            commands.entity(spawned).insert(
+                                crate::capabilities::dialogue::DialoguePath(dialogue_path.clone())
+                            );
                         }
 
                         // TriggerZone: Rapier sensor → entity.entered/exited:{id}
@@ -1606,6 +1620,73 @@ fn spawn_ui_element_node(
             } else {
                 warn!("StatRadar {:?}: no pre-created material handle — skipping spawn", radar.id);
             }
+        }
+        UiNodeDef::DialoguePanel(panel) => {
+            use crate::capabilities::dialogue::{
+                DialoguePanelMarker, DialogueTextMarker, DialogueTextRole, DialogueChoicesContainer,
+            };
+            let (r, g, b, a) = panel.background_color;
+            let visibility = if panel.initially_hidden {
+                Visibility::Hidden
+            } else {
+                Visibility::Visible
+            };
+            let speaker_font_size = panel.speaker_font_size;
+            let body_font_size = panel.body_font_size;
+            let choice_font_size = panel.choice_font_size;
+            let mut panel_node = node;
+            panel_node.flex_direction = FlexDirection::Column;
+            panel_node.padding = UiRect::all(Val::Px(12.0));
+            panel_node.row_gap = Val::Px(6.0);
+            parent
+                .spawn((
+                    Name::new(format!("DialoguePanel: {}", panel.id)),
+                    panel_node,
+                    BackgroundColor(Color::srgba(r, g, b, a)),
+                    visibility,
+                    DialoguePanelMarker { choice_font_size },
+                ))
+                .with_children(|p| {
+                    // Speaker name label.
+                    p.spawn((
+                        Name::new("Speaker"),
+                        Node { width: Val::Percent(100.0), ..default() },
+                        Text::new(""),
+                        TextFont { font_size: speaker_font_size, ..default() },
+                        TextColor(Color::srgba(0.70, 0.85, 1.0, 1.0)),
+                        DialogueTextMarker(DialogueTextRole::Speaker),
+                    ));
+                    // Thin separator line.
+                    p.spawn((
+                        Name::new("Separator"),
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(1.0),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(0.30, 0.30, 0.42, 0.55)),
+                    ));
+                    // Body text.
+                    p.spawn((
+                        Name::new("Body"),
+                        Node { width: Val::Percent(100.0), flex_grow: 1.0, ..default() },
+                        Text::new(""),
+                        TextFont { font_size: body_font_size, ..default() },
+                        TextColor(Color::WHITE),
+                        DialogueTextMarker(DialogueTextRole::Body),
+                    ));
+                    // Choice buttons container (populated dynamically by dialogue_tick_system).
+                    p.spawn((
+                        Name::new("Choices"),
+                        Node {
+                            width: Val::Percent(100.0),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(4.0),
+                            ..default()
+                        },
+                        DialogueChoicesContainer,
+                    ));
+                });
         }
         UiNodeDef::ActionBar(bar) => {
             use crate::capabilities::action_bar::{ActionSlotUi, CooldownOverlay};

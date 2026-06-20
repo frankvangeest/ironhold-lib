@@ -315,6 +315,7 @@ pub enum UiNodeDef {
     StatSpread(StatSpreadDef),
     StatRadar(StatRadarDef),
     ActionBar(ActionBarDef),
+    DialoguePanel(DialoguePanelDef),
 }
 
 impl UiNodeDef {
@@ -327,6 +328,7 @@ impl UiNodeDef {
             UiNodeDef::StatSpread(d) => &d.id,
             UiNodeDef::StatRadar(d) => &d.id,
             UiNodeDef::ActionBar(d) => &d.id,
+            UiNodeDef::DialoguePanel(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -346,6 +348,7 @@ impl UiNodeDef {
                 let w = n * d.slot_size + (n - 1.0).max(0.0) * d.slot_gap + 8.0;
                 (w, d.slot_size + 8.0)
             }
+            UiNodeDef::DialoguePanel(d) => d.size,
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -357,6 +360,7 @@ impl UiNodeDef {
             UiNodeDef::StatSpread(d) => d.position,
             UiNodeDef::StatRadar(d) => d.position,
             UiNodeDef::ActionBar(d) => d.position,
+            UiNodeDef::DialoguePanel(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -368,6 +372,7 @@ impl UiNodeDef {
             UiNodeDef::StatSpread(d) => d.absolute,
             UiNodeDef::StatRadar(d) => d.absolute,
             UiNodeDef::ActionBar(_) => true,
+            UiNodeDef::DialoguePanel(_) => true,
         }
     }
     pub fn align(&self) -> UiTextAlign {
@@ -379,6 +384,7 @@ impl UiNodeDef {
             UiNodeDef::StatSpread(_) => UiTextAlign::Center,
             UiNodeDef::StatRadar(_) => UiTextAlign::Center,
             UiNodeDef::ActionBar(_) => UiTextAlign::Center,
+            UiNodeDef::DialoguePanel(_) => UiTextAlign::Left,
         }
     }
 }
@@ -821,3 +827,47 @@ fn default_bar_bg() -> (f32, f32, f32, f32) { (0.0, 0.0, 0.0, 0.70) }
 fn default_icon_cols() -> u32 { 4 }
 fn default_icon_rows() -> u32 { 4 }
 fn default_icon_cell_size() -> u32 { 64 }
+
+// ─── Dialogue panel ───────────────────────────────────────────────────────────
+
+/// A data-driven dialogue panel that displays NPC conversation text and player choices.
+/// Spawned as a UI element; visibility is managed at runtime by `dialogue_tick_system`.
+/// Always uses absolute positioning. Start hidden by default (`initially_hidden: true`).
+///
+/// ```ron
+/// DialoguePanel((
+///     id: "npc_panel",
+///     position: (16.0, 430.0),
+///     size: (1200.0, 200.0),
+/// ))
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DialoguePanelDef {
+    pub id: String,
+    /// Top-left corner in pixels (always absolute).
+    pub position: (f32, f32),
+    /// Width and height of the panel in pixels.
+    pub size: (f32, f32),
+    /// Panel background colour as linear RGBA. Default: near-black, 92 % alpha.
+    #[serde(default = "default_dialogue_bg")]
+    pub background_color: (f32, f32, f32, f32),
+    /// Font size for the speaker name line. Default: 18.
+    #[serde(default = "default_speaker_font_size")]
+    pub speaker_font_size: f32,
+    /// Font size for the body text. Default: 15.
+    #[serde(default = "default_body_font_size")]
+    pub body_font_size: f32,
+    /// Font size for dynamically spawned choice buttons. Default: 13.
+    #[serde(default = "default_choice_font_size")]
+    pub choice_font_size: f32,
+    /// When `true` (default) the panel starts invisible and is shown by the dialogue system.
+    #[serde(default = "default_true_bool")]
+    pub initially_hidden: bool,
+}
+
+fn default_dialogue_bg() -> (f32, f32, f32, f32) { (0.05, 0.05, 0.08, 0.92) }
+fn default_speaker_font_size() -> f32 { 18.0 }
+fn default_body_font_size() -> f32 { 15.0 }
+fn default_choice_font_size() -> f32 { 13.0 }
+fn default_true_bool() -> bool { true }

@@ -1,0 +1,71 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "greeting",
+            speaker: "Guard",
+            body: "Hail, traveller! You've ventured into dangerous lands. The undead have been restless — stay sharp and keep your weapon ready.",
+            choices: [
+                (
+                    label: "What's happened here?",
+                    jump_to: "lore",
+                ),
+                (
+                    label: "Any rewards for dealing with them?",
+                    jump_to: "reward",
+                ),
+                (
+                    label: "Thanks for the warning.",
+                    jump_to: "farewell",
+                ),
+            ],
+        ),
+        (
+            id: "lore",
+            speaker: "Guard",
+            body: "Three nights ago a sorcerer was seen near the old ruins to the north. Since then the dead won't stay buried. We've lost two scouts already.",
+            choices: [
+                (
+                    label: "I'll investigate the ruins.",
+                    jump_to: "ruins_accepted",
+                ),
+                (
+                    label: "Sounds dangerous. Good luck.",
+                    jump_to: "farewell",
+                ),
+            ],
+        ),
+        (
+            id: "reward",
+            speaker: "Guard",
+            body: "The village elder is offering a sack of gold for proof that the sorcerer has been dealt with. I'd go myself but someone has to watch this post.",
+            choices: [
+                (
+                    label: "Consider it done.",
+                    jump_to: "ruins_accepted",
+                ),
+                (
+                    label: "I'll think about it.",
+                    jump_to: "farewell",
+                ),
+            ],
+        ),
+        (
+            id: "ruins_accepted",
+            speaker: "Guard",
+            body: "Good luck, warrior. The ruins lie north-east, past the old stone bridge. Don't let the spiders slow you down — they're the least of your problems up there.",
+            advance_delay_secs: 3.0,
+        ),
+        (
+            id: "farewell",
+            speaker: "Guard",
+            body: "Stay safe, traveller. And if you change your mind about those ruins — you know where to find me.",
+            choices: [
+                (
+                    label: "Farewell.",
+                    jump_to: "__end__",
+                ),
+            ],
+        ),
+    ],
+)
