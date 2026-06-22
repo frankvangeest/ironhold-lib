@@ -4,6 +4,13 @@ _Status: Draft_
 _Planned at: `6adb6bf` (2026-06-02)_
 _Soft deps: Inventory (Collect objectives), Dialogue (accept/turn-in flow), Stat templates (stat rewards — shipped)_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | Core loop — catalog, `QuestLog`, objectives, rewards; testable via events alone | Queued | — |
+| v2 | Presentation layer — `QuestTracker` UI node, quest-giver nameplate indicator, `DialogueCondition::QuestState` | Queued | — |
+
 ---
 
 > ## Pre-implementation checklist

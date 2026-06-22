@@ -3,6 +3,14 @@
 _Status: Draft | Ready | In Progress | Done_
 _Planned at: `<git rev-parse --short HEAD>` (YYYY-MM-DD)_
 
+<!-- Phases table — add only for multi-phase features; delete this block for single-phase ones -->
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | Short description | Queued | — |
+| v2 | Short description | Queued | — |
+
 ## What
 One paragraph. What does this add or change for the person authoring a game with the engine?
 

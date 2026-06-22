@@ -3,6 +3,13 @@
 _Status: Draft_
 _Planned at: `e2b096b` (2026-06-15)_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| 1+2 | UV elimination + U16 indices; mesh chunking — unblocks terrain snap + streaming | Queued | — |
+| 3+4 | GPU-derived XZ positions; compressed normals _(gated on Phase 0 WebGPU PoC)_ | Queued | — |
+
 ## What
 
 Reduce terrain GPU memory footprint by ~25–50 % and eliminate the WASM first-frame stall by restructuring the terrain mesh pipeline in four discrete phases. Designers gain a per-scene `chunk_size` knob; everything else is transparent to RON authors.

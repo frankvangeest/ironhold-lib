@@ -3,6 +3,13 @@
 _Status: Draft_
 _Planned at: `5f72600` (2026-05-31)_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | HUD `StatusEffectBar` UI node — player buffs/debuffs only | Queued | — |
+| v2 | World-space icon strip above entities | Queued | — |
+
 ---
 
 > ## Pre-implementation checklist

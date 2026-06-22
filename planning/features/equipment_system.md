@@ -4,6 +4,13 @@ _Status: Draft_
 _Planned at: `6adb6bf` (2026-06-02)_
 _Hard dep: Inventory & item system_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | Stat/actions/UI — slot system, `Equip`/`Unequip`, stat bonuses, `EquipmentPanel` | Queued | — |
+| v2 | Visual mesh attachment — `AttachmentDef`, bone socket authoring, runtime bone queries (Icebox) | Icebox | — |
+
 ---
 
 > ## Pre-implementation checklist

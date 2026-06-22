@@ -3,6 +3,13 @@
 _Status: Draft_
 _Planned at: `ece80c1` (2026-05-05)_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | Camera mode unification — `ActiveCameraMode` resource, backward-compat mapping | Queued | — |
+| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Queued | — |
+
 ## What
 
 A unified, data-driven camera system that lets game designers pick from a set of named camera presets — and switch between them at runtime via logic rules — without touching Rust. All camera behaviour is authored in RON: the mode, its tuning parameters, and when to transition between modes.

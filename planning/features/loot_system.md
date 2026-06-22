@@ -5,6 +5,13 @@ _Planned at: `6adb6bf` (2026-06-02)_
 _Hard dep: Inventory & item system_
 _Soft deps: Quest system (Collect objective auto-advance), Equipment system (equippable drops)_
 
+## Phases
+
+| Phase | Backlog item | Status | Completed |
+|---|---|---|---|
+| v1 | Roll + auto-loot — tables, `RollLootTable`, `auto_loot` direct to inventory | Queued | — |
+| v2 | Physical loot bags — `LootBag` entity, pickup UI, `PickupLoot`/`ClearLootBag`, `ItemQuality` | Queued | — |_
+
 ---
 
 > ## Pre-implementation checklist

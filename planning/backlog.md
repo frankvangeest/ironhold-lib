@@ -35,23 +35,27 @@ _(nothing active — pick the next item from Queued to start)_
 - [ ] **Optional `physics` Cargo feature** — gate Rapier3D behind a `physics` feature on `ironhold_core` so projects that don't use colliders skip the ~15 MB of Rapier symbols in the WASM binary; `ColliderDef` in RON becomes a validated-but-no-op field when the feature is absent; `PhysicsPlugin` conditionally compiled; `ironhold_web` enables `physics` by default but a future stripped build could omit it. Sourced from Phaser's Arcade vs Matter modular physics model.
 
 ### Camera
-- [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
+- [ ] **Camera mode unification (v1)** — unify `OrbitCamera` and `FlyCamera` under a single `ActiveCameraMode` resource; backward-compat mapping for existing `camera:`/`flycam:` prefab fields; no new designer-facing surface, but de-risks `CameraShake` re-homing and the persistent-camera/black-frame issue. See `planning/features/camera_modes.md`
+- [ ] **Camera modes — new modes + switching (v2)** — `Follow`, `FirstPerson`, `Fixed` modes in RON; `SetCameraMode` action with optional eased transitions; FOV interpolation. _Dep: camera mode unification (v1)._ See `planning/features/camera_modes.md`
 
 ### Gameplay & Environment
 
-- [ ] **Status effect icon display** — HUD and/or above-entity icon strip showing active buffs and debuffs; icons are asset catalog texture keys declared on modifier templates; strip updates via change detection on `ActiveModifiers`; designer controls position (HUD panel vs. world-space above entity) and max visible icons in scene RON. See `planning/features/status_effect_icons.md`
+- [ ] **Status effect icons — HUD bar (v1)** — `StatusEffectBar` UI node in scene RON; shows active player buffs/debuffs as a strip of icons; icons are asset catalog texture keys on modifier templates; updates via change detection on `ActiveModifiers`. See `planning/features/status_effect_icons.md`
+- [ ] **Status effect icons — world-space strip (v2)** — icon strip above entities (not just the player); shares `collect_visible_modifiers` logic; separate spawn/despawn path per entity. _Dep: HUD bar (v1)._ See `planning/features/status_effect_icons.md`
 - [ ] **Layered icon UI node** — new `LayeredIcon` UI node type; each layer declares a texture key, tint color (r,g,b,a), and opacity; layers are alpha-composited in declaration order (bottom → top); v1 alpha-stack only — additive blend mode deferred to a future `blend:` field per layer; feeds action bar slot icons and status effect icon strips directly.
 - [ ] **AoE ground targeting** — `TargetingMode: GroundAoE(radius)` on skill action bar slots; pressing the slot enters a placement mode showing a circle decal under the cursor; confirming fires the slot's `do_actions` with `{aoe_position}` substitution; cancelling (right-click / Escape) exits without firing. See `planning/features/aoe_ground_targeting.md` _Hard dep: Skill action bar._
-- [ ] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. See `planning/features/nameplate_system.md`
+- [ ] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. _(Quest-giver `!`/`?` indicator belongs to Quest system v2, not here.)_ See `planning/features/nameplate_system.md`
 - [ ] **Spawn wave / encounter system** — `WaveDef` in RON: an ordered sequence of spawn steps each with a prefab key, count, delay, and optional position list; fires on an event (`StartWave("wave_01")`), emits `wave.complete:{id}` when all spawned entities are dead; supports looping waves and inter-wave delays. Designer-friendly alternative to scripting individual `Spawn` + `EmitEventAfterDelay` chains. See `planning/features/spawn_wave_encounter.md`
 - [ ] **Day/night cycle** — `DayNightCycleDef` in scene RON: cycle duration, sun color/intensity keyframes at dawn/noon/dusk/midnight; `TimeOfDay` resource drives directional light + ambient each frame; `SetTimeOfDay(hour)` and `SetDaySpeed(multiplier)` actions; emits `time.dawn` / `time.noon` / `time.dusk` / `time.midnight` events designers can hook; WASM compatible (pure CPU, no post-process). See `planning/features/day_night_cycle.md`
 - [ ] **Audio channels (volume buses)** — `channels: HashMap<String, f32>` on `AudioConfig`; each audio entry in `assets.ron` declares a `channel` key; `SetChannelVolume(channel, f32)` action scales that category within the master ceiling; enables independent music/sfx/ambient balance without touching source files. _Depends on mute toggle + master volume._
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
 - [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
-- [ ] **Equipment system** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion; visual mesh attachment deferred to v2. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
-- [ ] **Quest system** — `quests/quests.ron` catalog; `QuestLog` resource (persists across scenes); objectives: `KillCount` (via `PrefabKey`+`entity.died`), `Collect`, `ReachLocation`, `TalkTo`, `Custom`; `auto_complete` flag; reward types: `GiveItem`, `GiveStat`, `UnlockQuest`, `RunActions`; `quest_giver` on `PrefabDef`; `QuestTracker` UI node; nameplate indicator patch. See `planning/features/quest_system.md` _Deps: Inventory, Dialogue, Save/load (soft); Stat templates (shipped)._
-- [ ] **Loot system** — `loot/loot_tables.ron` catalog; `RollEach`/`RollOne` strategies; `loot_table` on `PrefabDef`; `LootTableRef` component; `RollLootTable(entity)`/`PickupLoot`/`ClearLootBag` actions; designer-wired via behavior file; `auto_loot` on scene RON; `ItemQuality` for icon border tinting; nested tables deferred. See `planning/features/loot_system.md` _Deps: Inventory (hard); Quest, Equipment (soft)._
+- [ ] **Equipment system (v1)** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
+- [ ] **Quest system — core loop (v1)** — `quests/quests.ron` catalog; `QuestLog` resource (persists across scenes); `AcceptQuest`/`CompleteQuest`/`FailQuest` actions; objectives: `KillCount`, `Collect`, `ReachLocation`, `TalkTo`, `Custom`; `auto_complete` flag; reward types: `GiveItem`, `GiveStat`, `UnlockQuest`, `RunActions`. Fully testable via events alone. See `planning/features/quest_system.md` _Deps: Inventory, Dialogue (soft); Stat templates (shipped)._
+- [ ] **Quest system — presentation layer (v2)** — `QuestTracker` UI node; quest-giver `!`/`?` nameplate indicator; `DialogueCondition::QuestState` patch for dialogue branching on quest state. _Deps: Quest core (v1), Nameplate system._ See `planning/features/quest_system.md`
+- [ ] **Loot system — roll + auto-loot (v1)** — `loot/loot_tables.ron` catalog; `RollEach`/`RollOne` strategies; `loot_table` on `PrefabDef`; `RollLootTable(entity)` action with `auto_loot: true` delivering directly to inventory; designer-wired via behavior file; closes Quest `Collect` objective dep. See `planning/features/loot_system.md` _Deps: Inventory (hard)._
+- [ ] **Loot system — physical loot bags (v2)** — `LootBag` entity with pickup UI; `PickupLoot`/`ClearLootBag` actions; `ItemQuality` for icon border tinting; nested tables. _Dep: Loot v1._ See `planning/features/loot_system.md`
 - [ ] Timeline / sequencer — scripted cutscene playback from a RON timeline asset
 
 ### Particle System v2
@@ -89,14 +93,18 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
 - [ ] LAN co-op demo scene
 - [ ] Network protocol doc + integration tests
 
-### Beta 0.7 — Loading & Preloading
+### Beta 0.7a — Loading Screen
 - [ ] Loading screen overlay during `LoadingScene` / `LoadingProject` states
 - [ ] `scene.loading_progress:{0-100}` milestone events from loader and terrain task
 - [ ] `loading_scene` field in project config for custom splash scenes
+- [ ] Docs + tests
+- [ ] Design: `planning/features/loading_screen.md`
+
+### Beta 0.7b — Scene Preloading
 - [ ] `preload_poll_system`: watch `PreloadedScenes` handles, emit `scene.preloaded:{name}`
 - [ ] `LoadScene` fast-path when handle is already loaded in `PreloadedScenes`
 - [ ] Docs + tests
-- [ ] Design: `planning/features/loading_screen.md`, `planning/features/scene_preloading.md`
+- [ ] Design: `planning/features/scene_preloading.md`
 
 ### Beta 0.8 — Multiplayer Form 2: Internet Player-Hosted
 See `planning/features/networking_multiplayer.md`. Gate: Beta 0.6 (LAN) must ship first.
@@ -118,7 +126,8 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ### Terrain
 - [ ] Terrain snap — `snap_to_terrain: true` on entity def makes Y an offset above terrain surface; design: `planning/features/terrain_snap.md`
 - [ ] Terrain chunked streaming — generate and load only chunks within a player radius; unload distant chunks; requires chunk-aware terrain capability rewrite
-- [ ] **Improved terrain rendering** — 4-phase pipeline: UV elimination + U16 indices (~25 % vertex memory), mesh chunking (per-chunk culling + incremental async generation, kills WASM first-frame stall), GPU-derived XZ positions, compressed normals; CPU height-array shared between GPU and Rapier. See `planning/features/improved_terrain_rendering.md`
+- [ ] **Improved terrain rendering — Phases 1+2** — UV elimination + U16 indices (~25 % vertex memory); mesh chunking (per-chunk culling + incremental async generation, eliminates WASM first-frame stall); unblocks terrain snap and chunked streaming. See `planning/features/improved_terrain_rendering.md`
+- [ ] **Improved terrain rendering — Phases 3+4** _(gated on Phase 0 WebGPU PoC)_ — GPU-derived XZ positions; compressed normals; CPU height-array shared between GPU and Rapier. Start only after Phase 0 investigation confirms feasibility. See `planning/features/improved_terrain_rendering.md`
 
 ### Performance
 - [ ] **Off-thread texture decode in WASM** — use the browser's `ImageBitmap` API to decode textures off the main WASM thread, eliminating main-thread stalls during asset loads; requires a `wasm32`-specific code path in the asset loading pipeline or a Bevy plugin that wraps `createImageBitmap`; investigate whether Bevy's current WASM asset pipeline already defers texture decode before implementing. Sourced from Phaser's web-optimised asset loader model.
@@ -180,6 +189,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] **Group system — Tier 1 (factions, teams, parties)** — generic RON-defined `GroupDef` (kind, max_members, default_stance); `LoadedGroups` global resource mapping group-id → member set + `GroupMembership` component on entities; `AddToGroup` / `RemoveFromGroup` / `DisbandGroup` actions; `group.joined:{id}:{entity}` / `group.left:{id}:{entity}` / `group.full:{id}` events into the existing pipeline; faction stance rules (Hostile/Neutral/Friendly) for AI targeting; useful standalone in single-player for factions, arena teams, and NPC parties. Tier 2 (guild, chat, raid hierarchy) deferred to Beta 0.6 networking milestone. See `planning/features/group_system_tier1.md`
 
 ### Gameplay Capabilities
+- [ ] **Equipment system — v2 visual mesh attachment** — `model_attachment`/`AttachmentDef` for equipping visible mesh props (weapons, helmets) to named bone sockets; requires GLB skeleton socket authoring and runtime bone-query APIs. _Dep: Equipment system v1._
 - [ ] **Grid system** — square, hexagonal (flat-top / pointy-top), and triangular cell layouts; `grid: GridDef` on scene RON; `(col, row)` addressing for all types (axial for hex); `PlaceOnGrid` / `StartGridMove` / `SetCellPassable` / `FindPath` actions; A* with node cap; `GridPosition` component; `grid.cell_entered` / `grid.move_complete` / `grid.path_blocked` events; Gizmos debug overlay; WASM-compatible. See `planning/features/grid_system.md`
 
 ---
