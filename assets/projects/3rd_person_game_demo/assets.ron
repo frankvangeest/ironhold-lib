@@ -44,6 +44,10 @@
     "icons_basic_skills": "shared/ui/iconsheet-basic-skills.png",
     // Status effect icon atlas — 8×8 grid, 64 px per cell, 512×512 total
     "icons_status_effects": "shared/ui/iconsheet-status-effects-01.png",
+    // Item icon atlas — 8×8 grid, 64 px per cell, 512×512 total
+    "icons_items": "shared/ui/iconsheet-items-01.png",
+    // Common UI icons (50×50 px each)
+    "ui/cross": "shared/ui/common-ui-icons/cross.png",
     // Kenney Particle Pack sprites used by combat effects
     "particle/spark_01": "shared/textures/particles/kenney-particle-pack/spark_01.png",
     "particle/spark_02": "shared/textures/particles/kenney-particle-pack/spark_02.png",

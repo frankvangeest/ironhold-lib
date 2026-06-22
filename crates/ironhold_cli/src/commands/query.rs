@@ -596,6 +596,18 @@ fn action_kind(a: &Action) -> &'static str {
         Action::StartDialogue { .. } => "StartDialogue",
         Action::AdvanceDialogue => "AdvanceDialogue",
         Action::EndDialogue => "EndDialogue",
+        Action::AddItem { .. } => "AddItem",
+        Action::RemoveItem { .. } => "RemoveItem",
+        Action::TransferItem { .. } => "TransferItem",
+        Action::OpenInventory => "OpenInventory",
+        Action::CloseInventory => "CloseInventory",
+        Action::ToggleInventory => "ToggleInventory",
+        Action::OpenShop(_) => "OpenShop",
+        Action::CloseShop => "CloseShop",
+        Action::BuyItem(_) => "BuyItem",
+        Action::OpenContainer(_) => "OpenContainer",
+        Action::CloseContainer => "CloseContainer",
+        Action::TakeAllFromContainer => "TakeAllFromContainer",
     }
 }
 

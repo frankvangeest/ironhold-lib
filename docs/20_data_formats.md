@@ -101,6 +101,7 @@ Entry point for a project. References all other files.
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
+| `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
@@ -708,6 +709,101 @@ DialoguePanel((
     speaker_font_size: 18.0,
     body_font_size: 15.0,
     choice_font_size: 13.0,
+)),
+```
+
+#### `InventoryPanel((...))` ✅
+
+A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`.
+
+When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon_index` (from `items.ron`); a small count label (`x3`) appears in the corner for stacks greater than 1.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `position` | `(f32, f32)` | required | Top-left corner in pixels (always absolute) |
+| `columns` | `u32` | `5` | Number of slot columns |
+| `rows` | `u32` | `4` | Number of slot rows |
+| `slot_size` | `f32` | `48.0` | Width and height of each slot in pixels |
+| `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `font_size` | `f32` | `11.0` | Font size for slot count labels |
+| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for the item icon atlas (default sheet; items can override per-item with `ItemDef.icon_sheet`) |
+| `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
+| `icon_rows` | `u32` | `8` | Rows in the icon atlas grid |
+| `icon_cell_size` | `u32` | `64` | Pixel size of each square icon cell |
+| `initially_hidden` | `bool` | `true` | Whether the panel starts hidden |
+
+```ron
+InventoryPanel((
+    id: "player_inventory",
+    position: (20.0, 100.0),
+    columns: 5,
+    rows: 4,
+    slot_size: 52.0,
+    slot_gap: 4.0,
+    icon_sheet: "icons_items",   // 8×8 grid, 64 px cells — set in assets.ron
+    icon_cols: 8,
+    icon_rows: 8,
+    icon_cell_size: 64,
+)),
+```
+
+#### `ShopPanel((...))` ✅
+
+A scrollable list of merchant stock entries. Always positioned absolutely. Hidden by default; shown by `OpenShop(merchant_id)` and hidden by `CloseShop`. Stock is repopulated from the merchant's `MerchantDef` every time `OpenShop` fires. Requires `items_path` to be set in `project.ron`.
+
+> **v1 scope note:** The shop panel is display-only. It shows item names, prices, and stock counts but does not yet process buy/sell transactions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `position` | `(f32, f32)` | required | Top-left corner in pixels (always absolute) |
+| `size` | `(f32, f32)` | `(320.0, 400.0)` | Width and height of the panel in pixels |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `font_size` | `f32` | `13.0` | Font size for stock entry labels |
+| `initially_hidden` | `bool` | `true` | Whether the panel starts hidden |
+
+```ron
+ShopPanel((
+    id: "shop_panel",
+    position: (400.0, 100.0),
+    size: (320.0, 400.0),
+)),
+```
+
+> **Close button**: the ShopPanel now spawns its own close button as an embedded child (header row). No standalone `Button` is needed alongside the panel. The button fires `ui.button_pressed:close_shop` → `CloseShop`.
+
+#### `ContainerPanel((...))` ✅
+
+A slot grid that displays a container entity's `Inventory` (chest, crate, etc.). Always positioned absolutely. Hidden by default; shown by `OpenContainer(entity_id)` and hidden by `CloseContainer`. Includes an embedded close button and a "Take All" button. Requires `items_path` to be set in `project.ron`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `position` | `(f32, f32)` | required | Top-left corner in pixels (always absolute) |
+| `columns` | `u32` | `3` | Slot grid columns |
+| `rows` | `u32` | `3` | Slot grid rows |
+| `slot_size` | `f32` | `52.0` | Size of each slot square in pixels |
+| `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `font_size` | `f32` | `11.0` | Font size for count labels inside slots |
+| `icon_sheet` | `Option<String>` | `None` | Catalog key for the item icon atlas |
+| `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
+| `icon_rows` | `u32` | `8` | Rows in the icon atlas grid |
+| `icon_cell_size` | `u32` | `64` | Pixel size of each icon cell |
+
+```ron
+ContainerPanel((
+    id: "chest_panel",
+    position: (230.0, 80.0),
+    columns: 3,
+    rows: 3,
+    slot_size: 52.0,
+    icon_sheet: "icons_items",
+    icon_cols: 8,
+    icon_rows: 8,
+    icon_cell_size: 64,
 )),
 ```
 
@@ -2495,6 +2591,148 @@ Optional block in `{name}.project.ron` that controls project-level audio volume.
 | `audio.muted` | `ToggleMute` transitions to muted, or `SyncAudioState` while already muted |
 | `audio.unmuted` | `ToggleMute` transitions to unmuted, or `SyncAudioState` while not muted |
 | `audio.volume_changed` | `SetVolume` changes the active fraction |
+
+---
+
+## `items.ron` — ItemCatalog ✅
+
+Named item definitions for a project. Referenced via `items_path` in `{name}.project.ron`. Optional — omitting it means no inventory system for this project.
+
+Items persist across scene transitions (the `PlayerInventory` resource is not cleared on scene load). Container `Inventory` components on entities reset on `LoadScene` because they are owned by `LevelEntity`.
+
+**`ItemCatalog` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | `u32` | ✅ | Must be `1` |
+| `items` | `Map<String, ItemDef>` | ✅ | Named items keyed by item ID |
+
+**`ItemDef` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `display_name` | `String` | ✅ | Human-readable name shown in tooltip / shop panel |
+| `icon_sheet` | `Option<String>` | `null` | Catalog texture key for the icon atlas this item's icon is on. Overrides the panel's `icon_sheet` default. Omit if the item is on the panel's default sheet. All sheets must share the panel's `icon_cols/rows/cell_size`. |
+| `icon_index` | `u32` | `0` | Zero-based index into the icon atlas (row-major: `col + row * icon_cols`) |
+| `stackable` | `bool` | `true` | Whether multiple units stack in a single slot |
+| `max_stack` | `u32` | `99` | Maximum count per stack when `stackable: true` |
+| `weight` | `f32` | `1.0` | Weight in game units (for future encumbrance mechanics) |
+| `tags` | `Vec<String>` | `[]` | Arbitrary designer tags (e.g. `["consumable", "quest"]`) |
+
+**`InventoryContainerDef` fields (on `PrefabDef.inventory`):**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_slots` | `usize` | `9` | Maximum number of item slots this container entity has. Clamped to at least 4. |
+| `initial_items` | `Vec<InitialItemEntry>` | `[]` | Items pre-placed at spawn time, in slot order. Excess is silently ignored when slots are full. |
+
+**`InitialItemEntry` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `item_key` | `String` | ✅ | Key of the item from `items.ron` |
+| `count` | `u32` | `1` | How many to place |
+
+```ron
+// Place 3 health potions and 2 mana potions in chest_01 at spawn
+inventory: (
+    max_slots: 9,
+    initial_items: [
+        (item_key: "health_potion", count: 3),
+        (item_key: "mana_potion",   count: 2),
+    ],
+),
+```
+
+The slot count label in `InventoryPanel` and `ContainerPanel` now shows `"N/MAX"` (e.g. `"3/10"`) for stackable items and nothing for non-stackable items.
+
+**`MerchantDef` fields (on `PrefabDef.merchant`):**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stock` | `Vec<ShopEntry>` | ✅ | Items the merchant sells/buys |
+| `currency_stat` | `String` | `"gold"` | Stat key used as currency (display-only in v1; buy/sell transactions are planned for v1.1) |
+
+**`ShopEntry` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `item_key` | `String` | ✅ | Key of the item from `items.ron` |
+| `buy_price` | `u32` | ✅ | Price for the player to buy the item |
+| `sell_price` | `u32` | ✅ | Price the merchant pays to buy the item from the player |
+| `stock_count` | `Option<u32>` | `null` | If set, the merchant only has this many; displayed as `[N]` in the shop panel (deduction not yet implemented) |
+
+**Example:**
+
+```ron
+// items/items.ron
+(
+    schema_version: 1,
+    items: {
+        // Uses panel's default icon_sheet (no override needed)
+        "health_potion": (
+            display_name: "Health Potion",
+            icon_index: 2,          // row 0, col 2 — heart bottle
+            stackable: true,
+            max_stack: 10,
+            weight: 0.5,
+            tags: ["consumable"],
+        ),
+        // Uses a different sheet for this item only
+        "iron_sword": (
+            display_name: "Iron Sword",
+            icon_sheet: "icons_weapons",   // overrides panel default for this item only
+            icon_index: 5,                 // row 0, col 5 on icons_weapons sheet
+            stackable: false,
+            weight: 3.5,
+            tags: ["weapon"],
+        ),
+        "key_iron": (
+            display_name: "Iron Key",
+            icon_index: 63,         // row 7, col 7
+            stackable: false,
+            weight: 0.3,
+            tags: ["quest"],
+        ),
+    },
+)
+```
+
+> **Multi-sheet note:** All sheets referenced by items in a project's item catalog (via `icon_sheet`) are pre-loaded at panel spawn time. All sheets must share the same grid dimensions (`icon_cols`, `icon_rows`, `icon_cell_size`) as defined on the `InventoryPanel`. The engine resolves per-item sheet key → panel default → skip icon, so items on the default sheet never need an explicit `icon_sheet` field.
+
+```ron
+// prefabs/prefabs.ron — container chest
+"chest_small": (
+    kind: Prop,
+    model: "chest",
+    interactable: (radius: 1.5, hint_text: "Open"),
+    inventory: (max_slots: 9),
+),
+
+// prefabs/prefabs.ron — merchant NPC
+"merchant_vendor": (
+    kind: Actor,
+    model: "npc_merchant",
+    interactable: (radius: 2.0, hint_text: "Talk"),
+    merchant: (
+        stock: [
+            (item_key: "health_potion", buy_price: 10, sell_price: 5),
+            (item_key: "key_iron",      buy_price: 50, sell_price: 0, stock_count: 1),
+        ],
+    ),
+),
+```
+
+**Pipeline events emitted by inventory actions:**
+
+| Event | Trigger |
+|-------|---------|
+| `inventory.added:{entity}:{item_key}:{count}` | `AddItem` successfully adds items |
+| `inventory.full:{entity}` | `AddItem` finds no room (all slots occupied) |
+| `inventory.removed:{entity}:{item_key}:{count}` | `RemoveItem` removes items (count = actual removed) |
+| `inventory.transferred:{from}:{to}:{item_key}` | `TransferItem` completes a move between entities |
+
+> **v1 scope note:** `MerchantDef.buy_price`, `sell_price`, and `currency_stat` are display-only in v1. The shop panel shows pricing information but does not yet deduct or credit the `currency_stat`. Full buy/sell transaction support (stat deduction, item transfer) is planned for v1.1.
 
 ---
 

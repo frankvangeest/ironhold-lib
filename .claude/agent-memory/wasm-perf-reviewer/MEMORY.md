@@ -7,3 +7,4 @@
 - [Target indicator system](project_target_indicator_system.md) — Update, 0/1 entity, epsilon-guarded move; Local cache reset cleanly on LoadScene(None); Blend/depth_bias parity w/ decal — no new pipeline compile
 - [Camera shake system](project_camera_shake_system.md) — Update-chained after orbit; query gated by CameraShakeState component; idle frames iterate 0 entities (no change-detection); sine/sqrt WASM-safe, zero deps
 - [Dialogue system](project_dialogue_system.md) — dialogue_tick_system Update; idle empty-Vec collects (no alloc); render gated by last_rendered_node (per-transition not per-frame); UI-only spawn; DialogueDef on-demand load no preload; zero deps
+- [Inventory system](project_inventory_system.md) — inventory_ui_system Update is_changed()-gated + text.0 != label guard; OpenShop despawn+respawn is just_pressed edge-triggered (no held-key stall); 20 slot nodes per-scene-load; zero new deps

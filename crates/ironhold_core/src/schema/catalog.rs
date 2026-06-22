@@ -844,6 +844,14 @@ pub struct PrefabDef {
     /// Example: `"dialogues/npc_intro.dialogue.ron"`.
     #[serde(default)]
     pub dialogue: Option<String>,
+    /// When set, this entity has an inventory container with the given slot count.
+    /// Inventory components are cleared on scene load (use `PlayerInventory` resource for persistence).
+    #[serde(default)]
+    pub inventory: Option<InventoryContainerDef>,
+    /// When set, this entity acts as a merchant. `Action::OpenShop(entity_id)` populates
+    /// the scene's `ShopPanel` with this entity's stock.
+    #[serde(default)]
+    pub merchant: Option<MerchantDef>,
 }
 
 pub(crate) fn default_select_aim_height() -> f32 { 1.0 }
@@ -1382,3 +1390,61 @@ pub struct ChildPrimitiveDef {
 }
 
 fn one_vec3_child() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
+
+// ─── Inventory / merchant ─────────────────────────────────────────────────────
+
+/// One item entry in `InventoryContainerDef.initial_items`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct InitialItemEntry {
+    pub item_key: String,
+    /// How many to add. Default: 1.
+    #[serde(default = "default_item_count_one")]
+    pub count: u32,
+}
+
+fn default_item_count_one() -> u32 { 1 }
+
+/// Declares that a prefab entity has an inventory container.
+/// Entity-attached `Inventory` components are cleared on scene load.
+/// For player-persistent inventory use the `PlayerInventory` resource instead.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct InventoryContainerDef {
+    /// Number of item slots. Minimum 4. Default: 9.
+    #[serde(default = "default_max_slots")]
+    pub max_slots: usize,
+    /// Items pre-placed in the container at spawn time.
+    /// Placed in slot order; excess items are silently ignored when slots are full.
+    #[serde(default)]
+    pub initial_items: Vec<InitialItemEntry>,
+}
+
+fn default_max_slots() -> usize { 9 }
+
+/// Declares that a prefab entity is a merchant.
+/// `Action::OpenShop(entity_id)` populates the scene's `ShopPanel` from this def.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MerchantDef {
+    pub stock: Vec<ShopEntry>,
+    /// Global stat key used as currency (e.g. `"gold"`). Default: `"gold"`.
+    #[serde(default = "default_currency_stat")]
+    pub currency_stat: String,
+}
+
+fn default_currency_stat() -> String { "gold".to_string() }
+
+/// One item line in a merchant's stock list.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ShopEntry {
+    /// Key in the `ItemCatalog`.
+    pub item_key: String,
+    /// Price to buy this item from the merchant (deducted from the currency stat).
+    pub buy_price: u32,
+    /// Price the merchant pays when the player sells this item (added to currency stat).
+    pub sell_price: u32,
+    /// Finite stock — restocks at scene load. `None` means unlimited.
+    #[serde(default)]
+    pub stock_count: Option<u32>,
+}

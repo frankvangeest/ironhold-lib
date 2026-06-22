@@ -110,8 +110,33 @@
             ],
             exit_actions:  [ StopMusic ],
             on: [
-                ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimation("dance")                   ] ),
-                ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02")                ] ),
+                ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimationOn(target: "player_01", clip: "dance") ] ),
+                ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02", id: "chest_02_spawned", spawn_point: "chest_spawn") ] ),
+
+                // ── Inventory (action bar slot "i" fires ToggleInventory directly; close button uses close_inventory event) ────
+                ( event: "ui.button_pressed:close_inventory",  do_actions: [ CloseInventory ] ),
+
+                // ── Merchant shop ───────────────────────────────────────────────
+                // Walk up to merchant_01 and press F — interactable fires entity.interacted:merchant_01.
+                ( event: "entity.interacted:merchant_01",  do_actions: [ OpenShop("merchant_01") ] ),
+                ( event: "entity.exited:merchant_01",      do_actions: [ CloseShop ] ),
+                ( event: "ui.button_pressed:close_shop",   do_actions: [ CloseShop ] ),
+                ( event: "ui.button_pressed:buy_item:health_potion",      do_actions: [ BuyItem("health_potion") ] ),
+                ( event: "ui.button_pressed:buy_item:mana_potion",        do_actions: [ BuyItem("mana_potion") ] ),
+                ( event: "ui.button_pressed:buy_item:iron_sword",         do_actions: [ BuyItem("iron_sword") ] ),
+                ( event: "ui.button_pressed:buy_item:old_key",            do_actions: [ BuyItem("old_key") ] ),
+
+                // ── Chest / container inventory ─────────────────────────────────
+                // Walk up to chest_01 and press F — opens the ContainerPanel to show
+                // what's inside. Use the close button or take-all to interact.
+                // chest_01 has initial_items defined in prefabs.ron.
+                ( event: "entity.interacted:chest_01",               do_actions: [ OpenContainer("chest_01") ] ),
+                ( event: "entity.exited:chest_01",                   do_actions: [ CloseContainer ] ),
+                // chest_02_spawned is spawned by the "Spawn Chest" button; contains 500 gold coins.
+                ( event: "entity.interacted:chest_02_spawned",       do_actions: [ OpenContainer("chest_02_spawned") ] ),
+                ( event: "entity.exited:chest_02_spawned",           do_actions: [ CloseContainer ] ),
+                ( event: "ui.button_pressed:close_container",        do_actions: [ CloseContainer ] ),
+                ( event: "ui.button_pressed:take_all_from_container", do_actions: [ TakeAllFromContainer ] ),
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_mute",        do_actions: [ ToggleMute                                              ] ),
                 ( event: "ui.button_pressed:toggle_hitboxes_on",  do_actions: [ SetVariable("debug_target_hitboxes", "true")            ] ),

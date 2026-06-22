@@ -116,6 +116,10 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → event name with `{self}` filled in
 - `SpawnEffect(key: "hit_spark", entity: "{self}")` → entity becomes the entity's ID (burst spawns at that entity's position)
 - `ResetToSpawn("{self}")` → entity ID becomes the entity's spawn ID; teleports NPC to its `NpcAgent.origin` and zeros velocity
+- `AddItem(entity: "{self}", item_key: "potion")` → entity becomes the entity's ID (routes to that entity's `Inventory` component)
+- `RemoveItem(entity: "{self}", item_key: "key_01")` → entity becomes the entity's ID
+- `TransferItem(from: "{self}", to: "player", item_key: "loot")` → both `from` and `to` are substituted independently
+- `OpenShop("{self}")` → the merchant ID becomes the entity's spawn ID (looks up that entity's `MerchantDef`)
 
 **`{target}` substitution** — in global rules.ron, state_machine.ron, and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in all three interpreter systems before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
 

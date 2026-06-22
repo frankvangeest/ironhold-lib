@@ -17,7 +17,7 @@
 
 - [x] **Dialogue system** — RON-defined conversation trees; standalone `.dialogue.ron` asset files; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` / `AdvanceDialogue` actions; `{self}` / `{target}` substitution; branching via `jump_to` on choices; `do_actions` on choices; `dialogue.started/node/choice/ended` events; auto-wired to `entity.interacted` when `dialogue` set on prefab; demo via friendly NPC in `3rd_person_game_demo`. See `planning/features/done/dialogue_system.md`
 
-- [ ] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop`/`CloseShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). See `planning/features/inventory_item_system.md`
+- [x] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop`/`CloseShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). `currency_stat` on `ItemDef` routes looted coins to a global stat instead of inventory slots. Cross icon close buttons, shop item icons, dance fix, container spawn point. See `planning/features/done/inventory_item_system.md`
 
 ---
 

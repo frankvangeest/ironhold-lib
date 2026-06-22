@@ -9,6 +9,7 @@
     prefab_catalog: "prefabs/prefabs.ron",
     state_machine_path: "logic/state_machine.ron",
     stats_path: "stats/stats.ron",
+    items_path: "items/items.ron",
     model_fixes_path: "overrides/model_fixes.ron",
 
     global_environment: (
@@ -25,5 +26,6 @@
 
     global_key_bindings: {
         "Escape": "toggle_pause",
+        // "KeyI" removed — inventory is now wired via the action bar slot (key: "i").
     },
 )

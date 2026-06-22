@@ -74,6 +74,17 @@ pub fn spawn_prefab_instance(
         ec.insert(crate::capabilities::dialogue::DialoguePath(dialogue_path.clone()));
     }
 
+    if let Some(inv_def) = &prefab.inventory {
+        let slots = inv_def.max_slots.max(4);
+        let mut inv = crate::capabilities::inventory::Inventory::new(slots);
+        for entry in &inv_def.initial_items {
+            crate::capabilities::inventory::add_to_slots(
+                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
+            );
+        }
+        ec.insert(inv);
+    }
+
     if let Some(zone_def) = &prefab.trigger_zone {
         ec.insert((
             crate::capabilities::trigger_zone::TriggerZone,

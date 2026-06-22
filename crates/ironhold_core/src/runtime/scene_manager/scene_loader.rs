@@ -43,7 +43,7 @@ use super::entity_spawner::{
 
 pub fn spawn_scene_v2(
     mut commands: Commands,
-    params: SceneV2Params,
+    mut params: SceneV2Params,
     asset_server: Res<AssetServer>,
     mut events: MessageReader<AssetEvent<GameSceneV2>>,
     mut next_state: ResMut<NextState<AppState>>,
@@ -380,6 +380,17 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
+                    if let Some(inv_def) = &prefab.inventory {
+                        let slots = inv_def.max_slots.max(4);
+                        let mut inv = crate::capabilities::inventory::Inventory::new(slots);
+                        for entry in &inv_def.initial_items {
+                            crate::capabilities::inventory::add_to_slots(
+                                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
+                            );
+                        }
+                        commands.entity(parent).insert(inv);
+                    }
+
                     // (targeting markers attached above via tag_spawned_entity)
 
                     if !prefab.stat_templates.is_empty() {
@@ -642,6 +653,17 @@ pub fn spawn_scene_v2(
                                 Sensor,
                                 ActiveEvents::COLLISION_EVENTS,
                             ));
+                        }
+
+                        if let Some(inv_def) = &prefab.inventory {
+                            let slots = inv_def.max_slots.max(4);
+                            let mut inv = crate::capabilities::inventory::Inventory::new(slots);
+                            for entry in &inv_def.initial_items {
+                                crate::capabilities::inventory::add_to_slots(
+                                    &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
+                                );
+                            }
+                            commands.entity(spawned).insert(inv);
                         }
 
                         // (targeting markers attached above via tag_spawned_entity)
@@ -1219,6 +1241,10 @@ pub fn spawn_scene_v2(
             commands.insert_resource(LoadedTargetIndicator(resolved));
         }
 
+        // Reset inventory/container UI entity references so stale handles from previous scene don't linger.
+        *params.inventory_ui = crate::capabilities::inventory::LoadedInventoryUi::default();
+        *params.container_ui = crate::capabilities::inventory::LoadedContainerUi::default();
+
         next_state.set(AppState::InGame);
     } // end if !is_overlay
 
@@ -1318,7 +1344,7 @@ pub fn spawn_scene_v2(
                                     ..default()
                                 }
                             };
-                            spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0);
+                            spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0, params.loaded_item_catalog.0.as_ref(), &mut params.inventory_ui, &mut params.container_ui);
                         }
                     });
             });
@@ -1349,7 +1375,7 @@ pub fn spawn_scene_v2(
                         top: Val::Px(el.position().1),
                         ..default()
                     };
-                    spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0);
+                    spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0, params.loaded_item_catalog.0.as_ref(), &mut params.inventory_ui, &mut params.container_ui);
                 }
             });
         }
@@ -1377,6 +1403,9 @@ fn spawn_ui_element_node(
     asset_server: &AssetServer,
     mut atlas_layouts: Option<&mut Assets<TextureAtlasLayout>>,
     asset_catalog: &crate::schema::catalog::AssetCatalog,
+    item_catalog: Option<&crate::schema::items::ItemCatalog>,
+    inventory_ui: &mut crate::capabilities::inventory::LoadedInventoryUi,
+    container_ui: &mut crate::capabilities::inventory::LoadedContainerUi,
 ) {
     use crate::schema::scene_v2::UiNodeDef;
     match el {
@@ -1816,6 +1845,522 @@ fn spawn_ui_element_node(
                             });
                     }
                 });
+        }
+        UiNodeDef::InventoryPanel(panel) => {
+            use crate::capabilities::inventory::{InventoryPanelMarker, InventorySlotMarker, InventorySlotIconMarker};
+            let (r, g, b, a) = panel.background_color;
+            let visibility = if panel.initially_hidden { Visibility::Hidden } else { Visibility::Visible };
+            let columns = panel.columns;
+            let rows = panel.rows;
+            let slot_size = panel.slot_size;
+            let slot_gap = panel.slot_gap;
+            let font_size = panel.font_size;
+            // Close icon shared by all panel headers. Falls back to Unicode × if not in catalog.
+            let close_icon_handle: Option<Handle<Image>> = asset_catalog.textures.get("ui/cross")
+                .map(|p| asset_server.load(p.clone()));
+            // Outer panel = Column so the header row + slot grid stack vertically.
+            // The position (left/top) stays on the outer node from the caller.
+            let mut panel_node = node;
+            panel_node.flex_direction = FlexDirection::Column;
+
+            // Pre-load ALL icon atlases referenced by this panel:
+            //   1. The panel's default icon_sheet.
+            //   2. Any per-item icon_sheet overrides in the item catalog.
+            // All sheets share the same grid dimensions (icon_cols/rows/cell_size from the panel).
+            // Stored in LoadedInventoryUi so inventory_ui_system can resolve them without
+            // loading at runtime.
+            inventory_ui.icon_atlases.clear();
+            inventory_ui.panel_icon_sheet = panel.icon_sheet.clone();
+
+            // Collect all unique sheet keys upfront (panel default + item overrides).
+            let mut sheet_keys: Vec<String> = Vec::new();
+            if let Some(ref key) = panel.icon_sheet {
+                if !sheet_keys.contains(key) { sheet_keys.push(key.clone()); }
+            }
+            if let Some(catalog) = item_catalog {
+                for item_def in catalog.items.values() {
+                    if let Some(ref key) = item_def.icon_sheet {
+                        if !sheet_keys.contains(key) { sheet_keys.push(key.clone()); }
+                    }
+                }
+            }
+
+            // Load each sheet and build its TextureAtlasLayout. Done before with_children
+            // so atlas_layouts (&mut) is available.
+            if let Some(layouts) = atlas_layouts.as_mut() {
+                for key in &sheet_keys {
+                    if let Some(path) = asset_catalog.textures.get(key.as_str()).cloned() {
+                        let layout = layouts.add(TextureAtlasLayout::from_grid(
+                            UVec2::splat(panel.icon_cell_size),
+                            panel.icon_cols,
+                            panel.icon_rows,
+                            None,
+                            None,
+                        ));
+                        let tex: Handle<Image> = asset_server.load(path);
+                        inventory_ui.icon_atlases.insert(key.clone(), (tex, layout));
+                    }
+                }
+            }
+
+            // Default slot atlas (panel's sheet) used as placeholder for icon entities.
+            let slot_atlas: Option<(Handle<Image>, Handle<TextureAtlasLayout>)> =
+                panel.icon_sheet.as_deref()
+                    .and_then(|key| inventory_ui.icon_atlases.get(key))
+                    .map(|(t, l)| (t.clone(), l.clone()));
+
+            let entity = parent
+                .spawn((
+                    Name::new(format!("InventoryPanel: {}", panel.id)),
+                    panel_node,
+                    BackgroundColor(Color::srgba(r, g, b, a)),
+                    visibility,
+                    InventoryPanelMarker { columns, rows, font_size },
+                ))
+                .with_children(|p| {
+                    // ── Header row: title + close button ─────────────────────────────
+                    p.spawn((
+                        Name::new("InvHeader"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::SpaceBetween,
+                            align_items: AlignItems::Center,
+                            width: Val::Percent(100.0),
+                            padding: UiRect::new(
+                                Val::Px(8.0), Val::Px(6.0), Val::Px(4.0), Val::Px(4.0),
+                            ),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(r * 0.6, g * 0.6, b * 0.6, a)),
+                    ))
+                    .with_children(|h| {
+                        h.spawn((
+                            Name::new("InvTitle"),
+                            Text::new("Inventory"),
+                            TextFont { font_size: 12.0, ..default() },
+                            TextColor(Color::srgba(0.85, 0.85, 0.90, 0.90)),
+                        ));
+                        h.spawn((
+                            Name::new("InvCloseBtn"),
+                            Button,
+                            Node {
+                                width: Val::Px(22.0),
+                                height: Val::Px(22.0),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                border: UiRect::all(Val::Px(1.0)),
+                                ..default()
+                            },
+                            BorderColor::from(Color::srgba(0.5, 0.1, 0.1, 0.7)),
+                            BackgroundColor(Color::srgba(0.22, 0.05, 0.05, 0.85)),
+                            UiAction::Trigger("close_inventory".into()),
+                        ))
+                        .with_children(|b| {
+                            if let Some(ref tex) = close_icon_handle {
+                                b.spawn((
+                                    Name::new("CloseBtnIcon"),
+                                    Node { width: Val::Px(14.0), height: Val::Px(14.0), ..default() },
+                                    ImageNode { image: tex.clone(), color: Color::srgba(0.90, 0.60, 0.60, 1.0), ..default() },
+                                ));
+                            } else {
+                                b.spawn((
+                                    Name::new("CloseBtnText"),
+                                    Text::new("\u{2715}"),
+                                    TextFont { font_size: 11.0, ..default() },
+                                    TextColor(Color::srgba(0.90, 0.60, 0.60, 1.0)),
+                                ));
+                            }
+                        });
+                    });
+
+                    // ── Slot grid ─────────────────────────────────────────────────────
+                    p.spawn((
+                        Name::new("InvSlotGrid"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            padding: UiRect::all(Val::Px(8.0)),
+                            column_gap: Val::Px(slot_gap),
+                            row_gap: Val::Px(slot_gap),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|p| {
+                        for row in 0..rows {
+                            for col in 0..columns {
+                                let idx = (row * columns + col) as usize;
+                                let mut slot_cmd = p.spawn((
+                                    Name::new(format!("Slot:{}", idx)),
+                                    Node {
+                                        width: Val::Px(slot_size),
+                                        height: Val::Px(slot_size),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.12, 0.12, 0.16, 0.85)),
+                                    InventorySlotMarker { slot_index: idx },
+                                ));
+                                slot_cmd.with_children(|slot_parent| {
+                                    // Icon — spawned first so label renders on top.
+                                    if let Some((ref tex, ref layout)) = slot_atlas {
+                                        let t = tex.clone();
+                                        let l = layout.clone();
+                                        slot_parent.spawn((
+                                            Name::new("SlotIcon"),
+                                            Node {
+                                                position_type: PositionType::Absolute,
+                                                width: Val::Px(slot_size - 6.0),
+                                                height: Val::Px(slot_size - 6.0),
+                                                top: Val::Px(3.0),
+                                                left: Val::Px(3.0),
+                                                ..default()
+                                            },
+                                            ImageNode {
+                                                image: t,
+                                                texture_atlas: Some(TextureAtlas {
+                                                    layout: l,
+                                                    index: 0,
+                                                }),
+                                                color: Color::WHITE,
+                                                ..default()
+                                            },
+                                            Visibility::Hidden,
+                                            InventorySlotIconMarker { slot_index: idx },
+                                        ));
+                                    }
+                                    // Label — spawned after icon so it renders on top.
+                                    slot_parent.spawn((
+                                        Name::new("SlotLabel"),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            bottom: Val::Px(2.0),
+                                            right: Val::Px(2.0),
+                                            ..default()
+                                        },
+                                        Text::new(""),
+                                        TextFont { font_size, ..default() },
+                                        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+                                        crate::capabilities::inventory::InventorySlotLabelMarker { slot_index: idx },
+                                    ));
+                                });
+                            }
+                        }
+                    });
+                    // ── Gold footer ───────────────────────────────────────────────
+                    p.spawn((
+                        Name::new("InvGoldFooter"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::FlexEnd,
+                            align_items: AlignItems::Center,
+                            width: Val::Percent(100.0),
+                            padding: UiRect::new(Val::Px(6.0), Val::Px(6.0), Val::Px(4.0), Val::Px(2.0)),
+                            border: UiRect::top(Val::Px(1.0)),
+                            ..default()
+                        },
+                        BorderColor::from(Color::srgba(0.6, 0.5, 0.1, 0.3)),
+                    )).with_children(|footer| {
+                        footer.spawn((
+                            Name::new("GoldLabel"),
+                            Text::new("Gold: 0"),
+                            TextFont { font_size, ..default() },
+                            TextColor(Color::srgba(0.95, 0.85, 0.35, 1.0)),
+                            crate::capabilities::inventory::GoldLabelMarker {
+                                stat_key: "gold".to_string(),
+                            },
+                        ));
+                    });
+                })
+                .id();
+            inventory_ui.inventory_panel = Some(entity);
+        }
+        UiNodeDef::ShopPanel(panel) => {
+            use crate::capabilities::inventory::ShopPanelMarker;
+            let (r, g, b, a) = panel.background_color;
+            let visibility = if panel.initially_hidden { Visibility::Hidden } else { Visibility::Visible };
+            let font_size = panel.font_size;
+            let close_icon_handle: Option<Handle<Image>> = asset_catalog.textures.get("ui/cross")
+                .map(|p| asset_server.load(p.clone()));
+            let mut panel_node = node;
+            panel_node.flex_direction = FlexDirection::Column;
+            panel_node.padding = UiRect::all(Val::Px(10.0));
+            panel_node.row_gap = Val::Px(6.0);
+            let entity = parent
+                .spawn((
+                    Name::new(format!("ShopPanel: {}", panel.id)),
+                    panel_node,
+                    BackgroundColor(Color::srgba(r, g, b, a)),
+                    visibility,
+                    ShopPanelMarker { font_size },
+                ))
+                .with_children(|p| {
+                    // Header row: title + inline close button (child of panel so it hides together).
+                    p.spawn((
+                        Name::new("ShopHeader"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::SpaceBetween,
+                            align_items: AlignItems::Center,
+                            width: Val::Percent(100.0),
+                            padding: UiRect::new(Val::Px(4.0), Val::Px(4.0), Val::Px(2.0), Val::Px(2.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(r * 0.6, g * 0.6, b * 0.6, a)),
+                    ))
+                    .with_children(|h| {
+                        h.spawn((
+                            Name::new("ShopTitle"),
+                            Text::new("Shop"),
+                            TextFont { font_size: 12.0, ..default() },
+                            TextColor(Color::srgba(0.85, 0.80, 0.95, 0.90)),
+                        ));
+                        h.spawn((
+                            Name::new("ShopCloseBtn"),
+                            Button,
+                            Node {
+                                width: Val::Px(22.0),
+                                height: Val::Px(22.0),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                border: UiRect::all(Val::Px(1.0)),
+                                ..default()
+                            },
+                            BorderColor::from(Color::srgba(0.5, 0.1, 0.1, 0.7)),
+                            BackgroundColor(Color::srgba(0.22, 0.05, 0.05, 0.85)),
+                            UiAction::Trigger("close_shop".into()),
+                        ))
+                        .with_children(|b| {
+                            if let Some(ref tex) = close_icon_handle {
+                                b.spawn((
+                                    Name::new("CloseBtnIcon"),
+                                    Node { width: Val::Px(14.0), height: Val::Px(14.0), ..default() },
+                                    ImageNode { image: tex.clone(), color: Color::srgba(0.90, 0.60, 0.60, 1.0), ..default() },
+                                ));
+                            } else {
+                                b.spawn((
+                                    Name::new("CloseBtnText"),
+                                    Text::new("\u{2715}"),
+                                    TextFont { font_size: 11.0, ..default() },
+                                    TextColor(Color::srgba(0.90, 0.60, 0.60, 1.0)),
+                                ));
+                            }
+                        });
+                    });
+                    // Entries area — `OpenShop` despawns only this node's children each time
+                    // the shop opens, leaving the header + close button intact.
+                    p.spawn((
+                        Name::new("ShopEntries"),
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            width: Val::Percent(100.0),
+                            flex_grow: 1.0,
+                            row_gap: Val::Px(4.0),
+                            padding: UiRect::all(Val::Px(4.0)),
+                            ..default()
+                        },
+                        crate::capabilities::inventory::ShopEntriesContainerMarker,
+                    ));
+                })
+                .id();
+            inventory_ui.shop_panel = Some(entity);
+        }
+        UiNodeDef::ContainerPanel(panel) => {
+            use crate::capabilities::inventory::{
+                ContainerPanelMarker, ContainerSlotMarker, ContainerSlotIconMarker,
+            };
+            let (r, g, b, a) = panel.background_color;
+            let columns = panel.columns;
+            let rows = panel.rows;
+            let slot_size = panel.slot_size;
+            let slot_gap = panel.slot_gap;
+            let font_size = panel.font_size;
+            let close_icon_handle: Option<Handle<Image>> = asset_catalog.textures.get("ui/cross")
+                .map(|p| asset_server.load(p.clone()));
+
+            // Pre-load icon atlases (same pattern as InventoryPanel).
+            container_ui.icon_atlases.clear();
+            container_ui.panel_icon_sheet = panel.icon_sheet.clone();
+            let mut sheet_keys: Vec<String> = Vec::new();
+            if let Some(ref key) = panel.icon_sheet {
+                if !sheet_keys.contains(key) { sheet_keys.push(key.clone()); }
+            }
+            if let Some(layouts) = atlas_layouts.as_mut() {
+                for key in &sheet_keys {
+                    if let Some(path) = asset_catalog.textures.get(key.as_str()).cloned() {
+                        let layout = layouts.add(TextureAtlasLayout::from_grid(
+                            UVec2::splat(panel.icon_cell_size),
+                            panel.icon_cols,
+                            panel.icon_rows,
+                            None,
+                            None,
+                        ));
+                        let tex: Handle<Image> = asset_server.load(path);
+                        container_ui.icon_atlases.insert(key.clone(), (tex, layout));
+                    }
+                }
+            }
+
+            let slot_atlas: Option<(Handle<Image>, Handle<TextureAtlasLayout>)> =
+                panel.icon_sheet.as_deref()
+                    .and_then(|key| container_ui.icon_atlases.get(key))
+                    .map(|(t, l)| (t.clone(), l.clone()));
+
+            let mut panel_node = node;
+            panel_node.flex_direction = FlexDirection::Column;
+
+            let entity = parent
+                .spawn((
+                    Name::new(format!("ContainerPanel: {}", panel.id)),
+                    panel_node,
+                    BackgroundColor(Color::srgba(r, g, b, a)),
+                    Visibility::Hidden,
+                    ContainerPanelMarker { columns, rows, font_size },
+                ))
+                .with_children(|p| {
+                    // Header: title + close button.
+                    p.spawn((
+                        Name::new("ContainerHeader"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::SpaceBetween,
+                            align_items: AlignItems::Center,
+                            width: Val::Percent(100.0),
+                            padding: UiRect::new(
+                                Val::Px(8.0), Val::Px(6.0), Val::Px(4.0), Val::Px(4.0),
+                            ),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(r * 0.6, g * 0.6, b * 0.6, a)),
+                    ))
+                    .with_children(|h| {
+                        h.spawn((
+                            Name::new("ContainerTitle"),
+                            Text::new("Chest"),
+                            TextFont { font_size: 12.0, ..default() },
+                            TextColor(Color::srgba(0.85, 0.80, 0.65, 0.90)),
+                        ));
+                        h.spawn((
+                            Name::new("ContainerCloseBtn"),
+                            Button,
+                            Node {
+                                width: Val::Px(22.0),
+                                height: Val::Px(22.0),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                border: UiRect::all(Val::Px(1.0)),
+                                ..default()
+                            },
+                            BorderColor::from(Color::srgba(0.5, 0.1, 0.1, 0.7)),
+                            BackgroundColor(Color::srgba(0.22, 0.05, 0.05, 0.85)),
+                            UiAction::Trigger("close_container".into()),
+                        ))
+                        .with_children(|b| {
+                            if let Some(ref tex) = close_icon_handle {
+                                b.spawn((
+                                    Name::new("CloseBtnIcon"),
+                                    Node { width: Val::Px(14.0), height: Val::Px(14.0), ..default() },
+                                    ImageNode { image: tex.clone(), color: Color::srgba(0.90, 0.60, 0.60, 1.0), ..default() },
+                                ));
+                            } else {
+                                b.spawn((
+                                    Name::new("CloseBtnText"),
+                                    Text::new("\u{2715}"),
+                                    TextFont { font_size: 11.0, ..default() },
+                                    TextColor(Color::srgba(0.90, 0.60, 0.60, 1.0)),
+                                ));
+                            }
+                        });
+                    });
+
+                    // Slot grid.
+                    p.spawn((
+                        Name::new("ContainerSlotGrid"),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            padding: UiRect::all(Val::Px(8.0)),
+                            column_gap: Val::Px(slot_gap),
+                            row_gap: Val::Px(slot_gap),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|p| {
+                        for row in 0..rows {
+                            for col in 0..columns {
+                                let idx = (row * columns + col) as usize;
+                                let mut slot_cmd = p.spawn((
+                                    Name::new(format!("ContainerSlot:{}", idx)),
+                                    Node {
+                                        width: Val::Px(slot_size),
+                                        height: Val::Px(slot_size),
+                                        justify_content: JustifyContent::FlexEnd,
+                                        align_items: AlignItems::FlexEnd,
+                                        padding: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.12, 0.10, 0.08, 0.85)),
+                                    ContainerSlotMarker { slot_index: idx },
+                                    Text::new(""),
+                                    TextFont { font_size, ..default() },
+                                    TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+                                ));
+                                if let Some((ref tex, ref layout)) = slot_atlas {
+                                    let t = tex.clone();
+                                    let l = layout.clone();
+                                    slot_cmd.with_children(|slot_parent| {
+                                        slot_parent.spawn((
+                                            Name::new("SlotIcon"),
+                                            Node {
+                                                position_type: PositionType::Absolute,
+                                                width: Val::Px(slot_size - 6.0),
+                                                height: Val::Px(slot_size - 6.0),
+                                                ..default()
+                                            },
+                                            ImageNode {
+                                                image: t,
+                                                texture_atlas: Some(TextureAtlas {
+                                                    layout: l,
+                                                    index: 0,
+                                                }),
+                                                color: Color::WHITE,
+                                                ..default()
+                                            },
+                                            Visibility::Hidden,
+                                            ContainerSlotIconMarker { slot_index: idx },
+                                        ));
+                                    });
+                                }
+                            }
+                        }
+                    });
+
+                    // Take All button.
+                    p.spawn((
+                        Name::new("TakeAllBtn"),
+                        Button,
+                        Node {
+                            width: Val::Percent(100.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(5.0)),
+                            margin: UiRect::new(Val::Px(8.0), Val::Px(8.0), Val::Px(0.0), Val::Px(6.0)),
+                            border: UiRect::all(Val::Px(1.0)),
+                            ..default()
+                        },
+                        BorderColor::from(Color::srgba(0.35, 0.28, 0.10, 0.8)),
+                        BackgroundColor(Color::srgba(0.20, 0.16, 0.04, 0.90)),
+                        UiAction::Trigger("take_all_from_container".into()),
+                    ))
+                    .with_children(|b| {
+                        b.spawn((
+                            Name::new("TakeAllText"),
+                            Text::new("Take All"),
+                            TextFont { font_size: 12.0, ..default() },
+                            TextColor(Color::srgba(0.90, 0.82, 0.50, 1.0)),
+                        ));
+                    });
+                })
+                .id();
+            container_ui.container_panel = Some(entity);
         }
     }
 }

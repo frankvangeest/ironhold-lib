@@ -8,6 +8,7 @@ pub mod material;
 pub mod ron_loader;
 pub mod stats;
 pub mod dialogue;
+pub mod items;
 
 pub use project::*;
 pub use player::*;
@@ -22,3 +23,4 @@ pub use stats::{
     StatCatalog, StatDef, StatThreshold, ThresholdCondition, LiveStat, LoadedStats,
     ModifierDef, ModifierKind, StackRule, ActiveModifier, LoadedModifiers,
 };
+pub use items::{ItemCatalog, ItemDef, ItemStack};

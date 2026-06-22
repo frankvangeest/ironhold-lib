@@ -237,6 +237,19 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             entity: entity.map(|e| e.replace("{self}", spawn_id)),
         },
         Action::ResetToSpawn(id) => Action::ResetToSpawn(id.replace("{self}", spawn_id)),
+        Action::AddItem { entity, item_key, count } =>
+            Action::AddItem { entity: entity.replace("{self}", spawn_id), item_key, count },
+        Action::RemoveItem { entity, item_key, count } =>
+            Action::RemoveItem { entity: entity.replace("{self}", spawn_id), item_key, count },
+        Action::TransferItem { from, to, item_key, count } =>
+            Action::TransferItem {
+                from: from.replace("{self}", spawn_id),
+                to: to.replace("{self}", spawn_id),
+                item_key,
+                count,
+            },
+        Action::OpenShop(id) => Action::OpenShop(id.replace("{self}", spawn_id)),
+        Action::OpenContainer(id) => Action::OpenContainer(id.replace("{self}", spawn_id)),
         other => other,
     }
 }
@@ -277,6 +290,19 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         // SetVariable("target_name", "{target}") → SetVariable("target_name", "orc_01")
         Action::SetVariable(key, value) => Action::SetVariable(key, s(&value, target_id)),
         Action::ResetToSpawn(id) => Action::ResetToSpawn(s(&id, target_id)),
+        Action::AddItem { entity, item_key, count } =>
+            Action::AddItem { entity: s(&entity, target_id), item_key, count },
+        Action::RemoveItem { entity, item_key, count } =>
+            Action::RemoveItem { entity: s(&entity, target_id), item_key, count },
+        Action::TransferItem { from, to, item_key, count } =>
+            Action::TransferItem {
+                from: s(&from, target_id),
+                to: s(&to, target_id),
+                item_key,
+                count,
+            },
+        Action::OpenShop(id) => Action::OpenShop(s(&id, target_id)),
+        Action::OpenContainer(id) => Action::OpenContainer(s(&id, target_id)),
         other => other,
     }
 }

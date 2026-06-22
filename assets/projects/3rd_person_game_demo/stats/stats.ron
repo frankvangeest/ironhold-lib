@@ -30,6 +30,13 @@
             regen_delay: 2.0,
             thresholds: [],
         ),
+        // Currency stat — used by merchant_vendor as currency_stat.
+        // No regen, no thresholds; modified by future buy/sell transaction actions (v1.1).
+        "gold": (
+            base: 200.0,
+            min: 0.0,
+            max: 99999.0,
+        ),
     },
 
     modifiers: {},

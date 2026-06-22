@@ -121,6 +121,10 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅
 - `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅
 - `"dialogue.ended:{dialogue_path}"` — dialogue panel closed; payload is the project-relative `.dialogue.ron` path; emitted by `Action::EndDialogue` and cleared on `LoadScene` ✅
+- `"inventory.added:{entity}:{item_key}:{count}"` — items successfully added to the named entity's inventory (or `"player"` for `PlayerInventory`); emitted by `Action::AddItem` ✅
+- `"inventory.full:{entity}"` — `AddItem` found no room; all slots occupied; emitted alongside the partial-add event when some but not all items fit ✅
+- `"inventory.removed:{entity}:{item_key}:{count}"` — items removed from an inventory; `count` is the actual amount removed; emitted by `Action::RemoveItem` ✅
+- `"inventory.transferred:{from}:{to}:{item_key}"` — items moved between two inventories; emitted by `Action::TransferItem` ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 
@@ -303,6 +307,14 @@ Applies actions to the world. Key design points:
 - `SpawnEffect { key, position, entity }` — bursts a particle effect from `AssetCatalog.effects`; `entity` (spawn ID) takes precedence over `position` (world coords); the effect def `offset` is added to the resolved position; `{self}` substituted in behavior contexts; silently skips on unknown key or unresolvable entity; see `docs/20_data_formats.md` for `EffectDef` fields. **WASM:** sphere particles and flame sprite particles (`uv_distort > 0` or `uv_scroll_speed > 0`) compile separate WebGPU pipelines — fire one warmup burst per variant on `scene.ready` at `position: Some((0.0, -100.0, 0.0))` to pre-compile both pipelines before the player can interact.
 - `SetTarget(String)` — sets `CurrentTarget` to the given spawn ID; emits `target.changed:{id}` and `target.changed`; `{target}` in subsequent rule actions resolves to this ID
 - `ClearTarget` — clears `CurrentTarget`; emits `target.cleared`; also cleared automatically on `LoadScene`
+- `AddItem { entity, item_key, count? }` — adds `count` (default 1) of `item_key` to the named entity's inventory; `entity: "player"` targets `PlayerInventory` (the **reserved keyword** `"player"` — distinct from any entity's spawn id, even if the player character's spawn id is `"player_01"`); any other string routes to a container entity's `Inventory` by spawn ID. Emits `inventory.added:{entity}:{key}:{n}` on success, `inventory.full:{entity}` when no slot is available. `{self}` and `{target}` substituted in `entity`.
+- `RemoveItem { entity, item_key, count? }` — removes up to `count` (default 1) of `item_key`; emits `inventory.removed:{entity}:{key}:{n}` with the actual count removed. `{self}` and `{target}` substituted in `entity`.
+- `TransferItem { from, to, item_key, count? }` — removes `count` of `item_key` from `from` and adds it to `to` (both support `"player"` or a spawn ID). Emits `inventory.transferred:{from}:{to}:{key}`. `{self}` and `{target}` substituted in both `from` and `to`.
+- `OpenInventory` — makes the scene's `InventoryPanel` visible (guarded by change detection). Targets by node **type**, not by `id` — there can be at most one `InventoryPanel` per scene. The `id` field on the panel is currently decorative (available for future index-based targeting).
+- `CloseInventory` — hides the `InventoryPanel` (equality-guarded; no-op if already hidden)
+- `ToggleInventory` — checks current `InventoryPanel` visibility and flips it: shows if hidden, hides if visible. Use this for a single key/button that both opens and closes the panel.
+- `OpenShop(merchant_id)` — resolves the merchant's `MerchantDef` via the `SpawnRegistry` + `PrefabKey`, makes the `ShopPanel` visible, and repopulates its stock list. Targets by node **type** — at most one `ShopPanel` per scene. `{self}` and `{target}` substituted in the merchant ID. Warns if no merchant entity or no `ShopPanel` UI node is present.
+- `CloseShop` — hides the `ShopPanel` (equality-guarded; no-op if already hidden)
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)

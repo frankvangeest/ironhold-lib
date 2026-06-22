@@ -5,6 +5,8 @@ use crate::schema::project::StateMachineAsset;
 use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::catalog::{AssetCatalog, PrefabCatalog};
 use crate::schema::stats::{StatCatalog, LiveStat, LoadedStats, LoadedModifiers};
+use crate::schema::items::ItemCatalog;
+use crate::capabilities::inventory::LoadedItemCatalog;
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
@@ -28,6 +30,7 @@ pub fn check_project_loaded(
     asset_catalog_assets: Res<Assets<AssetCatalog>>,
     prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
     stat_catalog_assets: Res<Assets<StatCatalog>>,
+    item_catalog_assets: Res<Assets<ItemCatalog>>,
     scene_override: Option<Res<crate::InitialSceneOverride>>,
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
@@ -75,12 +78,19 @@ pub fn check_project_loaded(
             asset_server.load::<StatCatalog>(resolved)
         });
 
+        let items_handle = config.items_path.as_ref().map(|p| {
+            let resolved = resolve_project_path(&project_root.0, p);
+            info!("Loading item catalog from: {}", resolved);
+            asset_server.load::<ItemCatalog>(resolved)
+        });
+
         let any_pending = model_fixes_handle.is_some()
             || rules_handle.is_some()
             || state_machine_handle.is_some()
             || asset_catalog_handle.is_some()
             || prefab_catalog_handle.is_some()
-            || stats_handle.is_some();
+            || stats_handle.is_some()
+            || items_handle.is_some();
         commands.insert_resource(PendingProjectLoads {
             model_fixes: model_fixes_handle,
             rules: rules_handle,
@@ -88,6 +98,7 @@ pub fn check_project_loaded(
             asset_catalog: asset_catalog_handle,
             prefab_catalog: prefab_catalog_handle,
             stats: stats_handle,
+            items: items_handle,
         });
 
         if any_pending {
@@ -98,6 +109,7 @@ pub fn check_project_loaded(
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
         commands.insert_resource(LoadedRules(config.rules.clone()));
         commands.insert_resource(LoadedStateMachine(None));
+        commands.insert_resource(LoadedItemCatalog(None));
         commands.insert_resource(LoadedStats::default());
         commands.insert_resource(LoadedModifiers::default());
         {
@@ -183,6 +195,18 @@ pub fn check_project_loaded(
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "<unknown>".to_string());
                     error!("Stats catalog failed to load: {} — {} — proceeding with no stats", path, e);
+                }
+                _ => { return; }
+            }
+        }
+        if let Some(h) = &pending.items {
+            match asset_server.load_state(h) {
+                bevy::asset::LoadState::Loaded => {}
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    error!("Item catalog failed to load: {} — {} — proceeding with no items", path, e);
                 }
                 _ => { return; }
             }
@@ -277,6 +301,22 @@ pub fn check_project_loaded(
         };
         commands.insert_resource(loaded_stats);
         commands.insert_resource(loaded_modifiers);
+
+        let loaded_item_catalog = if let Some(h) = &pending.items {
+            if let Some(catalog) = item_catalog_assets.get(h) {
+                if let Err(e) = catalog.validate() {
+                    error!("Invalid ItemCatalog: {} — item system may not behave correctly", e);
+                }
+                info!("Item catalog loaded: {} item(s) defined", catalog.items.len());
+                LoadedItemCatalog(Some(catalog.clone()))
+            } else {
+                LoadedItemCatalog(None)
+            }
+        } else {
+            LoadedItemCatalog(None)
+        };
+        commands.insert_resource(loaded_item_catalog);
+
         commands.insert_resource(AudioState {
             max_volume: config.audio.max_volume,
             active_fraction: 1.0,

@@ -228,6 +228,7 @@ pub struct PendingProjectLoads {
     pub asset_catalog: Option<Handle<AssetCatalog>>,
     pub prefab_catalog: Option<Handle<PrefabCatalog>>,
     pub stats: Option<Handle<crate::schema::stats::StatCatalog>>,
+    pub items: Option<Handle<crate::schema::items::ItemCatalog>>,
 }
 
 /// Tracks all dynamically spawned entities by their spawn ID.
@@ -396,6 +397,9 @@ pub struct SceneV2Params<'w> {
     pub asset_catalog: Res<'w, LoadedAssetCatalog>,
     pub prefab_catalog: Res<'w, LoadedPrefabCatalog>,
     pub project_root: Res<'w, ProjectRoot>,
+    pub inventory_ui: ResMut<'w, crate::capabilities::inventory::LoadedInventoryUi>,
+    pub container_ui: ResMut<'w, crate::capabilities::inventory::LoadedContainerUi>,
+    pub loaded_item_catalog: Res<'w, crate::capabilities::inventory::LoadedItemCatalog>,
 }
 
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.
@@ -426,6 +430,27 @@ pub struct SceneStateParams<'w, 's> {
     pub orbit_cameras: Query<'w, 's, Entity, With<crate::capabilities::camera::OrbitCamera>>,
     /// Cleared on `LoadScene` so stale dialogue state doesn't bleed across scene transitions.
     pub active_dialogue: ResMut<'w, crate::capabilities::dialogue::ActiveDialogue>,
+    /// Player inventory — persists across scene loads.
+    pub player_inventory: ResMut<'w, crate::capabilities::inventory::PlayerInventory>,
+    /// Loaded item catalog for the current project.
+    pub loaded_item_catalog: Res<'w, crate::capabilities::inventory::LoadedItemCatalog>,
+    /// ECS entities for InventoryPanel and ShopPanel (set by scene loader).
+    pub inventory_ui: ResMut<'w, crate::capabilities::inventory::LoadedInventoryUi>,
+    /// ECS entity for ContainerPanel and active container (set by scene loader / OpenContainer).
+    pub container_ui: ResMut<'w, crate::capabilities::inventory::LoadedContainerUi>,
+    /// Entity-attached inventories (containers like chests).
+    pub container_inventories: Query<'w, 's, (&'static SpawnId, &'static mut crate::capabilities::inventory::Inventory)>,
+    /// Visibility query for the InventoryPanel node.
+    /// `Without<ShopPanelMarker>` makes this disjoint from `shop_panel_q` so both can borrow `&mut Visibility`.
+    pub inventory_panel_q: Query<'w, 's, (Entity, &'static mut Visibility), (With<crate::capabilities::inventory::InventoryPanelMarker>, Without<crate::capabilities::inventory::ShopPanelMarker>, Without<crate::capabilities::inventory::ContainerPanelMarker>)>,
+    /// Visibility query for the ShopPanel node. Also reads `ShopPanelMarker` for `font_size`.
+    /// `Without<InventoryPanelMarker>` makes this disjoint from `inventory_panel_q`.
+    pub shop_panel_q: Query<'w, 's, (Entity, &'static mut Visibility, &'static crate::capabilities::inventory::ShopPanelMarker), (With<crate::capabilities::inventory::ShopPanelMarker>, Without<crate::capabilities::inventory::InventoryPanelMarker>, Without<crate::capabilities::inventory::ContainerPanelMarker>)>,
+    /// Used by `OpenShop` to find the entries-area child so only entries are despawned on re-open,
+    /// preserving the header + close button.
+    pub shop_entries_q: Query<'w, 's, (Entity, &'static ChildOf), With<crate::capabilities::inventory::ShopEntriesContainerMarker>>,
+    /// Visibility query for the ContainerPanel node.
+    pub container_panel_q: Query<'w, 's, (Entity, &'static mut Visibility), (With<crate::capabilities::inventory::ContainerPanelMarker>, Without<crate::capabilities::inventory::InventoryPanelMarker>, Without<crate::capabilities::inventory::ShopPanelMarker>)>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

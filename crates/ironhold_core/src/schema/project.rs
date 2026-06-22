@@ -209,6 +209,12 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub stats_path: Option<String>,
 
+    /// Path to an `items/items.ron` file that defines the item catalog for this project.
+    /// Optional: when absent, the inventory system has no items.
+    /// Example: `"items/items.ron"`.
+    #[serde(default)]
+    pub items_path: Option<String>,
+
     /// Visual style for floating damage/heal popups shown by `Action::ShowDamagePopup`.
     /// Omit to use the built-in defaults (22 px font, 1.2 s duration, 1.5 m/s rise).
     #[serde(default)]

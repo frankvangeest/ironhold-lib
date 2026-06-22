@@ -127,6 +127,10 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::schema::stats::LoadedStats>()
             .init_resource::<crate::schema::stats::LoadedModifiers>()
             .init_resource::<crate::capabilities::dialogue::ActiveDialogue>()
+            .init_resource::<crate::capabilities::inventory::PlayerInventory>()
+            .init_resource::<crate::capabilities::inventory::LoadedItemCatalog>()
+            .init_resource::<crate::capabilities::inventory::LoadedInventoryUi>()
+            .init_resource::<crate::capabilities::inventory::LoadedContainerUi>()
             .init_resource::<crate::runtime::scene_manager::LogicState>()
             .init_resource::<crate::runtime::material_factory::BuiltMaterials>()
             .add_message::<UiEvent>()
@@ -144,6 +148,7 @@ impl Plugin for GamePlugin {
             .add_plugins(ImplicitRonPlugin::<crate::schema::catalog::PrefabCatalog>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::stats::StatCatalog>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::dialogue::DialogueDef>::new(&["ron"]))
+            .add_plugins(ImplicitRonPlugin::<crate::schema::items::ItemCatalog>::new(&["ron"]))
             .add_plugins(capabilities::terrain::TerrainPlugin)
             .add_plugins(capabilities::custom_material::CustomMaterialPlugin)
             .add_plugins(capabilities::stat_radar::StatRadarPlugin)
@@ -251,6 +256,8 @@ impl Plugin for GamePlugin {
             .add_systems(Update, update_dynamic_labels_system)
             .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system))
             .add_systems(Update, stat_radar_update_system)
+            .add_systems(Update, crate::capabilities::inventory::inventory_ui_system)
+            .add_systems(Update, crate::capabilities::inventory::container_ui_system)
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

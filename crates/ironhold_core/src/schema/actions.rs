@@ -262,7 +262,63 @@ pub enum Action {
     /// Close the current dialogue panel immediately.
     /// No-op when no dialogue is active. Emits `dialogue.ended:{path}` into the pipeline.
     EndDialogue,
+    /// Add items to an entity's inventory.
+    /// `entity: "player"` routes to `PlayerInventory` (persistent across scenes).
+    /// Any other value routes to the entity's `Inventory` component by spawn ID.
+    /// Emits `inventory.added:{entity}:{item_key}:{count}` on success.
+    /// Emits `inventory.full:{entity}` when the inventory has no space.
+    AddItem {
+        entity: String,
+        item_key: String,
+        #[serde(default = "one_u32")]
+        count: u32,
+    },
+    /// Remove items from an entity's inventory. Removes all held if count exceeds what's held.
+    /// `entity: "player"` targets `PlayerInventory`; any other value targets the entity's `Inventory`.
+    /// Emits `inventory.removed:{entity}:{item_key}:{actual_count}` on success.
+    RemoveItem {
+        entity: String,
+        item_key: String,
+        #[serde(default = "one_u32")]
+        count: u32,
+    },
+    /// Transfer items from one entity's inventory to another.
+    /// `from` / `to` each accept `"player"` or a spawn ID.
+    /// Emits `inventory.transferred:{from}:{to}:{item_key}` on success.
+    TransferItem {
+        from: String,
+        to: String,
+        item_key: String,
+        #[serde(default = "one_u32")]
+        count: u32,
+    },
+    /// Show the `InventoryPanel` UI node for the player's inventory.
+    OpenInventory,
+    /// Hide the `InventoryPanel` UI node.
+    CloseInventory,
+    /// Toggle the `InventoryPanel`: show it if hidden, hide it if visible.
+    ToggleInventory,
+    /// Populate the `ShopPanel` UI node with the given merchant's stock and show it.
+    /// The argument is the merchant entity's spawn ID.
+    OpenShop(String),
+    /// Hide the `ShopPanel` UI node.
+    CloseShop,
+    /// Buy one unit of `item_key` from the currently open shop.
+    /// Deducts `buy_price` from the player's currency stat and adds the item to the player's
+    /// inventory. No-ops with a warning if no shop is open, the item is not in stock, or
+    /// the player cannot afford it. Emits `item.bought:{item_key}` on success.
+    BuyItem(String),
+    /// Show the `ContainerPanel` UI node populated with the given entity's inventory.
+    /// The argument is the container entity's spawn ID (e.g. `"chest_01"`).
+    /// Emits `container.opened:{entity_id}` on success.
+    OpenContainer(String),
+    /// Hide the `ContainerPanel` UI node and clear the active container.
+    CloseContainer,
+    /// Transfer all items from the currently open container to the player's inventory.
+    /// No-op if no container is open. Emits `container.looted:{entity_id}` on success.
+    TakeAllFromContainer,
 }
 
 fn default_action_volume() -> f32 { 1.0 }
 fn default_decal_color() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }
+fn one_u32() -> u32 { 1 }

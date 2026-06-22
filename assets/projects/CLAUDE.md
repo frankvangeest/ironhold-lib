@@ -47,6 +47,14 @@ UnloadOverlay
 ToggleOverlay("scenes/pause.scene.ron")
 LoadSceneOverlay("scenes/pause.scene.ron")
 PlayAnimation("run")
+OpenInventory
+CloseInventory
+ToggleInventory
+OpenShop("merchant_01")
+CloseShop
+OpenContainer("chest_01")
+CloseContainer
+TakeAllFromContainer
 ```
 
 ### Struct variants → named fields

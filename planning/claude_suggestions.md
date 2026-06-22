@@ -55,5 +55,20 @@
 
 - **`spawn_prefab_instance` capability checklist — new prefab fields silently skip GLB actors** _(observed at `c669ee1` 2026-06-20)_ — Each new `PrefabDef` capability field (e.g. `dialogue`, `motion`, `stat_label`) must be manually added to `spawn_prefab_instance` in `entity_spawner.rs`; omitting it silently applies the field to primitive/composite entities but not to GLB Actors — as happened with `dialogue`. The promoted suggestion to consolidate the spawn sites (#34bc77d) would eliminate this class of bug entirely.
 
+- **Extract `InventoryParams` from `SceneStateParams` to split the god-param** _(observed at `c7de3f3` 2026-06-20)_ — `SceneStateParams` in `mod.rs` now has ~25 heterogeneous fields across audio, targeting, dialogue, NPC, camera, stats, and inventory; extracting the 6 inventory-specific fields (`player_inventory`, `loaded_item_catalog`, `inventory_ui`, `container_inventories`, `inventory_panel_q`, `shop_panel_q`) into an `InventoryParams` `SystemParam` bundle would make the inventory surface independently auditable. No correctness issue — `SystemParam` derive nests tuples without hitting Bevy's 16-param ceiling.
+
+- **CLI `--strict` cross-validate merchant `currency_stat` and `item_key` against catalogs** _(observed at `c7de3f3` 2026-06-20)_ — A typo'd `currency_stat: "glod"` or an `item_key` that doesn't exist in `items.ron` renders silently in the shop panel and only fails at runtime; adding cross-file checks to `ironhold_cli --strict` (mirroring the existing scene→prefab and prefab→catalog checks) would catch these at validate time before any test/play run.
+
 - **Stale `spider.hide:{self}` delay timer could hide a newly-respawned spider** _(observed at `0ddcf9b` 2026-06-19)_ — The `enemy_spider.behavior.ron` "dead" state schedules `EmitEventAfterDelay(event: "spider.hide:{self}", delay_secs: 15.0)`; if the spider respawns (transitions "dead" → "alive") before 15 s elapsed, the entity FSM interpreter has already moved on — the pending delay fires anyway and calls `SetEntityVisible(visible: false)` on the now-alive spider. The cleanest fix is to track the pending delay ID and cancel it on state exit, or to guard the hide handler with a condition (e.g. check that state is still "dead"). Concrete basis: the current delay system has no cancel/guard mechanism; this is a latent edge case for any short respawn_timer.
+
+## World Design / Gameplay
+
+- **Item-gated `interactable` (condition on inventory possession)** _(observed at `cd1d321` 2026-06-14)_
+  What: allow an `interactable` prop (e.g. the ruins "Seal Door") to require the player hold a specific item (`old_key`) before its interaction fires. Why: this is the linchpin of the `3rd_person_game_demo` main quest — the Old Key is designed to unlock the ruins; without an item-gate the door must fall back to a GameVariable set on `buy_item:old_key`, which rewards *buying* rather than *possessing* the key (breaks a future "find it as loot" path).
+
+- **Zone-based ambient audio swap on TriggerZone enter/exit** _(observed at `cd1d321` 2026-06-14)_
+  What: trigger an ambient music/SFX bed change when the player enters/exits a TriggerZone (e.g. safe village bed vs. tense field bed). Why: the Greywatch world design's emotional core is the warmth-gradient from village to ruins; a single `bg_music` bed everywhere flattens the "leaving the light" tension that drives the whole layout. Likely authorable in RON via `entity.entered/exited` rules + a `PlayMusicLoop`/`StopMusic` pairing if a per-zone trigger entity is supported.
+
+- **Conditionally-shown dialogue choices gated on a GameVariable** _(observed at `cd1d321` 2026-06-14)_
+  What: let a dialogue node's `choices` be shown/hidden based on a GameVariable (e.g. Maren's "claim your reward" branch only appears after `sorcerer_defeated` is set). Why: the elder's gold-reward quest in the world design needs to pay out *after* the climax, not before; without conditional choices the reward dialogue is always available and the quest loses its completion beat.
 

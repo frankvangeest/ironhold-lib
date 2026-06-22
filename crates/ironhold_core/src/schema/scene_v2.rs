@@ -316,6 +316,9 @@ pub enum UiNodeDef {
     StatRadar(StatRadarDef),
     ActionBar(ActionBarDef),
     DialoguePanel(DialoguePanelDef),
+    InventoryPanel(InventoryPanelDef),
+    ShopPanel(ShopPanelDef),
+    ContainerPanel(ContainerPanelDef),
 }
 
 impl UiNodeDef {
@@ -329,6 +332,9 @@ impl UiNodeDef {
             UiNodeDef::StatRadar(d) => &d.id,
             UiNodeDef::ActionBar(d) => &d.id,
             UiNodeDef::DialoguePanel(d) => &d.id,
+            UiNodeDef::InventoryPanel(d) => &d.id,
+            UiNodeDef::ShopPanel(d) => &d.id,
+            UiNodeDef::ContainerPanel(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -349,6 +355,18 @@ impl UiNodeDef {
                 (w, d.slot_size + 8.0)
             }
             UiNodeDef::DialoguePanel(d) => d.size,
+            UiNodeDef::InventoryPanel(d) => {
+                let w = d.columns as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 16.0;
+                // + 40 for header, + 28 for gold footer row
+                let h = d.rows as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 68.0;
+                (w, h)
+            }
+            UiNodeDef::ShopPanel(d) => d.size,
+            UiNodeDef::ContainerPanel(d) => {
+                let w = d.columns as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 16.0;
+                let h = d.rows as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 72.0;
+                (w, h)
+            }
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -361,6 +379,9 @@ impl UiNodeDef {
             UiNodeDef::StatRadar(d) => d.position,
             UiNodeDef::ActionBar(d) => d.position,
             UiNodeDef::DialoguePanel(d) => d.position,
+            UiNodeDef::InventoryPanel(d) => d.position,
+            UiNodeDef::ShopPanel(d) => d.position,
+            UiNodeDef::ContainerPanel(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -373,6 +394,9 @@ impl UiNodeDef {
             UiNodeDef::StatRadar(d) => d.absolute,
             UiNodeDef::ActionBar(_) => true,
             UiNodeDef::DialoguePanel(_) => true,
+            UiNodeDef::InventoryPanel(_) => true,
+            UiNodeDef::ShopPanel(_) => true,
+            UiNodeDef::ContainerPanel(_) => true,
         }
     }
     pub fn align(&self) -> UiTextAlign {
@@ -385,6 +409,9 @@ impl UiNodeDef {
             UiNodeDef::StatRadar(_) => UiTextAlign::Center,
             UiNodeDef::ActionBar(_) => UiTextAlign::Center,
             UiNodeDef::DialoguePanel(_) => UiTextAlign::Left,
+            UiNodeDef::InventoryPanel(_) => UiTextAlign::Left,
+            UiNodeDef::ShopPanel(_) => UiTextAlign::Left,
+            UiNodeDef::ContainerPanel(_) => UiTextAlign::Left,
         }
     }
 }
@@ -871,3 +898,168 @@ fn default_speaker_font_size() -> f32 { 18.0 }
 fn default_body_font_size() -> f32 { 15.0 }
 fn default_choice_font_size() -> f32 { 13.0 }
 fn default_true_bool() -> bool { true }
+
+// ─── Inventory panel ──────────────────────────────────────────────────────────
+
+/// A UI panel showing the player's inventory as a grid of item slots.
+/// Managed at runtime by the inventory system; toggled via `OpenInventory`/`CloseInventory`.
+/// Always uses absolute positioning. Starts hidden by default.
+///
+/// ```ron
+/// InventoryPanel((
+///     id: "inventory_panel",
+///     position: (20.0, 20.0),
+///     columns: 5,
+///     rows: 4,
+///     slot_size: 48.0,
+/// ))
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct InventoryPanelDef {
+    pub id: String,
+    /// Top-left corner in pixels (always absolute).
+    pub position: (f32, f32),
+    /// Number of slot columns. Default: 5.
+    #[serde(default = "default_inv_columns")]
+    pub columns: u32,
+    /// Number of slot rows. Default: 4.
+    #[serde(default = "default_inv_rows")]
+    pub rows: u32,
+    /// Size of each slot square in pixels. Default: 48.
+    #[serde(default = "default_inv_slot_size")]
+    pub slot_size: f32,
+    /// Gap between slots in pixels. Default: 4.
+    #[serde(default = "default_inv_slot_gap")]
+    pub slot_gap: f32,
+    /// Panel background colour as linear RGBA. Default: near-black, 90 % alpha.
+    #[serde(default = "default_inv_bg")]
+    pub background_color: (f32, f32, f32, f32),
+    /// Font size for item name / count labels inside slots. Default: 11.
+    #[serde(default = "default_inv_font_size")]
+    pub font_size: f32,
+    /// Catalog key for the icon atlas used to display item icons in slots.
+    /// When set, each slot shows the icon at the item's `icon_index` from this sheet.
+    #[serde(default)]
+    pub icon_sheet: Option<String>,
+    /// Number of columns in the icon atlas grid. Default: 11.
+    #[serde(default = "default_inv_icon_cols")]
+    pub icon_cols: u32,
+    /// Number of rows in the icon atlas grid. Default: 11.
+    #[serde(default = "default_inv_icon_rows")]
+    pub icon_rows: u32,
+    /// Pixel size of each square icon cell in the atlas. Default: 114.
+    #[serde(default = "default_inv_icon_cell_size")]
+    pub icon_cell_size: u32,
+    /// When `true` (default) the panel starts hidden.
+    #[serde(default = "default_true_bool")]
+    pub initially_hidden: bool,
+}
+
+fn default_inv_columns() -> u32 { 5 }
+fn default_inv_rows() -> u32 { 4 }
+fn default_inv_slot_size() -> f32 { 48.0 }
+fn default_inv_slot_gap() -> f32 { 4.0 }
+fn default_inv_bg() -> (f32, f32, f32, f32) { (0.05, 0.05, 0.08, 0.90) }
+fn default_inv_font_size() -> f32 { 11.0 }
+fn default_inv_icon_cols() -> u32 { 8 }
+fn default_inv_icon_rows() -> u32 { 8 }
+fn default_inv_icon_cell_size() -> u32 { 64 }
+
+// ─── Shop panel ───────────────────────────────────────────────────────────────
+
+/// A UI panel showing a merchant's stock with buy/sell prices.
+/// Populated dynamically by `Action::OpenShop(entity_id)`.
+/// Always uses absolute positioning. Starts hidden by default.
+///
+/// ```ron
+/// ShopPanel((
+///     id: "shop_panel",
+///     position: (500.0, 20.0),
+///     size: (320.0, 400.0),
+/// ))
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ShopPanelDef {
+    pub id: String,
+    /// Top-left corner in pixels (always absolute).
+    pub position: (f32, f32),
+    /// Width and height of the panel in pixels. Default: (320.0, 400.0).
+    #[serde(default = "default_shop_size")]
+    pub size: (f32, f32),
+    /// Panel background colour as linear RGBA. Default: near-black, 90 % alpha.
+    #[serde(default = "default_inv_bg")]
+    pub background_color: (f32, f32, f32, f32),
+    /// Font size for shop item rows. Default: 13.
+    #[serde(default = "default_shop_font_size")]
+    pub font_size: f32,
+    /// When `true` (default) the panel starts hidden.
+    #[serde(default = "default_true_bool")]
+    pub initially_hidden: bool,
+}
+
+fn default_shop_size() -> (f32, f32) { (320.0, 400.0) }
+fn default_shop_font_size() -> f32 { 13.0 }
+
+// ─── Container panel ──────────────────────────────────────────────────────────
+
+/// A UI panel that shows a container entity's inventory (chest, crate, etc.).
+/// Populated by `Action::OpenContainer(entity_id)`. Always absolute.
+/// Starts hidden; shown by `OpenContainer`, hidden by `CloseContainer`.
+/// Includes an embedded close button (`close_container`) and a take-all button
+/// (`take_all_from_container`).
+///
+/// ```ron
+/// ContainerPanel((
+///     id: "chest_panel",
+///     position: (230.0, 80.0),
+///     columns: 3,
+///     rows: 3,
+///     slot_size: 52.0,
+///     icon_sheet: "icons_items",
+///     icon_cols: 8,
+///     icon_rows: 8,
+///     icon_cell_size: 64,
+/// ))
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerPanelDef {
+    pub id: String,
+    /// Top-left corner in pixels (always absolute).
+    pub position: (f32, f32),
+    /// Number of slot columns. Default: 3.
+    #[serde(default = "default_container_columns")]
+    pub columns: u32,
+    /// Number of slot rows. Default: 3.
+    #[serde(default = "default_container_rows")]
+    pub rows: u32,
+    /// Size of each slot square in pixels. Default: 52.
+    #[serde(default = "default_inv_slot_size")]
+    pub slot_size: f32,
+    /// Gap between slots in pixels. Default: 4.
+    #[serde(default = "default_inv_slot_gap")]
+    pub slot_gap: f32,
+    /// Panel background colour as linear RGBA. Default: near-black, 90 % alpha.
+    #[serde(default = "default_inv_bg")]
+    pub background_color: (f32, f32, f32, f32),
+    /// Font size for item count labels inside slots. Default: 11.
+    #[serde(default = "default_inv_font_size")]
+    pub font_size: f32,
+    /// Catalog key for the icon atlas used to display item icons in slots.
+    #[serde(default)]
+    pub icon_sheet: Option<String>,
+    /// Number of columns in the icon atlas grid. Default: 8.
+    #[serde(default = "default_inv_icon_cols")]
+    pub icon_cols: u32,
+    /// Number of rows in the icon atlas grid. Default: 8.
+    #[serde(default = "default_inv_icon_rows")]
+    pub icon_rows: u32,
+    /// Pixel size of each square icon cell in the atlas. Default: 64.
+    #[serde(default = "default_inv_icon_cell_size")]
+    pub icon_cell_size: u32,
+}
+
+fn default_container_columns() -> u32 { 3 }
+fn default_container_rows() -> u32 { 3 }

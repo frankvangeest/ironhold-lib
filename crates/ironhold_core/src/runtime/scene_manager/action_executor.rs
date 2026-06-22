@@ -164,6 +164,9 @@ pub fn action_executor_system(
                     None
                 };
 
+                if player_config.is_some() {
+                    scene_state.player_inventory.player_spawn_id = Some(spawn_id.clone());
+                }
                 spawn_params.pending_spawns.0.push_back(super::QueuedSpawn {
                     prefab_def,
                     model_path,
@@ -773,6 +776,458 @@ pub fn action_executor_system(
                     info!("Action::EndDialogue: closing '{}'", path);
                     scene_state.active_dialogue.clear();
                     game_events.write(GameEvent::Trigger(format!("dialogue.ended:{}", path)));
+                }
+            }
+            Action::AddItem { entity: entity_id, item_key, count } => {
+                use crate::capabilities::inventory::add_to_slots;
+                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
+                if entity_id == "player" {
+                    let inv = &mut *scene_state.player_inventory;
+                    if inv.max_slots == 0 { inv.resize(20); }
+                    let (added, full) = add_to_slots(&mut inv.slots, inv.max_slots, &item_key, count, catalog_ref);
+                    if added > 0 {
+                        game_events.write(GameEvent::Trigger(
+                            format!("inventory.added:player:{}:{}", item_key, added)));
+                    }
+                    if full {
+                        game_events.write(GameEvent::Trigger("inventory.full:player".to_string()));
+                    }
+                } else {
+                    let mut found = false;
+                    for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
+                        if sid.0 == entity_id {
+                            found = true;
+                            let max = inv.max_slots;
+                            let (added, full) = add_to_slots(&mut inv.slots, max, &item_key, count, catalog_ref);
+                            if added > 0 {
+                                game_events.write(GameEvent::Trigger(
+                                    format!("inventory.added:{}:{}:{}", entity_id, item_key, added)));
+                            }
+                            if full {
+                                game_events.write(GameEvent::Trigger(
+                                    format!("inventory.full:{}", entity_id)));
+                            }
+                            break;
+                        }
+                    }
+                    if !found {
+                        warn!("Action::AddItem: entity '{}' not found or has no Inventory", entity_id);
+                    }
+                }
+            }
+            Action::RemoveItem { entity: entity_id, item_key, count } => {
+                use crate::capabilities::inventory::remove_from_slots;
+                if entity_id == "player" {
+                    let inv = &mut *scene_state.player_inventory;
+                    let removed = remove_from_slots(&mut inv.slots, &item_key, count);
+                    if removed > 0 {
+                        game_events.write(GameEvent::Trigger(
+                            format!("inventory.removed:player:{}:{}", item_key, removed)));
+                    }
+                } else {
+                    let mut found = false;
+                    for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
+                        if sid.0 == entity_id {
+                            found = true;
+                            let removed = remove_from_slots(&mut inv.slots, &item_key, count);
+                            if removed > 0 {
+                                game_events.write(GameEvent::Trigger(
+                                    format!("inventory.removed:{}:{}:{}", entity_id, item_key, removed)));
+                            }
+                            break;
+                        }
+                    }
+                    if !found {
+                        warn!("Action::RemoveItem: entity '{}' not found or has no Inventory", entity_id);
+                    }
+                }
+            }
+            Action::TransferItem { from, to, item_key, count } => {
+                use crate::capabilities::inventory::{add_to_slots, remove_from_slots};
+                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
+
+                // Step 1: remove from source.
+                let removed = if from == "player" {
+                    let inv = &mut *scene_state.player_inventory;
+                    remove_from_slots(&mut inv.slots, &item_key, count)
+                } else {
+                    let mut r = 0u32;
+                    for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
+                        if sid.0 == from {
+                            r = remove_from_slots(&mut inv.slots, &item_key, count);
+                            break;
+                        }
+                    }
+                    r
+                };
+
+                if removed == 0 {
+                    warn!("Action::TransferItem: no '{}' found in '{}'", item_key, from);
+                } else {
+                    // Step 2: add to destination.
+                    if to == "player" {
+                        let inv = &mut *scene_state.player_inventory;
+                        if inv.max_slots == 0 { inv.resize(20); }
+                        let max = inv.max_slots;
+                        add_to_slots(&mut inv.slots, max, &item_key, removed, catalog_ref);
+                    } else {
+                        for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
+                            if sid.0 == to {
+                                let max = inv.max_slots;
+                                add_to_slots(&mut inv.slots, max, &item_key, removed, catalog_ref);
+                                break;
+                            }
+                        }
+                    }
+                    game_events.write(GameEvent::Trigger(
+                        format!("inventory.transferred:{}:{}:{}", from, to, item_key)));
+                }
+            }
+            Action::OpenInventory => {
+                for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
+                    if *vis != Visibility::Visible { *vis = Visibility::Visible; }
+                }
+            }
+            Action::CloseInventory => {
+                for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
+                    if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                }
+            }
+            Action::ToggleInventory => {
+                let is_visible = {
+                    scene_state.inventory_panel_q.iter()
+                        .next()
+                        .map(|(_, vis)| *vis == Visibility::Visible)
+                        .unwrap_or(false)
+                };
+                let target = if is_visible { Visibility::Hidden } else { Visibility::Visible };
+                for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
+                    if *vis != target { *vis = target; }
+                }
+            }
+            Action::OpenShop(merchant_id) => {
+                // Resolve merchant's PrefabKey from the SpawnRegistry.
+                let entity_opt = spawn_params.registry.entities.get(&merchant_id).copied();
+                let prefab_key_opt = entity_opt.and_then(|e| {
+                    scene_state.prefab_keys.get(e).ok().map(|k| k.0.clone())
+                });
+                let merchant_def = prefab_key_opt.and_then(|key| {
+                    spawn_params.prefab_catalog.0.prefabs.get(&key)
+                        .and_then(|p| p.merchant.clone())
+                });
+
+                let Some(merchant_def) = merchant_def else {
+                    warn!("Action::OpenShop: entity '{}' not found or has no MerchantDef", merchant_id);
+                    continue;
+                };
+
+                // Find the ShopPanel entity, make it visible, read font_size.
+                let shop_panel_data = scene_state.shop_panel_q.iter_mut().next()
+                    .map(|(e, mut vis, marker)| {
+                        if *vis != Visibility::Visible { *vis = Visibility::Visible; }
+                        (e, marker.font_size)
+                    });
+
+                let Some((shop_entity, font_size)) = shop_panel_data else {
+                    warn!("Action::OpenShop: no ShopPanel in scene — add a ShopPanel UI node");
+                    continue;
+                };
+
+                // Track active merchant so BuyItem knows where to look up prices.
+                scene_state.inventory_ui.active_merchant_id = Some(merchant_id.clone());
+
+                // Populate only the entries container — the header + close button live above it.
+                let entries_entity = scene_state.shop_entries_q.iter()
+                    .find(|(_, child_of)| child_of.parent() == shop_entity)
+                    .map(|(e, _)| e);
+                let Some(entries_entity) = entries_entity else {
+                    warn!("Action::OpenShop: ShopPanel has no entries container — scene may need a rebuild");
+                    continue;
+                };
+
+                let catalog = &scene_state.loaded_item_catalog.0;
+                let panel_icon_sheet = scene_state.inventory_ui.panel_icon_sheet.clone();
+                commands.entity(entries_entity).despawn_children();
+                for entry in &merchant_def.stock {
+                    let display_name = catalog
+                        .as_ref()
+                        .and_then(|c| c.items.get(&entry.item_key))
+                        .map(|d| d.display_name.clone())
+                        .unwrap_or_else(|| entry.item_key.clone());
+                    let stock_label = entry.stock_count
+                        .map(|n| format!(" [{}]", n))
+                        .unwrap_or_default();
+
+                    // Resolve icon data for this entry (smaller than inventory slots).
+                    let item_def = catalog.as_ref().and_then(|c| c.items.get(&entry.item_key));
+                    let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
+                    let icon_color = item_def
+                        .and_then(|d| d.icon_color)
+                        .map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a))
+                        .unwrap_or(Color::WHITE);
+                    let sheet_key: Option<String> = item_def
+                        .and_then(|d| d.icon_sheet.clone())
+                        .or_else(|| panel_icon_sheet.clone());
+                    // Clone handles so the borrow on inventory_ui ends before with_children.
+                    let atlas_pair: Option<(Handle<Image>, Handle<TextureAtlasLayout>)> = sheet_key
+                        .as_deref()
+                        .and_then(|k| scene_state.inventory_ui.icon_atlases.get(k))
+                        .map(|(t, l)| (t.clone(), l.clone()));
+
+                    let item_key = entry.item_key.clone();
+                    let buy_price = entry.buy_price;
+                    commands.entity(entries_entity).with_children(|p| {
+                        p.spawn((
+                            Name::new("ShopEntryRow"),
+                            Node {
+                                flex_direction: FlexDirection::Row,
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::SpaceBetween,
+                                width: Val::Percent(100.0),
+                                padding: UiRect::axes(Val::Px(6.0), Val::Px(5.0)),
+                                ..default()
+                            },
+                        )).with_children(|row| {
+                            // Item icon (28×28, smaller than inventory slots).
+                            if let Some((tex, layout)) = atlas_pair {
+                                row.spawn((
+                                    Name::new("ShopEntryIcon"),
+                                    Node {
+                                        width: Val::Px(28.0),
+                                        height: Val::Px(28.0),
+                                        flex_shrink: 0.0,
+                                        margin: UiRect::right(Val::Px(6.0)),
+                                        ..default()
+                                    },
+                                    ImageNode {
+                                        image: tex,
+                                        texture_atlas: Some(TextureAtlas { layout, index: icon_index }),
+                                        color: icon_color,
+                                        ..default()
+                                    },
+                                ));
+                            }
+                            // Item name + optional stock count.
+                            row.spawn((
+                                Name::new("ShopEntryName"),
+                                Node { flex_grow: 1.0, ..default() },
+                                Text::new(format!("{}{}", display_name, stock_label)),
+                                TextFont { font_size, ..default() },
+                                TextColor(Color::srgba(0.90, 0.88, 0.78, 1.0)),
+                            ));
+                            // Buy price (gold tint).
+                            row.spawn((
+                                Name::new("ShopEntryPrice"),
+                                Node { margin: UiRect::axes(Val::Px(8.0), Val::Px(0.0)), ..default() },
+                                Text::new(format!("{} g", buy_price)),
+                                TextFont { font_size, ..default() },
+                                TextColor(Color::srgba(0.95, 0.85, 0.40, 1.0)),
+                            ));
+                            // Buy button (bigger padding, full font_size).
+                            row.spawn((
+                                Name::new("ShopBuyBtn"),
+                                Button,
+                                Node {
+                                    padding: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    ..default()
+                                },
+                                BorderColor::from(Color::srgba(0.2, 0.5, 0.2, 0.8)),
+                                BackgroundColor(Color::srgba(0.08, 0.20, 0.08, 0.85)),
+                                UiAction::Trigger(format!("buy_item:{}", item_key)),
+                            )).with_children(|b| {
+                                b.spawn((
+                                    Name::new("BuyBtnText"),
+                                    Text::new("Buy"),
+                                    TextFont { font_size, ..default() },
+                                    TextColor(Color::srgba(0.60, 0.90, 0.60, 1.0)),
+                                ));
+                            });
+                        });
+                    });
+                }
+            }
+            Action::CloseShop => {
+                scene_state.inventory_ui.active_merchant_id = None;
+                for (_, mut vis, _) in scene_state.shop_panel_q.iter_mut() {
+                    if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                }
+            }
+            Action::BuyItem(item_key) => {
+                use crate::capabilities::inventory::add_to_slots;
+
+                // Find active merchant.
+                let merchant_id = match scene_state.inventory_ui.active_merchant_id.clone() {
+                    Some(id) => id,
+                    None => { warn!("Action::BuyItem: no shop is currently open"); continue; }
+                };
+
+                // Look up merchant def.
+                let entity_opt = spawn_params.registry.entities.get(&merchant_id).copied();
+                let prefab_key_opt = entity_opt.and_then(|e| {
+                    scene_state.prefab_keys.get(e).ok().map(|k| k.0.clone())
+                });
+                let merchant_def = prefab_key_opt.and_then(|key| {
+                    spawn_params.prefab_catalog.0.prefabs.get(&key)
+                        .and_then(|p| p.merchant.clone())
+                });
+                let Some(merchant_def) = merchant_def else {
+                    warn!("Action::BuyItem: active merchant '{}' has no MerchantDef", merchant_id);
+                    continue;
+                };
+
+                // Find item in stock.
+                let Some(stock_entry) = merchant_def.stock.iter().find(|e| e.item_key == item_key) else {
+                    warn!("Action::BuyItem: item '{}' not in merchant '{}' stock", item_key, merchant_id);
+                    continue;
+                };
+
+                // Check stock (stock_count: Some(0) means sold out).
+                if stock_entry.stock_count == Some(0) {
+                    info!("Action::BuyItem: item '{}' is sold out", item_key);
+                    continue;
+                }
+
+                // Resolve display name for floating text.
+                let display_name = scene_state.loaded_item_catalog.0.as_ref()
+                    .and_then(|c| c.items.get(&item_key))
+                    .map(|d| d.display_name.clone())
+                    .unwrap_or_else(|| item_key.clone());
+
+                let player_id = scene_state.player_inventory.player_spawn_id.clone();
+
+                // Check and deduct currency (global stat).
+                let currency = &merchant_def.currency_stat;
+                let price = stock_entry.buy_price as f32;
+                let current = scene_state.loaded_stats.0.get(currency.as_str())
+                    .map(|s| s.current)
+                    .unwrap_or(0.0);
+                if current < price {
+                    info!("Action::BuyItem: not enough {} ({:.0} < {:.0})", currency, current, price);
+                    game_events.write(GameEvent::Trigger("shop.insufficient_funds".to_string()));
+                    if let Some(ref pid) = player_id {
+                        action_queue.push(Action::ShowFloatingText {
+                            entity: pid.clone(),
+                            text: "Not enough gold!".to_string(),
+                            offset: Some((0.0, 2.2, 0.0)),
+                        });
+                    }
+                    continue;
+                }
+                if let Some(stat) = scene_state.loaded_stats.0.get_mut(currency.as_str()) {
+                    stat.apply_delta(-price);
+                }
+
+                // Add item to player inventory.
+                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
+                let inv = &mut *scene_state.player_inventory;
+                if inv.max_slots == 0 { inv.resize(20); }
+                let max = inv.max_slots;
+                add_to_slots(&mut inv.slots, max, &item_key, 1, catalog_ref);
+
+                info!("Action::BuyItem: bought '{}' for {} {}", item_key, price, currency);
+                game_events.write(GameEvent::Trigger(format!("item.bought:{}", item_key)));
+                if let Some(ref pid) = player_id {
+                    action_queue.push(Action::ShowFloatingText {
+                        entity: pid.clone(),
+                        text: format!("Bought {}!", display_name),
+                        offset: Some((0.0, 2.2, 0.0)),
+                    });
+                }
+            }
+            Action::OpenContainer(entity_id) => {
+                // Verify a ContainerPanel exists in the scene.
+                if scene_state.container_panel_q.iter().next().is_none() {
+                    warn!("Action::OpenContainer: no ContainerPanel in scene — add a ContainerPanel UI node");
+                    continue;
+                }
+
+                // Resolve spawn ID → ECS entity.
+                let entity_opt = spawn_params.registry.entities.get(&entity_id).copied();
+                let Some(container_entity) = entity_opt else {
+                    warn!("Action::OpenContainer: entity '{}' not found", entity_id);
+                    continue;
+                };
+
+                // Verify it has an Inventory component.
+                if scene_state.container_inventories.get(container_entity).is_err() {
+                    warn!("Action::OpenContainer: entity '{}' has no Inventory component", entity_id);
+                    continue;
+                }
+
+                // Show the container panel.
+                for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
+                    if *vis != Visibility::Visible { *vis = Visibility::Visible; }
+                }
+
+                scene_state.container_ui.active_container = Some(container_entity);
+                game_events.write(GameEvent::Trigger(format!("container.opened:{}", entity_id)));
+            }
+            Action::CloseContainer => {
+                for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
+                    if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                }
+                scene_state.container_ui.active_container = None;
+                game_events.write(GameEvent::Trigger("container.closed".to_string()));
+            }
+            Action::TakeAllFromContainer => {
+                use crate::capabilities::inventory::{add_to_slots, remove_from_slots};
+                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
+                let Some(container_entity) = scene_state.container_ui.active_container else {
+                    warn!("Action::TakeAllFromContainer: no container is open");
+                    continue;
+                };
+
+                // Collect all items from the container.
+                let items_to_transfer: Vec<(String, u32)> = {
+                    if let Ok((_, inv)) = scene_state.container_inventories.get(container_entity) {
+                        inv.slots.iter()
+                            .filter_map(|s| s.as_ref().map(|stack| (stack.item_key.clone(), stack.count)))
+                            .collect()
+                    } else {
+                        warn!("Action::TakeAllFromContainer: container entity has no Inventory");
+                        continue;
+                    }
+                };
+
+                if items_to_transfer.is_empty() { continue; }
+
+                // Remove from container; currency items go to their stat, others to inventory.
+                let mut any_transferred = false;
+                for (item_key, count) in &items_to_transfer {
+                    if let Ok((sid, mut inv)) = scene_state.container_inventories.get_mut(container_entity) {
+                        let removed = remove_from_slots(&mut inv.slots, item_key, *count);
+                        if removed > 0 {
+                            let currency_stat = catalog_ref
+                                .and_then(|c| c.items.get(item_key.as_str()))
+                                .and_then(|def| def.currency_stat.clone());
+                            if let Some(ref stat_key) = currency_stat {
+                                if let Some(stat) = scene_state.loaded_stats.0.get_mut(stat_key) {
+                                    let new_val = stat.apply_delta(removed as f32);
+                                    info!("TakeAllFromContainer: {} x{} → stat \"{}\" now {:.0}", item_key, removed, stat_key, new_val);
+                                } else {
+                                    warn!("TakeAllFromContainer: currency_stat {:?} not found in stats", stat_key);
+                                }
+                            } else {
+                                let player = &mut *scene_state.player_inventory;
+                                if player.max_slots == 0 { player.resize(20); }
+                                let max = player.max_slots;
+                                add_to_slots(&mut player.slots, max, item_key, removed, catalog_ref);
+                            }
+                            game_events.write(GameEvent::Trigger(
+                                format!("inventory.added:player:{}:{}", item_key, removed)));
+                            any_transferred = true;
+                            let _ = sid; // suppress unused warning
+                        }
+                    }
+                }
+
+                if any_transferred {
+                    // Resolve entity ID from registry for the event.
+                    let entity_id = spawn_params.registry.entities.iter()
+                        .find_map(|(id, &e)| if e == container_entity { Some(id.clone()) } else { None })
+                        .unwrap_or_default();
+                    game_events.write(GameEvent::Trigger(format!("container.looted:{}", entity_id)));
                 }
             }
         }

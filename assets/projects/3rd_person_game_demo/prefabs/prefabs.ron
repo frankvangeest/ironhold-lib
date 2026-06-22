@@ -327,6 +327,15 @@
       click_selectable: true,
       select_aim_height: 0.1,
       indicator_category: "neutral",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      trigger_zone: (radius: 2.5),
+      inventory: (
+        max_slots: 9,
+        initial_items: [
+          (item_key: "health_potion", count: 3),
+          (item_key: "mana_potion",   count: 2),
+        ],
+      ),
     ),
 
     "chest_02": (
@@ -334,6 +343,21 @@
       model: "chest_02",
       components: (
         tags: ["loot"],
+      ),
+      colliders: [
+        (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
+        (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
+      ],
+      click_selectable: true,
+      select_aim_height: 0.1,
+      indicator_category: "neutral",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      trigger_zone: (radius: 2.5),
+      inventory: (
+        max_slots: 9,
+        initial_items: [
+          (item_key: "gold_coin", count: 500),
+        ],
       ),
     ),
 
@@ -345,6 +369,31 @@
       select_aim_height: 0.1,
       components: (
         tags: [],
+      ),
+    ),
+
+    // Merchant NPC — press F to open the shop (OpenShop wired in state_machine.ron).
+    // Uses the same character model as the friendly NPC, with a gold material tint.
+    "merchant_vendor": (
+      kind: Actor,
+      model: "character_male",
+      material: "mat_silver",
+      animation_policy: "prefabs/animation/player_policy_human.ron",
+      click_selectable: true,
+      indicator_category: "friendly",
+      interactable: (
+        radius: 3.0,
+        hint_text: "Shop",
+      ),
+      trigger_zone: (radius: 3.5),
+      merchant: (
+        currency_stat: "gold",
+        stock: [
+          (item_key: "health_potion", buy_price: 10,  sell_price: 5),
+          (item_key: "mana_potion",   buy_price: 10,  sell_price: 5),
+          (item_key: "iron_sword",    buy_price: 80,  sell_price: 30),
+          (item_key: "old_key",       buy_price: 150, sell_price: 0, stock_count: 1),
+        ],
       ),
     ),
 

@@ -22,8 +22,10 @@ Four required touchpoints:
 4. Document in `docs/20_data_formats.md` (actions table), `docs/30_runtime_events_and_logic.md` (appendix), and `docs/STATUS.md` (Engine ABI)
 
 Entity-targeted actions (those that reference a spawn ID) need two additional touchpoints:
-5. `rewrite_self()` in `entity_fsm_interpreter` — must handle the `{self}` substitution in the new field
+5. `rewrite_self()` AND `rewrite_target()` in `message_interpreter.rs` — must handle `{self}`/`{target}` substitution in any field that holds a spawn ID
 6. `crates/ironhold_core/src/CLAUDE.md` — add to the `{self}` targets list
+
+**Recurring anti-pattern — substitution-enumeration trap:** `rewrite_self()` and `rewrite_target()` in `message_interpreter.rs` are explicit `match` over Action variants ending in `other => other`. Any new entity-targeted action that is NOT added to both match arms silently passes through with literal `"{self}"`/`"{target}"` strings — so it works from global rules.ron but is unreachable from behavior files and dialogue choices, with no compile error and no warning. Observed concretely in the inventory system (AddItem/RemoveItem/TransferItem/OpenShop all omitted). ALWAYS check both functions when reviewing a new entity-targeted action.
 
 ## Rules.ron vs state_machine.ron
 

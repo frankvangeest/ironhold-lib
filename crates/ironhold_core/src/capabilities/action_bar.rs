@@ -209,6 +209,8 @@ const DIGIT_KEYS: &[(KeyCode, &str)] = &[
     (KeyCode::Digit7, "7"),
     (KeyCode::Digit8, "8"),
     (KeyCode::Digit9, "9"),
+    // Letter slots — used for utility actions (e.g. "i" = inventory toggle).
+    (KeyCode::KeyI, "i"),
 ];
 
 fn action_needs_target(action: &Action) -> bool {
