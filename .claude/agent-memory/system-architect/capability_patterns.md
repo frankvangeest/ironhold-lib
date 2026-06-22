@@ -33,6 +33,16 @@ Entity-targeted actions (those that reference a spawn ID) need two additional to
 - `state_machine.ron` — FSM with named states, entry/exit actions, and `when:` condition guards. Use when behavior depends on the current game state (e.g., playing vs paused, hp_low vs hp_ok).
 - Both can coexist: rules.ron fires unconditionally; state_machine.ron fires in context. The interpreter chain runs both: `message_interpreter_system` then `fsm_interpreter_system`.
 
+## Feature spec splitting
+
+When drafting a feature plan, **actively look for scope seams** and split into separate feature files when you find them. A seam exists when:
+- Part of the work is a small doc/config/default fix that can land independently (e.g. a "washed out icons" doc fix vs. a full shader feature).
+- Part requires schema/runtime changes and part is tools-only — they carry different risk profiles and review requirements.
+- Part is a hard dependency and part is a polish follow-up (e.g. "draggable windows" and "cursor grab icon").
+- The combined scope would be too large to review, play-test, and commit in one pass.
+
+When you split, say so explicitly in your response: name each part, explain the seam, and write a separate `.md` file per part. Do not silently combine them into one file.
+
 ## Schema stability rules
 
 - **Additive change** (new optional field with `#[serde(default)]`): backward-compatible. Existing RON files still parse.
