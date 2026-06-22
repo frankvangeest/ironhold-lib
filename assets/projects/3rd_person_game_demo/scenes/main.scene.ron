@@ -419,7 +419,7 @@
         (
           key: "5",
           icon_index: 27,  // Heart Heal
-          icon_color: (1.0, 0.80, 0.20, 1.0),
+          icon_color: (0.6, 0.0, 0.0, 1.0),
           do_actions: [
             ModifyStat(key: "player_health", delta: 25.0),
             ShowFloatingText(entity: "player_01", text: "+25 HP"),
@@ -432,7 +432,7 @@
           key: "i",
           icon: "icons_items",   // uses items sheet; index 56 = Coin Pouch (magic bag)
           icon_index: 56,
-          icon_color: (1.0, 0.85, 0.55, 1.0),
+          icon_color: (0.55, 0.35, 0.15, 1.0),   // light brown
           do_actions: [ ToggleInventory ],
           label: "Inventory",
         ),

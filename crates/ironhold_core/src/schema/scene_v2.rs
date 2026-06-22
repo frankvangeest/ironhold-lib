@@ -821,7 +821,7 @@ pub struct ActionSlotDef {
     /// Row 0 = top row; index `col + row * icon_cols`. Default: 0.
     #[serde(default)]
     pub icon_index: u32,
-    /// Linear RGBA tint multiplied onto the icon image. Omit for no tint; `(1,1,1,1)` is equivalent.
+    /// Linear RGBA replacement color for the icon. Replaces the icon's RGB with this color; texture alpha provides the shape. Omit to render the icon as-is.
     #[serde(default)]
     pub icon_color: Option<(f32, f32, f32, f32)>,
     /// Actions fired through the pipeline when the slot activates.

@@ -76,7 +76,7 @@ pub fn spawn_decal_system(
             duration_secs: queued.duration_secs,
             elapsed: 0.0,
             pulse_speed: queued.pulse_speed,
-            base_color: LinearRgba::new(r, g, b, a),
+            base_color: Color::srgba(r, g, b, a).to_linear(),
         };
         let mut cmd = commands.spawn((
             Mesh3d(mesh),

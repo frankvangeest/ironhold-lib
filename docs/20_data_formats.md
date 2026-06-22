@@ -31,6 +31,15 @@ The runtime prioritises **consistent, performant rendering across all supported 
 
 ---
 
+## Color conventions ✅
+
+All color tuples in RON files are **sRGB** — author them the same way you would in an image editor or CSS. The engine calls `Color::srgba()` / `Color::srgb()` on every color field it reads; Bevy linearises internally before the GPU. Do **not** pre-linearise values in RON — they will appear washed out.
+
+- **3-component** `(r, g, b)` — lights and primitive mesh `color` fields.
+- **4-component** `(r, g, b, a)` — UI, icon tints, stat bars, particles, and everything else.
+
+---
+
 ## Versioning ✅
 
 All top-level data files include `schema_version: <u32>`. The runtime validates this on load and rejects unsupported versions. Both v1 and v2 are accepted where noted.
@@ -99,7 +108,7 @@ Entry point for a project. References all other files.
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
-| `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default linear sRGB for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
+| `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
@@ -279,7 +288,7 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ambient` | `Option<(f32,f32,f32)>` | engine default | Ambient light colour as linear RGB |
+| `ambient` | `Option<(f32,f32,f32)>` | engine default | Ambient light colour as sRGB |
 | `ambient_brightness` | `Option<f32>` | `150.0` | Ambient brightness in lux. Without HDR colours clip at 1.0, so keep this low (50–300 is typical). |
 | `directional` | `Option<DirectionalLightDefV2>` | none | A single directional (sun) light |
 | `point_lights` | `Vec<PointLightDefV2>` | `[]` | Point (omnidirectional) lights |
@@ -290,7 +299,7 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `color` | `(f32,f32,f32)` | required | Linear RGB colour |
+| `color` | `(f32,f32,f32)` | required | sRGB colour |
 | `intensity` | `f32` | required | Illuminance in lux |
 | `rotation_euler_deg` | `(f32,f32,f32)` | required | Euler angles in degrees (XYZ order) |
 | `shadows_enabled` | `bool` | `true` | Whether this light casts shadows |
@@ -303,7 +312,7 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `position` | `(f32,f32,f32)` | required | World-space position |
-| `color` | `(f32,f32,f32)` | `(1,1,1)` | Linear RGB colour |
+| `color` | `(f32,f32,f32)` | `(1,1,1)` | sRGB colour |
 | `intensity` | `f32` | `800.0` | Luminous power in lumens (≈ a bright 60 W bulb) |
 | `radius` | `f32` | `0.0` | Sphere radius for specular highlights |
 | `range` | `f32` | `20.0` | Maximum reach in world units |
@@ -480,7 +489,7 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
-| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as linear RGBA |
+| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
 
@@ -515,7 +524,7 @@ The targeting variables update on every selection change (click, Tab, or `SetTar
 | `id` | `String` | required | Unique identifier within the scene |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
-| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill colour as linear RGBA |
+| `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill colour as sRGB RGBA |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
@@ -531,7 +540,7 @@ A bar that fills proportionally to `current / max` of a named stat from `LoadedS
 | `orientation` | `BarOrientation` | `Horizontal` | `Horizontal` (left→right) or `Vertical` (bottom→top) |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(200.0, 20.0)` | Width and height in pixels |
-| `fill_color` | `(f32,f32,f32,f32)` | red | Colour of the filled portion as linear RGBA |
+| `fill_color` | `(f32,f32,f32,f32)` | red | Colour of the filled portion as sRGB RGBA |
 | `background_color` | `(f32,f32,f32,f32)` | dark red | Colour of the unfilled portion |
 | `show_value` | `bool` | `false` | Overlay `"current / max"` text centred on the bar |
 | `color_bands` | `Vec<ColorBand>` | `[]` | Threshold-based colour overrides. Each band: `( above_percent: f32, color: (r,g,b,a) )`. The highest `above_percent` ≤ current fill ratio is selected. |
@@ -603,7 +612,7 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 | `position` | `(f32, f32)` | `(0.0, 0.0)` | Top-left corner in pixels (always absolute) |
 | `slot_size` | `f32` | `64.0` | Width and height of each slot square in pixels |
 | `slot_gap` | `f32` | `4.0` | Pixel gap between slots |
-| `background_color` | `(f32,f32,f32,f32)` | near-black 70 % | Bar container background as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | near-black 70 % | Bar container background as sRGB RGBA |
 | `icon_sheet` | `Option<String>` | `None` | Catalog texture key for a shared icon atlas (4×4 grid by default) |
 | `icon_cols` | `u32` | `4` | Columns in the icon atlas grid |
 | `icon_rows` | `u32` | `4` | Rows in the icon atlas grid |
@@ -617,11 +626,18 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 | `key` | `String` | required | Key that activates the slot: `"1"` through `"9"` |
 | `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
-| `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | Linear RGBA tint multiplied onto the icon image. Omit for no tint |
+| `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. White pixels show the exact specified color; dark pixels stay dark. Omit to render the icon untinted (see note below) |
 | `do_actions` | `Vec<Action>` | required | Actions fired through the pipeline on activation |
 | `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again |
 | `cost` | `Option<SlotCost>` | `None` | Stat cost checked and deducted at activation time |
-| `label` | `Option<String>` | `None` | Tooltip label (future use) |
+
+> **Icon colors are sRGB** — author values the same way you would in an image editor or CSS.
+> `(0.85, 0.15, 0.15, 1.0)` renders as the red you expect; no gamma conversion needed.
+>
+> The tint is **multiplicative**: the icon's pixel RGB is multiplied by `icon_color`.
+> For white-on-transparent icons (the most common atlas style), white × color = exact color —
+> so the specified value is exactly what appears. Dark outlines stay dark; the icon's shading is preserved.
+> For icons with non-white art, those pixels are tinted proportionally.
 
 **`SlotCost` fields:**
 
@@ -655,7 +671,7 @@ ActionBar((
     (
       key: "1",
       icon_index: 0,
-      icon_color: (0.3, 0.5, 1.0, 1.0),  // blue tint; omit for no tint
+      icon_color: (0.3, 0.5, 1.0, 1.0),  // blue; omit to render icon as-is
       do_actions: [
         PlayAnimationOn(target: "player_01", clip: "heal"),
         SpawnEffect(key: "heal_burst", entity: "player_01"),
@@ -694,7 +710,7 @@ Each scene that needs NPC dialogue must include exactly one `DialoguePanel`. If 
 | `id` | `String` | required | Unique identifier within the scene |
 | `position` | `(f32, f32)` | `(0, 0)` | Top-left corner in pixels (always absolute) |
 | `size` | `(f32, f32)` | `(1200.0, 200.0)` | Width and height in pixels |
-| `background_color` | `(f32,f32,f32,f32)` | dark blue-black | Panel background as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | dark blue-black | Panel background as sRGB RGBA |
 | `speaker_font_size` | `f32` | `18.0` | Font size for the speaker name label |
 | `body_font_size` | `f32` | `15.0` | Font size for the body text |
 | `choice_font_size` | `f32` | `13.0` | Font size for each choice button label |
@@ -726,7 +742,7 @@ When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon
 | `rows` | `u32` | `4` | Number of slot rows |
 | `slot_size` | `f32` | `48.0` | Width and height of each slot in pixels |
 | `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
-| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as sRGB RGBA |
 | `font_size` | `f32` | `11.0` | Font size for slot count labels |
 | `icon_sheet` | `Option<String>` | `None` | Catalog texture key for the item icon atlas (default sheet; items can override per-item with `ItemDef.icon_sheet`) |
 | `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
@@ -760,7 +776,7 @@ A scrollable list of merchant stock entries. Always positioned absolutely. Hidde
 | `id` | `String` | required | Unique identifier within the scene |
 | `position` | `(f32, f32)` | required | Top-left corner in pixels (always absolute) |
 | `size` | `(f32, f32)` | `(320.0, 400.0)` | Width and height of the panel in pixels |
-| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as sRGB RGBA |
 | `font_size` | `f32` | `13.0` | Font size for stock entry labels |
 | `initially_hidden` | `bool` | `true` | Whether the panel starts hidden |
 
@@ -786,7 +802,7 @@ A slot grid that displays a container entity's `Inventory` (chest, crate, etc.).
 | `rows` | `u32` | `3` | Slot grid rows |
 | `slot_size` | `f32` | `52.0` | Size of each slot square in pixels |
 | `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
-| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as linear RGBA |
+| `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as sRGB RGBA |
 | `font_size` | `f32` | `11.0` | Font size for count labels inside slots |
 | `icon_sheet` | `Option<String>` | `None` | Catalog key for the item icon atlas |
 | `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
@@ -813,7 +829,7 @@ When a scene includes a `ui_panel` block, all `ui` elements are arranged in a ve
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `background_color` | `(f32,f32,f32,f32)` | `(0.1,0.1,0.1,0.95)` | Background colour as linear RGBA (0.0–1.0) |
+| `background_color` | `(f32,f32,f32,f32)` | `(0.1,0.1,0.1,0.95)` | Background colour as sRGB RGBA (0.0–1.0) |
 | `padding` | `f32` | `20.0` | Inner padding around panel contents in pixels |
 | `gap` | `f32` | `12.0` | Vertical gap between child elements in pixels |
 | `width` | `Option<f32>` | `None` | Fixed panel width in pixels; auto-sized when omitted |
@@ -2436,7 +2452,7 @@ A numeric text label (e.g. `"85 / 100"`).
 | `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
 | `offset` | `(f32,f32,f32)` | `(0, 2.5, 0)` | World-space offset from the entity's origin in metres |
 | `font_size` | `f32` | `16.0` | Screen-space font size in pixels |
-| `color` | `(f32,f32,f32,f32)` | `(0.2, 0.9, 0.2, 1.0)` | Linear RGBA text colour |
+| `color` | `(f32,f32,f32,f32)` | `(0.2, 0.9, 0.2, 1.0)` | sRGB RGBA text colour |
 | `show_max` | `bool` | `true` | When `true`, shows `"current / max"`; when `false`, shows `"current"` |
 
 ```ron
@@ -2558,8 +2574,8 @@ Optional block in `{name}.project.ron` that controls how `Action::ShowDamagePopu
 | `duration_secs` | `f32` | `1.2` | Seconds the popup is visible before fully fading |
 | `rise_speed` | `f32` | `1.5` | Metres per second the label rises during its lifetime |
 | `spawn_offset` | `(f32,f32,f32)` | `(0.0, 1.2, 0.0)` | World-space offset from the entity origin where the popup appears. Increase Y for tall entities. |
-| `damage_color` | `(f32,f32,f32,f32)` | `(0.95, 0.25, 0.20, 1.0)` | Linear RGBA colour for negative amounts (damage) |
-| `heal_color` | `(f32,f32,f32,f32)` | `(0.20, 0.90, 0.20, 1.0)` | Linear RGBA colour for positive amounts (healing) |
+| `damage_color` | `(f32,f32,f32,f32)` | `(0.95, 0.25, 0.20, 1.0)` | sRGB RGBA colour for negative amounts (damage) |
+| `heal_color` | `(f32,f32,f32,f32)` | `(0.20, 0.90, 0.20, 1.0)` | sRGB RGBA colour for positive amounts (healing) |
 
 ---
 
@@ -2614,10 +2630,12 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | `display_name` | `String` | ✅ | Human-readable name shown in tooltip / shop panel |
 | `icon_sheet` | `Option<String>` | `null` | Catalog texture key for the icon atlas this item's icon is on. Overrides the panel's `icon_sheet` default. Omit if the item is on the panel's default sheet. All sheets must share the panel's `icon_cols/rows/cell_size`. |
 | `icon_index` | `u32` | `0` | Zero-based index into the icon atlas (row-major: `col + row * icon_cols`) |
+| `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. See the tint note in the Action Bar section above |
 | `stackable` | `bool` | `true` | Whether multiple units stack in a single slot |
 | `max_stack` | `u32` | `99` | Maximum count per stack when `stackable: true` |
 | `weight` | `f32` | `1.0` | Weight in game units (for future encumbrance mechanics) |
 | `tags` | `Vec<String>` | `[]` | Arbitrary designer tags (e.g. `["consumable", "quest"]`) |
+| `currency_stat` | `Option<String>` | `None` | When set, looting this item adds its count to the named global stat instead of occupying an inventory slot. Use for currency (e.g. `"gold"`). |
 
 **`InventoryContainerDef` fields (on `PrefabDef.inventory`):**
 

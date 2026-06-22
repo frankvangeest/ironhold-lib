@@ -22,6 +22,24 @@ Every RON file must start with `schema_version`. Use these values:
 
 ---
 
+## Color conventions
+
+All color tuples in RON files are **sRGB** — author them the same way you would in an image editor or CSS.
+
+```ron
+// sRGB — what you see is what you get
+fill_color:   (0.85, 0.15, 0.15, 1.0)   // rich red
+icon_color:   (0.90, 0.75, 0.40, 1.0)   // brass
+background_color: (0.08, 0.08, 0.10, 0.9)
+```
+
+- **3-component colors** `(r, g, b)` — used for lights and primitive mesh colors.
+- **4-component colors** `(r, g, b, a)` — used for UI colors, icon tints, stat bars, particles, etc.
+
+The engine calls `Color::srgba()` / `Color::srgb()` when it reads these values; Bevy linearises internally before sending to the GPU. Do **not** pre-linearise values in RON — they will look washed out.
+
+---
+
 ## Action RON syntax — struct vs tuple variants
 
 **This is the most common source of parse errors.** Whether an action uses named fields or positional args depends on how it is declared in `schema/actions.rs`.

@@ -44,8 +44,8 @@ pub struct ItemDef {
     /// Zero-based index into the icon atlas (row-major): `col + row * icon_cols`. Default: 0.
     #[serde(default)]
     pub icon_index: u32,
-    /// Linear RGBA color multiplied onto the icon. Omit for no tint (defaults to white).
-    /// Use this to re-color a greyscale or lightly-colored icon (e.g. `(1.0, 0.3, 0.3, 1.0)` for red).
+    /// Linear RGBA replacement color for the icon. Replaces the icon's RGB with this color; texture alpha provides the shape.
+    /// Omit to render the icon as-is. Set to e.g. `(1.0, 0.3, 0.3, 1.0)` for red.
     #[serde(default)]
     pub icon_color: Option<(f32, f32, f32, f32)>,
     /// When true, multiple units stack in one inventory slot. Default: true.

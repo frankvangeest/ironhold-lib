@@ -70,6 +70,10 @@ Do not add a general condition system to the interpreter unless the above patter
 No assets should be hardcoded in the runtime. All assets should be defined in the `assets/projects/{name}/assets.ron` file. Audio catalog keys (not file paths) are passed to `Action::PlaySound`; the executor resolves the path.
 When making code changes to the ironhold_core make sure we are using the code workflow properly.
 
+### Color field convention
+
+All color tuples read from RON must be passed to `Color::srgba(r, g, b, a)` or `Color::srgb(r, g, b)` — **never** `Color::linear_rgba` or `Color::linear_rgb`. RON color values are authored as sRGB (same as CSS / image editors); Bevy linearises internally. Using `linear_rgba` on designer-authored values makes colors appear washed out. This applies to every color field: UI backgrounds, icon tints, stat bars, particles, lights, primitives — all of them.
+
 ---
 
 ## Composite and nested prefab spawning

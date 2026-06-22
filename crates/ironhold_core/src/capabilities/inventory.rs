@@ -243,18 +243,13 @@ pub fn inventory_ui_system(
         if text.0 != label { text.0 = label; }
     }
 
-    // Update icon image, atlas index, and visibility for each slot.
-    // Resolves per-item sheet key (ItemDef.icon_sheet) → panel default → skip icons.
+    // Update icon nodes. When an item has icon_color, apply it as a multiplicative tint
+    // (sRGB values — Bevy linearises internally). When no icon_color, tint is white (no change).
     for (marker, mut img_node, mut vis) in icon_q.iter_mut() {
         match player_inv.slots.get(marker.slot_index).and_then(|s| s.as_ref()) {
             Some(stack) => {
                 let item_def = catalog.0.as_ref().and_then(|c| c.items.get(&stack.item_key));
                 let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
-                let icon_color = item_def
-                    .and_then(|d| d.icon_color)
-                    .map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a))
-                    .unwrap_or(Color::WHITE);
-                // Per-item sheet key overrides panel default.
                 let sheet_key = item_def
                     .and_then(|d| d.icon_sheet.as_deref())
                     .or(inv_ui.panel_icon_sheet.as_deref());
@@ -267,8 +262,11 @@ pub fn inventory_ui_system(
                         }
                     }
                 }
-                if img_node.color != icon_color { img_node.color = icon_color; }
-                // Inherited (not Visible) so the parent panel's Hidden state propagates down.
+                let tint = match item_def.and_then(|d| d.icon_color) {
+                    Some((r, g, b, a)) => Color::srgba(r, g, b, a),
+                    None => Color::WHITE,
+                };
+                if img_node.color != tint { img_node.color = tint; }
                 if *vis != Visibility::Inherited { *vis = Visibility::Inherited; }
             }
             None => {
@@ -276,7 +274,6 @@ pub fn inventory_ui_system(
             }
         }
     }
-
 }
 
 /// Update ContainerPanel slot text and icon nodes to reflect the active container's Inventory.
@@ -311,16 +308,12 @@ pub fn container_ui_system(
         }
     }
 
-    // Update icon visibility and atlas index for each slot.
+    // Update icon nodes with sRGB tint when item has icon_color; white otherwise.
     for (marker, mut img_node, mut vis) in icon_q.iter_mut() {
         match inv.slots.get(marker.slot_index).and_then(|s| s.as_ref()) {
             Some(stack) => {
                 let item_def = catalog.0.as_ref().and_then(|c| c.items.get(&stack.item_key));
                 let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
-                let icon_color = item_def
-                    .and_then(|d| d.icon_color)
-                    .map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a))
-                    .unwrap_or(Color::WHITE);
                 let sheet_key = item_def
                     .and_then(|d| d.icon_sheet.as_deref())
                     .or(container_ui.panel_icon_sheet.as_deref());
@@ -333,7 +326,11 @@ pub fn container_ui_system(
                         }
                     }
                 }
-                if img_node.color != icon_color { img_node.color = icon_color; }
+                let tint = match item_def.and_then(|d| d.icon_color) {
+                    Some((r, g, b, a)) => Color::srgba(r, g, b, a),
+                    None => Color::WHITE,
+                };
+                if img_node.color != tint { img_node.color = tint; }
                 if *vis != Visibility::Inherited { *vis = Visibility::Inherited; }
             }
             None => {

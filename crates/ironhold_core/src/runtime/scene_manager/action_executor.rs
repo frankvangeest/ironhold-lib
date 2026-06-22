@@ -963,7 +963,7 @@ pub fn action_executor_system(
                     let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
                     let icon_color = item_def
                         .and_then(|d| d.icon_color)
-                        .map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a))
+                        .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
                         .unwrap_or(Color::WHITE);
                     let sheet_key: Option<String> = item_def
                         .and_then(|d| d.icon_sheet.clone())

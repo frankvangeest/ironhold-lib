@@ -1728,7 +1728,6 @@ fn spawn_ui_element_node(
             bar_node.padding = UiRect::all(Val::Px(4.0));
             bar_node.align_items = AlignItems::Center;
             // Build one shared atlas layout for the whole bar (all slots share the same grid).
-            // Per-slot overrides reuse the same layout since they use the same icon_cell_size.
             let shared_layout: Option<Handle<TextureAtlasLayout>> = atlas_layouts.as_mut()
                 .map(|layouts| layouts.add(TextureAtlasLayout::from_grid(
                     UVec2::splat(bar.icon_cell_size),
@@ -1738,8 +1737,7 @@ fn spawn_ui_element_node(
                     None,
                 )));
 
-            // Pre-resolve (texture, layout) for every slot before entering closures so we
-            // don't need atlas_layouts captured mutably inside with_children.
+            // Pre-resolve (texture, layout) for every slot before entering the with_children closure.
             let slot_atlases: Vec<Option<(Handle<Image>, Handle<TextureAtlasLayout>)>> =
                 bar.slots.iter().map(|slot| {
                     let sheet_key = if !slot.icon.is_empty() {
@@ -1766,7 +1764,10 @@ fn spawn_ui_element_node(
                     for (slot, resolved_atlas) in slots.iter().zip(slot_atlases) {
                         let key = slot.key.clone();
                         let icon_index = slot.icon_index as usize;
-                        let icon_color = slot.icon_color.map(|(r, g, b, a)| Color::linear_rgba(r, g, b, a));
+                        let icon_tint = match slot.icon_color {
+                            Some((r, g, b, a)) => Color::srgba(r, g, b, a),
+                            None => Color::WHITE,
+                        };
                         parent
                             .spawn((
                                 Name::new(format!("Slot:{}", key)),
@@ -1791,7 +1792,8 @@ fn spawn_ui_element_node(
                                 },
                             ))
                             .with_children(|parent| {
-                                // Icon image — rendered first (bottom z-layer).
+                                // Icon — rendered first (bottom z-layer).
+                                // icon_color is applied as a multiplicative sRGB tint via ImageNode.color.
                                 if let Some((tex, layout)) = resolved_atlas {
                                     parent.spawn((
                                         Name::new("Icon"),
@@ -1809,7 +1811,7 @@ fn spawn_ui_element_node(
                                                 layout,
                                                 index: icon_index,
                                             }),
-                                            color: icon_color.unwrap_or(Color::WHITE),
+                                            color: icon_tint,
                                             ..default()
                                         },
                                     ));
@@ -2000,7 +2002,7 @@ fn spawn_ui_element_node(
                                     InventorySlotMarker { slot_index: idx },
                                 ));
                                 slot_cmd.with_children(|slot_parent| {
-                                    // Icon — spawned first so label renders on top.
+                                    // Normal icon (ImageNode) — shown when item has no icon_color.
                                     if let Some((ref tex, ref layout)) = slot_atlas {
                                         let t = tex.clone();
                                         let l = layout.clone();
@@ -2027,7 +2029,7 @@ fn spawn_ui_element_node(
                                             InventorySlotIconMarker { slot_index: idx },
                                         ));
                                     }
-                                    // Label — spawned after icon so it renders on top.
+                                    // Label — spawned after icons so it renders on top.
                                     slot_parent.spawn((
                                         Name::new("SlotLabel"),
                                         Node {
@@ -2303,10 +2305,11 @@ fn spawn_ui_element_node(
                                     TextFont { font_size, ..default() },
                                     TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
                                 ));
-                                if let Some((ref tex, ref layout)) = slot_atlas {
-                                    let t = tex.clone();
-                                    let l = layout.clone();
-                                    slot_cmd.with_children(|slot_parent| {
+                                slot_cmd.with_children(|slot_parent| {
+                                    // Normal icon (ImageNode) — shown when item has no icon_color.
+                                    if let Some((ref tex, ref layout)) = slot_atlas {
+                                        let t = tex.clone();
+                                        let l = layout.clone();
                                         slot_parent.spawn((
                                             Name::new("SlotIcon"),
                                             Node {
@@ -2327,8 +2330,8 @@ fn spawn_ui_element_node(
                                             Visibility::Hidden,
                                             ContainerSlotIconMarker { slot_index: idx },
                                         ));
-                                    });
-                                }
+                                    }
+                                });
                             }
                         }
                     });
