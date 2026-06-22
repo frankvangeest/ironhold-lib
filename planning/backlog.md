@@ -19,6 +19,8 @@
 
 - [x] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop`/`CloseShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). `currency_stat` on `ItemDef` routes looted coins to a global stat instead of inventory slots. Cross icon close buttons, shop item icons, dance fix, container spawn point. See `planning/features/done/inventory_item_system.md`
 
+- [ ] **Icon washed-out fix** — doc clarification that icon colors are linear RGBA (not sRGB); optional slot background darkening to improve white-icon contrast. No shader, no schema change. See `planning/features/icon_washed_out_fix.md`
+
 ---
 
 ## Bugs
