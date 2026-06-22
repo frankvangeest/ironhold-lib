@@ -11,24 +11,14 @@
 
 ## Active
 
-- [x] **Camera shake** — `Action::CameraShake { duration_secs, intensity }` applies a procedural position shake to the active orbit camera; wired to player-hit events in `3rd_person_game_demo` (snake 0.08, spider 0.10, zombie 0.13 intensity). See `planning/features/done/camera_shake.md`
-
-- [x] **NPC aggro-on-hit + Investigating state** — relay system populates `NpcHitQueue(HashMap<String,Vec3>)`; `Investigating` state walks toward attacker's last-known position at patrol speed; kiting works (each hit resets the timer); configurable `investigate_timeout_secs` per prefab (snake 15 s, zombie 20 s, default 10 s); `npc.investigating` / `npc.investigation_failed` events. See `planning/features/npc_aggro_on_hit.md`.
-
-- [x] **Dialogue system** — RON-defined conversation trees; standalone `.dialogue.ron` asset files; `DialoguePanel` UI node in scene RON; `StartDialogue` / `EndDialogue` / `AdvanceDialogue` actions; `{self}` / `{target}` substitution; branching via `jump_to` on choices; `do_actions` on choices; `dialogue.started/node/choice/ended` events; auto-wired to `entity.interacted` when `dialogue` set on prefab; demo via friendly NPC in `3rd_person_game_demo`. See `planning/features/done/dialogue_system.md`
-
-- [x] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource (persists across scenes); `Inventory` component for containers; `AddItem`/`RemoveItem`/`TransferItem`/`OpenInventory`/`CloseInventory`/`OpenShop`/`CloseShop` actions; `InventoryPanel`+`ShopPanel` UI nodes; currency via existing stat system; `MerchantDef` inline on `PrefabDef`; `PrefabKey` component added at spawn time (used by quest + loot). `currency_stat` on `ItemDef` routes looted coins to a global stat instead of inventory slots. Cross icon close buttons, shop item icons, dance fix, container spawn point. See `planning/features/done/inventory_item_system.md`
-
-- [x] **Icon washed-out fix** — established sRGB as the universal color convention for all RON color tuples; fixed `Color::linear_rgba` misuse in shop icon spawn and decal `FadingDecal` base color storage; updated docs (`20_data_formats.md`, `assets/projects/CLAUDE.md`, `ironhold_core/src/CLAUDE.md`) to state the rule. See `planning/features/done/icon_washed_out_fix.md`
+_(nothing active — pick the next item from Queued to start)_
 
 ---
 
 ## Bugs
 
-- [x] **3rd-person orbit camera — sky shows tan ground on steep pan** — reduced `max_pitch` from 1.5 → 0.9 rad (86° → 52°) in `player.rs` default and `entity_spawner.rs` `default_camera_config`; also removed redundant fallback camera spawn when `scene.spawn_points` is non-empty (main scene's FSM already spawns the orbit camera). Root cause: no skybox, so the large 100×100 sand plane filled the entire view at near-vertical camera angles. A proper sky/atmosphere is tracked in `claude_suggestions.md`.
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
 - [ ] **composite prefab child positions wrong with mixed-sign translation** — in `loot_display` (composite prefab with model+children), children spawn at incorrect world positions when the scene entity has a translation like `(-7.0, 0.0, 4.0)`, but look correct at `(7.0, 0.0, 4.0)` or `(-7.0, 0.0, -4.0)`. Bug only manifests when X and Z have opposite signs. Suspected cause: sign handling in the composite branch of `scene_loader.rs` when accumulating parent+child transforms — possibly a negation or component-wise multiply rather than a proper matrix/quat composition for the child offset. Reproduce: 3rd_person_game_demo, observe `loot_display_01` at `(-7.0, 0.0, 4.0)`.
-- [x] **RON color tuples interpreted as linear in shop and decal systems** — fixed in icon_washed_out_fix: `Color::srgba` now used at both sites; decal stores `.to_linear()` in `FadingDecal.base_color`.
 
 ---
 
@@ -47,12 +37,8 @@
 ### Camera
 - [ ] **Camera modes** — unified data-driven camera system: `Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam` modes all tunable from RON; `SetCameraMode` action for runtime switching with optional eased transitions; FOV interpolation; backwards-compatible with existing `camera:` / `flycam:` prefab fields. See `planning/features/camera_modes.md`
 
-### Animation
-- [x] **Multi-source animations (animation packs + shared-rig mesh variants)** — Done. See Active above.
-
 ### Gameplay & Environment
 
-_(moved to Active)_
 - [ ] **Status effect icon display** — HUD and/or above-entity icon strip showing active buffs and debuffs; icons are asset catalog texture keys declared on modifier templates; strip updates via change detection on `ActiveModifiers`; designer controls position (HUD panel vs. world-space above entity) and max visible icons in scene RON. See `planning/features/status_effect_icons.md`
 - [ ] **Layered icon UI node** — new `LayeredIcon` UI node type; each layer declares a texture key, tint color (r,g,b,a), and opacity; layers are alpha-composited in declaration order (bottom → top); v1 alpha-stack only — additive blend mode deferred to a future `blend:` field per layer; feeds action bar slot icons and status effect icon strips directly.
 - [ ] **AoE ground targeting** — `TargetingMode: GroundAoE(radius)` on skill action bar slots; pressing the slot enters a placement mode showing a circle decal under the cursor; confirming fires the slot's `do_actions` with `{aoe_position}` substitution; cancelling (right-click / Escape) exits without firing. See `planning/features/aoe_ground_targeting.md` _Hard dep: Skill action bar._
@@ -63,7 +49,6 @@ _(moved to Active)_
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
 - [ ] **World-space icon stat bar** — row of per-cell sprites (hearts, shields, or any catalog icon) above entities, `WorldIconBarDef` schema field on `PrefabDef`; full cells show filled icon, empty cells show depleted icon; requires sprite-sheet or paired asset catalog entries; design needed (asset reference format, partial-cell handling)
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
-_(moved to Active)_
 - [ ] **Equipment system** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion; visual mesh attachment deferred to v2. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
 - [ ] **Quest system** — `quests/quests.ron` catalog; `QuestLog` resource (persists across scenes); objectives: `KillCount` (via `PrefabKey`+`entity.died`), `Collect`, `ReachLocation`, `TalkTo`, `Custom`; `auto_complete` flag; reward types: `GiveItem`, `GiveStat`, `UnlockQuest`, `RunActions`; `quest_giver` on `PrefabDef`; `QuestTracker` UI node; nameplate indicator patch. See `planning/features/quest_system.md` _Deps: Inventory, Dialogue, Save/load (soft); Stat templates (shipped)._
 - [ ] **Loot system** — `loot/loot_tables.ron` catalog; `RollEach`/`RollOne` strategies; `loot_table` on `PrefabDef`; `LootTableRef` component; `RollLootTable(entity)`/`PickupLoot`/`ClearLootBag` actions; designer-wired via behavior file; `auto_loot` on scene RON; `ItemQuality` for icon border tinting; nested tables deferred. See `planning/features/loot_system.md` _Deps: Inventory (hard); Quest, Equipment (soft)._
@@ -202,6 +187,11 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Icon washed-out fix** — sRGB established as universal RON color convention; `Color::linear_rgba` fixed in shop icon spawn and decal base color storage; 14 doc labels corrected. See `planning/features/done/icon_washed_out_fix.md`
+- [x] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource; `InventoryPanel`/`ShopPanel`/`ContainerPanel` UI nodes; `OpenShop`/`BuyItem`/`OpenContainer`/`TakeAllFromContainer` actions; `MerchantDef`; currency via stat system. See `planning/features/done/inventory_item_system.md`
+- [x] **Dialogue system** — `.dialogue.ron` assets; `DialoguePanel` UI node; `StartDialogue`/`EndDialogue`/`AdvanceDialogue` actions; branching choices; `{self}`/`{target}` substitution; auto-wired to `entity.interacted`. See `planning/features/done/dialogue_system.md`
+- [x] **NPC aggro-on-hit + Investigating state** — `NpcHitQueue` relay; `Investigating` FSM state walks to attacker's last-known position; `investigate_timeout_secs` per prefab; `npc.investigating`/`npc.investigation_failed` events. See `planning/features/done/npc_aggro_on_hit.md`
+- [x] **Camera shake** — `Action::CameraShake { duration_secs, intensity }`; procedural position shake on orbit camera; wired to player-hit events in `3rd_person_game_demo`. See `planning/features/done/camera_shake.md`
 - [x] **Spider NPC behavior polish** — death animation holds last frame (no `duration`, `stop_action: "npc_revive"`); respawn clears death pose via `PlayAnimationOn(clip: "npc_revive")` in "alive" entry_actions; spider stops instantly on death (direct `StatMap` health check in `npc_behavior_system` eliminates 2-frame relay delay); patrol walk/idle/waypoint-pause working; attack override fires only on player reach; corpse hide/respawn timing designer-configurable via `EmitEventAfterDelay` in behavior RON.
 - [x] **Per-prefab `select_aim_height` for click targeting** — `select_aim_height: f32` (default 1.0) on `PrefabDef`; `SelectAimHeight(f32)` component; fixes snake/spider click hitboxes floating 0.6–1 m above the visible body; orc/zombie unaffected (no field set → default 1.0)
 - [x] **Target indicator color by category and per-prefab override** — layered color resolution: prefab `indicator_color` (direct RGBA) > `indicator_category` key in scene `named_colors` > scene `color` fallback; material memo keyed by resolved colour bits — `d945ea9`
