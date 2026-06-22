@@ -15,3 +15,4 @@
 - [NPC state machine design](npc_state_machine_design.md) — NpcState is runtime-only (not schema); Investigating-state split from Chase lets you delete the dist_opt.or hack; centralize hit-handling
 - [Camera architecture](camera_architecture.md) — OrbitCamera/FlyCamera siloed; camera systems run in Update (not FixedUpdate); shake must be additive AFTER camera_orbit_system; camera_modes will unify both
 - [Dialogue system](dialogue_system.md) — catalog-vs-structural-file rule; auto-wire seam; dual condition system; auto-advance-only-when-no-choices invariant; portrait must use catalog
+- [UI hover & tooltip](ui_hover_and_tooltip.md) — Interaction needs Button; inventory slots lack it; cursor/viewport via PrimaryWindow (WASM-safe); UI Camera2d order 1000 + GlobalZIndex; ActionSlotDef.label is unrendered "future use"
