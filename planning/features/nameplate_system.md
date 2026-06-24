@@ -7,27 +7,35 @@ _Planned at: `4c47cc6` (2026-06-02)_
 
 > ## Pre-implementation checklist
 >
-> - [ ] **Decide: nameplate widget composition.** The nameplate combines two `Text2d` entities (name line + health bar line) parented under an anchor entity attached to the world entity. Alternatively, both lines can share one `Text2d` with newline separation. Recommendation: **two separate `Text2d` entities** — they have different colors, different font sizes, and different update frequencies. A shared `Text2d` with sections is also valid in Bevy 0.18 (`TextLayout`), but separate entities are simpler and match the pattern used by `world_stat_bar`.
+> - [x] **Decide: nameplate widget composition.** Two `Text2d` entities for the name line; pixel bars are `Mesh2d` + `ColorMaterial2d` quads (background + foreground) per stat bar. All children parented under a billboard anchor entity.
 >
-> - [ ] **Decide: name source.** The nameplate needs a display string for the name line. Options: (a) a new `display_name: Option<String>` field on `PrefabDef`; (b) use the prefab key as the display name; (c) use the spawn ID. Recommendation: **`display_name: Option<String>` on `PrefabDef`**, falling back to the prefab key (not the spawn ID — spawn IDs contain counters like `orc_01`). This means adding one optional field to `PrefabDef`.
+> - [x] **Decide: name source.** `display_name: Option<String>` on `PrefabDef`, falling back to the prefab key (not spawn ID — spawn IDs contain counters like `orc_01`).
 >
-> - [ ] **Decide: health bar in nameplate — optional or always present.** The backlog says "name + health bar". But some entities (props, collectibles) have no `health` stat. Recommendation: bar is **conditional on `bar_stat_key` being set** in `NameplateOptionsDef`. When `bar_stat_key` is `None`, only the name line renders. Default for NPCs: `bar_stat_key: Some("{self}.health")`.
+> - [x] **Decide: health bar type.** Pixel bars using `Mesh2d` + `ColorMaterial2d` (two quads per bar: background full-width, foreground scaled by `current/max` fraction). **Not** ASCII Unicode blocks — those are for `world_stat_bar`. Bars render only if the entity has the named stat in its `StatMap`; missing stats skip the bar silently.
 >
-> - [ ] **Decide: distance reference point — camera or player.** Distance culling can measure from the active camera (what the player sees) or from the player entity (character position). Recommendation: **camera position** — it matches what the player would expect visually; a distant target could still be on-screen if the camera is orbiting.
+> - [x] **Decide: multiple stat bars.** `stat_bars: Vec<StatBarDef>` in `NameplateOptionsDef`. Each entry has `stat_key`, `fill_color`, `bg_color`. Bars stack vertically below the name with `bar_spacing` gap. For `3rd_person_game_demo`: health (green) + mana (blue) — mana bar only appears for entities that have the mana stat.
 >
-> - [ ] **Decide: faction filter v1 approximation.** Without the Group system, faction cannot be determined precisely. Use the same approximation as the targeting system: `HostileOnly` = `has NpcAgent`. Document this as a v1 stub to be replaced when Group system ships.
+> - [x] **Decide: player included.** Player entity gets a nameplate when `show_nameplates: true`. No player exclusion guard. The faction filter (`HostileOnly`, `All`, etc.) controls visibility, but player can be explicitly shown via `nameplate: Some(true)` on the player prefab.
 >
-> - [ ] **Confirm `world_stat_bar` and `nameplate` can coexist.** An entity could have both `world_stat_bar` (always visible, authored per-prefab) and `nameplate: true` (scene-managed, distance-culled). Both produce separate `Text2d` children. The nameplate offset should be 0.2–0.4 units above `world_stat_bar.offset` to avoid overlap. Verify at demo time with an entity that has both.
+> - [x] **Decide: drop shadow.** Name `Text2d` gets a `TextShadow` (Bevy 0.18) — same pattern used in floating combat text. Configurable via `text_shadow: bool` in `NameplateOptionsDef` (default `true`).
+>
+> - [x] **Decide: distance reference point — camera.** Camera position — matches what the player sees visually.
+>
+> - [x] **Decide: faction filter v1 approximation.** `HostileOnly` = `has NpcAgent`. Document as v1 stub; replaced when Group system ships.
+>
+> - [x] **Confirm `world_stat_bar` and `nameplate` can coexist.** Nameplate offset is 0.2–0.4 units above `world_stat_bar.offset` to avoid overlap. If both are present, set `world_stat_bar: None` on the prefab and use the nameplate bars alone.
 
 ---
 
 ## What
 
-A scene-managed system that renders a combined **name + health bar widget** above 3D entities, with automatic show/hide based on camera distance and faction stance.
+A scene-managed system that renders a combined **name + pixel health/mana bar widget** above 3D entities, with automatic show/hide based on camera distance and faction stance.
 
-Unlike `stat_label` and `world_stat_bar` (which are always-visible, per-prefab widgets), the nameplate system manages visibility globally — a single system scans all tagged entities each frame and toggles widget visibility based on scene-wide rules.
+Unlike `stat_label` and `world_stat_bar` (always-visible, per-prefab), the nameplate system manages visibility globally — a single system scans all tagged entities each frame and toggles widget visibility based on scene-wide rules.
 
-**Scene-wide opt-in** via `show_nameplates: true` in scene RON. Per-prefab override with `nameplate: true/false` on `PrefabDef`. Designer controls distance cutoff, faction filter, colors, and whether the bar appears.
+**Scene-wide opt-in** via `show_nameplates: true` in scene RON. Per-prefab override with `nameplate: true/false` on `PrefabDef`. Designer controls distance cutoff, faction filter, colors, drop shadow, and which stat bars appear.
+
+**Pixel bars** — colored mesh quads, not ASCII characters. Each stat bar entry is two quads: a background (full width) and a foreground (width × fraction). Missing stats render no bar.
 
 ---
 
@@ -38,8 +46,9 @@ In combat scenes with multiple enemies, always-visible `world_stat_bar` widgets 
 1. Showing nameplates only for entities the player needs awareness of (hostile, within range).
 2. Auto-hiding at distance so the screen isn't cluttered when many enemies exist.
 3. Providing entity names as context, distinct from raw stat values.
+4. Stacking health + mana bars so at-a-glance combat state is clear.
 
-Unblocks: targeted-entity nameplate highlighting (combine with targeting system — the selected entity's nameplate stays visible regardless of distance), dialogue name display, quest objective markers.
+Unblocks: targeted-entity nameplate highlighting, dialogue name display, quest objective markers.
 
 ---
 
@@ -51,11 +60,15 @@ Unblocks: targeted-entity nameplate highlighting (combine with targeting system 
 // scenes/dungeon.scene.ron
 (
     show_nameplates: true,           // NEW — enable the nameplate system for this scene
-    nameplate_options: (             // NEW — optional config block
-        faction_filter: HostileOnly,
-        max_distance: 20.0,
-        bar_stat_key: Some("{self}.health"),
-    ),
+    nameplate_options: Some((        // NEW — optional config block
+        faction_filter: All,
+        max_distance: 25.0,
+        text_shadow: true,
+        stat_bars: [
+            ( stat_key: "{self}.health", fill_color: (0.20, 0.85, 0.20, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+            ( stat_key: "{self}.mana",   fill_color: (0.20, 0.45, 0.90, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+        ],
+    )),
     // ... existing fields
 )
 ```
@@ -69,7 +82,7 @@ pub show_nameplates: bool,
 pub nameplate_options: Option<NameplateOptionsDef>,
 ```
 
-### New `NameplateOptionsDef` struct (`schema/scene_v2.rs`)
+### New `NameplateOptionsDef` and `StatBarDef` structs (`schema/scene_v2.rs`)
 
 ```rust
 #[derive(Deserialize, Debug, Clone)]
@@ -91,26 +104,42 @@ pub struct NameplateOptionsDef {
     #[serde(default = "default_nameplate_font_size")]
     pub name_font_size: f32,
 
-    /// Color of the name text as linear RGBA. Default: white.
+    /// Color of the name text as sRGB RGBA. Default: white.
     #[serde(default = "default_nameplate_name_color")]
     pub name_color: (f32, f32, f32, f32),
 
-    /// Stat key for the health bar below the name. `{self}` is substituted at spawn.
-    /// When `None`, no bar is rendered — name line only. Default: None.
+    /// Drop shadow on the name text. Default: true.
+    #[serde(default = "default_true")]
+    pub text_shadow: bool,
+
+    /// Pixel stat bars rendered below the name, in declaration order.
+    /// Each bar only appears if the entity has the named stat in its StatMap.
     #[serde(default)]
-    pub bar_stat_key: Option<String>,
+    pub stat_bars: Vec<StatBarDef>,
 
-    /// Width of the health bar in characters (ASCII block mode). Default: 10.
+    /// Width of each stat bar in screen pixels. Default: 100.0.
+    /// Same convention as `WorldStatBarStyle::Pixel { size: (w, h) }`.
     #[serde(default = "default_nameplate_bar_width")]
-    pub bar_width: u8,
+    pub bar_width: f32,
 
-    /// Health bar fill color as linear RGBA. Default: green.
-    #[serde(default = "default_nameplate_bar_fill")]
-    pub bar_fill_color: (f32, f32, f32, f32),
+    /// Height of each stat bar in screen pixels. Default: 6.0.
+    #[serde(default = "default_nameplate_bar_height")]
+    pub bar_height: f32,
 
-    /// Health bar background color as linear RGBA. Default: dark grey.
-    #[serde(default = "default_nameplate_bar_bg")]
-    pub bar_bg_color: (f32, f32, f32, f32),
+    /// Vertical gap between bars in screen pixels. Default: 9.0.
+    #[serde(default = "default_nameplate_bar_spacing")]
+    pub bar_spacing: f32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct StatBarDef {
+    /// Stat key — `{self}` is substituted with the entity's spawn ID at spawn time.
+    pub stat_key: String,
+    /// Fill color as sRGB RGBA.
+    pub fill_color: (f32, f32, f32, f32),
+    /// Background color as sRGB RGBA.
+    pub bg_color: (f32, f32, f32, f32),
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -135,10 +164,18 @@ pub enum NameplateFactionFilter {
     // ...
 )
 
+"player": (
+    kind: "actor",
+    model: "characters/player",
+    display_name: Some("Player"),        // NEW
+    nameplate: Some(true),               // NEW — show player nameplate when scene has show_nameplates
+    // ...
+)
+
 "chest_prop": (
     kind: "prop",
     model: "props/chest",
-    nameplate: Some(false),              // NEW — override: never show even if show_nameplates: true
+    nameplate: Some(false),              // NEW — override: never show
     // ...
 )
 ```
@@ -152,8 +189,8 @@ pub display_name: Option<String>,
 
 /// Nameplate visibility override.
 /// None = inherit scene `show_nameplates` + `nameplate_options.faction_filter`.
-/// Some(true) = always show a nameplate for this prefab (bypasses faction filter; respects max_distance).
-/// Some(false) = never show a nameplate for this prefab even if show_nameplates: true.
+/// Some(true) = always show (bypasses faction filter; respects max_distance).
+/// Some(false) = never show even if show_nameplates: true.
 #[serde(default)]
 pub nameplate: Option<bool>,
 ```
@@ -173,44 +210,52 @@ pub struct NameplateTag {
 }
 
 /// Entity ID of the nameplate anchor spawned as a child.
-/// Stored on the world entity so `nameplate_update_system` can find the bar text quickly.
 #[derive(Component)]
 pub struct NameplateAnchor(pub Entity);
-
-/// Marker on the health bar `Text2d` child of a nameplate anchor.
-/// Carries the resolved stat key for update queries.
-#[derive(Component)]
-pub struct NameplateBar {
-    pub stat_key: String,    // "{self}.health" resolved to e.g. "orc_01.health"
-    pub bar_width: u8,
-    pub fill_color: Color,
-    pub bg_color: Color,
-}
 ```
+
+Pixel bar fill entities use the **existing `WorldPixelBarFillMarker`** from `capabilities/stat_display.rs` — no new bar component or update system needed. The existing `world_pixel_bar_update_system` drives all bar fills (nameplate bars and `world_stat_bar` Pixel bars alike).
+
+### Pixel bar layout
+
+Each stat bar is two `Mesh2d` + `MeshMaterial2d<ColorMaterial>` entities, children of the nameplate anchor — the same structure `scene_loader.rs` already spawns for `WorldStatBarStyle::Pixel`:
+
+```
+WorldLabel anchor  (screen-space projected from world offset)
+  ├── Text2d           (name line, with optional TextShadow)
+  ├── bar_0_bg         (Mesh2d rectangle, full bar_width × bar_height px, bg_color)
+  ├── bar_0_fg         (Mesh2d 1.0×bar_height, fill_color — WorldPixelBarFillMarker drives scale.x)
+  ├── bar_1_bg         (optional second bar — mana)
+  └── bar_1_fg         (WorldPixelBarFillMarker)
+```
+
+Bar sizes are **screen pixels** (same convention as `WorldStatBarStyle::Pixel { size: (w, h) }`). A `bar_width: 100.0, bar_height: 6.0` matches the visual scale of existing world stat bars.
 
 ### Systems (all in `capabilities/nameplate.rs`)
 
-**`nameplate_setup_system`** — runs once on `SceneEvent::Ready` (after entities are spawned). For each entity with `NameplateTag` that has no `NameplateAnchor` yet:
-1. Spawns an anchor entity (child of the world entity) at the configured offset.
-2. Spawns a name `Text2d` child of the anchor.
-3. If `bar_stat_key` is set, spawns a bar `Text2d` child of the anchor (0.2 units below the name).
+**`nameplate_setup_system`** — runs every `Update`, queries `Added<NameplateTag>` (entities with `NameplateTag` but no `NameplateAnchor` yet). This fires on any newly-tagged entity — scene-loaded entities, wave-spawned enemies, and dynamically `Action::Spawn`-ed actors alike:
+1. Spawns a `WorldLabel` anchor entity at the configured offset.
+2. Spawns a name `Text2d` child of the anchor; applies `TextShadow` if `text_shadow: true`.
+3. For each `StatBarDef`, checks the entity's `StatMap` for the resolved stat key.
+   - Present: spawns background quad + foreground quad with `WorldPixelBarFillMarker`.
+   - Absent: skips that bar silently.
 4. Attaches `NameplateAnchor(anchor_entity)` to the world entity.
 5. Sets initial `Visibility::Hidden`.
 
-**`nameplate_visibility_system`** — runs in `Update`. Reads `NameplateSceneConfig` resource (populated from scene RON on load):
+**`nameplate_visibility_system`** — runs in `Update`. Reads `NameplateSceneConfig` resource:
 - If `show_nameplates: false` and no per-prefab `Some(true)` override: skip all.
 - For each entity with `NameplateTag` + `NameplateAnchor` + `GlobalTransform`:
-  1. Apply `prefab_override`: if `Some(false)` → hide; if `Some(true)` → skip distance/faction checks, show.
-  2. Faction filter: if `HostileOnly` and entity has no `NpcAgent` → hide.
-  3. Distance: if camera distance > `max_distance` → hide.
+  1. Apply `prefab_override`: `Some(false)` → hide; `Some(true)` → show (skip distance/faction checks).
+  2. Faction filter: `HostileOnly` and entity has no `NpcAgent` → hide (player shown when `All` or `Some(true)`).
+  3. Distance: camera distance > `max_distance` → hide.
   4. Otherwise → show.
-- Uses change-detection guard: only writes `Visibility` when the value actually changes (avoids re-triggering render graph each frame).
+- Change-detection guard: only writes `Visibility` when value changes.
 
-**`nameplate_update_system`** — runs in `Update`, only when `NameplateBar` entities exist. Reads `StatMap` from the world entity (looked up via `NameplateBar.stat_key`), computes fill fraction, updates the bar `Text2d` string using the same Unicode block algorithm as `world_stat_bar`. Guards on actual value change.
+Bar fill updates are handled entirely by the existing **`world_pixel_bar_update_system`** — no separate nameplate update system.
 
-### `NameplateSceneConfig` resource (`capabilities/nameplate.rs`)
+### `NameplateSceneConfig` resource
 
-Populated from `GameSceneV2` on scene load, stored as a `Resource`. Cleared and repopulated on each `LoadScene`.
+Populated from `GameSceneV2` on scene load, cleared and repopulated on each `LoadScene`.
 
 ```rust
 #[derive(Resource, Default)]
@@ -224,10 +269,9 @@ pub struct NameplateSceneConfig {
 
 ## Spawn-time wiring
 
-In `scene_loader.rs` (or `entity_spawner.rs`), after spawning a prefab:
+In `scene_loader.rs`, after spawning a prefab:
 
 ```rust
-// If show_nameplates AND (nameplate != Some(false)):
 if scene.show_nameplates || prefab.nameplate == Some(true) {
     if prefab.nameplate != Some(false) {
         let display_name = prefab.display_name.clone()
@@ -240,68 +284,98 @@ if scene.show_nameplates || prefab.nameplate == Some(true) {
 }
 ```
 
-The anchor + `Text2d` children are NOT spawned at entity spawn time — they're spawned by `nameplate_setup_system` after `SceneEvent::Ready`. This keeps the spawn path simple and avoids Text2d layout issues before the scene is fully loaded.
+Anchor + quad children are spawned by `nameplate_setup_system` after `SceneEvent::Ready` — keeps the spawn path simple, avoids layout issues before the scene is fully loaded.
 
 ---
 
 ## Relationship to existing world-space widgets
 
-| Widget | Authored on | Always visible | Distance culled | Faction filtered | Name line | Bar line |
+| Widget | Authored on | Always visible | Distance culled | Faction filtered | Name line | Bar type |
 |---|---|---|---|---|---|---|
-| `stat_label` | `PrefabDef` | Yes | No | No | No | No (text value only) |
-| `world_stat_bar` | `PrefabDef` | Yes | No | No | No | Yes |
-| `nameplate` | Scene + PrefabDef | Scene-managed | Yes | Yes | Yes | Optional |
+| `stat_label` | `PrefabDef` | Yes | No | No | No | Text value only |
+| `world_stat_bar` | `PrefabDef` | Yes | No | No | No | ASCII Unicode blocks |
+| `nameplate` | Scene + PrefabDef | Scene-managed | Yes | Yes | Yes | Pixel quads |
 
-Entities can have both `world_stat_bar` and `nameplate: true` simultaneously — the nameplate bar appears above the `world_stat_bar`. If overlap is visually undesirable, set `world_stat_bar: None` on the prefab and rely on the nameplate bar alone.
+Entities can have both `world_stat_bar` and a nameplate. If overlap is visually undesirable, set `world_stat_bar: None` on the prefab and rely on the nameplate bars.
+
+---
+
+## Demo configuration (`3rd_person_game_demo`)
+
+```ron
+// scenes/main.scene.ron
+show_nameplates: true,
+nameplate_options: Some((
+    faction_filter: All,
+    max_distance: 25.0,
+    text_shadow: true,
+    stat_bars: [
+        ( stat_key: "{self}.health", fill_color: (0.20, 0.85, 0.20, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+        ( stat_key: "{self}.mana",   fill_color: (0.20, 0.45, 0.90, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+    ],
+    bar_width: 100.0,
+    bar_height: 6.0,
+    bar_spacing: 9.0,
+)),
+
+// prefabs/prefabs.ron — add to enemies, NPCs, and player
+"player":      ( ..., display_name: Some("Player"),       nameplate: Some(true) )
+"enemy_snake": ( ..., display_name: Some("Snake"),        nameplate: Some(true) )
+"enemy_spider":( ..., display_name: Some("Spider"),       nameplate: Some(true) )
+"merchant":    ( ..., display_name: Some("Merchant"),     nameplate: Some(true) )
+```
+
+Snake and spider have no mana stat — their mana bar is silently skipped. Player and merchant have mana — both bars render.
 
 ---
 
 ## New Rust changes
 
-- `schema/scene_v2.rs` — add `show_nameplates: bool`, `nameplate_options: Option<NameplateOptionsDef>`, `NameplateOptionsDef`, `NameplateFactionFilter`.
-- `schema/catalog.rs` — add `display_name: Option<String>`, `nameplate: Option<bool>` to `PrefabDef`.
-- `capabilities/nameplate.rs` (new file) — `NameplateTag`, `NameplateAnchor`, `NameplateBar`, `NameplateSceneConfig`, `nameplate_setup_system`, `nameplate_visibility_system`, `nameplate_update_system`.
-- `capabilities/mod.rs` — register `nameplate` module and its systems.
+- `schema/scene_v2.rs` — `show_nameplates: bool`, `nameplate_options: Option<NameplateOptionsDef>`, `NameplateOptionsDef`, `StatBarDef`, `NameplateFactionFilter`.
+- `schema/catalog.rs` — `display_name: Option<String>`, `nameplate: Option<bool>` on `PrefabDef`.
+- `capabilities/nameplate.rs` (new file) — `NameplateTag`, `NameplateAnchor`, `NameplateSceneConfig`, `nameplate_setup_system` (uses `Added<NameplateTag>`), `nameplate_visibility_system`. Reuses `WorldPixelBarFillMarker` + `world_pixel_bar_update_system` from `stat_display.rs` for bar fills — no new bar component or update system.
+- `capabilities/mod.rs` — register `nameplate` module and systems.
 - `runtime/scene_manager/scene_loader.rs` — populate `NameplateSceneConfig` on scene load; insert `NameplateTag` at spawn time.
-- `lib.rs` — add `NameplatePlugin` (or inline system registration alongside other capability systems).
+- `lib.rs` — add `NameplatePlugin` (or inline registration alongside other capability systems).
 
 ---
 
 ## Tasks
 
-- [ ] Decisions from pre-implementation checklist resolved
+- [x] Decisions from pre-implementation checklist resolved
 - [ ] `show_nameplates: bool` + `nameplate_options: Option<NameplateOptionsDef>` on `GameSceneV2`
-- [ ] `NameplateOptionsDef` + `NameplateFactionFilter` in `schema/scene_v2.rs`
+- [ ] `NameplateOptionsDef` + `StatBarDef` + `NameplateFactionFilter` in `schema/scene_v2.rs`
 - [ ] `display_name: Option<String>` + `nameplate: Option<bool>` on `PrefabDef` in `schema/catalog.rs`
 - [ ] `NameplateSceneConfig` resource populated on scene load and cleared on `LoadScene`
 - [ ] Spawn-time: insert `NameplateTag` when conditions are met
-- [ ] `nameplate_setup_system` — spawn anchor + Text2d children after `SceneEvent::Ready`
-- [ ] `nameplate_visibility_system` — distance + faction culling with change-detection guard
-- [ ] `nameplate_update_system` — health bar text update reusing `world_stat_bar` fill algorithm
-- [ ] Demo: add `show_nameplates: true` + `display_name` + `nameplate: true` to enemies in `primitive_world` or `3rd_person_game_demo`
-- [ ] Integration tests: nameplate visible within range, hidden beyond `max_distance`, hidden when faction filter excludes the entity, per-prefab `Some(false)` suppresses even when scene enabled
-- [ ] Docs: `show_nameplates`, `nameplate_options`, `display_name`, `nameplate` fields in `docs/20_data_formats.md`
+- [ ] `nameplate_setup_system` — queries `Added<NameplateTag>` every frame; spawns `WorldLabel` anchor + `Text2d` name (with `TextShadow`) + pixel bar quads using `WorldPixelBarFillMarker`; skips bars for absent stats silently; works for scene-loaded and dynamically-spawned entities alike
+- [ ] `nameplate_visibility_system` — distance + faction culling with change-detection guard; player shown when `All` or `nameplate: Some(true)`
+- [ ] Bar fills driven by existing `world_pixel_bar_update_system` — no new update system needed
+- [ ] Demo: `show_nameplates: true` + `nameplate_options` in `3rd_person_game_demo` main scene; `display_name` + `nameplate: Some(true)` on player, enemies, merchant
+- [ ] Integration tests: nameplate visible within range; hidden beyond `max_distance`; `faction_filter: HostileOnly` hides non-NpcAgent entities; `nameplate: Some(false)` suppresses; mana bar skipped for entities without mana stat; `PlayerEquipment` not affected
+- [ ] Docs: `show_nameplates`, `nameplate_options`, `stat_bars`, `display_name`, `nameplate` fields in `docs/20_data_formats.md`
 
 ---
 
 ## Open questions
 
-- **Nameplate stacking at close range**: when multiple enemies cluster, nameplates overlap. v1 does no stacking/sorting — accept the overlap. A future pass could sort by depth and offset overlapping plates.
-- **Faction filter granularity**: `HostileOnly` uses `has NpcAgent` as v1 approximation. When Group system ships, replace with faction stance query.
-- **Nameplate for player**: by convention, `nameplate` is for non-player entities. If a scene sets `show_nameplates: All`, the player entity should still be excluded. Guard: skip entities with `PlayerController` in `nameplate_visibility_system`.
-- **`display_name` localisation**: for now, `display_name` is a plain string. A future localisation pass could make this a key into a string table.
+- **Nameplate stacking at close range**: when multiple enemies cluster, nameplates overlap. v1 does no stacking/sorting — accept the overlap.
+- **Faction filter granularity**: `HostileOnly` uses `has NpcAgent` as v1 approximation. Replace with faction stance query when Group system ships.
+- **`display_name` localisation**: plain string for now; a future pass could make this a key into a string table.
+- **Bar depth / render order**: pixel quads in world space may z-fight with geometry at extreme angles. Use `DepthBiasState` or set `render_layers` to keep bars always-on-top if needed.
 
 ---
 
 ## Acceptance criteria
 
-- Given `show_nameplates: true` in a scene and an enemy NPC with no `nameplate` override, a floating name widget appears above the entity when within `max_distance`.
+- Given `show_nameplates: true` in a scene and an enemy NPC within `max_distance`, a floating name widget with drop shadow appears above the entity.
 - Given the camera moves beyond `max_distance`, the nameplate widget becomes invisible.
-- Given `faction_filter: HostileOnly`, a prefab with no `NpcAgent` component does not show a nameplate even if within range.
-- Given `nameplate: Some(false)` on a prefab in a scene with `show_nameplates: true`, no nameplate appears for that prefab.
-- Given `nameplate: Some(true)` on a prefab in a scene with `show_nameplates: false`, the nameplate still appears (respects max_distance, ignores faction filter).
+- Given `faction_filter: HostileOnly`, a prefab with no `NpcAgent` does not show a nameplate even if within range.
+- Given `nameplate: Some(false)` on a prefab in a scene with `show_nameplates: true`, no nameplate appears.
+- Given `nameplate: Some(true)` on a prefab in a scene with `show_nameplates: false`, the nameplate still appears (respects `max_distance`, ignores faction filter).
 - Given `display_name: Some("Orc Warrior")`, the name line reads "Orc Warrior". Given no `display_name`, the name line reads the prefab key.
-- Given `bar_stat_key: Some("{self}.health")`, the bar below the name reflects current/max health and updates when health changes.
-- Given `bar_stat_key: None` in `nameplate_options`, only the name line appears.
-- Given `show_nameplates: false` and no per-prefab overrides, no nameplate widgets are spawned or updated.
+- Given `stat_bars` containing `{self}.health` and `{self}.mana`, an entity with both stats shows two pixel bars; an entity with only health shows one bar (mana bar silently absent).
+- Given a pixel health bar, the fill quad shrinks left-anchored as health decreases and returns to full width at max health.
+- Given `text_shadow: true`, the name text renders with a visible drop shadow.
 - Given a scene transition (`LoadScene`), all nameplate widgets are despawned and `NameplateSceneConfig` is reset.
+- Given the player prefab has `nameplate: Some(true)` and `faction_filter: All`, the player's nameplate is visible when within range.
