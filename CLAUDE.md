@@ -179,6 +179,10 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 
 ## Proactive Agent Reviews
 
+Beyond the mandatory post-implementation reviews below, use specialized agents proactively whenever a question is complex enough that a second perspective would change the answer: design decisions before coding, architectural tradeoffs, feasibility investigations, or any time the right approach is genuinely unclear. The system-architect, alignment-reviewer, and ux-gamedesigner-reviewer are all available for pre-implementation consultation, not just post-change audits.
+
+For bugs that are hard to reproduce, have an unclear root cause, or span multiple systems, invoke the **debug-detective** agent rather than investigating inline. Complex bugs benefit from systematic isolation — the agent works methodically through hypotheses without accumulating context debt in the main conversation.
+
 After implementing any feature, capability, or schema change, always invoke these specialized agents — do not wait to be asked:
 
 | Agent | When to invoke |
