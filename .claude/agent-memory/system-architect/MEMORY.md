@@ -17,3 +17,4 @@
 - [Dialogue system](dialogue_system.md) — catalog-vs-structural-file rule; auto-wire seam; dual condition system; auto-advance-only-when-no-choices invariant; portrait must use catalog
 - [UI hover & tooltip](ui_hover_and_tooltip.md) — Interaction needs Button; inventory slots lack it; cursor/viewport via PrimaryWindow (WASM-safe); UI Camera2d order 1000 + GlobalZIndex; ActionSlotDef.label is unrendered "future use"
 - [World-space widgets](world_space_widgets.md) — per-prefab (stat_label/world_stat_bar) vs scene-managed (nameplate); share WorldPixelBarFillMarker primitive, keep systems separate; partial not full consolidation
+- [Bevy 0.19 upgrade](bevy_019_upgrade.md) — wait/don't-upgrade-now; gated on rapier+framepace+bevy_common_assets 0.19; corrected audit (clear_entities/AnimationTargetId/Ref/Skybox N/A); ~5-7d; silent WebGPU+size risks
