@@ -18,4 +18,5 @@
 - [UI hover & tooltip](ui_hover_and_tooltip.md) — Interaction needs Button; inventory slots lack it; cursor/viewport via PrimaryWindow (WASM-safe); UI Camera2d order 1000 + GlobalZIndex; ActionSlotDef.label is unrendered "future use"
 - [World-space widgets](world_space_widgets.md) — per-prefab (stat_label/world_stat_bar) vs scene-managed (nameplate); share WorldPixelBarFillMarker primitive, keep systems separate; partial not full consolidation
 - [Bevy 0.19 upgrade](bevy_019_upgrade.md) — wait/don't-upgrade-now; gated on rapier+framepace+bevy_common_assets 0.19; corrected audit (clear_entities/AnimationTargetId/Ref/Skybox N/A); ~5-7d; silent WebGPU+size risks
+- [RNG & determinism](rng_and_determinism.md) — seed RNG in core (ChaCha8Rng) from day one, never thread_rng; getrandom js only needed by the self-seeding path; Beta 0.5 needs seeded RNG anyway
 - [Event pipeline & intent layer](event_pipeline_intent_layer.md) — pipeline IS intent/exec/result; action_bar shortcuts it (pushes to ActionQueue directly); minimal fix = intent.{slot} strings + rule mapping; defer 4-phase combat; CLI event validator for typo risk

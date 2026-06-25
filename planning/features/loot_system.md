@@ -4,6 +4,7 @@ _Status: Draft_
 _Planned at: `6adb6bf` (2026-06-02)_
 _Hard dep: Inventory & item system_
 _Soft deps: Quest system (Collect objective auto-advance), Equipment system (equippable drops)_
+_Soft dep: `at_entity` field on `Action::Spawn` — lands with `monster_drop_pickups` (see `planning/features/monster_drop_pickups.md`); the `RollLootTable` executor should use `at_entity` to position the loot bag rather than hand-resolving `GlobalTransform`_
 
 ## Phases
 
@@ -22,7 +23,7 @@ _Soft deps: Quest system (Collect objective auto-advance), Equipment system (equ
 >
 > - [ ] **Decide: `auto_loot` — per-scene or per-table.** Options: (a) `auto_loot: bool` on `GameSceneV2`; (b) per-table flag; (c) both. Recommendation: **per-scene via scene RON** (`auto_loot: true` in scene config) — a full scene can opt into direct-to-inventory drops (e.g. a mobile-style game); individual tables override with `force_bag: true` to always spawn a bag even in auto-loot scenes.
 >
-> - [ ] **Decide: RNG source.** `rand::thread_rng()` is not deterministic. For the Beta 0.5 deterministic tick milestone, the loot system must use a seeded `DeterministicRng` resource. v1 can use `thread_rng()` with a note that it must be replaced at Beta 0.5.
+> - [ ] **RNG: use `ChaCha8Rng` from day one — do not use `thread_rng()`.** `thread_rng()` is non-deterministic and panics in WASM without `getrandom = { features = ["js"] }` (an unnecessary dep). Instead, introduce a `LootRng(ChaCha8Rng)` resource seeded from a fixed constant (e.g. `seed_from_u64(42)`) for v1; at Beta 0.5, re-seed from the replay header. `roll_table` already takes `rng: &mut impl Rng` so only the caller changes (~15 lines). `ChaCha8Rng` is preferred over `StdRng` because its algorithm is stable across `rand` major versions. Identical loot per run in v1 is acceptable and aids reproducible play-testing.
 >
 > - [ ] **Decide: nested table references for v1.** A `LootEntry` referencing another table key (for tiered pools like "roll Common table OR Uncommon table") adds implementation complexity. Recommendation: **defer nested tables to v2** — flag it in open questions; v1 supports only flat entry lists.
 
@@ -250,16 +251,15 @@ Action::RollLootTable { entity } => {
             ));
         }
     } else {
-        // Spawn a loot bag entity
+        // Spawn a loot bag entity — use at_entity (lands with monster_drop_pickups)
+        // so we don't hand-resolve GlobalTransform here.
         let bag_id = format!("loot_bag_{}", registry.next_id());
-        let bag_pos = global_transforms.get(*ecs_entity)
-            .map(|t| t.translation())
-            .unwrap_or(Vec3::ZERO);
 
         action_queue.push(Action::Spawn {
             prefab: table.loot_bag_prefab.clone().unwrap(),
             id: Some(bag_id.clone()),
-            position: Some((bag_pos.x, bag_pos.y, bag_pos.z)),
+            at_entity: Some(entity.clone()),
+            position: None,
             spawn_point: None,
             yaw_deg: None,
         });
@@ -363,12 +363,12 @@ loot.collected:{item_key}:{count}
 - `schema/loot.rs` (new file) — `LootCatalog`, `LootTableDef`, `LootRollStrategy`, `LootEntry`, `ItemQuality`.
 - `schema/catalog.rs` — `loot_table: Option<String>` on `PrefabDef`.
 - `schema/scene_v2.rs` — `auto_loot: bool` on `GameSceneV2`.
-- `schema/actions.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag`.
+- `schema/actions.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag`. Note: `Action::Spawn` gains `at_entity: Option<String>` via `monster_drop_pickups` — use it in the bag-spawn path rather than adding a manual `GlobalTransform` lookup here.
 - `capabilities/loot.rs` (new file) — `LootTableRef`, `LootBag`, `LoadedLootCatalog`, `LootSceneConfig`, `roll_table`.
 - `capabilities/mod.rs` — register module.
 - `runtime/scene_manager/action_executor.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag` arms.
 - `runtime/scene_manager/scene_loader.rs` — populate `LootSceneConfig` from scene RON; insert `LootTableRef` at spawn time.
-- `Cargo.toml` — `rand` crate (if not already present).
+- `Cargo.toml` — `rand` and `rand_chacha` crates (if not already present). Do **not** add `getrandom = { features = ["js"] }` — `ChaCha8Rng` seeds from a fixed value and never requests OS entropy.
 
 ---
 
@@ -384,7 +384,7 @@ loot.collected:{item_key}:{count}
 - [ ] `PendingLootBag` resource for deferred component attachment to spawned bag entities
 - [ ] Pipeline events: `loot.rolled`, `loot.item_dropped`, `loot.bag_spawned`, `loot.collected`
 - [ ] Loot bag pickup UI (interactable prompt + item list panel before pickup)
-- [ ] Note in code: RNG must migrate to `DeterministicRng` at Beta 0.5
+- [ ] Introduce `LootRng(ChaCha8Rng)` resource seeded from a fixed constant; inject into `roll_table`; add a code comment that at Beta 0.5 it re-seeds from the replay header
 - [ ] Demo: `bandit_grunt.behavior.ron` with `RollLootTable` + `Despawn`; player walks over bag to collect
 - [ ] Integration tests: `RollEach` rolls each entry independently; `RollOne` produces exactly one drop; `auto_loot: true` goes direct to inventory; `PickupLoot` transfers and despawns bag; empty roll emits `loot.rolled` but no `loot.bag_spawned`
 - [ ] Docs: `LootTableDef`, `loot_table`, `auto_loot` in `docs/20_data_formats.md`; loot actions + events in `docs/30_runtime_events_and_logic.md`

@@ -181,6 +181,14 @@ SpawnEffect(key: "pickup_sparkle", position: (0.0, -100.0, 0.0)),  // pipeline w
 - [ ] **Docs**: `docs/20_data_formats.md` — document `at_entity` field on `Action::Spawn`; note auto-expire pattern in behavior examples
 - [ ] **asset_manifest**: run `python tools/build_asset_manifest.py` after adding models to assets.ron
 
+## Relationship to Other Features
+
+**`at_entity` is a general engine primitive, not a loot-only concept.** This feature is the smallest vehicle that ships it end-to-end; but it is useful for any system that needs to spawn an entity at another entity's world position — spawn waves, scripted cutscenes, impact decals, loot bags. Do not scope it as loot infrastructure; it lives on `Action::Spawn` and is available everywhere `Spawn` is.
+
+**Loot System v1** (`planning/features/loot_system.md`) has a soft dependency on this feature. Its `RollLootTable` executor currently resolves `GlobalTransform` by hand to position the loot bag. Once `at_entity` lands, the loot executor should drop that hand-rolled lookup and use `at_entity: Some(entity.clone())` — closing a duplicate code path. If monster drops ships first (it should; it has no inventory dep), the loot executor is written against `at_entity` from the start. If loot ships first, the manual transform lookup must be replaced when this feature lands.
+
+The `drop_table: Option<String>` extension noted below is the on-ramp toward loot tables — it would use `RollLootTable` under the hood once the loot system exists.
+
 ## Open questions
 
 - **Multiple drops per enemy?** Not in scope for v1. A future extension could be a `drop_table` on `PrefabDef` (probabilities + drop pool) — noted for later.

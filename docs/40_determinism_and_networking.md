@@ -49,6 +49,18 @@ For Ironhold, determinism means:
 
 ## Common pitfalls (and mitigations)
 
+### RNG in gameplay capabilities 🧭
+
+Any gameplay capability that uses randomness (loot rolls, procedural decisions, AI variance) must use an explicit seeded RNG — never `rand::thread_rng()` or any `from_entropy()` call.
+
+Rules:
+- Use `rand_chacha::ChaCha8Rng` — its algorithm is stable across `rand` major versions and is WASM-safe (no OS entropy call, no `getrandom` dependency required)
+- Expose it as a named `Resource` (e.g. `LootRng(ChaCha8Rng)`) so multiple systems share and advance the same stream
+- Seed from a fixed constant for v1 builds; at Beta 0.5 re-seed from the replay header so replays reproduce identical rolls
+- Write the rolling function as `fn roll(&self, rng: &mut impl Rng)` so the seed source can be swapped without touching the logic
+
+`thread_rng()` is banned from `ironhold_core`: it is non-deterministic and panics in WASM without a `getrandom = { features = ["js"] }` feature flag, which pulls in an unnecessary dependency. A seeded `ChaCha8Rng` sidesteps both problems.
+
 ### Floating-point differences 🧭
 Different CPUs and WASM runtimes can produce tiny float differences that amplify over time.
 
