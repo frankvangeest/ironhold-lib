@@ -177,6 +177,8 @@ File extension must be `.scene.ron`.
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: false` or `depth_scale: true`. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
+| `show_nameplates` | `bool` | Enable the nameplate system for this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. |
+| `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Ignored when `show_nameplates: false`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
 
 **Example:**
 ```ron
@@ -438,6 +440,100 @@ target_indicator: (
   ...
 ),
 ```
+
+### Nameplate system (`NameplateOptionsDef`) ✅
+
+_Used in: `GameSceneV2.nameplate_options`_
+
+Enable the nameplate system on a scene by setting `show_nameplates: true`. Each spawned entity that passes the faction filter and has no `nameplate: false` override receives a floating widget above it: a name line (from `PrefabDef.display_name` or the prefab key) plus any number of pixel stat bars. The widget hides automatically when the camera moves beyond `max_distance`.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `faction_filter` | `NameplateFactionFilter` | `HostileOnly` | Which entities receive a nameplate. `HostileOnly` shows nameplates on entities with NPC AI (hostile actors). `FriendlyOnly` shows them on non-NPC entities. `All` shows nameplates on every tagged entity. Individual prefabs can override this with `PrefabDef.nameplate`. |
+| `max_distance` | `f32` | `20.0` | Maximum camera distance in world units (metres) at which nameplates remain visible. Nameplates beyond this distance are hidden each frame. |
+| `offset` | `(f32, f32, f32)` | `(0.0, 2.4, 0.0)` | World-space offset from the entity's origin to the nameplate anchor point. Adjust the Y component to place the widget above the entity's head (e.g. `2.4` for a human-scale character). |
+| `name_font_size` | `f32` | `14.0` | Font size of the name text line in screen pixels. |
+| `name_color` | `(f32, f32, f32, f32)` | `(0.95, 0.95, 0.95, 1.0)` | RGBA colour of the name text (sRGB). |
+| `text_shadow` | `bool` | `true` | When `true`, a drop shadow is rendered behind the name text to improve legibility against bright backgrounds. |
+| `stat_bars` | `Vec<NameplateBarDef>` | `[]` | Ordered list of pixel stat bars shown below the name line. Bars for stats the entity does not have are silently skipped. See `NameplateBarDef` below. |
+| `bar_width` | `f32` | `100.0` | Width of each stat bar in screen pixels. |
+| `bar_height` | `f32` | `6.0` | Height of each stat bar in screen pixels. |
+| `bar_spacing` | `f32` | `9.0` | Vertical gap between consecutive stat bars in screen pixels. |
+
+### `NameplateBarDef`
+
+_Used in: `NameplateOptionsDef.stat_bars`_
+
+Each entry in `stat_bars` defines one pixel bar row in the nameplate widget.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `stat_key` | `String` | required | The stat to track. Supports `{self}` substitution — e.g. `"{self}.health"` becomes `"orc_01.health"` at spawn time for entity `orc_01`. If the entity does not have this stat in its `StatMap`, the bar is silently omitted. |
+| `fill_color` | `(f32, f32, f32, f32)` | required | RGBA colour of the filled portion of the bar (sRGB). |
+| `bg_color` | `(f32, f32, f32, f32)` | required | RGBA colour of the unfilled background track of the bar (sRGB). |
+
+**`NameplateFactionFilter` variants:**
+
+| Variant | Which entities show a nameplate |
+|---|---|
+| `HostileOnly` *(default)* | Entities with NPC AI (`NpcAgent` component). Note: this matches any entity with an `npc:` block, including friendly NPCs — the filter name refers to engine-side AI presence, not in-world faction. |
+| `FriendlyOnly` | Entities without NPC AI — friendly characters, the player, and non-actor props. |
+| `All` | Every entity that the scene marks for nameplates (subject to per-prefab overrides). |
+
+> **Per-prefab override:** `PrefabDef.nameplate: true` always shows the nameplate regardless of faction filter (still hides beyond `max_distance`). `PrefabDef.nameplate: false` suppresses it regardless of scene settings. Both take precedence over the faction filter.
+
+**Example:**
+```ron
+// In scenes/*.scene.ron
+show_nameplates: true,
+nameplate_options: (
+    faction_filter: All,
+    max_distance: 25.0,
+    offset: (0.0, 2.4, 0.0),
+    name_font_size: 14.0,
+    name_color: (0.95, 0.95, 0.95, 1.0),
+    text_shadow: true,
+    stat_bars: [
+        ( stat_key: "{self}.health", fill_color: (0.20, 0.85, 0.20, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+        ( stat_key: "{self}.mana",   fill_color: (0.20, 0.45, 0.90, 1.0), bg_color: (0.15, 0.15, 0.15, 0.80) ),
+    ],
+    bar_width: 100.0,
+    bar_height: 6.0,
+    bar_spacing: 9.0,
+),
+
+// In prefabs/prefabs.ron — enemy with a custom display name
+"enemy_zombie": (
+    kind: Actor,
+    model: "zombie",
+    display_name: "Zombie",   // shown in the nameplate name line
+    // nameplate omitted — inherits from scene faction_filter
+    ...
+),
+
+// Player always shows its nameplate regardless of faction_filter
+"player_warrior": (
+    kind: Actor,
+    model: "hero",
+    display_name: "Warrior",
+    nameplate: true,           // always show even if faction_filter would hide it
+    ...
+),
+
+// Chest never shows a nameplate
+"chest_01": (
+    kind: Prop,
+    model: "chest_01",
+    nameplate: false,          // never show even if show_nameplates: true
+    ...
+),
+```
+
+> **Stat bar visibility:** bars for stats the entity does not have are silently skipped — no error is logged. For example, if `stat_bars` contains `"{self}.mana"` but a skeleton enemy has no mana stat, the skeleton only shows the health bar while mana-capable entities show both bars.
+>
+> **`{self}.stat` requires a per-entity `stat_templates` entry.** `{self}.health` resolves to `"spawn_id.health"` and is looked up in the entity's `StatMap`. Only entities that declare a `stat_templates` block with key `"health"` have this stat in their `StatMap`. Global stats defined in `stats/stats.ron` (such as `player_health` or `score`) are not entity-scoped and will never satisfy a `{self}.` stat key — they belong to the shared game-variable pool, not any individual entity's `StatMap`. If you want a nameplate bar on the player, add a `stat_templates` entry to the player's prefab (see [Instance stats](#instance-stats-stat_templates-) for the format) and update your logic to use `ModifyStat(key: "{self}.health", ...)` targeting the player's spawn ID.
+
+> **Coexistence with `world_stat_bar`:** an entity can have both a nameplate (scene-managed, distance-culled) and a `world_stat_bar` (always visible, per-prefab). If the overlap is visually undesirable, remove `world_stat_bar` from the prefab and use the nameplate's `stat_bars` alone.
 
 ### Terrain (`TerrainConfigV2`)
 
@@ -1327,6 +1423,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
+| `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
+| `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates: true`. Absent = inherit from the scene's `show_nameplates` + `faction_filter`. |
 
 ### Special tag: `"flycam"` ✅
 

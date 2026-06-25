@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. _(Quest-giver `!`/`?` indicator belongs to Quest system v2, not here.)_ See `planning/features/nameplate_system.md`
+- [x] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. _(Quest-giver `!`/`?` indicator belongs to Quest system v2, not here.)_ See `planning/features/done/nameplate_system.md`
 
 ---
 

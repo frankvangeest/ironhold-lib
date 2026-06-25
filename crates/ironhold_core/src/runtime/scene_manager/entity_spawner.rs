@@ -274,6 +274,7 @@ pub fn drain_spawn_queue_system(
     fixes: Res<MergedModelFixes>,
     mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
     active_tonemapping: Res<super::ActiveTonemapping>,
+    nameplate_config: Res<crate::capabilities::nameplate::NameplateSceneConfig>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -332,6 +333,14 @@ pub fn drain_spawn_queue_system(
         });
         if stat_label.is_some() || world_stat_bar.is_some() {
             stat_ui_queue.0.push(super::DynamicStatUiEntry { entity: parent, stat_label, world_stat_bar });
+        }
+
+        if queued.prefab_def.nameplate != Some(false) && (nameplate_config.enabled || queued.prefab_def.nameplate == Some(true)) {
+            let display_name = queued.prefab_def.display_name.clone().unwrap_or_else(|| queued.prefab_key.clone());
+            commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
+                display_name,
+                prefab_override: queued.prefab_def.nameplate,
+            });
         }
     }
 }
@@ -527,6 +536,13 @@ pub(crate) fn spawn_player_entity(
         false,
         1.0,
     );
+
+    if let Some(display_name) = &player_config.nameplate_display_name {
+        commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
+            display_name: display_name.clone(),
+            prefab_override: player_config.nameplate_override,
+        });
+    }
 
     if let Some(policy_handle) = policy_handle_opt {
         commands.entity(player_entity).insert((

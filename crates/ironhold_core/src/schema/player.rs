@@ -29,6 +29,12 @@ pub struct PlayerConfig {
     /// Prefab catalog key (e.g. `"player_warrior"`) — set by the scene loader for `PrefabKey`.
     #[serde(default)]
     pub prefab_key: String,
+    /// Resolved display name for the player's nameplate widget. `None` = no nameplate.
+    #[serde(default)]
+    pub nameplate_display_name: Option<String>,
+    /// `PrefabDef.nameplate` override forwarded to `NameplateTag`.
+    #[serde(default)]
+    pub nameplate_override: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

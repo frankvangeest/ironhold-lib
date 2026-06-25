@@ -28,6 +28,7 @@ pub mod targeting;
 pub mod target_indicator;
 pub mod dialogue;
 pub mod inventory;
+pub mod nameplate;
 pub use player::*;
 pub use camera::*;
 pub use flycam::*;
@@ -63,5 +64,9 @@ pub use targeting::{TargetingPlugin, ClickSelectable, Targetable, tab_targeting_
 pub use dialogue::{
     ActiveDialogue, DialoguePath, DialoguePanelMarker, DialogueTextMarker, DialogueTextRole,
     DialogueChoicesContainer, DialogueChoiceBtn, dialogue_tick_system,
+};
+pub use nameplate::{
+    NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig,
+    nameplate_setup_system, nameplate_visibility_system, nameplate_cleanup_system,
 };
 

@@ -94,6 +94,14 @@ pub struct GameSceneV2 {
     /// Omit this field to disable the indicator for this scene (no ring, no error).
     #[serde(default)]
     pub target_indicator: Option<TargetIndicatorDef>,
+    /// Enable the nameplate system for this scene. When `true`, entities tagged with
+    /// `NameplateTag` at spawn time display a floating name + pixel stat bars above them.
+    /// Individual prefabs can override this per-entity via `PrefabDef.nameplate`.
+    #[serde(default)]
+    pub show_nameplates: bool,
+    /// Scene-wide nameplate display options. Ignored when `show_nameplates: false`.
+    #[serde(default)]
+    pub nameplate_options: Option<NameplateOptionsDef>,
 }
 
 impl GameSceneV2 {
@@ -1063,3 +1071,74 @@ pub struct ContainerPanelDef {
 
 fn default_container_columns() -> u32 { 3 }
 fn default_container_rows() -> u32 { 3 }
+
+// ─── Nameplate system ─────────────────────────────────────────────────────────
+
+/// Which entities receive a nameplate when `show_nameplates: true`.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+pub enum NameplateFactionFilter {
+    /// Only entities with `NpcAgent` (hostile NPCs). Default.
+    #[default]
+    HostileOnly,
+    /// Entities without `NpcAgent` (friendly, props, player).
+    FriendlyOnly,
+    /// All entities tagged for nameplates.
+    All,
+}
+
+/// One pixel stat bar row in the nameplate widget.
+/// Only rendered when the entity has the named stat in its `StatMap`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct NameplateBarDef {
+    /// Stat key. `{self}` is substituted with the entity's spawn ID at spawn time.
+    pub stat_key: String,
+    /// Filled portion colour as sRGB RGBA.
+    pub fill_color: (f32, f32, f32, f32),
+    /// Background / track colour as sRGB RGBA.
+    pub bg_color: (f32, f32, f32, f32),
+}
+
+/// Scene-wide nameplate display configuration. Authored in `GameSceneV2.nameplate_options`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct NameplateOptionsDef {
+    /// Which entities receive a nameplate (when not overridden per-prefab). Default: `HostileOnly`.
+    #[serde(default)]
+    pub faction_filter: NameplateFactionFilter,
+    /// Maximum camera distance (world units) at which nameplates remain visible. Default: 20.0.
+    #[serde(default = "default_nameplate_max_distance")]
+    pub max_distance: f32,
+    /// World-space offset from entity origin to the nameplate anchor. Default: `(0.0, 2.4, 0.0)`.
+    #[serde(default = "default_nameplate_offset")]
+    pub offset: (f32, f32, f32),
+    /// Font size of the name line in screen pixels. Default: 14.0.
+    #[serde(default = "default_nameplate_font_size")]
+    pub name_font_size: f32,
+    /// Name text colour as sRGB RGBA. Default: near-white.
+    #[serde(default = "default_wl_color")]
+    pub name_color: (f32, f32, f32, f32),
+    /// Render a drop shadow behind the name text. Default: true.
+    #[serde(default = "default_true")]
+    pub text_shadow: bool,
+    /// Pixel stat bars rendered below the name, in declaration order.
+    /// Each bar only appears when the entity has the named stat in its `StatMap`.
+    #[serde(default)]
+    pub stat_bars: Vec<NameplateBarDef>,
+    /// Width of each stat bar in screen pixels. Default: 100.0.
+    #[serde(default = "default_nameplate_bar_width")]
+    pub bar_width: f32,
+    /// Height of each stat bar in screen pixels. Default: 6.0.
+    #[serde(default = "default_nameplate_bar_height")]
+    pub bar_height: f32,
+    /// Vertical gap between bars in screen pixels. Default: 9.0.
+    #[serde(default = "default_nameplate_bar_spacing")]
+    pub bar_spacing: f32,
+}
+
+fn default_nameplate_max_distance() -> f32 { 20.0 }
+fn default_nameplate_offset() -> (f32, f32, f32) { (0.0, 2.4, 0.0) }
+fn default_nameplate_font_size() -> f32 { 14.0 }
+fn default_nameplate_bar_width() -> f32 { 100.0 }
+fn default_nameplate_bar_height() -> f32 { 6.0 }
+fn default_nameplate_bar_spacing() -> f32 { 9.0 }

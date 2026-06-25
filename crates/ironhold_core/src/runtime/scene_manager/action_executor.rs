@@ -159,6 +159,12 @@ pub fn action_executor_system(
                         movement: prefab_def.components.movement.clone(),
                         spawn_id: spawn_id.clone(),
                         prefab_key: prefab.clone(),
+                        nameplate_display_name: if prefab_def.nameplate != Some(false) {
+                            Some(prefab_def.display_name.clone().unwrap_or_else(|| prefab.clone()))
+                        } else {
+                            None
+                        },
+                        nameplate_override: prefab_def.nameplate,
                     })
                 } else {
                     None

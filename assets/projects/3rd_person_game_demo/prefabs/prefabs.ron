@@ -4,6 +4,8 @@
     "player_warrior": (
       kind: Actor,
       model: "hero",
+      display_name: "Warrior",
+      nameplate: false,
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
@@ -39,6 +41,8 @@
     "player_male": (
       kind: Actor,
       model: "character_male",
+      display_name: "Hero",
+      nameplate: false,
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],
@@ -67,6 +71,8 @@
     "player_female": (
       kind: Actor,
       model: "character_female",
+      display_name: "Heroine",
+      nameplate: false,
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],
@@ -116,6 +122,7 @@
     "enemy_zombie": (
       kind: Actor,
       model: "zombie",
+      display_name: "Zombie",
       animation_policy: "prefabs/animation/player_policy_zombie.ron",
       components: (
         tags: ["enemy"],
@@ -183,6 +190,7 @@
     "enemy_snake": (
       kind: Actor,
       model: "snake",
+      display_name: "Snake",
       animation_policy: "prefabs/animation/snake_policy.ron",
       components: (
         tags: ["enemy"],
@@ -251,6 +259,7 @@
     "enemy_spider": (
       kind: Actor,
       model: "spider",
+      display_name: "Spider",
       animation_policy: "prefabs/animation/spider_policy.ron",
       components: (
         tags: ["enemy"],
@@ -317,6 +326,7 @@
     "chest_01": (
       kind: Prop,
       model: "chest_01",
+      nameplate: false,
       components: (
         tags: ["loot"],
       ),
@@ -341,6 +351,7 @@
     "chest_02": (
       kind: Prop,
       model: "chest_02",
+      nameplate: false,
       components: (
         tags: ["loot"],
       ),
@@ -364,6 +375,7 @@
     "prop_anvil": (
       kind: Prop,
       model: "anvil",
+      nameplate: false,
       targetable: true,
       click_selectable: true,
       select_aim_height: 0.1,
@@ -377,6 +389,7 @@
     "merchant_vendor": (
       kind: Actor,
       model: "character_male",
+      display_name: "Merchant",
       material: "mat_silver",
       animation_policy: "prefabs/animation/player_policy_human.ron",
       click_selectable: true,
@@ -403,6 +416,7 @@
     "friendly_npc_male": (
       kind: Actor,
       model: "character_male",
+      display_name: "Stranger",
       material: "mat_silver",
       animation_policy: "prefabs/animation/player_policy_human.ron",
       click_selectable: true,
@@ -417,6 +431,7 @@
     // Large flat sand-coloured ground plane. physics: true so the player can walk on it.
     "ground_plane": (
       kind: Primitive,
+      nameplate: false,
       model: "",
       shape: Cuboid,
       primitive: (
@@ -432,6 +447,7 @@
     // Entity placed at y=0; platform bottom sits flush with the ground.
     "loot_display": (
       kind: Primitive,
+      nameplate: false,
       model: "",
       components: (),
       children: [

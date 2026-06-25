@@ -25,6 +25,14 @@
 
 - **Collapse dual `GlobalVolume` write in audio actions** _(observed at `43c5a84` 2026-06-10)_ — `action_executor_system` writes `GlobalVolume` directly after mutating `AudioState`, but mutating `AudioState` also trips `is_changed()`, so `audio_state_system` writes it again the following frame; benign today (idempotent), but two sources of truth — if `GlobalVolume` writes become expensive, collapse to a single writer by having the executor mutate only `AudioState` and letting `audio_state_system` be the sole `GlobalVolume` writer.
 
+## Nameplate System
+
+- **Extract nameplate spawn-condition predicate to a single helper** _(observed at `fcf8209` 2026-06-25)_ — The `prefab.nameplate != Some(false) && (show || prefab.nameplate == Some(true))` guard is copy-pasted across five sites in `scene_loader.rs`; extracting it to `fn should_insert_nameplate(nameplate: Option<bool>, show: bool) -> bool` would prevent the sites from drifting and eliminate a maintenance hazard identical to what `tag_spawned_entity` was built to kill.
+
+- **Cache nameplate bar `Mesh`/`ColorMaterial` handles to avoid per-entity GPU allocation** _(observed at `fcf8209` 2026-06-25)_ — `nameplate_setup_system` calls `meshes.add(Rectangle::new(bar_w, bar_h))` and `color_materials.add(ColorMaterial::from(...))` per entity per bar; since bar dimensions and colors are scene-global (`NameplateOptionsDef`), handles could be memoised in a `Local<HashMap>` keyed on `(ordered_float(bar_w), ordered_float(bar_h), [u32;4])`, matching the pattern in `target_indicator.rs`.
+
+- **Two-writer Visibility contract on nameplate anchors** _(observed at `fcf8209` 2026-06-25)_ — Both `nameplate_visibility_system` and `world_label_screen_pos_system` write the anchor's `Visibility`; correctness relies on explicit `.after()` ordering and a force-hide-only policy in the nameplate system. If ordering ever changes, nameplates within distance could remain hidden. Hardening option: a `NameplatePolicyHidden` marker that `world_label_screen_pos_system` reads as a veto before setting `Visible`.
+
 ## Scene Loading
 
 - ~~**Consolidate the 5 entity-spawn sites behind one "attach standard components" helper**~~ _(observed at `728c997` 2026-06-08; promoted to backlog `34bc77d` 2026-06-08 → Queued ▸ Engine / Runtime)_

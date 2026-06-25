@@ -2,6 +2,17 @@
   schema_version: 2,
   name: "main",
 
+  show_nameplates: true,
+  nameplate_options: (
+    faction_filter: All,
+    max_distance: 25.0,
+    text_shadow: true,
+    // No stat_bars here — enemies already use world_stat_bar + stat_label for health display.
+    // To add nameplate bars, give entities a stat_templates entry and reference the stat key as
+    // "{self}.health" (entity-scoped). Global stats.ron keys (e.g. player_health) are not
+    // entity-scoped and will not satisfy a {self}. stat bar — see docs/20_data_formats.md.
+  ),
+
   tonemapping: AcesFitted,
 
   lighting: (

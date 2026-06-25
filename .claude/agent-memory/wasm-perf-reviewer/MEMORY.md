@@ -8,3 +8,4 @@
 - [Camera shake system](project_camera_shake_system.md) — Update-chained after orbit; query gated by CameraShakeState component; idle frames iterate 0 entities (no change-detection); sine/sqrt WASM-safe, zero deps
 - [Dialogue system](project_dialogue_system.md) — dialogue_tick_system Update; idle empty-Vec collects (no alloc); render gated by last_rendered_node (per-transition not per-frame); UI-only spawn; DialogueDef on-demand load no preload; zero deps
 - [Inventory system](project_inventory_system.md) — inventory_ui_system Update is_changed()-gated + text.0 != label guard; OpenShop despawn+respawn is just_pressed edge-triggered (no held-key stall); 20 slot nodes per-scene-load; zero new deps
+- [Nameplate system](project_nameplate_system.md) — 3 Update systems; visibility O(1) contains + change-guarded; cleanup HashSet collect/frame but zero-cap when empty; Mesh2d/ColorMaterial WebGL2+WebGPU safe; zero deps

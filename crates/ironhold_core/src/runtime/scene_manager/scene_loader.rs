@@ -160,7 +160,7 @@ pub fn spawn_scene_v2(
         let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
         let mut player_config: Option<PlayerConfig> = None;
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>, String)> = None;
+        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>, String, Option<String>, Option<bool>)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -238,7 +238,7 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: collect and defer; camera spawned after entity loop ──
                 if is_player {
                     let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone(), entity_def.prefab.clone()));
+                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone(), entity_def.prefab.clone(), prefab.display_name.clone(), prefab.nameplate));
                     continue;
                 }
 
@@ -447,6 +447,15 @@ pub fn spawn_scene_v2(
                         let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
                         pending_world_bars.push((parent, resolved_key, wb.clone()));
                     }
+
+                    if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                        let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
+                        commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
+                            display_name,
+                            prefab_override: prefab.nameplate,
+                        });
+                    }
+
                     continue;
                 }
 
@@ -708,6 +717,15 @@ pub fn spawn_scene_v2(
                             let resolved_key = wb.stat_key.replace("{self}", &entity_def.id);
                             pending_world_bars.push((spawned, resolved_key, wb.clone()));
                         }
+
+                        if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                            let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
+                            commands.entity(spawned).insert(crate::capabilities::nameplate::NameplateTag {
+                                display_name,
+                                prefab_override: prefab.nameplate,
+                            });
+                        }
+
                 continue;
             }
 
@@ -740,6 +758,12 @@ pub fn spawn_scene_v2(
                     movement: prefab.components.movement.clone(),
                     spawn_id: entity_def.id.clone(),
                     prefab_key: entity_def.prefab.clone(),
+                    nameplate_display_name: if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                        Some(prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone()))
+                    } else {
+                        None
+                    },
+                    nameplate_override: prefab.nameplate,
                 });
             } else {
                 let parent = spawn_prefab_instance(
@@ -774,6 +798,14 @@ pub fn spawn_scene_v2(
                     pending_world_bars.push((parent, resolved_key, wb.clone()));
                 }
 
+                if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                    let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
+                    commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
+                        display_name,
+                        prefab_override: prefab.nameplate,
+                    });
+                }
+
             }
         }
 
@@ -790,7 +822,7 @@ pub fn spawn_scene_v2(
         commands.insert_resource(crate::runtime::scene_manager::ActiveTonemapping(tonemapping));
 
         // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((entity_id, shape, params, position, components, player_children, prefab_key)) = primitive_player {
+        if let Some((entity_id, shape, params, position, components, player_children, prefab_key, np_display_name, np_override)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
             // `height` always means total visual height (cylindrical body + two hemispheres).
             let player_height = params.height.unwrap_or(1.8);
@@ -870,6 +902,14 @@ pub fn spawn_scene_v2(
                 &mut commands.entity(player_entity), &mut spawn_registry,
                 &entity_id, &prefab_key, false, false, 1.0,
             );
+
+            if np_override != Some(false) && (scene.show_nameplates || np_override == Some(true)) {
+                let display_name = np_display_name.clone().unwrap_or_else(|| prefab_key.clone());
+                commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
+                    display_name,
+                    prefab_override: np_override,
+                });
+            }
 
             // Visual body child — mesh centred at body_y above the feet so it aligns
             // with the compound collider above.
@@ -1240,6 +1280,12 @@ pub fn spawn_scene_v2(
             });
             commands.insert_resource(LoadedTargetIndicator(resolved));
         }
+
+        // Populate nameplate system config from the scene definition.
+        commands.insert_resource(crate::capabilities::nameplate::NameplateSceneConfig {
+            enabled: scene.show_nameplates,
+            options: scene.nameplate_options.clone(),
+        });
 
         // Reset inventory/container UI entity references so stale handles from previous scene don't linger.
         *params.inventory_ui = crate::capabilities::inventory::LoadedInventoryUi::default();

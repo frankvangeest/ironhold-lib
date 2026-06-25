@@ -852,6 +852,16 @@ pub struct PrefabDef {
     /// the scene's `ShopPanel` with this entity's stock.
     #[serde(default)]
     pub merchant: Option<MerchantDef>,
+    /// Display name shown in the nameplate widget.
+    /// Falls back to the prefab key (e.g. `"orc_enemy"`) when `None`.
+    #[serde(default)]
+    pub display_name: Option<String>,
+    /// Nameplate visibility override.
+    /// `None` — inherit scene `show_nameplates` + `faction_filter` (default).
+    /// `Some(true)` — always show (bypasses faction filter; respects `max_distance`).
+    /// `Some(false)` — never show, even when the scene has `show_nameplates: true`.
+    #[serde(default)]
+    pub nameplate: Option<bool>,
 }
 
 pub(crate) fn default_select_aim_height() -> f32 { 1.0 }
