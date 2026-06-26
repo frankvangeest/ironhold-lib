@@ -36,6 +36,17 @@ By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two fla
 
 `--webgpu` and `--real-gpu` are mutually exclusive.
 
+> **Build note:** `--webgpu` in `test_web.py` selects the Chromium rendering backend only. The default WASM build already uses `--features webgpu`, so the Bevy and Chromium backends match out of the box:
+> ```bash
+> python test_web.py --webgpu --skip-build   # uses the existing pkg/ (built with --features webgpu)
+> ```
+> To test the WebGL2 fallback path, build without the feature flag first:
+> ```bash
+> wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev  # no --features webgpu
+> python test_web.py --skip-build   # GL/ANGLE backend matches the WebGL2 WASM build
+> ```
+> WebGPU builds require Chrome 113+ or Edge 113+ — Firefox and Safari are not fully supported.
+
 > **Baseline note:** baselines were captured with the default GL/ANGLE backend. Running `--webgpu` or `--real-gpu` may produce pixel-level differences (different rendering path). Regenerate baselines with `--update-baselines` if you switch the default backend.
 
 ## `DebugState` resource

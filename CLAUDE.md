@@ -48,7 +48,10 @@ cargo test -p ironhold_cli                              # run all CLI tests (smo
 cargo test -p ironhold_cli --test validate_projects     # smoke: validate each example project
 cargo test -p ironhold_cli --test validate_cross_file   # cross-file: reference errors reported correctly
 
-# Build for WASM (requires wasm-pack)
+# Build for WASM — WebGPU backend (default; requires Chrome 113+ / Edge 113+)
+wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --features webgpu
+
+# Build for WASM — WebGL2 fallback (broader browser support, more GPU fallback warnings)
 wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 
 # Serve WASM locally (no-cache, port 8000)
@@ -225,12 +228,12 @@ Every code change must follow this order before committing code:
     cargo run -p ironhold_cli -- query actions assets/projects/3rd_person_game_demo
     ```
     Verify new action kinds appear in the output and nothing crashes.
- 7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev`
+ 7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu`
     Fast (~2 min). For local play-testing only — never commit a `--dev` build.
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
     - If the user requests changes or changes are required we go back to step **Code changes** to implement them.
-10. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg`
+10. **WASM release build** — `cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --features webgpu`
     Full clean + size-optimised release build (~8 min). Only run after Frank confirms in step 9.
     ⚠️ Check binary size after build: `ls -lh pkg/ironhold_web_bg.wasm`. Warn at **95 MB** — GitHub Pages hard-blocks at **100 MB**.
 11. **Simple user play-test release build** — Just to confirm there are no errors in the console and basics are working. Frank confirms.

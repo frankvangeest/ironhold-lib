@@ -431,8 +431,16 @@ fn world_label_screen_pos_system(
 
         match camera.world_to_viewport(cam_global, world_pos) {
             Ok(vp) => {
-                t.translation.x = vp.x - half_w + label.screen_offset.x;
-                t.translation.y = half_h - vp.y + label.screen_offset.y;
+                let new_x = vp.x - half_w + label.screen_offset.x;
+                let new_y = half_h - vp.y + label.screen_offset.y;
+                // Guard: only write when position meaningfully changes (≥0.5 px).
+                // An unconditional write marks the Transform dirty every frame, forcing
+                // Bevy to re-propagate transforms and re-layout every Text2d/Mesh2d child
+                // in the entire nameplate subtree — causing constant idle stutter.
+                if (t.translation.x - new_x).abs() >= 0.5 || (t.translation.y - new_y).abs() >= 0.5 {
+                    t.translation.x = new_x;
+                    t.translation.y = new_y;
+                }
                 if *vis != Visibility::Visible { *vis = Visibility::Visible; }
             }
             Err(_) => {

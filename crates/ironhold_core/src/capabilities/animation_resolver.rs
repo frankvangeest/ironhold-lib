@@ -114,12 +114,17 @@ pub fn animation_resolver_system(
 
         // 3) Apply queued commands.
         while let Some(cmd) = requests.queue.pop_front() {
-            // stop action cancels active override
-            if let Some(stop) = &active.stop_action {
-                if stop == &cmd {
+            // If this command is declared as a stop_action on any policy override it is a
+            // sentinel value, not a real clip name. Clear the active override when it matches,
+            // then drop the command so it never reaches the raw-clip branch and pollutes
+            // `controller.current` with an unplayable name.
+            let is_stop_sentinel = policy.overrides.iter()
+                .any(|d| d.stop_action.as_deref() == Some(cmd.as_str()));
+            if is_stop_sentinel {
+                if active.stop_action.as_deref() == Some(cmd.as_str()) {
                     active.clear();
-                    continue;
                 }
+                continue;
             }
 
             // override id

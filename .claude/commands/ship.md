@@ -32,7 +32,7 @@ Steps:
 
 11. **WASM dev build** — Run:
     ```
-    wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev
+    wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu
     ```
     Report the size of `pkg/ironhold_web_bg.wasm`. Warn if ≥ 95 MB.
     ⚠️ **Never commit a `--dev` build** — it is ~180 MB and will exceed GitHub Pages' 100 MB hard limit. The `pkg/` directory must not be staged after a dev build.
@@ -51,7 +51,7 @@ Steps:
 
 14. **WASM release build** — Run:
     ```
-    cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
+    cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --features webgpu
     ```
     Report binary size. If ≥ 95 MB, warn Frank clearly — GitHub Pages hard-blocks at 100 MB.
 
