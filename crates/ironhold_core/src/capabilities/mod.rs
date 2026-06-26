@@ -59,7 +59,10 @@ pub use particle_renderer::{
 };
 pub use decal::{FadingDecal, TrackedDecal, PendingDecalSpawns, spawn_decal_system, fading_decal_system};
 pub use foliage::{FoliageMaterial, FoliageMaterialParams, ATTRIBUTE_LEAF_CENTER, PendingFoliage, FoliagePlugin};
-pub use action_bar::{ActionBarPlugin, CooldownMap, CurrentTarget, ActionSlotUi, CooldownOverlay};
+pub use action_bar::{
+    ActionBarPlugin, CooldownMap, CurrentTarget, ActionSlotUi, CooldownOverlay,
+    PendingIntentActions, HandledIntentSlots, flush_pending_intent_system,
+};
 pub use targeting::{TargetingPlugin, ClickSelectable, Targetable, tab_targeting_system};
 pub use dialogue::{
     ActiveDialogue, DialoguePath, DialoguePanelMarker, DialogueTextMarker, DialogueTextRole,

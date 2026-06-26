@@ -201,6 +201,7 @@ impl Plugin for GamePlugin {
                 message_interpreter_system,
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
+                flush_pending_intent_system,
                 action_executor_system,
                 stat_effective_value_system, // recompute after ModifyStat/SetStat/ApplyModifier/RemoveModifier
                 stat_threshold_system,

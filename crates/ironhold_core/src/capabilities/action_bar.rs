@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::schema::actions::Action;
 use crate::schema::scene_v2::SlotCost;
@@ -7,6 +7,8 @@ use crate::schema::stats::LoadedStats;
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::message_interpreter::rewrite_target;
+use crate::runtime::scene_manager::SpawnId;
+use crate::capabilities::player::CharacterController;
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,22 @@ pub struct CooldownMap(pub HashMap<String, (f32, f32)>); // (remaining, total)
 /// `{target}` substitution in action bar `do_actions` resolves against this value.
 #[derive(Resource, Default)]
 pub struct CurrentTarget(pub Option<String>);
+
+/// Pending slot actions held between `action_bar_input_system` and `flush_pending_intent_system`.
+/// Keys are slot keys (e.g., `"1"`, `"i"`).
+/// Values are (pre-target-rewritten actions, cooldown_secs).
+/// Cooldown is committed by `flush_pending_intent_system` only on the commit path,
+/// so a suppressed intent never starts the cooldown timer.
+/// Cleared each frame by `flush_pending_intent_system`.
+#[derive(Resource, Default)]
+pub struct PendingIntentActions(pub HashMap<String, (Vec<Action>, Option<f32>)>);
+
+/// Slot keys whose `intent.slot.*` event was matched by a rule this frame.
+/// Written by the interpreter systems; read by `flush_pending_intent_system` to suppress
+/// the slot's built-in do_actions when a designer rule took over.
+/// Cleared each frame by `flush_pending_intent_system`.
+#[derive(Resource, Default)]
+pub struct HandledIntentSlots(pub HashSet<String>);
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
@@ -49,8 +67,11 @@ fn any_action_slots(slots: Query<&ActionSlotUi>) -> bool {
 
 impl Plugin for ActionBarPlugin {
     fn build(&self, app: &mut App) {
+        use crate::runtime::scene_manager::message_interpreter::message_interpreter_system;
         app.init_resource::<CooldownMap>()
             .init_resource::<CurrentTarget>()
+            .init_resource::<PendingIntentActions>()
+            .init_resource::<HandledIntentSlots>()
             .add_systems(
                 Update,
                 (
@@ -58,7 +79,8 @@ impl Plugin for ActionBarPlugin {
                     action_bar_input_system.run_if(any_action_slots),
                     action_bar_visual_system.run_if(any_action_slots),
                 )
-                    .chain(),
+                    .chain()
+                    .before(message_interpreter_system),
             );
     }
 }
@@ -77,16 +99,21 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 }
 
 /// Listens for digit key presses (1–9), finds the matching `ActionSlotUi`, and either:
-/// - fires `do_actions` + starts cooldown + deducts cost, or
+/// - emits `intent.slot.{n}:{entity}` + stores pending actions for the interpreter pass, or
 /// - emits an `action_bar.*` event describing why the slot didn't fire.
+///
+/// Pending actions are flushed to `ActionQueue` by `flush_pending_intent_system` after all
+/// interpreter systems run. If a designer rule matches the intent event, the slot's built-in
+/// `do_actions` are suppressed; otherwise they fire unchanged.
 pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     slots: Query<&ActionSlotUi>,
-    mut action_queue: ResMut<ActionQueue>,
     mut game_events: MessageWriter<GameEvent>,
-    mut cooldowns: ResMut<CooldownMap>,
+    cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
     current_target: Res<CurrentTarget>,
+    mut pending: ResMut<PendingIntentActions>,
+    player_query: Query<&SpawnId, With<CharacterController>>,
 ) {
     let pressed_key = DIGIT_KEYS.iter().find(|(kc, _)| keys.just_pressed(*kc));
     let Some(&(_, key_str)) = pressed_key else { return };
@@ -127,28 +154,63 @@ pub fn action_bar_input_system(
     }
 
     // ── Fire ─────────────────────────────────────────────────────────────────
-    // Substitute {target} in actions if a target is available.
     let target_id = current_target.0.as_deref().unwrap_or("");
-    for action in &slot.do_actions {
-        action_queue.push(rewrite_target(action.clone(), target_id));
-    }
 
-    // Deduct cost stat.
+    // Emit the intent event. The interpreter checks for a matching rule this frame;
+    // if one matches, flush_pending_intent_system suppresses the slot's built-in do_actions.
+    let player_id = player_query.single().map(|id| id.0.as_str()).unwrap_or("player");
+    game_events.write(GameEvent::Trigger(
+        format!("intent.slot.{}:{}", key_str, player_id),
+    ));
+
+    // Store pending actions (target-rewritten) + cooldown. Flushed to ActionQueue by
+    // flush_pending_intent_system unless a rule handled the intent.
+    // Cooldown and `action_bar.activated` are also deferred to flush so that a
+    // suppressed intent never starts the cooldown or fires the result event.
+    let mut actions: Vec<Action> = slot.do_actions.iter()
+        .map(|a| rewrite_target(a.clone(), target_id))
+        .collect();
     if let Some(cost) = &slot.cost {
-        action_queue.push(Action::ModifyStat {
+        actions.push(Action::ModifyStat {
             key: cost.stat.clone(),
             delta: -cost.amount,
         });
     }
+    pending.0.insert(key_str.to_string(), (actions, slot.cooldown_secs));
 
-    // Start cooldown.
-    if let Some(cd) = slot.cooldown_secs {
-        cooldowns.0.insert(key_str.to_string(), (cd, cd));
-    }
-
+    // action_bar.pressed fires immediately (before interpreter) — notification that the key
+    // was pressed and passed all gate checks. Use for telemetry or UI feedback that should
+    // fire regardless of whether a rule later cancels the intent.
     game_events.write(GameEvent::Trigger(
-        format!("action_bar.activated:{}", key_str),
+        format!("action_bar.pressed:{}", key_str),
     ));
+}
+
+/// Drains `PendingIntentActions` after all interpreter systems have run.
+/// For each pending slot:
+/// - If a rule handled its intent (`HandledIntentSlots` contains the key): suppressed — no
+///   actions, no cooldown, no `action_bar.activated` event.
+/// - Otherwise: pushes actions to `ActionQueue`, commits the cooldown, and emits
+///   `action_bar.activated:{key}` so rules can react to the committed ability.
+pub fn flush_pending_intent_system(
+    mut pending: ResMut<PendingIntentActions>,
+    mut handled: ResMut<HandledIntentSlots>,
+    mut action_queue: ResMut<ActionQueue>,
+    mut cooldowns: ResMut<CooldownMap>,
+    mut game_events: MessageWriter<GameEvent>,
+) {
+    for (slot_key, (actions, cooldown)) in pending.0.drain() {
+        if !handled.0.contains(&slot_key) {
+            for action in actions {
+                action_queue.push(action);
+            }
+            if let Some(cd) = cooldown {
+                cooldowns.0.insert(slot_key.clone(), (cd, cd));
+            }
+            game_events.write(GameEvent::Trigger(format!("action_bar.activated:{}", slot_key)));
+        }
+    }
+    handled.0.clear();
 }
 
 /// Updates cooldown overlay alpha each frame.

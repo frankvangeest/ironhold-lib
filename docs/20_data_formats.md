@@ -746,10 +746,31 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 
 | Event | When fired |
 |-------|-----------|
-| `action_bar.activated:{key}` | Slot fired successfully |
+| `intent.slot.{key}:{entity}` | Before the slot's `do_actions` are committed — allows rules to intercept, redirect, or suppress the ability |
+| `action_bar.pressed:{key}` | Key pressed and passed all gate checks — fires even when a rule later cancels the intent; use for unconditional UI/telemetry |
+| `action_bar.activated:{key}` | Slot `do_actions` committed (not suppressed); cooldown starts at the same time — use to react to confirmed ability execution. **Note:** rules on this event fire one frame after the slot's own `do_actions` (the event is emitted after the interpreter chain runs). |
 | `action_bar.on_cooldown:{key}` | Key pressed while slot is on cooldown |
 | `action_bar.insufficient_resource:{key}` | Key pressed but cost stat too low |
 | `action_bar.no_target:{key}` | `{target}` used in `do_actions` but no target is selected |
+
+**Intent event layer:** When a slot key is pressed and passes all checks (cooldown, cost, target), the action bar emits `intent.slot.{key}:{entity}` (e.g. `intent.slot.1:player_01`) before committing the slot's `do_actions`. If any rule in `rules.ron`, `state_machine.ron`, or a `.behavior.ron` file matches this event, its `do_actions` run **and the slot's built-in `do_actions` are suppressed — including the cooldown and `action_bar.activated` event**. If no rule matches, the slot's `do_actions` fire unchanged, the cooldown starts, and `activated` fires — so existing projects with no intent rules behave identically to before.
+
+```ron
+// Suppress slot 1 and show a "Silenced!" popup when the player is in the "silenced" state
+( on: "intent.slot.1:player_01", when: "silenced", do_actions: [
+    ShowFloatingText(entity: "player_01", text: "Silenced!"),
+    // no damage action — intent is consumed with no effect
+] )
+
+// Redirect slot 1 to a rage-strike when the player is in "berserk" state
+( on: "intent.slot.1:player_01", when: "berserk", do_actions: [
+    PlayAnimation("rage_strike"),
+    ModifyStat(key: "{target}.health", delta: -25.0),
+    EmitEvent("combat.hit:player_01"),
+] )
+
+// No rule on intent.slot.1 → slot's own do_actions run as normal
+```
 
 **`{target}` substitution:** Any occurrence of `{target}` in a slot's `do_actions` (and in all rule / FSM `do_actions`) is replaced with the spawn ID of the entity in `CurrentTarget`. For action bar slots, if `CurrentTarget` is `None` the slot emits `action_bar.no_target:{key}` and does not fire. `CurrentTarget` is populated by the targeting system — set `click_selectable: true` or `targetable: true` on a `PrefabDef` to enable.
 

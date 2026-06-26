@@ -125,6 +125,12 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"inventory.full:{entity}"` — `AddItem` found no room; all slots occupied; emitted alongside the partial-add event when some but not all items fit ✅
 - `"inventory.removed:{entity}:{item_key}:{count}"` — items removed from an inventory; `count` is the actual amount removed; emitted by `Action::RemoveItem` ✅
 - `"inventory.transferred:{from}:{to}:{item_key}"` — items moved between two inventories; emitted by `Action::TransferItem` ✅
+- `"intent.slot.{n}:{entity}"` — emitted by the action bar when key `n` is pressed and passes all checks (cooldown, cost, target); fires before the slot's `do_actions` are committed; a matching rule's `do_actions` replace the slot's built-in ones; if no rule matches the slot fires as normal ✅
+- `"action_bar.pressed:{key}"` — key pressed and passed all gate checks; fires immediately before the interpreter runs, even if a rule later cancels the intent; use for telemetry or UI feedback that should fire unconditionally ✅
+- `"action_bar.activated:{key}"` — slot `do_actions` committed (fires only when no rule suppressed the intent); cooldown starts at the same time; use to react to confirmed ability execution ✅
+- `"action_bar.on_cooldown:{key}"` — key pressed while slot is on cooldown ✅
+- `"action_bar.insufficient_resource:{key}"` — key pressed but cost stat too low ✅
+- `"action_bar.no_target:{key}"` — `{target}` used in `do_actions` but no target is selected ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 

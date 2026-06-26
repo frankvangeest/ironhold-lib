@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::schema::Action;
-use crate::capabilities::action_bar::CurrentTarget;
+use crate::capabilities::action_bar::{CurrentTarget, HandledIntentSlots};
 use super::{LoadedRules, LoadedStateMachine, LogicState, BehaviorHandle, EntityFsmState, SpawnId};
 
 pub fn message_interpreter_system(
@@ -13,6 +13,7 @@ pub fn message_interpreter_system(
     loaded_rules: Res<LoadedRules>,
     logic_state: Res<LogicState>,
     current_target: Res<CurrentTarget>,
+    mut handled_intents: ResMut<HandledIntentSlots>,
 ) {
     let target_id = current_target.0.as_deref().unwrap_or("");
     for event in ui_events.read() {
@@ -28,7 +29,12 @@ pub fn message_interpreter_system(
             // (e.g. "entity.collected:coin_01", "zone.entered:checkpoint_1").
             GameEvent::Trigger(name) => name.clone(),
         };
-        match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue, target_id);
+        let matched = match_rules(&event_name, &loaded_rules, &logic_state, &mut action_queue, target_id);
+        if matched {
+            if let Some(slot_key) = intent_slot_key(&event_name) {
+                handled_intents.0.insert(slot_key);
+            }
+        }
     }
 
     for event in scene_events.read() {
@@ -48,9 +54,9 @@ fn match_rules(
     logic_state: &LogicState,
     action_queue: &mut ActionQueue,
     target_id: &str,
-) {
+) -> bool {
     if loaded_rules.0.is_empty() {
-        return;
+        return false;
     }
     let mut matched = false;
     for rule in &loaded_rules.0 {
@@ -69,6 +75,16 @@ fn match_rules(
     if !matched {
         debug!("No rule matched event {:?} (state: {:?})", event_name, logic_state.0);
     }
+    matched
+}
+
+/// Extracts the slot key from an intent event name.
+/// `"intent.slot.1:player_01"` → `Some("1")`
+fn intent_slot_key(event_name: &str) -> Option<String> {
+    event_name
+        .strip_prefix("intent.slot.")
+        .and_then(|s| s.split(':').next())
+        .map(|s| s.to_string())
 }
 
 fn scene_path_stem(path: &str) -> &str {
@@ -99,6 +115,7 @@ pub fn entity_fsm_interpreter_system(
     mut entities: Query<(&BehaviorHandle, &mut EntityFsmState, &SpawnId)>,
     state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
     current_target: Res<CurrentTarget>,
+    mut handled_intents: ResMut<HandledIntentSlots>,
 ) {
     let target_id = current_target.0.as_deref().unwrap_or("");
     // Collect all events emitted this frame.
@@ -128,6 +145,8 @@ pub fn entity_fsm_interpreter_system(
         let id = &spawn_id.0;
 
         for event_name in &events {
+            let mut intent_matched = false;
+
             // global_on — fires from any state without changing state.
             for binding in &fsm.global_on {
                 let pattern = binding.event.replace("{self}", id);
@@ -136,6 +155,7 @@ pub fn entity_fsm_interpreter_system(
                         info!("Entity FSM [{}] global_on: {} -> {:?}", id, event_name, action);
                         action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                     }
+                    intent_matched = true;
                 }
             }
 
@@ -150,6 +170,7 @@ pub fn entity_fsm_interpreter_system(
                                 id, current, event_name, action);
                             action_queue.push(rewrite_target(rewrite_self(action.clone(), id), target_id));
                         }
+                        intent_matched = true;
                     }
                 }
             }
@@ -184,6 +205,13 @@ pub fn entity_fsm_interpreter_system(
                 }
 
                 fsm_state.current = to_name;
+                intent_matched = true;
+            }
+
+            if intent_matched {
+                if let Some(slot_key) = intent_slot_key(event_name) {
+                    handled_intents.0.insert(slot_key);
+                }
             }
         }
     }
@@ -318,6 +346,7 @@ pub fn fsm_interpreter_system(
     loaded_fsm: Res<LoadedStateMachine>,
     mut logic_state: ResMut<LogicState>,
     current_target: Res<CurrentTarget>,
+    mut handled_intents: ResMut<HandledIntentSlots>,
 ) {
     let Some(fsm) = &loaded_fsm.0 else { return };
     let target_id = current_target.0.as_deref().unwrap_or("");
@@ -344,6 +373,8 @@ pub fn fsm_interpreter_system(
     }
 
     for event_name in &events {
+        let mut intent_matched = false;
+
         // 1. global_on — fires regardless of state, no state change.
         for binding in &fsm.global_on {
             if binding.event == *event_name {
@@ -351,6 +382,7 @@ pub fn fsm_interpreter_system(
                     info!("FSM global_on: {} -> {:?}", event_name, action);
                     action_queue.push(rewrite_target(action.clone(), target_id));
                 }
+                intent_matched = true;
             }
         }
 
@@ -362,6 +394,7 @@ pub fn fsm_interpreter_system(
                         info!("FSM in-state on [{}]: {} -> {:?}", logic_state.0, event_name, action);
                         action_queue.push(rewrite_target(action.clone(), target_id));
                     }
+                    intent_matched = true;
                 }
             }
         }
@@ -399,6 +432,13 @@ pub fn fsm_interpreter_system(
 
             // Advance logic state immediately so subsequent events this frame see the new state.
             logic_state.0 = to_name.clone();
+            intent_matched = true;
+        }
+
+        if intent_matched {
+            if let Some(slot_key) = intent_slot_key(event_name) {
+                handled_intents.0.insert(slot_key);
+            }
         }
     }
 }

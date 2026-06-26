@@ -1,6 +1,6 @@
 # Feature: Intent Event Layer
 
-_Status: Draft_
+_Status: Done_
 _Planned at: `f66f7b2` (2026-06-23)_
 
 ## What
@@ -114,13 +114,13 @@ New `Action` variant (optional, for the slot-suppression mechanism):
 
 ## Tasks
 
-- [ ] Design decision: Option A, B, or C for default-path suppression (recommendation: C)
-- [ ] Emit `intent.slot.{n}:{entity_id}` in `action_bar.rs` activation path
-- [ ] Interpreter: detect intent handler and suppress slot default `do_actions` when a rule matches
-- [ ] Add `intent.interact:{entity_id}` emission to interactable system (same pattern)
-- [ ] Integration test: slot fires do_actions when no rule; slot is suppressed when a rule matches the intent
-- [ ] Demo: add a silenced-state test rule in `entity_logic_demo` or `3rd_person_game_demo`
-- [ ] Docs: add `intent.slot.{n}:{entity}` to `docs/30_runtime_events_and_logic.md` event catalogue
+- [x] Design decision: Option C — slot's `do_actions` are the default path; a matching rule suppresses them
+- [x] Emit `intent.slot.{n}:{entity_id}` in `action_bar.rs` activation path
+- [x] Interpreter: detect intent handler and suppress slot default `do_actions` when a rule matches
+- [ ] Add `intent.interact:{entity_id}` emission to interactable system (same pattern) — deferred to v2
+- [x] Integration test: slot fires do_actions when no rule; slot is suppressed when a rule matches the intent
+- [ ] Demo: add a silenced-state RON rule to `primitive_world` or `3rd_person_game_demo` — deferred to v2
+- [x] Docs: add `intent.slot.{n}:{entity}` to `docs/30_runtime_events_and_logic.md` event catalogue
 
 ---
 

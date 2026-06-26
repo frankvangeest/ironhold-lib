@@ -3805,3 +3805,231 @@ fn test_camera_shake_component_removed_after_expiry() {
     let shake = app.world().entity(camera_entity).get::<CameraShakeState>();
     assert!(shake.is_none(), "CameraShakeState should be removed when remaining <= 0");
 }
+
+// ── Intent event layer ────────────────────────────────────────────────────────
+
+fn intent_test_player_controller() -> CharacterController {
+    use ironhold_core::schema::player::InputMap;
+    CharacterController {
+        walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+        inputs: InputMap {
+            forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+            left: "KeyA".to_string(), right: "KeyD".to_string(),
+            strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+            jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+            interact: "KeyF".to_string(), strafe_mouse_button: None,
+            target_next: "Tab".to_string(), target_range: 30.0,
+        },
+        is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+        double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+        collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+    }
+}
+
+/// No intent rule present → slot's built-in do_actions must fire unchanged.
+#[test]
+fn test_intent_slot_no_rule_fires_slot_do_actions() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Slot 1: sets "intent_test" = "slot_fired"
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+    });
+
+    // Player entity (needed so player_query resolves in action_bar_input_system)
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    // Press key 1
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("intent_test").map(String::as_str), Some("slot_fired"),
+        "Without an intent rule the slot's own do_actions must fire"
+    );
+}
+
+/// Intent rule matches → rule's do_actions run; slot's built-in do_actions are suppressed.
+#[test]
+fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Register an intent rule that fires "rule_fired" for slot 1 on player_01
+    {
+        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
+        rules.0 = vec![
+            LogicRule {
+                on: "intent.slot.1:player_01".to_string(),
+                when: None,
+                do_actions: vec![
+                    Action::SetVariable("intent_test".to_string(), "rule_fired".to_string()),
+                ],
+            }
+        ];
+    }
+
+    // Slot 1: would set "slot_fired" — this must be suppressed
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+    });
+
+    // Player entity
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("intent_test").map(String::as_str), Some("rule_fired"),
+        "Rule's do_actions must run and suppress the slot's built-in do_actions"
+    );
+}
+
+/// Intent suppressed by a rule → cooldown must NOT start.
+#[test]
+fn test_intent_slot_rule_match_does_not_start_cooldown() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownMap};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    {
+        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
+        rules.0 = vec![LogicRule {
+            on: "intent.slot.1:player_01".to_string(),
+            when: None,
+            do_actions: vec![Action::Log("intercepted".to_string())],
+        }];
+    }
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        do_actions: vec![],
+        cooldown_secs: Some(5.0),
+        cost: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let cooldowns = app.world().resource::<CooldownMap>();
+    assert!(
+        !cooldowns.0.contains_key("1"),
+        "Suppressed intent must not start the cooldown"
+    );
+}
+
+/// Intent suppressed → `action_bar.activated` must NOT fire; committed → it must fire.
+#[test]
+fn test_activated_fires_only_on_commit() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    // ── Case A: rule suppresses → activated must not clear the status variable ──
+    let mut app = setup_test_app();
+    app.update();
+
+    // Seed a sentinel so we can detect if activated fired (it would clear it via rule below)
+    {
+        let mut vars = app.world_mut().resource_mut::<GameVariables>();
+        vars.0.insert("status".to_string(), "silenced".to_string());
+    }
+    {
+        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
+        rules.0 = vec![
+            // intercept the intent
+            LogicRule {
+                on: "intent.slot.1:player_01".to_string(),
+                when: None,
+                do_actions: vec![Action::Log("intercepted".to_string())],
+            },
+            // would clear status on activated — must NOT fire
+            LogicRule {
+                on: "action_bar.activated:1".to_string(),
+                when: None,
+                do_actions: vec![Action::SetVariable("status".to_string(), "".to_string())],
+            },
+        ];
+    }
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("status").map(String::as_str), Some("silenced"),
+        "action_bar.activated must not fire when intent is suppressed"
+    );
+
+    // ── Case B: no rule → activated must fire ──
+    let mut app2 = setup_test_app();
+    app2.update();
+
+    {
+        let mut vars = app2.world_mut().resource_mut::<GameVariables>();
+        vars.0.insert("status".to_string(), "silenced".to_string());
+    }
+    {
+        let mut rules = app2.world_mut().resource_mut::<LoadedRules>();
+        rules.0 = vec![LogicRule {
+            on: "action_bar.activated:1".to_string(),
+            when: None,
+            do_actions: vec![Action::SetVariable("status".to_string(), "".to_string())],
+        }];
+    }
+
+    app2.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: None,
+    });
+    app2.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app2.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app2.update(); // slot activates, activated event emitted from flush_pending_intent_system
+    app2.update(); // interpreter picks up the activated event (one-frame propagation delay)
+
+    let vars = app2.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("status").map(String::as_str), Some(""),
+        "action_bar.activated must fire when intent is committed (no suppressing rule)"
+    );
+}
