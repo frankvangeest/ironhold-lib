@@ -32,8 +32,10 @@ Items flow: **Icebox → Queued → Active → Done**
 One line in the `## Bugs` section is enough for most bugs:
 
 ```
-- [ ] **short title** — reproduction, suspected cause, candidate fix.
+- [ ] **short title** — what goes wrong; Reproduce: exact project + exact steps to trigger it; suspected cause, candidate fix.
 ```
+
+**Reproduction steps are mandatory.** A bug without repro steps cannot be verified as fixed and may be re-introduced silently. Always include: which project to open, what sequence of actions triggers the bug, and what the wrong vs. expected outcome is.
 
 If the bug needs investigation before it can be fixed, add the backlog entry _and_ create an investigation file:
 

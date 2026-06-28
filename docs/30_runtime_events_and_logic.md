@@ -286,8 +286,8 @@ Applies actions to the world. Key design points:
 
 ### Actions ✅
 - `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`
-- `LoadSceneOverlay(String)` — loads a `.scene.ron` as an overlay (e.g. pause menu)
-- `UnloadOverlay` — despawns all overlay entities
+- `LoadSceneOverlay(String)` — loads a `.scene.ron` as an overlay (e.g. pause menu); automatically spawns a transparent full-screen backdrop beneath the overlay UI that blocks pointer events — base-scene buttons are not clickable through the overlay
+- `UnloadOverlay` — despawns all overlay entities (including the backdrop)
 - `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line

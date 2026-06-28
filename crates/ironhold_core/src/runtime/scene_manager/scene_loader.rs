@@ -1193,6 +1193,24 @@ pub fn spawn_scene_v2(
         })
         .collect();
 
+    // When loading an overlay, spawn a transparent full-screen backdrop first.
+    // It sits at GlobalZIndex(100), above all base-scene UI (which has no GlobalZIndex → 0),
+    // and absorbs pointer events so base-scene buttons are not clickable through the overlay.
+    // Tagged OverlayEntity so it despawns with UnloadOverlay automatically.
+    if is_overlay {
+        commands.spawn((
+            Name::new("Overlay Backdrop"),
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            GlobalZIndex(100),
+            OverlayEntity,
+        ));
+    }
+
     if !scene.ui.is_empty() {
         if let Some(panel_def) = &scene.ui_panel {
             // Panel mode: full-screen flex root → centered panel box → column of elements.
@@ -1209,6 +1227,7 @@ pub fn spawn_scene_v2(
             ));
             if is_overlay {
                 root_cmd.insert(OverlayEntity);
+                root_cmd.insert(GlobalZIndex(101));
             } else {
                 root_cmd.insert(LevelEntity);
             }
@@ -1275,6 +1294,7 @@ pub fn spawn_scene_v2(
             ));
             if is_overlay {
                 root_cmd.insert(OverlayEntity);
+                root_cmd.insert(GlobalZIndex(101));
             } else {
                 root_cmd.insert(LevelEntity);
             }

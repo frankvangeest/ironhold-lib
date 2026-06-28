@@ -23,6 +23,8 @@
 
 ## Audio
 
+- **CLI `validate` should cross-check scene button triggers against FSM rules** _(observed at `517afe7` 2026-06-28)_ — `scene_loader.rs:1384` strips the `ui.` prefix from button `action` strings silently; a mis-prefixed button (e.g. `action: "toggle_mute"` instead of `action: "ui.toggle_mute"`) produces a different trigger that matches no FSM rule, giving the "button animates but nothing happens" symptom with no error at startup. A validator pass comparing each scene button's derived `ui.button_pressed:{trigger}` against all events handled in `rules.ron`/`state_machine.ron` would catch this at author time; fits the existing `query events` CLI surface.
+
 - **Collapse dual `GlobalVolume` write in audio actions** _(observed at `43c5a84` 2026-06-10)_ — `action_executor_system` writes `GlobalVolume` directly after mutating `AudioState`, but mutating `AudioState` also trips `is_changed()`, so `audio_state_system` writes it again the following frame; benign today (idempotent), but two sources of truth — if `GlobalVolume` writes become expensive, collapse to a single writer by having the executor mutate only `AudioState` and letting `audio_state_system` be the sole `GlobalVolume` writer.
 
 ## Nameplate System

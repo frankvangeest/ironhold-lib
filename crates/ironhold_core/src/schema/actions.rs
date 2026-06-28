@@ -46,6 +46,8 @@ pub enum Action {
     /// Load a scene on top of the current one without unloading the game world.
     /// Only the UI section of the overlay scene is spawned; 3D entities are ignored.
     /// Entities are tagged OverlayEntity and removed by UnloadOverlay or any full LoadScene.
+    /// A transparent full-screen backdrop is automatically spawned beneath the overlay content,
+    /// blocking pointer events so base-scene buttons are not clickable through the overlay.
     LoadSceneOverlay(String),
     /// Remove all OverlayEntity entities (dismiss the current overlay).
     UnloadOverlay,
