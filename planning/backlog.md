@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Overlay modal backdrop (click-blocking)** — spawn a transparent full-screen click-absorbing rect when `LoadSceneOverlay` fires; tagged `OverlayEntity` so it despawns with `UnloadOverlay`; fixes click-through to base-scene buttons. See `planning/features/overlay_modal_backdrop.md`.
-
 ---
 
 ## Bugs
@@ -30,7 +28,7 @@
 ### Engine / Runtime
 
 - [ ] **Static scene mode (`?static=1`)** — freeze all time-driven systems (animations, NPC AI, motion, particles) immediately after `SceneEvent::Ready` so browser screenshot baselines are pixel-identical across runs. Mechanism: parse `?static=1` URL param in the WASM runner → `StaticMode(bool)` resource → pause `Time<Virtual>` + seek all `AnimationPlayer`s to t=0 on scene ready. Requires `start_app` signature change (all three crates) and a one-line change to `test_web.py`. See `planning/features/static_scene_mode.md`.
-- [>] **Overlay modal backdrop (click-blocking)** — _(Active)_ see above.
+- [x] **Overlay modal backdrop (click-blocking)** — _(Done)_ see Active section above.
 - [ ] **Inventory / shop / container click-blocking backdrop** — when `OpenInventory`, `OpenShop`, or `OpenContainer` shows a panel, spawn a full-screen absorbing rect beneath the panel (same technique as overlay modal backdrop but triggered by the panel open/close actions); prevents base-scene world-space interactions (collectibles, NPC interactables) firing through the UI while a window is open. _Dep: overlay modal backdrop (click-blocking) — reuse the same backdrop spawning utility._
 - [ ] **Promote magic `tags` to typed prefab fields** — add `collectable: bool`, `player: bool`, and `flycam: bool` as `#[serde(default)]` fields on `PrefabDef`; `tags` remains for free-form designer labels but control-flow semantics move to typed fields; consistent with the `PrefabKind` enum casing work that cleaned up `kind`. Additive, no migration required.
 - [ ] **Per-prefab `depth_scale` honoured on dynamic spawns** — `StatLabelDef`/`WorldStatBarDef.depth_scale` overrides are silently ignored for `Action::Spawn` entities; fix by storing scene-level label depth config in a `LoadedLabelDepthScale` resource at scene load and reading it in `drain_dynamic_stat_ui_system`. See `planning/features/depth_scale_dynamic_spawn.md`
@@ -210,6 +208,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Overlay modal backdrop (click-blocking)** — transparent full-screen `GlobalZIndex(100)` node auto-spawned by `LoadSceneOverlay`; overlay content at `GlobalZIndex(101)`; blocks base-scene button clicks through overlays. See `planning/features/done/overlay_modal_backdrop.md`.
 - [x] **Unify prefab feature application across all spawn paths** — moved `attach_prefab_features` to `entity_spawner.rs`; `spawn_prefab_instance` calls it at its tail; all three spawn paths (GLB Actor/Prop, composite Primitive, single-mesh Primitive) route through one function. See `planning/features/done/unify_prefab_feature_application.md`.
 - [x] **Consolidate conditional prefab-feature application (sibling divergence)** — introduced `attach_prefab_features` in `scene_loader.rs`; both Primitive branches call it instead of duplicating 6 feature blocks each.
 - [x] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true`) with per-prefab override; distance and faction filtering. See `planning/features/done/nameplate_system.md`

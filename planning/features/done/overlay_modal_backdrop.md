@@ -1,6 +1,6 @@
 # Feature: Overlay modal backdrop (click-blocking)
 
-_Status: In Progress_
+_Status: Done_
 _Planned at: `e24f03f` (2026-06-28)_
 
 ## What
