@@ -16,17 +16,24 @@ the multi-path footgun is closed: add the field to the helper once. When reviewi
 helper, verify every call site still passes the right flags (players pass `false,false` for markers
 deliberately — selecting the player is nonsensical).
 
-**UPDATE 2 (capability-feature consolidation, ~2026-06-28):** the two primitive branches in
-`scene_loader.rs` (composite + single-mesh) now share a second helper, **`attach_prefab_features(commands,
-entity, prefab, project_root, asset_server, entity_id, stat_overrides, prefab_key)`** (defined just
-before `spawn_scene_v2`). It covers SIX features: `behavior`, `interactable`, `dialogue`, `inventory`,
-`stat_templates`, `trigger_zone`. Both primitive call sites now call it (composite passes `parent`,
-single-mesh passes `spawned`; all other args identical). It is feature-for-feature identical to the
-GLB path in `entity_spawner.rs::spawn_prefab_instance` (verified 2026-06-28). So for those six fields
-the composite-vs-single-mesh divergence risk is closed — but there are still THREE copies of the logic
-(the two-in-one helper in scene_loader.rs + the GLB path in entity_spawner.rs), so a new feature must
-be added to BOTH `attach_prefab_features` AND `spawn_prefab_instance`. Note `motion`, `colliders`,
-`npc`, `Collectable` are NOT in `attach_prefab_features` — they remain inserted inline per-path.
+**UPDATE 2 (capability-feature consolidation, ~2026-06-28):** the SIX features `behavior`,
+`interactable`, `dialogue`, `inventory`, `stat_templates`, `trigger_zone` are now in a SINGLE helper
+**`attach_prefab_features(commands, entity, prefab, project_root, asset_server, entity_id,
+stat_overrides, prefab_key)`** — now defined `pub(super)` in **`entity_spawner.rs`** (top of file,
+just above `spawn_prefab_instance`), NOT in scene_loader.rs. `scene_loader.rs` imports it from
+`super::entity_spawner`. ALL THREE spawn paths route through this ONE function: GLB path calls it at
+the TAIL of `spawn_prefab_instance` (after animation_policy/colliders/motion/npc, passing
+`spawned.parent` and `name` for both entity_id and prefab_key); composite primitive branch
+(scene_loader ~351, passes `parent`); single-mesh primitive branch (scene_loader ~570, passes
+`spawned`). So the THREE-copies risk for these six features is now CLOSED — there is genuinely one
+source of truth (verified 2026-06-28 review of the consolidation refactor). A new feature added to
+`attach_prefab_features` propagates to all three paths automatically. The 3 removed imports
+(`TriggerZone`, `TriggerZoneId`, `Interactable`, `LiveStat`, `StatMap`) are gone from scene_loader.rs
+with no residual refs. Note `motion`, `colliders`, `npc`, `Collectable`, material override,
+`stat_label`/`world_stat_bar`, `nameplate` are STILL inserted inline per-path — those keep the
+multi-path footgun. Trigger-zone block is LAST in the helper (spawns a sensor child; needs a fresh
+Commands borrow, comment in code explains it). All call sites pass `&mut commands` not a held
+`EntityCommands`, so no borrow conflict.
 
 BUT the footgun below STILL applies to **every other** spawn-time field that is NOT part of the
 standard metadata set and NOT in `attach_prefab_features` — `motion`, `npc`, `colliders`,
