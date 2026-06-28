@@ -33,7 +33,7 @@ const TAG_FLYCAM: &str = "flycam";
 const TAG_PLAYER: &str = "player";
 const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
-use crate::capabilities::trigger_zone::TriggerZone;
+use crate::capabilities::trigger_zone::{TriggerZone, TriggerZoneId};
 use crate::capabilities::interactable::Interactable;
 use crate::schema::stats::{LiveStat, StatMap};
 use crate::PipelineWarmup;
@@ -267,6 +267,7 @@ pub fn spawn_scene_v2(
                             &mut commands, parent, &prefab.children,
                             prefab_catalog, &mut ctx,
                             &mut load_errors, &entity_def.id, 0, &mut HashSet::new(),
+                            transform,
                         );
                     }
 
@@ -372,12 +373,16 @@ pub fn spawn_scene_v2(
 
                     // TriggerZone: Rapier sensor → entity.entered/exited:{id}
                     if let Some(zone_def) = &prefab.trigger_zone {
-                        commands.entity(parent).insert((
+                        let sensor = commands.spawn((
+                            Name::new(format!("{}/trigger_zone", entity_def.id)),
                             TriggerZone,
+                            TriggerZoneId(entity_def.id.clone()),
                             bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
                             Sensor,
                             ActiveEvents::COLLISION_EVENTS,
-                        ));
+                            Transform::default(),
+                        )).id();
+                        commands.entity(parent).add_child(sensor);
                     }
 
                     if let Some(inv_def) = &prefab.inventory {
@@ -656,12 +661,16 @@ pub fn spawn_scene_v2(
 
                         // TriggerZone: Rapier sensor → entity.entered/exited:{id}
                         if let Some(zone_def) = &prefab.trigger_zone {
-                            commands.entity(spawned).insert((
+                            let sensor = commands.spawn((
+                                Name::new(format!("{}/trigger_zone", entity_def.id)),
                                 TriggerZone,
+                                TriggerZoneId(entity_def.id.clone()),
                                 bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
                                 Sensor,
                                 ActiveEvents::COLLISION_EVENTS,
-                            ));
+                                Transform::default(),
+                            )).id();
+                            commands.entity(spawned).add_child(sensor);
                         }
 
                         if let Some(inv_def) = &prefab.inventory {
@@ -941,6 +950,7 @@ pub fn spawn_scene_v2(
                     &mut commands, player_entity, &player_children,
                     prefab_catalog, &mut ctx,
                     &mut load_errors, "player", 0, &mut HashSet::new(),
+                    Transform::IDENTITY,
                 );
             }
 
@@ -2743,6 +2753,7 @@ fn spawn_primitive_children(
     entity_id: &str,
     depth: u8,
     visiting: &mut HashSet<String>,
+    parent_world_tf: Transform,
 ) {
     const MAX_DEPTH: u8 = 8;
 
@@ -2802,7 +2813,18 @@ fn spawn_primitive_children(
                     };
                     let model_path = catalog_entry.path.clone();
                     visiting.insert(nested_key.clone());
-                    let model_entity = spawn_prefab_instance(
+                    // Compose the child's world transform from the composite parent's world
+                    // transform and the child's local offset/rotation.  We spawn the entity
+                    // at this world position WITHOUT parenting it in the Bevy hierarchy.
+                    // If we added it as a child first, Rapier would read the entity's
+                    // GlobalTransform before TransformPropagate runs — at that moment
+                    // GlobalTransform equals the local offset (not the world position) —
+                    // and would lock the physics body there permanently.  As a root entity,
+                    // GlobalTransform == Transform from day one, so Rapier initialises at
+                    // the correct world position.  model_spawner inserts LevelEntity, so
+                    // scene cleanup still finds and removes it.
+                    let world_child_tf = parent_world_tf.mul_transform(child_tf);
+                    spawn_prefab_instance(
                         commands,
                         ctx.asset_server,
                         ctx.model_spawner,
@@ -2810,11 +2832,10 @@ fn spawn_primitive_children(
                         ctx.project_root,
                         nested_prefab,
                         model_path,
-                        child_tf,
+                        world_child_tf,
                         nested_key,
                         &Default::default(),
                     );
-                    commands.entity(parent).add_child(model_entity);
                     visiting.remove(nested_key.as_str());
                 }
                 PrefabKind::Primitive => {
@@ -2832,6 +2853,7 @@ fn spawn_primitive_children(
                         spawn_primitive_children(
                             commands, anchor, &nested_prefab.children,
                             prefab_catalog, ctx, load_errors, entity_id, depth + 1, visiting,
+                            parent_world_tf.mul_transform(child_tf),
                         );
                         visiting.remove(nested_key.as_str());
                     } else if let Some(nested_shape) = nested_prefab.shape.as_ref() {

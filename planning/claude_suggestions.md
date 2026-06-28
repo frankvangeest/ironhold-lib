@@ -33,6 +33,10 @@
 
 - **Two-writer Visibility contract on nameplate anchors** _(observed at `fcf8209` 2026-06-25)_ — Both `nameplate_visibility_system` and `world_label_screen_pos_system` write the anchor's `Visibility`; correctness relies on explicit `.after()` ordering and a force-hide-only policy in the nameplate system. If ordering ever changes, nameplates within distance could remain hidden. Hardening option: a `NameplatePolicyHidden` marker that `world_label_screen_pos_system` reads as a veto before setting `Visible`.
 
+## Physics / Composite Prefabs
+
+- **`trigger_zone` + `colliders` on the same entity — sensor ball is overwritten by compound** _(observed at `9f61177` 2026-06-27)_ — In `entity_spawner.rs::spawn_prefab_instance`, `trigger_zone` inserts `Collider::ball + Sensor` first (line 88), then `colliders` inserts `Collider::compound` which overwrites the single `Collider` slot (line 144); the intended 2.5 m ball sensor is silently replaced by the compound physical shapes (which are `Sensor`-marked but wrong size/shape). Fix: spawn the trigger zone sensor on a separate child entity (`TriggerZone + TriggerZoneId(name) + Collider::ball + Sensor`) so the two colliders coexist.
+
 ## Scene Loading
 
 - ~~**Consolidate the 5 entity-spawn sites behind one "attach standard components" helper**~~ _(observed at `728c997` 2026-06-08; promoted to backlog `34bc77d` 2026-06-08 → Queued ▸ Engine / Runtime)_

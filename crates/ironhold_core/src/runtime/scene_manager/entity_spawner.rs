@@ -85,15 +85,6 @@ pub fn spawn_prefab_instance(
         ec.insert(inv);
     }
 
-    if let Some(zone_def) = &prefab.trigger_zone {
-        ec.insert((
-            crate::capabilities::trigger_zone::TriggerZone,
-            bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
-            bevy_rapier3d::prelude::Sensor,
-            bevy_rapier3d::prelude::ActiveEvents::COLLISION_EVENTS,
-        ));
-    }
-
     if let Some(policy_path) = &prefab.animation_policy {
         let resolved = resolve_project_path(project_root, policy_path);
         let policy_handle: Handle<AnimationPolicy> = asset_server.load(resolved);
@@ -122,6 +113,22 @@ pub fn spawn_prefab_instance(
     // Targeting markers (click_selectable/targetable) and the standard metadata
     // (SpawnId/PrefabKey/LevelEntity/registry) are attached by the caller via
     // `tag_spawned_entity`, so every spawn path stays consistent.
+
+    // Trigger zone: spawn a dedicated sensor child so its Collider::ball does not share
+    // the component slot with any physical Collider::compound on the parent.
+    // Placed after the last `ec` use so the borrow of `commands` has been released.
+    if let Some(zone_def) = &prefab.trigger_zone {
+        let sensor = commands.spawn((
+            Name::new(format!("{}/trigger_zone", name)),
+            crate::capabilities::trigger_zone::TriggerZone,
+            crate::capabilities::trigger_zone::TriggerZoneId(name.to_string()),
+            Collider::ball(zone_def.radius),
+            Sensor,
+            ActiveEvents::COLLISION_EVENTS,
+            Transform::default(),
+        )).id();
+        commands.entity(spawned.parent).add_child(sensor);
+    }
 
     if !prefab.colliders.is_empty() {
         let shapes: Vec<(Vec3, Quat, Collider)> = prefab.colliders.iter().filter_map(|cdef| {
