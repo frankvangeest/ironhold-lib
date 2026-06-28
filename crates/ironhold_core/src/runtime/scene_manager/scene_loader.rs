@@ -41,6 +41,104 @@ use super::entity_spawner::{
     spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
 };
 
+/// Attaches capability features declared on a `PrefabDef` to a primitive entity.
+/// Parallel to `tag_spawned_entity` for standard metadata — called from both the
+/// composite and single-mesh primitive branches so neither can silently diverge.
+///
+/// Covers: behavior, interactable, dialogue, inventory, stat_templates, trigger_zone.
+/// The trigger_zone block spawns a sensor child and must come last.
+fn attach_prefab_features(
+    commands: &mut Commands,
+    entity: Entity,
+    prefab: &crate::schema::catalog::PrefabDef,
+    project_root: &str,
+    asset_server: &AssetServer,
+    entity_id: &str,
+    stat_overrides: &HashMap<String, f32>,
+    prefab_key: &str,
+) {
+    if let Some(behavior_path) = &prefab.behavior {
+        let resolved = resolve_project_path(project_root, behavior_path);
+        let handle: Handle<crate::schema::project::StateMachineAsset> =
+            asset_server.load(resolved);
+        commands.entity(entity).insert(PendingBehavior(handle));
+    }
+
+    if let Some(interactable_def) = &prefab.interactable {
+        commands.entity(entity).insert(Interactable {
+            radius: interactable_def.radius,
+            hint_text: interactable_def.hint_text.clone(),
+        });
+    }
+
+    if let Some(dialogue_path) = &prefab.dialogue {
+        commands.entity(entity).insert(
+            crate::capabilities::dialogue::DialoguePath(dialogue_path.clone())
+        );
+    }
+
+    if let Some(inv_def) = &prefab.inventory {
+        let slots = inv_def.max_slots.max(4);
+        let mut inv = crate::capabilities::inventory::Inventory::new(slots);
+        for entry in &inv_def.initial_items {
+            crate::capabilities::inventory::add_to_slots(
+                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
+            );
+        }
+        commands.entity(entity).insert(inv);
+    }
+
+    if !prefab.stat_templates.is_empty() {
+        for key in stat_overrides.keys() {
+            if !prefab.stat_templates.iter().any(|t| &t.key == key) {
+                warn!(
+                    "stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')",
+                    entity_id, key, prefab_key
+                );
+            }
+        }
+        let mut stat_map = StatMap::default();
+        for tpl in &prefab.stat_templates {
+            let base = stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+            if base > tpl.max {
+                warn!(
+                    "stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max",
+                    entity_id, tpl.key, base, tpl.max
+                );
+            }
+            let def = crate::schema::stats::StatDef {
+                base,
+                min: tpl.min,
+                max: tpl.max,
+                soft_max: None,
+                regen_rate: tpl.regen_rate,
+                regen_delay: tpl.regen_delay,
+                thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                    when: t.when.clone(),
+                    emit: t.emit.replace("{self}", entity_id),
+                }).collect(),
+            };
+            stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+        }
+        commands.entity(entity).insert(stat_map);
+    }
+
+    // Trigger zone must come last: spawning the sensor child requires a fresh Commands borrow
+    // after all entity-level inserts above have been committed.
+    if let Some(zone_def) = &prefab.trigger_zone {
+        let sensor = commands.spawn((
+            Name::new(format!("{}/trigger_zone", entity_id)),
+            TriggerZone,
+            TriggerZoneId(entity_id.to_string()),
+            bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
+            Sensor,
+            ActiveEvents::COLLISION_EVENTS,
+            Transform::default(),
+        )).id();
+        commands.entity(entity).add_child(sensor);
+    }
+}
+
 pub fn spawn_scene_v2(
     mut commands: Commands,
     mut params: SceneV2Params,
@@ -347,83 +445,14 @@ pub fn spawn_scene_v2(
                         ));
                     }
 
-                    // Entity FSM behavior for composite primitives.
-                    if let Some(behavior_path) = &prefab.behavior {
-                        let project_root = params.project_root.0.as_str();
-                        let resolved = resolve_project_path(project_root, behavior_path);
-                        let handle: Handle<crate::schema::project::StateMachineAsset> =
-                            asset_server.load(resolved);
-                        commands.entity(parent).insert(PendingBehavior(handle));
-                    }
-
-                    // Interactable: proximity + F key → entity.interacted:{id}
-                    if let Some(interactable_def) = &prefab.interactable {
-                        commands.entity(parent).insert(Interactable {
-                            radius: interactable_def.radius,
-                            hint_text: interactable_def.hint_text.clone(),
-                        });
-                    }
-
-                    // DialoguePath: auto-wires entity.interacted → StartDialogue
-                    if let Some(dialogue_path) = &prefab.dialogue {
-                        commands.entity(parent).insert(
-                            crate::capabilities::dialogue::DialoguePath(dialogue_path.clone())
-                        );
-                    }
-
-                    // TriggerZone: Rapier sensor → entity.entered/exited:{id}
-                    if let Some(zone_def) = &prefab.trigger_zone {
-                        let sensor = commands.spawn((
-                            Name::new(format!("{}/trigger_zone", entity_def.id)),
-                            TriggerZone,
-                            TriggerZoneId(entity_def.id.clone()),
-                            bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
-                            Sensor,
-                            ActiveEvents::COLLISION_EVENTS,
-                            Transform::default(),
-                        )).id();
-                        commands.entity(parent).add_child(sensor);
-                    }
-
-                    if let Some(inv_def) = &prefab.inventory {
-                        let slots = inv_def.max_slots.max(4);
-                        let mut inv = crate::capabilities::inventory::Inventory::new(slots);
-                        for entry in &inv_def.initial_items {
-                            crate::capabilities::inventory::add_to_slots(
-                                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
-                            );
-                        }
-                        commands.entity(parent).insert(inv);
-                    }
-
-                    // (targeting markers attached above via tag_spawned_entity)
-
-                    if !prefab.stat_templates.is_empty() {
-                        let spawn_id = &entity_def.id;
-                        for key in entity_def.stat_overrides.keys() {
-                            if !prefab.stat_templates.iter().any(|t| &t.key == key) {
-                                warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
-                            }
-                        }
-                        let mut stat_map = StatMap::default();
-                        for tpl in &prefab.stat_templates {
-                            let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
-                            if base > tpl.max {
-                                warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
-                            }
-                            let def = crate::schema::stats::StatDef {
-                                base, min: tpl.min, max: tpl.max,
-                                soft_max: None,
-                                regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
-                                thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
-                                    when: t.when.clone(),
-                                    emit: t.emit.replace("{self}", spawn_id),
-                                }).collect(),
-                            };
-                            stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
-                        }
-                        commands.entity(parent).insert(stat_map);
-                    }
+                    // Capability features (behavior, interactable, dialogue, inventory,
+                    // stat_templates, trigger_zone) — consolidated via helper to stay in sync
+                    // with the single-mesh branch and GLB spawn_prefab_instance path.
+                    attach_prefab_features(
+                        &mut commands, parent, prefab,
+                        params.project_root.0.as_str(), &asset_server,
+                        &entity_def.id, &entity_def.stat_overrides, &entity_def.prefab,
+                    );
 
                     // Motion: continuous rotation and/or vertical bob on the root entity.
                     // Children inherit the transform via Bevy's hierarchy, so the whole
@@ -635,83 +664,14 @@ pub fn spawn_scene_v2(
                             ));
                         }
 
-                        // Entity FSM behavior.
-                        if let Some(behavior_path) = &prefab.behavior {
-                            let project_root = params.project_root.0.as_str();
-                            let resolved = resolve_project_path(project_root, behavior_path);
-                            let handle: Handle<crate::schema::project::StateMachineAsset> =
-                                asset_server.load(resolved);
-                            commands.entity(spawned).insert(PendingBehavior(handle));
-                        }
-
-                        // Interactable: proximity + F key → entity.interacted:{id}
-                        if let Some(interactable_def) = &prefab.interactable {
-                            commands.entity(spawned).insert(Interactable {
-                                radius: interactable_def.radius,
-                                hint_text: interactable_def.hint_text.clone(),
-                            });
-                        }
-
-                        // DialoguePath: auto-wires entity.interacted → StartDialogue
-                        if let Some(dialogue_path) = &prefab.dialogue {
-                            commands.entity(spawned).insert(
-                                crate::capabilities::dialogue::DialoguePath(dialogue_path.clone())
-                            );
-                        }
-
-                        // TriggerZone: Rapier sensor → entity.entered/exited:{id}
-                        if let Some(zone_def) = &prefab.trigger_zone {
-                            let sensor = commands.spawn((
-                                Name::new(format!("{}/trigger_zone", entity_def.id)),
-                                TriggerZone,
-                                TriggerZoneId(entity_def.id.clone()),
-                                bevy_rapier3d::prelude::Collider::ball(zone_def.radius),
-                                Sensor,
-                                ActiveEvents::COLLISION_EVENTS,
-                                Transform::default(),
-                            )).id();
-                            commands.entity(spawned).add_child(sensor);
-                        }
-
-                        if let Some(inv_def) = &prefab.inventory {
-                            let slots = inv_def.max_slots.max(4);
-                            let mut inv = crate::capabilities::inventory::Inventory::new(slots);
-                            for entry in &inv_def.initial_items {
-                                crate::capabilities::inventory::add_to_slots(
-                                    &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
-                                );
-                            }
-                            commands.entity(spawned).insert(inv);
-                        }
-
-                        // (targeting markers attached above via tag_spawned_entity)
-
-                        if !prefab.stat_templates.is_empty() {
-                            let spawn_id = &entity_def.id;
-                            for key in entity_def.stat_overrides.keys() {
-                                if !prefab.stat_templates.iter().any(|t| &t.key == key) {
-                                    warn!("stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')", spawn_id, key, entity_def.prefab);
-                                }
-                            }
-                            let mut stat_map = StatMap::default();
-                            for tpl in &prefab.stat_templates {
-                                let base = entity_def.stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
-                                if base > tpl.max {
-                                    warn!("stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max", spawn_id, tpl.key, base, tpl.max);
-                                }
-                                let def = crate::schema::stats::StatDef {
-                                    base, min: tpl.min, max: tpl.max,
-                                    soft_max: None,
-                                    regen_rate: tpl.regen_rate, regen_delay: tpl.regen_delay,
-                                    thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
-                                        when: t.when.clone(),
-                                        emit: t.emit.replace("{self}", spawn_id),
-                                    }).collect(),
-                                };
-                                stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
-                            }
-                            commands.entity(spawned).insert(stat_map);
-                        }
+                        // Capability features (behavior, interactable, dialogue, inventory,
+                        // stat_templates, trigger_zone) — consolidated via helper to stay in sync
+                        // with the composite branch and GLB spawn_prefab_instance path.
+                        attach_prefab_features(
+                            &mut commands, spawned, prefab,
+                            params.project_root.0.as_str(), &asset_server,
+                            &entity_def.id, &entity_def.stat_overrides, &entity_def.prefab,
+                        );
 
                         if let Some(label_def) = &entity_def.label {
                             pending_labels.push((spawned, label_def.clone()));

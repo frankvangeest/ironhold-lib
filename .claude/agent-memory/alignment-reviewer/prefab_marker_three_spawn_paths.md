@@ -16,10 +16,22 @@ the multi-path footgun is closed: add the field to the helper once. When reviewi
 helper, verify every call site still passes the right flags (players pass `false,false` for markers
 deliberately — selecting the player is nonsensical).
 
+**UPDATE 2 (capability-feature consolidation, ~2026-06-28):** the two primitive branches in
+`scene_loader.rs` (composite + single-mesh) now share a second helper, **`attach_prefab_features(commands,
+entity, prefab, project_root, asset_server, entity_id, stat_overrides, prefab_key)`** (defined just
+before `spawn_scene_v2`). It covers SIX features: `behavior`, `interactable`, `dialogue`, `inventory`,
+`stat_templates`, `trigger_zone`. Both primitive call sites now call it (composite passes `parent`,
+single-mesh passes `spawned`; all other args identical). It is feature-for-feature identical to the
+GLB path in `entity_spawner.rs::spawn_prefab_instance` (verified 2026-06-28). So for those six fields
+the composite-vs-single-mesh divergence risk is closed — but there are still THREE copies of the logic
+(the two-in-one helper in scene_loader.rs + the GLB path in entity_spawner.rs), so a new feature must
+be added to BOTH `attach_prefab_features` AND `spawn_prefab_instance`. Note `motion`, `colliders`,
+`npc`, `Collectable` are NOT in `attach_prefab_features` — they remain inserted inline per-path.
+
 BUT the footgun below STILL applies to **every other** spawn-time field that is NOT part of the
-standard metadata set — `trigger_zone`, `interactable`, `motion`, `behavior`, `stat_templates`,
-`npc`, `colliders`, `Collectable`, material override, etc. Those are still inserted per-path and are
-NOT in `tag_spawned_entity`. The insertion logic for them lives in `entity_spawner.rs::spawn_prefab_instance`
+standard metadata set and NOT in `attach_prefab_features` — `motion`, `npc`, `colliders`,
+`Collectable`, material override, `stat_label`/`world_stat_bar`, `nameplate`, etc. Those are still
+inserted per-path. The GLB insertion logic lives in `entity_spawner.rs::spawn_prefab_instance`
 — but that function is **only called for GLB prefabs** (`kind: Actor` / `kind: Prop`) and nested-prefab
 references.
 

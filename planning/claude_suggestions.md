@@ -45,6 +45,8 @@
 
 - ~~**Consolidate conditional prefab-feature application (the sibling divergence)**~~ _(observed at `cef818a` 2026-06-08; promoted to backlog `cdee26b` 2026-06-08 → Queued ▸ Engine / Runtime)_
 
+- ~~**`attach_prefab_features` and `spawn_prefab_instance` are two parallel feature lists**~~ _(observed at `6440b29` 2026-06-28; promoted to backlog 2026-06-28 → Queued ▸ Engine / Runtime; see `planning/features/unify_prefab_feature_application.md`)_ — After introducing `attach_prefab_features` for the primitive branches, a new `PrefabDef` capability field still requires wiring in **both** `attach_prefab_features` (scene_loader.rs) and `spawn_prefab_instance` (entity_spawner.rs) or GLB-vs-Primitive will diverge. Full unification would require refactoring the GLB path to also call `attach_prefab_features`, but that conflicts with the `ec` borrow pattern; a lighter fix is a code comment checklist at both function definitions.
+
 - ~~**Push `stat_overrides` into `spawn_prefab_instance` so the StatMap is built once**~~ _(promoted to backlog `df8c94b` 2026-06-14 → Active ▸ Engine / Runtime)_
 
 - ~~**Add optional `collider_radius`/`collider_height` to `NpcDef` for GLB actor sizing**~~ _(promoted to backlog `df8c94b` 2026-06-14 → Active ▸ Engine / Runtime)_
