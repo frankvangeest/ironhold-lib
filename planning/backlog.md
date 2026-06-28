@@ -11,11 +11,6 @@
 
 ## Active
 
-- [x] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true` in scene RON) with per-prefab override; visibility filtered by faction stance (hostile / friendly / all) and optional max distance; distinct from per-entity world-space stat bars — nameplates are managed by a single system scanning all tagged entities. _(Quest-giver `!`/`?` indicator belongs to Quest system v2, not here.)_ See `planning/features/done/nameplate_system.md`
-- [x] **Intent event layer** — emit `intent.slot.{n}:{entity}` from `action_bar.rs` before committing, route through the interpreter; designers can then cancel/redirect ability slots from RON rules using `when:` gates. Fixes the one capability that bypasses the Message→Interpreter→Action→Executor pipeline. See `planning/features/done/intent_event_layer.md`
-- [x] **Unify prefab feature application across all spawn paths** — moved `attach_prefab_features` to `entity_spawner.rs` as `pub(super)`; `spawn_prefab_instance` now calls it at its tail; removed the six duplicate inline blocks; all three spawn paths (GLB Actor/Prop, composite Primitive, single-mesh Primitive) route through one function. See `planning/features/done/unify_prefab_feature_application.md`.
-- [x] **Consolidate conditional prefab-feature application (sibling divergence)** — introduced `attach_prefab_features` helper in `scene_loader.rs`; both the composite and single-mesh Primitive branches now call it instead of duplicating 6 feature blocks each; closes the class of "works for composite but silently missing for single-mesh" bugs at the primitive level. GLB path (`spawn_prefab_instance`) still separate — tracked in `planning/features/unify_prefab_feature_application.md`.
-
 ---
 
 ## Bugs
@@ -213,6 +208,10 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### June 2026
+- [x] **Unify prefab feature application across all spawn paths** — moved `attach_prefab_features` to `entity_spawner.rs`; `spawn_prefab_instance` calls it at its tail; all three spawn paths (GLB Actor/Prop, composite Primitive, single-mesh Primitive) route through one function. See `planning/features/done/unify_prefab_feature_application.md`.
+- [x] **Consolidate conditional prefab-feature application (sibling divergence)** — introduced `attach_prefab_features` in `scene_loader.rs`; both Primitive branches call it instead of duplicating 6 feature blocks each.
+- [x] **Nameplate system** — floating name + health bar above entities, scene-wide opt-in (`show_nameplates: true`) with per-prefab override; distance and faction filtering. See `planning/features/done/nameplate_system.md`
+- [x] **Intent event layer** — `intent.slot.{n}:{entity}` emitted before committing; routes through interpreter so designers can cancel/redirect ability slots from RON rules. See `planning/features/done/intent_event_layer.md`
 - [x] **Icon washed-out fix** — sRGB established as universal RON color convention; `Color::linear_rgba` fixed in shop icon spawn and decal base color storage; 14 doc labels corrected. See `planning/features/done/icon_washed_out_fix.md`
 - [x] **Inventory & item system** — `items/items.ron` catalog; `PlayerInventory` resource; `InventoryPanel`/`ShopPanel`/`ContainerPanel` UI nodes; `OpenShop`/`BuyItem`/`OpenContainer`/`TakeAllFromContainer` actions; `MerchantDef`; currency via stat system. See `planning/features/done/inventory_item_system.md`
 - [x] **Dialogue system** — `.dialogue.ron` assets; `DialoguePanel` UI node; `StartDialogue`/`EndDialogue`/`AdvanceDialogue` actions; branching choices; `{self}`/`{target}` substitution; auto-wired to `entity.interacted`. See `planning/features/done/dialogue_system.md`
