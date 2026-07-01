@@ -53,6 +53,19 @@ pub struct LoadedInventoryUi {
     pub panels_open: u8,
 }
 
+impl LoadedInventoryUi {
+    /// Adjusts `panels_open` for one panel opening (`open: true`) or closing
+    /// (`open: false`). Saturates at 0 so a stray Close (no matching Open)
+    /// never underflows.
+    pub fn set_panel_open(&mut self, open: bool) {
+        if open {
+            self.panels_open = self.panels_open.saturating_add(1);
+        } else {
+            self.panels_open = self.panels_open.saturating_sub(1);
+        }
+    }
+}
+
 /// Stores the ECS entity for the ContainerPanel and the currently-active container.
 #[derive(Resource, Default)]
 pub struct LoadedContainerUi {

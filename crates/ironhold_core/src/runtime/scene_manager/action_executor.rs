@@ -894,14 +894,14 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }
                 }
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_add(1);
+                scene_state.inventory_ui.set_panel_open(true);
                 game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
             }
             Action::CloseInventory => {
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_sub(1);
+                scene_state.inventory_ui.set_panel_open(false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
             }
             Action::ToggleInventory => {
@@ -915,11 +915,7 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != target { *vis = target; }
                 }
-                if is_visible {
-                    scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_sub(1);
-                } else {
-                    scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_add(1);
-                }
+                scene_state.inventory_ui.set_panel_open(!is_visible);
                 game_events.write(GameEvent::Trigger(if is_visible {
                     "ui.panel_closed".to_string()
                 } else {
@@ -953,7 +949,7 @@ pub fn action_executor_system(
                     warn!("Action::OpenShop: no ShopPanel in scene — add a ShopPanel UI node");
                     continue;
                 };
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_add(1);
+                scene_state.inventory_ui.set_panel_open(true);
                 game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
 
                 // Track active merchant so BuyItem knows where to look up prices.
@@ -1075,7 +1071,7 @@ pub fn action_executor_system(
                 for (_, mut vis, _) in scene_state.shop_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_sub(1);
+                scene_state.inventory_ui.set_panel_open(false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
             }
             Action::BuyItem(item_key) => {
@@ -1185,7 +1181,7 @@ pub fn action_executor_system(
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }
                 }
 
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_add(1);
+                scene_state.inventory_ui.set_panel_open(true);
                 game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
                 scene_state.container_ui.active_container = Some(container_entity);
                 game_events.write(GameEvent::Trigger(format!("container.opened:{}", entity_id)));
@@ -1194,7 +1190,7 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.panels_open = scene_state.inventory_ui.panels_open.saturating_sub(1);
+                scene_state.inventory_ui.set_panel_open(false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
                 scene_state.container_ui.active_container = None;
                 game_events.write(GameEvent::Trigger("container.closed".to_string()));
