@@ -5,6 +5,12 @@
 
 ---
 
+## Correctness
+
+- **Panel Open/Close action arms share identical blocker logic — extract a helper** _(observed at `ba01c5e` 2026-07-01)_ — The six `Open*/Close*` arms in `action_executor.rs` each inline `panels_open.saturating_add/sub(1)`; a `fn set_panel_open(ui: &mut LoadedInventoryUi, delta: i8)` helper would eliminate the duplication and make `ToggleInventory`'s conditional increment/decrement a single call. Concrete basis: observed after removing the blocker — the counter update is now the only change between the Open and Close arms, making the redundancy more visible.
+
+- **Overlay Backdrop (z=100) lacks `FocusPolicy::Block` — may only block clicks incidentally** _(observed at `ba01c5e` 2026-06-30)_ — The "Overlay Backdrop" node in `scene_loader.rs` (~line 1201) has neither `Interaction` nor `FocusPolicy::Block`, and `Node` defaults `FocusPolicy` to `Pass`; like the panel-blocker bug, it cannot stop `ui_focus_system` from pressing base-scene buttons beneath it — it "works" today only because the pause overlay's own panel covers the click area, so add `FocusPolicy::Block` to make the backdrop's blocking explicit and robust if a base button is ever exposed under an overlay.
+
 ## Performance
 
 

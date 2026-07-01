@@ -46,6 +46,11 @@ pub struct LoadedInventoryUi {
     /// All icon atlases keyed by catalog texture key (panel default + per-item overrides).
     /// Pre-loaded at panel spawn time so no runtime loading is needed on item pickup.
     pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>,
+    /// Count of currently open panels (inventory/shop/container). Incremented by each Open
+    /// action, decremented by each Close — so closing one panel while another is still open
+    /// does not re-enable world interactions. Read by interactable_system, collectible_system,
+    /// and tab_targeting_system to suppress keyboard/physics-driven world-space events.
+    pub panels_open: u8,
 }
 
 /// Stores the ECS entity for the ContainerPanel and the currently-active container.

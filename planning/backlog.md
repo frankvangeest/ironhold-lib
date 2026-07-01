@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Inventory / shop / container click-blocking backdrop** — transparent full-screen backdrop at `GlobalZIndex(50)` shown by Open*/Close* actions; panels at `GlobalZIndex(51)`; `interactable_system` and `collectible_system` skip while open. See `planning/features/panel_backdrop.md`.
+- [x] **Inventory / shop / container click-blocking backdrop** — per-rect `FocusPolicy::Block` on panel roots; `panels_open: u8` counter guards keyboard/physics input. See `planning/features/done/panel_backdrop.md`.
 
 ---
 
@@ -29,9 +29,10 @@
 
 ### Engine / Runtime
 
+- [ ] **Extract `set_panel_open()` helper in action_executor** — the six `Open*/Close*` arms each inline `panels_open.saturating_add/sub(1)`; a small helper eliminates the duplication and makes `ToggleInventory` a single call.
 - [ ] **Static scene mode (`?static=1`)** — freeze all time-driven systems (animations, NPC AI, motion, particles) immediately after `SceneEvent::Ready` so browser screenshot baselines are pixel-identical across runs. Mechanism: parse `?static=1` URL param in the WASM runner → `StaticMode(bool)` resource → pause `Time<Virtual>` + seek all `AnimationPlayer`s to t=0 on scene ready. Requires `start_app` signature change (all three crates) and a one-line change to `test_web.py`. See `planning/features/static_scene_mode.md`.
-- [x] **Overlay modal backdrop (click-blocking)** — _(Done)_ see Active section above.
-- [>] **Inventory / shop / container click-blocking backdrop** — _(Active)_ see above.
+- [x] **Overlay modal backdrop (click-blocking)** — _(Done)_
+- [x] **Inventory / shop / container click-blocking backdrop** — _(Done)_ per-rect `FocusPolicy::Block` on panel roots.
 - [ ] **Promote magic `tags` to typed prefab fields** — add `collectable: bool`, `player: bool`, and `flycam: bool` as `#[serde(default)]` fields on `PrefabDef`; `tags` remains for free-form designer labels but control-flow semantics move to typed fields; consistent with the `PrefabKind` enum casing work that cleaned up `kind`. Additive, no migration required.
 - [ ] **Per-prefab `depth_scale` honoured on dynamic spawns** — `StatLabelDef`/`WorldStatBarDef.depth_scale` overrides are silently ignored for `Action::Spawn` entities; fix by storing scene-level label depth config in a `LoadedLabelDepthScale` resource at scene load and reading it in `drain_dynamic_stat_ui_system`. See `planning/features/depth_scale_dynamic_spawn.md`
 - [ ] **Page visibility / focus-loss handling** — freeze delta time, pause audio, and drop render to zero when the browser tab loses focus; resume cleanly on tab restore without physics or audio desync; wire Bevy's `WindowFocused` / `ApplicationLifetime` events behind a `pause_on_focus_loss: bool` field on `ProjectConfig` (default `true`); opt-out lets streaming / spectator scenes keep running. Sourced from Phaser's focus-loss model.

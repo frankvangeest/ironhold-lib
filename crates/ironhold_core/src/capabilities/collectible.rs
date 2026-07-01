@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::capabilities::player::CharacterController;
+use crate::capabilities::inventory::LoadedInventoryUi;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::SpawnId;
 
@@ -27,7 +28,10 @@ pub fn collectible_system(
     players: Query<(), With<CharacterController>>,
     collectibles: Query<&SpawnId, With<Collectable>>,
     mut game_events: MessageWriter<GameEvent>,
+    inventory_ui: Res<LoadedInventoryUi>,
 ) {
+    if inventory_ui.panels_open > 0 { return; }
+
     for event in collision_events.read() {
         let CollisionEvent::Started(e1, e2, _flags) = event else { continue };
 

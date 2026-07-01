@@ -1853,6 +1853,12 @@ fn spawn_ui_element_node(
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     visibility,
                     InventoryPanelMarker { columns, rows, font_size },
+                    GlobalZIndex(99),
+                    // Interaction + FocusPolicy::Block: clicks anywhere within the panel rect
+                    // are absorbed here (or by a child button above it in z-order).
+                    // Prevents click-through to base-scene UI and world targeting.
+                    Interaction::default(),
+                    bevy::ui::FocusPolicy::Block,
                 ))
                 .with_children(|p| {
                     // ── Header row: title + close button ─────────────────────────────
@@ -2028,6 +2034,9 @@ fn spawn_ui_element_node(
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     visibility,
                     ShopPanelMarker { font_size },
+                    GlobalZIndex(99),
+                    Interaction::default(),
+                    bevy::ui::FocusPolicy::Block,
                 ))
                 .with_children(|p| {
                     // Header row: title + inline close button (child of panel so it hides together).
@@ -2151,6 +2160,9 @@ fn spawn_ui_element_node(
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     Visibility::Hidden,
                     ContainerPanelMarker { columns, rows, font_size },
+                    GlobalZIndex(99),
+                    Interaction::default(),
+                    bevy::ui::FocusPolicy::Block,
                 ))
                 .with_children(|p| {
                     // Header: title + close button.

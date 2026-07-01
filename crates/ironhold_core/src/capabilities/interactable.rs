@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::capabilities::player::CharacterController;
+use crate::capabilities::inventory::LoadedInventoryUi;
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::SpawnId;
 
@@ -28,7 +29,10 @@ pub fn interactable_system(
     player_query: Query<(&Transform, &CharacterController)>,
     interactables: Query<(&Transform, &SpawnId, &Interactable)>,
     mut game_events: MessageWriter<GameEvent>,
+    inventory_ui: Res<LoadedInventoryUi>,
 ) {
+    if inventory_ui.panels_open > 0 { return; }
+
     let Ok((player_transform, controller)) = player_query.single() else { return };
     let Some(interact_key) = controller.inputs.key("interact") else { return };
     if !keyboard_input.just_pressed(interact_key) {

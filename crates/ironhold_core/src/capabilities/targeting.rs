@@ -7,6 +7,7 @@ use crate::capabilities::action_bar::CurrentTarget;
 use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
 use crate::GameVariables;
+use crate::capabilities::inventory::LoadedInventoryUi;
 
 /// Pixel radius around the cursor within which a left-click selects an entity.
 const SELECT_PIXEL_RADIUS: f32 = 70.0;
@@ -104,8 +105,16 @@ fn click_select_system(
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
+    ui_interactions: Query<&Interaction>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    // Skip world targeting when ui_focus_system gave a UI node the click this frame.
+    // Each panel root carries FocusPolicy::Block + Interaction, so any click inside
+    // a panel rect registers Pressed on the panel root (or its child button). Clicks
+    // outside open panels pass through normally and reach world targeting.
+    if ui_interactions.iter().any(|i| *i == Interaction::Pressed) {
         return;
     }
     let Ok(window) = windows.single() else { return };
@@ -155,7 +164,9 @@ pub fn tab_targeting_system(
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
+    inventory_ui: Res<LoadedInventoryUi>,
 ) {
+    if inventory_ui.panels_open > 0 { return; }
     let Some((controller, player_gt)) = controllers.iter().next() else { return };
 
     let tab_key = InputMap::parse_key(&controller.inputs.target_next)
