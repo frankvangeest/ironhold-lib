@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Audio icon toggle button** — see `planning/features/audio_icon_button.md`. Replace the main HUD's "Toggle Mute" text button + "Audio: {state}" label with a single top-right `IconButton` swapping `audioOn.png`/`audioOff.png`.
+
 ---
 
 ## Bugs
