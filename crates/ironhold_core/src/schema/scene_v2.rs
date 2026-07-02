@@ -317,6 +317,7 @@ fn one_vec3() -> (f32, f32, f32) { (1.0, 1.0, 1.0) }
 #[derive(Deserialize, Debug, Clone)]
 pub enum UiNodeDef {
     Button(ButtonDef),
+    IconButton(IconButtonDef),
     Label(LabelDef),
     Rect(RectDef),
     StatBar(StatBarDef),
@@ -333,6 +334,7 @@ impl UiNodeDef {
     pub fn id(&self) -> &str {
         match self {
             UiNodeDef::Button(d) => &d.id,
+            UiNodeDef::IconButton(d) => &d.id,
             UiNodeDef::Label(d) => &d.id,
             UiNodeDef::Rect(d) => &d.id,
             UiNodeDef::StatBar(d) => &d.id,
@@ -348,6 +350,7 @@ impl UiNodeDef {
     pub fn size(&self) -> (f32, f32) {
         match self {
             UiNodeDef::Button(d) => d.size,
+            UiNodeDef::IconButton(d) => d.size,
             UiNodeDef::Label(d) => d.size,
             UiNodeDef::Rect(d) => d.size,
             UiNodeDef::StatBar(d) => d.size,
@@ -380,6 +383,7 @@ impl UiNodeDef {
     pub fn position(&self) -> (f32, f32) {
         match self {
             UiNodeDef::Button(d) => d.position,
+            UiNodeDef::IconButton(d) => d.position,
             UiNodeDef::Label(d) => d.position,
             UiNodeDef::Rect(d) => d.position,
             UiNodeDef::StatBar(d) => d.position,
@@ -395,6 +399,7 @@ impl UiNodeDef {
     pub fn absolute(&self) -> bool {
         match self {
             UiNodeDef::Button(d) => d.absolute,
+            UiNodeDef::IconButton(d) => d.absolute,
             UiNodeDef::Label(d) => d.absolute,
             UiNodeDef::Rect(d) => d.absolute,
             UiNodeDef::StatBar(d) => d.absolute,
@@ -410,6 +415,7 @@ impl UiNodeDef {
     pub fn align(&self) -> UiTextAlign {
         match self {
             UiNodeDef::Button(d) => d.align,
+            UiNodeDef::IconButton(_) => UiTextAlign::Center,
             UiNodeDef::Label(d) => d.align,
             UiNodeDef::Rect(_) => UiTextAlign::Center,
             UiNodeDef::StatBar(_) => UiTextAlign::Center,
@@ -449,6 +455,64 @@ pub struct ButtonDef {
     /// top-left corner using its `position` field instead of flowing in the column.
     #[serde(default)]
     pub absolute: bool,
+}
+
+/// An interactive icon-only button that swaps between two catalog textures
+/// based on a bound `GameVariables` key, and emits a `UiEvent::ButtonPressed`
+/// trigger when clicked (same pipeline as `ButtonDef`).
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct IconButtonDef {
+    pub id: String,
+    /// Trigger string; `"ui."` prefix is stripped when firing (e.g. `"ui.toggle_mute"` → `"toggle_mute"`).
+    #[serde(default)]
+    pub action: String,
+    /// Asset catalog texture key shown when `bind` resolves to `"true"`.
+    pub icon_on: String,
+    /// Asset catalog texture key shown when `bind` resolves to anything other than `"true"`
+    /// (including when the key is absent from `GameVariables`).
+    pub icon_off: String,
+    /// `GameVariables` key holding `"true"`/`"false"`. Re-evaluated every frame.
+    pub bind: String,
+    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    /// Width and height in pixels. Default: `(36.0, 36.0)`.
+    #[serde(default = "default_icon_button_size")]
+    pub size: (f32, f32),
+    /// In panel mode: position this element absolutely relative to the panel's
+    /// top-left corner using its `position` field instead of flowing in the column.
+    #[serde(default)]
+    pub absolute: bool,
+    /// RGBA replacement color for the icon in its normal state (same convention as
+    /// `ActionSlotDef.icon_color`: works cleanly on white/greyscale source art, since it's
+    /// applied as a multiply tint). Omit to render the icon as-is (unmodified white).
+    #[serde(default)]
+    pub icon_color: Option<(f32, f32, f32, f32)>,
+    /// RGBA replacement color shown at rest while `bind` resolves to `"true"` (i.e. `icon_on`
+    /// is showing). Falls back to `icon_color` (or as-is, if that is also omitted) when unset —
+    /// i.e. the active/inactive states look identical by default. Overridden by
+    /// `hover_color`/`click_color` while the cursor is hovering/pressing.
+    #[serde(default)]
+    pub active_color: Option<(f32, f32, f32, f32)>,
+    /// RGBA replacement color shown while the cursor hovers the button (not pressed).
+    /// Falls back to `icon_color` (or as-is, if that is also omitted) when unset —
+    /// i.e. no hover feedback by default.
+    #[serde(default)]
+    pub hover_color: Option<(f32, f32, f32, f32)>,
+    /// RGBA replacement color shown while the button is pressed. Falls back to `icon_color`
+    /// (or as-is, if that is also omitted) when unset — i.e. no click feedback by default.
+    #[serde(default)]
+    pub click_color: Option<(f32, f32, f32, f32)>,
+    /// Pixel offset `(dx, dy)` of an optional drop-shadow copy of the icon, rendered behind
+    /// the main icon. Positive `dx` shifts right, positive `dy` shifts down. Only used when
+    /// `shadow_color` is set.
+    #[serde(default = "default_icon_shadow_offset")]
+    pub shadow_offset: (f32, f32),
+    /// RGBA replacement color for the drop-shadow copy. Omit to disable the shadow entirely
+    /// (no shadow child is spawned).
+    #[serde(default)]
+    pub shadow_color: Option<(f32, f32, f32, f32)>,
 }
 
 /// Non-interactive text display. Can be data-bound to a `GameVariables` key.
@@ -537,6 +601,8 @@ fn default_panel_bg() -> (f32, f32, f32, f32) { (0.1, 0.1, 0.1, 0.95) }
 fn default_panel_padding() -> f32 { 20.0 }
 fn default_panel_gap() -> f32 { 12.0 }
 fn default_ui_size() -> (f32, f32) { (120.0, 32.0) }
+fn default_icon_button_size() -> (f32, f32) { (36.0, 36.0) }
+fn default_icon_shadow_offset() -> (f32, f32) { (-2.0, 2.0) }
 fn default_ui_dark_color() -> (f32, f32, f32, f32) { (0.15, 0.15, 0.15, 1.0) }
 
 /// A text annotation anchored to a 3-D world position.

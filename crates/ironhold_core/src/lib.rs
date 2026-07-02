@@ -78,6 +78,44 @@ pub struct DynamicLabel {
     pub format: Option<String>,
 }
 
+/// Placed on a `UiNodeDef::IconButton`'s foreground icon child entity by `scene_loader`.
+/// The clickable root entity (`Button` + `Interaction` + `UiAction`) holds no image itself —
+/// it's just the hit-test/click surface. Every frame `icon_button_sync_system` swaps this
+/// child's `ImageNode.image` between `icon_on`/`icon_off` based on whether
+/// `GameVariables[key] == "true"`, and swaps `ImageNode.color` between `icon_color`/
+/// `active_color`/`hover_color`/`click_color` based on the bound state and the *parent* root
+/// entity's `Interaction` state (looked up via `ChildOf`, since `Interaction` lives on the
+/// root, not this cosmetic child). Both `Handle<Image>` and `Color` compare cheaply by value,
+/// so the system only writes on an actual change — no extra tracked state.
+#[derive(Component)]
+pub struct IconButtonBind {
+    pub key: String,
+    pub icon_on: Handle<Image>,
+    pub icon_off: Handle<Image>,
+    pub icon_color: Color,
+    pub active_color: Color,
+    pub hover_color: Color,
+    pub click_color: Color,
+}
+
+/// Placed on an `IconButton`'s optional decorative drop-shadow child entity — only spawned
+/// when `shadow_color` is set in RON. Tracks the same bound key as the sibling
+/// `IconButtonBind` so the shadow's silhouette always matches whichever icon is currently
+/// showing. Its `ImageNode.color` never changes: shadows don't react to hover/click.
+#[derive(Component)]
+pub struct IconShadowBind {
+    pub key: String,
+    pub icon_on: Handle<Image>,
+    pub icon_off: Handle<Image>,
+}
+
+/// Empty marker on an `IconButton`'s clickable root entity (the one with `Button` +
+/// `Interaction` + `UiAction`). Lets `button_system` skip it — icon buttons signal state via
+/// their child `ImageNode`'s color/texture, not the root's `BackgroundColor` — while
+/// `icon_button_click_system` claims it instead to fire the click event.
+#[derive(Component)]
+pub struct IconButtonRoot;
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -179,6 +217,7 @@ impl Plugin for GamePlugin {
                 resolve_pending_behaviors_system,
                 apply_material_overrides,
                 button_system,
+                icon_button_click_system,
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
@@ -259,6 +298,7 @@ impl Plugin for GamePlugin {
             // Debug state (runs last so it sees the final app_state for this frame)
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(Update, update_dynamic_labels_system)
+            .add_systems(Update, icon_button_sync_system)
             .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system))
             .add_systems(Update, stat_radar_update_system)
             .add_systems(Update, crate::capabilities::inventory::inventory_ui_system)
@@ -282,6 +322,38 @@ fn update_dynamic_labels_system(
         };
         if text.0 != new_text {
             *text = Text::new(new_text);
+        }
+    }
+}
+
+fn icon_button_sync_system(
+    vars: Res<GameVariables>,
+    root_interactions: Query<&Interaction>,
+    mut icon_query: Query<(&mut ImageNode, &IconButtonBind, &ChildOf), Without<IconShadowBind>>,
+    mut shadow_query: Query<(&mut ImageNode, &IconShadowBind), Without<IconButtonBind>>,
+) {
+    for (mut image, bind, child_of) in &mut icon_query {
+        let showing_on = vars.0.get(&bind.key).map(String::as_str) == Some("true");
+        let texture = if showing_on { &bind.icon_on } else { &bind.icon_off };
+        if &image.image != texture {
+            image.image = texture.clone();
+        }
+        let interaction = root_interactions.get(child_of.parent()).copied().unwrap_or(Interaction::None);
+        let resting_color = if showing_on { bind.active_color } else { bind.icon_color };
+        let color = match interaction {
+            Interaction::Pressed => bind.click_color,
+            Interaction::Hovered => bind.hover_color,
+            Interaction::None => resting_color,
+        };
+        if image.color != color {
+            image.color = color;
+        }
+    }
+    for (mut image, shadow) in &mut shadow_query {
+        let showing_on = vars.0.get(&shadow.key).map(String::as_str) == Some("true");
+        let texture = if showing_on { &shadow.icon_on } else { &shadow.icon_off };
+        if &image.image != texture {
+            image.image = texture.clone();
         }
     }
 }
@@ -342,7 +414,7 @@ fn setup(
 fn button_system(
     interaction_query: Query<
         (&Interaction, &mut BackgroundColor, &UiAction),
-        (Changed<Interaction>, With<Button>),
+        (Changed<Interaction>, With<Button>, Without<IconButtonRoot>),
     >,
     mut ui_events: MessageWriter<UiEvent>,
     #[cfg(feature = "inspector")]
@@ -373,6 +445,34 @@ fn button_system(
             Interaction::None => {
                 *color = BackgroundColor(Color::srgb(0.15, 0.15, 0.15));
             }
+        }
+    }
+}
+
+/// `IconButton` variant of `button_system`: fires the same click event on
+/// `Interaction::Pressed`, but never touches `BackgroundColor` — icon buttons signal
+/// state via `icon_button_sync_system`'s color/texture swap on `ImageNode` instead.
+fn icon_button_click_system(
+    interaction_query: Query<
+        (&Interaction, &UiAction),
+        (Changed<Interaction>, With<IconButtonRoot>),
+    >,
+    mut ui_events: MessageWriter<UiEvent>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
+) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
+    for (interaction, action) in &interaction_query {
+        if *interaction == Interaction::Pressed {
+            let UiAction::Trigger(trigger) = action;
+            info!("IconButton Pressed! Emitting UiEvent: {}", trigger);
+            ui_events.write(UiEvent::ButtonPressed(trigger.clone()));
         }
     }
 }

@@ -6,8 +6,8 @@
     // SyncAudioState in each state's entry_actions re-emits the current state on entry,
     // ensuring labels are correct on first project load and after navigating between scenes.
     global_on: [
-        ( event: "audio.muted",   do_actions: [ SetVariable("audio_state", "Muted")    ] ),
-        ( event: "audio.unmuted", do_actions: [ SetVariable("audio_state", "Sound On") ] ),
+        ( event: "audio.muted",   do_actions: [ SetVariable("audio_state", "Muted"),    SetVariable("audio_muted", "true")  ] ),
+        ( event: "audio.unmuted", do_actions: [ SetVariable("audio_state", "Sound On"), SetVariable("audio_muted", "false") ] ),
     ],
 
     states: [

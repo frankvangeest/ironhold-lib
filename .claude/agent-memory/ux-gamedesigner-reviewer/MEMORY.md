@@ -15,3 +15,4 @@
 - [Dialogue system doc gaps](project_dialogue_system_doc_gaps.md) — hint_text undocumented on InteractableDef; dialogue.started payload is spawn id not prefab; condition absent-key semantics unexplained; canonical example 3rd_person_game_demo
 - [Inventory & item system](project_inventory_item_system.md) — v1 shops display-only; entity:"player" magic string vs spawn id; currency_stat "gold" not in stats.ron; canonical 3rd_person_game_demo
 - [Nameplate system](project_nameplate_system.md) — {self}.stat needs a matching stat_template; player uses global player_health so its forced nameplate shows NO bars; mana bar shows on nothing
+- [IconButton bind wiring](project_iconbutton_bind_wiring.md) — IconButton bind var is designer-wired via SetVariable, NOT auto-populated; scene RON lacks wiring comment; canonical 3rd_person_game_demo hud_audio_toggle

@@ -48,6 +48,8 @@
     "icons_items": "shared/ui/iconsheet-items-01.png",
     // Common UI icons (50×50 px each)
     "ui/cross": "shared/ui/common-ui-icons/cross.png",
+    "ui/audio_on": "shared/ui/common-ui-icons/audioOn.png",
+    "ui/audio_off": "shared/ui/common-ui-icons/audioOff.png",
     // Kenney Particle Pack sprites used by combat effects
     "particle/spark_01": "shared/textures/particles/kenney-particle-pack/spark_01.png",
     "particle/spark_02": "shared/textures/particles/kenney-particle-pack/spark_02.png",

@@ -200,13 +200,6 @@
       size: (200.0, 44.0),
     )),
     Button((
-      id: "hud_mute_button",
-      text: "Toggle Mute",
-      action: "ui.toggle_mute",
-      position: (16.0, 280.0),
-      size: (200.0, 44.0),
-    )),
-    Button((
       id: "hitbox_debug_on_button",
       text: "Hitbox: ON",
       action: "ui.toggle_hitboxes_on",
@@ -276,14 +269,26 @@
     )),
 
     // ── Audio HUD ───────────────────────────────────────────────────────────────
-    Label((
-      id: "audio_state_hud",
-      text: "",
-      bind: "audio_state",
-      format: " Audio: {}",
-      position: (800.0, 16.0),
-      size: (220.0, 30.0),
-      align: Left,
+    // "audio_muted" is not written automatically — it's kept in sync by the
+    // audio.muted/audio.unmuted rules in logic/state_machine.ron. Any IconButton's
+    // `bind` needs a matching SetVariable("<key>", "true"/"false") rule pair.
+    IconButton((
+      id: "hud_audio_toggle",
+      action: "ui.toggle_mute",
+      // icon_on/icon_off name which state of `bind` shows them, not which state the artwork
+      // depicts — bind is "audio_muted", so icon_on (shown when muted) is the no-sound art
+      // (audioOff.png) and icon_off (shown when unmuted) is the sound-wave art (audioOn.png).
+      icon_on: "ui/audio_off",
+      icon_off: "ui/audio_on",
+      bind: "audio_muted",
+      position: (976.0, 26.0),
+      size: (36.0, 36.0),
+      icon_color: (0.90, 0.75, 0.40, 1.0),   // warm brass, matches the desert HUD palette
+      active_color: (0.75, 0.40, 0.30, 1.0), // dusty terracotta while muted, draws attention
+      hover_color: (1.0, 0.90, 0.65, 1.0),   // lighter brass, subtle hover feedback
+      click_color: (1.0, 0.60, 0.15, 1.0),   // brighter amber flash, echoes the late-afternoon sun light
+      shadow_offset: (-2.0, 2.0),            // left + down
+      shadow_color: (0.75, 0.75, 0.75, 0.55), // light grey, semi-transparent
     )),
 
     // ── Dialogue panel ─────────────────────────────────────────────────────────

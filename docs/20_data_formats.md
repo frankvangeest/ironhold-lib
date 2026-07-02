@@ -589,6 +589,50 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
 
+#### `IconButton((...))`
+
+An icon-only button that swaps between two catalog textures depending on a bound `GameVariables` key, and fires the same click pipeline as `Button` (`UiEvent::ButtonPressed` → `action` trigger). The button itself has no background/border — only the icon (and optional drop-shadow copy) is visible. Internally it spawns a clickable root entity (hit-test surface, no image) with one or two `ImageNode` children: an optional shadow (behind) and the foreground icon (on top).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | required | Unique identifier within the scene |
+| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.toggle_mute"` → `"toggle_mute"`) |
+| `icon_on` | `String` | required | Asset catalog texture key shown when `bind` resolves to `"true"` |
+| `icon_off` | `String` | required | Asset catalog texture key shown when `bind` resolves to anything else, including when the key is missing from `GameVariables` |
+| `bind` | `String` | required | `GameVariables` key holding `"true"`/`"false"`. Re-checked every frame. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `size` | `(f32, f32)` | `(36.0, 36.0)` | Width and height in pixels |
+| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color for the icon's resting state while `bind` is `"false"` (same convention as `ActionSlotDef.icon_color` — a multiply tint, so it works cleanly on white/greyscale source art). Omit to render the icon as-is (unmodified white). |
+| `active_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color for the icon's resting state while `bind` is `"true"` (i.e. `icon_on` is showing). Falls back to `icon_color` (or as-is) when unset — active/inactive look identical by default. |
+| `hover_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color while the cursor hovers the button (not pressed). Falls back to `icon_color` (or as-is) when unset — no hover feedback by default. |
+| `click_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color while the button is pressed. Falls back to `icon_color` (or as-is) when unset — no click feedback by default. |
+| `shadow_offset` | `(f32, f32)` | `(-2.0, 2.0)` | Pixel offset `(dx, dy)` of the drop-shadow copy relative to the icon. Positive `dx` shifts right, positive `dy` shifts down. Only used when `shadow_color` is set. |
+| `shadow_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color for a drop-shadow copy of the icon, rendered behind the main icon. Omit to disable the shadow entirely (no shadow entity is spawned). The shadow always shows whichever of `icon_on`/`icon_off` the foreground is currently showing, but never reacts to hover/click. |
+
+`bind` is not audio-specific — any bool-shaped `GameVariable` (`"true"`/`"false"`) works, so the same node can drive a settings-gear icon, a notification-bell badge, or any other two-state toggle.
+
+```ron
+// Mute/unmute toggle — see assets/projects/3rd_person_game_demo/scenes/main.scene.ron
+IconButton((
+  id: "hud_audio_toggle",
+  action: "ui.toggle_mute",
+  icon_on: "ui/audio_on",
+  icon_off: "ui/audio_off",
+  bind: "audio_muted",
+  position: (976.0, 26.0),
+  size: (36.0, 36.0),
+  icon_color: (0.90, 0.75, 0.40, 1.0),   // warm brass, matches the desert HUD palette
+  active_color: (0.75, 0.40, 0.30, 1.0), // dusty terracotta while muted, draws attention
+  hover_color: (1.0, 0.90, 0.65, 1.0),   // lighter brass, subtle hover feedback
+  click_color: (1.0, 0.60, 0.15, 1.0),   // brighter amber flash while held
+  shadow_offset: (-2.0, 2.0),            // left + down
+  shadow_color: (0.75, 0.75, 0.75, 0.55), // light grey, semi-transparent
+)),
+```
+
+The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that listen for `audio.muted` / `audio.unmuted` events and call `SetVariable("audio_muted", "true"|"false")`.
+
 #### `Label((...))`
 
 | Field | Type | Default | Description |

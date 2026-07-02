@@ -1402,6 +1402,73 @@ fn spawn_ui_element_node(
                     ));
                 });
         }
+        UiNodeDef::IconButton(icon_btn) => {
+            let trigger = icon_btn.action.strip_prefix("ui.").unwrap_or(&icon_btn.action).to_string();
+            let icon_on: Handle<Image> = asset_catalog.textures.get(&icon_btn.icon_on)
+                .map(|p| asset_server.load(p.clone()))
+                .unwrap_or_default();
+            let icon_off: Handle<Image> = asset_catalog.textures.get(&icon_btn.icon_off)
+                .map(|p| asset_server.load(p.clone()))
+                .unwrap_or_default();
+            let icon_color = icon_btn.icon_color
+                .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                .unwrap_or(Color::WHITE);
+            let active_color = icon_btn.active_color
+                .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                .unwrap_or(icon_color);
+            let hover_color = icon_btn.hover_color
+                .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                .unwrap_or(icon_color);
+            let click_color = icon_btn.click_color
+                .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
+                .unwrap_or(icon_color);
+            let shadow_color = icon_btn.shadow_color.map(|(r, g, b, a)| Color::srgba(r, g, b, a));
+            let (shadow_dx, shadow_dy) = icon_btn.shadow_offset;
+            parent
+                .spawn((
+                    Name::new(format!("IconButton: {}", icon_btn.id)),
+                    Button,
+                    node,
+                    BackgroundColor(Color::NONE),
+                    UiAction::Trigger(trigger),
+                    crate::IconButtonRoot,
+                ))
+                .with_children(|parent| {
+                    if let Some(shadow_color) = shadow_color {
+                        parent.spawn((
+                            Name::new(format!("IconButtonShadow: {}", icon_btn.id)),
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(shadow_dx),
+                                top: Val::Px(shadow_dy),
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
+                                ..default()
+                            },
+                            ImageNode { image: icon_off.clone(), color: shadow_color, ..default() },
+                            crate::IconShadowBind {
+                                key: icon_btn.bind.clone(),
+                                icon_on: icon_on.clone(),
+                                icon_off: icon_off.clone(),
+                            },
+                        ));
+                    }
+                    parent.spawn((
+                        Name::new(format!("IconButtonIcon: {}", icon_btn.id)),
+                        Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+                        ImageNode { image: icon_off.clone(), color: icon_color, ..default() },
+                        crate::IconButtonBind {
+                            key: icon_btn.bind.clone(),
+                            icon_on,
+                            icon_off,
+                            icon_color,
+                            active_color,
+                            hover_color,
+                            click_color,
+                        },
+                    ));
+                });
+        }
         UiNodeDef::StatBar(bar) => {
             let (br, bg_c, bb, ba) = bar.background_color;
             let (fr, fg, fb, fa) = bar.fill_color;

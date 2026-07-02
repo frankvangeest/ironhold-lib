@@ -27,6 +27,7 @@
 
 - **Further split `integration_tests.rs` as it grows** _(observed at `c07c1e0` 2026-05-27)_ — `integration_tests.rs` is still 2447 lines / 69 tests after the domain split; as FSM, scene-loading, and spawn-pipeline tests accumulate, splitting into `fsm_tests.rs`, `scene_lifecycle_tests.rs`, and `spawn_tests.rs` would keep individual files under ~30 tests. Concrete basis: current file mixes 6 distinct subsystems with no internal headers separating them.
 
+
 ## Audio
 
 - **CLI `validate` should cross-check scene button triggers against FSM rules** _(observed at `517afe7` 2026-06-28)_ — `scene_loader.rs:1384` strips the `ui.` prefix from button `action` strings silently; a mis-prefixed button (e.g. `action: "toggle_mute"` instead of `action: "ui.toggle_mute"`) produces a different trigger that matches no FSM rule, giving the "button animates but nothing happens" symptom with no error at startup. A validator pass comparing each scene button's derived `ui.button_pressed:{trigger}` against all events handled in `rules.ron`/`state_machine.ron` would catch this at author time; fits the existing `query events` CLI surface.
