@@ -159,6 +159,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] **Schema version v2→v3 migration guide** — add a "Migrating from v2 to v3" section in `docs/20_data_formats.md` covering: rename `rules_path` → `state_machine_path`, bump `schema_version` to `3`, convert `rules.ron` to the FSM format, and the warning to expect if both files coexist
 - [ ] **Magic-string event/action validator** — `tools/ron_validator/` CLI that cross-checks event names used in `rules.ron` / `state_machine.ron` against the set emitted by capabilities and reports unknown event keys before runtime; eliminates silent no-ops from typos in event names
 - [ ] **CLI `--strict` merchant cross-validation** — cross-check merchant `currency_stat` against stat defs and `item_key` against `items.ron` at validate time; catches typos before any runtime run, mirroring existing scene→prefab checks.
+- [ ] **CLI `validate` cross-checks UI trigger reachability** — derive each scene `Button`/`IconButton`/`global_key_bindings` entry's `ui.button_pressed:{trigger}` event and confirm a rule/transition/binding actually handles it; catches "button animates but nothing happens" typos at author time instead of at runtime. See `planning/features/ui_trigger_reachability_check.md`.
 
 ### UI
 - [ ] UI element types beyond `Button`: `Label`, `Image`, `ProgressBar`, `Panel`
