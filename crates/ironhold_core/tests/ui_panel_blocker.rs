@@ -181,3 +181,95 @@ fn blocker_with_block_policy_blocks() {
         "with FocusPolicy::Block the button beneath must not be pressed"
     );
 }
+
+// Regression test for the overlay-backdrop click-through gap (same root cause
+// as the panel blocker above): scene_loader.rs's "Overlay Backdrop" node must
+// carry FocusPolicy::Block + Interaction, or a base-scene button beneath it
+// remains pressable regardless of GlobalZIndex or screen coverage.
+fn click_through_overlay_backdrop(backdrop_has_block: bool) -> Interaction {
+    let mut app = build_app();
+
+    app.world_mut().spawn((
+        Camera {
+            order: 1000,
+            viewport: Some(bevy::camera::Viewport {
+                physical_position: bevy::math::UVec2::ZERO,
+                physical_size: bevy::math::UVec2::new(1280, 720),
+                ..default()
+            }),
+            ..default()
+        },
+        bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Primary),
+    ));
+
+    app.world_mut()
+        .spawn((
+            Name::new("UI Root"),
+            Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+        ))
+        .with_children(|p| {
+            p.spawn((
+                Name::new("Dance Button"),
+                Button,
+                DanceButton,
+                Node {
+                    width: Val::Px(200.0),
+                    height: Val::Px(44.0),
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(16.0),
+                    top: Val::Px(176.0),
+                    ..default()
+                },
+            ));
+        });
+
+    // Mirrors scene_loader.rs's "Overlay Backdrop" spawn exactly.
+    let mut backdrop = app.world_mut().spawn((
+        Name::new("Overlay Backdrop"),
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        GlobalZIndex(100),
+    ));
+    if backdrop_has_block {
+        backdrop.insert((FocusPolicy::Block, Interaction::default()));
+    }
+
+    for _ in 0..6 {
+        app.update();
+    }
+
+    set_cursor(&mut app, 116.0, 198.0);
+    app.update();
+    app.update();
+
+    app.world_mut().resource_mut::<InjectClick>().0 = true;
+    app.update();
+
+    dance_interaction(&mut app)
+}
+
+#[test]
+fn overlay_backdrop_without_focus_policy_does_not_block() {
+    let interaction = click_through_overlay_backdrop(false);
+    eprintln!("backdrop without FocusPolicy::Block -> dance Interaction = {:?}", interaction);
+    assert_eq!(
+        interaction,
+        Interaction::Pressed,
+        "without FocusPolicy::Block the base-scene button is clickable through the overlay backdrop (bug repro)"
+    );
+}
+
+#[test]
+fn overlay_backdrop_with_focus_policy_blocks() {
+    let interaction = click_through_overlay_backdrop(true);
+    eprintln!("backdrop with FocusPolicy::Block -> dance Interaction = {:?}", interaction);
+    assert_ne!(
+        interaction,
+        Interaction::Pressed,
+        "with FocusPolicy::Block the base-scene button beneath the overlay backdrop must not be pressed"
+    );
+}

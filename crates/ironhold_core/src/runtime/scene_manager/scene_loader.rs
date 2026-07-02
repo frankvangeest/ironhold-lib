@@ -1194,8 +1194,13 @@ pub fn spawn_scene_v2(
         .collect();
 
     // When loading an overlay, spawn a transparent full-screen backdrop first.
-    // It sits at GlobalZIndex(100), above all base-scene UI (which has no GlobalZIndex → 0),
-    // and absorbs pointer events so base-scene buttons are not clickable through the overlay.
+    // It sits at GlobalZIndex(100), above all base-scene UI (which has no GlobalZIndex → 0).
+    // FocusPolicy::Block is required to actually stop base-scene buttons from being
+    // clickable through the overlay — Node's FocusPolicy defaults to Pass, so
+    // ui_focus_system would otherwise walk straight past this node regardless of
+    // z-index or screen coverage (same root cause as the panel click-through bug
+    // fixed via per-rect FocusPolicy::Block on panel roots). Interaction::default()
+    // is required for that Block to be evaluated by the focus pass.
     // Tagged OverlayEntity so it despawns with UnloadOverlay automatically.
     if is_overlay {
         commands.spawn((
@@ -1207,6 +1212,8 @@ pub fn spawn_scene_v2(
                 ..default()
             },
             GlobalZIndex(100),
+            bevy::ui::FocusPolicy::Block,
+            Interaction::default(),
             OverlayEntity,
         ));
     }
