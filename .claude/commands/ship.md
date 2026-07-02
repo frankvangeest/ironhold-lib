@@ -14,7 +14,7 @@ Steps:
 
 6. **Tests pass** — Run:
    ```
-   cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint
+   cargo test -p ironhold_core --test '*'
    ```
    All must pass. Fix any failures before continuing.
 

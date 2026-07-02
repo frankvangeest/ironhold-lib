@@ -21,7 +21,7 @@ Given a feature, capability, or bug fix, produce integration tests that:
 **Always read the test infrastructure documentation and existing tests first.** The ironhold test setup is non-obvious and has specific rules. Do not guess.
 
 1. Read `crates/ironhold_core/tests/CLAUDE.md` — mandatory setup rules, helper conventions, what is and is not allowed
-2. Read 2–3 existing tests in `crates/ironhold_core/tests/integration_tests.rs` that are closest to the feature being tested — these are your style templates
+2. Read 2–3 existing tests in the domain file closest to the feature being tested (see the file layout table in `tests/CLAUDE.md` — e.g. `fsm_tests.rs`, `spawn_tests.rs`, `ui_tests.rs`) — these are your style templates
 3. Read the relevant capability source (`capabilities/*.rs`) to understand what components and resources to assert
 4. Read the relevant schema types (`schema/*.rs`) to understand what RON constructs the test needs to set up
 

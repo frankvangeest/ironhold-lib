@@ -94,7 +94,7 @@ For any capability change:
 | What you're testing | Where it lives |
 |---|---|
 | Pure function, no Bevy | `#[cfg(test)]` block in the `.rs` file |
-| Bevy system / ECS behavior | `tests/integration_tests.rs` |
+| Bevy system / ECS behavior | `tests/{domain}_tests.rs` — e.g. `fsm_tests.rs`, `spawn_tests.rs`, `ui_tests.rs` (see `crates/ironhold_core/tests/CLAUDE.md` for the full file layout) |
 | RON file loads correctly | `tests/ron_validation.rs` |
 | CLI output and exit codes | `crates/ironhold_cli/tests/` |
 

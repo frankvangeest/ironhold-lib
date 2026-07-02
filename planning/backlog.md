@@ -12,6 +12,7 @@
 ## Active
 
 - [x] **Audio icon toggle button** — see `planning/features/done/audio_icon_button.md`. Replaced the main HUD's "Toggle Mute" text button + "Audio: {state}" label with a single top-right `IconButton`; grew into a general-purpose reusable node with icon/active/hover/click tint colors and an optional drop-shadow, all RON-authorable.
+- [x] **Split `integration_tests.rs` into domain files** — see `planning/features/done/split_integration_tests.md`. 104-test/4258-line file split into 8 domain files (`fsm_tests.rs`, `entity_logic_tests.rs`, `scene_lifecycle_tests.rs`, `spawn_tests.rs`, `action_tests.rs`, `npc_tests.rs`, `nameplate_tests.rs`, `ui_tests.rs`); no production code changed, all 104 tests still pass.
 
 ---
 

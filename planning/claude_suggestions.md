@@ -25,7 +25,7 @@
 
 ## Testing
 
-- **Further split `integration_tests.rs` as it grows** _(observed at `c07c1e0` 2026-05-27)_ — `integration_tests.rs` is still 2447 lines / 69 tests after the domain split; as FSM, scene-loading, and spawn-pipeline tests accumulate, splitting into `fsm_tests.rs`, `scene_lifecycle_tests.rs`, and `spawn_tests.rs` would keep individual files under ~30 tests. Concrete basis: current file mixes 6 distinct subsystems with no internal headers separating them.
+- ~~**Further split `integration_tests.rs` as it grows**~~ _(observed at `c07c1e0` 2026-05-27; promoted to backlog and fixed 2026-07-02, see `planning/features/done/split_integration_tests.md`)_ — split into 8 domain files (`fsm_tests.rs`, `entity_logic_tests.rs`, `scene_lifecycle_tests.rs`, `spawn_tests.rs`, `action_tests.rs`, `npc_tests.rs`, `nameplate_tests.rs`, `ui_tests.rs`) once the file reached 104 tests / 4258 lines.
 
 
 ## Audio

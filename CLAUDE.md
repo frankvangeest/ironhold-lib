@@ -37,11 +37,11 @@ cargo run -p ironhold_native -- --project 3rd_person_game_demo
 cargo test -p ironhold_core --test '*' -- --nocapture
 
 # Run a single test file
-cargo test -p ironhold_core --test integration_tests
+cargo test -p ironhold_core --test fsm_tests
 cargo test -p ironhold_core --test ron_validation
 
 # Run a single test by name
-cargo test -p ironhold_core --test integration_tests test_ui_button_to_load_scene_action
+cargo test -p ironhold_core --test ui_tests test_ui_button_to_load_scene_action
 
 # Ironhold CLI tests (spawn the binary — no Bevy required)
 cargo test -p ironhold_cli                              # run all CLI tests (smoke + cross-file)
@@ -218,7 +218,7 @@ Every code change must follow this order before committing code:
  3. **Code changes** — implement the feature or fix and update tests
  4. **Tests pass** — run both together every time:
     ```
-    cargo test -p ironhold_core --test integration_tests --test ron_validation --test ron_lint
+    cargo test -p ironhold_core --test '*'
     cargo check -p ironhold_cli
     ```
     The CLI check is unconditional — new `Action` variants and schema changes silently break `query.rs` without it.

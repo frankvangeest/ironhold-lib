@@ -18,7 +18,7 @@ For any new `Action` variant that takes an `entity` / `target` / `event` string 
 
 5. **`tests/ron_validation.rs`** — add a parse test (`from_str::<Action>("…")`) to prove the variant deserializes correctly.
 
-6. **`tests/integration_tests.rs`** — add a behavior test pushing the action onto `ActionQueue`, calling `app.update()`, and asserting the side effect (component changed, event emitted, etc.).
+6. **The matching domain test file** (`tests/{domain}_tests.rs` — e.g. `action_tests.rs`, `spawn_tests.rs`; see `tests/CLAUDE.md`'s file layout table) — add a behavior test pushing the action onto `ActionQueue`, calling `app.update()`, and asserting the side effect (component changed, event emitted, etc.). `integration_tests.rs` was split into domain files 2026-07-02 — do not recreate it.
 
 ## Patterns that signal a problem when reviewing such an action
 
