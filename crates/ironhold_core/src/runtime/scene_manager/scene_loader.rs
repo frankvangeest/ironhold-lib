@@ -17,7 +17,7 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, WorldLabel,
+    ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate, WorldLabel,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     DynamicStatUiQueue,
 };
@@ -381,7 +381,7 @@ pub fn spawn_scene_v2(
                         pending_world_bars.push((parent, resolved_key, wb.clone()));
                     }
 
-                    if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                    if should_insert_nameplate(prefab.nameplate, scene.show_nameplates) {
                         let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
                         commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
                             display_name,
@@ -586,7 +586,7 @@ pub fn spawn_scene_v2(
                             pending_world_bars.push((spawned, resolved_key, wb.clone()));
                         }
 
-                        if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                        if should_insert_nameplate(prefab.nameplate, scene.show_nameplates) {
                             let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
                             commands.entity(spawned).insert(crate::capabilities::nameplate::NameplateTag {
                                 display_name,
@@ -626,7 +626,7 @@ pub fn spawn_scene_v2(
                     movement: prefab.components.movement.clone(),
                     spawn_id: entity_def.id.clone(),
                     prefab_key: entity_def.prefab.clone(),
-                    nameplate_display_name: if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                    nameplate_display_name: if should_insert_nameplate(prefab.nameplate, scene.show_nameplates) {
                         Some(prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone()))
                     } else {
                         None
@@ -666,7 +666,7 @@ pub fn spawn_scene_v2(
                     pending_world_bars.push((parent, resolved_key, wb.clone()));
                 }
 
-                if prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true)) {
+                if should_insert_nameplate(prefab.nameplate, scene.show_nameplates) {
                     let display_name = prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone());
                     commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
                         display_name,

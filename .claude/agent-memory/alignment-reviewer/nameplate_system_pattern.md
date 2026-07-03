@@ -19,7 +19,17 @@ the cleanest data-driven example so far of a NON-action cosmetic capability.
   None=inherit scene; Some(true)=always show (bypass faction, respect distance); Some(false)=never.
 
 **Six spawn paths all insert `NameplateTag` (verified at 4c47cc6+):**
-The standard tag-condition is `prefab.nameplate != Some(false) && (scene.show_nameplates || prefab.nameplate == Some(true))`.
+The tag-condition is now the extracted helper `should_insert_nameplate(nameplate, show)` in
+`scene_manager/mod.rs` (beside `tag_spawned_entity`): `nameplate != Some(false) && (show || nameplate == Some(true))`.
+5 of the 6 call sites route through it (scene_loader.rs ×4, entity_spawner.rs ×1). The 6th —
+`action_executor.rs:163` (dynamic character-select PLAYER spawn) — deliberately does NOT use the
+helper: it uses a truncated `nameplate != Some(false)` that ignores `show_nameplates` entirely.
+That divergence is a KNOWN BUG tracked in planning/backlog.md ## Bugs ("Character-select player
+nameplate ignores show_nameplates"), NOT a candidate for silent inclusion in a refactor — leaving
+it out preserves current behavior pending Frank's decision. Note action_executor.rs:163 gates a
+`nameplate_display_name` (PlayerConfig assembly), while the scene_loader primitive-player path at
+line 629 gates the SAME PlayerConfig field but WITH the full helper — direct evidence the two
+player paths intentionally differ today.
 1. scene_loader.rs ~451 — composite primitive
 2. scene_loader.rs ~721 — single-mesh primitive (or GLB non-player; grep to confirm which)
 3. scene_loader.rs ~801 — GLB non-player actor/prop

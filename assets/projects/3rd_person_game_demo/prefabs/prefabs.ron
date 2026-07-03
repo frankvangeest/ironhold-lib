@@ -42,7 +42,7 @@
       kind: Actor,
       model: "character_male",
       display_name: "Hero",
-      nameplate: false,
+      nameplate: true,
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],
@@ -72,7 +72,7 @@
       kind: Actor,
       model: "character_female",
       display_name: "Heroine",
-      nameplate: false,
+      nameplate: true,
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],

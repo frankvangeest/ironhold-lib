@@ -3,6 +3,20 @@
 mod support;
 use support::setup_test_app;
 
+/// `should_insert_nameplate` tri-state contract: `Some(false)` always suppresses regardless
+/// of `show`, `Some(true)` force-shows regardless of `show`, and `None` inherits `show`.
+#[test]
+fn test_should_insert_nameplate_tri_state_contract() {
+    use ironhold_core::runtime::should_insert_nameplate;
+
+    assert!(!should_insert_nameplate(Some(false), true));
+    assert!(!should_insert_nameplate(Some(false), false));
+    assert!(should_insert_nameplate(Some(true), false));
+    assert!(should_insert_nameplate(Some(true), true));
+    assert!(should_insert_nameplate(None, true));
+    assert!(!should_insert_nameplate(None, false));
+}
+
 /// `nameplate_setup_system` runs without panicking when `show_nameplates` is enabled and
 /// a tagged entity exists, even though render assets are absent in the headless harness.
 /// The system must early-return cleanly (not panic) when `Assets<ColorMaterial>` is missing.

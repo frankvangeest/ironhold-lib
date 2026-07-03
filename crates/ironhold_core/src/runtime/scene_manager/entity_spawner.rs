@@ -18,7 +18,7 @@ use super::{
     LevelEntity, LoadedAssetCatalog, MergedModelFixes, PendingAnimationPolicy,
     PendingPlayerConfig, PendingTonemapping,
     PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
-    PendingEntitySpawns, tag_spawned_entity,
+    PendingEntitySpawns, tag_spawned_entity, should_insert_nameplate,
     resolve_project_path,
     scene_loader::resolve_jump_velocity,
 };
@@ -372,7 +372,7 @@ pub fn drain_spawn_queue_system(
             stat_ui_queue.0.push(super::DynamicStatUiEntry { entity: parent, stat_label, world_stat_bar });
         }
 
-        if queued.prefab_def.nameplate != Some(false) && (nameplate_config.enabled || queued.prefab_def.nameplate == Some(true)) {
+        if should_insert_nameplate(queued.prefab_def.nameplate, nameplate_config.enabled) {
             let display_name = queued.prefab_def.display_name.clone().unwrap_or_else(|| queued.prefab_key.clone());
             commands.entity(parent).insert(crate::capabilities::nameplate::NameplateTag {
                 display_name,

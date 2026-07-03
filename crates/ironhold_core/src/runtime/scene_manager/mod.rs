@@ -317,6 +317,14 @@ pub fn tag_spawned_entity(
     registry.entities.insert(id.to_string(), entity);
 }
 
+/// Single source of truth for whether a spawned entity should get a `NameplateTag`.
+/// `nameplate: Some(false)` always suppresses; otherwise `show` (scene-level
+/// `show_nameplates` or the dynamic-spawn equivalent) or an explicit `nameplate: Some(true))`
+/// opt-in enables it.
+pub fn should_insert_nameplate(nameplate: Option<bool>, show: bool) -> bool {
+    nameplate != Some(false) && (show || nameplate == Some(true))
+}
+
 /// Temporary component inserted at spawn time when a prefab has a `behavior` path.
 /// Replaced by `BehaviorHandle` + `EntityFsmState` once the asset resolves.
 #[derive(Component)]
