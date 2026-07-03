@@ -11,7 +11,7 @@
 
 ## Active
 
-_(none)_
+- [ ] **Local Co-op Split-Screen Demo — Stage 1: foundation (2-player schema, shared framing camera, view-box clamp)** — see `planning/features/local_coop_foundation.md`
 
 ---
 
@@ -40,6 +40,20 @@ _(none)_
 ### Camera
 - [ ] **Camera mode unification (v1)** — unify `OrbitCamera` and `FlyCamera` under a single `ActiveCameraMode` resource; backward-compat mapping for existing `camera:`/`flycam:` prefab fields; no new designer-facing surface, but de-risks `CameraShake` re-homing and the persistent-camera/black-frame issue. See `planning/features/camera_modes.md`
 - [ ] **Camera modes — new modes + switching (v2)** — `Follow`, `FirstPerson`, `Fixed` modes in RON; `SetCameraMode` action with optional eased transitions; FOV interpolation. _Dep: camera mode unification (v1)._ See `planning/features/camera_modes.md`
+
+### Local Co-op Split-Screen Demo
+New example project (`local_coop_demo`): two local players (keyboard + optional gamepad) move
+through portal-linked scenes, each showcasing a different screen-sharing configuration. Local
+co-op on one machine — unrelated to and does not depend on the Beta 0.6 LAN networking milestone.
+Staged incrementally; each stage ships and is playtested before the next starts.
+- [ ] **Stage 1 — foundation: 2-player schema, shared framing camera, view-box clamp** — Active, see `planning/features/local_coop_foundation.md`
+- [ ] **Stage 2 — portal/teleport action** — moves both players to the next scene when either enters the portal
+- [ ] **Stage 3 — vertical split-screen scene**
+- [ ] **Stage 4 — horizontal split-screen scene**
+- [ ] **Stage 5 — dynamic split-screen scene** — viewport boundary follows player positions
+- [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit once Stage 3+ split-screen viewports land. _Dep: Stage 1 (`player_index`)._
+- Diagonal split-screen scoped out at design time — Bevy's `Camera.viewport` is rectangle-only; a true diagonal cut needs a stencil/shader mask, untested on this engine's WASM/WebGL2 target.
+- Dep (soft): promotes "Gamepad / controller input" (Icebox) from icebox to in-scope, sized down to exactly this demo's needs.
 
 ### Gameplay & Environment
 

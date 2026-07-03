@@ -38,6 +38,19 @@ scene). The terrain-deferred player path (`spawn_player_when_terrain_ready`) rea
 scene with terrain ever spawns the player via Action::Spawn, confirm ActiveTonemapping is
 set before the drain runs (scene_loader inserts it during scene load, so ordering is fine).
 
+**Local co-op (Stage 1) extends this:** `local_coop_foundation.md` plan makes
+`player_config: Option<PlayerConfig>` → `Vec<PlayerConfig>` (one player-tagged entity per
+entry, spawns a controller+camera rig each). Player identity is RON-authored: each player
+prefab carries `tags:["player"]` + distinct `PrefabDef.player_index: u32` + own
+`components.inputs` (NO prefab-key string parsing). New `InputMap.gamepad_index: Option<usize>`
+routes a player to a specific gamepad (first gamepad consumer in ironhold_core — verify WASM
+Gamepad API path). New `PartyOrbitCamera` (targets: Vec<Entity>) + `CameraConfig.party:
+PartyZoomDef{zoom_margin}`; the party block (not the raw 2+ player count) should be the
+explicit RON switch — warn at load if 2+ players and no party. `GameSceneV2.max_view_box:
+Option<(f32,f32,f32,f32)>` = clamp on when present, absent = off. When adding `player_index`,
+it MUST be set at BOTH assembly sites (footgun below) or Action::Spawn players collide on
+index 0.
+
 **Designer reachability confirmed:** preview-only prefabs (no player tag, no camera/inputs)
 used on character-select screens avoid spawning stray cameras/controllers — correct pattern.
 The character_select.scene.ron uses `preview_male/female/zombie`; player prefabs stay

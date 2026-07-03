@@ -1,16 +1,19 @@
 ---
 name: player-spawn-paths
-description: The (now three) player-construction code paths, their drift risk, and the shared-helper rule for any new player spawn site
+description: The FOUR player-construction code paths, their singular-player assumptions, drift risk, and the shared-helper rule for any new player spawn site (multi-player / character-select / respawn)
 metadata:
   type: project
 ---
 
-There are multiple player-entity construction sites that MUST be kept in sync. See [[scene-prefab-boundary]] and [[core-architectural-decisions]].
+There are FOUR player-entity construction sites that MUST be kept in sync. Any feature that changes player spawning (local co-op, character select, respawn, possession) must account for all four or players diverge silently. See [[scene-prefab-boundary]] and [[core-architectural-decisions]].
 
-**The sites (as of 2026-06):**
-1. Primitive player — `scene_loader.rs` (~line 769), spawns capsule+mesh+camera inline.
-2. GLB player — `entity_spawner.rs::spawn_player_entity` (~line 402), spawns GLB+capsule+orbit-camera inline; takes a `PlayerConfig`.
-3. `PlayerConfig` assembly — `scene_loader.rs` (~line 685), builds the config from a `tags:["player"]` prefab.
+**The sites (verified 2026-07-03):**
+1. **GLB collector** — `scene_loader.rs:164` `player_config: Option<PlayerConfig>`, assembled at `:626`. SINGULAR: overwritten each player-tagged entity, so a 2nd GLB player discards the 1st.
+2. **Primitive collector + inline spawn** — `scene_loader.rs:166` `primitive_player: Option<(tuple)>`, set at `:244`, spawned INLINE at `:699`–`:862` (builds its own `CharacterController` + `OrbitCamera`; does NOT use `PlayerConfig` at all). Also SINGULAR. **A primitive-capsule demo uses THIS path** — easy to miss because it's not a `PlayerConfig`. `Vec<PlayerConfig>` alone does nothing for primitive players.
+3. **Dynamic spawn** — `action_executor.rs:148`–`173` assembles a 3rd `PlayerConfig` literal for `Action::Spawn` on a `tags:["player"]` prefab (character-select). One player per action, so it doesn't break count, but any new `PlayerConfig` field must be populated here too.
+4. **`spawn_player_entity`** — `entity_spawner.rs:491`, the shared GLB spawn fn; consumes `QueuedSpawn.player_config` (`mod.rs:173`) and `PendingPlayerConfig` (`mod.rs:346`, NOT 868). GLB non-terrain path calls it directly (`scene_loader.rs:873`); terrain path defers via `PendingPlayerConfig`.
+
+Note: `PlayerConfig` is assembled by hand in TWO literals (`scene_loader.rs:626` + `action_executor.rs:155`); a shared `assemble_player_config` helper was proposed and DROPPED in `claude_suggestions.md:71`. Land it BEFORE adding any new `PlayerConfig` field.
 
 **Detection:** player prefabs are identified by `components.tags.contains("player")` (the `TAG_PLAYER` magic-string constant in scene_loader.rs). Same stringly-typed mechanism for `flycam`.
 
