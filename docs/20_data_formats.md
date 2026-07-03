@@ -177,8 +177,8 @@ File extension must be `.scene.ron`.
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. Individual labels can override with `depth_scale: false` or `depth_scale: true`. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
-| `show_nameplates` | `bool` | Enable the nameplate system for this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. |
-| `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Ignored when `show_nameplates: false`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
+| `show_nameplates` | `bool` | Enable the nameplate system for NPCs/props in this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does **not** govern the player's own nameplate — see `show_player_nameplate` below. |
+| `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Cosmetic fields (offset, font, colors, bars) apply regardless of `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when `show_nameplates: true`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
 
 **Example:**
 ```ron
@@ -445,11 +445,16 @@ target_indicator: (
 
 _Used in: `GameSceneV2.nameplate_options`_
 
-Enable the nameplate system on a scene by setting `show_nameplates: true`. Each spawned entity that passes the faction filter and has no `nameplate: false` override receives a floating widget above it: a name line (from `PrefabDef.display_name` or the prefab key) plus any number of pixel stat bars. The widget hides automatically when the camera moves beyond `max_distance`.
+Enable the nameplate system on a scene by setting `show_nameplates: true`. Each spawned NPC/prop entity that passes the faction filter and has no `nameplate: false` override receives a floating widget above it: a name line (from `PrefabDef.display_name` or the prefab key) plus any number of pixel stat bars. The widget hides automatically when the camera moves beyond `max_distance`.
+
+The player's own nameplate is controlled independently by `show_player_nameplate` (below) — it is never subject to `show_nameplates` or `faction_filter`, since faction hostility categorization doesn't apply to "should I see my own name." A per-prefab `nameplate: true`/`false` override still wins over either scene toggle, exactly the same way for the player as for any other entity.
+
+> **Two independent toggles:** `show_nameplates` covers NPCs/props; `show_player_nameplate` covers only your player. Setting `show_nameplates: true` does **not** show the player's own nameplate — you must also set `show_player_nameplate: true` (or a per-prefab `nameplate: true` on the player prefab) if you want it.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `faction_filter` | `NameplateFactionFilter` | `HostileOnly` | Which entities receive a nameplate. `HostileOnly` shows nameplates on entities with NPC AI (hostile actors). `FriendlyOnly` shows them on non-NPC entities. `All` shows nameplates on every tagged entity. Individual prefabs can override this with `PrefabDef.nameplate`. |
+| `faction_filter` | `NameplateFactionFilter` | `HostileOnly` | Which NPC/prop entities receive a nameplate. `HostileOnly` shows nameplates on entities with NPC AI (hostile actors). `FriendlyOnly` shows them on non-NPC entities. `All` shows nameplates on every tagged entity. Individual prefabs can override this with `PrefabDef.nameplate`. Never applies to the player — see `show_player_nameplate`. |
+| `show_player_nameplate` | `bool` | `false` | Whether the player's own nameplate is shown, independent of `show_nameplates`/`faction_filter`. Defaults to `false`, matching genre convention (most 3rd-person RPGs hide your own nameplate since it only occludes your own character). A per-prefab `nameplate: true`/`false` override on the player prefab still wins over this default. |
 | `max_distance` | `f32` | `20.0` | Maximum camera distance in world units (metres) at which nameplates remain visible. Nameplates beyond this distance are hidden each frame. |
 | `offset` | `(f32, f32, f32)` | `(0.0, 2.4, 0.0)` | World-space offset from the entity's origin to the nameplate anchor point. Adjust the Y component to place the widget above the entity's head (e.g. `2.4` for a human-scale character). |
 | `name_font_size` | `f32` | `14.0` | Font size of the name text line in screen pixels. |
@@ -488,6 +493,7 @@ Each entry in `stat_bars` defines one pixel bar row in the nameplate widget.
 show_nameplates: true,
 nameplate_options: (
     faction_filter: All,
+    show_player_nameplate: false,  // player's own nameplate stays off (the genre-conventional default)
     max_distance: 25.0,
     offset: (0.0, 2.4, 0.0),
     name_font_size: 14.0,
@@ -511,12 +517,17 @@ nameplate_options: (
     ...
 ),
 
-// Player always shows its nameplate regardless of faction_filter
+// Force this specific player prefab to always show its own nameplate, regardless of
+// the scene's show_player_nameplate default (per-prefab override wins, same as any entity).
+// Note: this will show a NAME ONLY, no bars — the scene's stat_bars above use "{self}.health"/
+// "{self}.mana", which only resolve for entities with a matching per-entity stat_templates
+// entry. The player here uses global stats (e.g. player_health from stats/stats.ron), which
+// are not entity-scoped and silently fail to match {self}.* — see the {self}.stat note below.
 "player_warrior": (
     kind: Actor,
     model: "hero",
     display_name: "Warrior",
-    nameplate: true,           // always show even if faction_filter would hide it
+    nameplate: true,           // always show even if show_player_nameplate: false
     ...
 ),
 
@@ -1489,7 +1500,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
-| `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates: true`. Absent = inherit from the scene's `show_nameplates` + `faction_filter`. |
+| `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
 
 ### Special tag: `"flycam"` ✅
 

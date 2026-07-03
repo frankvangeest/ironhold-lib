@@ -36,6 +36,17 @@ cargo run -p ironhold_native -- --project 3rd_person_game_demo
 # Run all tests
 cargo test -p ironhold_core --test '*' -- --nocapture
 
+# Fallback if the above fails with an IO/no-space or compiler-panic error on a low-disk machine:
+# building every test binary in parallel can exceed available disk scratch space. Try capping
+# build parallelism first (single flag, keeps one command):
+cargo test -p ironhold_core --test '*' --jobs 1
+# If that still fails, fall back to compiling/running one test file at a time:
+for t in fsm_tests entity_logic_tests scene_lifecycle_tests spawn_tests action_tests npc_tests \
+         nameplate_tests ui_tests audio_tests stats_tests particle_tests ron_validation ron_lint \
+         ui_panel_blocker assets_schema_version_regression; do
+  cargo test -p ironhold_core --test "$t" || break
+done
+
 # Run a single test file
 cargo test -p ironhold_core --test fsm_tests
 cargo test -p ironhold_core --test ron_validation

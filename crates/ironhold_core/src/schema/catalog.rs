@@ -857,9 +857,10 @@ pub struct PrefabDef {
     #[serde(default)]
     pub display_name: Option<String>,
     /// Nameplate visibility override.
-    /// `None` — inherit scene `show_nameplates` + `faction_filter` (default).
+    /// `None` — inherit the scene default: `show_nameplates` + `faction_filter` for NPCs/props,
+    /// or `show_player_nameplate` for the player prefab (whichever the entity is).
     /// `Some(true)` — always show (bypasses faction filter; respects `max_distance`).
-    /// `Some(false)` — never show, even when the scene has `show_nameplates: true`.
+    /// `Some(false)` — never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`.
     #[serde(default)]
     pub nameplate: Option<bool>,
 }

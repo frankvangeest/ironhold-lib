@@ -718,6 +718,27 @@ fn test_ui_panel_background_color_explicit() {
     assert_eq!(scene.ui_panel.unwrap().background_color, (0.2, 0.2, 0.2, 1.0));
 }
 
+// ── NameplateOptionsDef.show_player_nameplate ─────────────────────────────────
+
+#[test]
+fn test_nameplate_options_show_player_nameplate_default_false() {
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [], nameplate_options: Some(()))"#;
+    let scene: GameSceneV2 = from_str(ron_str).expect("nameplate_options with all defaults should parse");
+    let opts = scene.nameplate_options.as_ref().unwrap();
+    assert_eq!(opts.show_player_nameplate, false,
+        "show_player_nameplate must default to false, independent of show_nameplates");
+}
+
+#[test]
+fn test_nameplate_options_show_player_nameplate_explicit_true() {
+    let ron_str = r#"(schema_version: 1, entities: [], ui: [], nameplate_options: Some((
+        show_player_nameplate: true,
+    )))"#;
+    let scene: GameSceneV2 = from_str(ron_str)
+        .expect("nameplate_options with explicit show_player_nameplate should parse");
+    assert!(scene.nameplate_options.unwrap().show_player_nameplate);
+}
+
 // ── AssetCatalog validation ───────────────────────────────────────────────────
 
 #[test]

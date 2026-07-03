@@ -13,6 +13,25 @@ use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests
 #[derive(Component)]
 pub struct SpeedMultiplier(pub f32);
 
+/// Marker for a player-controlled entity, as opposed to NPCs, props, or other prefabs.
+/// Inserted unconditionally wherever a player entity is spawned — GLB (`spawn_player_entity`)
+/// or primitive (inline in `scene_loader.rs`), scene-placed or dynamic character-select.
+/// Distinct from `CharacterController`: a future networked remote player may carry `Player`
+/// without local input handling.
+#[derive(Component)]
+pub struct Player;
+
+/// Whether a `Player` entity is controlled by this client (`Local`) or mirrored from another
+/// client (`Remote`). Always `Local` today — there is no multiplayer code yet. Reserved as a
+/// forward-compat hook for Beta 0.6 (LAN co-op) so nameplate/UI/camera systems can distinguish
+/// "me" from "other players" without another schema pass once real players exist.
+#[derive(Component, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayerOwnership {
+    #[default]
+    Local,
+    Remote,
+}
+
 #[derive(Component)]
 pub struct CharacterController {
     pub walk_speed: f32,

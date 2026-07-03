@@ -78,6 +78,12 @@ pub fn spawn_scene_v2(
 
     let Some(scene) = params.scenes.get(&scene_handle.0) else { return; };
 
+    // Independent of `scene.show_nameplates` (which governs NPCs/props via `faction_filter`):
+    // whether the player's own nameplate shows is controlled by this separate scene field.
+    let show_player_nameplate = scene.nameplate_options.as_ref()
+        .map(|o| o.show_player_nameplate)
+        .unwrap_or(false);
+
     scene_events.write(SceneEvent::Loaded(
         asset_server
             .get_path(&scene_handle.0)
@@ -626,7 +632,7 @@ pub fn spawn_scene_v2(
                     movement: prefab.components.movement.clone(),
                     spawn_id: entity_def.id.clone(),
                     prefab_key: entity_def.prefab.clone(),
-                    nameplate_display_name: if should_insert_nameplate(prefab.nameplate, scene.show_nameplates) {
+                    nameplate_display_name: if should_insert_nameplate(prefab.nameplate, show_player_nameplate) {
                         Some(prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone()))
                     } else {
                         None
@@ -770,8 +776,12 @@ pub fn spawn_scene_v2(
                 &mut commands.entity(player_entity), &mut spawn_registry,
                 &entity_id, &prefab_key, false, false, 1.0,
             );
+            commands.entity(player_entity).insert((
+                crate::capabilities::player::Player,
+                crate::capabilities::player::PlayerOwnership::Local,
+            ));
 
-            if np_override != Some(false) && (scene.show_nameplates || np_override == Some(true)) {
+            if should_insert_nameplate(np_override, show_player_nameplate) {
                 let display_name = np_display_name.clone().unwrap_or_else(|| prefab_key.clone());
                 commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
                     display_name,
@@ -1153,6 +1163,7 @@ pub fn spawn_scene_v2(
         // Populate nameplate system config from the scene definition.
         commands.insert_resource(crate::capabilities::nameplate::NameplateSceneConfig {
             enabled: scene.show_nameplates,
+            player_enabled: show_player_nameplate,
             options: scene.nameplate_options.clone(),
         });
 

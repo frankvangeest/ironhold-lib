@@ -94,12 +94,15 @@ pub struct GameSceneV2 {
     /// Omit this field to disable the indicator for this scene (no ring, no error).
     #[serde(default)]
     pub target_indicator: Option<TargetIndicatorDef>,
-    /// Enable the nameplate system for this scene. When `true`, entities tagged with
-    /// `NameplateTag` at spawn time display a floating name + pixel stat bars above them.
-    /// Individual prefabs can override this per-entity via `PrefabDef.nameplate`.
+    /// Enable the nameplate system for NPCs/props in this scene. When `true`, entities tagged
+    /// with `NameplateTag` at spawn time display a floating name + pixel stat bars above them.
+    /// Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does NOT
+    /// govern the player's own nameplate — see `NameplateOptionsDef.show_player_nameplate`.
     #[serde(default)]
     pub show_nameplates: bool,
-    /// Scene-wide nameplate display options. Ignored when `show_nameplates: false`.
+    /// Scene-wide nameplate display options (cosmetic fields apply regardless of
+    /// `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when
+    /// `show_nameplates: true`).
     #[serde(default)]
     pub nameplate_options: Option<NameplateOptionsDef>,
 }
@@ -1170,8 +1173,17 @@ pub struct NameplateBarDef {
 #[serde(deny_unknown_fields)]
 pub struct NameplateOptionsDef {
     /// Which entities receive a nameplate (when not overridden per-prefab). Default: `HostileOnly`.
+    /// Governs NPCs/props only — the player's own nameplate is controlled independently by
+    /// `show_player_nameplate` and never subject to this filter.
     #[serde(default)]
     pub faction_filter: NameplateFactionFilter,
+    /// Whether the player's own nameplate is shown, independent of `show_nameplates` (which
+    /// governs NPCs/props via `faction_filter`). Default: `false`, matching genre convention
+    /// (most 3rd-person RPGs hide your own nameplate — it only occludes your own character).
+    /// A per-prefab `nameplate: Some(true)`/`Some(false)` override on the player prefab still
+    /// wins over this default, same as for any other entity.
+    #[serde(default)]
+    pub show_player_nameplate: bool,
     /// Maximum camera distance (world units) at which nameplates remain visible. Default: 20.0.
     #[serde(default = "default_nameplate_max_distance")]
     pub max_distance: f32,

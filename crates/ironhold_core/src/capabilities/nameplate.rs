@@ -4,6 +4,7 @@ use crate::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
 use crate::schema::stats::StatMap;
 use crate::capabilities::stat_display::WorldPixelBarFillMarker;
 use crate::capabilities::npc::NpcAgent;
+use crate::capabilities::player::Player;
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
@@ -40,7 +41,11 @@ pub struct NameplateAnchorWidget;
 /// Consumed by both `nameplate_setup_system` and `nameplate_visibility_system`.
 #[derive(Resource, Default)]
 pub struct NameplateSceneConfig {
+    /// From `GameSceneV2.show_nameplates` — governs NPCs/props only.
     pub enabled: bool,
+    /// From `NameplateOptionsDef.show_player_nameplate` — governs the player's own nameplate
+    /// only, independent of `enabled`.
+    pub player_enabled: bool,
     pub options: Option<NameplateOptionsDef>,
 }
 
@@ -54,7 +59,7 @@ pub fn nameplate_setup_system(
     config: Res<NameplateSceneConfig>,
     mut meshes: Option<ResMut<Assets<Mesh>>>,
     mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
-    new_entities: Query<(Entity, &NameplateTag, Option<&StatMap>, Option<&SpawnId>), Added<NameplateTag>>,
+    new_entities: Query<(Entity, &NameplateTag, Option<&StatMap>, Option<&SpawnId>, Option<&Player>), Added<NameplateTag>>,
 ) {
     let (Some(meshes), Some(color_materials)) = (meshes.as_deref_mut(), color_materials.as_deref_mut()) else { return };
 
@@ -62,11 +67,14 @@ pub fn nameplate_setup_system(
     // per-prefab Some(true) overrides even when the scene has show_nameplates: false.
     let opts = config.options.as_ref();
 
-    for (entity, tag, stat_map, spawn_id) in new_entities.iter() {
+    for (entity, tag, stat_map, spawn_id, player) in new_entities.iter() {
         // Skip if explicitly suppressed.
         if tag.prefab_override == Some(false) { continue; }
-        // Skip if scene disabled AND no per-prefab override.
-        if !config.enabled && tag.prefab_override != Some(true) { continue; }
+        // Skip if the relevant scene toggle is disabled AND no per-prefab override.
+        // Players are gated by `player_enabled` (show_player_nameplate), never `enabled`
+        // (show_nameplates) — the two toggles are independent.
+        let scene_enabled = if player.is_some() { config.player_enabled } else { config.enabled };
+        if !scene_enabled && tag.prefab_override != Some(true) { continue; }
 
         let offset_v3 = opts.map(|o| {
             let (x, y, z) = o.offset;
@@ -186,6 +194,7 @@ pub fn nameplate_visibility_system(
     camera_q: Query<&GlobalTransform, With<Camera3d>>,
     entity_q: Query<(Entity, &NameplateTag, &NameplateAnchor, &GlobalTransform)>,
     npc_q: Query<(), With<NpcAgent>>,
+    player_q: Query<(), With<Player>>,
     mut vis_q: Query<&mut Visibility>,
 ) {
     let Some(opts) = &config.options else { return };
@@ -195,11 +204,13 @@ pub fn nameplate_visibility_system(
     for (entity, tag, anchor, gt) in entity_q.iter() {
         let should_hide = if tag.prefab_override == Some(false) {
             true
-        } else if tag.prefab_override == Some(true) {
-            // Bypasses faction filter; respects max_distance only.
+        } else if tag.prefab_override == Some(true) || player_q.contains(entity) {
+            // Bypasses faction filter; respects max_distance only. `faction_filter` is an
+            // NPC/prop hostile-vs-friendly categorization and does not apply to the player's
+            // own nameplate, which is already gated by `show_player_nameplate` at spawn time.
             (gt.translation() - cam_pos).length() > opts.max_distance
         } else {
-            // Apply faction filter then distance.
+            // Apply faction filter then distance. Never reached for Player entities (see above).
             let passes_faction = match opts.faction_filter {
                 NameplateFactionFilter::HostileOnly  => npc_q.contains(entity),
                 NameplateFactionFilter::FriendlyOnly => !npc_q.contains(entity),

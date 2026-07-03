@@ -573,6 +573,10 @@ pub(crate) fn spawn_player_entity(
         false,
         1.0,
     );
+    commands.entity(player_entity).insert((
+        crate::capabilities::player::Player,
+        crate::capabilities::player::PlayerOwnership::Local,
+    ));
 
     if let Some(display_name) = &player_config.nameplate_display_name {
         commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {

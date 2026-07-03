@@ -31,6 +31,7 @@ fn test_nameplate_setup_does_not_panic_when_render_assets_absent() {
     // Enable nameplates globally.
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: ironhold_core::schema::scene_v2::NameplateFactionFilter::All,
             max_distance: 20.0,
@@ -42,6 +43,7 @@ fn test_nameplate_setup_does_not_panic_when_render_assets_absent() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -69,6 +71,7 @@ fn test_nameplate_setup_skips_entity_when_prefab_override_is_false() {
 
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: ironhold_core::schema::scene_v2::NameplateFactionFilter::All,
             max_distance: 20.0,
@@ -80,6 +83,7 @@ fn test_nameplate_setup_skips_entity_when_prefab_override_is_false() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -111,6 +115,7 @@ fn test_nameplate_setup_skips_entity_when_scene_disabled_and_no_override() {
     // Scene-level nameplates disabled; no options provided.
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: false,
+        player_enabled: false,
         options: None,
     });
 
@@ -125,6 +130,67 @@ fn test_nameplate_setup_skips_entity_when_scene_disabled_and_no_override() {
     let has_anchor = app.world().get::<NameplateAnchor>(entity).is_some();
     assert!(!has_anchor,
         "NameplateAnchor must not be inserted when scene nameplates are disabled and no prefab override is set");
+}
+
+/// A `Player`-tagged entity is gated by `NameplateSceneConfig.player_enabled`, not `.enabled`.
+/// Config sets `enabled: true` (would show an NPC) but `player_enabled: false` — the player
+/// entity must still be skipped, proving the two toggles are independent.
+#[test]
+fn test_nameplate_setup_player_entity_gated_by_player_enabled_not_enabled() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateSceneConfig};
+    use ironhold_core::capabilities::player::Player;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: false,
+        options: None,
+    });
+
+    let entity = app.world_mut().spawn((
+        NameplateTag {
+            display_name: "Hero".to_string(),
+            prefab_override: None,
+        },
+        Player,
+    )).id();
+
+    app.update();
+    app.update();
+
+    let has_anchor = app.world().get::<NameplateAnchor>(entity).is_some();
+    assert!(!has_anchor,
+        "a Player entity must be gated by player_enabled, not enabled, even when enabled=true");
+}
+
+/// A non-`Player` entity must NOT be gated by `player_enabled` — it stays skipped when
+/// `enabled: false`, even though `player_enabled: true`, proving the toggles don't cross over.
+#[test]
+fn test_nameplate_setup_non_player_entity_not_gated_by_player_enabled() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateSceneConfig};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: false,
+        player_enabled: true,
+        options: None,
+    });
+
+    let entity = app.world_mut().spawn(NameplateTag {
+        display_name: "Goblin".to_string(),
+        prefab_override: None,
+    }).id();
+
+    app.update();
+    app.update();
+
+    let has_anchor = app.world().get::<NameplateAnchor>(entity).is_some();
+    assert!(!has_anchor,
+        "a non-Player entity must be gated by enabled, not player_enabled, even when player_enabled=true");
 }
 
 /// `WorldLabel.tracked_entity` on a manually-constructed anchor must equal the tagged entity.
@@ -239,6 +305,7 @@ fn test_nameplate_visibility_hides_anchor_beyond_max_distance() {
     // Configure: max_distance=10.0, faction_filter=All so distance is the only gate.
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: NameplateFactionFilter::All,
             max_distance: 10.0,
@@ -250,6 +317,7 @@ fn test_nameplate_visibility_hides_anchor_beyond_max_distance() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -317,6 +385,7 @@ fn test_nameplate_visibility_does_not_hide_anchor_within_max_distance() {
     // Configure: max_distance=100.0, faction_filter=All — entity is well within range.
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: NameplateFactionFilter::All,
             max_distance: 100.0,
@@ -328,6 +397,7 @@ fn test_nameplate_visibility_does_not_hide_anchor_within_max_distance() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -394,6 +464,7 @@ fn test_nameplate_visibility_hides_anchor_when_prefab_override_is_false() {
 
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: NameplateFactionFilter::All,
             max_distance: 100.0,
@@ -405,6 +476,7 @@ fn test_nameplate_visibility_hides_anchor_when_prefab_override_is_false() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -469,6 +541,7 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
     // HostileOnly filter: only entities with NpcAgent pass. This entity has no NpcAgent.
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: NameplateFactionFilter::HostileOnly,
             max_distance: 100.0,
@@ -480,6 +553,7 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 
@@ -530,6 +604,87 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
     let _ = cam_entity; // suppress unused warning
 }
 
+/// `nameplate_visibility_system` never hides a `Player` entity's nameplate for failing
+/// `faction_filter`, even under `HostileOnly` (which would hide any other non-NPC entity —
+/// see `test_nameplate_visibility_hostile_only_filter_hides_non_npc`). The player is gated by
+/// `show_player_nameplate` at spawn time, not by faction filtering.
+#[test]
+fn test_nameplate_visibility_player_bypasses_faction_filter() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::player::Player;
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // HostileOnly filter: only entities with NpcAgent would normally pass.
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: true,
+        options: Some(NameplateOptionsDef {
+            faction_filter: NameplateFactionFilter::HostileOnly,
+            max_distance: 100.0,
+            offset: (0.0, 2.4, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: true,
+        }),
+    });
+
+    let cam_entity = app.world_mut().spawn((
+        Camera3d::default(),
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+    )).id();
+
+    // Player entity, no NpcAgent — would fail HostileOnly if faction_filter applied to it.
+    let tagged_entity = app.world_mut().spawn((
+        NameplateTag {
+            display_name: "Hero".to_string(),
+            prefab_override: None,
+        },
+        Player,
+        Transform::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(2.0, 0.0, 0.0))),
+    )).id();
+
+    let anchor_entity = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tagged_entity),
+            offset: Vec3::new(0.0, 2.4, 0.0),
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        NameplateAnchorWidget,
+        Visibility::Visible,
+        Transform::default(),
+    )).id();
+
+    app.world_mut().entity_mut(tagged_entity).insert(NameplateAnchor(anchor_entity));
+
+    app.update();
+    app.update();
+
+    let vis = *app.world()
+        .get::<Visibility>(anchor_entity)
+        .expect("anchor must have Visibility");
+    assert_eq!(
+        vis,
+        Visibility::Visible,
+        "nameplate_visibility_system must not hide a Player entity's anchor under HostileOnly faction_filter"
+    );
+
+    let _ = cam_entity; // suppress unused warning
+}
+
 /// `nameplate_visibility_system` does not hide the anchor when `faction_filter=HostileOnly`
 /// and the entity carries `NpcAgent` (i.e. it is a hostile NPC within range).
 #[test]
@@ -545,6 +700,7 @@ fn test_nameplate_visibility_hostile_only_filter_shows_npc_within_range() {
 
     app.world_mut().insert_resource(NameplateSceneConfig {
         enabled: true,
+        player_enabled: false,
         options: Some(NameplateOptionsDef {
             faction_filter: NameplateFactionFilter::HostileOnly,
             max_distance: 100.0,
@@ -556,6 +712,7 @@ fn test_nameplate_visibility_hostile_only_filter_shows_npc_within_range() {
             bar_width: 100.0,
             bar_height: 6.0,
             bar_spacing: 9.0,
+            show_player_nameplate: false,
         }),
     });
 

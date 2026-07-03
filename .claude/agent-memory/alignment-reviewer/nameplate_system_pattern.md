@@ -18,25 +18,44 @@ the cleanest data-driven example so far of a NON-action cosmetic capability.
 - `PrefabDef.display_name: Option<String>` + `nameplate: Option<bool>` (schema/catalog.rs ~855).
   None=inherit scene; Some(true)=always show (bypass faction, respect distance); Some(false)=never.
 
-**Six spawn paths all insert `NameplateTag` (verified at 4c47cc6+):**
-The tag-condition is now the extracted helper `should_insert_nameplate(nameplate, show)` in
-`scene_manager/mod.rs` (beside `tag_spawned_entity`): `nameplate != Some(false) && (show || nameplate == Some(true))`.
-5 of the 6 call sites route through it (scene_loader.rs ×4, entity_spawner.rs ×1). The 6th —
-`action_executor.rs:163` (dynamic character-select PLAYER spawn) — deliberately does NOT use the
-helper: it uses a truncated `nameplate != Some(false)` that ignores `show_nameplates` entirely.
-That divergence is a KNOWN BUG tracked in planning/backlog.md ## Bugs ("Character-select player
-nameplate ignores show_nameplates"), NOT a candidate for silent inclusion in a refactor — leaving
-it out preserves current behavior pending Frank's decision. Note action_executor.rs:163 gates a
-`nameplate_display_name` (PlayerConfig assembly), while the scene_loader primitive-player path at
-line 629 gates the SAME PlayerConfig field but WITH the full helper — direct evidence the two
-player paths intentionally differ today.
-1. scene_loader.rs ~451 — composite primitive
-2. scene_loader.rs ~721 — single-mesh primitive (or GLB non-player; grep to confirm which)
-3. scene_loader.rs ~801 — GLB non-player actor/prop
-4. scene_loader.rs ~906 — primitive player (uses np_override/np_display_name locals)
-5. entity_spawner.rs ~340 — dynamic Action::Spawn (drain_spawn_queue_system) — reads
-   `nameplate_config.enabled` from the RESOURCE not scene context (correct; same as stat-bar dynamic path)
-6. entity_spawner.rs ~541 — GLB player via PlayerConfig.nameplate_display_name/nameplate_override
+**Player nameplate is now a SEPARATE toggle (player_nameplate_visibility v1, shipped 2026-07-03):**
+`NameplateOptionsDef.show_player_nameplate: bool` (`#[serde(default)]`=false, schema/scene_v2.rs
+~1186) governs the PLAYER's own nameplate INDEPENDENTLY of `show_nameplates` (which now governs
+NPCs/props only). Flows to `NameplateSceneConfig.player_enabled` (parallel to `.enabled`) at scene
+load (scene_loader.rs ~1166). A real `Player` marker + `PlayerOwnership::{Local,Remote}` enum now
+exists (capabilities/player.rs) — purely internal ECS signal, NO RON surface (correct: designer
+never sets ownership; always Local until multiplayer). Inserted unconditionally at BOTH player
+spawn paths right after tag_spawned_entity: entity_spawner.rs spawn_player_entity ~577 (GLB) and
+scene_loader.rs ~780 (primitive). The known character-select bug IS NOW FIXED — action_executor.rs
+~164 uses `should_insert_nameplate(prefab_def.nameplate, spawn_params.nameplate_config.player_enabled)`.
+
+**should_insert_nameplate helper (scene_manager/mod.rs ~324) unchanged**:
+`nameplate != Some(false) && (show || nameplate == Some(true))`. What changed is the `show` ARG the
+player call sites pass: player paths pass `show_player_nameplate`/`player_enabled`, NPC/prop paths
+pass `scene.show_nameplates`/`nameplate_config.enabled`.
+
+**Three player-nameplate call sites (all pass show_player_nameplate — verified 2026-07-03):**
+1. scene_loader.rs ~635 — scene-placed GLB player (PlayerConfig.nameplate_display_name)
+2. scene_loader.rs ~784 — scene-placed primitive player (np_override/np_display_name locals)
+3. action_executor.rs ~164 — dynamic character-select player (PlayerConfig via SpawnParams)
+`show_player_nameplate` local extracted once at scene_loader.rs ~83 (`.unwrap_or(false)` when
+nameplate_options absent). SpawnParams (scene_manager/mod.rs, bundled SystemParam to dodge the
+16-param limit) gained `nameplate_config: Res<NameplateSceneConfig>` to reach it at :164.
+
+**NPC/prop spawn paths (pass scene.show_nameplates / nameplate_config.enabled):**
+- scene_loader.rs ~390, ~595, ~675 (composite/single-mesh/GLB non-player)
+- entity_spawner.rs ~375 — dynamic Action::Spawn NON-player (else-branch after player early-continue);
+  reads `nameplate_config.enabled` from RESOURCE (correct; same as stat-bar dynamic path)
+
+**Two per-entity gates in the systems (both NECESSARY consequences of the split, NOT scope creep):**
+- `nameplate_setup_system` (Added<NameplateTag>) queries `Option<&Player>` and picks
+  `config.player_enabled` vs `config.enabled` per-entity (~line 76). Without it, its own redundant
+  `!scene_enabled && prefab_override != Some(true)` gate would re-suppress a legitimately-tagged
+  player when show_nameplates=false. Per-prefab `nameplate: Some(true)` still survives (verified).
+- `nameplate_visibility_system` (per-frame) has `player_q: Query<(), With<Player>>` and treats
+  `player_q.contains(entity)` like `Some(true)` override — distance-only, bypasses faction_filter
+  (~line 207). Without it, default HostileOnly would force-hide the player every frame. Correctly
+  reasoned: faction hostility is meaningless for "should I see my own name."
 
 `PlayerConfig` (schema/player.rs) is a runtime assembly struct, NOT RON-authored. Its
 nameplate_display_name/nameplate_override fields are populated from PrefabDef at scene_loader.rs

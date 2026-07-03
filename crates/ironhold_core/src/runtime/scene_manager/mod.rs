@@ -393,6 +393,7 @@ pub struct SpawnParams<'w, 's> {
     pub pending_particles: ResMut<'w, crate::capabilities::particle::PendingParticleEffects>,
     pub pending_decals: ResMut<'w, crate::capabilities::decal::PendingDecalSpawns>,
     pub particle_quality: ResMut<'w, crate::capabilities::particle_budget::ParticleQuality>,
+    pub nameplate_config: Res<'w, crate::capabilities::nameplate::NameplateSceneConfig>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.
