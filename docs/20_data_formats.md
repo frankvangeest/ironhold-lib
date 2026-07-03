@@ -451,6 +451,10 @@ The player's own nameplate is controlled independently by `show_player_nameplate
 
 > **Two independent toggles:** `show_nameplates` covers NPCs/props; `show_player_nameplate` covers only your player. Setting `show_nameplates: true` does **not** show the player's own nameplate — you must also set `show_player_nameplate: true` (or a per-prefab `nameplate: true` on the player prefab) if you want it.
 
+> **Runtime player toggle:** `Action::ToggleOwnNameplate` lets a player flip their own nameplate on/off at runtime (e.g. bound to a settings-menu button), independent of `show_player_nameplate`. It emits `nameplate.own_shown`/`nameplate.own_hidden` — bind these to an `IconButton`'s `bind` `GameVariable` the same way `audio.muted`/`audio.unmuted` drive the mute-button toggle (see [`IconButton((...))`](#iconbutton-) above). Has no effect on NPC/prop nameplates. If the player prefab has an explicit `nameplate: Some(true)`/`Some(false)` override, that always wins — the toggle still flips internally (and the button's bound label will still change), but the nameplate's actual visibility won't change, since the override bypasses the runtime preference entirely.
+>
+> ⚠️ **This preference does not persist across a scene transition.** It resets to the current scene's `show_player_nameplate` default on every scene load — including `LoadScene` to the same scene. If your project needs the choice to persist (e.g. across a portal or scene reload), that isn't built in yet; treat it as a per-scene runtime toggle, not a saved setting.
+
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `faction_filter` | `NameplateFactionFilter` | `HostileOnly` | Which NPC/prop entities receive a nameplate. `HostileOnly` shows nameplates on entities with NPC AI (hostile actors). `FriendlyOnly` shows them on non-NPC entities. `All` shows nameplates on every tagged entity. Individual prefabs can override this with `PrefabDef.nameplate`. Never applies to the player — see `show_player_nameplate`. |
@@ -464,6 +468,13 @@ The player's own nameplate is controlled independently by `show_player_nameplate
 | `bar_width` | `f32` | `100.0` | Width of each stat bar in screen pixels. |
 | `bar_height` | `f32` | `6.0` | Height of each stat bar in screen pixels. |
 | `bar_spacing` | `f32` | `9.0` | Vertical gap between consecutive stat bars in screen pixels. |
+
+**Pipeline events** emitted by `Action::ToggleOwnNameplate`:
+
+| Event | Trigger |
+|-------|---------|
+| `nameplate.own_shown` | `ToggleOwnNameplate` transitions the player's own nameplate to shown |
+| `nameplate.own_hidden` | `ToggleOwnNameplate` transitions the player's own nameplate to hidden |
 
 ### `NameplateBarDef`
 
@@ -2214,6 +2225,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetVolume(0–100)` | Set the global audio volume (percent). Scales against the project's `max_volume` ceiling — `SetVolume(100)` equals `max_volume`. Emits `audio.volume_changed`. |
 | `ToggleMute` | Toggle muted state. Muting emits `audio.muted`; unmuting restores the previous volume and emits `audio.unmuted`. |
 | `SyncAudioState` | Re-emit the current mute state (`audio.muted` or `audio.unmuted`) without changing it. Use in state `entry_actions` to initialise bound audio labels on first load — combine with a `global_on` bridge that maps the event to `SetVariable`. |
+| `ToggleOwnNameplate` | Toggle the local player's own nameplate visibility as a runtime preference, independent of the scene's `show_player_nameplate` default. Does not persist across scene transitions (resets to the new scene's authored default). Has no effect on NPC/prop nameplates or when the player prefab has an explicit `nameplate: Some(true)`/`Some(false)` override (that always wins). Emits `nameplate.own_shown`/`nameplate.own_hidden`. |
 | `ApplyModifier(modifier_key: "key")` | Apply a named stat modifier template to its target stat. |
 | `RemoveModifier(modifier_key: "key")` | Remove all active instances of a named modifier. |
 | `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |

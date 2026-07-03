@@ -68,6 +68,13 @@ pub enum Action {
     /// reflect the true state on every state entry — including the first project load where
     /// no toggle has yet fired.
     SyncAudioState,
+    /// Toggle the local player's own nameplate visibility as a runtime preference, independent
+    /// of the scene-authored `NameplateOptionsDef.show_player_nameplate` default. Flips
+    /// `PlayerNameplatePreference` and emits `nameplate.own_shown` / `nameplate.own_hidden`.
+    /// Has no effect on NPC/prop nameplates (`show_nameplates`/`faction_filter`), and is
+    /// overridden by an explicit per-prefab `nameplate: Some(true)`/`Some(false)` on the
+    /// player prefab, same precedence as `show_player_nameplate` itself.
+    ToggleOwnNameplate,
     /// Pre-load a scene asset into the cache so it's ready instantly when first needed.
     /// Takes a project-relative path to a `.scene.ron`. Does not spawn or transition; purely
     /// warms the cache so a subsequent `LoadScene` resolves instantly.

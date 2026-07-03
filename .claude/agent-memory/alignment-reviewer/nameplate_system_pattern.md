@@ -57,6 +57,25 @@ nameplate_options absent). SpawnParams (scene_manager/mod.rs, bundled SystemPara
   (~line 207). Without it, default HostileOnly would force-hide the player every frame. Correctly
   reasoned: faction hostility is meaningless for "should I see my own name."
 
+**v2 runtime toggle (`ToggleOwnNameplate`, shipped 2026-07-03):** unit Action `Action::ToggleOwnNameplate`
+(schema/actions.rs ~77, after SyncAudioState) flips resource `PlayerNameplatePreference(pub bool)`
+(nameplate.rs ~60, `init_resource` lib.rs ~156) and emits `nameplate.own_shown`/`nameplate.own_hidden`
+(two distinct events, mirrors ToggleMute's audio.muted/audio.unmuted — correct precedent). Executor arm
+action_executor.rs ~307 is a pure resource-flip + GameEvent emit, NO ActionQueue push (correct — same
+shape as ToggleMute). `nameplate_pref: ResMut<PlayerNameplatePreference>` added to `SceneStateParams`
+bundle (mod.rs ~433, next to audio_state). Consumed ONLY by nameplate_visibility_system's per-frame
+Player branch (~222): the previously-combined `prefab_override==Some(true) || player_q.contains(entity)`
+condition is now SPLIT — Some(true) is distance-only (ignores pref), no-override Player is
+`!nameplate_pref.0 || beyond max_distance`. Precedence verified in code: per-prefab Some(true)/Some(false)
+> PlayerNameplatePreference > scene show_player_nameplate default. Re-seeded from show_player_nameplate
+at scene_loader.rs ~1166 (does NOT persist across scene transitions — deliberate, matches player_enabled
+not AudioState's session-persistence). NOTE: unlike AudioState (two project_loader insert sites), nameplate
+config has ONE seeding site (scene_loader ~1166-1171) — spawn_scene_v2 is the sole path; do not expect a
+second. CLI touchpoint REQUIRED: query.rs action_kind ~611 (exhaustive match — omitting breaks
+`cargo check -p ironhold_cli`, the mandatory check that catches it). Tests that build NameplateSceneConfig
+directly (bypassing spawn_scene_v2) must also `insert_resource(PlayerNameplatePreference(...))` or it sits
+at Default=false and hides the player — this regressed test_nameplate_visibility_player_bypasses_faction_filter.
+
 `PlayerConfig` (schema/player.rs) is a runtime assembly struct, NOT RON-authored. Its
 nameplate_display_name/nameplate_override fields are populated from PrefabDef at scene_loader.rs
 ~761. The "is this designer-reachable" answer is the PrefabDef fields, not PlayerConfig.

@@ -610,7 +610,7 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
 /// `show_player_nameplate` at spawn time, not by faction filtering.
 #[test]
 fn test_nameplate_visibility_player_bypasses_faction_filter() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
     use ironhold_core::capabilities::player::Player;
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
@@ -636,6 +636,11 @@ fn test_nameplate_visibility_player_bypasses_faction_filter() {
             show_player_nameplate: true,
         }),
     });
+    // Isolate the faction_filter-bypass behavior under test from the (separately-tested)
+    // runtime own-nameplate toggle — a real scene load would seed this from
+    // show_player_nameplate via scene_loader.rs; mirror that here since this test constructs
+    // NameplateSceneConfig directly rather than going through spawn_scene_v2.
+    app.world_mut().insert_resource(PlayerNameplatePreference(true));
 
     let cam_entity = app.world_mut().spawn((
         Camera3d::default(),
@@ -790,6 +795,220 @@ fn test_nameplate_visibility_hostile_only_filter_shows_npc_within_range() {
         vis,
         Visibility::Visible,
         "nameplate_visibility_system must not hide anchor for NPC entity within max_distance with HostileOnly filter"
+    );
+
+    let _ = cam_entity; // suppress unused warning
+}
+
+/// `Action::ToggleOwnNameplate` flips `PlayerNameplatePreference` from its default (`false`)
+/// to `true` and emits `nameplate.own_shown`.
+#[test]
+fn test_toggle_own_nameplate_flips_preference_and_emits_shown() {
+    use ironhold_core::capabilities::nameplate::PlayerNameplatePreference;
+    use ironhold_core::runtime::actions::ActionQueue;
+    use ironhold_core::runtime::messages::GameEvent;
+    use ironhold_core::schema::Action;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    assert!(!app.world().resource::<PlayerNameplatePreference>().0,
+        "PlayerNameplatePreference must default to false");
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ToggleOwnNameplate);
+    app.update();
+
+    assert!(app.world().resource::<PlayerNameplatePreference>().0,
+        "ToggleOwnNameplate must flip the preference to true");
+
+    let has_shown = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "nameplate.own_shown"));
+    assert!(has_shown, "Expected GameEvent::Trigger(\"nameplate.own_shown\") after toggling on");
+}
+
+/// A second `Action::ToggleOwnNameplate` flips the preference back to `false` and emits
+/// `nameplate.own_hidden` (not `nameplate.own_shown` again).
+#[test]
+fn test_toggle_own_nameplate_twice_returns_to_hidden() {
+    use ironhold_core::capabilities::nameplate::PlayerNameplatePreference;
+    use ironhold_core::runtime::actions::ActionQueue;
+    use ironhold_core::runtime::messages::GameEvent;
+    use ironhold_core::schema::Action;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ToggleOwnNameplate);
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ToggleOwnNameplate);
+    app.update();
+
+    assert!(!app.world().resource::<PlayerNameplatePreference>().0,
+        "toggling twice must return the preference to false");
+
+    let has_hidden = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "nameplate.own_hidden"));
+    assert!(has_hidden, "Expected GameEvent::Trigger(\"nameplate.own_hidden\") after toggling back off");
+}
+
+/// `nameplate_visibility_system` hides a `Player` entity's anchor when
+/// `PlayerNameplatePreference` is `false` and there is no per-prefab override, even though the
+/// entity is well within `max_distance`.
+#[test]
+fn test_nameplate_visibility_own_toggle_hides_player_without_override() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
+    use ironhold_core::capabilities::player::Player;
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: true,
+        options: Some(NameplateOptionsDef {
+            faction_filter: NameplateFactionFilter::All,
+            max_distance: 100.0,
+            offset: (0.0, 2.4, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: true,
+        }),
+    });
+    // Runtime preference explicitly off, despite the scene defaulting player nameplates on.
+    app.world_mut().insert_resource(PlayerNameplatePreference(false));
+
+    let cam_entity = app.world_mut().spawn((
+        Camera3d::default(),
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+    )).id();
+
+    let tagged_entity = app.world_mut().spawn((
+        NameplateTag {
+            display_name: "Hero".to_string(),
+            prefab_override: None,
+        },
+        Player,
+        Transform::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(2.0, 0.0, 0.0))),
+    )).id();
+
+    let anchor_entity = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tagged_entity),
+            offset: Vec3::new(0.0, 2.4, 0.0),
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        NameplateAnchorWidget,
+        Visibility::Visible,
+        Transform::default(),
+    )).id();
+
+    app.world_mut().entity_mut(tagged_entity).insert(NameplateAnchor(anchor_entity));
+
+    app.update();
+    app.update();
+
+    let vis = *app.world()
+        .get::<Visibility>(anchor_entity)
+        .expect("anchor must have Visibility");
+    assert_eq!(
+        vis,
+        Visibility::Hidden,
+        "nameplate_visibility_system must hide a Player entity's anchor when PlayerNameplatePreference is false"
+    );
+
+    let _ = cam_entity; // suppress unused warning
+}
+
+/// An explicit per-prefab `nameplate: Some(true)` override on a `Player` entity wins over
+/// `PlayerNameplatePreference` being `false` — the anchor stays visible.
+#[test]
+fn test_nameplate_visibility_prefab_override_wins_over_own_toggle() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
+    use ironhold_core::capabilities::player::Player;
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: false,
+        options: Some(NameplateOptionsDef {
+            faction_filter: NameplateFactionFilter::All,
+            max_distance: 100.0,
+            offset: (0.0, 2.4, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: false,
+        }),
+    });
+    // Runtime preference off, but the entity has an explicit force-show override below.
+    app.world_mut().insert_resource(PlayerNameplatePreference(false));
+
+    let cam_entity = app.world_mut().spawn((
+        Camera3d::default(),
+        Transform::from_translation(Vec3::ZERO),
+        GlobalTransform::default(),
+    )).id();
+
+    let tagged_entity = app.world_mut().spawn((
+        NameplateTag {
+            display_name: "Hero".to_string(),
+            prefab_override: Some(true),
+        },
+        Player,
+        Transform::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(2.0, 0.0, 0.0))),
+    )).id();
+
+    let anchor_entity = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tagged_entity),
+            offset: Vec3::new(0.0, 2.4, 0.0),
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        NameplateAnchorWidget,
+        Visibility::Visible,
+        Transform::default(),
+    )).id();
+
+    app.world_mut().entity_mut(tagged_entity).insert(NameplateAnchor(anchor_entity));
+
+    app.update();
+    app.update();
+
+    let vis = *app.world()
+        .get::<Visibility>(anchor_entity)
+        .expect("anchor must have Visibility");
+    assert_eq!(
+        vis,
+        Visibility::Visible,
+        "an explicit nameplate: Some(true) override must win over PlayerNameplatePreference(false)"
     );
 
     let _ = cam_entity; // suppress unused warning

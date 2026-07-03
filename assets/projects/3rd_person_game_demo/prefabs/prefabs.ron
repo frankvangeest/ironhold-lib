@@ -42,7 +42,9 @@
       kind: Actor,
       model: "character_male",
       display_name: "Hero",
-      nameplate: true,
+      // nameplate omitted — shown by default via the scene's show_player_nameplate: true,
+      // and toggleable at runtime via the "Toggle Nameplate" button (Action::ToggleOwnNameplate).
+      // An explicit true/false override here would always win and make that button a no-op.
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],
@@ -72,7 +74,7 @@
       kind: Actor,
       model: "character_female",
       display_name: "Heroine",
-      nameplate: true,
+      // nameplate omitted — see player_male's comment above.
       animation_policy: "prefabs/animation/player_policy_human.ron",
       components: (
         tags: ["player"],

@@ -429,6 +429,8 @@ pub struct SceneStateParams<'w, 's> {
     /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
     pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
     pub audio_state: ResMut<'w, AudioState>,
+    /// Runtime player preference for their own nameplate, flipped by `Action::ToggleOwnNameplate`.
+    pub nameplate_pref: ResMut<'w, crate::capabilities::nameplate::PlayerNameplatePreference>,
     /// Used by `Action::ResetToSpawn` to read the NPC's stored spawn origin.
     pub npc_agents: Query<'w, 's, &'static crate::capabilities::npc::NpcAgent>,
     /// Used by `Action::ResetToSpawn` to teleport the entity's transform.

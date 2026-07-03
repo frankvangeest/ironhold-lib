@@ -5,6 +5,7 @@
   show_nameplates: true,
   nameplate_options: (
     faction_filter: All,
+    show_player_nameplate: true,  // player's own nameplate shown by default; toggle with the "Toggle Nameplate" HUD button
     max_distance: 25.0,
     text_shadow: true,
     // No stat_bars here — enemies already use world_stat_bar + stat_label for health display.
@@ -197,6 +198,13 @@
       text: "Spawn Chest",
       action: "ui.test_actions",
       position: (16.0, 228.0),
+      size: (200.0, 44.0),
+    )),
+    Button((
+      id: "toggle_nameplate_button",
+      text: "Toggle Nameplate",
+      action: "ui.toggle_own_nameplate",
+      position: (16.0, 280.0),
       size: (200.0, 44.0),
     )),
     Button((

@@ -3190,6 +3190,13 @@ fn test_action_clear_target_parses() {
 }
 
 #[test]
+fn test_action_toggle_own_nameplate_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str("ToggleOwnNameplate").expect("ToggleOwnNameplate should parse");
+    assert!(matches!(action, Action::ToggleOwnNameplate));
+}
+
+#[test]
 fn test_action_reset_to_spawn_parses() {
     use ironhold_core::schema::actions::Action;
     let action: Action = from_str(r#"ResetToSpawn("npc_01")"#).expect("ResetToSpawn should parse");

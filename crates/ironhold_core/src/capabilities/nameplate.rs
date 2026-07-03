@@ -49,6 +49,16 @@ pub struct NameplateSceneConfig {
     pub options: Option<NameplateOptionsDef>,
 }
 
+/// Runtime player preference for their own nameplate visibility, independent of the
+/// scene-authored `show_player_nameplate` default. Re-seeded from `show_player_nameplate` on
+/// every scene load, same as `NameplateSceneConfig.player_enabled` — a manual
+/// `Action::ToggleOwnNameplate` choice does NOT persist across a scene transition (resets to
+/// the new scene's authored default). Consumed by `nameplate_visibility_system`; ignored for
+/// entities with an explicit per-prefab `nameplate: Some(true)`/`Some(false)` override, which
+/// always wins.
+#[derive(Resource, Default)]
+pub struct PlayerNameplatePreference(pub bool);
+
 // ─── Systems ──────────────────────────────────────────────────────────────────
 
 /// Reacts to newly tagged entities (`Added<NameplateTag>`) and spawns the nameplate
@@ -191,6 +201,7 @@ pub fn nameplate_setup_system(
 /// so `world_label_screen_pos_system` handles the on-/off-screen toggle.
 pub fn nameplate_visibility_system(
     config: Res<NameplateSceneConfig>,
+    nameplate_pref: Res<PlayerNameplatePreference>,
     camera_q: Query<&GlobalTransform, With<Camera3d>>,
     entity_q: Query<(Entity, &NameplateTag, &NameplateAnchor, &GlobalTransform)>,
     npc_q: Query<(), With<NpcAgent>>,
@@ -204,11 +215,16 @@ pub fn nameplate_visibility_system(
     for (entity, tag, anchor, gt) in entity_q.iter() {
         let should_hide = if tag.prefab_override == Some(false) {
             true
-        } else if tag.prefab_override == Some(true) || player_q.contains(entity) {
-            // Bypasses faction filter; respects max_distance only. `faction_filter` is an
-            // NPC/prop hostile-vs-friendly categorization and does not apply to the player's
-            // own nameplate, which is already gated by `show_player_nameplate` at spawn time.
+        } else if tag.prefab_override == Some(true) {
+            // Explicit force-show always wins — bypasses faction filter AND the player's own
+            // runtime preference (Action::ToggleOwnNameplate); respects max_distance only.
             (gt.translation() - cam_pos).length() > opts.max_distance
+        } else if player_q.contains(entity) {
+            // No prefab override: the player relies on the scene default (mirrored into
+            // PlayerNameplatePreference at load), which can be flipped at runtime via
+            // Action::ToggleOwnNameplate. Bypasses faction_filter (an NPC/prop-only
+            // categorization); still respects max_distance.
+            !nameplate_pref.0 || (gt.translation() - cam_pos).length() > opts.max_distance
         } else {
             // Apply faction filter then distance. Never reached for Player entities (see above).
             let passes_faction = match opts.faction_filter {

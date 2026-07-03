@@ -304,6 +304,12 @@ pub fn action_executor_system(
                 info!("Action::SyncAudioState: emitting {}", event_name);
                 game_events.write(GameEvent::Trigger(event_name.to_string()));
             }
+            Action::ToggleOwnNameplate => {
+                scene_state.nameplate_pref.0 = !scene_state.nameplate_pref.0;
+                let event_name = if scene_state.nameplate_pref.0 { "nameplate.own_shown" } else { "nameplate.own_hidden" };
+                info!("Action::ToggleOwnNameplate: shown={} (emitting {})", scene_state.nameplate_pref.0, event_name);
+                game_events.write(GameEvent::Trigger(event_name.to_string()));
+            }
             Action::PreloadScene(path) => {
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Action::PreloadScene: warming cache for {}", resolved);

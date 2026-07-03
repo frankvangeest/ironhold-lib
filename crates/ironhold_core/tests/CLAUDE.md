@@ -16,12 +16,12 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `spawn_tests.rs` | `Action::Spawn`/`Despawn`, spawn queue rate limiting, preload, composite prefab spawn | 15 |
 | `action_tests.rs` | Misc `Action` executor behaviors: variables, delayed events, floating text, target indicator | 13 |
 | `npc_tests.rs` | NPC aggro/investigating states, camera shake | 8 |
-| `nameplate_tests.rs` | Nameplate anchor spawn, visibility filtering, cleanup, `should_insert_nameplate` tri-state contract, `Player`-vs-NPC gating (`player_enabled`, faction_filter bypass) | 14 |
+| `nameplate_tests.rs` | Nameplate anchor spawn, visibility filtering, cleanup, `should_insert_nameplate` tri-state contract, `Player`-vs-NPC gating (`player_enabled`, faction_filter bypass), `ToggleOwnNameplate`/`PlayerNameplatePreference` | 18 |
 | `ui_tests.rs` | Button click-to-action wiring, `IconButton` icon/color/shadow sync | 9 |
 | `audio_tests.rs` | PlaySound, PlayMusicLoop, StopMusic, SetVolume | 16 |
 | `stats_tests.rs` | StatMap, modifiers, resolve_stat | 22 |
 | `particle_tests.rs` | SpawnEffect, layers, visual effects (particles + decals + fading lights), quality tiers, budget gating | 27 |
-| `ron_validation.rs` | RON schema round-trips | 188 |
+| `ron_validation.rs` | RON schema round-trips | 191 |
 | `assets_schema_version_regression.rs` | Schema version regression guard | 1 |
 | `ron_lint.rs` | RON style invariants (e.g. no explicit `Some(...)` wrappers) | 1 |
 | `ui_panel_blocker.rs` | Headless Bevy UI focus pipeline: panel + overlay backdrop click-blocking (`FocusPolicy::Block`) | 4 |

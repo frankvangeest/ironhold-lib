@@ -608,6 +608,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::OpenContainer(_) => "OpenContainer",
         Action::CloseContainer => "CloseContainer",
         Action::TakeAllFromContainer => "TakeAllFromContainer",
+        Action::ToggleOwnNameplate => "ToggleOwnNameplate",
     }
 }
 

@@ -1,6 +1,6 @@
 # Feature: Player nameplate visibility — Player marker + own-nameplate toggle
 
-_Status: In Progress (v1 Done, v2 Queued)_
+_Status: Done_
 _Planned at: `48889f1` (2026-07-03)_
 
 ## Phases
@@ -8,7 +8,7 @@ _Planned at: `48889f1` (2026-07-03)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | `Player`/`PlayerOwnership` marker + `show_player_nameplate` scene field + close the `action_executor.rs:163` bug | Done | 2026-07-03 |
-| v2 | Runtime `ToggleOwnNameplate` action (player preference, independent of scene authoring) | Queued | — |
+| v2 | Runtime `ToggleOwnNameplate` action (player preference, independent of scene authoring) | Done | 2026-07-03 |
 
 ## What
 
@@ -49,7 +49,7 @@ Inserted only for entities with the `"player"` tag (mirrors the existing tag che
 
 **Bug fix**: `action_executor.rs:163` (character-select dynamic player-spawn) is rewired to call `should_insert_nameplate(prefab_def.nameplate, show_player_nameplate)` instead of its current truncated `nameplate != Some(false)` check — closing the `planning/backlog.md` Bugs entry "Character-select player nameplate ignores `show_nameplates`."
 
-**v2 — `ToggleOwnNameplate` action**: a new resource (e.g. `PlayerNameplatePreference(bool)`, mirroring `AudioState`'s shape) initialized from `show_player_nameplate` at scene load. `nameplate_visibility_system` (which already re-evaluates `Visibility` every frame for faction/distance filtering) additionally checks this preference for `Player` + `PlayerOwnership::Local` entities — no change needed to spawn-time `NameplateTag` insertion, since visibility toggling happens in the existing per-frame system. `Action::ToggleOwnNameplate` flips the resource; executor pushes a `GameEvent::Trigger("nameplate.own_toggled")` for RON-side label/icon updates, mirroring the `ToggleMute` → `audio.muted`/`audio.unmuted` pattern.
+**v2 — `ToggleOwnNameplate` action**: a new resource (`PlayerNameplatePreference(bool)`, mirroring `AudioState`'s shape) initialized from `show_player_nameplate` at scene load. `nameplate_visibility_system` (which already re-evaluates `Visibility` every frame for faction/distance filtering) additionally checks this preference for `Player` entities with no per-prefab override — no change needed to spawn-time `NameplateTag` insertion, since visibility toggling happens in the existing per-frame system. `Action::ToggleOwnNameplate` flips the resource; executor pushes `nameplate.own_shown`/`nameplate.own_hidden` for RON-side label/icon updates, mirroring the `ToggleMute` → `audio.muted`/`audio.unmuted` pattern.
 
 **Multiplayer (explicitly out of scope for this feature)**: `show_other_player_nameplates` and any `Remote`-player handling are deferred until Beta 0.6's library spike defines real requirements — building them now would be guessing at a shape with no replication code to validate against.
 
@@ -63,6 +63,13 @@ Implementation surfaced two things the design above didn't anticipate, both hand
   - `nameplate_visibility_system`'s default `faction_filter: HostileOnly` would otherwise force-hide the player's plate every frame (no `NpcAgent` = fails the filter), regardless of `show_player_nameplate`. Rather than special-casing `FriendlyOnly` alone (the plan's original framing), `Player` entities now bypass `faction_filter` entirely — treated the same as an explicit `Some(true)` prefab override (distance-only gating). This is correct for all three filter variants, not just `FriendlyOnly`.
 - `SpawnParams` (the bundled `SystemParam` used to stay within Bevy's 16-param limit) gained a `nameplate_config: Res<NameplateSceneConfig>` field so `action_executor.rs`'s `Action::Spawn` arm could read `player_enabled`.
 
+## Approach — v2 deviations from plan (as shipped)
+
+- **Two distinct events, not one `nameplate.own_toggled`.** The plan originally sketched a single generic toggle event; shipped code instead emits `nameplate.own_shown`/`nameplate.own_hidden`, exactly mirroring `ToggleMute`'s `audio.muted`/`audio.unmuted` shape. Alignment review confirmed this is the correct pattern — two semantic events let a `global_on` RON bridge map each to a distinct `SetVariable` without conditional logic, matching every other two-state toggle in the engine.
+- **The v1 `Some(true) || player_q.contains(entity)` bypass branch had to be split in two**, not left combined: an explicit per-prefab override must ignore the runtime preference entirely (always wins, distance-only), while a `Player` entity with *no* override is gated by `PlayerNameplatePreference`. Combining them would have made the runtime toggle override an explicit designer `nameplate: Some(true))`, which is backwards from the intended precedence.
+- **A real regression surfaced during verification**: `nameplate_visibility_system` gaining a `Res<PlayerNameplatePreference>` dependency broke the v1 test `test_nameplate_visibility_player_bypasses_faction_filter`, which constructs `NameplateSceneConfig` directly (bypassing `spawn_scene_v2`) and therefore never seeded the new resource — it sat at its `Default` of `false`, hiding the player entity the test expected to see. Fixed by having that test explicitly seed `PlayerNameplatePreference(true)`, isolating the faction-filter-bypass behavior it actually tests from the newly-added, separately-tested toggle behavior.
+- **`cargo check -p ironhold_cli` caught a real non-exhaustive-match compile error** (`E0004`) in `query.rs::action_kind`, exactly the failure mode the project's mandatory CLI check exists to catch for new `Action` variants. Fixed by adding the missing arm.
+
 ## Tasks
 - [x] Add `Player` marker + `PlayerOwnership` component; wire into `tag_spawned_entity`-adjacent spawn sites for player entities (`spawn_player_entity`, primitive-player block)
 - [x] Fix `nameplate_visibility_system`'s `faction_filter` check — `Player` entities bypass it entirely (all three variants), not just a `FriendlyOnly` tweak
@@ -72,17 +79,21 @@ Implementation surfaced two things the design above didn't anticipate, both hand
 - [x] `ron_validation.rs` — 2 parse tests for the new `show_player_nameplate` field (default + explicit)
 - [x] Domain test coverage (`nameplate_tests.rs`) — 3 new tests: `player_enabled`-vs-`enabled` gating (both directions) + faction_filter bypass
 - [x] Update `docs/20_data_formats.md` and `crates/ironhold_core/src/CLAUDE.md` nameplate section
-- [ ] **v2**: `Action::ToggleOwnNameplate`, `PlayerNameplatePreference` resource, `nameplate.own_toggled` event, docs + tests
-- [x] Alignment review — ALIGNED, no blocking issues
-- [x] `wasm-perf-reviewer` — negligible per-frame cost, no concerns (added since both touched systems run every frame/per-spawn)
-- [x] `ux-gamedesigner-reviewer` — no blockers; two doc-clarity gaps found and fixed (two-toggle callout, `player_warrior` example annotation)
-- [x] Full `ironhold_core` test suite (200+ tests) + `cargo check -p ironhold_cli` — all green
-- [x] WASM dev build + play-test confirmed; WASM release build (58 MB) + smoke-test confirmed
+- [x] **v2**: `Action::ToggleOwnNameplate`, `PlayerNameplatePreference` resource, `nameplate.own_shown`/`nameplate.own_hidden` events, docs + tests
+- [x] v1 alignment review — ALIGNED, no blocking issues
+- [x] v1 `wasm-perf-reviewer` — negligible per-frame cost, no concerns (added since both touched systems run every frame/per-spawn)
+- [x] v1 `ux-gamedesigner-reviewer` — no blockers; two doc-clarity gaps found and fixed (two-toggle callout, `player_warrior` example annotation)
+- [x] v1: Full `ironhold_core` test suite (200+ tests) + `cargo check -p ironhold_cli` — all green
+- [x] v1: WASM dev build + play-test confirmed; WASM release build (58 MB) + smoke-test confirmed
+- [x] v2 alignment review — ALIGNED, no blocking issues
+- [x] v2 `wasm-perf-reviewer` — negligible cost (one extra bool check per nameplated entity per frame), no concerns
+- [x] v2 `ux-gamedesigner-reviewer` — no blockers; three doc-clarity gaps found and fixed (scene-reset promoted to its own warning callout, events reference table added, override-precedence "toggle does nothing visible" nuance documented)
+- [x] v2: 6 new `nameplate_tests.rs` tests + 1 `ron_validation.rs` parse test; fixed 1 v1 test regression; `cargo check -p ironhold_cli` (caught and fixed a real missing-match-arm compile error) + `query actions` CLI spot-check — all green
+- [x] Worked example added to `3rd_person_game_demo`: a "Toggle Nameplate" HUD button wired through `state_machine.ron` to `Action::ToggleOwnNameplate`. This required converting `player_male`/`player_female`'s hard per-prefab `nameplate: true` override into the scene-level `show_player_nameplate: true` default (same default visual result — nameplate shown — but now actually toggleable; a `Some(true)` override would have made the button a permanent no-op). Closes both v1's and v2's "no shipped example" gap in one pass. Validated via `ironhold_cli validate`, dev + release WASM play-tested and confirmed.
 
 ## Open questions
 - Should `PlayerOwnership::Remote` handling (or the `show_other_player_nameplates` field) be stubbed now even though nothing sets it yet, or added only when Beta 0.6 actually lands? Leaning toward **not stubbing** — an enum variant with zero call sites is dead code with no test coverage possible today.
-- v2's `ToggleOwnNameplate` — is it in scope for the same work session as v1, or a separate pass? v1 shipped alone; v2 remains queued as a separate pass.
-- (raised by alignment review, non-blocking) No shipped example project demonstrates `show_player_nameplate: true` as the actual mechanism — only `3rd_person_game_demo`'s pre-existing per-prefab override is exercised. Deferred: adding it to a demo project would also require regenerating that project's `test_web.py` screenshot baseline, which is separable scope beyond this feature's acceptance criteria.
+- (raised by v2 alignment review, non-blocking) `PlayerNameplatePreference` resets on every scene transition rather than persisting for the session (unlike `AudioState`'s mute toggle). Deliberate scoping choice to keep v2 simple and match `player_enabled`'s own per-scene-authored behavior — revisit only if this becomes a real reported UX complaint.
 
 ## Acceptance criteria
 - A project that sets neither `show_nameplates` nor `show_player_nameplate` shows no nameplates on the player and behaves exactly as before for NPCs.
@@ -90,4 +101,5 @@ Implementation surfaced two things the design above didn't anticipate, both hand
 - A project with `show_player_nameplate: true` shows the player's own nameplate regardless of `show_nameplates`.
 - `3rd_person_game_demo`'s existing `nameplate: true` per-prefab override on `player_male`/`player_female` continues to force-show their nameplate, unaffected by the new default.
 - The character-select dynamic player-spawn path (`action_executor.rs:163`) now respects `show_player_nameplate` identically to the scene-placed player path — the tracked bug is closed.
-- (v2) `Action::ToggleOwnNameplate` flips the local player's nameplate visibility at runtime without affecting NPC or (future) other-player nameplates.
+- `Action::ToggleOwnNameplate` flips the local player's nameplate visibility at runtime without affecting NPC or (future) other-player nameplates, and without affecting a player prefab that has an explicit `nameplate: Some(true)`/`Some(false)` override.
+- The preference resets to `show_player_nameplate` on the next scene load (documented behavior, not a bug).

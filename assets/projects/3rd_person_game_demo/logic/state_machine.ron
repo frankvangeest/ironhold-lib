@@ -112,6 +112,7 @@
             on: [
                 ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimationOn(target: "player_01", clip: "dance") ] ),
                 ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02", id: "chest_02_spawned", spawn_point: "chest_spawn") ] ),
+                ( event: "ui.button_pressed:toggle_own_nameplate", do_actions: [ ToggleOwnNameplate ] ),
 
                 // ── Inventory (action bar slot "i" fires ToggleInventory directly; close button uses close_inventory event) ────
                 ( event: "ui.button_pressed:close_inventory",  do_actions: [ CloseInventory ] ),

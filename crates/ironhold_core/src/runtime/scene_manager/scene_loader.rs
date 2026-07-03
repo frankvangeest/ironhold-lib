@@ -1160,7 +1160,10 @@ pub fn spawn_scene_v2(
             commands.insert_resource(LoadedTargetIndicator(resolved));
         }
 
-        // Populate nameplate system config from the scene definition.
+        // Populate nameplate system config from the scene definition. The player's runtime
+        // ToggleOwnNameplate preference is re-seeded here too — it does not persist across
+        // scene transitions, matching player_enabled's own per-scene-authored behavior.
+        commands.insert_resource(crate::capabilities::nameplate::PlayerNameplatePreference(show_player_nameplate));
         commands.insert_resource(crate::capabilities::nameplate::NameplateSceneConfig {
             enabled: scene.show_nameplates,
             player_enabled: show_player_nameplate,

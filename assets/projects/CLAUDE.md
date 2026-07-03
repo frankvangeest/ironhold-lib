@@ -56,6 +56,7 @@ IncrementVariable("score", 1)   // string key, then i32 delta
 SetVolume(80)
 ToggleMute
 SyncAudioState
+ToggleOwnNameplate
 PreloadScene("scenes/game.scene.ron")
 PreloadPrefab("enemy_orc")
 Log("debug message")
