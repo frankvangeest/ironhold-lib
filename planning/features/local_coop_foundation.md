@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Done, Stages 4–5 Queued)_
+_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Done, Stage 4 Active, Stage 5 Queued)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -10,7 +10,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 | Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
 | Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
 | Stage 3 | Vertical split-screen scene | Done | `b59a3e7` (2026-07-05) |
-| Stage 4 | Horizontal split-screen scene | Queued | — |
+| Stage 4 | Horizontal split-screen scene | Active | — |
 | Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Queued | — |
 
 A fifth split style (diagonal) was scoped out during design discussion — Bevy's `Camera.viewport`
@@ -489,3 +489,131 @@ split-rect formula."
   offset applies.
 - Given `split` and `party` are both set on the first player by mistake, when the scene loads,
   then a warning is logged and `split` takes effect, not two conflicting camera setups.
+
+---
+
+## Stage 4 — Horizontal Split-Screen Scene
+
+### What
+
+Add `SplitOrientation::Horizontal` (top/bottom halves) as a second variant alongside Stage 3's
+`Vertical` (left/right), reusing every mechanism Stage 3 built — `SplitViewportSlot`,
+`ActiveSplitScreen`, `split_screen_viewport_system`, the camera-order fix, the manual-control-off
+convention — unchanged. New `local_coop_demo` scene `room4.scene.ron`, reachable via a new portal
+from `room3`.
+
+### Why
+
+Stage 3's design explicitly anticipated this: the plan says landing the harder, novel part (viewport
+math, resize correctness, shared-input handling, the clear-wipe question) once means "Stages 4-5 are
+mostly a formula swap." Stage 3's system-architect review independently confirmed the same thing
+("sets up Stages 4-5 to be a formula swap rather than new architecture") and specifically flagged
+that `split_screen_viewport_system`'s `if slot.0 == 0 { .. } else { .. }` binary assumption is fine
+for a second 2-way split but would need revisiting for Stage 5's N-way dynamic split — not relevant
+here since Horizontal is still exactly 2 slots.
+
+### Research findings (confirmed by reading the current code, no new investigation needed)
+
+- `spawn_players_and_camera`'s `split` branch (`entity_spawner.rs`) is **already orientation-agnostic**
+  — it reads `split.orientation` once and stores it in `ActiveSplitScreen`, spawning two per-player
+  cameras and tagging `SplitViewportSlot(0)`/`SplitViewportSlot(1)` regardless of which orientation.
+  Zero changes needed there.
+- `ActiveSplitScreen`, `SplitViewportSlot`, and the Stage-3-bugfix `Camera.order` assignment
+  (`entity_spawner.rs`, giving each slot a distinct render order) are all orientation-agnostic too.
+  Zero changes needed there either.
+- The only place orientation actually drives behavior is `split_screen_viewport_system`'s
+  `match orientation { SplitOrientation::Vertical => .. }` (`camera.rs:273-286`) — this is the one
+  place Stage 4 adds code: a new `Horizontal` arm.
+- Confirmed there is **no scene-level or per-entity override mechanism** for a prefab's `camera`
+  block (`SceneEntityDef` only supports `stat_overrides` for stat values, nothing for camera fields)
+  — so, matching Stage 3's own precedent of dedicated `player_p1_split`/`player_p2_split` prefabs,
+  Stage 4 needs its own prefab pair carrying `split: (orientation: Horizontal)` rather than reusing
+  Stage 3's prefabs with an override.
+
+### Approach
+
+- `SplitOrientation` gains a `Horizontal` variant (`crates/ironhold_core/src/schema/player.rs`).
+  Update its doc comment (currently "`Horizontal` and `Dynamic` are reserved for later stages") to
+  say only `Dynamic` remains reserved.
+- `split_screen_viewport_system` gains a `Horizontal` match arm: same shape as `Vertical` but splits
+  `physical_height` instead of `physical_width`, slot `0` = top half, slot `1` = bottom half (screen
+  space Y grows downward, so top is `position.y == 0`). Same odd-pixel-remainder handling as
+  `Vertical` (bottom gets `physical_height - half_height`, not a second `half_height`, so the two
+  halves always sum to the full height exactly).
+- New prefabs `player_p1_split_h`/`player_p2_split_h` in `local_coop_demo`'s `prefabs.ron` — same
+  camera tuning as `player_p1_split`/`player_p2_split` (fixed offset, `zoom_speed: 0.0`,
+  `orbit_button: "None"`), differing only in `split: (orientation: Horizontal)` on the first
+  player's block. Naming note (per ux-gamedesigner-reviewer): the Stage 3 prefabs stay named
+  `player_p1_split`/`player_p2_split` (no `_v` suffix) rather than renaming them to match — they
+  predate `Horizontal` existing at all, and renaming would touch `room3.scene.ron` for zero
+  functional benefit. The comment next to the new `_h` pair must say what the unsuffixed name
+  *means*, not just flag the asymmetry — e.g. "`player_p1_split`/`_p2_split` above are the
+  VERTICAL pair (no `_v` — they predate horizontal existing); orientation is set by the `split:`
+  block, not the prefab name" — otherwise a designer skimming the list could reasonably guess the
+  unsuffixed one is a shared/base variant rather than "the vertical one."
+- New scene `room4.scene.ron`: a new `ground_room4` prefab (cool teal/blue tone, distinct from
+  room3's warm amber, continuing each room's one-color-identity convention), `player_p1_split_h`/
+  `player_p2_split_h`, and a portal back to `room3` that **reuses the existing `portal_to_room3`
+  prefab** (same event name `entity.entered:portal_to_room3`, already wired in `rules.ron` to
+  `LoadScene("scenes/room3.scene.ron")`) — no new prefab needed for the return trip, same trick
+  Stage 3 used reusing `portal_to_room2`. `room4.scene.ron`'s entity for this must carry the same
+  "return trip reuses X prefab, same event name, no new prefab needed" comment style already used
+  in `room3.scene.ron`/`prefabs.ron`, so it reads as an intentional pattern, not a copy-paste bug.
+- New portal prefab `portal_to_room4` (cyan/teal accent, matching room4's theme) placed in
+  `room3.scene.ron`, plus one new `rules.ron` pair: `entity.entered:portal_to_room4` →
+  `LoadScene("scenes/room4.scene.ron")`, and `scene.ready:room4` → `Log(...)`. `room3`'s
+  `room_hint` label text gets a third line pointing at the new portal — **overflow risk flagged by
+  ux-gamedesigner-reviewer**: the current text is 62 chars at `size: (900.0, 32.0)`, and Stage 2's
+  playtest already hit one label-overflow bug. Adding a third line needs either a length budget
+  that keeps the combined text comfortably under the box width, or a taller `size` + repositioned
+  label — decide during authoring, and explicitly verify no wrap/overlap in-browser during the
+  Stage 4 playtest (added to the playtest checklist below).
+- `room4` keeps the same `max_view_box` as every other room (`(-20, -20, 20, 20)`) — Stage 3's own
+  open question about whether halved screen space changes what a sensible box looks like was
+  resolved by playtesting to "no change needed," so no new investigation here.
+
+### Tasks
+- [x] Plan reviewed pre-implementation: system-architect (ALIGNED — all three claims verified
+      against shipped code; two gaps folded into the tasks below) and ux-gamedesigner-reviewer
+      (ALIGNED — three refinements folded into the Approach/Tasks above and below)
+- [ ] `SplitOrientation::Horizontal` variant + updated doc comment. Per architecture review, grep
+      for every stale "`Vertical` is the only variant" reference and update all of them, not just
+      the enum's own doc comment — at least `player.rs`'s enum comment, `entity_spawner.rs`'s
+      example, and `crates/ironhold_core/src/CLAUDE.md`
+- [ ] `split_screen_viewport_system`: `Horizontal` match arm (top/bottom, odd-height remainder
+      handling mirroring `Vertical`'s odd-width handling)
+- [ ] `local_coop_demo`: `player_p1_split_h`/`player_p2_split_h` prefabs (with the strengthened
+      naming-clarification comment), `ground_room4` prefab, `portal_to_room4` prefab, new
+      `room4.scene.ron` (with the "return trip reuses `portal_to_room3`" comment matching Stage 3's
+      style), `room3` → `room4` portal wiring in `rules.ron`, `room3`'s `room_hint` label updated
+      with an explicit length/box-size check to avoid a repeat of Stage 2's label-overflow bug
+- [ ] Tests (`local_coop_tests.rs`): `Horizontal` produces correct non-overlapping top/bottom
+      physical-pixel rects for even AND odd height — per architecture review, explicitly assert
+      non-overlap (slot 1's `position.y` equals slot 0's `size.y`), not just that each size looks
+      right in isolation; confirm `Vertical`'s existing tests are untouched/still passing
+      (regression, not new coverage)
+- [ ] Alignment review (mandatory for every code change)
+- [ ] Architecture review — likely brief given Stage 3's review already pre-approved this exact
+      extension shape, but run it anyway per the mandatory-for-schema-changes rule (`SplitOrientation`
+      is a schema enum)
+- [ ] wasm-perf-reviewer — likely brief given the change is one more `match` arm in an
+      already-reviewed per-frame system, but the "touches a per-frame system" trigger still applies
+- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: document the `Horizontal`
+      variant and `room4`
+- [ ] WASM dev + release build, playtest checklist (including an explicit `room_hint` overflow/wrap
+      check in-browser), Frank confirmation
+
+### Open questions
+- None outstanding — Stage 3's review already answered the architectural questions this stage
+  would otherwise raise (clear-wipe behavior, shared-mouse-input coupling, the four `With<Camera3d>`
+  degradation sites), since none of those are orientation-specific.
+
+### Acceptance criteria
+- Given a scene with `split: (orientation: Horizontal)` on the first player and 2 players present,
+  when the scene loads, then two cameras spawn, each rendering to its own half of the window split
+  top/bottom (not left/right) with no visual bleed or clear-wipe between halves.
+- Given the browser window is resized (including to an odd height), when the next frame renders,
+  then both viewport halves resize to stay correctly proportioned with no gap or overlap.
+- Given `room3`, when either player walks into the new portal, then `room4` loads with the
+  horizontal split active; walking into `room4`'s return portal loads `room3` again with its
+  existing vertical split, unaffected by having visited `room4`.
