@@ -51,6 +51,8 @@ Create `planning/features/{name}.md` (copy `_template.md`) when a feature needs 
 
 When a feature is shipped (merged and working), move its file from `planning/features/` into `planning/features/done/`. Leave the backlog entry marked Done — the file move is the long-term archive.
 
+**Multi-phase features (a `## Phases` table with v1/v2/... or Stage 1/2/...) only move to `features/done/` once every phase in the table ships — not after the first one.** While phases remain Queued, the file stays in `planning/features/` and its `_Status:` line reads `In Progress (v1 Done, v2 Queued)` (or the Stage-N equivalent) rather than `Done`. Update the `## Phases` table row for the just-shipped phase (`Status: Done`, `Completed: <hash> (<date>)`) and the matching backlog entry (mark that phase's bullet `[x]` with the hash) without touching the file's location or top-level status until the last phase lands. See `planning/features/done/player_nameplate_visibility.md` (moved only at v2, its final phase) for the precedent.
+
 Always fill in the `Planned at` metadata at the top of a new feature file:
 
 ```

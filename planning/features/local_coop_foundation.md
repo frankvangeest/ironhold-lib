@@ -1,13 +1,13 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: Ready_
+_Status: In Progress (Stage 1 Done, Stages 2–5 Queued)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Draft | — |
+| Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
 | Stage 2 | Portal/teleport action (moves both players together) | Queued | — |
 | Stage 3 | Vertical split-screen scene | Queued | — |
 | Stage 4 | Horizontal split-screen scene | Queued | — |
