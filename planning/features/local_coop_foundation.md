@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Ready/awaiting play-test, Stages 3–5 Queued)_
+_Status: In Progress (Stage 1 Done, Stage 2 Done, Stages 3–5 Queued)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -8,7 +8,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
-| Stage 2 | Portal/teleport action (moves both players together) | Ready (awaiting play-test) | — |
+| Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
 | Stage 3 | Vertical split-screen scene | Queued | — |
 | Stage 4 | Horizontal split-screen scene | Queued | — |
 | Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Queued | — |
@@ -284,8 +284,11 @@ mechanics.
 - [x] `room2` picked up automatically by `test_web.py`'s `discover_scenes()` (globs
       `scenes/*.scene.ron`) — no manual registration needed, screenshot baseline still pending a
       GPU-capable run (same outstanding item as Stage 1's `main` baseline)
-- [ ] Play-test checklist: walk player 1 through the portal alone → both players land in room2;
-      walk back through the return portal → both land in room1 at their original spawn positions
+- [x] Play-test checklist: walk player 1 through the portal alone → both players land in room2;
+      walk back through the return portal → both land in room1 at their original spawn positions.
+      Confirmed by Frank; also surfaced and fixed a real UI label-overlap bug (see commit
+      `8181ccd`) not anticipated by the plan — the fixed-size `Label` box wraps/overflows
+      instead of clipping, and stacking two of them without accounting for that overlapped.
 - [x] Re-confirmed "no Rust changes" — implementation only touched `assets/projects/local_coop_demo/`
       RON files, a new test file, and this doc; `cargo check -p ironhold_cli` clean. No Rust/schema
       change means no WASM rebuild either — the Stage 1 release binary already committed
