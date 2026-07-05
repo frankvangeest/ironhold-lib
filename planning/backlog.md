@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Local Co-op Split-Screen Demo — Stage 4: horizontal split-screen scene** — see `planning/features/local_coop_foundation.md`
+_(none)_
 
 ---
 
@@ -51,9 +51,9 @@ Staged incrementally; each stage ships and is playtested before the next starts.
 - [x] **Stage 3 — vertical split-screen scene** — two real per-player `OrbitCamera`s, each
       constrained to its half of the window via `Camera.viewport`; fixed a camera-order-ambiguity
       console warning found during playtest — `b59a3e7`
-- [ ] **Stage 4 — horizontal split-screen scene** — Active; reuses Stage 3's mechanism almost
-      entirely (a new `SplitOrientation::Horizontal` enum variant + one new match arm), plan
-      reviewed and ALIGNED by system-architect and ux-gamedesigner-reviewer
+- [x] **Stage 4 — horizontal split-screen scene** — reused Stage 3's mechanism almost entirely (a
+      new `SplitOrientation::Horizontal` enum variant + one new match arm; `entity_spawner.rs`,
+      `ActiveSplitScreen`, `SplitViewportSlot` needed zero changes) — `b5844c7`
 - [ ] **Stage 5 — dynamic split-screen scene** — viewport boundary follows player positions
 - [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit once Stage 3+ split-screen viewports land. _Dep: Stage 1 (`player_index`)._
 - Diagonal split-screen scoped out at design time — Bevy's `Camera.viewport` is rectangle-only; a true diagonal cut needs a stencil/shader mask, untested on this engine's WASM/WebGL2 target.
