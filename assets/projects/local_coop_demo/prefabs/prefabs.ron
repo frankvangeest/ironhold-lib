@@ -16,6 +16,54 @@
       ),
     ),
 
+    // Room 2's ground — same shape as "ground", distinct color so a portal teleport is
+    // visually obvious even before either player moves.
+    "ground_room2": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.24, 0.28, 0.36),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // ── Portals ────────────────────────────────────────────────────────────────
+    // Stage 2: TriggerZone (radius 1.5) fires entity.entered:{id} -> rules.ron -> LoadScene.
+    // trigger_zone_system fires for ANY CharacterController entity that enters, so either
+    // player triggers it; LoadScene then reloads the whole world (both players included) from
+    // the destination scene's entities: list — "both players teleport" needs no extra code.
+    // If both players enter in the same physics tick, the rule fires twice — harmless, the
+    // second LoadScene just re-triggers an already-in-flight load.
+    "portal_to_room2": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.18, 0.25), roughness: 0.88), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.18, 0.16, 0.22), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.42, 0.62, 1.0), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    "portal_to_room1": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.65, 0.62, 0.58), roughness: 0.88), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.28, 0.82), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
     // Player 1 — WASD + Space + Left Shift to run. Local co-op reads the SHARED party
     // camera config from whichever player-tagged entity appears FIRST in the scene's
     // `entities` list (see scenes/main.scene.ron) — that entity's `camera.party` block is

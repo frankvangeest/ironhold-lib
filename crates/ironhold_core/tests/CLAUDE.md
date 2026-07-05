@@ -25,7 +25,7 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `assets_schema_version_regression.rs` | Schema version regression guard | 1 |
 | `ron_lint.rs` | RON style invariants (e.g. no explicit `Some(...)` wrappers) | 1 |
 | `ui_panel_blocker.rs` | Headless Bevy UI focus pipeline: panel + overlay backdrop click-blocking (`FocusPolicy::Block`) | 4 |
-| `local_coop_tests.rs` | Local co-op: `party_camera_follow_system` midpoint/radius derivation, `player_view_box_clamp_system` position clamp + velocity zero, two-player scene spawn with shared vs. fallback camera | 7 |
+| `local_coop_tests.rs` | Local co-op: `party_camera_follow_system` midpoint/radius derivation, `player_view_box_clamp_system` position clamp + velocity zero, two-player scene spawn with shared vs. fallback camera, `trigger_zone_system` portal firing for any/both players (Stage 2) | 10 |
 
 `fsm_tests.rs` through `ui_tests.rs` were split out of a single `integration_tests.rs` (2026-07-02) once it grew to 104 tests / 4258 lines mixing 8 distinct subsystems with no internal organization. See `planning/features/done/split_integration_tests.md`.
 

@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Draft, Stages 3–5 Queued)_
+_Status: In Progress (Stage 1 Done, Stage 2 Ready/awaiting play-test, Stages 3–5 Queued)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -8,7 +8,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
-| Stage 2 | Portal/teleport action (moves both players together) | Draft | — |
+| Stage 2 | Portal/teleport action (moves both players together) | Ready (awaiting play-test) | — |
 | Stage 3 | Vertical split-screen scene | Queued | — |
 | Stage 4 | Horizontal split-screen scene | Queued | — |
 | Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Queued | — |
@@ -273,20 +273,24 @@ mechanics.
   later stage needs to preserve state (e.g. score) across a portal — out of scope here.
 
 ### Tasks
-- [ ] Add `portal_to_room2` / `portal_to_room1` prefabs to `local_coop_demo/prefabs/prefabs.ron`
-- [ ] Add `scenes/room2.scene.ron` (ground + two players + `max_view_box`, matching
-      `main.scene.ron`'s shape)
-- [ ] Wire both portal directions in `logic/rules.ron`; comment the same-tick double-fire quirk
-- [ ] RON validate (`ironhold_cli validate`) + asset checker
-- [ ] Integration test coverage for the portal's `entity.entered:{id}` firing with 2 players
-      present (extends `trigger_zone` test coverage, not a new system)
-- [ ] Register `room2` as an extra scene screenshot baseline (`test_web.py` already supports
-      multi-scene baselines per project)
+- [x] Add `portal_to_room2` / `portal_to_room1` prefabs to `local_coop_demo/prefabs/prefabs.ron`
+      (plus a `ground_room2` variant so the destination is visually distinct at a glance)
+- [x] Add `scenes/room2.scene.ron` (ground + two players + `max_view_box`, matching
+      `main.scene.ron`'s shape; cooler lighting tone as an extra visual "you teleported" cue)
+- [x] Wire both portal directions in `logic/rules.ron`; commented the same-tick double-fire quirk
+- [x] RON validate (`ironhold_cli validate` — 7 files valid) + asset checker (511 refs, 0 missing)
+- [x] Integration test coverage (`local_coop_tests.rs`, 3 new tests): fires for a single player,
+      fires twice when both players enter the same tick, ignores non-player entities
+- [x] `room2` picked up automatically by `test_web.py`'s `discover_scenes()` (globs
+      `scenes/*.scene.ron`) — no manual registration needed, screenshot baseline still pending a
+      GPU-capable run (same outstanding item as Stage 1's `main` baseline)
 - [ ] Play-test checklist: walk player 1 through the portal alone → both players land in room2;
       walk back through the return portal → both land in room1 at their original spawn positions
-- [ ] Re-confirm the "no Rust changes" assumption once the prefab/scene RON is actually written —
-      if a nicer portal visual ends up needing a new primitive shape or shader, alignment/UX
-      review triggers apply again; skip them only if genuinely zero Rust changed
+- [x] Re-confirmed "no Rust changes" — implementation only touched `assets/projects/local_coop_demo/`
+      RON files, a new test file, and this doc; `cargo check -p ironhold_cli` clean. No Rust/schema
+      change means no WASM rebuild either — the Stage 1 release binary already committed
+      (58 MB) serves the new RON at runtime unchanged, so alignment/architecture/wasm-perf review
+      triggers genuinely don't apply here.
 
 ### Open questions
 - Should the portal require *both* players to be within some radius before firing (a

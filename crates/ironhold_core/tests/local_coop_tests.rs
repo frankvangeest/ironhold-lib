@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
-use bevy_rapier3d::prelude::Velocity;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox};
+use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
+use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, GameEvent};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, InputMap};
 use ironhold_core::capabilities::player::{CharacterController, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{OrbitCamera, PartyOrbitCamera, party_camera_follow_system};
+use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
 
 mod support;
 use support::setup_test_app;
@@ -311,4 +313,92 @@ fn test_two_players_without_party_block_falls_back_to_single_camera() {
 
     let party_cam_count = app.world_mut().query::<&PartyOrbitCamera>().iter(app.world()).count();
     assert_eq!(party_cam_count, 0);
+}
+
+// ── trigger_zone_system: portal fires generically for any player (Stage 2 foundation) ──────
+//
+// Stage 2 (portal/teleport) needed zero new engine code because trigger_zone_system already
+// queries `With<CharacterController>` generically rather than assuming a single player. These
+// tests inject `CollisionEvent`s directly (bypassing real Rapier physics) for a deterministic,
+// fast check of that assumption, including the documented same-tick double-fire quirk.
+
+#[test]
+fn test_trigger_zone_fires_entity_entered_for_a_single_player() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p1 = app.world_mut().spawn(test_character_controller()).id();
+    let zone = app.world_mut()
+        .spawn((TriggerZone, TriggerZoneId("portal_to_room2".to_string())))
+        .id();
+
+    app.world_mut()
+        .resource_mut::<Messages<CollisionEvent>>()
+        .write(CollisionEvent::Started(p1, zone, CollisionEventFlags::SENSOR));
+
+    app.world_mut().run_system_once(trigger_zone_system).unwrap();
+
+    let fired = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.entered:portal_to_room2"));
+    assert!(fired, "expected entity.entered:portal_to_room2 when a player enters the zone");
+}
+
+#[test]
+fn test_trigger_zone_fires_once_per_player_when_both_enter_same_tick() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p1 = app.world_mut().spawn(test_character_controller()).id();
+    let p2 = app.world_mut().spawn(test_character_controller()).id();
+    let zone = app.world_mut()
+        .spawn((TriggerZone, TriggerZoneId("portal_to_room2".to_string())))
+        .id();
+
+    // Both players enter the same portal in the same physics tick — the plan's "known, accepted
+    // quirk": the matching rules.ron LoadScene fires twice (harmless re-trigger), not once.
+    {
+        let mut collisions = app.world_mut().resource_mut::<Messages<CollisionEvent>>();
+        collisions.write(CollisionEvent::Started(p1, zone, CollisionEventFlags::SENSOR));
+        collisions.write(CollisionEvent::Started(p2, zone, CollisionEventFlags::SENSOR));
+    }
+
+    app.world_mut().run_system_once(trigger_zone_system).unwrap();
+
+    let entered_count = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .filter(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.entered:portal_to_room2"))
+        .count();
+    assert_eq!(
+        entered_count, 2,
+        "both players entering the same tick must fire entity.entered twice, not once or zero \
+         — this is the documented double-fire quirk rules.ron's LoadScene action tolerates"
+    );
+}
+
+#[test]
+fn test_trigger_zone_ignores_non_player_entities() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // An entity with no CharacterController (e.g. an NPC or physics prop) colliding with the
+    // zone must not fire entity.entered — trigger_zone_system only checks for the player marker.
+    let non_player = app.world_mut().spawn(Transform::default()).id();
+    let zone = app.world_mut()
+        .spawn((TriggerZone, TriggerZoneId("portal_to_room2".to_string())))
+        .id();
+
+    app.world_mut()
+        .resource_mut::<Messages<CollisionEvent>>()
+        .write(CollisionEvent::Started(non_player, zone, CollisionEventFlags::SENSOR));
+
+    app.world_mut().run_system_once(trigger_zone_system).unwrap();
+
+    let fired = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.entered:portal_to_room2"));
+    assert!(!fired, "a non-player entity colliding with the zone must not fire entity.entered");
 }

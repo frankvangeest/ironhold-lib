@@ -84,6 +84,10 @@
 
 - ~~**Stale `spider.hide:{self}` delay timer could hide a newly-respawned spider**~~ _(promoted to backlog 2026-06-23 → Bugs)_
 
+## UI
+
+- **`Label` nodes wrap and overflow with no clipping — easy to author an overlap** _(observed while building `local_coop_demo`'s room2 scene, 2026-07-05)_ — `LabelDef.size` is a fixed-pixel `Node` width/height (`Val::Px`, `scene_loader.rs:1314-1316`) with no `overflow: Overflow::clip()` set, and `font_size` is hardcoded to `22.0` with no per-label RON override; a designer who doesn't do the width/character-count math by hand gets text that silently wraps and visually overflows past the declared box into whatever UI element sits below it (exactly what happened here — two stacked labels overlapped). Consider either adding `overflow: clip` by default (so at worst text is cut off, not overlapping something else) or exposing `font_size` on `LabelDef` so designers can shrink text to fit instead of guessing pixel widths.
+
 ## Animation
 
 - **`jump_enter`/`jump_exit` sentinel fallback logs a designer-facing warning for a normal, valid policy state** _(observed while building `local_coop_demo`, 2026-07-04)_ — `player_movement_system` unconditionally fires these two override IDs on every jump/landing for every player prefab; when a policy has no matching override (a legitimate minimal locomotion-only policy, not a typo), `animation_resolver_system` falls through to a literal-clip-name lookup and logs `WARN ... falling back to idle` every single jump — indistinguishable in the log from an actual designer typo in a real clip name. Consider either recognizing these two IDs as engine-internal sentinels and silently no-opping when unmatched, or downgrading the log level specifically for them, so real clip-name typos stay visible without jump-spam noise.

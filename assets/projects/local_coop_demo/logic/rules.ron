@@ -1,8 +1,14 @@
 (
     schema_version: 2,
-    // Stage 1 is deliberately logic-light — no portals or event-driven rules yet.
-    // Stage 2 (portal/teleport action) is where this file starts doing real work.
     rules: [
-        ( on: "scene.ready:main", do_actions: [ Log("Local co-op demo scene ready") ] ),
+        ( on: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
+        ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready") ] ),
+
+        // Portal navigation — either player entering fires the LoadScene reload, which
+        // respawns both players from the destination scene's entities: list. If both players
+        // enter the same tick, this rule fires twice; the second LoadScene is a harmless no-op
+        // re-trigger of an already-in-flight load. See prefabs.ron's portal_to_room2 comment.
+        ( on: "entity.entered:portal_to_room2", do_actions: [ LoadScene("scenes/room2.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room1", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
     ],
 )

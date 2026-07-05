@@ -1,14 +1,15 @@
 (
   schema_version: 2,
-  name: "main",
+  name: "room2",
 
   tonemapping: AcesFitted,
 
+  // Cooler tone than main.scene.ron so the teleport reads visually, not just via console log.
   lighting: (
-    ambient: (0.20, 0.22, 0.32),
+    ambient: (0.18, 0.20, 0.30),
     ambient_brightness: 220.0,
     directional: (
-      color: (1.0, 0.95, 0.82),
+      color: (0.85, 0.90, 1.0),
       intensity: 28000.0,
       rotation_euler_deg: (-42.0, 30.0, 0.0),
       shadows_enabled: true,
@@ -20,16 +21,15 @@
     "player_2_start": (4.0, 0.5, 0.0),
   },
 
-  // Hard XZ clamp so neither player can wander off the 50x50 ground platform
-  // (which spans roughly -25..25 on both axes) or out of camera view.
-  // Tuple order is (min_x, min_z, max_x, max_z).
+  // Same shape as main.scene.ron's clamp — Stage 2 only proves the portal mechanic, no new
+  // camera/view-box behavior. Tuple order is (min_x, min_z, max_x, max_z).
   max_view_box: (-20.0, -20.0, 20.0, 20.0),
 
   entities: [
 
     (
       id: "ground",
-      prefab: "ground",
+      prefab: "ground_room2",
       transform: (
         translation: (0.0, -0.5, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -37,8 +37,8 @@
       ),
     ),
 
-    // player_p1 MUST be first among the two `tags: ["player"]` entities below —
-    // its `camera.party` block is what local co-op reads for the shared camera.
+    // player_p1 MUST be first — see main.scene.ron's comment; same rule applies in every
+    // local co-op scene.
     (
       id: "player_01",
       prefab: "player_p1",
@@ -59,11 +59,10 @@
       ),
     ),
 
-    // entity.entered:portal_to_room2 -> logic/rules.ron -> LoadScene(room2). Either player
-    // walking in teleports both (see prefabs.ron comment on portal_to_room2).
+    // entity.entered:portal_to_room1 -> logic/rules.ron -> LoadScene(main).
     (
-      id: "portal_to_room2",
-      prefab: "portal_to_room2",
+      id: "portal_to_room1",
+      prefab: "portal_to_room1",
       transform: (
         translation: (0.0, 0.0, -15.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -74,16 +73,19 @@
   ],
 
   ui: [
-    // Label boxes are fixed-pixel Node width/height (Val::Px) with no text clipping — if the
-    // text is wider than `size.0` at the fixed 22px UI font, it wraps and the wrapped lines
-    // visually overflow past `size.1` into whatever is below. Width here is sized with margin
-    // for this string; if you change the text, re-check it doesn't wrap (no live-reload for
-    // this — playtest in a real browser).
+    // See main.scene.ron's comment — Label boxes don't clip overflow, so width must be wide
+    // enough at the fixed 22px UI font to avoid wrapping into the label below.
     Label((
       id: "controls_hint",
       text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift",
       position: (20.0, 20.0),
       size: (900.0, 32.0),
+    )),
+    Label((
+      id: "room_hint",
+      text: "Room 2 — walk into the violet portal to return",
+      position: (20.0, 64.0),
+      size: (700.0, 32.0),
     )),
   ],
 )
