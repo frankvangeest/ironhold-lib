@@ -11,7 +11,7 @@
 
 ## Active
 
-_(none)_
+- [ ] **Local Co-op Split-Screen Demo — Stage 2: portal/teleport action** — see `planning/features/local_coop_foundation.md`
 
 ---
 
@@ -47,7 +47,7 @@ through portal-linked scenes, each showcasing a different screen-sharing configu
 co-op on one machine — unrelated to and does not depend on the Beta 0.6 LAN networking milestone.
 Staged incrementally; each stage ships and is playtested before the next starts.
 - [x] **Stage 1 — foundation: 2-player schema, shared framing camera, view-box clamp** — see `planning/features/local_coop_foundation.md` (stays out of `features/done/` until all 5 stages ship) — `da81799`
-- [ ] **Stage 2 — portal/teleport action** — moves both players to the next scene when either enters the portal
+- [ ] **Stage 2 — portal/teleport action** — Active, moves both players to the next scene when either enters the portal
 - [ ] **Stage 3 — vertical split-screen scene**
 - [ ] **Stage 4 — horizontal split-screen scene**
 - [ ] **Stage 5 — dynamic split-screen scene** — viewport boundary follows player positions
