@@ -1752,11 +1752,13 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `orientation` | `SplitOrientation` | required | How the window is divided between players. Currently only `Vertical` (left half / right half) is implemented — more variants are planned for later stages of this feature, so treat this as a growing list, not a fixed pair. |
+| `orientation` | `SplitOrientation` | required | How the window is divided between players. `Vertical` and `Horizontal` are both implemented; a `Dynamic` variant is planned for a later stage. |
 
 **`SplitOrientation` variants:**
-- `Vertical` — the window is split down the middle into a left half and a right half, one player per half. Recomputed every frame from the window's actual size, so it stays correct across resizes and on HiDPI displays.
-- More variants (e.g. horizontal top/bottom, a dynamic split that follows player positions) are planned but not yet implemented — do not author anything other than `Vertical` today.
+- `Vertical` — the window is split down the middle into a left half and a right half, one player per half.
+- `Horizontal` — the window is split down the middle into a top half and a bottom half, one player per half.
+- Both variants recompute every frame from the window's actual size, so they stay correct across resizes and on HiDPI displays.
+- A `Dynamic` variant (viewport boundary follows player positions) is planned for a later stage but not yet implemented.
 
 > **Only the first `"player"`-tagged entity's `split` block is read.** Same rule as `party` — if you author `split` on the second (or later) player instead of the first, it is silently ignored. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
 

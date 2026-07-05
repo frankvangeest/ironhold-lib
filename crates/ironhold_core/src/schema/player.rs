@@ -108,12 +108,14 @@ pub struct SplitScreenDef {
 }
 
 /// How the window is divided between local co-op players' individual cameras.
-/// `Horizontal` and `Dynamic` are reserved for later stages of the same feature — only
-/// `Vertical` is implemented today.
+/// `Dynamic` is reserved for a later stage of the same feature — `Vertical` and `Horizontal`
+/// are both implemented today.
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SplitOrientation {
     /// Left half / right half, split down the middle.
     Vertical,
+    /// Top half / bottom half, split down the middle.
+    Horizontal,
 }
 
 fn default_min_pitch() -> f32 { 0.1 }

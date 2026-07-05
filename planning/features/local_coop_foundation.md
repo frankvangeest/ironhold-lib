@@ -576,32 +576,34 @@ here since Horizontal is still exactly 2 slots.
 - [x] Plan reviewed pre-implementation: system-architect (ALIGNED — all three claims verified
       against shipped code; two gaps folded into the tasks below) and ux-gamedesigner-reviewer
       (ALIGNED — three refinements folded into the Approach/Tasks above and below)
-- [ ] `SplitOrientation::Horizontal` variant + updated doc comment. Per architecture review, grep
-      for every stale "`Vertical` is the only variant" reference and update all of them, not just
-      the enum's own doc comment — at least `player.rs`'s enum comment, `entity_spawner.rs`'s
-      example, and `crates/ironhold_core/src/CLAUDE.md`
-- [ ] `split_screen_viewport_system`: `Horizontal` match arm (top/bottom, odd-height remainder
+- [x] `SplitOrientation::Horizontal` variant + updated doc comment. Swept every stale
+      "`Vertical` is the only variant" reference (`player.rs`, `docs/20_data_formats.md`,
+      `crates/ironhold_core/src/CLAUDE.md`) — `entity_spawner.rs` had none to begin with, since it
+      never branches on orientation
+- [x] `split_screen_viewport_system`: `Horizontal` match arm (top/bottom, odd-height remainder
       handling mirroring `Vertical`'s odd-width handling)
-- [ ] `local_coop_demo`: `player_p1_split_h`/`player_p2_split_h` prefabs (with the strengthened
+- [x] `local_coop_demo`: `player_p1_split_h`/`player_p2_split_h` prefabs (with the strengthened
       naming-clarification comment), `ground_room4` prefab, `portal_to_room4` prefab, new
       `room4.scene.ron` (with the "return trip reuses `portal_to_room3`" comment matching Stage 3's
       style), `room3` → `room4` portal wiring in `rules.ron`, `room3`'s `room_hint` label updated
-      with an explicit length/box-size check to avoid a repeat of Stage 2's label-overflow bug
-- [ ] Tests (`local_coop_tests.rs`): `Horizontal` produces correct non-overlapping top/bottom
-      physical-pixel rects for even AND odd height — per architecture review, explicitly assert
-      non-overlap (slot 1's `position.y` equals slot 0's `size.y`), not just that each size looks
-      right in isolation; confirm `Vertical`'s existing tests are untouched/still passing
-      (regression, not new coverage)
-- [ ] Alignment review (mandatory for every code change)
-- [ ] Architecture review — likely brief given Stage 3's review already pre-approved this exact
-      extension shape, but run it anyway per the mandatory-for-schema-changes rule (`SplitOrientation`
-      is a schema enum)
-- [ ] wasm-perf-reviewer — likely brief given the change is one more `match` arm in an
-      already-reviewed per-frame system, but the "touches a per-frame system" trigger still applies
-- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: document the `Horizontal`
-      variant and `room4`
+      (rewritten to the compact `room2`-style pipe-separated form, well under the box width)
+- [x] Tests (`local_coop_tests.rs`, 2 new): `Horizontal` produces correct non-overlapping top/bottom
+      physical-pixel rects for even (1280×720) AND odd (1280×721) height, each explicitly asserting
+      non-overlap (`vp1.physical_position.y == vp0.physical_size.y`); all 17 pre-existing tests
+      (including `Vertical`'s) still pass unmodified
+- [x] Alignment review — ALIGNED, no concerns (fully RON-authorable, no hardcoded paths, no
+      `ActionQueue` bypass)
+- [x] Architecture review — ALIGNED, no concerns (implementation matches the plan exactly; the
+      zero-change claim for `entity_spawner.rs`/`ActiveSplitScreen`/`SplitViewportSlot` verified
+      against the actual diff, confirmed unchanged since Stage 3's `b59a3e7`)
+- [x] wasm-perf-reviewer — OK, no regressions (58 MB release size unchanged)
+- [x] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: documented the `Horizontal`
+      variant (audited by data-format-doc-writer — no gaps found beyond the first-pass edit)
 - [ ] WASM dev + release build, playtest checklist (including an explicit `room_hint` overflow/wrap
-      check in-browser), Frank confirmation
+      check in-browser), Frank confirmation. Note: `room4`'s baseline screenshot regen
+      (`test_web.py --project local_coop_demo --update-baselines`) remains blocked by the same
+      known WebGPU/Playwright environment limitation as room3's — see
+      `planning/investigations/headless_webgpu_testing.md`, not a new blocker
 
 ### Open questions
 - None outstanding — Stage 3's review already answered the architectural questions this stage

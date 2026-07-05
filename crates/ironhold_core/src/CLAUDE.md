@@ -319,8 +319,8 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   every `SplitViewportSlot` camera's `Camera.viewport` every frame from
   `Window::physical_size()` (physical pixels already — no manual `scale_factor()` multiplication
   needed, unlike a naive `width()`/`height()` read) and `ActiveSplitScreen`'s orientation
-  (`SplitOrientation::Vertical` is the only variant implemented so far; `Horizontal`/`Dynamic` are
-  reserved for later stages of the same feature). Split-screen orientation lives in the
+  (`SplitOrientation::Vertical` splits left/right, `Horizontal` splits top/bottom; `Dynamic` is
+  reserved for a later stage of the same feature). Split-screen orientation lives in the
   `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/`LoadedTargetIndicator` — populated by
   `spawn_players_and_camera`, cleared on `LoadScene`), **not** on `OrbitCamera` or
   `SplitViewportSlot` — this keeps split-screen state out of the camera components so the planned

@@ -4,6 +4,7 @@
         ( on: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
         ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready") ] ),
         ( on: "scene.ready:room3", do_actions: [ Log("Local co-op demo room3 ready") ] ),
+        ( on: "scene.ready:room4", do_actions: [ Log("Local co-op demo room4 ready") ] ),
 
         // Portal navigation — either player entering fires the LoadScene reload, which
         // respawns both players from the destination scene's entities: list. If both players
@@ -12,5 +13,6 @@
         ( on: "entity.entered:portal_to_room2", do_actions: [ LoadScene("scenes/room2.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room1", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room3", do_actions: [ LoadScene("scenes/room3.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room4", do_actions: [ LoadScene("scenes/room4.scene.ron") ] ),
     ],
 )

@@ -284,6 +284,20 @@ pub fn split_screen_viewport_system(
                     )
                 }
             }
+            crate::schema::player::SplitOrientation::Horizontal => {
+                let half_height = physical_height / 2;
+                if slot.0 == 0 {
+                    // Screen-space Y grows downward, so slot 0 (top half) starts at y=0.
+                    (UVec2::new(0, 0), UVec2::new(physical_width, half_height))
+                } else {
+                    (
+                        UVec2::new(0, half_height),
+                        // Remainder (not another half_height) absorbs odd-pixel-height rounding
+                        // so the two halves always sum to the full window height exactly.
+                        UVec2::new(physical_width, physical_height - half_height),
+                    )
+                }
+            }
         };
         camera.viewport = Some(Viewport {
             physical_position: position,

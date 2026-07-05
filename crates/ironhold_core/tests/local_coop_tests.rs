@@ -480,6 +480,52 @@ fn test_split_screen_viewport_absorbs_odd_width_remainder() {
 }
 
 #[test]
+fn test_split_screen_viewport_halves_window_horizontally() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Horizontal)));
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+    let cam1 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(1))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp0 = app.world().get::<Camera>(cam0).unwrap().viewport.clone().unwrap();
+    let vp1 = app.world().get::<Camera>(cam1).unwrap().viewport.clone().unwrap();
+
+    assert_eq!(vp0.physical_position, UVec2::new(0, 0));
+    assert_eq!(vp0.physical_size, UVec2::new(1280, 360));
+    assert_eq!(vp1.physical_position, UVec2::new(0, 360));
+    assert_eq!(vp1.physical_size, UVec2::new(1280, 360));
+    // Non-overlap: slot 1 must start exactly where slot 0 ends, not merely have a plausible size.
+    assert_eq!(vp1.physical_position.y, vp0.physical_size.y, "slot 1 must start where slot 0 ends");
+}
+
+#[test]
+fn test_split_screen_viewport_absorbs_odd_height_remainder() {
+    let mut app = setup_test_app();
+    app.update();
+    // Odd physical height — the two halves must still sum to exactly the full window height.
+    spawn_primary_window(&mut app, 1280, 721, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Horizontal)));
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+    let cam1 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(1))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp0 = app.world().get::<Camera>(cam0).unwrap().viewport.clone().unwrap();
+    let vp1 = app.world().get::<Camera>(cam1).unwrap().viewport.clone().unwrap();
+
+    assert_eq!(vp0.physical_size.y + vp1.physical_size.y, 721, "halves must sum to the full physical height");
+    assert_eq!(vp0.physical_size.y, 360);
+    assert_eq!(vp1.physical_size.y, 361, "remainder pixel goes to the second half, not dropped");
+    // Non-overlap: slot 1 must start exactly where slot 0 ends, even with the odd remainder.
+    assert_eq!(vp1.physical_position.y, vp0.physical_size.y, "slot 1 must start where slot 0 ends");
+}
+
+#[test]
 fn test_split_screen_viewport_unaffected_by_scale_factor_override() {
     let mut app = setup_test_app();
     app.update();

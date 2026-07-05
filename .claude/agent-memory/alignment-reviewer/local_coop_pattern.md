@@ -5,14 +5,22 @@ metadata:
   type: project
 ---
 
-**STAGE 3 — vertical split-screen (reviewed 2026-07-05, ALIGNED, uncommitted at review time):**
+**STAGES 3+4 — vertical + horizontal split-screen (reviewed 2026-07-05, both ALIGNED):**
 - `CameraConfig.split: Option<SplitScreenDef{orientation: SplitOrientation}>` (schema/player.rs).
-  `SplitOrientation` enum has ONLY `Vertical` today (`Horizontal`/`Dynamic` reserved for Stages 4-5,
-  intentionally NOT added yet — a `deny_unknown_fields`-free enum, so a RON `Horizontal` would be a
-  clean parse error, not silent). Fully `#[derive(Deserialize)]`, `#[serde(default)]` on `split`.
-- `split_screen_viewport_system` (capabilities/camera.rs) touches ONLY `Camera.viewport`; reads
+  `SplitOrientation` enum has `Vertical` AND `Horizontal` implemented today (Stage 4 added
+  `Horizontal`, player.rs:118). `Dynamic` still reserved for a later stage — NOT added yet, so a RON
+  `Dynamic` is a clean parse error, not silent. Fully `#[derive(Deserialize)]`, `#[serde(default)]`
+  on `split`.
+- `split_screen_viewport_system` (capabilities/camera.rs:273) touches ONLY `Camera.viewport`; reads
   `ActiveSplitScreen` resource + primary `Window::physical_size()`. NO ActionQueue, no gameplay
   reach-over. Correct. Runs in Update alongside camera_orbit/party_camera_follow (lib.rs).
+  Both match arms are pure viewport geometry: Vertical splits `physical_width` L/R, Horizontal splits
+  `physical_height` T/B (slot 0 = top, y=0). Slot-1 half uses `full - half` remainder to absorb
+  odd-pixel rounding so the two halves always sum exactly. Zero per-project/hardcoded logic — any
+  designer's own project gets working H-split from `split: (orientation: Horizontal)` alone.
+- Stage 4 demo: local_coop_demo room4 (scenes/room4.scene.ron) + player_p1_split_h/player_p2_split_h
+  (prefabs.ron:298/337) + ground_room4/portal_to_room4 + rules.ron portal wiring. No new
+  resources/components; entity_spawner spawn logic was already orientation-agnostic.
 - `ActiveSplitScreen(Option<SplitOrientation>)` resource (scene_manager/mod.rs) — mirrors ActiveViewBox
   EXACTLY: init_resource in lib.rs, set by spawn_players_and_camera, cleared on Action::LoadScene
   (action_executor.rs). Orientation kept OFF the SplitViewportSlot component deliberately (camera_modes

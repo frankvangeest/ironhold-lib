@@ -1,0 +1,91 @@
+(
+  schema_version: 2,
+  name: "room4",
+
+  tonemapping: AcesFitted,
+
+  // Cool teal/blue tone, matching the cyan portal_to_room4 accent and ground_room4.
+  lighting: (
+    ambient: (0.16, 0.24, 0.26),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (0.75, 0.90, 1.0),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-4.0, 0.5, 0.0),
+    "player_2_start": (4.0, 0.5, 0.0),
+  },
+
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground_room4",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1_split_h MUST be first — its `camera.split` block is the sole switch for
+    // horizontal split-screen (same "first player wins" rule as `party`/vertical `split`
+    // elsewhere). Both players' own `camera` blocks matter here — each gets a real,
+    // independent OrbitCamera from their own config.
+    (
+      id: "player_01",
+      prefab: "player_p1_split_h",
+      transform: (
+        translation: (-4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_02",
+      prefab: "player_p2_split_h",
+      transform: (
+        translation: (4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Return trip reuses the "portal_to_room3" prefab (see prefabs.ron comment) — same event
+    // name as room2's forward portal, same rules.ron entry, no new prefab needed.
+    (
+      id: "portal_to_room3",
+      prefab: "portal_to_room3",
+      transform: (
+        translation: (0.0, 0.0, -15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+  ],
+
+  ui: [
+    Label((
+      id: "controls_hint",
+      text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift",
+      position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+    Label((
+      id: "room_hint",
+      text: "Room 4 — horizontal split screen. Cyan portal returns to room 3.",
+      position: (20.0, 64.0),
+      size: (900.0, 32.0),
+    )),
+  ],
+)

@@ -72,6 +72,18 @@
       ),
     ),
 
+    // room3 -> room4 (Stage 4, horizontal split). See prefabs.ron's "portal_to_room4" comment —
+    // the return trip reuses the existing "portal_to_room3" prefab, no new prefab needed for it.
+    (
+      id: "portal_to_room4",
+      prefab: "portal_to_room4",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
   ],
 
   ui: [
@@ -83,7 +95,9 @@
     )),
     Label((
       id: "room_hint",
-      text: "Room 3 — vertical split screen. Blue portal returns to room 2.",
+      // Kept under 900px width, same budget as controls_hint above (a known-good 59-char line
+      // at this box size) — see Stage 4 plan's note on avoiding Stage 2's label-overflow bug.
+      text: "Room 3: vertical split | Blue portal -> room 2 | Cyan portal -> room 4",
       position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),
