@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Done, Stage 4 Done, Stage 5 Queued)_
+_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Done, Stage 4 Done, Stage 5 Active)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -11,7 +11,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 | Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
 | Stage 3 | Vertical split-screen scene | Done | `b59a3e7` (2026-07-05) |
 | Stage 4 | Horizontal split-screen scene | Done | `b5844c7` (2026-07-06) |
-| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Queued | — |
+| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Active | — |
 
 A fifth split style (diagonal) was scoped out during design discussion — Bevy's `Camera.viewport`
 is rectangle-only, so a true diagonal cut needs a custom stencil/shader mask, which is untested
@@ -599,10 +599,11 @@ here since Horizontal is still exactly 2 slots.
 - [x] wasm-perf-reviewer — OK, no regressions (58 MB release size unchanged)
 - [x] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: documented the `Horizontal`
       variant (audited by data-format-doc-writer — no gaps found beyond the first-pass edit)
-- [ ] WASM dev + release build, playtest checklist (including an explicit `room_hint` overflow/wrap
-      check in-browser), Frank confirmation. Note: `room4`'s baseline screenshot regen
-      (`test_web.py --project local_coop_demo --update-baselines`) remains blocked by the same
-      known WebGPU/Playwright environment limitation as room3's — see
+- [x] WASM dev + release build, playtest checklist (including an explicit `room_hint` overflow/wrap
+      check in-browser), Frank confirmation. Dev and release builds both confirmed in-browser, no
+      console errors, `room_hint`'s rewritten text did not overflow. Note: `room4`'s baseline
+      screenshot regen (`test_web.py --project local_coop_demo --update-baselines`) remains blocked
+      by the same known WebGPU/Playwright environment limitation as room3's — see
       `planning/investigations/headless_webgpu_testing.md`, not a new blocker
 
 ### Open questions
@@ -619,3 +620,192 @@ here since Horizontal is still exactly 2 slots.
 - Given `room3`, when either player walks into the new portal, then `room4` loads with the
   horizontal split active; walking into `room4`'s return portal loads `room3` again with its
   existing vertical split, unaffected by having visited `room4`.
+
+---
+
+## Stage 5 — Dynamic Split-Screen Scene
+
+### What
+
+A third split-screen mode: the screen starts merged (one shared camera framing both players,
+reusing Stage 1's `PartyOrbitCamera`) and automatically splits into two independent per-player
+cameras once the players separate beyond a distance threshold — merging back when they regroup.
+Unlike Stage 3/4, this is genuinely new mechanism, not a formula swap: it needs a live
+merge/split decision every frame instead of a fixed choice made once at scene load, plus a live
+choice of *which* axis to split on (vertical vs horizontal) based on how the players are actually
+positioned relative to each other. Diagonal splits are explicitly out of scope (already logged in
+the backlog: `Camera.viewport` is rectangle-only; a true diagonal needs a stencil/shader mask,
+untested on this engine's WASM/WebGL2 target).
+
+### Why
+
+Completes the feature's originally-scoped mode set (shared / fixed-vertical / fixed-horizontal /
+dynamic) and is the natural "why would a real game want this" payoff — Stage 3/4 proved the
+viewport-splitting mechanics work; Stage 5 proves they can be driven by live gameplay state instead
+of a static scene author's choice.
+
+### Research findings (confirmed by reading Bevy source directly, no runtime spike needed)
+
+- **`camera_orbit_system` and `party_camera_follow_system` never gate on `Camera.is_active`** —
+  both query by `OrbitCamera`/`PartyOrbitCamera` component alone (`camera.rs:49`, `:182`), with no
+  reference to the `Camera` component's active flag. This means an inactive camera's `Transform`
+  keeps being correctly updated every frame even while it isn't rendering — so toggling `is_active`
+  on/off produces **zero pop/snap** on reactivation, because the camera was never "frozen," just not
+  drawn. This is the key insight that makes the design below possible with no new following logic.
+- **Bevy's camera extraction skips inactive cameras before the shared-`ColorAttachment` clear logic
+  ever runs** — confirmed at `bevy_render-0.18.0/src/camera.rs:480`: `if !camera.is_active { ...
+  continue; }`, executed before any `RenderTarget`/texture-attachment bookkeeping. An inactive
+  camera never participates in Stage 3's researched `is_first_call` shared-clear mechanism at all —
+  it simply isn't there. This means an "always spawn all 3 cameras, toggle `is_active`" design has
+  no interaction with the clear-sharing behavior researched for Stage 3; it degrades to exactly "1
+  active camera, full-screen" or "2 active cameras, split viewports," both already-proven cases.
+- **These two findings together mean Stage 5 needs zero new camera-following math.** The merged
+  state is just `PartyOrbitCamera` (Stage 1, already frames the midpoint and scales zoom with
+  separation — exactly what "merged" should look like) with `is_active: true`; the split state is
+  just the Stage 3/4 per-player `OrbitCamera`+`SplitViewportSlot` pair with `is_active: true`. All
+  three camera entities are spawned once at scene load and live for the scene's lifetime — Stage 5
+  only adds the merge/split *decision* system that flips `is_active` + `Camera.viewport` on the
+  already-existing, already-correctly-tracking entities. No runtime entity spawn/despawn churn.
+
+### Approach
+
+- **New schema**: `SplitScreenDef` gains `dynamic: Option<DynamicSplitDef>` (default `None`,
+  preserving Stage 3/4 behavior exactly when absent). `DynamicSplitDef { split_distance: f32,
+  merge_distance: f32, merged_zoom_margin: f32, merged_allow_manual_zoom: bool }` — the last two
+  mirror `PartyZoomDef`'s fields exactly, since dynamic mode's merged state spawns its own internal
+  `PartyOrbitCamera` rather than requiring the designer to *also* author a `party:` block. This is a
+  deliberate choice over reusing `party:` directly: `party` and `split` are already documented as
+  mutually exclusive (split wins, with a warning) — carving out "except when `split.dynamic` is set,
+  then both are required together" would make that rule harder to state and remember. Keeping all
+  dynamic-mode tuning self-contained inside `dynamic:` keeps each block single-purpose. Docs must
+  cross-link the `PartyZoomDef` table to note dynamic split mirrors these two fields as
+  `merged_zoom_margin`/`merged_allow_manual_zoom` (per ux-gamedesigner-reviewer).
+  `split_distance`/`merge_distance` get **no schema defaults** (no `#[serde(default)]`) — they're
+  required per-scene, since the right values depend on room size and player `walk_speed`; a schema
+  default blindly copied into a differently-sized room would silently misbehave (never trigger, or
+  trigger immediately). Per ux-gamedesigner-reviewer, `SplitScreenDef.orientation` becomes
+  **optional** (`#[serde(default)]`, defaulting to `Vertical` via `#[derive(Default)]` +
+  `#[default]` on `SplitOrientation::Vertical`) rather than staying required-but-usually-ignored:
+  one field with a mode-dependent meaning ("the fixed split axis when `dynamic` is unset; the
+  tie-break axis when `dynamic` is set") beats adding a second, similarly-named field just for the
+  dynamic case.
+- **`spawn_players_and_camera` gains a fourth branch**: when `split.dynamic.is_some()`, spawn all
+  three camera entities together — `spawn_party_orbit_camera` (Stage 1, using `merged_zoom_margin`/
+  `merged_allow_manual_zoom`) plus both per-player `OrbitCamera`+`SplitViewportSlot` entities (Stage
+  3/4's existing loop). Per architecture review (Major #2), this branch must explicitly set, at
+  spawn time, not just conceptually: **(a)** `Camera.is_active` on all three entities from the
+  players' starting distance (computed once at load, same formula the runtime system uses every
+  frame after), and **(b)** a `Camera.order` on the party camera distinct from the split cameras'
+  `0`/`1` (e.g. `2`) — cheap insurance against reintroducing the exact camera-order-ambiguity bug
+  Stage 3 fixed in `b59a3e7`, in case any frame ever has more than one camera active at once.
+- **New resource `DynamicSplitConfig(Option<DynamicSplitDef>)`**, mirroring `ActiveSplitScreen`'s
+  populate-at-load/clear-on-`LoadScene` lifecycle, holding the thresholds for the runtime system to
+  read every frame.
+- **`ActiveSplitScreen`'s contract widens**: for Stage 3/4 it's set once at load and never changes;
+  for Stage 5 it becomes continuously overwritten by the new runtime system while `DynamicSplitConfig`
+  is `Some`. Its type doesn't change (`Option<SplitOrientation>`, still just `Vertical`/`Horizontal`,
+  no `Dynamic` variant added to the enum itself) — only *how often* it's written changes.
+  Architecture review signed off: it's a plain `Res` read in `split_screen_viewport_system`, no
+  write-once invariant is encoded anywhere in the type or its usages.
+- **New system `dynamic_split_screen_system`**, with an **exact chain position** per architecture
+  review (Major #1): inserted into the existing `.chain()` in `lib.rs` (currently
+  `camera_orbit_system` → `party_camera_follow_system` → `split_screen_viewport_system` →
+  `camera_shake_system`) **between `party_camera_follow_system` and `split_screen_viewport_system`**
+  — after party-follow so its distance read uses that frame's fresh transforms, before
+  split-viewport so an `is_active` flip takes effect the same frame with no one-frame-stale
+  viewport. No-ops when `DynamicSplitConfig` is `None`. Otherwise:
+  1. Looks up both split-tagged cameras' `OrbitCamera.target` entities (already stores which player
+     each tracks — no new player-lookup mechanism needed) and reads their `Transform.translation`.
+     Guards the "fewer than 2 split cameras found, or a target was despawned mid-transition" case by
+     early-`continue`/return, mirroring `party_camera_follow_system`'s existing empty-target guard
+     (per architecture review, Minor) — never unwraps.
+  2. Computes `distance = target_a.distance(target_b)`.
+  3. Applies **hysteresis** against `ActiveSplitScreen`'s current value: merged → split only once
+     `distance > split_distance`; split → merged only once `distance < merge_distance`. Requires
+     `merge_distance < split_distance` (validated with a warn-and-clamp, same convention as other
+     designer-facing invariants in this file) — without the gap, the state would flicker every frame
+     right at the boundary.
+  4. **Orientation is locked at the merged→split transition instant**, not recomputed every frame
+     while already split: at the moment of transition, compare `abs(dx)` vs `abs(dz)` between the
+     two players (world-space, since these cameras use a fixed, non-rotating offset — a reasonable
+     approximation of "which way they're spread apart on screen," not an exact screen-space
+     projection) and pick `Vertical` (side-by-side) if `abs(dx) >= abs(dz)`, else `Horizontal`
+     (top/bottom); ties use `orientation`'s configured fallback. Locking prevents the split axis from
+     visibly flipping mid-split if the players' relative dx/dz ordering changes sign while still far
+     apart — re-evaluated fresh only the next time a merged→split transition happens.
+  5. On each transition, flips `Camera.is_active` on the party camera and both split cameras
+     (opposite states) and writes `ActiveSplitScreen` accordingly.
+- **Minor doc note (per architecture review)**: `camera_shake_system` queries `With<OrbitCamera>`,
+  so in a dynamic scene it fires on both split cameras even when one is currently inactive —
+  harmless (nothing renders for the inactive one) but worth a one-line doc note, matching Stage 3's
+  precedent of documenting this kind of thing at the code site, not just in CLAUDE.md.
+- **New scene `room5.scene.ron`**: players spawn close together — **comfortably below**
+  `merge_distance`, not just "close," per ux-gamedesigner-reviewer, so the merged state is
+  unambiguously demonstrated before any split — with enough open space that reaching
+  `split_distance` takes a few seconds of deliberate walking, not an instant/accidental trigger.
+  `room_hint` explicitly tells the tester to "walk apart" to see the split. Reachable via a new
+  portal from `room4`, return trip reuses the existing `portal_to_room4` prefab/event (same trick
+  every prior stage used).
+
+### Tasks
+- [x] Plan reviewed pre-implementation: system-architect (ALIGNED — both research findings verified
+      against real source; 2 Major + 1 Minor concern folded into the Approach above: exact
+      `.chain()` position, explicit `is_active`/`order` at spawn, guard the missing-target case) and
+      ux-gamedesigner-reviewer (ALIGNED — 2 friction points folded in: `orientation` made optional
+      with a mode-dependent meaning instead of a required-but-usually-ignored field, and explicit
+      "no schema defaults for distances" + room5 framing guidance)
+- [ ] `DynamicSplitDef` schema + `SplitScreenDef.dynamic: Option<DynamicSplitDef>`;
+      `SplitScreenDef.orientation` becomes `#[serde(default)]` (`SplitOrientation` gains
+      `#[derive(Default)]` with `#[default]` on `Vertical`)
+- [ ] `DynamicSplitConfig` resource (populate/clear lifecycle mirroring `ActiveSplitScreen`)
+- [ ] `spawn_players_and_camera`: fourth branch spawning all 3 cameras, explicitly setting
+      `Camera.is_active` (from starting distance) and `Camera.order` (party camera gets an order
+      distinct from the split cameras' `0`/`1`) at spawn time — not left to defaults
+- [ ] `dynamic_split_screen_system`: hysteresis merge/split decision, orientation-lock-at-transition,
+      `is_active` + `ActiveSplitScreen` writes, guards the fewer-than-2-targets case; inserted into
+      `lib.rs`'s existing `.chain()` between `party_camera_follow_system` and
+      `split_screen_viewport_system`
+- [ ] `merge_distance < split_distance` validation (warn-and-clamp)
+- [ ] Document the `camera_shake_system`-fires-on-inactive-split-camera note at the code site
+      (harmless, but matching Stage 3's precedent of an in-code marker, not just CLAUDE.md)
+- [ ] `local_coop_demo`: new `room5.scene.ron` (spawn separation comfortably below `merge_distance`,
+      room sized so reaching `split_distance` takes a few seconds of walking), portal wiring from
+      `room4`, `room_hint` explicitly telling the tester to "walk apart" (with the same overflow
+      check as Stage 4)
+- [ ] Tests: hysteresis (no flicker exactly at either threshold), orientation lock (split axis
+      doesn't change mid-split even if dx/dz ordering flips), `is_active` toggling correctness (both
+      the flag and the distinct `Camera.order` values), `merge_distance >= split_distance` warns and
+      clamps, initial-load distance sets correct starting state, fewer-than-2-targets guard doesn't
+      panic
+- [ ] `docs/20_data_formats.md`: cross-link `PartyZoomDef`'s table to note dynamic split mirrors
+      `zoom_margin`/`allow_manual_zoom` as `merged_zoom_margin`/`merged_allow_manual_zoom`; document
+      `orientation`'s dual meaning (fixed axis vs. tie-break hint) now that it's optional
+- [ ] Full review gate: alignment, architecture, wasm-perf-reviewer (new per-frame system doing
+      distance math + entity lookups, more work than Stage 3/4's pure arithmetic)
+- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: document `DynamicSplitDef`,
+      the hysteresis/orientation-lock behavior, and the `ActiveSplitScreen` contract widening
+- [ ] WASM dev + release build, playtest checklist (walk apart to trigger split, walk back to
+      trigger merge, confirm no flicker at the boundary, confirm orientation doesn't flip mid-split),
+      Frank confirmation
+
+### Open questions
+- Concrete default values for `split_distance`/`merge_distance`/`merged_zoom_margin` — pick during
+  authoring and playtesting against `room5`'s actual dimensions and player `walk_speed`, not decided
+  in the abstract here.
+- Should a debug/inspector affordance exist to force merge or split for testing, bypassing distance?
+  Not required for the acceptance criteria below; consider only if playtesting the real thing proves
+  awkward.
+
+### Acceptance criteria
+- Given `room5` loads with players close together, when the scene is ready, then a single
+  `PartyOrbitCamera` view is active (no split), framing both players.
+- Given the players walk apart past `split_distance`, when the next frame renders, then the view
+  splits into two independent per-player cameras with an orientation matching whichever axis they
+  are more spread apart on (side-by-side if more spread horizontally, top/bottom if more spread
+  vertically), and this happens exactly once (no flicker) as they cross the threshold.
+- Given the view is split and the players walk back together past `merge_distance`, when the next
+  frame renders, then the view merges back into a single `PartyOrbitCamera`, exactly once (no
+  flicker) as they cross the threshold.
+- Given the view is split, when the players' relative horizontal/depth separation ordering changes
+  while they remain apart (e.g. player 2 circles around player 1 without ever coming close), then
+  the split orientation does NOT change until the next full merge→split cycle.
