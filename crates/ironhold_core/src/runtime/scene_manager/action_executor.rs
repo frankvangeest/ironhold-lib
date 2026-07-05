@@ -3,7 +3,6 @@ use bevy::audio::AudioSinkPlayback;
 use crate::ProjectRoot;
 use crate::schema::*;
 use crate::schema::scene_v2::GameSceneV2;
-use crate::schema::player::PlayerConfig;
 use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
@@ -13,8 +12,8 @@ use crate::capabilities::particle::QueuedParticleEffect;
 use super::{
     BackgroundMusic, LevelEntity, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
     SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, resolve_project_path,
-    should_insert_nameplate,
 };
+use super::entity_spawner::assemble_player_config;
 
 pub fn action_executor_system(
     mut commands: Commands,
@@ -51,6 +50,7 @@ pub fn action_executor_system(
                 scene_state.active_dialogue.clear();
                 scene_state.inventory_ui.panels_open = 0;
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
+                commands.insert_resource(crate::runtime::scene_manager::ActiveViewBox(None));
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);
@@ -146,28 +146,14 @@ pub fn action_executor_system(
                 // system calls spawn_player_entity (camera + controller) instead of the
                 // normal spawn_prefab_instance path.
                 let player_config = if prefab_def.components.tags.contains(&"player".to_string()) {
-                    use crate::runtime::scene_manager::entity_spawner::{default_camera_config, default_input_map};
-                    if prefab_def.animation_policy.is_none() {
-                        warn!("Action::Spawn: player prefab '{}' has no animation_policy; spawned player will have no animations", prefab);
-                    }
-                    let cam = prefab_def.components.camera.clone().unwrap_or_else(default_camera_config);
-                    let inputs = prefab_def.components.inputs.clone().unwrap_or_else(default_input_map);
-                    Some(PlayerConfig {
-                        model_path: model_path.clone(),
-                        initial_position: (sx, sy, sz),
-                        camera: cam,
-                        inputs,
-                        animation_policy: prefab_def.animation_policy.clone(),
-                        movement: prefab_def.components.movement.clone(),
-                        spawn_id: spawn_id.clone(),
-                        prefab_key: prefab.clone(),
-                        nameplate_display_name: if should_insert_nameplate(prefab_def.nameplate, spawn_params.nameplate_config.player_enabled) {
-                            Some(prefab_def.display_name.clone().unwrap_or_else(|| prefab.clone()))
-                        } else {
-                            None
-                        },
-                        nameplate_override: prefab_def.nameplate,
-                    })
+                    Some(assemble_player_config(
+                        &prefab_def,
+                        &prefab,
+                        &spawn_id,
+                        model_path.clone(),
+                        (sx, sy, sz),
+                        spawn_params.nameplate_config.player_enabled,
+                    ))
                 } else {
                     None
                 };

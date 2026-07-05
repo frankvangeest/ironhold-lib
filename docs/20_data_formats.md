@@ -179,6 +179,7 @@ File extension must be `.scene.ron`.
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
 | `show_nameplates` | `bool` | Enable the nameplate system for NPCs/props in this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does **not** govern the player's own nameplate — see `show_player_nameplate` below. |
 | `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Cosmetic fields (offset, font, colors, bars) apply regardless of `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when `show_nameplates: true`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
+| `max_view_box` | `Option<(f32,f32,f32,f32)>` | Hard XZ movement boundary `(min_x, min_z, max_x, max_z)` in world units. Every player's position is clamped inside this box each physics tick (vertical movement/jumping is unaffected); velocity on the clamped axis is zeroed so the player doesn't jitter against the edge. Intended for local co-op scenes with a shared camera, so players can't wander out of frame — but works for any scene. Omit to disable (most scenes have no boundary). |
 
 **Example:**
 ```ron
@@ -1512,6 +1513,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
 | `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
+| `player_index` | `u32` | `0` | **Local co-op only.** Which player slot this prefab controls (P1 = `0`, P2 = `1`, ...) when a scene has 2+ entities tagged `"player"`. Meaningless for single-player scenes. Forwarded onto the spawned entity as a queryable `PlayerIndex` component — reserved for future per-player systems (e.g. nameplate/HUD labeling); no shipped system reads it yet, since input routing uses `gamepad_index` and camera targeting uses scene entity order. Always assign a unique index per player so a future consumer doesn't collide. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -1605,6 +1607,7 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
+| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player reads movement/camera input from the connected gamepad at this index instead of the keyboard: left stick = move/strafe, right stick X = turn, South button (A / Cross) = jump, East button (B / Circle) = run. `None` (default) keeps keyboard-only behavior. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
 
 > **Selection is proximity-based, not a pixel-perfect mesh hit.** Left-clicking selects the `click_selectable` entity whose on-screen position is nearest the cursor (within a fixed radius), resolved from the entity's transform — so thin or animated/skinned characters are easy to click and never "fall through" to the geometry behind them. Clicking with nothing nearby clears the current target. For combat-style play, set the player camera's `orbit_button: "Right"` so left-click is free for selection (see `3rd_person_game_demo`).
 
@@ -1658,6 +1661,9 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable |
 | `initial_pitch` | `f32` | `0.5` | Camera pitch at scene start in radians |
 | `initial_yaw` | `f32` | `0.0` | Camera yaw at scene start in radians |
+| `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. |
+
+> **2+ players without a `party` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party` is unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to the shared camera explicitly.
 
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
@@ -1665,6 +1671,71 @@ on: [
   (event: "player.jumped", do_actions: [PlaySound(key: "sfx_jump")]),
 ]
 ```
+
+### Shared party camera (`PartyZoomDef`) ✅
+
+This is **local, same-machine co-op** — all players share one keyboard/gamepad set on one screen and one camera. It is unrelated to (and does not require) networked multiplayer, which is a separate, planned system (`planning/features/networking_multiplayer.md`) not covered by anything on this page.
+
+For local co-op scenes with two or more `"player"`-tagged entities, `camera.party` on the **first** player switches from one-orbit-camera-per-player to a single shared camera. The shared camera looks at the midpoint of all players and automatically zooms out as they spread apart: its distance is `clamp(max_pairwise_separation + zoom_margin, min_radius, max_radius)`, using the `min_radius`/`max_radius` already set on that same `camera` block.
+
+**`PartyZoomDef` fields** (`components.camera.party`, authored on the first player only):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `zoom_margin` | `f32` | required | Extra distance (metres) added on top of the players' current maximum separation, so they aren't framed edge-to-edge. Larger values keep more headroom around both players as they split apart. |
+| `allow_manual_zoom` | `bool` | `false` | When `true`, the scroll wheel still nudges the camera distance as an offset on top of the distance-derived radius. When `false` (default), the radius is fully derived from player separation and manual scroll input has no effect — this matches "the camera zooms based on how far apart the players are" with no player fighting that behavior. |
+
+> **Only the first `"player"`-tagged entity's `party` block is read.** If you author `party` on the second (or later) player instead of the first, it is silently ignored — there is no validation error. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
+
+**Example** — two-player scene where player 1 owns the shared camera:
+
+```ron
+// prefabs/prefabs.ron
+"player_p1": (
+  kind: Actor,
+  model: "character_male",
+  display_name: "Player 1",
+  player_index: 0,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 7.0, 14.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     8.0,
+      orbit_speed:    0.4,
+      min_radius:     8.0,
+      max_radius:     28.0,
+      orbit_button:   "Right",
+      // Shared-camera zoom: radius = clamp(max player separation + zoom_margin, min, max).
+      party: (
+        zoom_margin: 6.0,
+      ),
+    ),
+    inputs: (
+      forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+    ),
+  ),
+),
+
+// player_p2 — no `camera` block at all; with 2+ players only player_p1's camera
+// (the first "player"-tagged entity in the scene) is read.
+"player_p2": (
+  kind: Actor,
+  model: "character_female",
+  display_name: "Player 2",
+  player_index: 1,
+  components: (
+    tags: ["player"],
+    inputs: (
+      forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
+      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+    ),
+  ),
+),
+```
+
+A full working example lives in `assets/projects/local_coop_demo/`.
 
 ### NPC behaviour (`components.npc`) ✅
 
@@ -2049,6 +2120,15 @@ Defines the locomotion clips and override animations for a character type.
 > when the GLB contains at least one animation clip. Every character model GLB **must** include
 > at least one embedded clip (typically `Idle_Loop`). Without it, `animation_sources` retargeting
 > silently does nothing — the character will load visually but will never animate.
+
+> **Reserved override IDs — `jump_enter` / `jump_exit`.** `player_movement_system` fires these
+> two override IDs automatically on every jump takeoff/landing, for **every** player prefab,
+> regardless of policy. If your policy has no `overrides` entry for one of them, the resolver
+> falls through to treating the ID as a literal glTF clip name, doesn't find it, and logs a
+> `WARN ... falling back to idle` — harmless, but noisy console spam on every jump. A minimal
+> locomotion-only policy (no combat/emotes) still needs these two overrides; see
+> `assets/projects/local_coop_demo/prefabs/animation/player_locomotion.ron` for the smallest
+> working example (just `jump_enter`/`jump_exit`, nothing else).
 
 ```ron
 (

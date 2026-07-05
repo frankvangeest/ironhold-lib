@@ -465,11 +465,11 @@ pub fn spawn_player_when_terrain_ready(
     }
 
     for (pending_entity, pending, pending_tm) in &pending_query {
-        info!("Terrain is ready. Spawning player...");
+        info!("Terrain is ready. Spawning player(s)...");
         let tonemapping = pending_tm
             .map(|pt| pt.0)
             .unwrap_or(bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted);
-        spawn_player_entity(
+        spawn_players_and_camera(
             &mut commands,
             &asset_server,
             &merged_fixes.0,
@@ -483,6 +483,12 @@ pub fn spawn_player_when_terrain_ready(
     }
 }
 
+/// Spawns a player's character (model, physics, controller, metadata) plus its own
+/// dedicated `OrbitCamera`. This is the single-player path: dynamic `Action::Spawn`
+/// (character-select), the terrain-delayed spawn, and single-player scene loads all use it
+/// unchanged. Local co-op (2+ players sharing one camera) uses `spawn_players_and_camera`
+/// instead, which calls `spawn_player_entity_core` directly and spawns one shared
+/// `PartyOrbitCamera` rather than one `OrbitCamera` per player.
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -493,6 +499,66 @@ pub(crate) fn spawn_player_entity(
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     registry: &mut SpawnRegistry,
 ) {
+    let player_entity = spawn_player_entity_core(
+        commands, asset_server, fixes, model_spawner, player_config, project_root, registry,
+    );
+    spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
+}
+
+/// Spawns one or more players from the same scene, sharing a single camera when there are
+/// 2+ of them (local co-op). A single player gets its own `OrbitCamera`, matching
+/// `spawn_player_entity`'s single-player behavior exactly.
+///
+/// When 2+ players are present, the first player's `CameraConfig.party` block is the sole,
+/// explicit switch for the shared `PartyOrbitCamera` — an absent `party` block is treated as
+/// a designer oversight, not "use single-player mode": rather than silently spawning
+/// competing per-player cameras, this logs a warning and falls back to a single `OrbitCamera`
+/// targeting only the first player.
+pub(crate) fn spawn_players_and_camera(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    fixes: &HashMap<String, TransformFix>,
+    model_spawner: &ModelSpawner,
+    player_configs: &[PlayerConfig],
+    project_root: &str,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    registry: &mut SpawnRegistry,
+) {
+    let entities: Vec<Entity> = player_configs.iter().map(|pc| {
+        spawn_player_entity_core(commands, asset_server, fixes, model_spawner, pc, project_root, registry)
+    }).collect();
+
+    let Some(first) = player_configs.first() else { return };
+    if entities.len() < 2 {
+        spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
+        return;
+    }
+
+    if let Some(party) = &first.camera.party {
+        crate::capabilities::camera::spawn_party_orbit_camera(
+            commands, tonemapping, &first.camera, party, &entities,
+        );
+    } else {
+        warn!(
+            "Scene has {} players but no `party` camera block on the first player's `camera` \
+             config — falling back to a single OrbitCamera targeting only the first player. \
+             Add a `party: (zoom_margin: ...)` block to the first player's camera config to \
+             get a shared local co-op camera instead.",
+            entities.len()
+        );
+        spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
+    }
+}
+
+fn spawn_player_entity_core(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    fixes: &HashMap<String, TransformFix>,
+    model_spawner: &ModelSpawner,
+    player_config: &PlayerConfig,
+    project_root: &str,
+    registry: &mut SpawnRegistry,
+) -> Entity {
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
 
@@ -576,6 +642,7 @@ pub(crate) fn spawn_player_entity(
     commands.entity(player_entity).insert((
         crate::capabilities::player::Player,
         crate::capabilities::player::PlayerOwnership::Local,
+        crate::capabilities::player::PlayerIndex(player_config.player_index),
     ));
 
     if let Some(display_name) = &player_config.nameplate_display_name {
@@ -603,7 +670,18 @@ pub(crate) fn spawn_player_entity(
         ));
     }
 
-    // Spawn Orbit Camera
+    player_entity
+}
+
+/// Spawns a single-target `OrbitCamera` following `player_entity`, per `player_config.camera`.
+/// Factored out of `spawn_player_entity` so `spawn_players_and_camera`'s single-player
+/// fallback path can reuse it without duplicating the field mapping.
+fn spawn_orbit_camera_for_player(
+    commands: &mut Commands,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    player_config: &PlayerConfig,
+    player_entity: Entity,
+) {
     let cam = &player_config.camera;
     let (orbit_lmb, orbit_rmb) = crate::capabilities::camera::parse_orbit_button(&cam.orbit_button);
     let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
@@ -654,6 +732,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         character_rotate_button: Some("Right".to_string()),
         initial_pitch: 0.5,
         initial_yaw: 0.0,
+        party: None,
     }
 }
 
@@ -671,5 +750,44 @@ pub(crate) fn default_input_map() -> InputMap {
         strafe_mouse_button: Some("Left".to_string()),
         target_next: "Tab".to_string(),
         target_range: 30.0,
+        gamepad_index: None,
+    }
+}
+
+/// Builds a `PlayerConfig` from a `tags: ["player"]` prefab. Single source of truth for the
+/// two sites that assemble one by hand: the scene-load GLB player path (`scene_loader.rs`)
+/// and the dynamic `Action::Spawn` character-select path (`action_executor.rs`). Adding a new
+/// `PlayerConfig` field means editing this function once instead of both call sites.
+pub(crate) fn assemble_player_config(
+    prefab: &crate::schema::catalog::PrefabDef,
+    prefab_key: &str,
+    spawn_id: &str,
+    model_path: String,
+    initial_position: (f32, f32, f32),
+    player_nameplate_enabled: bool,
+) -> PlayerConfig {
+    if prefab.animation_policy.is_none() {
+        warn!(
+            "Player prefab '{}' has no animation_policy — no animations will play. \
+             Set animation_policy in prefabs.ron to enable locomotion animation.",
+            prefab_key
+        );
+    }
+    PlayerConfig {
+        model_path,
+        initial_position,
+        camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
+        inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
+        animation_policy: prefab.animation_policy.clone(),
+        movement: prefab.components.movement.clone(),
+        spawn_id: spawn_id.to_string(),
+        prefab_key: prefab_key.to_string(),
+        player_index: prefab.player_index,
+        nameplate_display_name: if should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
+            Some(prefab.display_name.clone().unwrap_or_else(|| prefab_key.to_string()))
+        } else {
+            None
+        },
+        nameplate_override: prefab.nameplate,
     }
 }

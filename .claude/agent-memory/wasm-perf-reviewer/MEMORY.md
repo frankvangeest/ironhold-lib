@@ -9,4 +9,5 @@
 - [Dialogue system](project_dialogue_system.md) — dialogue_tick_system Update; idle empty-Vec collects (no alloc); render gated by last_rendered_node (per-transition not per-frame); UI-only spawn; DialogueDef on-demand load no preload; zero deps
 - [Inventory system](project_inventory_system.md) — inventory_ui_system Update is_changed()-gated + text.0 != label guard; OpenShop despawn+respawn is just_pressed edge-triggered (no held-key stall); 20 slot nodes per-scene-load; zero new deps
 - [Nameplate system](project_nameplate_system.md) — 3 Update systems; visibility O(1) contains + change-guarded; cleanup HashSet collect/frame but zero-cap when empty; Mesh2d/ColorMaterial WebGL2+WebGPU safe; zero deps
+- [Local co-op input/camera](project_local_coop_input_camera.md) — gamepad collect+sort empty-cheap; party_camera_follow empty-archetype free; view_box_clamp early-returns None; gilrs wasm-safe; zero deps
 - [Intent event layer](project_intent_event_layer.md) — action_bar Pending/Handled intent resources; flush_pending_intent_system per-frame but drains empty HashMap on idle (O(0)); inserts/clones only on slot press; zero deps

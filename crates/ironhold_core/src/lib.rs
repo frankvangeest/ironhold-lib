@@ -152,6 +152,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedTargetIndicator>()
+            .init_resource::<crate::runtime::scene_manager::ActiveViewBox>()
             .init_resource::<crate::capabilities::nameplate::NameplateSceneConfig>()
             .init_resource::<crate::capabilities::nameplate::PlayerNameplatePreference>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
@@ -265,6 +266,7 @@ impl Plugin for GamePlugin {
             .add_systems(FixedUpdate, (
                 input_translator_system,
                 player_movement_system,
+                player_view_box_clamp_system,
                 collectible_system,
                 trigger_zone_system,
                 npc_behavior_system,
@@ -285,6 +287,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 animation_resolver_system,
                 camera_orbit_system,
+                party_camera_follow_system,
                 camera_shake_system,
                 fly_camera_system,
                 animation_playback_system,

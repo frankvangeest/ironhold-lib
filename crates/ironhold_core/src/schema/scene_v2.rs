@@ -105,6 +105,11 @@ pub struct GameSceneV2 {
     /// `show_nameplates: true`).
     #[serde(default)]
     pub nameplate_options: Option<NameplateOptionsDef>,
+    /// Hard XZ position clamp `(min_x, min_z, max_x, max_z)` applied to every
+    /// `CharacterController` entity (both players in local co-op). Y (vertical/jump) is
+    /// untouched. Omit to disable — most scenes have no view box.
+    #[serde(default)]
+    pub max_view_box: Option<(f32, f32, f32, f32)>,
 }
 
 impl GameSceneV2 {

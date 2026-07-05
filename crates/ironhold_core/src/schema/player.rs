@@ -35,6 +35,10 @@ pub struct PlayerConfig {
     /// `PrefabDef.nameplate` override forwarded to `NameplateTag`.
     #[serde(default)]
     pub nameplate_override: Option<bool>,
+    /// Forwarded from `PrefabDef.player_index`. Distinguishes local co-op players (P1/P2/...)
+    /// from a single-player scene, where it stays `0` and is unused.
+    #[serde(default)]
+    pub player_index: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -64,6 +68,28 @@ pub struct CameraConfig {
     /// Camera yaw at scene start in radians. Default: 0.0.
     #[serde(default)]
     pub initial_yaw: f32,
+    /// Local co-op only: when the scene has 2+ `tags: ["player"]` entities, this player's
+    /// `party` block (read from the *first* player only — later players' `party` fields are
+    /// ignored) is the sole switch that spawns a single shared `PartyOrbitCamera` framing all
+    /// players instead of each getting their own `OrbitCamera`. Absent on a 2+ player scene
+    /// logs a warning and falls back to a single-player camera on the first player only —
+    /// never silently spawns competing per-player cameras. Meaningless for single-player scenes.
+    #[serde(default)]
+    pub party: Option<PartyZoomDef>,
+}
+
+/// Local co-op shared-camera zoom behavior, authored on the first player's `camera.party`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct PartyZoomDef {
+    /// Extra distance added beyond the raw max pairwise distance between players, so they
+    /// aren't framed edge-to-edge.
+    pub zoom_margin: f32,
+    /// Whether manual scroll-zoom still nudges the derived radius (as an offset on top of the
+    /// distance-driven value, not a replacement for it). Default: `false` — radius is fully
+    /// derived from player separation, matching "camera zooms based on player distance" with
+    /// no player-controlled override fighting it.
+    #[serde(default)]
+    pub allow_manual_zoom: bool,
 }
 
 fn default_min_pitch() -> f32 { 0.1 }
@@ -97,6 +123,11 @@ pub struct InputMap {
     /// Maximum world-space distance (in units) to consider for Tab targeting (default: 30.0).
     #[serde(default = "default_target_range")]
     pub target_range: f32,
+    /// When set, this player reads input from the connected gamepad at this index instead of
+    /// the keyboard — lets local co-op scenes bind player 2 to a controller. `None` (default)
+    /// keeps keyboard-only behavior identical to before this field existed.
+    #[serde(default)]
+    pub gamepad_index: Option<usize>,
 }
 
 fn default_run_key() -> String {

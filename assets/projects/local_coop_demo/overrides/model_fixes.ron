@@ -1,0 +1,17 @@
+(
+    schema_version: 2,
+    // Per-asset corrections, keyed by model path — same values as 3rd_person_game_demo,
+    // since these are the same shared GLBs.
+    model_fixes: {
+        "shared/models/characters/character-male-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
+        "shared/models/characters/character-female-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
+    },
+)

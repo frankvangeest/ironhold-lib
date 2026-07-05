@@ -164,6 +164,7 @@ fn test_player_jump_emits_game_event() {
                 strafe_mouse_button: Some("Left".to_string()),
                 target_next: "Tab".to_string(),
                 target_range: 30.0,
+                gamepad_index: None,
             },
             is_running: false,
             jump_velocity: 5.94,

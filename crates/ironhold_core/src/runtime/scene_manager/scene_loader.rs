@@ -34,8 +34,8 @@ const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::PipelineWarmup;
 use super::entity_spawner::{
-    spawn_prefab_instance, spawn_player_entity, default_camera_config, default_input_map,
-    attach_prefab_features,
+    spawn_prefab_instance, default_camera_config, default_input_map,
+    attach_prefab_features, assemble_player_config,
 };
 
 pub fn spawn_scene_v2(
@@ -161,7 +161,10 @@ pub fn spawn_scene_v2(
         let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
         let mut pending_stat_labels: Vec<(Entity, String, crate::schema::catalog::StatLabelDef)> = Vec::new();
         let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
-        let mut player_config: Option<PlayerConfig> = None;
+        // One entry per `tags: ["player"]` GLB prefab in the scene — supports local co-op
+        // (2+ players). The primitive/capsule player path below is separate and stays
+        // single-player-only (see `primitive_player`).
+        let mut player_configs: Vec<PlayerConfig> = Vec::new();
         // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
         let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>, String, Option<String>, Option<bool>)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
@@ -616,29 +619,14 @@ pub fn spawn_scene_v2(
             };
 
             if is_player {
-                if prefab.animation_policy.is_none() {
-                    warn!(
-                        "Player prefab '{}' has no animation_policy — no animations will play. \
-                         Set animation_policy in prefabs.ron to enable locomotion animation.",
-                        entity_def.prefab
-                    );
-                }
-                player_config = Some(PlayerConfig {
+                player_configs.push(assemble_player_config(
+                    prefab,
+                    &entity_def.prefab,
+                    &entity_def.id,
                     model_path,
-                    initial_position: (translation.x, translation.y, translation.z),
-                    camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
-                    inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
-                    animation_policy: prefab.animation_policy.clone(),
-                    movement: prefab.components.movement.clone(),
-                    spawn_id: entity_def.id.clone(),
-                    prefab_key: entity_def.prefab.clone(),
-                    nameplate_display_name: if should_insert_nameplate(prefab.nameplate, show_player_nameplate) {
-                        Some(prefab.display_name.clone().unwrap_or_else(|| entity_def.prefab.clone()))
-                    } else {
-                        None
-                    },
-                    nameplate_override: prefab.nameplate,
-                });
+                    (translation.x, translation.y, translation.z),
+                    show_player_nameplate,
+                ));
             } else {
                 let parent = spawn_prefab_instance(
                     &mut commands,
@@ -860,22 +848,22 @@ pub fn spawn_scene_v2(
                 },
             ));
         }
-        // Spawn player (delayed if terrain present), flycam, or fallback camera.
-        else if let Some(pc) = player_config {
+        // Spawn player(s) (delayed if terrain present), flycam, or fallback camera.
+        else if !player_configs.is_empty() {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
                 commands.spawn((
-                    crate::runtime::scene_manager::PendingPlayerConfig(pc),
+                    crate::runtime::scene_manager::PendingPlayerConfig(player_configs),
                     crate::runtime::scene_manager::PendingTonemapping(tonemapping),
                     LevelEntity,
                 ));
             } else {
-                spawn_player_entity(
+                super::entity_spawner::spawn_players_and_camera(
                     &mut commands,
                     &asset_server,
                     &merged_fixes.0,
                     &model_spawner,
-                    &pc,
+                    &player_configs,
                     &params.project_root.0,
                     tonemapping,
                     &mut spawn_registry,
@@ -1159,6 +1147,8 @@ pub fn spawn_scene_v2(
             });
             commands.insert_resource(LoadedTargetIndicator(resolved));
         }
+
+        commands.insert_resource(crate::runtime::scene_manager::ActiveViewBox(scene.max_view_box));
 
         // Populate nameplate system config from the scene definition. The player's runtime
         // ToggleOwnNameplate preference is re-seeded here too — it does not persist across

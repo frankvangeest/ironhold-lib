@@ -1,0 +1,100 @@
+(
+  schema_version: 2,
+  prefabs: {
+
+    // Static ground platform — physics: true gives it a fixed collider.
+    "ground": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.30, 0.34, 0.30),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // Player 1 — WASD + Space + Left Shift to run. Local co-op reads the SHARED party
+    // camera config from whichever player-tagged entity appears FIRST in the scene's
+    // `entities` list (see scenes/main.scene.ron) — that entity's `camera.party` block is
+    // the sole switch for the shared camera; player_p1 is placed first on purpose.
+    // IMPORTANT: `party` on player_p2 (or any non-first player) would be silently ignored —
+    // there is no validation error, so always author it on the first player only.
+    // `player_index` is stored on the entity (queryable `PlayerIndex` component) but not yet
+    // read by any system in this stage — reserved for a future per-player HUD/nameplate feature.
+    "player_p1": (
+      kind: Actor,
+      model: "character_male",
+      display_name: "Player 1",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 0,
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 7.0, 14.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     8.0,
+          orbit_speed:    0.4,
+          min_radius:     8.0,
+          max_radius:     28.0,
+          orbit_button:   "Right",
+          // Shared-camera zoom: radius = clamp(max player separation + zoom_margin, min, max).
+          party: (
+            zoom_margin: 6.0,
+            // allow_manual_zoom: true,  // uncomment to let scroll wheel nudge the auto-zoom
+          ),
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          // One shared mouse — mouse-driven strafe/rotate is a single-player convenience
+          // that would conflict between two keyboard players, so it's disabled here.
+          strafe_mouse_button: None,
+          // gamepad_index: 0,  // uncomment (and remove keyboard split below) for controller co-op
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    // Player 2 — arrow keys + Enter to jump + Right Shift to run.
+    // `camera`/`party` omitted: with 2+ players only player_p1's camera config is read.
+    "player_p2": (
+      kind: Actor,
+      model: "character_female",
+      display_name: "Player 2",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 1,
+      components: (
+        tags: ["player"],
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+          // gamepad_index: 1,  // uncomment for controller co-op (see player_p1's inputs comment)
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+  }
+)

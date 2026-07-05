@@ -1,0 +1,72 @@
+(
+  schema_version: 2,
+  name: "main",
+
+  tonemapping: AcesFitted,
+
+  lighting: (
+    ambient: (0.20, 0.22, 0.32),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (1.0, 0.95, 0.82),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-4.0, 0.5, 0.0),
+    "player_2_start": (4.0, 0.5, 0.0),
+  },
+
+  // Hard XZ clamp so neither player can wander off the 50x50 ground platform
+  // (which spans roughly -25..25 on both axes) or out of camera view.
+  // Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1 MUST be first among the two `tags: ["player"]` entities below —
+    // its `camera.party` block is what local co-op reads for the shared camera.
+    (
+      id: "player_01",
+      prefab: "player_p1",
+      transform: (
+        translation: (-4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_02",
+      prefab: "player_p2",
+      transform: (
+        translation: (4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+  ],
+
+  ui: [
+    Label((
+      id: "controls_hint",
+      text: "P1: WASD + Space + Shift    |    P2: Arrows + Enter + Right Shift",
+      position: (20.0, 20.0),
+      size: (600.0, 32.0),
+    )),
+  ],
+)

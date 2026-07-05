@@ -84,6 +84,14 @@
 
 - ~~**Stale `spider.hide:{self}` delay timer could hide a newly-respawned spider**~~ _(promoted to backlog 2026-06-23 → Bugs)_
 
+## Animation
+
+- **`jump_enter`/`jump_exit` sentinel fallback logs a designer-facing warning for a normal, valid policy state** _(observed while building `local_coop_demo`, 2026-07-04)_ — `player_movement_system` unconditionally fires these two override IDs on every jump/landing for every player prefab; when a policy has no matching override (a legitimate minimal locomotion-only policy, not a typo), `animation_resolver_system` falls through to a literal-clip-name lookup and logs `WARN ... falling back to idle` every single jump — indistinguishable in the log from an actual designer typo in a real clip name. Consider either recognizing these two IDs as engine-internal sentinels and silently no-opping when unmatched, or downgrading the log level specifically for them, so real clip-name typos stay visible without jump-spam noise.
+
+## Camera
+
+- **`PartyOrbitCamera` duplicates `OrbitCamera`'s tuning fields and mouse-orbit block** _(observed at local co-op Stage 1 implementation, 2026-07-04)_ — `capabilities/camera.rs`'s new `PartyOrbitCamera` (added for local co-op's shared camera) repeats ~10 fields from `OrbitCamera` and mirrors `camera_orbit_system`'s mouse-orbit handling almost line-for-line in `party_camera_follow_system`, because unifying it under the existing Icebox "Camera mode unification (v1)" item would have coupled Stage 1 to an unstarted refactor. When that unification work starts, it should fold `PartyOrbitCamera` in as a third mode (distance-derived-radius + multi-target midpoint), not just `OrbitCamera`/`FlyCamera`.
+
 ## World Design / Gameplay
 
 - ~~**Item-gated `interactable` (condition on inventory possession)**~~ _(promoted to backlog 2026-06-23 → Queued ▸ Gameplay & Environment)_

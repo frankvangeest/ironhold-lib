@@ -1,0 +1,8 @@
+(
+    schema_version: 2,
+    // Stage 1 is deliberately logic-light — no portals or event-driven rules yet.
+    // Stage 2 (portal/teleport action) is where this file starts doing real work.
+    rules: [
+        ( on: "scene.ready:main", do_actions: [ Log("Local co-op demo scene ready") ] ),
+    ],
+)

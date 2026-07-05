@@ -92,7 +92,12 @@ Changes:
   plus a distinct `player_index`, each with its own `components.inputs` (`InputMap`) — this is
   what lets input routing and camera targeting tell the two players apart without parsing prefab
   keys as strings.
-- `PlayerConfig` gains `player_index: u32`, threaded through `assemble_player_config`.
+- `PlayerConfig` gains `player_index: u32`, threaded through `assemble_player_config`, and
+  forwarded onto the spawned entity as a queryable `PlayerIndex(u32)` component
+  (`capabilities/player.rs`). **Not consumed by any system yet** — Stage 1's own input routing
+  keys off `gamepad_index` and camera targeting keys off scene `entities` order, not this value.
+  Reserved for a future consumer (e.g. per-player nameplate/HUD labeling — see the split-out
+  backlog item).
 
 ### Input: per-player routing + gamepad
 
@@ -119,8 +124,12 @@ without breaking existing single-player scenes.
   `zoom_margin: f32` (extra distance added beyond raw player separation).
 - New system `party_camera_follow_system`: each frame, computes the midpoint and max pairwise
   distance across `targets`, sets `look_at` to the midpoint, and sets `radius = (max_distance +
-  zoom_margin).clamp(min_radius, max_radius)`. Runs in the same `FixedUpdate` slot as
-  `camera_orbit_system` (physics/camera-follow rule in `crates/ironhold_core/src/CLAUDE.md`).
+  zoom_margin).clamp(min_radius, max_radius)`. **Correction post-implementation:** runs in
+  `Update`, chained alongside `camera_orbit_system` — not `FixedUpdate` as originally planned
+  here. `camera_orbit_system` itself already runs in `Update` (treated as render cadence, not
+  physics, per `lib.rs`'s existing "Visual/animation pipeline stays in Update" grouping); this
+  doc's original claim about its schedule was wrong, and the implementation correctly matches
+  the real sibling system instead of the mistaken plan.
 - `CameraConfig` (RON) gains an optional `party: PartyZoomDef { zoom_margin: f32, allow_manual_zoom:
   bool }` block (`allow_manual_zoom` defaults `false`) — whether scroll-zoom still nudges the
   derived radius is an authored choice, not a hardcoded Rust behavior.

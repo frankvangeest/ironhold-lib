@@ -262,11 +262,11 @@ Use WAV for all short SFX — it is uncompressed PCM with zero decode overhead. 
 
 **`tag_spawned_entity` (in `runtime/scene_manager/mod.rs`) is the single source of truth for the
 metadata every addressable spawned entity gets.** Every spawn site routes through it — GLB
-actor/prop, single-mesh primitive, composite primitive, foliage root, both player paths, and
-dynamic `Action::Spawn`. It always inserts `SpawnId` + `PrefabKey` + `LevelEntity` and registers
-the entity in `SpawnRegistry`; it inserts the `ClickSelectable`/`Targetable` markers per the
-prefab flags (players pass `false`). Player-specific components (CharacterController, physics,
-camera) stay at the call site.
+actor/prop, single-mesh primitive, composite primitive, foliage root, every player spawn path
+(see the four-site inventory below), and dynamic `Action::Spawn`. It always inserts `SpawnId` +
+`PrefabKey` + `LevelEntity` and registers the entity in `SpawnRegistry`; it inserts the
+`ClickSelectable`/`Targetable` markers per the prefab flags (players pass `false`).
+Player-specific components (CharacterController, physics, camera) stay at the call site.
 
 Do **not** hand-insert `SpawnId`/`PrefabKey`/`LevelEntity` or call `spawn_registry.entities.insert`
 at a spawn site — call `tag_spawned_entity`. The 5-way divergence this replaced caused real bugs
@@ -274,6 +274,72 @@ at a spawn site — call `tag_spawned_entity`. The 5-way divergence this replace
 missing `PrefabKey`/`LevelEntity`). Adding a new "every entity gets X" field means editing the
 helper once, not every site. `PrefabKey` (catalog key, e.g. `"enemy_orc_melee"`) is distinct from
 `SpawnId` (instance id, e.g. `"orc_01"`).
+
+### The four player-construction sites
+
+Any feature that changes player spawning (local co-op, character select, respawn, possession)
+must account for all four or players diverge silently:
+
+1. **GLB collector** — `scene_loader.rs` builds `player_configs: Vec<PlayerConfig>` from every
+   scene entity whose prefab has `tags: ["player"]`.
+2. **Primitive collector + inline spawn** — a separate `primitive_player` path in
+   `scene_loader.rs` builds its own `CharacterController` + `OrbitCamera` directly and does
+   **not** go through `PlayerConfig` at all. Single-player only — local co-op (`player_index`,
+   the shared party camera) does not extend to primitive/capsule players. A capsule-based demo
+   would need a separate change to support 2+ players.
+3. **Dynamic spawn** — `action_executor.rs`'s `Action::Spawn` handler assembles a `PlayerConfig`
+   for a `tags: ["player"]` prefab (the character-select flow).
+4. **Shared GLB spawn functions** — `entity_spawner.rs`'s `spawn_player_entity` (single player,
+   own `OrbitCamera`) and `spawn_players_and_camera` (1+ players; 2+ share one camera). Both
+   call the private `spawn_player_entity_core` to avoid duplicating the model/physics/metadata
+   setup. The terrain-delayed path (`PendingPlayerConfig`, now `Vec<PlayerConfig>`) also routes
+   through `spawn_players_and_camera`.
+
+Sites 1 and 3 both hand-assemble a `PlayerConfig` — routed through the shared
+`assemble_player_config()` helper (`entity_spawner.rs`) so a new `PlayerConfig` field (e.g.
+`player_index`) only needs adding in one place. `spawn_player_entity_core` inserts
+`player_config.player_index` as a queryable `PlayerIndex(u32)` component
+(`capabilities/player.rs`) on every GLB player entity — no system reads it yet (input routing
+uses `gamepad_index`, camera targeting uses scene entity order), but it's a real ECS fact a
+future per-player system (nameplate/HUD labeling) can query without another schema pass.
+
+### Local co-op: shared camera, gamepad routing, view-box clamp
+
+**`PartyOrbitCamera`** (`capabilities/camera.rs`) is a sibling to `OrbitCamera`, not a
+replacement — single-player scenes are untouched. When a scene has 2+ `tags: ["player"]`
+entities, `spawn_players_and_camera` reads the **first** player's `CameraConfig.party:
+Option<PartyZoomDef>` as the sole, explicit switch:
+- `party` set → spawns one `PartyOrbitCamera` framing the midpoint of all players; radius is
+  `clamp(max_pairwise_separation + zoom_margin, min_radius, max_radius)`, recomputed every frame
+  by `party_camera_follow_system`. `PartyZoomDef.allow_manual_zoom` (default `false`) controls
+  whether scroll-wheel still nudges the derived radius via an accumulated offset.
+- `party` absent → logs a warning and falls back to a single `OrbitCamera` targeting only the
+  first player. Never silently spawns one `OrbitCamera` per player — that would mean two cameras
+  fighting for the same viewport with no RON-visible symptom.
+
+Later players' `camera`/`party` fields are ignored entirely — only the first player-tagged scene
+entity's config is read. Scene entity order in `entities:` therefore matters for local co-op.
+
+**Known limitation:** `Action::CameraShake` only queries `With<OrbitCamera>`
+(`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`), so it silently no-ops on a scene
+using `PartyOrbitCamera`. Not needed for the local co-op foundation's acceptance criteria.
+
+**Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
+specific gamepad instead of the keyboard. Bevy has no built-in numeric gamepad index (each
+connected pad is its own `Gamepad` entity); `input_translator_system` (`runtime/input.rs`) sorts
+connected gamepads by entity index, so `gamepad_index: 0` means "whichever gamepad connected
+first this session," not a hardware-guaranteed slot. Left stick moves/strafes, right stick X
+turns, South button jumps, East button toggles run — independent of the keyboard's
+`strafe_mouse_button` toggle (that only exists to disambiguate A/D on one keyboard; a gamepad
+already has separate sticks).
+
+**View-box clamp** — `GameSceneV2.max_view_box: Option<(f32, f32, f32, f32)>` (`min_x, min_z,
+max_x, max_z`) is read into the `ActiveViewBox` resource on scene load (cleared on `LoadScene`,
+same pattern as `LoadedTargetIndicator`). `player_view_box_clamp_system` (`capabilities/player.rs`,
+`FixedUpdate`, after `player_movement_system`) clamps every `CharacterController`'s XZ position
+into the box (Y/jump untouched) and zeroes the clamped axis's `Velocity.linvel` — without the
+velocity zero, Rapier keeps re-integrating the outward velocity every tick and the player jitters
+against the edge instead of stopping cleanly.
 
 ## Dynamic spawning
 

@@ -1,0 +1,12 @@
+(
+  schema_version: 1,
+  models: {
+    "character_male":   ( path: "shared/models/characters/character-male-01.glb#Scene0" ),
+    "character_female": ( path: "shared/models/characters/character-female-01.glb#Scene0" ),
+    "anim_locomotion":  ( path: "shared/models/characters/character-animations/locomotion.glb#Scene0" ),
+  },
+  textures: {},
+  audio: {},
+  effects: {},
+  materials: {},
+)

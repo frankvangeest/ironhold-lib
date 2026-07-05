@@ -3,6 +3,7 @@ use bevy_rapier3d::prelude::*;
 use crate::schema::player::InputMap;
 use crate::schema::stats::{LoadedStats, LoadedModifiers}; // used by update_player_speed_system
 use crate::runtime::messages::*;
+use crate::runtime::scene_manager::ActiveViewBox;
 use std::collections::HashMap;
 
 use crate::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
@@ -31,6 +32,13 @@ pub enum PlayerOwnership {
     Local,
     Remote,
 }
+
+/// Forwarded from `PrefabDef.player_index`. Inserted on every player entity (local co-op or
+/// single-player, where it's always `0`) so future systems (e.g. per-player nameplate/HUD
+/// labeling) can query it without another schema pass. No system reads this yet — local co-op
+/// currently identifies "the first player" by scene `entities` order, not by this value.
+#[derive(Component, Clone, Copy, Default)]
+pub struct PlayerIndex(pub u32);
 
 #[derive(Component)]
 pub struct CharacterController {
@@ -214,6 +222,32 @@ pub fn player_movement_system(
             controller.jumps_used += 1;
             requests.queue.push_back("jump_enter".to_string());
             game_events.write(GameEvent::Trigger("player.jumped".to_string()));
+        }
+    }
+}
+
+/// Clamps every `CharacterController` entity's XZ position into `ActiveViewBox` (Y/jump is
+/// untouched). Also zeroes the clamped axis's `Velocity.linvel` component — without that,
+/// Rapier keeps re-integrating the outward velocity every tick and the player visibly
+/// jitters against the edge instead of stopping cleanly. Runs after `player_movement_system`
+/// so it clamps this tick's movement, not last tick's.
+pub fn player_view_box_clamp_system(
+    view_box: Res<ActiveViewBox>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<CharacterController>>,
+) {
+    let Some((min_x, min_z, max_x, max_z)) = view_box.0 else { return };
+
+    for (mut transform, mut velocity) in &mut query {
+        let clamped_x = transform.translation.x.clamp(min_x, max_x);
+        let clamped_z = transform.translation.z.clamp(min_z, max_z);
+
+        if clamped_x != transform.translation.x {
+            velocity.linvel.x = 0.0;
+            transform.translation.x = clamped_x;
+        }
+        if clamped_z != transform.translation.z {
+            velocity.linvel.z = 0.0;
+            transform.translation.z = clamped_z;
         }
     }
 }

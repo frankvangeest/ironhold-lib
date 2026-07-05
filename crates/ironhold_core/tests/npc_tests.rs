@@ -18,6 +18,7 @@ fn npc_aggro_test_player_controller() -> CharacterController {
             jump: "Space".to_string(), run: "ShiftLeft".to_string(),
             interact: "KeyF".to_string(), strafe_mouse_button: None,
             target_next: "Tab".to_string(), target_range: 30.0,
+            gamepad_index: None,
         },
         is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
         double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,

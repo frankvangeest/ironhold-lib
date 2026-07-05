@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
+use crate::runtime::scene_manager::LevelEntity;
 
 /// Inserted by `Action::CameraShake` on the active orbit camera entity.
 /// Removed automatically when `remaining` reaches zero.
@@ -95,6 +96,146 @@ pub fn camera_orbit_system(
             cam_transform.translation = target_pos + offset;
             cam_transform.look_at(target_pos, Vec3::Y);
         }
+    }
+}
+
+/// Local co-op shared camera: frames the midpoint of `targets` and derives its distance from
+/// how far apart they are, instead of orbiting one fixed target like `OrbitCamera`. Spawned by
+/// `spawn_party_orbit_camera` when 2+ players exist in a scene and the first player's
+/// `CameraConfig.party` block is set — see `entity_spawner::spawn_players_and_camera`.
+///
+/// Known limitation: `Action::CameraShake` only queries `With<OrbitCamera>`
+/// (`scene_manager/mod.rs`'s `SceneStateParams::orbit_cameras`), so it silently no-ops on a
+/// scene using `PartyOrbitCamera` instead. Not needed for Stage 1's acceptance criteria.
+#[derive(Component)]
+pub struct PartyOrbitCamera {
+    pub targets: Vec<Entity>,
+    /// Extra distance added beyond the raw max pairwise distance between targets.
+    pub zoom_margin: f32,
+    /// Whether manual scroll-zoom still nudges the derived radius. See `PartyZoomDef`.
+    pub allow_manual_zoom: bool,
+    /// Accumulated manual scroll input (only used when `allow_manual_zoom` is true).
+    pub manual_zoom_offset: f32,
+    pub zoom_speed: f32,
+    pub orbit_speed: f32,
+    pub min_radius: f32,
+    pub max_radius: f32,
+    pub pitch: f32,
+    pub yaw: f32,
+    pub look_at_offset: Vec3,
+    pub min_pitch: f32,
+    pub max_pitch: f32,
+    pub orbit_lmb: bool,
+    pub orbit_rmb: bool,
+}
+
+/// Spawns a single shared camera framing every entity in `targets`, reusing `base_camera`
+/// (the first player's `CameraConfig`) for tuning fields and `party` for the co-op-specific
+/// zoom behavior. Called once per scene load from `spawn_players_and_camera` — never per
+/// player, since all players share this one camera.
+pub fn spawn_party_orbit_camera(
+    commands: &mut Commands,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    base_camera: &crate::schema::player::CameraConfig,
+    party: &crate::schema::player::PartyZoomDef,
+    targets: &[Entity],
+) {
+    let (orbit_lmb, orbit_rmb) = parse_orbit_button(&base_camera.orbit_button);
+    commands.spawn((
+        Name::new("Party Orbit Camera"),
+        Camera3d::default(),
+        tonemapping,
+        // Real position/look-at is set on the first `party_camera_follow_system` tick, once
+        // target transforms are available — this initial transform is just a safe placeholder.
+        Transform::from_translation(Vec3::from(base_camera.offset))
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        LevelEntity,
+        PartyOrbitCamera {
+            targets: targets.to_vec(),
+            zoom_margin: party.zoom_margin,
+            allow_manual_zoom: party.allow_manual_zoom,
+            manual_zoom_offset: 0.0,
+            zoom_speed: base_camera.zoom_speed,
+            orbit_speed: base_camera.orbit_speed,
+            min_radius: base_camera.min_radius,
+            max_radius: base_camera.max_radius,
+            pitch: base_camera.initial_pitch,
+            yaw: base_camera.initial_yaw,
+            look_at_offset: Vec3::from(base_camera.look_at_offset),
+            min_pitch: base_camera.min_pitch,
+            max_pitch: base_camera.max_pitch,
+            orbit_lmb,
+            orbit_rmb,
+        },
+    ));
+}
+
+/// Frames the midpoint of a `PartyOrbitCamera`'s `targets` each frame and derives the orbit
+/// radius from their maximum pairwise separation, clamped to `[min_radius, max_radius]`.
+/// Mirrors `camera_orbit_system`'s mouse-orbit handling but has no single character to rotate.
+pub fn party_camera_follow_system(
+    time: Res<Time>,
+    mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
+    mut mouse_wheel_events: MessageReader<bevy::input::mouse::MouseWheel>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut camera_query: Query<(&mut Transform, &mut PartyOrbitCamera)>,
+    target_query: Query<&Transform, (With<CharacterController>, Without<PartyOrbitCamera>)>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
+) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
+    let mut mouse_delta = Vec2::ZERO;
+    for event in mouse_motion_events.read() {
+        mouse_delta += event.delta;
+    }
+    let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
+
+    for (mut cam_transform, mut party) in &mut camera_query {
+        let positions: Vec<Vec3> = party.targets.iter()
+            .filter_map(|e| target_query.get(*e).ok())
+            .map(|t| t.translation)
+            .collect();
+        // No resolvable targets this frame (e.g. mid scene-transition) — hold the last position
+        // rather than snapping the camera to the origin.
+        if positions.is_empty() {
+            continue;
+        }
+
+        let midpoint = positions.iter().copied().sum::<Vec3>() / positions.len() as f32;
+        let mut max_dist = 0.0_f32;
+        for i in 0..positions.len() {
+            for j in (i + 1)..positions.len() {
+                max_dist = max_dist.max(positions[i].distance(positions[j]));
+            }
+        }
+
+        if party.allow_manual_zoom && zoom_delta != 0.0 {
+            party.manual_zoom_offset -= zoom_delta * party.zoom_speed * time.delta_secs();
+        }
+        let radius = (max_dist + party.zoom_margin + party.manual_zoom_offset)
+            .clamp(party.min_radius, party.max_radius);
+
+        let lmb = mouse_button_input.pressed(MouseButton::Left);
+        let rmb = mouse_button_input.pressed(MouseButton::Right);
+        let orbit_active = (party.orbit_lmb && lmb) || (party.orbit_rmb && rmb);
+        if orbit_active {
+            party.yaw -= mouse_delta.x * party.orbit_speed * time.delta_secs();
+            party.pitch -= mouse_delta.y * party.orbit_speed * time.delta_secs();
+            party.pitch = party.pitch.clamp(party.min_pitch, party.max_pitch);
+        }
+
+        let target_pos = midpoint + party.look_at_offset;
+        let rot = Quat::from_axis_angle(Vec3::Y, party.yaw)
+            * Quat::from_axis_angle(Vec3::X, -party.pitch);
+        let offset = rot * Vec3::Z * radius;
+        cam_transform.translation = target_pos + offset;
+        cam_transform.look_at(target_pos, Vec3::Y);
     }
 }
 

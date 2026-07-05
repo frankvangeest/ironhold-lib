@@ -16,3 +16,4 @@
 - [Inventory & item system](project_inventory_item_system.md) — v1 shops display-only; entity:"player" magic string vs spawn id; currency_stat "gold" not in stats.ron; canonical 3rd_person_game_demo
 - [Nameplate system](project_nameplate_system.md) — {self}.stat needs a matching stat_template; player uses global player_health so its forced nameplate shows NO bars; mana bar shows on nothing
 - [IconButton bind wiring](project_iconbutton_bind_wiring.md) — IconButton bind var is designer-wired via SetVariable, NOT auto-populated; scene RON lacks wiring comment; canonical 3rd_person_game_demo hud_audio_toggle
+- [Local co-op system](project_local_coop_system.md) — Stage 1 single-machine co-op; first-scene-entity-wins party camera; player_index/gamepad_index/max_view_box; canonical local_coop_demo; distinct from unshipped LAN networking

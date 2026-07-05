@@ -125,6 +125,12 @@ pub struct LoadedDecalHandles(pub Vec<Handle<Image>>);
 #[derive(Resource, Default)]
 pub struct LoadedTargetIndicator(pub Option<ResolvedTargetIndicator>);
 
+/// Active `GameSceneV2.max_view_box` for the current scene, as `(min_x, min_z, max_x, max_z)`.
+/// `None` means no clamp — `player_view_box_clamp_system` early-exits silently.
+/// Populated by `spawn_scene_v2` on scene load; cleared on full `LoadScene`.
+#[derive(Resource, Default)]
+pub struct ActiveViewBox(pub Option<(f32, f32, f32, f32)>);
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,
@@ -342,8 +348,11 @@ pub struct EntityFsmState {
     pub current: String,
 }
 
+/// Holds all `tags: ["player"]` GLB player configs for a scene whose player spawn is delayed
+/// until terrain generation completes. A `Vec` (not a single `PlayerConfig`) so local co-op
+/// scenes (2+ players) work the same whether or not the scene has terrain.
 #[derive(Component)]
-pub struct PendingPlayerConfig(pub PlayerConfig);
+pub struct PendingPlayerConfig(pub Vec<PlayerConfig>);
 
 /// Stores the scene's tonemapping alongside `PendingPlayerConfig` for the terrain-delayed
 /// player spawn path. `spawn_player_when_terrain_ready` reads this to apply the correct
