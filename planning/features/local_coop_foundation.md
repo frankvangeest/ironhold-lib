@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Done, Stages 3–5 Queued)_
+_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Draft, Stages 4–5 Queued)_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -9,7 +9,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 |---|---|---|---|
 | Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
 | Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
-| Stage 3 | Vertical split-screen scene | Queued | — |
+| Stage 3 | Vertical split-screen scene | Draft | — |
 | Stage 4 | Horizontal split-screen scene | Queued | — |
 | Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Queued | — |
 
@@ -310,3 +310,158 @@ mechanics.
 - Given both players in `scenes/room2.scene.ron`, when either enters the return portal, then both
   players are back in `scenes/main.scene.ron`.
 - No regression to Stage 1 behavior (shared camera, view-box clamp) in either scene.
+
+---
+
+## Stage 3 — Vertical Split-Screen Scene
+
+### What
+
+Replace the single shared `PartyOrbitCamera` (Stage 1's no-split camera) with two independent
+cameras, each rendering to half the screen (left/right) and following just one player. This is
+the first real viewport-splitting work in the project — everything through Stage 2 was schema and
+RON, this stage touches actual multi-camera rendering.
+
+### Why
+
+Confirms the Bevy multi-camera-viewport mechanics actually work correctly in this engine and its
+WASM/WebGPU target before Stage 4 (horizontal) and Stage 5 (dynamic) reuse the same underlying
+mechanism with a different split calculation. Landing the harder, novel part (viewport math,
+window-resize correctness, shared-input handling) once here means Stages 4-5 are mostly "swap the
+split-rect formula."
+
+### Research findings (confirmed before writing this plan — Explore + system-architect review)
+
+- Zero existing `Viewport`/`RenderTarget` usage anywhere in `ironhold_core` — greenfield.
+- Window size is already dynamically queryable on both native and WASM (no fixed-size assumption
+  anywhere) — viewport rects can be recomputed every frame cheaply rather than needing to hook
+  resize events specifically.
+- `camera_orbit_system`'s query has no `.single()` — it already supports N independent
+  `OrbitCamera` entities tracking different targets. Zero changes needed there for "two cameras,
+  two players."
+- **Real problem needing a design fix, not just documentation**: `camera_orbit_system` (and
+  `party_camera_follow_system`, same shape) reads `mouse_wheel_events`/`mouse_motion_events`
+  **once per system call**, applying the identical computed delta to every `OrbitCamera` in its
+  loop. Two split cameras both mouse-orbit/scroll-zoom enabled would rotate/zoom **together** on
+  one shared mouse — visibly wrong for split-screen. Fix: disable manual camera control entirely
+  for split-screen player cameras (fixed-angle auto-follow only — the convention most split-screen
+  console co-op games use) via two RON-authorable knobs, no new concepts needed:
+  `zoom_speed: 0.0` (already a field — scroll × 0 has no effect) and a new `"None"` arm added to
+  `parse_orbit_button` (currently `"Left"`/`"Right"`/`"Either"`; an unrecognized string
+  warns-and-defaults to `"Either"`, the opposite of what's wanted here). system-architect confirmed
+  this is the right tool — the coupling is in the global input-event stream, not the component, so
+  per-camera input masking would be solving it at the wrong layer.
+- Four **other** systems query `With<Camera3d>` and will see 2+ matches once split-screen ships:
+  `world_label_screen_pos_system` (`lib.rs:501`), `nameplate.rs:212`, `particle_renderer.rs:303`,
+  `targeting.rs:122`. All four already degrade gracefully (`.single()` returning a `Result` +
+  `else { return }`, or `.iter().find(...)`) — none panic, they silently no-op or arbitrarily pick
+  one camera. `local_coop_demo` doesn't use world labels, nameplates, particles, or
+  click-targeting, so none of these degradations are visible in this demo. Documented as known
+  limitations (matching Stage 1's `CameraShake`/`PartyOrbitCamera` precedent), not fixed now — but
+  unlike that limitation, none of these four sites carry an in-code comment marking the
+  assumption, so also logging them to `claude_suggestions.md` for whoever hits them next.
+- **`CameraShake` behavior actually changes here, not just "stays broken"**: split-screen spawns
+  two *real* `OrbitCamera` entities (not `PartyOrbitCamera`), so `Action::CameraShake`
+  (`With<OrbitCamera>`) will fire on **both** cameras once this ships — a real behavior change from
+  Stage 1's "shake no-ops with the party camera" story. Documenting this as an intentional
+  consequence of using real `OrbitCamera`s for split-screen, not an accident to fix later.
+- **Prototype-first risk reduction**: the one genuinely-unverified Bevy behavior is whether a
+  second camera's default clear wipes the first camera's already-rendered viewport half. Spike
+  this with two hardcoded `Camera3d` + `Viewport` rects before writing the RON schema — cheap,
+  de-risks the whole stage early rather than discovering a rendering-model problem mid-build.
+
+### Approach
+
+- **Spike first** (throwaway code, deleted once confirmed): hardcode two `Camera3d` entities with
+  fixed, non-overlapping `Viewport` rects, confirm both halves render correctly with default
+  `ClearColorConfig` — no wipe-out — before committing to the RON schema below.
+- New RON type `SplitScreenDef { orientation: SplitOrientation }`, with `SplitOrientation::Vertical`
+  the only variant Stage 3 implements. Introducing the enum now (rather than a Stage-3-only ad hoc
+  field) is deliberate: Stage 4 adds `Horizontal` and Stage 5 adds `Dynamic` as new variants of
+  this *same* enum, and both are concretely planned (not speculative), so the shape is predictable
+  enough to get right the first time.
+- `CameraConfig.split: Option<SplitScreenDef>` — authored on the FIRST player only, same convention
+  as `party`. **`split` and `party` are mutually exclusive on player 0's `CameraConfig`** — if a
+  designer sets both by mistake, log a warning and let `split` win (more specific/newer setting),
+  rather than silently picking one with no signal.
+- When `split` is set (2+ players): `spawn_players_and_camera` gains a third branch — spawn TWO
+  real per-player cameras (reusing the existing `spawn_orbit_camera_for_player` path once per
+  player, **not** `PartyOrbitCamera`), each tagged with a new marker `SplitViewportSlot(u32)`
+  (which half it owns: `0` = left, `1` = right).
+- **Orientation itself is NOT stored on `SplitViewportSlot`** — kept in a new resource
+  `ActiveSplitScreen(Option<SplitOrientation>)`, mirroring `ActiveViewBox`/`LoadedTargetIndicator`'s
+  exact pattern (populated on scene load, cleared on `LoadScene`). Keeping split-screen state off
+  `OrbitCamera` itself means the planned `camera_modes` unification (`OrbitCamera` + `FlyCamera` →
+  `ActiveCameraMode`) doesn't have to untangle it later — split-screen becomes a fourth thing that
+  refactor eventually needs to account for, but doesn't gain a fourth *coupling point* to unwind.
+- New system `split_screen_viewport_system`: reads `ActiveSplitScreen` + the primary window's size,
+  and for each `SplitViewportSlot` camera, sets `Camera.viewport` to its half — recomputed every
+  frame (cheap: 2 cameras, simple arithmetic) rather than hooking resize events specifically, so
+  it's correct immediately after any resize with no missed-event risk. **Must convert logical
+  window size to physical pixels via `window.scale_factor()`** — `Viewport`'s fields are
+  physical-pixel `UVec2`, not logical; getting this wrong means correct-looking layout on
+  non-HiDPI displays and wrong-sized/positioned splits on HiDPI ones.
+- Disable manual camera control for split-screen player cameras in RON: `zoom_speed: 0.0` and
+  `orbit_button: "None"` on both players' `camera` blocks in the split scene. Each camera then only
+  ever sits at its configured fixed offset/angle behind its own player.
+- UI (`Camera2d`, order 1000, `ClearColorConfig::None`) stays completely untouched — it already
+  renders full-screen across both viewport halves with no coupling to either 3D camera's
+  `viewport`.
+- New scene `scenes/room3.scene.ron`, reachable via a new portal from `room2` (with a return
+  portal back), carrying `split: (orientation: Vertical)` on player 1's `camera` block. `room1`
+  and `room2` stay exactly as shipped in Stages 1-2 — each room continues to prove exactly one new
+  mechanic in isolation.
+
+### Tasks
+- [ ] Spike: two hardcoded `Camera3d` + `Viewport` entities, confirm no clear-wipe issue between
+      halves (throwaway, delete once confirmed)
+- [ ] `SplitOrientation` enum (`Vertical` only for now) + `SplitScreenDef { orientation }` +
+      `CameraConfig.split: Option<SplitScreenDef>`; warn-and-`split`-wins if `party` is also set
+- [ ] `SplitViewportSlot(u32)` component + `ActiveSplitScreen(Option<SplitOrientation>)` resource
+      (populate on scene load, clear on `LoadScene`, mirroring `ActiveViewBox`)
+- [ ] `spawn_players_and_camera`: third branch — when `split` is set, spawn two per-player cameras
+      and tag each with `SplitViewportSlot`
+- [ ] `split_screen_viewport_system`: recompute `Camera.viewport` every frame from window size
+      (physical pixels via `scale_factor()`) + `ActiveSplitScreen`'s orientation
+- [ ] `parse_orbit_button`: add `"None"` arm → `(false, false)`, no warning
+- [ ] `local_coop_demo`: new `scenes/room3.scene.ron` (vertical split, `zoom_speed: 0.0` +
+      `orbit_button: "None"` on both player cameras), portal `room2` → `room3` + return portal
+- [ ] Tests: `split_screen_viewport_system` produces correct non-overlapping physical-pixel
+      viewport rects across a couple of window sizes/scale factors; `ActiveSplitScreen`
+      populate/clear lifecycle; `parse_orbit_button("None")` returns `(false, false)`;
+      `split`+`party`-both-set warning fires and `split` wins
+- [ ] Document the `CameraShake`-now-fires-on-both-cameras behavior change (`camera.rs` +
+      `crates/ironhold_core/src/CLAUDE.md`)
+- [ ] Log the four `With<Camera3d>` "silently picks/ignores one camera" sites in
+      `claude_suggestions.md` (no in-code marker today, unlike `CameraShake`'s documented one)
+- [ ] Update the `camera_modes` Icebox backlog note — split-screen is now a fourth thing that
+      unification will eventually need to account for (after `OrbitCamera`, `FlyCamera`,
+      `PartyOrbitCamera`)
+- [ ] Full review gate applies this time (unlike Stage 2): alignment, architecture, and
+      wasm-perf-reviewer, since this touches Rust/schema and a new per-frame system
+- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md` updates for the new
+      fields/resource/system
+- [ ] WASM dev + release build (this stage DOES need a rebuild, unlike Stage 2), playtest
+      checklist, Frank confirmation
+
+### Open questions
+- Is "fully fixed camera, no manual control at all" the right UX for Stage 3, or should
+  gamepad-bound players eventually get their own right-stick orbit? No gamepad-driven camera
+  control exists anywhere in `camera_orbit_system` today (mouse only), so adding it is out of scope
+  here — defaulting to fully fixed for both players regardless of input device. Revisit only if
+  this becomes a real ask.
+- Should `room3` keep the same `max_view_box` size as `room1`/`room2`, or does halving each
+  player's horizontal screen space change what a sensible box looks like? Decide during authoring
+  and playtesting rather than guessing now.
+
+### Acceptance criteria
+- Given a scene with `split: (orientation: Vertical)` on the first player and 2 players present,
+  when the scene loads, then two cameras spawn (not a `PartyOrbitCamera`), each rendering to its
+  own half of the window with no visual bleed or clear-wipe between halves.
+- Given the browser window is resized, when the next frame renders, then both viewport halves
+  resize to match, correctly accounting for the display's scale factor.
+- Given a split-screen scene, when either player scrolls the mouse wheel or drags to orbit, then
+  neither camera's zoom or angle changes — manual control is disabled, only the fixed configured
+  offset applies.
+- Given `split` and `party` are both set on the first player by mistake, when the scene loads,
+  then a warning is logged and `split` takes effect, not two conflicting camera setups.

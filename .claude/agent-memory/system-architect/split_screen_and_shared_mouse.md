@@ -1,0 +1,20 @@
+---
+name: split-screen-and-shared-mouse
+description: Split-screen viewport design constraints, the shared-mouse-delta bug in camera_orbit_system, and the class of With<Camera3d>.single() systems that assume one camera
+metadata:
+  type: project
+---
+
+**Split-screen is a render-only concern, orthogonal to camera behavior.** Viewport rects live on their own component/resource, NOT on `OrbitCamera`/`PartyOrbitCamera` — so they survive the planned `camera_modes` refactor (which unifies `OrbitCamera`+`FlyCamera` into `ActiveCameraMode`). A `split_screen_viewport_system` only writes `Camera.viewport`, never `cam_transform`, so it does NOT participate in the `camera_orbit_system`→`camera_shake_system` additive-write ordering hazard (see [[camera-architecture]]) and can chain anywhere in Update.
+
+**The shared-mouse-delta bug:** `camera_orbit_system` (camera.rs:~60-65) reads `mouse_delta` (MouseMotion) and `zoom_delta` (MouseWheel) ONCE, above the `for (..) in &mut camera_query` loop, then applies the same values to EVERY `OrbitCamera` in the loop. `party_camera_follow_system` (~193-229) has the identical structure. Consequence: with 2+ `OrbitCamera`s (split-screen), one shared mouse zooms/orbits/rotates BOTH players' cameras/characters simultaneously. There is no per-viewport mouse partition (OS gives one cursor; `MessageReader` drains one global stream). **The convention-correct fix for split-screen is to disable manual camera control** (fixed-angle auto-follow, like console split-screen games), authored via RON: `zoom_speed: 0.0` (scroll × 0 = no-op, line ~69) + `orbit_button: "None"` (a `(false,false)` arm added to `parse_orbit_button`, camera.rs:244 — currently only Left/Right/Either + warn-default). Also set `character_rotate_button: None` or the `char_rotate` branch (camera.rs:83-89) rotates both bodies off the shared delta. Per-camera input masking is the WRONG tool — the coupling is in the global event stream, not the component.
+
+**`parse_orbit_button` (camera.rs:244):** matches `"Left"`/`"Right"`/`"Either"`, `_` arm warns and defaults `(true,true)`. Adding `"None" => (false,false)` (no warning) is a clean non-breaking additive change.
+
+**The `With<Camera3d>.single()` one-camera-assumption class:** four systems query `With<Camera3d>` and silently degrade (not panic) with 2+ cameras — `world_label_screen_pos_system` (lib.rs:~501), `nameplate.rs:~212` (distance culling), `particle_renderer.rs:~303` (billboard), `targeting.rs:~122` (click-select). All use graceful `.single() else return` / `.iter().find()`. None visible in `local_coop_demo` (uses none of those features). Real limitation for FUTURE split-screen+those-features combos. Document as limitation + one `claude_suggestions.md` entry naming the pattern — NOT four code comments (noise for a not-yet-real problem).
+
+**`Action::CameraShake` behavior change under split-screen:** it queries `With<OrbitCamera>` (`SceneStateParams::orbit_cameras`). The documented "no-ops with `PartyOrbitCamera`" limitation does NOT apply to split-screen, which uses two real `OrbitCamera`s — so shake WOULD fire, on both cameras. A behavior change from the Stage 1 story; make it a documented decision.
+
+**`split` vs `party` must be mutually exclusive** — both authored on player-0's `CameraConfig`. The camera-spawn decision in `spawn_players_and_camera` becomes 3-way: party→one PartyOrbitCamera; split→one OrbitCamera per player; neither→one OrbitCamera on player 0. Warn if both set.
+
+**Bevy 0.18 viewport facts:** `Viewport.physical_position`/`physical_size` are physical-pixel `UVec2`; `Window.width()/height()` are logical — must × `window.scale_factor()` (WASM devicePixelRatio is often ≠ 1.0). Side-by-side non-overlapping viewports do NOT need distinct `Camera.order`. The one thing to smoke-test: whether camera 1 needs `ClearColorConfig::None` to avoid its default whole-target clear wiping camera 0's half. Full-window UI `Camera2d` (order 1000, ClearColorConfig::None, viewport:None) is unaffected by sibling Camera3d viewport rects — renders full-window as its own pass.

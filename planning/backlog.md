@@ -11,7 +11,7 @@
 
 ## Active
 
-_(none)_
+- [ ] **Local Co-op Split-Screen Demo — Stage 3: vertical split-screen scene** — see `planning/features/local_coop_foundation.md`
 
 ---
 
@@ -48,7 +48,7 @@ co-op on one machine — unrelated to and does not depend on the Beta 0.6 LAN ne
 Staged incrementally; each stage ships and is playtested before the next starts.
 - [x] **Stage 1 — foundation: 2-player schema, shared framing camera, view-box clamp** — see `planning/features/local_coop_foundation.md` (stays out of `features/done/` until all 5 stages ship) — `da81799`
 - [x] **Stage 2 — portal/teleport action** — moves both players to the next scene when either enters the portal; needed zero new engine code (existing `TriggerZone`/`LoadScene` mechanics already generalize to N players) — `8181ccd`
-- [ ] **Stage 3 — vertical split-screen scene**
+- [ ] **Stage 3 — vertical split-screen scene** — Active
 - [ ] **Stage 4 — horizontal split-screen scene**
 - [ ] **Stage 5 — dynamic split-screen scene** — viewport boundary follows player positions
 - [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit once Stage 3+ split-screen viewports land. _Dep: Stage 1 (`player_index`)._
