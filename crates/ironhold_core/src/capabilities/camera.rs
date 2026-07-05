@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::camera::Viewport;
 use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
 use crate::runtime::scene_manager::LevelEntity;
@@ -239,6 +240,59 @@ pub fn party_camera_follow_system(
     }
 }
 
+/// Marks a local co-op split-screen camera and which share of the window it owns. Spawned
+/// alongside a normal `OrbitCamera` (not a replacement) by `spawn_players_and_camera` when
+/// `CameraConfig.split` is set — each split-screen camera independently tracks its own player,
+/// exactly like a single-player `OrbitCamera` would, and only needs its `Camera.viewport`
+/// constrained to its share of the window. Orientation is deliberately NOT stored here — see
+/// `ActiveSplitScreen`.
+#[derive(Component)]
+pub struct SplitViewportSlot(pub u32);
+
+/// Recomputes every `SplitViewportSlot` camera's `Camera.viewport` from the current primary
+/// window size and `ActiveSplitScreen`'s orientation. Runs every frame (cheap: at most 2 cameras,
+/// simple arithmetic) rather than hooking window-resize events specifically, so a resize is
+/// always correct on the very next frame with no missed-event risk.
+///
+/// `Viewport.physical_position`/`physical_size` are physical pixels, not logical — reads
+/// `Window::physical_size()` (not `width()`/`height()`, which are logical) so this is correct on
+/// any HiDPI display without doing the `scale_factor()` multiplication by hand.
+pub fn split_screen_viewport_system(
+    active_split: Res<crate::runtime::scene_manager::ActiveSplitScreen>,
+    window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut cameras: Query<(&mut Camera, &SplitViewportSlot)>,
+) {
+    let Some(orientation) = active_split.0 else { return };
+    let Ok(window) = window_q.single() else { return };
+
+    let physical_size = window.physical_size();
+    let physical_width = physical_size.x;
+    let physical_height = physical_size.y;
+
+    for (mut camera, slot) in &mut cameras {
+        let (position, size) = match orientation {
+            crate::schema::player::SplitOrientation::Vertical => {
+                let half_width = physical_width / 2;
+                if slot.0 == 0 {
+                    (UVec2::new(0, 0), UVec2::new(half_width, physical_height))
+                } else {
+                    (
+                        UVec2::new(half_width, 0),
+                        // Remainder (not another half_width) absorbs odd-pixel-width rounding
+                        // so the two halves always sum to the full window width exactly.
+                        UVec2::new(physical_width - half_width, physical_height),
+                    )
+                }
+            }
+        };
+        camera.viewport = Some(Viewport {
+            physical_position: position,
+            physical_size: size.max(UVec2::new(1, 1)),
+            ..default()
+        });
+    }
+}
+
 /// Parse a `CameraConfig.orbit_button` / `character_rotate_button` string into
 /// `(activate_on_lmb, activate_on_rmb)`.
 pub fn parse_orbit_button(s: &str) -> (bool, bool) {
@@ -246,6 +300,10 @@ pub fn parse_orbit_button(s: &str) -> (bool, bool) {
         "Left"   => (true,  false),
         "Right"  => (false, true),
         "Either" => (true,  true),
+        // Explicit opt-out — no warning, this is a real designer choice (e.g. local co-op
+        // split-screen player cameras, where a shared mouse would otherwise orbit/zoom every
+        // player's camera identically).
+        "None"   => (false, false),
         _        => {
             warn!("Unknown orbit button value {:?} — defaulting to Either", s);
             (true, true)
@@ -261,6 +319,12 @@ pub fn parse_strafe_button(s: &str) -> Option<MouseButton> {
 /// Applies and decays a procedural camera shake after `camera_orbit_system` has set the
 /// orbital position. The shake is a deterministic sine-wave offset (no RNG — WASM safe).
 /// Removes `CameraShakeState` when the remaining time reaches zero.
+///
+/// Queries `With<OrbitCamera>`, so in a `split` scene this fires on both per-player
+/// `OrbitCamera`s (unlike `PartyOrbitCamera`, which it silently skips — see the limitation
+/// noted above `PartyOrbitCamera`). Intentional: each split-screen camera is a real independent
+/// `OrbitCamera`, so a shake action shakes whichever camera(s) match its target, exactly like
+/// single-player. See `SplitViewportSlot`.
 pub fn camera_shake_system(
     time: Res<Time>,
     mut commands: Commands,

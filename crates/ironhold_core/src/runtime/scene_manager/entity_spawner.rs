@@ -530,20 +530,54 @@ pub(crate) fn spawn_players_and_camera(
 
     let Some(first) = player_configs.first() else { return };
     if entities.len() < 2 {
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
         return;
     }
 
-    if let Some(party) = &first.camera.party {
+    let split = first.camera.split.as_ref();
+    let party = first.camera.party.as_ref();
+    if split.is_some() && party.is_some() {
+        warn!(
+            "Scene has both `split` and `party` set on the first player's `camera` config — \
+             these are mutually exclusive. Using `split` (the more specific setting) and \
+             ignoring `party`; remove one of the two blocks to silence this warning."
+        );
+    }
+
+    if let Some(split) = split {
+        commands.insert_resource(
+            crate::runtime::scene_manager::ActiveSplitScreen(Some(split.orientation)),
+        );
+        // Only the first two players get a split-screen slot — Stages 4-5 (horizontal/dynamic
+        // split) are also two-way splits; a hypothetical 3rd+ player isn't part of this stage's
+        // scope (the demo project only ever has 2).
+        for (i, (config, entity)) in player_configs.iter().zip(entities.iter()).enumerate().take(2) {
+            let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
+            // Both split cameras render to the same window at Camera's default order (0), which
+            // Bevy's ambiguity detection flags every frame even though non-overlapping viewports
+            // make the render order harmless. Giving each slot a distinct order silences it and
+            // makes the (harmless-but-real) two-passes-per-frame render order explicit/deterministic.
+            commands.entity(camera_entity).insert((
+                crate::capabilities::camera::SplitViewportSlot(i as u32),
+                Camera {
+                    order: i as isize,
+                    ..default()
+                },
+            ));
+        }
+    } else if let Some(party) = party {
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         crate::capabilities::camera::spawn_party_orbit_camera(
             commands, tonemapping, &first.camera, party, &entities,
         );
     } else {
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         warn!(
-            "Scene has {} players but no `party` camera block on the first player's `camera` \
-             config — falling back to a single OrbitCamera targeting only the first player. \
-             Add a `party: (zoom_margin: ...)` block to the first player's camera config to \
-             get a shared local co-op camera instead.",
+            "Scene has {} players but no `party` or `split` camera block on the first player's \
+             `camera` config — falling back to a single OrbitCamera targeting only the first \
+             player. Add a `party: (zoom_margin: ...)` or `split: (orientation: Vertical)` block \
+             to the first player's camera config to get a shared or split local co-op camera.",
             entities.len()
         );
         spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
@@ -676,12 +710,15 @@ fn spawn_player_entity_core(
 /// Spawns a single-target `OrbitCamera` following `player_entity`, per `player_config.camera`.
 /// Factored out of `spawn_player_entity` so `spawn_players_and_camera`'s single-player
 /// fallback path can reuse it without duplicating the field mapping.
+/// Returns the spawned camera entity so callers needing to attach extra components (e.g.
+/// `SplitViewportSlot` for local co-op split-screen) can do so without this function needing to
+/// know about them.
 fn spawn_orbit_camera_for_player(
     commands: &mut Commands,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     player_config: &PlayerConfig,
     player_entity: Entity,
-) {
+) -> Entity {
     let cam = &player_config.camera;
     let (orbit_lmb, orbit_rmb) = crate::capabilities::camera::parse_orbit_button(&cam.orbit_button);
     let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
@@ -715,7 +752,7 @@ fn spawn_orbit_camera_for_player(
             character_rotate_lmb: char_rot_lmb,
             character_rotate_rmb: char_rot_rmb,
         },
-    ));
+    )).id()
 }
 
 pub(crate) fn default_camera_config() -> CameraConfig {
@@ -733,6 +770,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         initial_pitch: 0.5,
         initial_yaw: 0.0,
         party: None,
+        split: None,
     }
 }
 

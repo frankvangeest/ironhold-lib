@@ -2,12 +2,16 @@ use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, GameEvent};
+use bevy::window::PrimaryWindow;
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, GameEvent};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
-use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, InputMap};
+use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, InputMap};
 use ironhold_core::capabilities::player::{CharacterController, player_view_box_clamp_system};
-use ironhold_core::capabilities::camera::{OrbitCamera, PartyOrbitCamera, party_camera_follow_system};
+use ironhold_core::capabilities::camera::{
+    OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
+    SplitViewportSlot, split_screen_viewport_system, parse_orbit_button,
+};
 use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
 
 mod support;
@@ -50,6 +54,7 @@ fn base_camera_config() -> CameraConfig {
         initial_pitch: 0.5,
         initial_yaw: 0.0,
         party: None,
+        split: None,
     }
 }
 
@@ -206,6 +211,14 @@ fn test_view_box_system_is_noop_when_no_box_configured() {
 // ── Scene-load level: two-player spawn + shared/fallback camera ────────────────
 
 fn two_player_catalogs(app: &mut App, party: Option<PartyZoomDef>) {
+    two_player_catalogs_with_split(app, party, None);
+}
+
+fn two_player_catalogs_with_split(
+    app: &mut App,
+    party: Option<PartyZoomDef>,
+    split: Option<SplitScreenDef>,
+) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         models: std::collections::HashMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
@@ -216,6 +229,7 @@ fn two_player_catalogs(app: &mut App, party: Option<PartyZoomDef>) {
 
     let mut p1_camera = base_camera_config();
     p1_camera.party = party;
+    p1_camera.split = split;
 
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
         prefabs: std::collections::HashMap::from([
@@ -401,4 +415,159 @@ fn test_trigger_zone_ignores_non_player_entities() {
         .iter_current_update_messages()
         .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.entered:portal_to_room2"));
     assert!(!fired, "a non-player entity colliding with the zone must not fire entity.entered");
+}
+
+// ── Stage 3: split_screen_viewport_system ───────────────────────────────────────
+
+/// Spawns a `Window` tagged `PrimaryWindow` with the given PHYSICAL pixel size and an optional
+/// scale factor override — `WindowResolution` stores physical pixels as its source of truth and
+/// derives logical `width()`/`height()` by dividing by `scale_factor()`; `physical_size()`
+/// (what `split_screen_viewport_system` reads) is exactly `(physical_width, physical_height)`
+/// regardless of the scale factor. `setup_test_app()` uses `MinimalPlugins`, which spawns no
+/// window at all, so tests exercising the viewport system need one manually.
+fn spawn_primary_window(app: &mut App, physical_width: u32, physical_height: u32, scale_factor_override: f32) {
+    use bevy::window::{Window, WindowResolution};
+    app.world_mut().spawn((
+        Window {
+            resolution: WindowResolution::new(physical_width, physical_height)
+                .with_scale_factor_override(scale_factor_override),
+            ..default()
+        },
+        PrimaryWindow,
+    ));
+}
+
+#[test]
+fn test_split_screen_viewport_halves_window_vertically() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+    let cam1 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(1))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp0 = app.world().get::<Camera>(cam0).unwrap().viewport.clone().unwrap();
+    let vp1 = app.world().get::<Camera>(cam1).unwrap().viewport.clone().unwrap();
+
+    assert_eq!(vp0.physical_position, UVec2::new(0, 0));
+    assert_eq!(vp0.physical_size, UVec2::new(640, 720));
+    assert_eq!(vp1.physical_position, UVec2::new(640, 0));
+    assert_eq!(vp1.physical_size, UVec2::new(640, 720));
+}
+
+#[test]
+fn test_split_screen_viewport_absorbs_odd_width_remainder() {
+    let mut app = setup_test_app();
+    app.update();
+    // Odd physical width — the two halves must still sum to exactly the full window width.
+    spawn_primary_window(&mut app, 1281, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+    let cam1 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(1))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp0 = app.world().get::<Camera>(cam0).unwrap().viewport.clone().unwrap();
+    let vp1 = app.world().get::<Camera>(cam1).unwrap().viewport.clone().unwrap();
+
+    assert_eq!(vp0.physical_size.x + vp1.physical_size.x, 1281, "halves must sum to the full physical width");
+    assert_eq!(vp0.physical_size.x, 640);
+    assert_eq!(vp1.physical_size.x, 641, "remainder pixel goes to the second half, not dropped");
+}
+
+#[test]
+fn test_split_screen_viewport_unaffected_by_scale_factor_override() {
+    let mut app = setup_test_app();
+    app.update();
+    // Same physical size as test_split_screen_viewport_halves_window_vertically but with a 2x
+    // scale factor override — must produce the IDENTICAL viewport split. This locks in reading
+    // `Window::physical_size()` directly: if a future change swapped that for
+    // `width()`/`height()` (logical) * `scale_factor()` by hand and got the multiplication
+    // backwards or forgot it entirely, this test would catch the resulting HiDPI regression.
+    spawn_primary_window(&mut app, 1280, 720, 2.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+    let cam1 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(1))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp0 = app.world().get::<Camera>(cam0).unwrap().viewport.clone().unwrap();
+    let vp1 = app.world().get::<Camera>(cam1).unwrap().viewport.clone().unwrap();
+
+    assert_eq!(vp0.physical_size, UVec2::new(640, 720));
+    assert_eq!(vp1.physical_position, UVec2::new(640, 0));
+    assert_eq!(vp1.physical_size, UVec2::new(640, 720));
+}
+
+#[test]
+fn test_split_screen_viewport_system_is_noop_when_no_split_active() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    // ActiveSplitScreen defaults to None via init_resource — no explicit insert needed.
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    assert!(
+        app.world().get::<Camera>(cam0).unwrap().viewport.is_none(),
+        "no ActiveSplitScreen orientation set means the system must not touch Camera.viewport"
+    );
+}
+
+#[test]
+fn test_parse_orbit_button_none_disables_both_mouse_buttons() {
+    assert_eq!(parse_orbit_button("None"), (false, false));
+}
+
+// ── Stage 3: split + party mutual exclusion ─────────────────────────────────────
+
+#[test]
+fn test_split_and_party_both_set_split_wins() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        Some(PartyZoomDef { zoom_margin: 4.0, allow_manual_zoom: false }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical }),
+    );
+    load_two_player_scene(&mut app);
+
+    let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
+    assert_eq!(controller_count, 2, "both players still spawn regardless of the conflicting config");
+
+    let party_cam_count = app.world_mut().query::<&PartyOrbitCamera>().iter(app.world()).count();
+    assert_eq!(party_cam_count, 0, "party must NOT spawn when split is also set");
+
+    let split_slot_count = app.world_mut().query::<&SplitViewportSlot>().iter(app.world()).count();
+    assert_eq!(split_slot_count, 2, "split wins: one SplitViewportSlot camera per player");
+
+    let orbit_cam_count = app.world_mut().query::<&OrbitCamera>().iter(app.world()).count();
+    assert_eq!(orbit_cam_count, 2, "split spawns two real OrbitCameras, not a fallback single one");
+}
+
+#[test]
+fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical }),
+    );
+    load_two_player_scene(&mut app);
+
+    let slots: Vec<u32> = {
+        let mut query = app.world_mut().query::<&SplitViewportSlot>();
+        query.iter(app.world()).map(|s| s.0).collect()
+    };
+    let mut sorted = slots.clone();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1], "expected exactly one slot 0 and one slot 1, got {:?}", slots);
 }

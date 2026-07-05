@@ -74,8 +74,17 @@ pub struct CameraConfig {
     /// players instead of each getting their own `OrbitCamera`. Absent on a 2+ player scene
     /// logs a warning and falls back to a single-player camera on the first player only —
     /// never silently spawns competing per-player cameras. Meaningless for single-player scenes.
+    /// Mutually exclusive with `split` — if both are set on the first player, `split` wins and a
+    /// warning is logged.
     #[serde(default)]
     pub party: Option<PartyZoomDef>,
+    /// Local co-op only: like `party`, read from the *first* player only. When set (and 2+
+    /// players are present), spawns one real `OrbitCamera` per player, each rendering to its own
+    /// share of the window (`SplitScreenDef.orientation`) instead of a single shared
+    /// `PartyOrbitCamera`. Mutually exclusive with `party` — if both are set, `split` wins and a
+    /// warning is logged.
+    #[serde(default)]
+    pub split: Option<SplitScreenDef>,
 }
 
 /// Local co-op shared-camera zoom behavior, authored on the first player's `camera.party`.
@@ -90,6 +99,21 @@ pub struct PartyZoomDef {
     /// no player-controlled override fighting it.
     #[serde(default)]
     pub allow_manual_zoom: bool,
+}
+
+/// Local co-op split-screen configuration, authored on the first player's `camera.split`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct SplitScreenDef {
+    pub orientation: SplitOrientation,
+}
+
+/// How the window is divided between local co-op players' individual cameras.
+/// `Horizontal` and `Dynamic` are reserved for later stages of the same feature — only
+/// `Vertical` is implemented today.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitOrientation {
+    /// Left half / right half, split down the middle.
+    Vertical,
 }
 
 fn default_min_pitch() -> f32 { 0.1 }

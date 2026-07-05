@@ -153,6 +153,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedTargetIndicator>()
             .init_resource::<crate::runtime::scene_manager::ActiveViewBox>()
+            .init_resource::<crate::runtime::scene_manager::ActiveSplitScreen>()
             .init_resource::<crate::capabilities::nameplate::NameplateSceneConfig>()
             .init_resource::<crate::capabilities::nameplate::PlayerNameplatePreference>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()
@@ -288,6 +289,7 @@ impl Plugin for GamePlugin {
                 animation_resolver_system,
                 camera_orbit_system,
                 party_camera_follow_system,
+                split_screen_viewport_system,
                 camera_shake_system,
                 fly_camera_system,
                 animation_playback_system,

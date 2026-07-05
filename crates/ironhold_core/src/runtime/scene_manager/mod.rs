@@ -131,6 +131,17 @@ pub struct LoadedTargetIndicator(pub Option<ResolvedTargetIndicator>);
 #[derive(Resource, Default)]
 pub struct ActiveViewBox(pub Option<(f32, f32, f32, f32)>);
 
+/// Active local co-op split-screen orientation for the current scene, resolved from the first
+/// player's `CameraConfig.split`. `None` means no split-screen — `split_screen_viewport_system`
+/// early-exits silently. Populated by `spawn_players_and_camera` (the same function that decides
+/// party vs. split vs. single-camera fallback, so that decision lives in exactly one place);
+/// cleared on full `LoadScene` as a safety net for scenes with 0-1 players that never call it.
+/// Deliberately a resource rather than a field on `SplitViewportSlot`/`OrbitCamera` — keeps
+/// split-screen state out of the camera components so the planned `camera_modes` unification
+/// doesn't have to untangle it later.
+#[derive(Resource, Default)]
+pub struct ActiveSplitScreen(pub Option<crate::schema::player::SplitOrientation>);
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,

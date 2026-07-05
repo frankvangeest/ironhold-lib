@@ -1,9 +1,39 @@
 ---
 name: local-coop-pattern
-description: Local co-op Stage 1 — PartyOrbitCamera, gamepad routing, view-box clamp; the four player-construction sites and the player_index dead-field footgun
+description: Local co-op Stages 1+3 — PartyOrbitCamera, split-screen viewport, gamepad routing, view-box clamp; four player-construction sites, player_index dead-field footgun, split-vs-party per-player-config asymmetry
 metadata:
   type: project
 ---
+
+**STAGE 3 — vertical split-screen (reviewed 2026-07-05, ALIGNED, uncommitted at review time):**
+- `CameraConfig.split: Option<SplitScreenDef{orientation: SplitOrientation}>` (schema/player.rs).
+  `SplitOrientation` enum has ONLY `Vertical` today (`Horizontal`/`Dynamic` reserved for Stages 4-5,
+  intentionally NOT added yet — a `deny_unknown_fields`-free enum, so a RON `Horizontal` would be a
+  clean parse error, not silent). Fully `#[derive(Deserialize)]`, `#[serde(default)]` on `split`.
+- `split_screen_viewport_system` (capabilities/camera.rs) touches ONLY `Camera.viewport`; reads
+  `ActiveSplitScreen` resource + primary `Window::physical_size()`. NO ActionQueue, no gameplay
+  reach-over. Correct. Runs in Update alongside camera_orbit/party_camera_follow (lib.rs).
+- `ActiveSplitScreen(Option<SplitOrientation>)` resource (scene_manager/mod.rs) — mirrors ActiveViewBox
+  EXACTLY: init_resource in lib.rs, set by spawn_players_and_camera, cleared on Action::LoadScene
+  (action_executor.rs). Orientation kept OFF the SplitViewportSlot component deliberately (camera_modes
+  unification hygiene).
+- `parse_orbit_button` "None" arm → `(false, false)`, NO warning (distinct from unknown string, which
+  warns+defaults "Either"). Genuine designer opt-out.
+- split+party both set: `spawn_players_and_camera` warns and `split` wins (entity_spawner.rs ~540).
+  Pure warn+precedence, no demo-specific hardcoding. Data-driven.
+
+**CRITICAL ASYMMETRY (footgun to flag on any co-op camera review):** `party` reads ONLY the first
+player's full camera block; later players' camera fields are ignored. `split` is the OPPOSITE — it
+spawns one real OrbitCamera PER player from THAT player's OWN camera block (only `split`/`party`
+themselves are first-player-only). So split-screen requires `zoom_speed: 0.0` + `orbit_button: "None"`
+on EVERY player's camera block, not just the first — omit it on player 2 and a shared mouse
+orbits/zooms both cameras together. local_coop_demo's prefabs.ron documents this inline on both
+player_p1_split (196/200) and player_p2_split (238/242). If reviewing a new split scene, verify every
+player prefab has these two knobs, not just player 1.
+
+**Known accepted split-screen limitations (documented in src/CLAUDE.md, not bugs):** CameraShake now
+fires on BOTH split cameras (real OrbitCameras); world_label/nameplate/particle_renderer/targeting all
+assume one Camera3d and silently pick/no-op one — none affect local_coop_demo (uses none of them).
 
 Local co-op (same-machine 2-player) extends the player-spawn pipeline. See
 [[player_spawn_via_action_pattern]] for the base Action::Spawn player promotion.

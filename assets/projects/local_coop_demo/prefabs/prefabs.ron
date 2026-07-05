@@ -31,6 +31,20 @@
       ),
     ),
 
+    // Room 3's ground — warm/amber tone, matching the orange portal_to_room3 accent.
+    "ground_room3": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.36, 0.30, 0.20),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
     // ── Portals ────────────────────────────────────────────────────────────────
     // Stage 2: TriggerZone (radius 1.5) fires entity.entered:{id} -> rules.ron -> LoadScene.
     // trigger_zone_system fires for ANY CharacterController entity that enters, so either
@@ -61,6 +75,23 @@
         ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.72, 0.68, 0.62), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.65, 0.62, 0.58), roughness: 0.88), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.28, 0.82), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // room2 -> room3 (Stage 3, vertical split). The return trip reuses the existing
+    // "portal_to_room2" prefab placed a second time in room3.scene.ron — same event name
+    // ("entity.entered:portal_to_room2"), same rules.ron entry, no new prefab needed for that
+    // direction.
+    "portal_to_room3": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.30, 0.20, 0.10), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.30, 0.20, 0.10), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.24, 0.16, 0.08), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (1.0, 0.55, 0.15), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -136,6 +167,90 @@
           run:          "ShiftRight",
           strafe_mouse_button: None,
           // gamepad_index: 1,  // uncomment for controller co-op (see player_p1's inputs comment)
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    // ── Stage 3: vertical split-screen player prefabs ───────────────────────────
+    // Split-screen gives each player their own real OrbitCamera (see spawn_players_and_camera's
+    // `split` branch), so — unlike party mode — EVERY player's own `camera` block matters, not
+    // just the first's. Both cameras here disable manual control entirely: `zoom_speed: 0.0`
+    // (scroll x 0 has no effect) and `orbit_button: "None"` (new parse_orbit_button arm). One
+    // shared mouse would otherwise rotate/zoom both players' cameras together — see the Stage 3
+    // plan's "Research findings" for why disabling is the fix, not per-camera input masking.
+    "player_p1_split": (
+      kind: Actor,
+      model: "character_male",
+      display_name: "Player 1",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 0,
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+          // Sole switch for split-screen — read only from this (the first) player.
+          split: (
+            orientation: Vertical,
+          ),
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          strafe_mouse_button: None,
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    "player_p2_split": (
+      kind: Actor,
+      model: "character_female",
+      display_name: "Player 2",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 1,
+      components: (
+        tags: ["player"],
+        // No `split`/`party` here — only the first player's camera block is read for those.
+        // The rest of this camera block (fixed distance, no manual control) DOES still apply,
+        // since split-screen spawns one real camera per player from their OWN config.
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+        ),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
         ),
         movement: (
           walk_speed: 5.0,

@@ -365,16 +365,22 @@ split-rect formula."
   (`With<OrbitCamera>`) will fire on **both** cameras once this ships — a real behavior change from
   Stage 1's "shake no-ops with the party camera" story. Documenting this as an intentional
   consequence of using real `OrbitCamera`s for split-screen, not an accident to fix later.
-- **Prototype-first risk reduction**: the one genuinely-unverified Bevy behavior is whether a
-  second camera's default clear wipes the first camera's already-rendered viewport half. Spike
-  this with two hardcoded `Camera3d` + `Viewport` rects before writing the RON schema — cheap,
-  de-risks the whole stage early rather than discovering a rendering-model problem mid-build.
+- **Resolved without a runtime spike, by reading Bevy's actual source**: the one
+  system-architect-flagged unverified behavior — does a second camera's clear wipe the first
+  camera's already-rendered viewport half? — is answered definitively by
+  `bevy_render::texture::texture_attachment::ColorAttachment` (`bevy_render-0.18.0/src/texture/texture_attachment.rs:12-32`).
+  Cameras targeting the same window with matching HDR/MSAA settings share one cached texture
+  (`bevy_render-0.18.0/src/view/mod.rs:1104-1105`'s `textures.entry((camera.target, texture_usage,
+  hdr, msaa))`), and that shared `ColorAttachment` carries an `is_first_call: Arc<AtomicBool>`
+  that `get_attachment()` flips to `false` on first use (`texture_attachment.rs:40-49`) — so
+  **only the first camera to render each frame actually clears (`LoadOp::Clear`); every later
+  camera targeting the same texture gets `LoadOp::Load` automatically, regardless of its own
+  `ClearColorConfig`.** Combined with each camera's `viewport` restricting where it draws, this is
+  exactly the correct split-screen behavior with zero extra code — no `ClearColorConfig::None`
+  workaround needed on the second camera, no spike required. No open risk here anymore.
 
 ### Approach
 
-- **Spike first** (throwaway code, deleted once confirmed): hardcode two `Camera3d` entities with
-  fixed, non-overlapping `Viewport` rects, confirm both halves render correctly with default
-  `ClearColorConfig` — no wipe-out — before committing to the RON schema below.
 - New RON type `SplitScreenDef { orientation: SplitOrientation }`, with `SplitOrientation::Vertical`
   the only variant Stage 3 implements. Introducing the enum now (rather than a Stage-3-only ad hoc
   field) is deliberate: Stage 4 adds `Horizontal` and Stage 5 adds `Dynamic` as new variants of
@@ -413,36 +419,54 @@ split-rect formula."
   mechanic in isolation.
 
 ### Tasks
-- [ ] Spike: two hardcoded `Camera3d` + `Viewport` entities, confirm no clear-wipe issue between
-      halves (throwaway, delete once confirmed)
-- [ ] `SplitOrientation` enum (`Vertical` only for now) + `SplitScreenDef { orientation }` +
+- [x] Verify no clear-wipe issue between viewport halves — resolved by reading Bevy's
+      `ColorAttachment` source (see Research findings above), no runtime spike needed
+- [x] `SplitOrientation` enum (`Vertical` only for now) + `SplitScreenDef { orientation }` +
       `CameraConfig.split: Option<SplitScreenDef>`; warn-and-`split`-wins if `party` is also set
-- [ ] `SplitViewportSlot(u32)` component + `ActiveSplitScreen(Option<SplitOrientation>)` resource
-      (populate on scene load, clear on `LoadScene`, mirroring `ActiveViewBox`)
-- [ ] `spawn_players_and_camera`: third branch — when `split` is set, spawn two per-player cameras
+- [x] `SplitViewportSlot(u32)` component + `ActiveSplitScreen(Option<SplitOrientation>)` resource
+      (populated by `spawn_players_and_camera`, not `spawn_scene_v2` as originally planned — see
+      that function's own decision of party vs. split vs. fallback; cleared on `LoadScene`)
+- [x] `spawn_players_and_camera`: third branch — when `split` is set, spawn two per-player cameras
       and tag each with `SplitViewportSlot`
-- [ ] `split_screen_viewport_system`: recompute `Camera.viewport` every frame from window size
-      (physical pixels via `scale_factor()`) + `ActiveSplitScreen`'s orientation
-- [ ] `parse_orbit_button`: add `"None"` arm → `(false, false)`, no warning
-- [ ] `local_coop_demo`: new `scenes/room3.scene.ron` (vertical split, `zoom_speed: 0.0` +
-      `orbit_button: "None"` on both player cameras), portal `room2` → `room3` + return portal
-- [ ] Tests: `split_screen_viewport_system` produces correct non-overlapping physical-pixel
-      viewport rects across a couple of window sizes/scale factors; `ActiveSplitScreen`
-      populate/clear lifecycle; `parse_orbit_button("None")` returns `(false, false)`;
-      `split`+`party`-both-set warning fires and `split` wins
-- [ ] Document the `CameraShake`-now-fires-on-both-cameras behavior change (`camera.rs` +
+- [x] `split_screen_viewport_system`: recompute `Camera.viewport` every frame from
+      `Window::physical_size()` (already physical pixels — simpler than the planned
+      `width()`/`height()` × `scale_factor()` multiplication) + `ActiveSplitScreen`'s orientation
+- [x] `parse_orbit_button`: add `"None"` arm → `(false, false)`, no warning
+- [x] `local_coop_demo`: new `scenes/room3.scene.ron` (vertical split, `zoom_speed: 0.0` +
+      `orbit_button: "None"` on both player cameras via new `player_p1_split`/`player_p2_split`
+      prefabs), portal `room2` → `room3` (new `portal_to_room3` prefab) + return portal (reuses
+      the existing `portal_to_room2` prefab — same event name, no new prefab needed for the
+      return trip)
+- [x] Tests (7 new, `local_coop_tests.rs`): `split_screen_viewport_system` produces correct
+      non-overlapping physical-pixel viewport rects (even width, odd width, and a regression test
+      proving `scale_factor_override` doesn't perturb the result since `physical_size()` is read
+      directly); no-op when no split active; `ActiveSplitScreen` lifecycle; `parse_orbit_button`
+      `"None"`; `split`+`party`-both-set warns and `split` wins; split spawns exactly one
+      `SplitViewportSlot(0)` + one `SplitViewportSlot(1)`
+- [x] Document the `CameraShake`-now-fires-on-both-cameras behavior change (`camera.rs` +
       `crates/ironhold_core/src/CLAUDE.md`)
-- [ ] Log the four `With<Camera3d>` "silently picks/ignores one camera" sites in
-      `claude_suggestions.md` (no in-code marker today, unlike `CameraShake`'s documented one)
-- [ ] Update the `camera_modes` Icebox backlog note — split-screen is now a fourth thing that
-      unification will eventually need to account for (after `OrbitCamera`, `FlyCamera`,
-      `PartyOrbitCamera`)
-- [ ] Full review gate applies this time (unlike Stage 2): alignment, architecture, and
-      wasm-perf-reviewer, since this touches Rust/schema and a new per-frame system
-- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md` updates for the new
+- [x] Log the four `With<Camera3d>` "silently picks/ignores one camera" sites in
+      `claude_suggestions.md` (no in-code marker today, unlike `CameraShake`'s documented one) —
+      done during planning, before implementation
+- [x] Update the `camera_modes` Icebox/Queued backlog note — split-screen's `SplitViewportSlot`/
+      `ActiveSplitScreen` noted as a fourth thing that unification will eventually need to
+      account for (after `OrbitCamera`, `FlyCamera`, `PartyOrbitCamera`)
+- [x] Full review gate applies this time (unlike Stage 2): alignment, architecture, and
+      wasm-perf-reviewer, since this touches Rust/schema and a new per-frame system. Alignment:
+      ALIGNED, no blockers. Wasm-perf: OK, no regressions (one explicitly-non-blocking nit on
+      guarding the per-frame `Camera.viewport` write, declined as premature optimization for a
+      2-camera demo). Architecture: no Critical/Major issues; two Minor nits — CameraShake's
+      fires-on-both-cameras behavior now documented at the `camera_shake_system` code site (not
+      just CLAUDE.md), and `SplitViewportSlot`'s implicit binary (0/1) assumption flagged as a
+      latent constraint for Stage 4/5's N-way split, not Stage 3
+- [x] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md` updates for the new
       fields/resource/system
-- [ ] WASM dev + release build (this stage DOES need a rebuild, unlike Stage 2), playtest
-      checklist, Frank confirmation
+- [x] WASM dev + release build (this stage DOES need a rebuild, unlike Stage 2), playtest
+      checklist, Frank confirmation. Dev playtest surfaced a real bug (Bevy's camera-order-
+      ambiguity warning spamming the console, since both split cameras defaulted to
+      `Camera.order = 0`) — fixed by giving each split slot a distinct explicit order
+      (`entity_spawner.rs`), re-verified via alignment review + full test suite + a second dev
+      playtest, then the release build was confirmed clean (58 MB, no console errors)
 
 ### Open questions
 - Is "fully fixed camera, no manual control at all" the right UX for Stage 3, or should

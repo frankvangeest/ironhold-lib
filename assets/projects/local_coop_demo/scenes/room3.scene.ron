@@ -1,15 +1,15 @@
 (
   schema_version: 2,
-  name: "room2",
+  name: "room3",
 
   tonemapping: AcesFitted,
 
-  // Cooler tone than main.scene.ron so the teleport reads visually, not just via console log.
+  // Warm/amber tone, matching the orange portal_to_room3 accent and ground_room3.
   lighting: (
-    ambient: (0.18, 0.20, 0.30),
+    ambient: (0.26, 0.22, 0.16),
     ambient_brightness: 220.0,
     directional: (
-      color: (0.85, 0.90, 1.0),
+      color: (1.0, 0.90, 0.70),
       intensity: 28000.0,
       rotation_euler_deg: (-42.0, 30.0, 0.0),
       shadows_enabled: true,
@@ -21,15 +21,14 @@
     "player_2_start": (4.0, 0.5, 0.0),
   },
 
-  // Same shape as main.scene.ron's clamp — Stage 2 only proves the portal mechanic, no new
-  // camera/view-box behavior. Tuple order is (min_x, min_z, max_x, max_z).
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
   max_view_box: (-20.0, -20.0, 20.0, 20.0),
 
   entities: [
 
     (
       id: "ground",
-      prefab: "ground_room2",
+      prefab: "ground_room3",
       transform: (
         translation: (0.0, -0.5, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -37,11 +36,13 @@
       ),
     ),
 
-    // player_p1 MUST be first — see main.scene.ron's comment; same rule applies in every
-    // local co-op scene.
+    // player_p1_split MUST be first — its `camera.split` block is the sole switch for
+    // vertical split-screen (same "first player wins" rule as `party` in the other rooms).
+    // Unlike `party` scenes, BOTH players' own `camera` blocks matter here — each gets a real,
+    // independent OrbitCamera from their own config, not just the first player's.
     (
       id: "player_01",
-      prefab: "player_p1",
+      prefab: "player_p1_split",
       transform: (
         translation: (-4.0, 0.5, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -51,7 +52,7 @@
 
     (
       id: "player_02",
-      prefab: "player_p2",
+      prefab: "player_p2_split",
       transform: (
         translation: (4.0, 0.5, 0.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
@@ -59,23 +60,13 @@
       ),
     ),
 
-    // entity.entered:portal_to_room1 -> logic/rules.ron -> LoadScene(main).
+    // Return trip reuses the "portal_to_room2" prefab (see prefabs.ron comment) — same event
+    // name as room1's forward portal, same rules.ron entry, no new prefab needed.
     (
-      id: "portal_to_room1",
-      prefab: "portal_to_room1",
+      id: "portal_to_room2",
+      prefab: "portal_to_room2",
       transform: (
         translation: (0.0, 0.0, -15.0),
-        rotation_euler_deg: (0.0, 0.0, 0.0),
-        scale: (1.0, 1.0, 1.0),
-      ),
-    ),
-
-    // entity.entered:portal_to_room3 -> logic/rules.ron -> LoadScene(room3) — Stage 3.
-    (
-      id: "portal_to_room3",
-      prefab: "portal_to_room3",
-      transform: (
-        translation: (0.0, 0.0, 15.0),
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
@@ -84,8 +75,6 @@
   ],
 
   ui: [
-    // See main.scene.ron's comment — Label boxes don't clip overflow, so width must be wide
-    // enough at the fixed 22px UI font to avoid wrapping into the label below.
     Label((
       id: "controls_hint",
       text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift",
@@ -94,9 +83,9 @@
     )),
     Label((
       id: "room_hint",
-      text: "Violet portal -> room 1 | Orange portal -> room 3",
+      text: "Room 3 — vertical split screen. Blue portal returns to room 2.",
       position: (20.0, 64.0),
-      size: (700.0, 32.0),
+      size: (900.0, 32.0),
     )),
   ],
 )

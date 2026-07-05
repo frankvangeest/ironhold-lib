@@ -1657,13 +1657,18 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |
 | `min_pitch` | `f32` | `0.1` | Minimum pitch in radians (looking up limit) |
 | `max_pitch` | `f32` | `0.9` | Maximum pitch in radians (looking down limit) |
-| `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, or `"Either"` |
+| `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, `"Either"`, or `"None"` to disable manual mouse-orbit entirely (fixed-angle auto-follow only). See the `"None"` note below. |
 | `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable |
 | `initial_pitch` | `f32` | `0.5` | Camera pitch at scene start in radians |
 | `initial_yaw` | `f32` | `0.0` | Camera yaw at scene start in radians |
-| `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. |
+| `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. Mutually exclusive with `split` — see below. |
+| `split` | `Option<SplitScreenDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list. When the scene has 2+ players and this is set, the engine gives every player their own real camera, each locked to its own half of the window, instead of one shared camera. See [Split-screen camera](#split-screen-camera-splitscreendef-) below. Mutually exclusive with `party` — see below. |
 
-> **2+ players without a `party` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party` is unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to the shared camera explicitly.
+> **2+ players without a `party` or `split` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party`/`camera.split` are both unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to a shared or split camera explicitly.
+
+> **`party` and `split` are mutually exclusive.** Both are read only from the first player's `camera` block. If a designer sets both by mistake, the engine logs a warning and `split` wins (treated as the more specific/newer setting) — it does not silently pick one with no signal.
+
+> **`orbit_button: "None"`** — unlike an actually-unrecognized string (which warns and falls back to `"Either"`), `"None"` is a deliberate, silent opt-out: no left-click or right-click binding at all. This exists for local co-op split-screen player cameras, where a single shared mouse would otherwise rotate/zoom every player's camera identically. Split-screen scenes typically pair this with `zoom_speed: 0.0` (scroll × 0 has no effect) on every player's `camera` block, giving each player a fully fixed, auto-follow-only camera.
 
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
@@ -1736,6 +1741,92 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.part
 ```
 
 A full working example lives in `assets/projects/local_coop_demo/`.
+
+### Split-screen camera (`SplitScreenDef`) ✅
+
+This is **local, same-machine co-op** — same scope note as the shared party camera above: unrelated to (and does not require) networked multiplayer.
+
+For local co-op scenes with two or more `"player"`-tagged entities, `camera.split` on the **first** player switches from "one shared camera framing everyone" to **one real camera per player**, each locked to its own rectangle of the window. Unlike `party`, split-screen does not derive a shared midpoint/zoom — every player gets a fully independent `OrbitCamera` built from their **own** `camera` block, so `offset`, `zoom_speed`, `orbit_button`, etc. need to be authored correctly on **every** player's prefab, not just player 1's. Only the `split` switch field itself is read exclusively from the first player.
+
+**`SplitScreenDef` fields** (`components.camera.split`, authored on the first player only):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `orientation` | `SplitOrientation` | required | How the window is divided between players. Currently only `Vertical` (left half / right half) is implemented — more variants are planned for later stages of this feature, so treat this as a growing list, not a fixed pair. |
+
+**`SplitOrientation` variants:**
+- `Vertical` — the window is split down the middle into a left half and a right half, one player per half. Recomputed every frame from the window's actual size, so it stays correct across resizes and on HiDPI displays.
+- More variants (e.g. horizontal top/bottom, a dynamic split that follows player positions) are planned but not yet implemented — do not author anything other than `Vertical` today.
+
+> **Only the first `"player"`-tagged entity's `split` block is read.** Same rule as `party` — if you author `split` on the second (or later) player instead of the first, it is silently ignored. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
+
+> **`split` and `party` are mutually exclusive.** If both are set on the first player's `camera` block by mistake, the engine logs a warning and `split` wins.
+
+> **Every player's own `camera` block matters here — not just the first player's.** With `party`, only player 1's `camera` fields (besides `party` itself) are used, because there is only one shared camera. With `split`, each player gets their own real `OrbitCamera` built from their own config, so `offset`, `look_at_offset`, `zoom_speed`, `min_radius`/`max_radius`, `orbit_button`, etc. must be set on **every** player's `camera` block. Only `split` (and `party`) themselves stay first-player-only.
+
+> **Disabling manual camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above) and `zoom_speed: 0.0` on **every** player's `camera` block, giving each player a fixed-angle, auto-follow-only camera at their configured offset.
+
+**Example** — two-player scene with a vertical split, both cameras fixed (no manual mouse control):
+
+```ron
+// prefabs/prefabs.ron
+"player_p1_split": (
+  kind: Actor,
+  model: "character_male",
+  display_name: "Player 1",
+  player_index: 0,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+      // Sole switch for split-screen — read only from this (the first) player.
+      split: (
+        orientation: Vertical,
+      ),
+    ),
+    inputs: (
+      forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+
+// player_p2_split — no `split`/`party` here (only the first player's is read for those),
+// but its OWN camera block still fully matters: split-screen spawns one real camera per
+// player from their own config, unlike `party`'s single shared camera.
+"player_p2_split": (
+  kind: Actor,
+  model: "character_female",
+  display_name: "Player 2",
+  player_index: 1,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+    ),
+    inputs: (
+      forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
+      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+```
+
+A full working example lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` (`player_p1_split`/`player_p2_split`) and `scenes/room3.scene.ron`.
 
 ### NPC behaviour (`components.npc`) ✅
 

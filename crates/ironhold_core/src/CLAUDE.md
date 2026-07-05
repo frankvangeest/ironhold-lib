@@ -303,26 +303,59 @@ Sites 1 and 3 both hand-assemble a `PlayerConfig` — routed through the shared
 uses `gamepad_index`, camera targeting uses scene entity order), but it's a real ECS fact a
 future per-player system (nameplate/HUD labeling) can query without another schema pass.
 
-### Local co-op: shared camera, gamepad routing, view-box clamp
+### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 
 **`PartyOrbitCamera`** (`capabilities/camera.rs`) is a sibling to `OrbitCamera`, not a
 replacement — single-player scenes are untouched. When a scene has 2+ `tags: ["player"]`
 entities, `spawn_players_and_camera` reads the **first** player's `CameraConfig.party:
-Option<PartyZoomDef>` as the sole, explicit switch:
+Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the explicit switches
+(mutually exclusive — if both are set, `split` wins and a warning is logged):
 - `party` set → spawns one `PartyOrbitCamera` framing the midpoint of all players; radius is
   `clamp(max_pairwise_separation + zoom_margin, min_radius, max_radius)`, recomputed every frame
   by `party_camera_follow_system`. `PartyZoomDef.allow_manual_zoom` (default `false`) controls
   whether scroll-wheel still nudges the derived radius via an accumulated offset.
-- `party` absent → logs a warning and falls back to a single `OrbitCamera` targeting only the
-  first player. Never silently spawns one `OrbitCamera` per player — that would mean two cameras
-  fighting for the same viewport with no RON-visible symptom.
+- `split` set → spawns one **real `OrbitCamera` per player** (not `PartyOrbitCamera`), each
+  tagged `SplitViewportSlot(u32)` (which half it owns). `split_screen_viewport_system` recomputes
+  every `SplitViewportSlot` camera's `Camera.viewport` every frame from
+  `Window::physical_size()` (physical pixels already — no manual `scale_factor()` multiplication
+  needed, unlike a naive `width()`/`height()` read) and `ActiveSplitScreen`'s orientation
+  (`SplitOrientation::Vertical` is the only variant implemented so far; `Horizontal`/`Dynamic` are
+  reserved for later stages of the same feature). Split-screen orientation lives in the
+  `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/`LoadedTargetIndicator` — populated by
+  `spawn_players_and_camera`, cleared on `LoadScene`), **not** on `OrbitCamera` or
+  `SplitViewportSlot` — this keeps split-screen state out of the camera components so the planned
+  `camera_modes` unification doesn't have to untangle it later.
+- Neither set → logs a warning and falls back to a single `OrbitCamera` targeting only the
+  first player. Never silently spawns one `OrbitCamera` per player without split-screen viewports
+  — that would mean two cameras fighting for the same full-window viewport with no RON-visible
+  symptom.
 
-Later players' `camera`/`party` fields are ignored entirely — only the first player-tagged scene
-entity's config is read. Scene entity order in `entities:` therefore matters for local co-op.
+Later players' `camera.party`/`camera.split` fields are ignored entirely — only the first
+player-tagged scene entity's config is read for those two switches. Scene entity order in
+`entities:` therefore matters for local co-op. **Split-screen is the one case where every
+player's OTHER camera fields still matter** — each split-screen player gets a real `OrbitCamera`
+built from their own `camera` block (offset, `zoom_speed`, `orbit_button`, etc.), not just the
+first player's. A shared mouse would otherwise rotate/zoom every split-screen camera identically
+(`camera_orbit_system` reads mouse input once per system call, applying the same delta to every
+`OrbitCamera` in its query) — split-screen scenes disable manual control per-camera instead via
+RON: `zoom_speed: 0.0` (scroll × 0 has no effect) and `orbit_button: "None"` (new
+`parse_orbit_button` arm returning `(false, false)`, no warning — distinct from an actually
+unrecognized string, which warns and defaults to `"Either"`).
 
 **Known limitation:** `Action::CameraShake` only queries `With<OrbitCamera>`
 (`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`), so it silently no-ops on a scene
-using `PartyOrbitCamera`. Not needed for the local co-op foundation's acceptance criteria.
+using `PartyOrbitCamera` — but **does** fire on both cameras in a `split` scene, since those are
+real `OrbitCamera`s. This is an intentional consequence of split-screen using real per-player
+cameras, not an oversight to fix.
+
+**Other known limitations, introduced by split-screen having 2 real `Camera3d` entities per
+scene** (none affect `local_coop_demo`, which uses none of these features, but matter for any
+future project combining split-screen with them): `world_label_screen_pos_system` (`lib.rs`),
+`nameplate.rs`'s distance-culling, `particle_renderer.rs`'s billboard orientation, and
+`targeting.rs`'s click-to-select all assume one `Camera3d` exists. None panic (graceful
+`.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or arbitrarily
+pick one of the two cameras rather than being viewport-aware. See `planning/claude_suggestions.md`
+▸ Camera for the exact line references.
 
 **Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
 specific gamepad instead of the keyboard. Bevy has no built-in numeric gamepad index (each
