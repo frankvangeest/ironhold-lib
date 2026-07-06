@@ -754,39 +754,45 @@ of a static scene author's choice.
       ux-gamedesigner-reviewer (ALIGNED — 2 friction points folded in: `orientation` made optional
       with a mode-dependent meaning instead of a required-but-usually-ignored field, and explicit
       "no schema defaults for distances" + room5 framing guidance)
-- [ ] `DynamicSplitDef` schema + `SplitScreenDef.dynamic: Option<DynamicSplitDef>`;
+- [x] `DynamicSplitDef` schema + `SplitScreenDef.dynamic: Option<DynamicSplitDef>`;
       `SplitScreenDef.orientation` becomes `#[serde(default)]` (`SplitOrientation` gains
       `#[derive(Default)]` with `#[default]` on `Vertical`)
-- [ ] `DynamicSplitConfig` resource (populate/clear lifecycle mirroring `ActiveSplitScreen`)
-- [ ] `spawn_players_and_camera`: fourth branch spawning all 3 cameras, explicitly setting
-      `Camera.is_active` (from starting distance) and `Camera.order` (party camera gets an order
+- [x] `DynamicSplitConfig` resource (populate/clear lifecycle mirroring `ActiveSplitScreen`)
+- [x] `spawn_players_and_camera`: fourth branch spawning all 3 cameras, explicitly setting
+      `Camera.is_active` (from starting distance) and `Camera.order` (party camera gets order `2`,
       distinct from the split cameras' `0`/`1`) at spawn time — not left to defaults
-- [ ] `dynamic_split_screen_system`: hysteresis merge/split decision, orientation-lock-at-transition,
+- [x] `dynamic_split_screen_system`: hysteresis merge/split decision, orientation-lock-at-transition,
       `is_active` + `ActiveSplitScreen` writes, guards the fewer-than-2-targets case; inserted into
       `lib.rs`'s existing `.chain()` between `party_camera_follow_system` and
-      `split_screen_viewport_system`
-- [ ] `merge_distance < split_distance` validation (warn-and-clamp)
-- [ ] Document the `camera_shake_system`-fires-on-inactive-split-camera note at the code site
+      `split_screen_viewport_system`. Post-review nit fix (wasm-perf-reviewer): replaced a per-frame
+      `Vec<Entity>` allocation with a plain iterator `.next()`/`.next()` — no functional change
+- [x] `merge_distance < split_distance` validation (warn-and-clamp to `split_distance - 0.01`)
+- [x] Document the `camera_shake_system`-fires-on-inactive-split-camera note at the code site
       (harmless, but matching Stage 3's precedent of an in-code marker, not just CLAUDE.md)
-- [ ] `local_coop_demo`: new `room5.scene.ron` (spawn separation comfortably below `merge_distance`,
-      room sized so reaching `split_distance` takes a few seconds of walking), portal wiring from
-      `room4`, `room_hint` explicitly telling the tester to "walk apart" (with the same overflow
-      check as Stage 4)
-- [ ] Tests: hysteresis (no flicker exactly at either threshold), orientation lock (split axis
-      doesn't change mid-split even if dx/dz ordering flips), `is_active` toggling correctness (both
-      the flag and the distinct `Camera.order` values), `merge_distance >= split_distance` warns and
-      clamps, initial-load distance sets correct starting state, fewer-than-2-targets guard doesn't
-      panic
-- [ ] `docs/20_data_formats.md`: cross-link `PartyZoomDef`'s table to note dynamic split mirrors
-      `zoom_margin`/`allow_manual_zoom` as `merged_zoom_margin`/`merged_allow_manual_zoom`; document
-      `orientation`'s dual meaning (fixed axis vs. tie-break hint) now that it's optional
-- [ ] Full review gate: alignment, architecture, wasm-perf-reviewer (new per-frame system doing
-      distance math + entity lookups, more work than Stage 3/4's pure arithmetic)
-- [ ] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: document `DynamicSplitDef`,
-      the hysteresis/orientation-lock behavior, and the `ActiveSplitScreen` contract widening
-- [ ] WASM dev + release build, playtest checklist (walk apart to trigger split, walk back to
+- [x] `local_coop_demo`: new `room5.scene.ron` (players spawn at distance 3.0, comfortably below
+      `merge_distance` 5.0; `split_distance` 12.0 so reaching it takes a few seconds of walking),
+      `player_p1_dynamic`/`player_p2_dynamic` prefabs (`max_radius` widened to 15.0 so the merged
+      `PartyOrbitCamera` can zoom out further than Stage 3/4's split-mode 9.0 cap — the split-mode
+      cameras never re-derive radius since manual zoom is disabled, so this is safe), `ground_room5`/
+      `portal_to_room5` prefabs, portal wiring from `room4`, `room_hint` rewritten to the compact
+      pipe-separated form (70 chars, matching Stage 4's known-good budget)
+- [x] Tests (11 new, `local_coop_tests.rs`): hysteresis from both starting states at the same
+      distance, orientation lock while already split, `is_active` toggling + distinct `Camera.order`
+      at both transition and initial-load time, `merge_distance >= split_distance` warns and clamps,
+      fewer-than-2-targets guard doesn't panic. All 30 tests in the file pass (19 pre-existing + 11
+      new)
+- [x] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: documented `DynamicSplitDef`
+      (new subsection + field table + RON example), cross-linked from `PartyZoomDef`'s table,
+      `orientation`'s dual meaning, and the `ActiveSplitScreen` continuous-rewrite note (audited by
+      data-format-doc-writer)
+- [x] Full review gate: alignment ALIGNED (no hardcoded distances, no `ActionQueue` reach-in, proper
+      warn-and-clamp), architecture ALIGNED (all 3 pre-implementation concerns verified landed
+      correctly in the shipped code, no new issues), wasm-perf-reviewer OK (one non-blocking nit,
+      fixed above; no frame-time or binary-size regression, 58 MB unchanged pre-Stage-5)
+- [x] WASM dev + release build, playtest checklist (walk apart to trigger split, walk back to
       trigger merge, confirm no flicker at the boundary, confirm orientation doesn't flip mid-split),
-      Frank confirmation
+      Frank confirmation. Dev and release builds both confirmed in-browser, no console errors.
+      Release size 59 MB (up ~1 MB from Stage 4's 58 MB, negligible)
 
 ### Open questions
 - Concrete default values for `split_distance`/`merge_distance`/`merged_zoom_margin` — pick during

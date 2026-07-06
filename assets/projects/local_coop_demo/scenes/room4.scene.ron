@@ -72,6 +72,18 @@
       ),
     ),
 
+    // room4 -> room5 (Stage 5, dynamic split). See prefabs.ron's "portal_to_room5" comment —
+    // the return trip reuses the existing "portal_to_room4" prefab, no new prefab needed for it.
+    (
+      id: "portal_to_room5",
+      prefab: "portal_to_room5",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
   ],
 
   ui: [
@@ -83,7 +95,7 @@
     )),
     Label((
       id: "room_hint",
-      text: "Room 4 — horizontal split screen. Cyan portal returns to room 3.",
+      text: "Room 4: horizontal split | Cyan -> room 3 | Pink -> room 5",
       position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),

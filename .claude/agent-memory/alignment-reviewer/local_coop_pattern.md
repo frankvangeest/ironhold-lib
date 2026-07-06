@@ -5,6 +5,27 @@ metadata:
   type: project
 ---
 
+**STAGE 5 — dynamic split-screen (reviewed 2026-07-06, ALIGNED):**
+- `SplitScreenDef.dynamic: Option<DynamicSplitDef>`; `orientation` now `#[serde(default)]` (Vertical),
+  in dynamic mode it's only a rare-tie-break hint (live axis chosen from dx/dz). `DynamicSplitDef`
+  fields ALL RON-authored: `split_distance`/`merge_distance` (no default, per-scene), `merged_zoom_margin`,
+  `merged_allow_manual_zoom` (default false). No magic constants leaked to Rust — only the anti-flicker
+  clamp `split_distance - 0.01` is a code literal, which is correct (it's a jitter epsilon, not a tunable).
+- Dynamic spawns ALL 3 cameras up front (party + 2 split), toggles only `Camera.is_active`; neither
+  camera_orbit_system nor party_camera_follow_system gate on is_active so inactive cams stay Transform-
+  correct (no pop on reactivate). `DynamicSplitConfig(Option<DynamicSplitDef>)` resource: init lib.rs:157,
+  set at all 4 entity_spawner branches (Some only in dynamic branch, None elsewhere), cleared on LoadScene
+  (action_executor.rs:55). Mirrors ActiveSplitScreen exactly.
+- `dynamic_split_screen_system` (camera.rs:331) touches ONLY Camera.is_active + ActiveSplitScreen; reads
+  DynamicSplitConfig + split cams' tracked-player Transforms. NO ActionQueue, no gameplay side effects.
+  Hysteresis correct: currently_split uses merge_distance, else split_distance; early-return when no state
+  change. Chained in Update after party_camera_follow, before split_screen_viewport (lib.rs:293).
+- merge<split validation is proper warn-and-clamp (entity_spawner.rs:556): if merge>=split, warn + clamp
+  merge to split-0.01. No panic, no silent misbehavior.
+- No hardcoded asset paths in room5.scene.ron / prefabs.ron / rules.ron — models are catalog keys
+  (character_male/female), LoadScene uses scene-file refs (engine convention). player_p2_dynamic correctly
+  repeats zoom_speed:0.0 + orbit_button:"None" per the per-player-config asymmetry footgun below.
+
 **STAGES 3+4 — vertical + horizontal split-screen (reviewed 2026-07-05, both ALIGNED):**
 - `CameraConfig.split: Option<SplitScreenDef{orientation: SplitOrientation}>` (schema/player.rs).
   `SplitOrientation` enum has `Vertical` AND `Horizontal` implemented today (Stage 4 added

@@ -531,6 +531,7 @@ pub(crate) fn spawn_players_and_camera(
     let Some(first) = player_configs.first() else { return };
     if entities.len() < 2 {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
+        commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
         return;
     }
@@ -545,10 +546,74 @@ pub(crate) fn spawn_players_and_camera(
         );
     }
 
-    if let Some(split) = split {
+    if let Some(dynamic) = split.and_then(|s| s.dynamic.as_ref()) {
+        // Dynamic split (Stage 5): all 3 cameras (party + 2 split) are spawned up front and live
+        // for the scene's lifetime; only `Camera.is_active` + `Camera.viewport` change at runtime
+        // (see `dynamic_split_screen_system`). This works with zero new camera-following logic
+        // because neither `camera_orbit_system` nor `party_camera_follow_system` gate on
+        // `is_active` — an inactive camera's Transform stays correctly updated the whole time, so
+        // there's no pop/snap when it reactivates.
+        let (split_distance, merge_distance) = if dynamic.merge_distance < dynamic.split_distance {
+            (dynamic.split_distance, dynamic.merge_distance)
+        } else {
+            warn!(
+                "Scene's `split.dynamic.merge_distance` ({}) is not less than `split_distance` \
+                 ({}) — without a gap, the merge/split state would flicker at the boundary. \
+                 Clamping merge_distance just below split_distance.",
+                dynamic.merge_distance, dynamic.split_distance
+            );
+            (dynamic.split_distance, dynamic.split_distance - 0.01)
+        };
+        let party_cam = crate::capabilities::camera::spawn_party_orbit_camera(
+            commands, tonemapping, &first.camera,
+            &crate::schema::player::PartyZoomDef {
+                zoom_margin: dynamic.merged_zoom_margin,
+                allow_manual_zoom: dynamic.merged_allow_manual_zoom,
+            },
+            &entities,
+        );
+        let p0 = Vec3::from(player_configs[0].initial_position);
+        let p1 = Vec3::from(player_configs[1].initial_position);
+        let dx = p1.x - p0.x;
+        let dz = p1.z - p0.z;
+        let starts_split = p0.distance(p1) > split_distance;
+        let initial_orientation = if dx.abs() >= dz.abs() {
+            crate::schema::player::SplitOrientation::Vertical
+        } else {
+            crate::schema::player::SplitOrientation::Horizontal
+        };
+        commands.entity(party_cam).insert(Camera {
+            is_active: !starts_split,
+            order: 2,
+            ..default()
+        });
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(
+            if starts_split { Some(initial_orientation) } else { None },
+        ));
+        commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(Some(
+            crate::schema::player::DynamicSplitDef {
+                split_distance,
+                merge_distance,
+                merged_zoom_margin: dynamic.merged_zoom_margin,
+                merged_allow_manual_zoom: dynamic.merged_allow_manual_zoom,
+            },
+        )));
+        for (i, (config, entity)) in player_configs.iter().zip(entities.iter()).enumerate().take(2) {
+            let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
+            commands.entity(camera_entity).insert((
+                crate::capabilities::camera::SplitViewportSlot(i as u32),
+                Camera {
+                    is_active: starts_split,
+                    order: i as isize,
+                    ..default()
+                },
+            ));
+        }
+    } else if let Some(split) = split {
         commands.insert_resource(
             crate::runtime::scene_manager::ActiveSplitScreen(Some(split.orientation)),
         );
+        commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         // Only the first two players get a split-screen slot — Stages 4-5 (horizontal/dynamic
         // split) are also two-way splits; a hypothetical 3rd+ player isn't part of this stage's
         // scope (the demo project only ever has 2).
@@ -568,11 +633,13 @@ pub(crate) fn spawn_players_and_camera(
         }
     } else if let Some(party) = party {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
+        commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         crate::capabilities::camera::spawn_party_orbit_camera(
             commands, tonemapping, &first.camera, party, &entities,
         );
     } else {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
+        commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         warn!(
             "Scene has {} players but no `party` or `split` camera block on the first player's \
              `camera` config — falling back to a single OrbitCamera targeting only the first \

@@ -319,12 +319,31 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   every `SplitViewportSlot` camera's `Camera.viewport` every frame from
   `Window::physical_size()` (physical pixels already — no manual `scale_factor()` multiplication
   needed, unlike a naive `width()`/`height()` read) and `ActiveSplitScreen`'s orientation
-  (`SplitOrientation::Vertical` splits left/right, `Horizontal` splits top/bottom; `Dynamic` is
-  reserved for a later stage of the same feature). Split-screen orientation lives in the
-  `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/`LoadedTargetIndicator` — populated by
-  `spawn_players_and_camera`, cleared on `LoadScene`), **not** on `OrbitCamera` or
-  `SplitViewportSlot` — this keeps split-screen state out of the camera components so the planned
-  `camera_modes` unification doesn't have to untangle it later.
+  (`SplitOrientation::Vertical` splits left/right, `Horizontal` splits top/bottom). Split-screen
+  orientation lives in the `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/
+  `LoadedTargetIndicator` — populated by `spawn_players_and_camera`, cleared on `LoadScene`),
+  **not** on `OrbitCamera` or `SplitViewportSlot` — this keeps split-screen state out of the
+  camera components so the planned `camera_modes` unification doesn't have to untangle it later.
+- `split.dynamic: Option<DynamicSplitDef>` set (Stage 5) → the view starts **merged** (its own
+  internal `PartyOrbitCamera`, tuned by `DynamicSplitDef.merged_zoom_margin`/
+  `merged_allow_manual_zoom` — mirrors `PartyZoomDef`'s two fields, self-contained specifically so
+  dynamic split doesn't also require authoring a `party:` block alongside `split:`) and
+  auto-splits into the two per-player `OrbitCamera`s once `split_distance` is exceeded, merging
+  back below `merge_distance` (hysteresis — the gap prevents flicker right at one boundary).
+  `dynamic_split_screen_system` (`capabilities/camera.rs`) runs every frame, `.after(
+  party_camera_follow_system)` and `.before(split_screen_viewport_system)` (see the `.chain()` in
+  `lib.rs`), and decides merged-vs-split purely by toggling `Camera.is_active` on the
+  already-spawned party/split cameras — **it never spawns or despawns cameras**; all three exist
+  for the scene's lifetime, so there is no pop/snap on transition since inactive cameras keep
+  tracking their targets the whole time (`camera_orbit_system`/`party_camera_follow_system` don't
+  gate on `is_active`). The split axis (`Vertical` vs `Horizontal`) is chosen automatically from
+  `abs(dx)` vs `abs(dz)` between the two players only at the merged→split transition instant, then
+  held fixed for that whole split period — `SplitScreenDef.orientation` becomes a rare tie-break
+  hint (used only when dx/dz are exactly equal) rather than the authored axis. **Unlike the
+  fixed-orientation case, `ActiveSplitScreen` is continuously rewritten while dynamic mode is
+  active** — every merge/split transition updates it — rather than being write-once at scene load;
+  `DynamicSplitConfig` (the static per-scene tuning resource, populated once at scene load like
+  `ActiveSplitScreen` itself) is what stays write-once.
 - Neither set → logs a warning and falls back to a single `OrbitCamera` targeting only the
   first player. Never silently spawns one `OrbitCamera` per player without split-screen viewports
   — that would mean two cameras fighting for the same full-window viewport with no RON-visible

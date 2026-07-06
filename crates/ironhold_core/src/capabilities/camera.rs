@@ -140,7 +140,7 @@ pub fn spawn_party_orbit_camera(
     base_camera: &crate::schema::player::CameraConfig,
     party: &crate::schema::player::PartyZoomDef,
     targets: &[Entity],
-) {
+) -> Entity {
     let (orbit_lmb, orbit_rmb) = parse_orbit_button(&base_camera.orbit_button);
     commands.spawn((
         Name::new("Party Orbit Camera"),
@@ -168,7 +168,7 @@ pub fn spawn_party_orbit_camera(
             orbit_lmb,
             orbit_rmb,
         },
-    ));
+    )).id()
 }
 
 /// Frames the midpoint of a `PartyOrbitCamera`'s `targets` each frame and derives the orbit
@@ -307,6 +307,75 @@ pub fn split_screen_viewport_system(
     }
 }
 
+/// Local co-op dynamic split (Stage 5): decides every frame whether the scene should be merged
+/// (one shared `PartyOrbitCamera`) or split (two per-player `OrbitCamera`s), and flips
+/// `Camera.is_active` accordingly. Runs after `party_camera_follow_system` (so the distance read
+/// below uses that frame's fresh transforms) and before `split_screen_viewport_system` (so an
+/// `is_active` flip takes effect the same frame, with no one-frame-stale viewport) — see the
+/// `.chain()` order in `lib.rs`.
+///
+/// No-ops when `DynamicSplitConfig` is `None` (fixed-orientation or no split at all). Never
+/// spawns/despawns cameras — all three (party + 2 split) already exist for the scene's lifetime
+/// (see `spawn_players_and_camera`'s dynamic branch); only `is_active` toggles. This works with
+/// zero new camera-following logic because neither `camera_orbit_system` nor
+/// `party_camera_follow_system` gate on `is_active` — an inactive camera's `Transform` stays
+/// correctly updated the whole time, so there's no pop/snap on reactivation.
+///
+/// Applies hysteresis against the *current* `ActiveSplitScreen` value (merged → split only past
+/// `split_distance`; split → merged only below `merge_distance`) to avoid flickering right at a
+/// single boundary. The split orientation is decided (`abs(dx)` vs `abs(dz)` between the two
+/// players — a world-space approximation of "which way they're spread apart on screen", not an
+/// exact projection) only at the merged→split transition instant and then held fixed for the
+/// rest of that split period, so it can't visibly flip if the players' relative dx/dz ordering
+/// changes sign while they remain apart.
+pub fn dynamic_split_screen_system(
+    dynamic_config: Res<crate::runtime::scene_manager::DynamicSplitConfig>,
+    mut active_split: ResMut<crate::runtime::scene_manager::ActiveSplitScreen>,
+    mut split_cameras: Query<(&mut Camera, &OrbitCamera), (With<SplitViewportSlot>, Without<PartyOrbitCamera>)>,
+    mut party_camera: Query<&mut Camera, (With<PartyOrbitCamera>, Without<SplitViewportSlot>)>,
+    transforms: Query<&Transform>,
+) {
+    let Some(dynamic) = dynamic_config.0.as_ref() else { return };
+
+    let mut targets = split_cameras.iter().map(|(_, orbit)| orbit.target);
+    let Some(t0) = targets.next() else { return };
+    let Some(t1) = targets.next() else { return };
+    let Ok(p0) = transforms.get(t0) else { return };
+    let Ok(p1) = transforms.get(t1) else { return };
+    let p0 = p0.translation;
+    let p1 = p1.translation;
+    let distance = p0.distance(p1);
+
+    let currently_split = active_split.0.is_some();
+    let should_split = if currently_split {
+        distance >= dynamic.merge_distance
+    } else {
+        distance > dynamic.split_distance
+    };
+    if should_split == currently_split {
+        return;
+    }
+
+    active_split.0 = if should_split {
+        let dx = p1.x - p0.x;
+        let dz = p1.z - p0.z;
+        Some(if dx.abs() >= dz.abs() {
+            crate::schema::player::SplitOrientation::Vertical
+        } else {
+            crate::schema::player::SplitOrientation::Horizontal
+        })
+    } else {
+        None
+    };
+
+    for (mut camera, _) in &mut split_cameras {
+        camera.is_active = should_split;
+    }
+    if let Ok(mut party_camera) = party_camera.single_mut() {
+        party_camera.is_active = !should_split;
+    }
+}
+
 /// Parse a `CameraConfig.orbit_button` / `character_rotate_button` string into
 /// `(activate_on_lmb, activate_on_rmb)`.
 pub fn parse_orbit_button(s: &str) -> (bool, bool) {
@@ -336,7 +405,10 @@ pub fn parse_strafe_button(s: &str) -> Option<MouseButton> {
 ///
 /// Queries `With<OrbitCamera>`, so in a `split` scene this fires on both per-player
 /// `OrbitCamera`s (unlike `PartyOrbitCamera`, which it silently skips — see the limitation
-/// noted above `PartyOrbitCamera`). Intentional: each split-screen camera is a real independent
+/// noted above `PartyOrbitCamera`). In a `dynamic` split scene it fires on both split cameras
+/// even when one is currently inactive (`Camera.is_active: false`) — harmless, since nothing
+/// renders for the inactive one, but the shake state keeps accumulating so it's already correct
+/// if that camera reactivates mid-shake. Intentional: each split-screen camera is a real independent
 /// `OrbitCamera`, so a shake action shakes whichever camera(s) match its target, exactly like
 /// single-player. See `SplitViewportSlot`.
 pub fn camera_shake_system(

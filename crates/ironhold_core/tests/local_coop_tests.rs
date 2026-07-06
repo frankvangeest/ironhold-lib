@@ -3,14 +3,14 @@ use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, GameEvent};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, GameEvent};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
-use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, InputMap};
+use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
 use ironhold_core::capabilities::player::{CharacterController, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
-    SplitViewportSlot, split_screen_viewport_system, parse_orbit_button,
+    SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
 };
 use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
 
@@ -581,7 +581,7 @@ fn test_split_and_party_both_set_split_wins() {
     two_player_catalogs_with_split(
         &mut app,
         Some(PartyZoomDef { zoom_margin: 4.0, allow_manual_zoom: false }),
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
     );
     load_two_player_scene(&mut app);
 
@@ -605,7 +605,7 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     two_player_catalogs_with_split(
         &mut app,
         None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
     );
     load_two_player_scene(&mut app);
 
@@ -616,4 +616,311 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     let mut sorted = slots.clone();
     sorted.sort();
     assert_eq!(sorted, vec![0, 1], "expected exactly one slot 0 and one slot 1, got {:?}", slots);
+}
+
+// ── Stage 5: dynamic_split_screen_system (unit-level) ───────────────────────────
+
+fn test_orbit_camera(target: Entity) -> OrbitCamera {
+    OrbitCamera {
+        target,
+        radius: 10.0,
+        offset: Vec3::new(0.0, 4.5, 9.0),
+        zoom_speed: 0.0,
+        orbit_speed: 0.4,
+        min_radius: 4.5,
+        max_radius: 9.0,
+        pitch: 0.5,
+        yaw: 0.0,
+        look_at_offset: Vec3::ZERO,
+        min_pitch: 0.1,
+        max_pitch: 0.9,
+        orbit_lmb: false,
+        orbit_rmb: false,
+        character_rotate_lmb: false,
+        character_rotate_rmb: false,
+    }
+}
+
+fn test_party_orbit_camera(targets: Vec<Entity>) -> PartyOrbitCamera {
+    PartyOrbitCamera {
+        targets,
+        zoom_margin: 3.0,
+        allow_manual_zoom: false,
+        manual_zoom_offset: 0.0,
+        zoom_speed: 10.0,
+        orbit_speed: 0.5,
+        min_radius: 4.0,
+        max_radius: 20.0,
+        pitch: 0.5,
+        yaw: 0.0,
+        look_at_offset: Vec3::ZERO,
+        min_pitch: 0.1,
+        max_pitch: 0.9,
+        orbit_lmb: true,
+        orbit_rmb: true,
+    }
+}
+
+/// Spawns the minimal 3-camera rig `dynamic_split_screen_system` operates on: two "player"
+/// entities (just a `Transform` — the system only reads position), two split cameras each
+/// tagged `OrbitCamera{target}` + `SplitViewportSlot`, and one party camera tagged
+/// `PartyOrbitCamera` — mirroring the real shape `spawn_players_and_camera`'s dynamic branch
+/// produces, minus everything the system itself doesn't touch (no Actor model, no
+/// `CharacterController`). Returns `(cam0, cam1, party_cam)` for asserting on `Camera.is_active`.
+fn spawn_dynamic_rig(app: &mut App, p0_pos: Vec3, p1_pos: Vec3, split_active: bool) -> (Entity, Entity, Entity) {
+    let p0 = app.world_mut().spawn(Transform::from_translation(p0_pos)).id();
+    let p1 = app.world_mut().spawn(Transform::from_translation(p1_pos)).id();
+    let cam0 = app.world_mut().spawn((
+        Camera { is_active: split_active, order: 0, ..default() },
+        test_orbit_camera(p0),
+        SplitViewportSlot(0),
+    )).id();
+    let cam1 = app.world_mut().spawn((
+        Camera { is_active: split_active, order: 1, ..default() },
+        test_orbit_camera(p1),
+        SplitViewportSlot(1),
+    )).id();
+    let party_cam = app.world_mut().spawn((
+        Camera { is_active: !split_active, order: 2, ..default() },
+        test_party_orbit_camera(vec![p0, p1]),
+    )).id();
+    (cam0, cam1, party_cam)
+}
+
+fn dynamic_config(split_distance: f32, merge_distance: f32) -> DynamicSplitConfig {
+    DynamicSplitConfig(Some(DynamicSplitDef {
+        split_distance,
+        merge_distance,
+        merged_zoom_margin: 3.0,
+        merged_allow_manual_zoom: false,
+    }))
+}
+
+#[test]
+fn test_dynamic_split_stays_merged_within_hysteresis_band() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(-4.0, 0.0, 0.0), Vec3::new(4.0, 0.0, 0.0), false);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None, "distance 8.0 is within the hysteresis band, not past split_distance — must stay merged");
+    assert!(app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_stays_split_within_hysteresis_band() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+    // Same 8.0 separation as the merged test above, but starting split — hysteresis must keep
+    // it split (8.0 is not below merge_distance 6.0), proving the same physical distance can be
+    // valid in either state depending on which side of the band it was approached from.
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(-4.0, 0.0, 0.0), Vec3::new(4.0, 0.0, 0.0), true);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, Some(SplitOrientation::Vertical));
+    assert!(!app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_transitions_to_vertical_split_past_split_distance() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    // dx = 15.0, dz = 0.0 -> horizontal separation dominates -> Vertical (side-by-side) split.
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(0.0, 0.0, 0.0), Vec3::new(15.0, 0.0, 0.0), false);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, Some(SplitOrientation::Vertical));
+    assert!(!app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_transitions_to_horizontal_split_when_depth_separation_dominates() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    // dx = 0.0, dz = 15.0 -> depth separation dominates -> Horizontal (top/bottom) split.
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 15.0), false);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, Some(SplitOrientation::Horizontal));
+    assert!(!app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_transitions_to_merged_below_merge_distance() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(-2.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), true);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None, "distance 4.0 is below merge_distance 6.0 -> must merge");
+    assert!(app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_orientation_stays_locked_while_already_split() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    // Already split, locked Vertical from an earlier transition. Now positioned so depth
+    // separation dominates (would pick Horizontal if freshly transitioning) but still far apart
+    // (distance 15.0 stays above merge_distance 6.0, so no merge->re-split cycle happens).
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 15.0), true);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(
+        app.world().resource::<ActiveSplitScreen>().0,
+        Some(SplitOrientation::Vertical),
+        "orientation must stay locked to whatever it was at the last merge->split transition, \
+         not recomputed every frame while already split"
+    );
+    assert!(!app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_system_is_noop_when_config_none() {
+    let mut app = setup_test_app();
+    app.update();
+    // DynamicSplitConfig defaults to None via init_resource — no explicit insert needed.
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    let (cam0, cam1, party) = spawn_dynamic_rig(&mut app, Vec3::new(0.0, 0.0, 0.0), Vec3::new(100.0, 0.0, 0.0), false);
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None);
+    assert!(app.world().get::<Camera>(party).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam0).unwrap().is_active);
+    assert!(!app.world().get::<Camera>(cam1).unwrap().is_active);
+}
+
+#[test]
+fn test_dynamic_split_guards_fewer_than_two_split_cameras() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(dynamic_config(10.0, 6.0));
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    // Only one split camera exists (e.g. mid scene-transition) — must not panic.
+    let p0 = app.world_mut().spawn(Transform::from_xyz(0.0, 0.0, 0.0)).id();
+    app.world_mut().spawn((
+        Camera { is_active: false, order: 0, ..default() },
+        test_orbit_camera(p0),
+        SplitViewportSlot(0),
+    ));
+
+    app.world_mut().run_system_once(dynamic_split_screen_system).unwrap();
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None, "must no-op, not panic, when fewer than 2 split cameras exist");
+}
+
+// ── Stage 5: spawn_players_and_camera's dynamic branch (scene-load level) ───────
+
+#[test]
+fn test_dynamic_split_initial_state_starts_split_when_distance_exceeds_threshold() {
+    let mut app = setup_test_app();
+    app.update();
+    // load_two_player_scene spawns players at (-4,0.5,0) and (4,0.5,0) -> distance 8.0.
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef {
+            orientation: SplitOrientation::Vertical,
+            dynamic: Some(DynamicSplitDef { split_distance: 5.0, merge_distance: 3.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+        }),
+    );
+    load_two_player_scene(&mut app);
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, Some(SplitOrientation::Vertical), "8.0 > split_distance 5.0 -> must start split");
+
+    let party_active: Vec<bool> = {
+        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyOrbitCamera>>();
+        q.iter(app.world()).map(|c| c.is_active).collect()
+    };
+    assert_eq!(party_active, vec![false], "party camera must start inactive when the scene starts split");
+
+    let split_cams: Vec<(bool, isize)> = {
+        let mut q = app.world_mut().query_filtered::<&Camera, With<SplitViewportSlot>>();
+        q.iter(app.world()).map(|c| (c.is_active, c.order)).collect()
+    };
+    assert_eq!(split_cams.len(), 2);
+    assert!(split_cams.iter().all(|(active, _)| *active), "both split cameras must start active when the scene starts split");
+    let mut orders: Vec<isize> = split_cams.iter().map(|(_, o)| *o).collect();
+    orders.sort();
+    assert_eq!(orders, vec![0, 1], "split cameras must keep distinct orders 0/1 even in dynamic mode");
+}
+
+#[test]
+fn test_dynamic_split_initial_state_starts_merged_when_within_threshold() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef {
+            orientation: SplitOrientation::Vertical,
+            dynamic: Some(DynamicSplitDef { split_distance: 12.0, merge_distance: 6.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+        }),
+    );
+    load_two_player_scene(&mut app);
+
+    assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None, "8.0 < split_distance 12.0 -> must start merged");
+
+    let party_active: Vec<bool> = {
+        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyOrbitCamera>>();
+        q.iter(app.world()).map(|c| c.is_active).collect()
+    };
+    assert_eq!(party_active, vec![true], "party camera must start active when the scene starts merged");
+
+    let split_active: Vec<bool> = {
+        let mut q = app.world_mut().query_filtered::<&Camera, With<SplitViewportSlot>>();
+        q.iter(app.world()).map(|c| c.is_active).collect()
+    };
+    assert!(split_active.iter().all(|active| !active), "both split cameras must start inactive when the scene starts merged");
+}
+
+#[test]
+fn test_dynamic_split_merge_distance_clamped_when_not_less_than_split_distance() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef {
+            orientation: SplitOrientation::Vertical,
+            // Authored backwards on purpose — must warn and clamp, not panic or misbehave.
+            dynamic: Some(DynamicSplitDef { split_distance: 5.0, merge_distance: 6.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+        }),
+    );
+    load_two_player_scene(&mut app);
+
+    let config = app.world().resource::<DynamicSplitConfig>().0.clone().expect("dynamic config must still be Some after clamping");
+    assert_eq!(config.split_distance, 5.0, "split_distance is untouched by the clamp");
+    assert!(config.merge_distance < config.split_distance, "merge_distance must be clamped below split_distance, got {}", config.merge_distance);
 }

@@ -60,6 +60,21 @@
       ),
     ),
 
+    // Room 5's ground — rose/magenta tone, matching the pink portal_to_room5 accent. Distinct
+    // from room3's amber and room4's teal, continuing each room's one-color-identity convention.
+    "ground_room5": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.34, 0.18, 0.26),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
     // ── Portals ────────────────────────────────────────────────────────────────
     // Stage 2: TriggerZone (radius 1.5) fires entity.entered:{id} -> rules.ron -> LoadScene.
     // trigger_zone_system fires for ANY CharacterController entity that enters, so either
@@ -124,6 +139,23 @@
         ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.10, 0.22, 0.24), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.08, 0.18, 0.20), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
         ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.15, 0.85, 0.80), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // room4 -> room5 (Stage 5, dynamic split). The return trip reuses the existing
+    // "portal_to_room4" prefab placed a second time in room5.scene.ron — same event name
+    // ("entity.entered:portal_to_room4"), same rules.ron entry, no new prefab needed for that
+    // direction (same trick every prior stage used).
+    "portal_to_room5": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.24, 0.10, 0.18), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.24, 0.10, 0.18), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.20, 0.08, 0.14), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.95, 0.25, 0.55), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       ],
     ),
 
@@ -352,6 +384,99 @@
           orbit_speed:    0.4,
           min_radius:     4.5,
           max_radius:     9.0,
+          orbit_button:   "None",
+        ),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    // Stage 5, dynamic split. `min_radius`/`max_radius` here serve two different purposes at
+    // once: the split-mode per-player OrbitCamera never re-derives its radius from these (zoom
+    // is fully disabled — `zoom_speed: 0.0` + `orbit_button: "None"` freeze it at `offset`'s
+    // length), but the MERGED-state PartyOrbitCamera spawned alongside it (see
+    // `split.dynamic`) genuinely zooms within this range as the players separate, up to
+    // `max_radius` — widened to 15.0 (vs the split pair's 9.0) so the merged camera can pull
+    // back smoothly as players approach `split_distance` before the screen actually splits.
+    "player_p1_dynamic": (
+      kind: Actor,
+      model: "character_male",
+      display_name: "Player 1",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 0,
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     15.0,
+          orbit_button:   "None",
+          // Sole switch for split-screen — read only from this (the first) player.
+          // `orientation` here is only a tie-break hint for the rare frame where the players end
+          // up exactly equally separated on both axes — the live axis is otherwise chosen
+          // automatically from their actual relative position. See `dynamic` below.
+          split: (
+            orientation: Vertical,
+            dynamic: (
+              split_distance: 12.0,
+              merge_distance: 5.0,
+              merged_zoom_margin: 3.0,
+              merged_allow_manual_zoom: false,
+            ),
+          ),
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          strafe_mouse_button: None,
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    "player_p2_dynamic": (
+      kind: Actor,
+      model: "character_female",
+      display_name: "Player 2",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 1,
+      components: (
+        tags: ["player"],
+        // No `split`/`party` here — only the first player's camera block is read for those.
+        // The rest of this camera block (fixed distance, no manual control) DOES still apply
+        // to the split-mode camera spawned for this player from their OWN config.
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     15.0,
           orbit_button:   "None",
         ),
         inputs: (

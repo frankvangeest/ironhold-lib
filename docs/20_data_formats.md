@@ -1690,6 +1690,8 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.part
 | `zoom_margin` | `f32` | required | Extra distance (metres) added on top of the players' current maximum separation, so they aren't framed edge-to-edge. Larger values keep more headroom around both players as they split apart. |
 | `allow_manual_zoom` | `bool` | `false` | When `true`, the scroll wheel still nudges the camera distance as an offset on top of the distance-derived radius. When `false` (default), the radius is fully derived from player separation and manual scroll input has no effect — this matches "the camera zooms based on how far apart the players are" with no player fighting that behavior. |
 
+> **Dynamic split-screen (`camera.split.dynamic`) reuses these same two fields** under the names `merged_zoom_margin`/`merged_allow_manual_zoom` — dynamic split spawns its own internal shared camera for its merged state (rather than requiring a separate `party:` block alongside `split:`), tuned identically to `zoom_margin`/`allow_manual_zoom` above. See [Dynamic split-screen](#dynamic-split-screen-dynamicsplitdef-) below.
+
 > **Only the first `"player"`-tagged entity's `party` block is read.** If you author `party` on the second (or later) player instead of the first, it is silently ignored — there is no validation error. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
 
 **Example** — two-player scene where player 1 owns the shared camera:
@@ -1752,13 +1754,13 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `orientation` | `SplitOrientation` | required | How the window is divided between players. `Vertical` and `Horizontal` are both implemented; a `Dynamic` variant is planned for a later stage. |
+| `orientation` | `SplitOrientation` | `Vertical` | **Dual meaning, depending on `dynamic`.** When `dynamic` is **unset**, this is the fixed split axis used for the whole scene (Stage 3/4 behavior, as before). When `dynamic` **is** set, the live split axis is instead chosen automatically every time the view splits, from the players' actual relative position — `orientation` becomes only a rare tie-break hint, used on the exact frame the two players are equally separated on both axes. Optional either way — omit it to get `Vertical`. |
+| `dynamic` | `Option<DynamicSplitDef>` | `None` | When set, the view starts **merged** into one shared camera (like `party`) and automatically switches to a two-camera split once the players separate far enough, merging back when they come close again. See [Dynamic split-screen](#dynamic-split-screen-dynamicsplitdef-) below. |
 
 **`SplitOrientation` variants:**
 - `Vertical` — the window is split down the middle into a left half and a right half, one player per half.
 - `Horizontal` — the window is split down the middle into a top half and a bottom half, one player per half.
 - Both variants recompute every frame from the window's actual size, so they stay correct across resizes and on HiDPI displays.
-- A `Dynamic` variant (viewport boundary follows player positions) is planned for a later stage but not yet implemented.
 
 > **Only the first `"player"`-tagged entity's `split` block is read.** Same rule as `party` — if you author `split` on the second (or later) player instead of the first, it is silently ignored. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
 
@@ -1829,6 +1831,93 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 ```
 
 A full working example lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` (`player_p1_split`/`player_p2_split`) and `scenes/room3.scene.ron`.
+
+### Dynamic split-screen (`DynamicSplitDef`) ✅
+
+This is **local, same-machine co-op** — same scope note as the two sections above: unrelated to (and does not require) networked multiplayer.
+
+`camera.split.dynamic` on the **first** player makes the view start **merged** — one shared camera framing both players, just like `party` — and automatically **split** into two independent per-player cameras once the players separate beyond `split_distance`. It automatically **merges back** once they come within `merge_distance` of each other. The two thresholds are deliberately different (hysteresis) so the view doesn't flicker back and forth for players hovering right at one boundary.
+
+Dynamic mode is self-contained: it does **not** require also authoring a `party:` block. Internally it spawns its own shared camera for the merged state, tuned by `merged_zoom_margin`/`merged_allow_manual_zoom` — these mirror `PartyZoomDef.zoom_margin`/`PartyZoomDef.allow_manual_zoom` exactly (see [Shared party camera](#shared-party-camera-partyzoomdef-) above). This keeps `party` and `split` mutually exclusive as a simple either/or switch, even when `split` itself internally behaves like `party` part of the time.
+
+**`DynamicSplitDef` fields** (`components.camera.split.dynamic`, authored on the first player only):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `split_distance` | `f32` | required | Distance (metres) between the two players beyond which the merged view splits into two independent cameras. No built-in default — the right value depends on room size and player `walk_speed`, so it must be tuned per scene. |
+| `merge_distance` | `f32` | required | Distance (metres) below which a split view merges back into the single shared camera. Must be smaller than `split_distance` — the gap between the two is what prevents flicker right at the boundary. If authored backwards, a warning is logged and the value is clamped just below `split_distance`. |
+| `merged_zoom_margin` | `f32` | required | Extra distance (metres) added beyond the players' current separation while merged, so they aren't framed edge-to-edge. Same meaning as `PartyZoomDef.zoom_margin`. |
+| `merged_allow_manual_zoom` | `bool` | `false` | When `true`, the scroll wheel still nudges the merged camera's distance as an offset on top of the distance-derived radius. When `false` (default), the radius is fully derived from player separation while merged. Same meaning as `PartyZoomDef.allow_manual_zoom`. |
+
+> **The split axis is chosen automatically, not authored.** Unlike fixed-orientation `split` (where you set `orientation: Vertical` or `orientation: Horizontal` up front), dynamic mode picks the axis itself every time the view transitions from merged to split, based on whether the players are further apart left-right or front-back at that moment. It then holds that axis fixed for the rest of the split period — it will not flip mid-split even if the players' relative position changes. `orientation` on `SplitScreenDef` is only consulted as a tie-break on the rare frame where the separation is exactly equal on both axes.
+
+> **All three cameras exist for the whole scene.** Dynamic mode does not spawn or despawn cameras as the view merges/splits — the shared camera and both per-player cameras are created once, up front, and the engine simply toggles which ones are active. This avoids any pop or snap when switching: the inactive cameras keep tracking their targets in the background the entire time.
+
+> **Every player's own `camera` block still matters**, same as fixed-orientation `split` — each player needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, since those drive the per-player cameras used once the view splits. Only `split.dynamic` itself is read exclusively from the first player.
+
+**Example** — two-player scene that starts merged and splits once the players are more than 10 m apart, merging back under 6 m:
+
+```ron
+// prefabs/prefabs.ron
+"player_p1_dynamic": (
+  kind: Actor,
+  model: "character_male",
+  display_name: "Player 1",
+  player_index: 0,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     18.0,
+      orbit_button:   "None",
+      // Sole switch for dynamic split — read only from this (the first) player.
+      split: (
+        dynamic: (
+          split_distance:           10.0,
+          merge_distance:           6.0,
+          merged_zoom_margin:       6.0,
+          merged_allow_manual_zoom: false,
+        ),
+      ),
+    ),
+    inputs: (
+      forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+
+// player_p2_dynamic — no `split` here (only the first player's is read for the switch), but
+// its OWN camera block still matters once the view splits — same rule as fixed-orientation split.
+"player_p2_dynamic": (
+  kind: Actor,
+  model: "character_female",
+  display_name: "Player 2",
+  player_index: 1,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     18.0,
+      orbit_button:   "None",
+    ),
+    inputs: (
+      forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
+      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+```
 
 ### NPC behaviour (`components.npc`) ✅
 

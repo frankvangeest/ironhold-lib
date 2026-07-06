@@ -104,18 +104,57 @@ pub struct PartyZoomDef {
 /// Local co-op split-screen configuration, authored on the first player's `camera.split`.
 #[derive(Deserialize, Debug, Clone)]
 pub struct SplitScreenDef {
+    /// The fixed split axis when `dynamic` is unset (Stage 3/4 behavior). When `dynamic` IS set,
+    /// this instead becomes a rare tie-break hint — used only on the exact frame the two players
+    /// are equally separated on both axes — since the live split axis is otherwise chosen
+    /// automatically from their actual relative position. Optional because dynamic-mode authors
+    /// usually don't need to think about it; defaults to `Vertical`.
+    #[serde(default)]
     pub orientation: SplitOrientation,
+    /// Local co-op only: when set, the screen starts merged into a single shared camera (framing
+    /// both players like `party`) and automatically splits into two independent per-player
+    /// cameras once they separate beyond `split_distance`, merging back below `merge_distance`.
+    /// See `DynamicSplitDef`.
+    #[serde(default)]
+    pub dynamic: Option<DynamicSplitDef>,
 }
 
 /// How the window is divided between local co-op players' individual cameras.
-/// `Dynamic` is reserved for a later stage of the same feature — `Vertical` and `Horizontal`
-/// are both implemented today.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// `Vertical` and `Horizontal` are both implemented; when `SplitScreenDef.dynamic` is set, the
+/// live split axis is chosen automatically instead (see `SplitScreenDef.orientation`'s doc).
+#[derive(Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SplitOrientation {
     /// Left half / right half, split down the middle.
+    #[default]
     Vertical,
     /// Top half / bottom half, split down the middle.
     Horizontal,
+}
+
+/// Local co-op dynamic split-screen tuning, authored on the first player's `camera.split.dynamic`.
+/// Self-contained rather than reusing `party:` — `party` and `split` are mutually exclusive
+/// elsewhere in this schema, and requiring both together just for dynamic mode would complicate
+/// that rule. `merged_zoom_margin`/`merged_allow_manual_zoom` mirror `PartyZoomDef`'s fields
+/// exactly; dynamic mode spawns its own internal `PartyOrbitCamera` for the merged state using
+/// them, with no `party:` block required.
+#[derive(Deserialize, Debug, Clone)]
+pub struct DynamicSplitDef {
+    /// Distance beyond which the merged camera splits into two independent per-player cameras.
+    /// No default — the right value depends on room size and player `walk_speed`, so it must be
+    /// authored per-scene.
+    pub split_distance: f32,
+    /// Distance below which a split view merges back into one shared camera. Must be less than
+    /// `split_distance` (the gap prevents flicker right at either boundary) — if authored
+    /// backwards, a warning is logged and it's clamped just below `split_distance`. No default,
+    /// same reasoning as `split_distance`.
+    pub merge_distance: f32,
+    /// Extra distance added beyond the raw pairwise distance between players while merged —
+    /// same meaning as `PartyZoomDef.zoom_margin`.
+    pub merged_zoom_margin: f32,
+    /// Whether manual scroll-zoom still nudges the merged camera's derived radius — same meaning
+    /// as `PartyZoomDef.allow_manual_zoom`. Default: `false`.
+    #[serde(default)]
+    pub merged_allow_manual_zoom: bool,
 }
 
 fn default_min_pitch() -> f32 { 0.1 }

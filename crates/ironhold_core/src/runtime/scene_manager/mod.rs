@@ -142,6 +142,15 @@ pub struct ActiveViewBox(pub Option<(f32, f32, f32, f32)>);
 #[derive(Resource, Default)]
 pub struct ActiveSplitScreen(pub Option<crate::schema::player::SplitOrientation>);
 
+/// Active local co-op dynamic-split tuning for the current scene, resolved from the first
+/// player's `CameraConfig.split.dynamic`. `None` means dynamic split is off (Stage 3/4 fixed
+/// orientation, or no split at all) — `dynamic_split_screen_system` early-exits silently.
+/// Populated by `spawn_players_and_camera`, same as `ActiveSplitScreen`; cleared on full
+/// `LoadScene`. Unlike `ActiveSplitScreen`, this is never rewritten after scene load — it's the
+/// static config the runtime system reads every frame, not the resolved per-frame state.
+#[derive(Resource, Default)]
+pub struct DynamicSplitConfig(pub Option<crate::schema::player::DynamicSplitDef>);
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,

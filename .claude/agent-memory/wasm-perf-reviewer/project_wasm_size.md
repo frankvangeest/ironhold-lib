@@ -5,9 +5,9 @@ metadata:
   type: project
 ---
 
-Release `pkg/ironhold_web_bg.wasm` ~90.7 MB as of 2026-06; warn at 95 MB, GitHub Pages hard-blocks at 100 MB.
+Release `pkg/ironhold_web_bg.wasm` measured ~58 MB on 2026-07-06 (`ls -lh` of the current build). Warn at 95 MB, GitHub Pages hard-blocks at 100 MB. The older "~90.7 MB" figure was stale/wrong — trust the 58 MB clean-build measurement.
 
-**Why:** GitHub Pages serves the web build; very little headroom.
+**Why:** GitHub Pages serves the web build; headroom is actually large (~37 MB below warn), not tight as previously believed.
 
 **How to apply:**
 - DEV builds balloon (~190 MB observed for the targeting branch dev build) — ignore dev size entirely, only the `--release` (cargo clean + wasm-pack release) size counts toward the limit.
