@@ -11,7 +11,7 @@
 
 ## Active
 
-_(none)_
+- [ ] **Local Co-op Split-Screen Demo — Stage 6: 4-way split-screen scene** — see `planning/features/local_coop_4way_split.md`
 
 ---
 
@@ -60,6 +60,13 @@ Staged incrementally; each stage ships and is playtested before the next starts.
       prevent flicker/mid-split axis flips — `02d7ccb`. All 5 stages shipped — feature doc moved to
       `planning/features/done/local_coop_foundation.md`.
 - [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit now that Stage 3-5's split-screen viewports have all shipped. _Dep: Stage 1 (`player_index`)._
+- [ ] **Stage 6 — 4-way split-screen scene (N-way generic)** — Active; generalizes the split
+      system from 2-way (`Vertical`/`Horizontal`) to a new `Grid` orientation driven by player
+      count (static only, no dynamic merge); removes the `.take(2)` cap in
+      `spawn_players_and_camera`; adds Numpad key support for a 4th keyboard scheme so 4 players
+      (WASD / Arrows / IJKL / Numpad) share one keyboard, each visually distinguished by a
+      solid-color material tint (blue/pink/dark green/red); plan reviewed and ALIGNED by
+      system-architect and ux-gamedesigner-reviewer. See `planning/features/local_coop_4way_split.md`.
 - Diagonal split-screen scoped out at design time — Bevy's `Camera.viewport` is rectangle-only; a true diagonal cut needs a stencil/shader mask, untested on this engine's WASM/WebGL2 target.
 - Dep (soft): promotes "Gamepad / controller input" (Icebox) from icebox to in-scope, sized down to exactly this demo's needs.
 
@@ -213,6 +220,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 - [ ] Capability registry — declare events, actions, and validation rules per capability; replaces ad-hoc wiring
 - [ ] Schema migrations — versioned upgrade paths with diagnostics on load failure
 - [ ] **Gamepad / controller input** — wire Bevy's built-in gamepad input through the existing `InputAction` system and RON key bindings; map stick axes to movement/camera and face buttons to `InputAction` variants; designers declare gamepad bindings in the same input config block as keyboard; needed for web builds targeting controller users
+- [ ] **Local co-op hot join/leave (min 1, max 4 players)** — dynamically spawn/despawn players at runtime and recompute the split-screen layout live, instead of the player count being fixed at scene load. Needs a per-scheme "press to join" trigger and a decision on what happens to a leaving player's state. Not yet drafted — write a `planning/features/` doc before starting. Discussed 2026-07-06 while scoping the 4-way split scene; deliberately scoped out of that feature to avoid bundling a runtime-lifecycle change into a viewport-math change. _Dep: Stage 6 — 4-way split-screen scene (N-way `Grid` split) landing first, since this builds on top of a split system that already tolerates a variable player count._
 - [ ] **Save / load game state** — `SaveGame` / `LoadGame` actions; serialize `GameVariables`, per-entity `StatMap`, and active modifier state to a JSON/RON file (native) or `localStorage` (WASM); `AutoSave` trigger on configurable events; scene transitions preserve state across loads. See `planning/features/save_load_game_state.md`
 - [ ] **Input remapping** — let players rebind keyboard and gamepad actions at runtime via a settings UI; bindings persisted to a per-player config file (native) or `localStorage` (WASM); designer declares remappable actions and default bindings in project RON; depends on gamepad input feature for full coverage
 - [ ] **Per-instance stat overrides on `Action::Spawn` (v2)** — extend `stat_overrides` support to dynamic `Action::Spawn` so runtime-spawned entities can also start with non-default stats; requires threading the override map through `QueuedSpawn` and `drain_spawn_queue_system`; depends on per-instance overrides v1 (scene-placed) shipping first.
