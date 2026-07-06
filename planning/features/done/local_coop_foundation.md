@@ -1,6 +1,6 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
-_Status: In Progress (Stage 1 Done, Stage 2 Done, Stage 3 Done, Stage 4 Done, Stage 5 Active)_
+_Status: Done_
 _Planned at: `c624c7b` (2026-07-03)_
 
 ## Phases
@@ -11,7 +11,7 @@ _Planned at: `c624c7b` (2026-07-03)_
 | Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
 | Stage 3 | Vertical split-screen scene | Done | `b59a3e7` (2026-07-05) |
 | Stage 4 | Horizontal split-screen scene | Done | `b5844c7` (2026-07-06) |
-| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Active | — |
+| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Done | `02d7ccb` (2026-07-06) |
 
 A fifth split style (diagonal) was scoped out during design discussion — Bevy's `Camera.viewport`
 is rectangle-only, so a true diagonal cut needs a custom stencil/shader mask, which is untested
