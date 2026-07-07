@@ -22,6 +22,12 @@ every GLB player entity, but no system has read it until now.
 
 ## Research findings (confirmed by reading the current code, verified by architecture + UX review)
 
+- **Re-confirmed by architecture review (2026-07-07): zero new schema surface.** No RON fields, no
+  new `Action`/event types — `SplitScreenPlayerLabel`/`LinkedPlayerLabel` are pure runtime
+  components, not serializable `schema/` types, so schema stability is a non-issue for this
+  feature. Crate boundaries are clean: everything lives in `capabilities/camera.rs` plus one
+  `.chain()` registration in `lib.rs:290-299` — no platform-specific code, nothing leaks into
+  `ironhold_native`/`ironhold_web`.
 - `PlayerIndex(u32)` (`capabilities/player.rs:41`) is inserted on every GLB player entity at spawn
   (`spawn_player_entity_core`) but consumed by zero systems today — this feature is its first
   real use.
