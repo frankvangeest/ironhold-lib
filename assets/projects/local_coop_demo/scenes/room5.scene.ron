@@ -70,6 +70,19 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: (text: "Room 4", offset: (0.0, 4.0, 0.0)),
+    ),
+
+    // room5 -> room6 (Stage 6, 4-way grid split). See prefabs.ron's "portal_to_room6" comment.
+    (
+      id: "portal_to_room6",
+      prefab: "portal_to_room6",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 6", offset: (0.0, 4.0, 0.0)),
     ),
 
   ],
@@ -85,7 +98,7 @@
       id: "room_hint",
       // Kept under 900px width, same budget as controls_hint above (a known-good 59-char line
       // at this box size) — see Stage 4/5 plan notes on avoiding Stage 2's label-overflow bug.
-      text: "Dynamic split: walk apart to split, together to merge | Pink -> room 4",
+      text: "Dynamic split: walk apart to split, together to merge | Gold -> room 6",
       position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),

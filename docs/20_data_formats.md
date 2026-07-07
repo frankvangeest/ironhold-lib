@@ -1617,6 +1617,7 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 |----------|--------------|
 | Letters | `"KeyA"`–`"KeyZ"` (or bare `"A"`–`"Z"`) |
 | Digits | `"Digit0"`–`"Digit9"` (or bare `"0"`–`"9"`) |
+| Numpad | `"Numpad0"`–`"Numpad9"` — physical numeric-keypad keys, unaffected by NumLock state |
 | Function | `"F1"`–`"F12"` |
 | Modifiers | `"ShiftLeft"`, `"ShiftRight"`, `"ControlLeft"`, `"ControlRight"`, `"AltLeft"`, `"AltRight"` |
 | Common | `"Space"`, `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"` |
@@ -1754,13 +1755,14 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `orientation` | `SplitOrientation` | `Vertical` | **Dual meaning, depending on `dynamic`.** When `dynamic` is **unset**, this is the fixed split axis used for the whole scene (Stage 3/4 behavior, as before). When `dynamic` **is** set, the live split axis is instead chosen automatically every time the view splits, from the players' actual relative position — `orientation` becomes only a rare tie-break hint, used on the exact frame the two players are equally separated on both axes. Optional either way — omit it to get `Vertical`. |
+| `orientation` | `SplitOrientation` | `Vertical` | **Dual meaning, depending on `dynamic`.** When `dynamic` is **unset**, this is the fixed split axis used for the whole scene (`Vertical`/`Horizontal`/`Grid`). When `dynamic` **is** set (`Vertical`/`Horizontal` only — `dynamic` does not support `Grid`), the live split axis is instead chosen automatically every time the view splits, from the players' actual relative position — `orientation` becomes only a rare tie-break hint, used on the exact frame the two players are equally separated on both axes. Optional either way — omit it to get `Vertical`. |
 | `dynamic` | `Option<DynamicSplitDef>` | `None` | When set, the view starts **merged** into one shared camera (like `party`) and automatically switches to a two-camera split once the players separate far enough, merging back when they come close again. See [Dynamic split-screen](#dynamic-split-screen-dynamicsplitdef-) below. |
 
 **`SplitOrientation` variants:**
-- `Vertical` — the window is split down the middle into a left half and a right half, one player per half.
-- `Horizontal` — the window is split down the middle into a top half and a bottom half, one player per half.
-- Both variants recompute every frame from the window's actual size, so they stay correct across resizes and on HiDPI displays.
+- `Vertical` — the window is split down the middle into a left half and a right half, one player per half. Always exactly 2-way.
+- `Horizontal` — the window is split down the middle into a top half and a bottom half, one player per half. Always exactly 2-way.
+- `Grid` — N-way split for 2 to `MAX_SPLIT_PLAYERS` (4) players, laid out in a grid computed from the actual player count. Static only (no `dynamic` support). See [Grid split-screen](#grid-split-screen--n-way-splitorientationgrid-) below.
+- All three variants recompute every frame from the window's actual size, so they stay correct across resizes and on HiDPI displays.
 
 > **Only the first `"player"`-tagged entity's `split` block is read.** Same rule as `party` — if you author `split` on the second (or later) player instead of the first, it is silently ignored. The engine always reads whichever `"player"`-tagged entity appears first in the scene's `entities` list.
 
@@ -1918,6 +1920,113 @@ Dynamic mode is self-contained: it does **not** require also authoring a `party:
   ),
 ),
 ```
+
+### Grid split-screen — N-way (`SplitOrientation::Grid`) ✅
+
+This is **local, same-machine co-op** — same scope note as the sections above: unrelated to (and does not require) networked multiplayer.
+
+`orientation: Grid` generalizes fixed-orientation `split` (`Vertical`/`Horizontal`, always exactly 2-way) to any player count from 2 up to `MAX_SPLIT_PLAYERS` (4). Quadrant/cell layout is computed automatically from however many `"player"`-tagged entities the scene has: `cols = ceil(sqrt(count))`, `rows = ceil(count / cols)`. For `count == 4` this produces a clean 2×2 quadrant grid — the only player count this engine's example content actually ships. **Static only** — `Grid` does not support `dynamic` (no merge/split-by-distance for 3+ players).
+
+**Quadrant assignment is entity order, not an authored field.** Slot `0` is the first `"player"`-tagged entity in the scene's `entities` list, slot `1` the second, and so on — same "first player wins for the switch field" rule as `party`/`Vertical`/`Horizontal`, extended here to determine every player's on-screen position too. Cells fill row-major: for a 4-player grid, slot `0` = top-left, `1` = top-right, `2` = bottom-left, `3` = bottom-right.
+
+> **`count == 3` leaves one grid cell empty.** There is no special-cased 3-way layout (e.g. one wide top pane + two bottom panes) — a 3-player `Grid` scene still computes a 2×2 grid and simply never assigns a camera to the 4th cell, which renders as the window's clear color.
+
+> **More than `MAX_SPLIT_PLAYERS` (4) players spawn cameraless.** Consistent with the existing (pre-`Grid`) behavior when a 3rd player exists in a `Vertical`/`Horizontal` scene — extra players beyond the cap simply don't get a `SplitViewportSlot` camera, they still spawn and can still move, just without their own rendered view.
+
+> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`) so one shared mouse doesn't move every camera at once. Only `split` itself is read exclusively from the first player.
+
+**Example** — 4-player scene with a grid split, all 4 cameras fixed (no manual mouse control):
+
+```ron
+// prefabs/prefabs.ron
+"player_p1_grid": (
+  kind: Actor,
+  model: "character_male",
+  material: "tint_blue",   // solid-color tint — see `PrefabDef.material` / `AssetCatalog.materials` above
+  display_name: "Player 1",
+  player_index: 0,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+      // Sole switch for split-screen — read only from this (the first) player. Player count
+      // is read from the scene's entity count at load, not authored here.
+      split: (
+        orientation: Grid,
+      ),
+    ),
+    inputs: (
+      forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+
+// player_p3_grid — a THIRD keyboard scheme (IJKL) sharing the same physical keyboard as
+// player_p1_grid's WASD and player_p2_grid's arrow keys. No `split` here — only the first
+// player's is read for the switch — but this player's own `camera` block still matters.
+"player_p3_grid": (
+  kind: Actor,
+  model: "character_male",
+  material: "tint_dark_green",
+  display_name: "Player 3",
+  player_index: 2,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+    ),
+    inputs: (
+      forward: "KeyI", backward: "KeyK", left: "KeyJ", right: "KeyL",
+      strafe_left: "KeyJ", strafe_right: "KeyL", jump: "KeyU", run: "KeyO",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+
+// player_p4_grid — a FOURTH scheme using the numeric keypad (`Numpad0`-`Numpad9` — see the
+// "Valid key name strings" table above). Deliberately the lower half of the numpad (5/2/1/3 + 0 + 4), not
+// the more common 8/4/6/2 cluster — 8-and-2-with-5-in-the-middle is uncomfortable to play.
+"player_p4_grid": (
+  kind: Actor,
+  model: "character_female",
+  material: "tint_red",
+  display_name: "Player 4",
+  player_index: 3,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+    ),
+    inputs: (
+      forward: "Numpad5", backward: "Numpad2", left: "Numpad1", right: "Numpad3",
+      strafe_left: "Numpad1", strafe_right: "Numpad3", jump: "Numpad0", run: "Numpad4",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+```
+
+A full working example (all 4 players, including `player_p2_grid`) lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` and `scenes/room6.scene.ron`.
 
 ### NPC behaviour (`components.npc`) ✅
 

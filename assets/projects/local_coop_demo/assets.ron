@@ -8,5 +8,13 @@
   textures: {},
   audio: {},
   effects: {},
-  materials: {},
+  // Solid-color tints for room6's 4-way split — distinguishes 4 players who otherwise reuse just
+  // the 2 existing character models (2 players per model). Standard (not unlit), so tinted
+  // characters still respond to each room's lighting like every other model in this project.
+  materials: {
+    "tint_blue":       ( kind: Standard(( base_color: (r:0.15, g:0.35, b:0.95, a:1.0) )) ),
+    "tint_pink":       ( kind: Standard(( base_color: (r:0.95, g:0.35, b:0.70, a:1.0) )) ),
+    "tint_dark_green": ( kind: Standard(( base_color: (r:0.10, g:0.40, b:0.15, a:1.0) )) ),
+    "tint_red":        ( kind: Standard(( base_color: (r:0.85, g:0.15, b:0.15, a:1.0) )) ),
+  },
 )

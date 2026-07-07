@@ -39,6 +39,12 @@ pub struct PlayerConfig {
     /// from a single-player scene, where it stays `0` and is unused.
     #[serde(default)]
     pub player_index: u32,
+    /// Forwarded from `PrefabDef.material`. Applied via `PendingMaterialOverride` in
+    /// `spawn_player_entity_core`, same mechanism as the generic Actor/Prop spawn path
+    /// (`spawn_prefab_instance`) — players have their own dedicated spawn path that does not
+    /// otherwise read `PrefabDef.material` at all.
+    #[serde(default)]
+    pub material: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -120,15 +126,21 @@ pub struct SplitScreenDef {
 }
 
 /// How the window is divided between local co-op players' individual cameras.
-/// `Vertical` and `Horizontal` are both implemented; when `SplitScreenDef.dynamic` is set, the
-/// live split axis is chosen automatically instead (see `SplitScreenDef.orientation`'s doc).
+/// `Vertical`, `Horizontal`, and `Grid` are all implemented; when `SplitScreenDef.dynamic` is set,
+/// the live split axis is chosen automatically between `Vertical`/`Horizontal` instead (see
+/// `SplitScreenDef.orientation`'s doc) — `dynamic` does not support `Grid`.
 #[derive(Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SplitOrientation {
-    /// Left half / right half, split down the middle.
+    /// Left half / right half, split down the middle. Always exactly 2-way.
     #[default]
     Vertical,
-    /// Top half / bottom half, split down the middle.
+    /// Top half / bottom half, split down the middle. Always exactly 2-way.
     Horizontal,
+    /// N-way grid (`cols = ceil(sqrt(count))`, `rows = ceil(count / cols)`), static only (no
+    /// `dynamic` support). Player count is read from the scene's entity count at load, capped at
+    /// `MAX_SPLIT_PLAYERS` — see `capabilities::camera::split_screen_viewport_system`. A count of
+    /// 3 leaves one grid cell empty; more than `MAX_SPLIT_PLAYERS` players spawn cameraless.
+    Grid,
 }
 
 /// Local co-op dynamic split-screen tuning, authored on the first player's `camera.split.dynamic`.
@@ -273,6 +285,17 @@ impl InputMap {
             "Digit7" | "7" => Some(KeyCode::Digit7),
             "Digit8" | "8" => Some(KeyCode::Digit8),
             "Digit9" | "9" => Some(KeyCode::Digit9),
+            // Numpad (physical keys, unaffected by NumLock state)
+            "Numpad0" => Some(KeyCode::Numpad0),
+            "Numpad1" => Some(KeyCode::Numpad1),
+            "Numpad2" => Some(KeyCode::Numpad2),
+            "Numpad3" => Some(KeyCode::Numpad3),
+            "Numpad4" => Some(KeyCode::Numpad4),
+            "Numpad5" => Some(KeyCode::Numpad5),
+            "Numpad6" => Some(KeyCode::Numpad6),
+            "Numpad7" => Some(KeyCode::Numpad7),
+            "Numpad8" => Some(KeyCode::Numpad8),
+            "Numpad9" => Some(KeyCode::Numpad9),
             // Function keys
             "F1"  => Some(KeyCode::F1),
             "F2"  => Some(KeyCode::F2),

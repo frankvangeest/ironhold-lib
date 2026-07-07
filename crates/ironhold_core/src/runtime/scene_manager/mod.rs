@@ -151,6 +151,16 @@ pub struct ActiveSplitScreen(pub Option<crate::schema::player::SplitOrientation>
 #[derive(Resource, Default)]
 pub struct DynamicSplitConfig(pub Option<crate::schema::player::DynamicSplitDef>);
 
+/// Number of active `SplitViewportSlot` cameras for a `SplitOrientation::Grid` scene (Stage 6).
+/// `None` for `Vertical`/`Horizontal`/no-split scenes, where the slot count is always implicitly
+/// 2 or 0. Populated once by `spawn_players_and_camera` at scene load; cleared on full
+/// `LoadScene`. Deliberately authoritative rather than derived by counting `SplitViewportSlot`
+/// cameras live in `split_screen_viewport_system` — the live-count approach would silently
+/// reflow the grid on any mid-transition entity churn (relevant once a future hot join/leave
+/// feature builds on top of `Grid`), whereas a stored count only changes on an explicit write.
+#[derive(Resource, Default)]
+pub struct ActiveSplitSlotCount(pub Option<u32>);
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,

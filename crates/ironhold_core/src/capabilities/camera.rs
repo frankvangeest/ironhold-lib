@@ -240,6 +240,12 @@ pub fn party_camera_follow_system(
     }
 }
 
+/// Hard ceiling on `SplitOrientation::Grid`'s player count — bounds render-pass count (4 cameras
+/// is the worst case this engine has validated) and avoids degenerate slivers on a misconfigured
+/// scene. Extra players beyond this cap spawn cameraless, matching the existing (pre-Stage-6)
+/// behavior when a 3rd player exists in a `Vertical`/`Horizontal` (always-2-way) scene.
+pub const MAX_SPLIT_PLAYERS: u32 = 4;
+
 /// Marks a local co-op split-screen camera and which share of the window it owns. Spawned
 /// alongside a normal `OrbitCamera` (not a replacement) by `spawn_players_and_camera` when
 /// `CameraConfig.split` is set — each split-screen camera independently tracks its own player,
@@ -250,15 +256,23 @@ pub fn party_camera_follow_system(
 pub struct SplitViewportSlot(pub u32);
 
 /// Recomputes every `SplitViewportSlot` camera's `Camera.viewport` from the current primary
-/// window size and `ActiveSplitScreen`'s orientation. Runs every frame (cheap: at most 2 cameras,
-/// simple arithmetic) rather than hooking window-resize events specifically, so a resize is
-/// always correct on the very next frame with no missed-event risk.
+/// window size and `ActiveSplitScreen`'s orientation. Runs every frame (cheap: at most
+/// `MAX_SPLIT_PLAYERS` cameras, simple arithmetic) rather than hooking window-resize events
+/// specifically, so a resize is always correct on the very next frame with no missed-event risk.
 ///
 /// `Viewport.physical_position`/`physical_size` are physical pixels, not logical — reads
 /// `Window::physical_size()` (not `width()`/`height()`, which are logical) so this is correct on
 /// any HiDPI display without doing the `scale_factor()` multiplication by hand.
+///
+/// `Grid` reads `ActiveSplitSlotCount` for its player count rather than counting the
+/// `SplitViewportSlot` query live — see that resource's doc comment for why (Stage 6 plan: the
+/// live-count approach would silently reflow the grid on any mid-transition entity churn). A
+/// `Grid` scene with `count == 3` leaves one grid cell empty (no special-cased 3-way layout); a
+/// camera whose `slot.0 >= cols*rows` (more players than slots accounted for) is left unpositioned
+/// this frame rather than assigned a bogus cell.
 pub fn split_screen_viewport_system(
     active_split: Res<crate::runtime::scene_manager::ActiveSplitScreen>,
+    slot_count: Res<crate::runtime::scene_manager::ActiveSplitSlotCount>,
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut cameras: Query<(&mut Camera, &SplitViewportSlot)>,
 ) {
@@ -297,6 +311,24 @@ pub fn split_screen_viewport_system(
                         UVec2::new(physical_width, physical_height - half_height),
                     )
                 }
+            }
+            crate::schema::player::SplitOrientation::Grid => {
+                let Some(count) = slot_count.0 else { continue };
+                if count == 0 { continue; }
+                let cols = (count as f32).sqrt().ceil() as u32;
+                let rows = count.div_ceil(cols);
+                if slot.0 >= cols * rows { continue; }
+                let row = slot.0 / cols;
+                let col = slot.0 % cols;
+                let cell_width = physical_width / cols;
+                let cell_height = physical_height / rows;
+                let x = col * cell_width;
+                let y = row * cell_height;
+                // Last column/row absorbs the remainder — same odd-pixel-dimension handling as
+                // `Vertical`/`Horizontal` above, generalized to N cells per axis.
+                let w = if col == cols - 1 { physical_width - x } else { cell_width };
+                let h = if row == rows - 1 { physical_height - y } else { cell_height };
+                (UVec2::new(x, y), UVec2::new(w, h))
             }
         };
         camera.viewport = Some(Viewport {

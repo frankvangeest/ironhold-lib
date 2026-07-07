@@ -1,0 +1,142 @@
+(
+  schema_version: 2,
+  name: "room6",
+
+  tonemapping: AcesFitted,
+
+  // Golden/amber-yellow tone, matching the gold portal_to_room6 accent and ground_room6.
+  lighting: (
+    ambient: (0.26, 0.24, 0.14),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (1.0, 0.95, 0.75),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-2.5, 0.5, -2.5),
+    "player_2_start": (2.5, 0.5, -2.5),
+    "player_3_start": (-2.5, 0.5, 2.5),
+    "player_4_start": (2.5, 0.5, 2.5),
+  },
+
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground_room6",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1_grid MUST be first — its `camera.split` block (orientation: Grid) is the sole
+    // switch for the 4-way split-screen (same "first player wins" rule as `party`/fixed `split`
+    // elsewhere). Entity order also determines quadrant assignment (slot 0-3 = spawn order):
+    // P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right.
+    (
+      id: "player_01",
+      prefab: "player_p1_grid",
+      transform: (
+        translation: (-2.5, 0.5, -2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_02",
+      prefab: "player_p2_grid",
+      transform: (
+        translation: (2.5, 0.5, -2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_03",
+      prefab: "player_p3_grid",
+      transform: (
+        translation: (-2.5, 0.5, 2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_04",
+      prefab: "player_p4_grid",
+      transform: (
+        translation: (2.5, 0.5, 2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Return trip reuses the "portal_to_room5" prefab (see prefabs.ron comment) — same event
+    // name as room4's forward portal, same rules.ron entry, no new prefab needed.
+    (
+      id: "portal_to_room5",
+      prefab: "portal_to_room5",
+      transform: (
+        translation: (0.0, 0.0, -15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 5", offset: (0.0, 4.0, 0.0)),
+    ),
+
+  ],
+
+  // Scene title stays a single top label, same convention as every other room (room3/4/5's
+  // room_hint). Per-player control hints moved into each grid cell instead of a global stacked
+  // block — see the 4 quadrant labels below. Positions assume the 1280x720 baseline (the same
+  // fixed-pixel convention every Label in this project already uses — none of them are
+  // resize-aware, only the 3D camera viewports are).
+  ui: [
+    Label((
+      id: "room_hint",
+      text: "4-way grid split-screen | Pink -> room 5",
+      position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+
+    // Bottom-of-quadrant control hints. 2x2 grid at 1280x720 -> cell 640x360; each label sits
+    // 12px above its cell's bottom edge (y=360 or y=720), with a 20px left margin matching every
+    // other room's label convention. size.x (600) fits inside a 640-wide cell with matching
+    // right-side breathing room.
+    Label((
+      id: "controls_hint_p1",
+      text: "P1: WASD + Space + Shift",
+      position: (20.0, 316.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p2",
+      text: "P2: Arrows + Enter + R.Shift",
+      position: (660.0, 316.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p3",
+      text: "P3: IJKL + U + O",
+      position: (20.0, 676.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p4",
+      text: "P4: Numpad 5/2/1/3 + 0 + 4",
+      position: (660.0, 676.0),
+      size: (600.0, 32.0),
+    )),
+  ],
+)

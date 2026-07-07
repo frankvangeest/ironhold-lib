@@ -303,6 +303,16 @@ Sites 1 and 3 both hand-assemble a `PlayerConfig` — routed through the shared
 uses `gamepad_index`, camera targeting uses scene entity order), but it's a real ECS fact a
 future per-player system (nameplate/HUD labeling) can query without another schema pass.
 
+**`PrefabDef.material` does NOT automatically apply to players — this bit Stage 6's local co-op
+4-way split during playtest.** `spawn_prefab_instance` (the generic Actor/Prop/NPC path) reads
+`prefab.material` and inserts `PendingMaterialOverride`; `spawn_player_entity_core` (the player
+path) is completely separate and did not, and `PlayerConfig` didn't even carry the field. Fixed by
+adding `PlayerConfig.material: Option<String>`, forwarding it in `assemble_player_config` (so all
+three sites above get it for free), and inserting `PendingMaterialOverride` in
+`spawn_player_entity_core` exactly like the generic path does. **Any future `PrefabDef` field
+meant to affect rendering/visuals must be checked against both spawn paths, not just the generic
+one** — this is the same class of bug the four-site inventory above exists to prevent.
+
 ### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 
 **`PartyOrbitCamera`** (`capabilities/camera.rs`) is a sibling to `OrbitCamera`, not a
@@ -315,15 +325,34 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   by `party_camera_follow_system`. `PartyZoomDef.allow_manual_zoom` (default `false`) controls
   whether scroll-wheel still nudges the derived radius via an accumulated offset.
 - `split` set → spawns one **real `OrbitCamera` per player** (not `PartyOrbitCamera`), each
-  tagged `SplitViewportSlot(u32)` (which half it owns). `split_screen_viewport_system` recomputes
-  every `SplitViewportSlot` camera's `Camera.viewport` every frame from
-  `Window::physical_size()` (physical pixels already — no manual `scale_factor()` multiplication
-  needed, unlike a naive `width()`/`height()` read) and `ActiveSplitScreen`'s orientation
-  (`SplitOrientation::Vertical` splits left/right, `Horizontal` splits top/bottom). Split-screen
-  orientation lives in the `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/
+  tagged `SplitViewportSlot(u32)` (which cell it owns — slot index = spawn order, i.e. entity
+  order in the scene's `entities:` list). `split_screen_viewport_system` recomputes every
+  `SplitViewportSlot` camera's `Camera.viewport` every frame from `Window::physical_size()`
+  (physical pixels already — no manual `scale_factor()` multiplication needed, unlike a naive
+  `width()`/`height()` read) and `ActiveSplitScreen`'s orientation (`SplitOrientation::Vertical`
+  splits left/right, `Horizontal` splits top/bottom, `Grid` computes an N-cell grid — see below).
+  Split-screen orientation lives in the `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/
   `LoadedTargetIndicator` — populated by `spawn_players_and_camera`, cleared on `LoadScene`),
   **not** on `OrbitCamera` or `SplitViewportSlot` — this keeps split-screen state out of the
   camera components so the planned `camera_modes` unification doesn't have to untangle it later.
+  `Vertical`/`Horizontal` are always exactly 2-way (`.take(2)` in `spawn_players_and_camera`'s
+  `split` branch); only `Grid` (Stage 6) unlocks N-way, `.take(slot_count)` where
+  `slot_count = entities.len().min(MAX_SPLIT_PLAYERS)` (`MAX_SPLIT_PLAYERS = 4`, `camera.rs`) —
+  a `Grid` scene with more players than the cap spawns the extras cameraless, same as what
+  already happened pre-Stage-6 if a 3rd player existed in a `Vertical`/`Horizontal` scene.
+- `Grid` orientation (Stage 6) → `split_screen_viewport_system` reads a separate resource,
+  **`ActiveSplitSlotCount(Option<u32>)`** (populated once by `spawn_players_and_camera` at scene
+  load, cleared on `LoadScene` — mirrors `DynamicSplitConfig`'s exact write-once lifecycle), for
+  its player count, rather than counting `SplitViewportSlot` cameras live in the query each frame.
+  This was a deliberate architecture-review fix during planning: since `Grid` is meant as the
+  foundation for a future hot-join/leave feature, deriving the count live would silently reflow
+  the grid on any mid-transition entity churn — a stored, explicitly-written count doesn't. Layout:
+  `cols = ceil(sqrt(count))`, `rows = ceil(count / cols)`, cell assigned row-major by `slot.0`
+  (`row = slot.0 / cols`, `col = slot.0 % cols`); the last row/column absorbs the remainder on an
+  odd window dimension, same pattern as `Vertical`/`Horizontal`. `count == 3` leaves one grid cell
+  (slot `3` of a 2×2 grid) with no camera — renders as clear color, not a special-cased 3-pane
+  layout. `Grid` does **not** support `split.dynamic` — dynamic merge/split stays `Vertical`/
+  `Horizontal`-only.
 - `split.dynamic: Option<DynamicSplitDef>` set (Stage 5) → the view starts **merged** (its own
   internal `PartyOrbitCamera`, tuned by `DynamicSplitDef.merged_zoom_margin`/
   `merged_allow_manual_zoom` — mirrors `PartyZoomDef`'s two fields, self-contained specifically so

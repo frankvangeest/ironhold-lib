@@ -70,6 +70,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: (text: "Room 3", offset: (0.0, 4.0, 0.0)),
     ),
 
     // room4 -> room5 (Stage 5, dynamic split). See prefabs.ron's "portal_to_room5" comment —
@@ -82,6 +83,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: (text: "Room 5", offset: (0.0, 4.0, 0.0)),
     ),
 
   ],

@@ -5,6 +5,29 @@ metadata:
   type: project
 ---
 
+**STAGE 6 — 4-way / N-way Grid split-screen (reviewed 2026-07-07, ALIGNED):**
+- `SplitOrientation::Grid` variant (additive; Vertical/Horizontal unchanged, still 2-way). Reachable
+  via `split: (orientation: Grid)` on FIRST player's camera block only (same first-player-wins rule).
+- Player count is NOT authored directly — derived from scene `entities:` count (tags:["player"]),
+  capped at `MAX_SPLIT_PLAYERS: u32 = 4` (camera.rs:247). Grid math is generic (cols=ceil(sqrt(count)),
+  rows=ceil(count/cols), row-major cell by slot.0) but the cap is a hardcoded perf/safety ceiling
+  (bounds WebGPU render-pass count) — a designer wanting 5+ way silently gets 4 cams + extras
+  cameraless. NOT RON-tunable; accepted (documented, analogous to SPAWNS_PER_FRAME), NOT a blocker.
+- Quadrant assignment = entity order in `entities:` (slot 0-3 = spawn order). Designer-controllable
+  but MUST be known — documented in room6.scene.ron comment + src/CLAUDE.md. count==3 leaves one
+  dead (clear-color) quadrant, documented.
+- `ActiveSplitSlotCount(Option<u32>)` resource (mod.rs:162) mirrors DynamicSplitConfig EXACTLY:
+  init lib.rs:158, set at all entity_spawner branches (Some(slot_count) only in Grid, None else),
+  cleared LoadScene (action_executor.rs:56). Deliberately stored-not-live-queried so future hot-
+  join/leave won't reflow grid on mid-transition churn. No hidden non-RON behavior.
+- `split_screen_viewport_system` Grid arm (camera.rs:315) touches ONLY Camera.viewport; slot.0 >=
+  cols*rows → skip (unpositioned, not bogus cell). NO ActionQueue. Correct.
+- Numpad0-9 added to InputMap::parse_key (player.rs:283) — additive whitelist, RON-authored.
+- Visual distinction = ZERO new capability: 4 `tint_*` Standard materials in assets.ron + per-prefab
+  `material: "tint_blue"` catalog-key override (PrefabDef.material → PendingMaterialOverride). No
+  hardcoded paths. player_p1-4_grid each repeat zoom_speed:0.0 + orbit_button:"None" per the
+  per-player-config asymmetry footgun below (correct). Grid does NOT support split.dynamic (2-way only).
+
 **STAGE 5 — dynamic split-screen (reviewed 2026-07-06, ALIGNED):**
 - `SplitScreenDef.dynamic: Option<DynamicSplitDef>`; `orientation` now `#[serde(default)]` (Vertical),
   in dynamic mode it's only a rare-tie-break hint (live axis chosen from dx/dz). `DynamicSplitDef`

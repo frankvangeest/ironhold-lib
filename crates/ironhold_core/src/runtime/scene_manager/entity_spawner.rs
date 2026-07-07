@@ -532,6 +532,7 @@ pub(crate) fn spawn_players_and_camera(
     if entities.len() < 2 {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
         return;
     }
@@ -544,6 +545,18 @@ pub(crate) fn spawn_players_and_camera(
              these are mutually exclusive. Using `split` (the more specific setting) and \
              ignoring `party`; remove one of the two blocks to silence this warning."
         );
+    }
+
+    if let Some(s) = split {
+        if s.orientation == crate::schema::player::SplitOrientation::Grid && s.dynamic.is_some() {
+            warn!(
+                "Scene has `split.orientation: Grid` and `split.dynamic` both set on the first \
+                 player's `camera` config — dynamic split only supports Vertical/Horizontal, so \
+                 `dynamic` silently wins here and the scene gets a 2-way merge/split, not an \
+                 N-way grid. Remove `dynamic` to get a static Grid split, or remove `orientation: \
+                 Grid` (dynamic picks its own axis) to silence this warning."
+            );
+        }
     }
 
     if let Some(dynamic) = split.and_then(|s| s.dynamic.as_ref()) {
@@ -598,6 +611,9 @@ pub(crate) fn spawn_players_and_camera(
                 merged_allow_manual_zoom: dynamic.merged_allow_manual_zoom,
             },
         )));
+        // Dynamic split is always a 2-way merge/split (Grid's N-way layout is static-only —
+        // see the feature plan's "not in scope" list), so the slot count is never Grid-driven.
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         for (i, (config, entity)) in player_configs.iter().zip(entities.iter()).enumerate().take(2) {
             let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
             commands.entity(camera_entity).insert((
@@ -614,15 +630,39 @@ pub(crate) fn spawn_players_and_camera(
             crate::runtime::scene_manager::ActiveSplitScreen(Some(split.orientation)),
         );
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
-        // Only the first two players get a split-screen slot — Stages 4-5 (horizontal/dynamic
-        // split) are also two-way splits; a hypothetical 3rd+ player isn't part of this stage's
-        // scope (the demo project only ever has 2).
-        for (i, (config, entity)) in player_configs.iter().zip(entities.iter()).enumerate().take(2) {
+        // `Vertical`/`Horizontal` stay strictly 2-way (Stages 3-5's original behavior, unchanged);
+        // only `Grid` (Stage 6) unlocks N-way, capped at `MAX_SPLIT_PLAYERS` to bound render-pass
+        // count and avoid degenerate slivers on a misconfigured scene.
+        let slot_count: u32 = if split.orientation == crate::schema::player::SplitOrientation::Grid {
+            let max = crate::capabilities::camera::MAX_SPLIT_PLAYERS;
+            if entities.len() as u32 > max {
+                warn!(
+                    "Scene has {} players with `split.orientation: Grid`, but MAX_SPLIT_PLAYERS \
+                     is {} — the extra player(s) spawn without a camera (cameraless, but still \
+                     playable). Reduce the player count or raise MAX_SPLIT_PLAYERS to silence \
+                     this warning.",
+                    entities.len(), max
+                );
+            }
+            (entities.len() as u32).min(max)
+        } else {
+            2
+        };
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(
+            if split.orientation == crate::schema::player::SplitOrientation::Grid {
+                Some(slot_count)
+            } else {
+                None
+            },
+        ));
+        for (i, (config, entity)) in player_configs.iter().zip(entities.iter())
+            .enumerate().take(slot_count as usize)
+        {
             let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
-            // Both split cameras render to the same window at Camera's default order (0), which
+            // All split cameras render to the same window at Camera's default order (0), which
             // Bevy's ambiguity detection flags every frame even though non-overlapping viewports
             // make the render order harmless. Giving each slot a distinct order silences it and
-            // makes the (harmless-but-real) two-passes-per-frame render order explicit/deterministic.
+            // makes the (harmless-but-real) N-passes-per-frame render order explicit/deterministic.
             commands.entity(camera_entity).insert((
                 crate::capabilities::camera::SplitViewportSlot(i as u32),
                 Camera {
@@ -634,12 +674,14 @@ pub(crate) fn spawn_players_and_camera(
     } else if let Some(party) = party {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         crate::capabilities::camera::spawn_party_orbit_camera(
             commands, tonemapping, &first.camera, party, &entities,
         );
     } else {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
+        commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         warn!(
             "Scene has {} players but no `party` or `split` camera block on the first player's \
              `camera` config — falling back to a single OrbitCamera targeting only the first \
@@ -679,6 +721,9 @@ fn spawn_player_entity_core(
     );
 
     let player_entity = spawned.parent;
+    if let Some(mat_key) = &player_config.material {
+        commands.entity(player_entity).insert(PendingMaterialOverride(mat_key.clone()));
+    }
     let mv = &player_config.movement;
     let cap_radius = mv.collider_radius.unwrap_or(0.4);
     let player_height = mv.collider_height.unwrap_or(1.8);
@@ -894,5 +939,6 @@ pub(crate) fn assemble_player_config(
             None
         },
         nameplate_override: prefab.nameplate,
+        material: prefab.material.clone(),
     }
 }

@@ -69,6 +69,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
+      label: (text: "Room 2", offset: (0.0, 4.0, 0.0)),
     ),
 
   ],

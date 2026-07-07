@@ -3,7 +3,7 @@ use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, GameEvent};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
@@ -11,6 +11,7 @@ use ironhold_core::capabilities::player::{CharacterController, player_view_box_c
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
+    MAX_SPLIT_PLAYERS,
 };
 use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
 
@@ -616,6 +617,248 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     let mut sorted = slots.clone();
     sorted.sort();
     assert_eq!(sorted, vec![0, 1], "expected exactly one slot 0 and one slot 1, got {:?}", slots);
+}
+
+// ── Stage 6: Grid orientation (N-way split) ─────────────────────────────────────
+
+#[test]
+fn test_split_screen_viewport_grid_4way_quadrants() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Grid)));
+    app.world_mut().insert_resource(ActiveSplitSlotCount(Some(4)));
+
+    let cams: Vec<Entity> = (0..4)
+        .map(|i| app.world_mut().spawn((Camera::default(), SplitViewportSlot(i))).id())
+        .collect();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp = |e: Entity| app.world().get::<Camera>(e).unwrap().viewport.clone().unwrap();
+    let (vp0, vp1, vp2, vp3) = (vp(cams[0]), vp(cams[1]), vp(cams[2]), vp(cams[3]));
+
+    // 2x2 grid: slot 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right.
+    assert_eq!(vp0.physical_position, UVec2::new(0, 0));
+    assert_eq!(vp0.physical_size, UVec2::new(640, 360));
+    assert_eq!(vp1.physical_position, UVec2::new(640, 0));
+    assert_eq!(vp1.physical_size, UVec2::new(640, 360));
+    assert_eq!(vp2.physical_position, UVec2::new(0, 360));
+    assert_eq!(vp2.physical_size, UVec2::new(640, 360));
+    assert_eq!(vp3.physical_position, UVec2::new(640, 360));
+    assert_eq!(vp3.physical_size, UVec2::new(640, 360));
+}
+
+#[test]
+fn test_split_screen_viewport_grid_absorbs_odd_dimension_remainder() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1281, 721, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Grid)));
+    app.world_mut().insert_resource(ActiveSplitSlotCount(Some(4)));
+
+    let cams: Vec<Entity> = (0..4)
+        .map(|i| app.world_mut().spawn((Camera::default(), SplitViewportSlot(i))).id())
+        .collect();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    let vp = |e: Entity| app.world().get::<Camera>(e).unwrap().viewport.clone().unwrap();
+    let (vp0, vp1, vp2, vp3) = (vp(cams[0]), vp(cams[1]), vp(cams[2]), vp(cams[3]));
+
+    assert_eq!(vp0.physical_size.x + vp1.physical_size.x, 1281, "row must sum to the full physical width");
+    assert_eq!(vp2.physical_size.x + vp3.physical_size.x, 1281, "row must sum to the full physical width");
+    assert_eq!(vp0.physical_size.y + vp2.physical_size.y, 721, "column must sum to the full physical height");
+    assert_eq!(vp1.physical_size.y + vp3.physical_size.y, 721, "column must sum to the full physical height");
+    assert_eq!(vp1.physical_size, UVec2::new(641, 360), "right column absorbs the width remainder");
+    assert_eq!(vp3.physical_size, UVec2::new(641, 361), "bottom-right cell absorbs both remainders");
+}
+
+#[test]
+fn test_split_screen_viewport_grid_count_three_leaves_one_dead_quadrant() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Grid)));
+    app.world_mut().insert_resource(ActiveSplitSlotCount(Some(3)));
+
+    // Only 3 cameras exist — slot 3's cell (bottom-right of the 2x2 grid) is simply never
+    // rendered to, since no camera claims it. Must not panic.
+    let cams: Vec<Entity> = (0..3)
+        .map(|i| app.world_mut().spawn((Camera::default(), SplitViewportSlot(i))).id())
+        .collect();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    for cam in &cams {
+        assert!(app.world().get::<Camera>(*cam).unwrap().viewport.is_some());
+    }
+}
+
+#[test]
+fn test_split_screen_viewport_grid_noop_when_slot_count_none() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Grid)));
+    // ActiveSplitSlotCount defaults to None via init_resource — no explicit insert.
+
+    let cam0 = app.world_mut().spawn((Camera::default(), SplitViewportSlot(0))).id();
+
+    app.world_mut().run_system_once(split_screen_viewport_system).unwrap();
+
+    assert!(
+        app.world().get::<Camera>(cam0).unwrap().viewport.is_none(),
+        "Grid orientation with no ActiveSplitSlotCount must not touch Camera.viewport"
+    );
+}
+
+#[test]
+fn test_numpad_key_parsing() {
+    assert_eq!(InputMap::parse_key("Numpad0"), Some(KeyCode::Numpad0));
+    assert_eq!(InputMap::parse_key("Numpad1"), Some(KeyCode::Numpad1));
+    assert_eq!(InputMap::parse_key("Numpad4"), Some(KeyCode::Numpad4));
+    assert_eq!(InputMap::parse_key("Numpad5"), Some(KeyCode::Numpad5));
+    assert_eq!(InputMap::parse_key("Numpad9"), Some(KeyCode::Numpad9));
+}
+
+/// Builds `n` player prefabs (`test_player_1`..`test_player_n`), alternating the two shared
+/// character models. Only the first player's `camera.split` is set — mirrors
+/// `two_player_catalogs_with_split`'s pattern, generalized to N players for Stage 6's Grid tests.
+fn n_player_catalogs_with_split(app: &mut App, n: u32, split: Option<SplitScreenDef>) {
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+
+    let mut prefabs = std::collections::HashMap::new();
+    for i in 0..n {
+        let camera = if i == 0 {
+            let mut c = base_camera_config();
+            c.split = split.clone();
+            Some(c)
+        } else {
+            None
+        };
+        prefabs.insert(format!("test_player_{}", i + 1), PrefabDef {
+            kind: PrefabKind::Actor,
+            model: if i % 2 == 0 { "char_a".to_string() } else { "char_b".to_string() },
+            player_index: i,
+            components: PrefabComponents {
+                tags: vec!["player".to_string()],
+                camera,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog { prefabs, ..Default::default() }));
+}
+
+/// Drives a Replace-mode load of an N-player scene, mirroring `load_two_player_scene`.
+fn load_n_player_scene(app: &mut App, n: u32) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let mut entities_ron = String::new();
+    for i in 0..n {
+        let x = -4.0 + (i as f32) * 3.0;
+        entities_ron.push_str(&format!(
+            r#"(id: "p{i}", prefab: "test_player_{idx}", transform: (translation: ({x:.1}, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),"#,
+            i = i, idx = i + 1, x = x
+        ));
+    }
+    let ron_str = format!(
+        "(schema_version: 2, entities: [{entities_ron}], ui: [])"
+    );
+    let scene: GameSceneV2 = ron::de::from_str(&ron_str).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_grid_split_spawns_four_viewport_slots_and_sets_slot_count() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, 4,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_n_player_scene(&mut app, 4);
+
+    let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
+    assert_eq!(controller_count, 4, "all 4 players must spawn a CharacterController");
+
+    let mut slots: Vec<u32> = {
+        let mut query = app.world_mut().query::<&SplitViewportSlot>();
+        query.iter(app.world()).map(|s| s.0).collect()
+    };
+    slots.sort();
+    assert_eq!(slots, vec![0, 1, 2, 3], "expected one SplitViewportSlot per player, 0 through 3");
+
+    assert_eq!(
+        app.world().resource::<ActiveSplitSlotCount>().0,
+        Some(4),
+        "ActiveSplitSlotCount must be set for a Grid scene"
+    );
+}
+
+#[test]
+fn test_vertical_split_scene_leaves_slot_count_none() {
+    // Regression: Vertical/Horizontal must NOT populate ActiveSplitSlotCount — only Grid does.
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+    load_two_player_scene(&mut app);
+
+    assert_eq!(
+        app.world().resource::<ActiveSplitSlotCount>().0,
+        None,
+        "Vertical split must leave ActiveSplitSlotCount at None"
+    );
+}
+
+#[test]
+fn test_grid_split_with_five_players_caps_at_max_and_spawns_fifth_cameraless() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, 5,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_n_player_scene(&mut app, 5);
+
+    let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
+    assert_eq!(controller_count, 5, "all 5 players still spawn a CharacterController");
+
+    let slot_count = app.world_mut().query::<&SplitViewportSlot>().iter(app.world()).count();
+    assert_eq!(
+        slot_count, MAX_SPLIT_PLAYERS as usize,
+        "5th player must spawn cameraless — Grid caps at MAX_SPLIT_PLAYERS"
+    );
+
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
 }
 
 // ── Stage 5: dynamic_split_screen_system (unit-level) ───────────────────────────

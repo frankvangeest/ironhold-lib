@@ -123,6 +123,36 @@ layer runtime add/remove on top.
   adjacent to IJKL and not colliding with any other scheme's keys — confirm during
   authoring/playtesting like every prior stage's tentative key choice.
 
+### Playtest findings (2026-07-07) — two fixes made post-implementation
+
+- **Material tint didn't apply to players — real gap, now fixed.** The plan's claim that
+  `PrefabDef.material` was "zero new engine capability" was wrong for players specifically:
+  `spawn_prefab_instance` (the generic Actor/Prop path) reads `prefab.material` and inserts
+  `PendingMaterialOverride`, but players are spawned through a completely separate path
+  (`spawn_player_entity_core`) that never read it — and `PlayerConfig` didn't even carry a
+  `material` field. Fixed: added `PlayerConfig.material: Option<String>` (`schema/player.rs`),
+  forwarded it in `assemble_player_config` (the single shared helper all three player-assembly
+  sites already route through — Stage 1's four-site inventory paid off here, one edit fixed all
+  three), and `spawn_player_entity_core` now inserts `PendingMaterialOverride` exactly like the
+  generic path does. No schema RON change needed — `material:` on a player prefab already parsed
+  correctly, it just silently did nothing before this fix.
+- **UI relayout — per-quadrant control hints instead of a stacked global block.** Frank's playtest
+  feedback: two stacked "controls_hint" lines at the top reads worse than putting each player's
+  own control hint at the bottom of their own grid cell, and the scene title should stay the sole
+  top label (matching every other room) instead of becoming a 3rd stacked line. Reworked
+  `room6.scene.ron`'s `ui:` block: one `room_hint` label at the top (unchanged position/role from
+  every other room), plus 4 new labels (`controls_hint_p1`-`p4`) positioned near the bottom edge of
+  each 1280x720-baseline quadrant. Same fixed-pixel convention every other Label in this project
+  already uses (no Label in this engine is resize-aware — only the 3D camera viewports are), so
+  this is a content-only change, no new schema/capability.
+- **Floating room-destination labels above every portal (all 6 `local_coop_demo` scenes, not just
+  room6).** Frank asked whether this was possible RON-only — it is: `SceneEntityDef.label:
+  Option<EntityLabelDef>` already exists (`schema/scene_v2.rs`) as a per-entity floating
+  world-space text annotation, independent of the nameplate system, and already wired into the
+  composite-prefab spawn branch every portal here uses (`scene_loader.rs`). Added `label: (text:
+  "Room N", offset: (0.0, 4.0, 0.0))` to all 10 portal entities across `main`/`room2`-`room6`, one
+  edit per portal, zero Rust/schema changes.
+
 ### Scene content
 
 - New prefabs `player_p3_grid` (IJKL) and `player_p4_grid` (Numpad), alongside new

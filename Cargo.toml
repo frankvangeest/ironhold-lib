@@ -31,7 +31,11 @@ overflow-checks = true
 split-debuginfo = "packed" # Extracts symbols into a separate .dwp file
 
 [profile.test.package."*"]
-opt-level = 3       # Match release performance for Bevy engine code
+# Test-only: dependency code (Bevy, Rapier, etc.) doesn't need release-grade FPS in headless unit
+# tests, so this trades a bit of runtime speed for much faster compiles — every one of the ~19
+# separate ironhold_core test binaries otherwise fully re-optimizes the entire dependency tree at
+# opt-level 3. Deliberately NOT applied to [profile.dev.package."*"] below, which stays at 3.
+opt-level = 1
 
 [profile.dev]
 opt-level = 3       # Match release performance for local code
