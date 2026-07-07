@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Local Co-op Split-Screen Demo — Stage 6: 4-way split-screen scene** — see `planning/features/local_coop_4way_split.md`
+_(none)_
 
 ---
 
@@ -60,13 +60,16 @@ Staged incrementally; each stage ships and is playtested before the next starts.
       prevent flicker/mid-split axis flips — `02d7ccb`. All 5 stages shipped — feature doc moved to
       `planning/features/done/local_coop_foundation.md`.
 - [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit now that Stage 3-5's split-screen viewports have all shipped. _Dep: Stage 1 (`player_index`)._
-- [ ] **Stage 6 — 4-way split-screen scene (N-way generic)** — Active; generalizes the split
-      system from 2-way (`Vertical`/`Horizontal`) to a new `Grid` orientation driven by player
-      count (static only, no dynamic merge); removes the `.take(2)` cap in
-      `spawn_players_and_camera`; adds Numpad key support for a 4th keyboard scheme so 4 players
-      (WASD / Arrows / IJKL / Numpad) share one keyboard, each visually distinguished by a
-      solid-color material tint (blue/pink/dark green/red); plan reviewed and ALIGNED by
-      system-architect and ux-gamedesigner-reviewer. See `planning/features/local_coop_4way_split.md`.
+- [x] **Stage 6 — 4-way split-screen scene (N-way generic)** — generalizes the split system from
+      2-way (`Vertical`/`Horizontal`) to a new `Grid` orientation driven by player count (static
+      only, no dynamic merge); removes the `.take(2)` cap in `spawn_players_and_camera`; adds
+      Numpad key support for a 4th keyboard scheme so 4 players (WASD / Arrows / IJKL / Numpad)
+      share one keyboard, each visually distinguished by a solid-color material tint (blue/pink/
+      dark green/red). Playtest surfaced two real bugs (material tint never reached players —
+      `PlayerConfig` didn't carry the field at all; UI needed reworking to per-quadrant control
+      hints) and one added polish item (floating "Room N" labels above every portal, all 6 scenes)
+      — all fixed. Screenshot baseline for `room6` deferred (build-time constraints this session).
+      `2a5e425`. See `planning/features/done/local_coop_4way_split.md`.
 - Diagonal split-screen scoped out at design time — Bevy's `Camera.viewport` is rectangle-only; a true diagonal cut needs a stencil/shader mask, untested on this engine's WASM/WebGL2 target.
 - Dep (soft): promotes "Gamepad / controller input" (Icebox) from icebox to in-scope, sized down to exactly this demo's needs.
 

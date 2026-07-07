@@ -1,7 +1,8 @@
 # Feature: Local Co-op 4-Way Split-Screen Scene
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `c575139` (2026-07-06)_
+_Shipped at: `2a5e425` (2026-07-07)_
 
 ## What
 
@@ -212,43 +213,48 @@ layer runtime add/remove on top.
 
 ## Tasks
 
-- [ ] `SplitOrientation::Grid` variant + `ActiveSplitSlotCount(Option<u32>)` resource (mirroring
+- [x] `SplitOrientation::Grid` variant + `ActiveSplitSlotCount(Option<u32>)` resource (mirroring
       `DynamicSplitConfig`'s populate-at-load/clear-on-`LoadScene` lifecycle) + `Grid` match arm in
       `split_screen_viewport_system` reading it (row/col math, remainder-absorbing cell sizing) —
       NOT deriving count from a live camera query (see architecture review note in Approach)
-- [ ] `MAX_SPLIT_PLAYERS` constant; `spawn_players_and_camera`'s `split` branch takes
+- [x] `MAX_SPLIT_PLAYERS` constant; `spawn_players_and_camera`'s `split` branch takes
       `slot_count` instead of a hardcoded `.take(2)` (`Vertical`/`Horizontal` keep taking exactly 2),
       writes `ActiveSplitSlotCount` accordingly
-- [ ] Update stale doc comments: `SplitOrientation` (`schema/player.rs`) and
+- [x] Update stale doc comments: `SplitOrientation` (`schema/player.rs`) and
       `split_screen_viewport_system` (`capabilities/camera.rs`) both currently assert only 2-way
       splits are implemented
-- [ ] `InputMap::parse_key`: add `Numpad0`-`Numpad9`
-- [ ] `local_coop_demo/assets.ron`: 4 new `materials` entries (`tint_blue`, `tint_pink`,
+- [x] `InputMap::parse_key`: add `Numpad0`-`Numpad9`
+- [x] `local_coop_demo/assets.ron`: 4 new `materials` entries (`tint_blue`, `tint_pink`,
       `tint_dark_green`, `tint_red`, all `MaterialKind::Standard`)
-- [ ] `local_coop_demo`: `player_p1_grid`/`player_p2_grid`/`player_p3_grid`/`player_p4_grid`
+- [x] `local_coop_demo`: `player_p1_grid`/`player_p2_grid`/`player_p3_grid`/`player_p4_grid`
       prefabs (reusing `character_male`/`character_female` models, each with a distinct
-      `material: "tint_<color>"` override), `ground_room6`, `room6.scene.ron` (with the stacked
-      `controls_hint`/`controls_hint_2`/`room_hint` labels), portal wiring both directions
-- [ ] Tests: `Grid` viewport math for `count == 4` (even + odd window dimensions, non-overlap,
+      `material: "tint_<color>"` override), `ground_room6`, `room6.scene.ron` — final UI layout
+      (post-playtest) is one top title label + 4 per-quadrant control-hint labels, not the
+      originally-planned stacked pair; portal wiring both directions
+- [x] Tests: `Grid` viewport math for `count == 4` (even + odd window dimensions, non-overlap,
       sums-to-full-size); `count == 3` leaves the documented dead quadrant (no panic); a `Grid`
       scene with 5 players spawns the 5th cameraless without panicking; `spawn_players_and_camera`
       spawns exactly 4 `SplitViewportSlot`s + `ActiveSplitSlotCount(Some(4))` for a `Grid` scene;
       `Vertical`/`Horizontal` scenes unaffected (regression, `ActiveSplitSlotCount` stays `None`);
-      Numpad key parsing
-- [ ] Docs: `docs/20_data_formats.md` (`Grid` variant, `MAX_SPLIT_PLAYERS`, `ActiveSplitSlotCount`,
+      Numpad key parsing. 38/38 pass; full `ironhold_core` suite passes.
+- [x] Docs: `docs/20_data_formats.md` (`Grid` variant, `MAX_SPLIT_PLAYERS`, `ActiveSplitSlotCount`,
       Numpad key names, the `count == 3`/`>4 players` documented behaviors, quadrant-order-equals-
-      entity-order), `crates/ironhold_core/src/CLAUDE.md`
-- [ ] Schema/CLI check: `cargo check -p ironhold_cli`
-- [ ] Full review gate: alignment, architecture (schema/capability change), wasm-perf (4 cameras ×
-      4 render passes worst case — confirm no WASM frame-time/binary-size regression)
-- [ ] Register `room6` per `CLAUDE.md`'s "Adding a new asset project" steps (screenshot baseline
-      — `test_web.py`'s `discover_scenes()` picks up `room6` automatically, no `PROJECTS` list
-      change needed since `local_coop_demo` is already registered)
-- [ ] Playtest checklist explicitly includes: confirm no `controls_hint_2`/`room_hint` wrap/overlap
-      in-browser; note the IJKL-scheme's keyboard-position-to-screen-quadrant mismatch (IJKL sits
-      center-right on the keyboard but P3 renders bottom-left) as an accepted, non-blocking quirk
-      to watch for during Frank's playtest, not a bug to fix
-- [ ] WASM dev + release build, playtest checklist, Frank confirmation
+      entity-order), `crates/ironhold_core/src/CLAUDE.md` (also documents the `PlayerConfig.material`
+      playtest-fix gap for future readers)
+- [x] Schema/CLI check: `cargo check -p ironhold_cli` — clean
+- [x] Full review gate: alignment-reviewer (ALIGNED), system-architect (ALIGNED, 2 minor — the
+      Grid+dynamic-combo warning was added), wasm-perf-reviewer (OK, no regression),
+      ux-gamedesigner-reviewer (ALIGNED, found the room6 room_hint color-name bug, fixed)
+- [ ] Register `room6` per `CLAUDE.md`'s "Adding a new asset project" steps — **deferred**: the
+      screenshot baseline (`test_web.py --project local_coop_demo --update-baselines`) was not
+      generated for `room6` due to this session's build-time/disk constraints. `main`/`room2`-`5`
+      already have baselines; `room6`'s is missing until a future baseline refresh. Not a blocker
+      per Frank's explicit call — revisit next time baselines are regenerated for this project.
+- [x] Playtest checklist explicitly includes: confirm no label wrap/overlap in-browser; note the
+      IJKL-scheme's keyboard-position-to-screen-quadrant mismatch (IJKL sits center-right on the
+      keyboard but P3 renders bottom-left) as an accepted, non-blocking quirk — confirmed by Frank
+- [x] WASM dev + release build, playtest checklist, Frank confirmation — dev (111 MB) and release
+      (59 MB) both confirmed working in-browser, no console errors
 
 ## Open questions
 
