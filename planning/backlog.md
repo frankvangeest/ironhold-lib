@@ -11,7 +11,7 @@
 
 ## Active
 
-_(none)_
+- [ ] **Local Co-op — split-screen player HUD labels** — see `planning/features/local_coop_player_hud_labels.md`
 
 ---
 
@@ -59,7 +59,13 @@ Staged incrementally; each stage ships and is playtested before the next starts.
       `Camera.is_active` toggling rather than runtime spawn/despawn; hysteresis + orientation-lock
       prevent flicker/mid-split axis flips — `02d7ccb`. All 5 stages shipped — feature doc moved to
       `planning/features/done/local_coop_foundation.md`.
-- [ ] **P1/P2 nameplate & HUD distinction** — split out of Stage 1 on 2026-07-04; once `player_index` exists (Stage 1), label each player's nameplate/UI by index (e.g. "P1"/"P2") for local co-op scenes. Deferred because there's no split-screen HUD yet to put per-player UI in — natural fit now that Stage 3-5's split-screen viewports have all shipped. _Dep: Stage 1 (`player_index`)._
+- [ ] **P1/P2 nameplate & HUD distinction** — Active as "split-screen player HUD labels", see
+      `planning/features/local_coop_player_hud_labels.md`. Split into two independent halves during
+      planning (2026-07-07): the HUD-corner-label half is what's now Active; the *nameplate* half
+      (floating 3D "Player N" tags) turned out to be blocked on a separate, deeper bug —
+      `nameplate_visibility_system`'s `camera_q.single()` no-ops entirely once 2+ real cameras exist
+      (every split-screen scene, Stage 3+), already tracked in `claude_suggestions.md` ▸ Camera —
+      not folded into this item, revisit separately.
 - [x] **Stage 6 — 4-way split-screen scene (N-way generic)** — generalizes the split system from
       2-way (`Vertical`/`Horizontal`) to a new `Grid` orientation driven by player count (static
       only, no dynamic merge); removes the `.take(2)` cap in `spawn_players_and_camera`; adds
