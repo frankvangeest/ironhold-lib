@@ -11,12 +11,11 @@
 
 ## Active
 
-- [ ] **Local Co-op — split-screen player HUD labels** — see `planning/features/local_coop_player_hud_labels.md`
-
 ---
 
 ## Bugs
 
+- [ ] **Portal room-name labels render static and mis-positioned in every split-screen room** — `world_label_screen_pos_system` (`lib.rs:508`) requires exactly one `Camera3d` (`camera_q.single()`); every split-screen scene has 2+ (room5's dynamic split always has 3 — two split cameras plus the party camera, regardless of which is active; room6's grid split has 4). The `.single()` call fails every frame, so the system returns early and the label's `Transform` never updates past its default spawn value, rendering as one static, generically-centered text block instead of tracking the portal's actual position. Reproduce: open `local_coop_demo`, visit room3, room4, room5, or room6 — the floating "Room N" label above each split-screen room's portal sits statically near screen-center instead of over the portal; confirmed via screenshots 2026-07-08 (`bug-room-text-Screenshot-2026-07-08-105447.png` room5, `bug-room-text-wrong-room-number-Screenshot-2026-07-08-105608.png` room6). This is the real-world trigger of the multi-camera limitation already predicted in `planning/claude_suggestions.md` ▸ Camera (2026-07-05, before any split-screen code existed) — `local_coop_demo`'s portal labels (added this session) are the first thing in the project to actually exercise `WorldLabel` inside a split-screen scene. Candidate fix: make `world_label_screen_pos_system` viewport-aware — position (and possibly duplicate) each label per active `Camera3d`/viewport rather than assuming a single full-window camera. Cross-capability change (shared by nameplate visibility, particle billboarding, and click-targeting per the same claude_suggestions.md entry) — needs a `planning/features/` doc before starting, per Frank's direction (2026-07-08): fix `world_label_screen_pos_system` properly rather than reverting the labels.
 - [x] **`npc_revive` stop-action sentinel leaks into clip pipeline** — `PlayAnimationOn(clip: "npc_revive")` fired by enemy behavior on `alive` entry reached the raw-clip-name branch of `animation_resolver.rs` on fresh spawns (no active override → stop-action check was skipped), setting `controller.current = "npc_revive"` and triggering two fallback paths per enemy per spawn. Fixed: sentinels are now intercepted before the raw-clip branch and always dropped.
 - [ ] **Stale `EmitEventAfterDelay` fires after entity state exit** — `enemy_spider` 'dead' state schedules `spider.hide:{self}` at 15s; if the spider respawns before 15s elapses the pending delay fires and hides the now-alive spider. Root cause: delay system has no cancel/guard on state transition. Reproduce: kill a spider in `3rd_person_game_demo` and wait for respawn within 15s.
 - [ ] **uphill jump lock** — when jumping against an uphill slope, the player can land in a state where `jump` never re-triggers: the character controller reports ground contact but the slope normal keeps the jump cooldown active. Suspected cause: Rapier's ground-contact normal threshold in the character controller or the jump cooldown not resetting when sliding contact ends. Reproduce: 3rd_person_game_demo, run toward any hill and spam jump while ascending.
@@ -59,10 +58,13 @@ Staged incrementally; each stage ships and is playtested before the next starts.
       `Camera.is_active` toggling rather than runtime spawn/despawn; hysteresis + orientation-lock
       prevent flicker/mid-split axis flips — `02d7ccb`. All 5 stages shipped — feature doc moved to
       `planning/features/done/local_coop_foundation.md`.
-- [ ] **P1/P2 nameplate & HUD distinction** — Active as "split-screen player HUD labels", see
-      `planning/features/local_coop_player_hud_labels.md`. Split into two independent halves during
-      planning (2026-07-07): the HUD-corner-label half is what's now Active; the *nameplate* half
-      (floating 3D "Player N" tags) turned out to be blocked on a separate, deeper bug —
+- [x] **P1/P2 nameplate & HUD distinction** — split into two independent halves during planning
+      (2026-07-07): the HUD-corner-label half shipped as "split-screen player HUD labels" — a
+      colored "P1"-"P4" corner label per player's split-screen viewport, derived from `PlayerIndex`
+      and a fixed engine palette (not the RON `material` tint); wasm-perf follow-up guarded an
+      unconditional `Node` write causing per-frame UI relayout — `af6727f` / `b034a53`. See
+      `planning/features/done/local_coop_player_hud_labels.md`. The *nameplate* half (floating 3D
+      "Player N" tags) turned out to be blocked on a separate, deeper bug —
       `nameplate_visibility_system`'s `camera_q.single()` no-ops entirely once 2+ real cameras exist
       (every split-screen scene, Stage 3+), already tracked in `claude_suggestions.md` ▸ Camera —
       not folded into this item, revisit separately.

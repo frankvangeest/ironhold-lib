@@ -1,7 +1,26 @@
 # Feature: Local Co-op Split-Screen Player HUD Labels
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `69189c9` (2026-07-07)_
+_Shipped at: `b034a53` (2026-07-08)_
+
+## Playtest findings (2026-07-08)
+
+- Dev and release builds both confirmed: P1-P4 corner labels render correctly top-right in
+  room3/room4/room6, hide/show correctly across room5's dynamic split, no regressions.
+- Post-implementation review (alignment-reviewer + wasm-perf-reviewer, both run on commit
+  `af6727f`): alignment ALIGNED (two non-blocking warnings — stale `PlayerIndex` doc comments,
+  fixed by `b034a53`; no RON opt-out, deliberately out of scope per this plan's "Not in scope"
+  section). wasm-perf found one real issue — `split_viewport_player_label_update_system` wrote
+  `Node.left`/`top` unconditionally every frame, forcing a full UI relayout on every split-screen
+  frame; fixed in `b034a53` by guarding the write like the adjacent `Visibility` write.
+- Separately discovered (not part of this feature): the pre-existing portal room-name labels
+  (`WorldLabel`/`EntityLabelDef`, added earlier this session) render mis-positioned in every
+  split-screen room because `world_label_screen_pos_system` assumes exactly one `Camera3d`. This
+  is the real-world trigger of a limitation already predicted in `claude_suggestions.md` ▸ Camera
+  before any split-screen code existed. Logged as a bug in `planning/backlog.md` ▸ Bugs; a proper
+  viewport-aware fix is planned as a separate follow-up feature per Frank's direction — not folded
+  into this plan.
 
 ## What
 
@@ -130,39 +149,43 @@ every GLB player entity, but no system has read it until now.
 
 ## Tasks
 
-- [ ] `SplitScreenPlayerLabel` marker + `LinkedPlayerLabel(pub Entity)` components; fixed 4-entry
+- [x] `SplitScreenPlayerLabel` marker + `LinkedPlayerLabel(pub Entity)` components; fixed 4-entry
       `PLAYER_LABEL_COLORS` palette constant (`capabilities/camera.rs`)
-- [ ] `split_viewport_player_label_spawn_system` (`Added<SplitViewportSlot>` filter, mirroring
+- [x] `split_viewport_player_label_spawn_system` (`Added<SplitViewportSlot>` filter, mirroring
       `nameplate_setup_system`'s idiom) — spawns the UI `Text` node with explicit
       `PositionType::Absolute`, explicit `Visibility::Visible`, text outline/shadow, `LevelEntity`
       tag
-- [ ] `split_viewport_player_label_update_system`, `.after(split_screen_viewport_system)` in
-      `lib.rs`'s `.chain()` — updates position (top-right anchored) + visibility every frame
-- [ ] One-line comment at the spawn site documenting the "UI targets the full-window `Camera2d`,
+- [x] `split_viewport_player_label_update_system`, `.after(split_screen_viewport_system)` in
+      `lib.rs`'s `.chain()` — updates position (top-right anchored) + visibility every frame.
+      Guarded against unconditional change-detection writes (`b034a53`, wasm-perf follow-up).
+- [x] One-line comment at the spawn site documenting the "UI targets the full-window `Camera2d`,
       not per-viewport space" dependency (per architecture review), so a future `Camera2d`/
       `IsDefaultUiCamera` refactor doesn't silently break this
-- [ ] Tests: label spawns exactly once per `SplitViewportSlot` camera whose target has a
+- [x] Tests: label spawns exactly once per `SplitViewportSlot` camera whose target has a
       `PlayerIndex`; position correctly converts physical `Camera.viewport` to **window-logical**
       `Node` coordinates (architecture review: assert against window-logical, not
       viewport-logical, coords) including a HiDPI/scale-factor-override case (mirroring
       `test_split_screen_viewport_unaffected_by_scale_factor_override`); visibility mirrors
       `Camera.is_active` across a dynamic-split merge/split transition with no stale frame; no
       label spawns for a party or single-player scene (no `SplitViewportSlot` exists there);
-      label color matches the fixed palette by `player_index`, independent of any `material` field
-- [ ] Docs: `docs/20_data_formats.md` — engine-automatic behavior note (no new RON field), must
+      label color matches the fixed palette by `player_index`, independent of any `material` field.
+      7 new tests, all passing (`local_coop_tests.rs`).
+- [x] Docs: `docs/20_data_formats.md` — engine-automatic behavior note (no new RON field), must
       state explicitly: (a) label text is driven by `player_index`, NOT by scene entity/spawn
       order — a designer must give each player prefab a distinct `player_index` that matches its
       intended quadrant, or two players could show the same "P" number or a mismatched one; (b)
       label color is a fixed engine palette, independent of and NOT synced to a player's
       `material:` tint. `crates/ironhold_core/src/CLAUDE.md` gets the same two notes plus the
       `Added<SplitViewportSlot>`/`LinkedPlayerLabel` pattern summary.
-- [ ] Full review gate: alignment (confirm this stays intentionally zero-RON-surface — nothing
-      here should have been a RON field instead), architecture (system ordering, `LevelEntity`
-      cleanup correctness, the `Added<>` idiom), wasm-perf (one more per-frame system + one spawn
-      system, trivial cost — confirm)
-- [ ] WASM dev + release build, playtest checklist (confirm labels appear top-right in `room3`/
+- [x] Full review gate: alignment (ALIGNED, `af6727f`/`b034a53` — confirmed zero-RON-surface is
+      correct; stale `PlayerIndex` doc comments fixed), architecture (reviewed at plan stage,
+      implementation matches), wasm-perf (found and fixed an unguarded `Node` write causing
+      per-frame UI relayout on split-screen scenes, `b034a53`)
+- [x] WASM dev + release build, playtest checklist (confirm labels appear top-right in `room3`/
       `room4`/`room6` without colliding with any room's title label; correctly hide/show across
-      `room5`'s dynamic merge/split; legible against each room's ground tone), Frank confirmation
+      `room5`'s dynamic merge/split; legible against each room's ground tone), Frank confirmation.
+      Confirmed twice — once for the initial feature (`af6727f`) and once for the wasm-perf
+      follow-up fix (`b034a53`).
 
 ## Open questions
 
