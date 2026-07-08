@@ -405,6 +405,25 @@ future project combining split-screen with them): `world_label_screen_pos_system
 pick one of the two cameras rather than being viewport-aware. See `planning/claude_suggestions.md`
 ▸ Camera for the exact line references.
 
+**Split-screen player HUD labels** (`capabilities/camera.rs`) — the first real consumer of
+`PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to
+`Added<SplitViewportSlot>` (mirroring `nameplate_setup_system`'s `Added<NameplateTag>` idiom, so
+no per-frame "does a label already exist" scan is needed) and spawns a standalone (unparented) UI
+`Text` node — a corner "P{n}" label — for any split camera whose `OrbitCamera.target` carries a
+`PlayerIndex`. The camera entity gets tagged `SplitScreenPlayerLabel` + `LinkedPlayerLabel(Entity)`
+pointing at the UI entity. `split_viewport_player_label_update_system` (`.after(
+split_screen_viewport_system)` in `lib.rs`'s `.chain()`) keeps the label's `Node.left`/`top`
+synced to that camera's live `Camera.viewport` (physical pixels ÷ `window.scale_factor()` →
+logical, top-right anchored so it never collides with a room's top-left `room_hint` title) and its
+`Visibility` synced to `Camera.is_active` — the ordering guarantees no stale frame across a
+`dynamic` split's merge/split transition. Label text reads `PlayerIndex`, not scene entity/spawn
+order; label color comes from a fixed `PLAYER_LABEL_COLORS` palette, not from `PrefabDef.material`
+— see `docs/20_data_formats.md`'s "Split-screen player HUD labels" section for the designer-facing
+version of both notes. The label is a valid standalone UI root because it resolves against the
+same full-window `Camera2d` every RON UI label already uses (see the "Adding a new asset
+project"/UI conventions elsewhere in this file) — `IsDefaultUiCamera` being commented out on that
+camera does not change this in practice, but a future refactor of that setup should re-verify it.
+
 **Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
 specific gamepad instead of the keyboard. Bevy has no built-in numeric gamepad index (each
 connected pad is its own `Gamepad` entity); `input_translator_system` (`runtime/input.rs`) sorts

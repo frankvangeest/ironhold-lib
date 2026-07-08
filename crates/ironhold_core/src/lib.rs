@@ -293,10 +293,12 @@ impl Plugin for GamePlugin {
                 party_camera_follow_system,
                 dynamic_split_screen_system,
                 split_screen_viewport_system,
+                split_viewport_player_label_update_system,
                 camera_shake_system,
                 fly_camera_system,
                 animation_playback_system,
             ).chain())
+            .add_systems(Update, split_viewport_player_label_spawn_system)
             .add_systems(Update, motion_system)
             .add_systems(Update, pipeline_warmup_system)
             .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))

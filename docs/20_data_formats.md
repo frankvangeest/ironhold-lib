@@ -2028,6 +2028,34 @@ This is **local, same-machine co-op** — same scope note as the sections above:
 
 A full working example (all 4 players, including `player_p2_grid`) lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` and `scenes/room6.scene.ron`.
 
+### Split-screen player HUD labels ✅
+
+**Fully engine-automatic — no RON field to author.** Whenever a scene has real split-screen
+cameras (`Vertical`/`Horizontal`/`Grid` — i.e. any camera tagged `SplitViewportSlot`), each one
+automatically gets a colored "P1"/"P2"/"P3"/"P4" corner label in its own cell, top-right anchored,
+that updates live as the window resizes and hides/shows correctly across a `dynamic` split's
+merge/split transitions. Party-mode and single-player scenes never get a label — they have no
+`SplitViewportSlot` camera to attach one to.
+
+> **Label text is driven by `player_index`, not by scene entity/spawn order.** The label reads
+> each split camera's target's `PlayerIndex` component (forwarded from `PrefabDef.player_index`)
+> — it is NOT derived from the order entities appear in the scene's `entities:` list. Give each
+> player prefab a distinct `player_index` that matches its intended quadrant (as every
+> `local_coop_demo` example already does — `player_p1_grid` through `player_p4_grid` set
+> `player_index: 0` through `3`); otherwise two players could show the same "P" number, or a
+> label that doesn't match its actual quadrant.
+
+> **Label color is a fixed engine palette, independent of `material:`.** The four label colors are
+> hardcoded (`PLAYER_LABEL_COLORS` in `capabilities/camera.rs`) to visually match
+> `local_coop_demo`'s room6 tints (`tint_blue`/`tint_pink`/`tint_dark_green`/`tint_red`), but they
+> are **not** read from a player's actual `material:` field — rooms 3/4/5 use plain untinted
+> models and still get colored labels. Re-tinting a player's `material` in RON does **not** move
+> the label's color; the two are deliberately independent.
+
+No other configuration exists for this feature today — no opt-out, no repositioning, no
+controller-icon variant. See `crates/ironhold_core/src/CLAUDE.md` for the underlying
+`SplitScreenPlayerLabel`/`LinkedPlayerLabel` component pattern.
+
 ### NPC behaviour (`components.npc`) ✅
 
 Set `components.npc` on any prefab to attach NPC AI. The engine spawns a dynamic Rapier capsule body and runs the behaviour system each physics tick.

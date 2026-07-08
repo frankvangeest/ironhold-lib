@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
+use bevy::camera::Viewport;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
@@ -7,11 +8,12 @@ use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCata
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
-use ironhold_core::capabilities::player::{CharacterController, player_view_box_clamp_system};
+use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
-    MAX_SPLIT_PLAYERS,
+    MAX_SPLIT_PLAYERS, SplitScreenPlayerLabel, LinkedPlayerLabel, PLAYER_LABEL_COLORS,
+    split_viewport_player_label_spawn_system, split_viewport_player_label_update_system,
 };
 use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
 
@@ -1166,4 +1168,232 @@ fn test_dynamic_split_merge_distance_clamped_when_not_less_than_split_distance()
     let config = app.world().resource::<DynamicSplitConfig>().0.clone().expect("dynamic config must still be Some after clamping");
     assert_eq!(config.split_distance, 5.0, "split_distance is untouched by the clamp");
     assert!(config.merge_distance < config.split_distance, "merge_distance must be clamped below split_distance, got {}", config.merge_distance);
+}
+
+// ── Player HUD labels: split_viewport_player_label_spawn_system / update_system ─────
+
+#[test]
+fn test_split_labels_spawn_once_per_grid_camera_with_player_index() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, 4,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_n_player_scene(&mut app, 4);
+    app.update();
+
+    let linked: Vec<Entity> = {
+        let mut q = app.world_mut().query_filtered::<&LinkedPlayerLabel, With<SplitScreenPlayerLabel>>();
+        q.iter(app.world()).map(|l| l.0).collect()
+    };
+    assert_eq!(linked.len(), 4, "every one of the 4 Grid split cameras must get exactly one linked label");
+    let mut distinct = linked.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), 4, "labels must be distinct entities, not shared/aliased");
+
+    // Extra frames must not spawn duplicates — Added<SplitViewportSlot> only fires once.
+    app.update();
+    app.update();
+    let linked_after = app.world_mut().query::<&LinkedPlayerLabel>().iter(app.world()).count();
+    assert_eq!(linked_after, 4, "no duplicate labels spawn on later frames");
+}
+
+#[test]
+fn test_split_label_text_and_color_match_player_index_not_material() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, 4,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_n_player_scene(&mut app, 4);
+    app.update();
+
+    let cams: Vec<(Entity, Entity)> = {
+        let mut q = app.world_mut().query::<(&OrbitCamera, &LinkedPlayerLabel)>();
+        q.iter(app.world()).map(|(o, l)| (o.target, l.0)).collect()
+    };
+    assert_eq!(cams.len(), 4);
+    for (target, label_entity) in cams {
+        let idx = app.world().get::<PlayerIndex>(target)
+            .expect("split camera target must carry PlayerIndex").0;
+        let text = app.world().get::<Text>(label_entity).unwrap();
+        assert_eq!(
+            text.0, format!("P{}", idx + 1),
+            "label text must read the target's PlayerIndex, not spawn/slot order"
+        );
+        let color = app.world().get::<TextColor>(label_entity).unwrap();
+        assert_eq!(
+            color.0, PLAYER_LABEL_COLORS[idx as usize],
+            "label color must come from the fixed palette, independent of any material field \
+             (rooms 3/4/5 have none at all)"
+        );
+    }
+}
+
+#[test]
+fn test_split_label_position_converts_physical_viewport_to_window_logical_coords() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let target = app.world_mut().spawn(PlayerIndex(0)).id();
+    let camera = app.world_mut().spawn((
+        Camera {
+            is_active: true,
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(0, 0),
+                physical_size: UVec2::new(640, 720),
+                ..default()
+            }),
+            ..default()
+        },
+        test_orbit_camera(target),
+        SplitViewportSlot(0),
+    )).id();
+
+    app.world_mut().run_system_once(split_viewport_player_label_spawn_system).unwrap();
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    let label = app.world().get::<LinkedPlayerLabel>(camera).unwrap().0;
+    let node = app.world().get::<Node>(label).unwrap();
+    // Top-right anchored inside the 640x720 (already-logical, scale_factor 1.0) cell.
+    assert_eq!(node.top, Val::Px(8.0));
+    match node.left {
+        Val::Px(px) => assert!(
+            (px - (640.0 - 48.0 - 8.0)).abs() < 0.01,
+            "left must sit at the cell's right edge minus label width and margin, got {px}"
+        ),
+        other => panic!("expected Val::Px, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_split_label_position_unaffected_by_hidpi_scale_factor_override() {
+    let mut app = setup_test_app();
+    app.update();
+    // 2x scale factor override, mirroring
+    // test_split_screen_viewport_unaffected_by_scale_factor_override: a physical viewport must
+    // convert to the SAME logical (window-space, not viewport-space) position regardless of DPI.
+    spawn_primary_window(&mut app, 2560, 1440, 2.0);
+
+    let target = app.world_mut().spawn(PlayerIndex(1)).id();
+    let camera = app.world_mut().spawn((
+        Camera {
+            is_active: true,
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(1280, 0),
+                physical_size: UVec2::new(1280, 1440),
+                ..default()
+            }),
+            ..default()
+        },
+        test_orbit_camera(target),
+        SplitViewportSlot(1),
+    )).id();
+
+    app.world_mut().run_system_once(split_viewport_player_label_spawn_system).unwrap();
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    let label = app.world().get::<LinkedPlayerLabel>(camera).unwrap().0;
+    let node = app.world().get::<Node>(label).unwrap();
+    // Physical right edge 2560 / scale_factor 2.0 = logical 1280 — identical logical position to
+    // a 1x, 1280-wide-cell window, proving the conversion is scale-factor independent.
+    assert_eq!(node.top, Val::Px(8.0));
+    match node.left {
+        Val::Px(px) => assert!(
+            (px - (1280.0 - 48.0 - 8.0)).abs() < 0.01,
+            "logical position must be scale-factor-independent, got {px}"
+        ),
+        other => panic!("expected Val::Px, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_split_label_visibility_mirrors_camera_is_active_across_merge_split_with_no_stale_frame() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let p0 = app.world_mut().spawn((Transform::default(), PlayerIndex(0))).id();
+    let p1 = app.world_mut().spawn((Transform::default(), PlayerIndex(1))).id();
+    let cam0 = app.world_mut().spawn((
+        Camera {
+            is_active: true, order: 0,
+            viewport: Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+            ..default()
+        },
+        test_orbit_camera(p0),
+        SplitViewportSlot(0),
+    )).id();
+    let cam1 = app.world_mut().spawn((
+        Camera {
+            is_active: true, order: 1,
+            viewport: Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+            ..default()
+        },
+        test_orbit_camera(p1),
+        SplitViewportSlot(1),
+    )).id();
+
+    app.world_mut().run_system_once(split_viewport_player_label_spawn_system).unwrap();
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    let label0 = app.world().get::<LinkedPlayerLabel>(cam0).unwrap().0;
+    let label1 = app.world().get::<LinkedPlayerLabel>(cam1).unwrap().0;
+    assert_eq!(*app.world().get::<Visibility>(label0).unwrap(), Visibility::Visible);
+    assert_eq!(*app.world().get::<Visibility>(label1).unwrap(), Visibility::Visible);
+
+    // Simulate dynamic_split_screen_system's merge — it flips is_active the same frame the
+    // viewport is (re)computed; per architecture review, this system must read the fresh
+    // is_active immediately, with no stale Visible frame left over from before the merge.
+    app.world_mut().get_mut::<Camera>(cam0).unwrap().is_active = false;
+    app.world_mut().get_mut::<Camera>(cam1).unwrap().is_active = false;
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    assert_eq!(*app.world().get::<Visibility>(label0).unwrap(), Visibility::Hidden, "must hide immediately on merge, no stale Visible frame");
+    assert_eq!(*app.world().get::<Visibility>(label1).unwrap(), Visibility::Hidden);
+
+    // And back to split — must reappear immediately too, no stale Hidden frame.
+    app.world_mut().get_mut::<Camera>(cam0).unwrap().is_active = true;
+    app.world_mut().get_mut::<Camera>(cam1).unwrap().is_active = true;
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    assert_eq!(*app.world().get::<Visibility>(label0).unwrap(), Visibility::Visible, "must show immediately on re-split, no stale Hidden frame");
+    assert_eq!(*app.world().get::<Visibility>(label1).unwrap(), Visibility::Visible);
+}
+
+#[test]
+fn test_no_split_labels_spawn_for_party_mode_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs(&mut app, Some(PartyZoomDef { zoom_margin: 4.0, allow_manual_zoom: false }));
+    load_two_player_scene(&mut app);
+    app.update();
+
+    let split_slot_count = app.world_mut().query::<&SplitViewportSlot>().iter(app.world()).count();
+    assert_eq!(split_slot_count, 0, "party mode must not spawn any SplitViewportSlot camera");
+
+    let label_count = app.world_mut().query::<&SplitScreenPlayerLabel>().iter(app.world()).count();
+    assert_eq!(
+        label_count, 0,
+        "no HUD corner labels should spawn when there is no SplitViewportSlot to attach one to"
+    );
+}
+
+#[test]
+fn test_no_split_labels_spawn_for_single_player_fallback_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs(&mut app, None); // no party, no split -> falls back to a single OrbitCamera
+    load_two_player_scene(&mut app);
+    app.update();
+
+    let label_count = app.world_mut().query::<&SplitScreenPlayerLabel>().iter(app.world()).count();
+    assert_eq!(
+        label_count, 0,
+        "fallback single-camera scenes have no SplitViewportSlot and must spawn no corner label"
+    );
 }

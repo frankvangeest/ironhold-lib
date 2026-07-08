@@ -255,6 +255,33 @@ pub const MAX_SPLIT_PLAYERS: u32 = 4;
 #[derive(Component)]
 pub struct SplitViewportSlot(pub u32);
 
+/// Fixed engine-side palette for the per-player split-screen HUD corner label, indexed by
+/// `PlayerIndex`. Chosen to visually match `local_coop_demo`'s room6 `tint_blue`/`tint_pink`/
+/// `tint_dark_green`/`tint_red` material RGB values, but this is its own independent constant —
+/// NOT a read of a player's actual `material:` field (only room6 has one; rooms 3/4/5 use plain
+/// untinted models). See `split_viewport_player_label_spawn_system`.
+pub const PLAYER_LABEL_COLORS: [Color; MAX_SPLIT_PLAYERS as usize] = [
+    Color::srgb(0.15, 0.35, 0.95), // P1 — matches tint_blue
+    Color::srgb(0.95, 0.35, 0.70), // P2 — matches tint_pink
+    Color::srgb(0.10, 0.40, 0.15), // P3 — matches tint_dark_green
+    Color::srgb(0.85, 0.15, 0.15), // P4 — matches tint_red
+];
+
+/// Marker on a `SplitViewportSlot` camera entity indicating its corner "P{n}" HUD label has
+/// already been spawned. Companion to `LinkedPlayerLabel`, which points at the UI entity itself.
+/// Lets `split_viewport_player_label_spawn_system` use `Added<SplitViewportSlot>` filtering
+/// instead of a per-frame "does a label already exist" scan — mirrors `nameplate_setup_system`'s
+/// `Added<NameplateTag>` idiom.
+#[derive(Component)]
+pub struct SplitScreenPlayerLabel;
+
+/// Points at the UI `Text` entity spawned for this split-screen camera's corner label. Attached
+/// to the camera entity alongside `SplitScreenPlayerLabel`. Read every frame by
+/// `split_viewport_player_label_update_system` to sync the label's position and visibility to
+/// this camera's live `Camera.viewport`/`is_active`.
+#[derive(Component)]
+pub struct LinkedPlayerLabel(pub Entity);
+
 /// Recomputes every `SplitViewportSlot` camera's `Camera.viewport` from the current primary
 /// window size and `ActiveSplitScreen`'s orientation. Runs every frame (cheap: at most
 /// `MAX_SPLIT_PLAYERS` cameras, simple arithmetic) rather than hooking window-resize events
@@ -336,6 +363,93 @@ pub fn split_screen_viewport_system(
             physical_size: size.max(UVec2::new(1, 1)),
             ..default()
         });
+    }
+}
+
+/// Spawns a colored "P{n}" corner HUD label for every newly-added split-screen camera whose
+/// `OrbitCamera.target` carries a `PlayerIndex` — the first real consumer of that component
+/// (see `capabilities/player.rs`). `Added<SplitViewportSlot>` fires exactly once per camera (the
+/// frame it's spawned by `spawn_players_and_camera`), mirroring `nameplate_setup_system`'s
+/// `Added<NameplateTag>` idiom, so no per-frame "does a label already exist" scan is needed.
+///
+/// The label is a standalone (unparented) UI `Text` root — this resolves against the same
+/// full-window `Camera2d` every existing RON UI label uses (confirmed by architecture review:
+/// `IsDefaultUiCamera` is commented out on that camera, but every RON UI root and room6's
+/// per-quadrant hints are all authored in full-window logical coordinates already). If a future
+/// refactor of that `Camera2d`/`IsDefaultUiCamera` setup changes this, `split_viewport_
+/// player_label_update_system`'s physical-viewport → logical-window conversion below would need
+/// revisiting too.
+///
+/// Color comes from the fixed `PLAYER_LABEL_COLORS` palette, not from the player's `material:`
+/// tint (rooms 3/4/5 have no tint at all — see the palette's doc comment). `TextShadow` keeps the
+/// label legible against every room's differently-toned ground.
+pub fn split_viewport_player_label_spawn_system(
+    mut commands: Commands,
+    new_cameras: Query<(Entity, &OrbitCamera), Added<SplitViewportSlot>>,
+    player_index_q: Query<&crate::capabilities::player::PlayerIndex>,
+) {
+    for (camera_entity, orbit) in &new_cameras {
+        let Ok(player_index) = player_index_q.get(orbit.target) else { continue };
+        let color = PLAYER_LABEL_COLORS[player_index.0 as usize % PLAYER_LABEL_COLORS.len()];
+
+        let label = commands.spawn((
+            Name::new(format!("SplitScreenPlayerLabel: P{}", player_index.0 + 1)),
+            Text::new(format!("P{}", player_index.0 + 1)),
+            TextFont { font_size: 22.0, ..default() },
+            TextColor(color),
+            TextShadow::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            Visibility::Visible,
+            LevelEntity,
+        )).id();
+
+        commands.entity(camera_entity).insert((
+            SplitScreenPlayerLabel,
+            LinkedPlayerLabel(label),
+        ));
+    }
+}
+
+/// Keeps every spawned corner label positioned in its own camera's viewport and in sync with
+/// `Camera.is_active` (hidden while merged during a `split.dynamic` scene). `.after(
+/// split_screen_viewport_system)` in `lib.rs`'s `.chain()` — on the exact frame a merge/split
+/// transition flips `is_active` and recomputes `viewport`, this system reads both already-fresh
+/// values in the same frame (per architecture review), so there is no stale position/visibility.
+///
+/// `Camera.viewport` is in physical pixels; `Node.left`/`top` are in logical pixels — divides by
+/// `window.scale_factor()` to convert, the mirror image of `split_screen_viewport_system`'s own
+/// physical-pixel care. Anchored to the top-right of each camera's cell (a fixed margin inset)
+/// rather than top-left, since every room's `room_hint` title label sits at top-left (UX review).
+pub fn split_viewport_player_label_update_system(
+    window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    cameras: Query<(&Camera, &LinkedPlayerLabel), With<SplitScreenPlayerLabel>>,
+    mut labels: Query<(&mut Node, &mut Visibility)>,
+) {
+    const MARGIN_PX: f32 = 8.0;
+    const LABEL_WIDTH_PX: f32 = 48.0;
+
+    let Ok(window) = window_q.single() else { return };
+    let scale_factor = window.scale_factor();
+
+    for (camera, linked) in &cameras {
+        let Ok((mut node, mut visibility)) = labels.get_mut(linked.0) else { continue };
+
+        let new_visibility = if camera.is_active { Visibility::Visible } else { Visibility::Hidden };
+        if *visibility != new_visibility {
+            *visibility = new_visibility;
+        }
+        if !camera.is_active {
+            continue;
+        }
+
+        let Some(viewport) = &camera.viewport else { continue };
+        let right_edge = (viewport.physical_position.x + viewport.physical_size.x) as f32 / scale_factor;
+        let top_edge = viewport.physical_position.y as f32 / scale_factor;
+        node.left = Val::Px(right_edge - LABEL_WIDTH_PX - MARGIN_PX);
+        node.top = Val::Px(top_edge + MARGIN_PX);
     }
 }
 
