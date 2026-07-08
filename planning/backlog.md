@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Viewport-aware `world_label_screen_pos_system`** — fixes the "Portal room-name labels render static and mis-positioned in every split-screen room" bug (see `## Bugs` below). See `planning/features/world_label_split_screen_positioning.md`.
+
 ---
 
 ## Bugs
