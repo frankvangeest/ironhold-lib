@@ -865,12 +865,10 @@ pub struct PrefabDef {
     pub nameplate: Option<bool>,
     /// Which local player slot this prefab controls, for scenes with more than one
     /// `tags: ["player"]` entity (local co-op). Meaningless for single-player scenes. Forwarded
-    /// to a queryable `PlayerIndex` component on the spawned entity, but reserved for future
-    /// consumers (e.g. per-player nameplate/HUD labeling) — no system reads it yet. Two player
-    /// prefabs sharing the same `player_index` is a designer error today only in the sense that
-    /// both entities end up tagged with the same value; nothing currently keys off it, so
-    /// nothing breaks, but a future consumer likely will collide on it. Assign a unique index
-    /// per player.
+    /// to a queryable `PlayerIndex` component on the spawned entity, which drives the
+    /// split-screen HUD corner label's "P{n}" text and palette color (`capabilities/camera.rs`).
+    /// Two player prefabs sharing the same `player_index` will show the same "P" number and
+    /// color on their HUD labels — assign a unique index per player.
     #[serde(default)]
     pub player_index: u32,
 }

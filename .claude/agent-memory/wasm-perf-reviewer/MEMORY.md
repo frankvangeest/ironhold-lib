@@ -13,3 +13,4 @@
 - [Local co-op input/camera](project_local_coop_input_camera.md) — gamepad collect+sort empty-cheap; party_camera_follow empty-archetype free; view_box_clamp early-returns None; gilrs wasm-safe; zero deps
 - [Intent event layer](project_intent_event_layer.md) — action_bar Pending/Handled intent resources; flush_pending_intent_system per-frame but drains empty HashMap on idle (O(0)); inserts/clones only on slot press; zero deps
 - [Split-screen viewport](project_split_screen_viewport.md) — Stage 3 split_screen_viewport_system: ActiveSplitScreen None-gated early-return (free on all existing scenes); unchanged Camera.viewport write cheap; NoFrustumCulling warmup is per-entity so covers both cameras; zero deps
+- [Split-screen HUD labels](project_split_screen_hud_labels.md) — af6727f camera.rs; update system Visibility guarded but Node.left/top UNGUARDED per-frame → forces taffy relayout every frame on split scenes; +37KB wasm; zero deps

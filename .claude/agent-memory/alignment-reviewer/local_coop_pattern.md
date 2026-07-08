@@ -5,6 +5,31 @@ metadata:
   type: project
 ---
 
+**STAGE 7 — split-screen player HUD labels (reviewed 2026-07-08, ALIGNED w/ warnings):**
+- FIRST real consumer of `PlayerIndex` — the DEAD-FIELD footgun below is now PARTLY obsolete:
+  `split_viewport_player_label_spawn_system` (camera.rs) reads `PlayerIndex` off `orbit.target`.
+  Label text = `P{player_index+1}`, color = `PLAYER_LABEL_COLORS[player_index % 4]`. So
+  `PrefabDef.player_index` now has a VISIBLE effect (text + color), fully RON-reachable:
+  catalog.rs:875 (#[serde(default)]) → assemble_player_config (entity_spawner.rs:935) →
+  spawn_player_entity_core inserts PlayerIndex (entity_spawner.rs:791) → label spawn system reads it.
+- STALE DOC WARNING (still uncorrected at review time): player.rs:36-39 AND catalog.rs:867-873
+  both still say player_index "No system reads this yet" / "reserved for future consumers" — now
+  factually wrong. catalog.rs is the schema (surfaced by CLI query + docs), so it understates the
+  designer's control. camera.rs itself calls the system "the first real consumer" — self-contradiction
+  within the crate. Flag on any player_index touch until fixed.
+- Zero new RON surface by design: no opt-out, no reposition, fixed palette. docs/20_data_formats.md
+  §"Split-screen player HUD labels" is honest/complete about all three. Palette (camera.rs:263)
+  matches room6 tints but is an INDEPENDENT const, not a read of PrefabDef.material.
+- WARNING (not blocking): no `show_player_labels` opt-out. room6 ALREADY authors per-quadrant
+  RON hints → engine label can double up with no suppression. A scene-level Option<bool>
+  (mirroring show_nameplates) would close the gap. Accepted-not-blocked: additive/cosmetic, only
+  appears when SplitViewportSlot present, graceful, doesn't restrict any other designer behavior.
+- Both systems correct: NO ActionQueue, spawn only UI (Text/Node/TextFont/TextShadow/TextColor +
+  LevelEntity so it's scene-cleaned), update only mutates Node.left/top + Visibility (change-guarded
+  on visibility). All WASM-safe standard Bevy UI. Standalone unparented UI root → full-window Camera2d
+  (documented refactor risk if IsDefaultUiCamera changes). % modulo guards palette OOB. update system
+  chained .after(split_screen_viewport_system); spawn system unchained Update (Added<> driven).
+
 **STAGE 6 — 4-way / N-way Grid split-screen (reviewed 2026-07-07, ALIGNED):**
 - `SplitOrientation::Grid` variant (additive; Vertical/Horizontal unchanged, still 2-way). Reachable
   via `split: (orientation: Grid)` on FIRST player's camera block only (same first-player-wins rule).
@@ -109,7 +134,11 @@ Local co-op (same-machine 2-player) extends the player-spawn pipeline. See
 - `player_view_box_clamp_system` (capabilities/player.rs) mutates only Transform + Velocity;
   FixedUpdate, chained after player_movement_system. Correct.
 
-**FOOTGUN — `player_index` is a DEAD FIELD (as of 2026-07-04 impl).** It is threaded schema →
+**FOOTGUN — `player_index` WAS a DEAD FIELD (2026-07-04 → 2026-07-07); Stage 7 gave it its first
+consumer (HUD labels, see above). It IS now inserted as a `PlayerIndex(u32)` component and IS read
+by `split_viewport_player_label_spawn_system`.** The historical note below is kept for the input/
+camera-targeting caveats, which remain true (those still key off gamepad_index / entities order):
+It is threaded schema →
 PlayerConfig → stored, but has ZERO runtime consumers. Input routing keys off `gamepad_index`
 (InputMap), camera targeting keys off the `entities` Vec order — neither reads `player_index`.
 It is NOT inserted as a component on the player entity, so no future system can query it either.

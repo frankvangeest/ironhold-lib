@@ -34,9 +34,10 @@ pub enum PlayerOwnership {
 }
 
 /// Forwarded from `PrefabDef.player_index`. Inserted on every player entity (local co-op or
-/// single-player, where it's always `0`) so future systems (e.g. per-player nameplate/HUD
-/// labeling) can query it without another schema pass. No system reads this yet — local co-op
-/// currently identifies "the first player" by scene `entities` order, not by this value.
+/// single-player, where it's always `0`). Drives the split-screen HUD corner label's "P{n}" text
+/// and `PLAYER_LABEL_COLORS` palette index (`capabilities/camera.rs`) — its first real consumer.
+/// Local co-op still identifies "the first player" for camera/party switches by scene `entities`
+/// order, not by this value; only the HUD label reads it.
 #[derive(Component, Clone, Copy, Default)]
 pub struct PlayerIndex(pub u32);
 

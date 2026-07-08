@@ -448,8 +448,14 @@ pub fn split_viewport_player_label_update_system(
         let Some(viewport) = &camera.viewport else { continue };
         let right_edge = (viewport.physical_position.x + viewport.physical_size.x) as f32 / scale_factor;
         let top_edge = viewport.physical_position.y as f32 / scale_factor;
-        node.left = Val::Px(right_edge - LABEL_WIDTH_PX - MARGIN_PX);
-        node.top = Val::Px(top_edge + MARGIN_PX);
+        // Guarded writes — Val implements PartialEq. An unconditional write marks Node changed
+        // every frame, forcing Bevy's ui_layout_system to redo the taffy layout pass for no
+        // reason (see CLAUDE.md's "Change-detection discipline"), even though this only actually
+        // changes on window resize.
+        let new_left = Val::Px(right_edge - LABEL_WIDTH_PX - MARGIN_PX);
+        let new_top = Val::Px(top_edge + MARGIN_PX);
+        if node.left != new_left { node.left = new_left; }
+        if node.top != new_top { node.top = new_top; }
     }
 }
 
