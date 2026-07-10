@@ -251,7 +251,9 @@ Every code change must follow this order before committing code:
     - If the user requests changes or changes are required we go back to step **Code changes** to implement them.
 12. **Move the completed feature from active to done in the backlog** — See Claude.md in planning
 13. **Commit** — only after Frank confirms; include a summary in git commit message format
-14. **Compact session** — Do a /compact before  
+14. **Post cleanup**
+      - Do a cargo clean
+      - Compact session. Do a /compact.  
 15. **Propose the next feature to add to active in the backlog**
 
 Do not start coding before the feature plan is finalized and reviewed.

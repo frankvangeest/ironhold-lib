@@ -311,6 +311,18 @@ pub struct WorldLabel {
     pub screen_offset: Vec2,
 }
 
+/// Marks a `WorldLabel` entity as one of several visual siblings of the same logical label,
+/// each pinned to a different rank in `world_label_screen_pos_system`'s deterministic
+/// active-camera ordering (see that system's doc comment). Rank 0 is implicit — a
+/// `WorldLabel` with no `WorldLabelRank` behaves exactly like `WorldLabelRank(0)` — so every
+/// pre-existing single-instance `WorldLabel` consumer (nameplate anchors, damage popups, stat
+/// labels, entity labels) is unaffected. Only the scene-level `world_labels:` (portal
+/// room-name labels) spawn path spawns ranks 1..`MAX_SPLIT_PLAYERS` sibling entities, so a
+/// label simultaneously visible in 2+ active split viewports at once shows in every one of
+/// them rather than just the highest-priority camera.
+#[derive(Component)]
+pub struct WorldLabelRank(pub u8);
+
 /// Stable handle attached to every entity spawned via `Action::Spawn`.
 /// Used by `Action::Despawn` to locate and remove the entity.
 #[derive(Component, Debug, Clone)]

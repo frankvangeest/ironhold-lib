@@ -18,11 +18,13 @@ use super::{
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate, WorldLabel,
+    WorldLabelRank,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     DynamicStatUiQueue,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
+use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
 use crate::capabilities::stat_display::{StatBarFill, StatValueText, StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker};
 use crate::schema::catalog::WorldStatBarStyle;
 use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
@@ -928,51 +930,76 @@ pub fn spawn_scene_v2(
         }
 
         // Spawn world-label annotations (fixed positions).
+        //
+        // Spawns one rank-0 primary plus rank 1..MAX_SPLIT_PLAYERS sibling entities, all
+        // identical, differing only by `WorldLabelRank`. `world_label_screen_pos_system`
+        // binds each rank to a different priority in its deterministic active-camera
+        // ordering, so a label simultaneously visible in 2+ active split viewports at once
+        // (e.g. two players standing near the same portal in a fixed or grid split scene)
+        // shows in every viewport that can see it, not just the highest-priority one. Ranks
+        // with no qualifying camera this frame simply stay hidden — see
+        // `planning/features/world_label_split_screen_positioning.md`.
         for label in &scene.world_labels {
             let (r, g, b, a) = label.color;
-            commands.spawn((
-                Name::new(format!("WorldLabel: {}", label.id)),
-                Text2d::new(label.text.clone()),
-                TextFont { font_size: label.font_size, ..default() },
-                TextColor(Color::srgba(r, g, b, a)),
-                Transform::from_xyz(0.0, 0.0, 1.0),
-                WorldLabel {
-                    world_pos: Vec3::from(label.translation),
-                    tracked_entity: None,
-                    offset: Vec3::ZERO,
-                    base_font_size: label.font_size,
-                    depth_scale: resolve_label_depth_scale(
-                        scene.label_depth_scale.as_ref(),
-                        label.depth_scale,
-                    ),
-                    screen_offset: Vec2::ZERO,
-                },
-                LevelEntity,
-            ));
+            let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), label.depth_scale);
+            for rank in 0..MAX_SPLIT_PLAYERS {
+                let mut label_entity = commands.spawn((
+                    Name::new(format!("WorldLabel: {} (rank {})", label.id, rank)),
+                    Text2d::new(label.text.clone()),
+                    TextFont { font_size: label.font_size, ..default() },
+                    TextColor(Color::srgba(r, g, b, a)),
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                    WorldLabel {
+                        world_pos: Vec3::from(label.translation),
+                        tracked_entity: None,
+                        offset: Vec3::ZERO,
+                        base_font_size: label.font_size,
+                        depth_scale,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    // Hidden until world_label_screen_pos_system's first tick confirms a
+                    // qualifying camera exists for this rank — otherwise this sibling would
+                    // render for one frame at its default Transform (screen center),
+                    // flashing a stack of duplicate labels before its real position resolves.
+                    label_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+            }
         }
 
-        // Spawn per-entity labels collected during the entity loop above.
+        // Spawn per-entity labels collected during the entity loop above (e.g. portal
+        // room-name labels authored via a scene entity's `label:` field). Same rank-duplication
+        // rationale as the `world_labels:` loop above — one rank-0 primary plus rank
+        // 1..MAX_SPLIT_PLAYERS sibling entities, so a label attached to an entity (like a
+        // portal) simultaneously visible in 2+ active split viewports at once shows in every
+        // one of them, not just the highest-priority camera. See
+        // `planning/features/world_label_split_screen_positioning.md`.
         for (tracked, label_def) in pending_labels {
             let (r, g, b, a) = label_def.color;
-            commands.spawn((
-                Name::new(format!("EntityLabel: {}", label_def.text)),
-                Text2d::new(label_def.text.clone()),
-                TextFont { font_size: label_def.font_size, ..default() },
-                TextColor(Color::srgba(r, g, b, a)),
-                Transform::from_xyz(0.0, 0.0, 1.0),
-                WorldLabel {
-                    world_pos: Vec3::ZERO,
-                    tracked_entity: Some(tracked),
-                    offset: Vec3::from(label_def.offset),
-                    base_font_size: label_def.font_size,
-                    depth_scale: resolve_label_depth_scale(
-                        scene.label_depth_scale.as_ref(),
-                        label_def.depth_scale,
-                    ),
-                    screen_offset: Vec2::ZERO,
-                },
-                LevelEntity,
-            ));
+            let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), label_def.depth_scale);
+            for rank in 0..MAX_SPLIT_PLAYERS {
+                let mut label_entity = commands.spawn((
+                    Name::new(format!("EntityLabel: {} (rank {})", label_def.text, rank)),
+                    Text2d::new(label_def.text.clone()),
+                    TextFont { font_size: label_def.font_size, ..default() },
+                    TextColor(Color::srgba(r, g, b, a)),
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: Vec3::from(label_def.offset),
+                        base_font_size: label_def.font_size,
+                        depth_scale,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    label_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+            }
         }
 
         // Spawn floating stat labels from PrefabDef.stat_label.

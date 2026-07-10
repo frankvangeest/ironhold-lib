@@ -396,14 +396,38 @@ using `PartyOrbitCamera` — but **does** fire on both cameras in a `split` scen
 real `OrbitCamera`s. This is an intentional consequence of split-screen using real per-player
 cameras, not an oversight to fix.
 
-**Other known limitations, introduced by split-screen having 2 real `Camera3d` entities per
-scene** (none affect `local_coop_demo`, which uses none of these features, but matter for any
-future project combining split-screen with them): `world_label_screen_pos_system` (`lib.rs`),
-`nameplate.rs`'s distance-culling, `particle_renderer.rs`'s billboard orientation, and
-`targeting.rs`'s click-to-select all assume one `Camera3d` exists. None panic (graceful
-`.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or arbitrarily
-pick one of the two cameras rather than being viewport-aware. See `planning/claude_suggestions.md`
-▸ Camera for the exact line references.
+**`world_label_screen_pos_system` (`lib.rs`) is viewport-aware** (fixed — this was the root cause
+of "Portal room-name labels render static and mis-positioned in every split-screen room"; see
+`planning/features/world_label_split_screen_positioning.md`). It queries every active `Camera3d`
+(`camera.is_active`, not `.single()`) and, per `WorldLabel`, picks the `WorldLabelRank`-th
+(default 0 when the component is absent) active camera whose own `logical_viewport_rect()`
+actually contains the point's `world_to_viewport()` projection — deterministic order:
+`SplitViewportSlot` index first (cameras with no slot, e.g. `PartyOrbitCamera`, sort last),
+tie-broken by `Entity`. This fixes positioning for every `WorldLabel` consumer at once (room
+labels, entity labels, stat labels, damage popups, nameplate anchors), since they all share this
+one system.
+
+**Scene-level `world_labels:` (portal room-name labels) duplicate across simultaneously-visible
+split viewports** (2026-07-10 playtest amendment — Frank found the single-camera-per-label
+behavior above showed a label vanishing from a fixed split screen's *other*, still-fully-rendered
+viewport whenever a portal became visible in both at once). `scene_loader.rs`'s `world_labels:`
+spawn loop now spawns `MAX_SPLIT_PLAYERS` (4) sibling entities per authored label — ranks 0..3,
+via the `WorldLabelRank(u8)` component — instead of just one. Each sibling independently binds to
+a different active-camera priority in `world_label_screen_pos_system`'s selection above, so up to
+4 simultaneously-visible active split viewports each get their own correctly-positioned,
+independently-hideable copy. **This does NOT extend to any other `WorldLabel` consumer** — entity
+labels, stat labels, damage popups, and nameplate anchors all still spawn a single instance (no
+`WorldLabelRank`, implicit rank 0 = highest-priority camera only), so the same multi-viewport gap
+still applies to them; extend the same pattern to a given consumer's spawn site only if a real
+project need surfaces.
+
+**Still affected by split-screen having 2 real `Camera3d` entities per scene** (none affect
+`local_coop_demo`, which uses none of these features, but matter for any future project combining
+split-screen with them): `nameplate.rs`'s distance-culling, `particle_renderer.rs`'s billboard
+orientation, and `targeting.rs`'s click-to-select all still assume one `Camera3d` exists. None
+panic (graceful `.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or
+arbitrarily pick one of the two cameras rather than being viewport-aware. See
+`planning/claude_suggestions.md` ▸ Camera for the exact line references.
 
 **Split-screen player HUD labels** (`capabilities/camera.rs`) — the first real consumer of
 `PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to

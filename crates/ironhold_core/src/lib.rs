@@ -488,30 +488,55 @@ fn icon_button_click_system(
     }
 }
 
-/// Projects each [`WorldLabel`]'s 3-D world position through the active
-/// `Camera3d` and repositions the entity in `Camera2d` screen space so
-/// `Camera2d` renders the `Text2d` at the correct on-screen location.
+/// Projects each [`WorldLabel`]'s 3-D world position through whichever active
+/// `Camera3d` actually shows it on-screen, and repositions the entity in
+/// `Camera2d` screen space so `Camera2d` renders the `Text2d` at the correct
+/// on-screen location.
 ///
 /// Text2d is rendered by `Camera2d` (not `Camera3d`), so this is the correct
 /// way to show text that appears to float over a 3-D world position.
+///
+/// Split-screen scenes have 2+ real `Camera3d` entities alive at once (see
+/// `SplitViewportSlot` in `capabilities/camera.rs`), so a label is positioned
+/// against whichever active camera's own on-screen viewport rect actually
+/// contains the projected point — not an arbitrarily "the" camera.
+///
+/// A `WorldLabel` with no [`WorldLabelRank`](crate::runtime::scene_manager::WorldLabelRank)
+/// (every nameplate anchor, damage popup, stat label, and entity label) always binds to
+/// rank 0 — the single highest-priority qualifying camera, by the deterministic order
+/// below. If the same world point is simultaneously visible in 2+ active viewports (e.g.
+/// two split-screen players near the same portal), only that one camera's viewport shows
+/// it. Scene-level `world_labels:` (portal room-name labels) instead spawn one rank-0..N
+/// sibling per possible split slot (`scene_loader.rs`), so each active viewport that can
+/// see the point gets its own visible copy — see
+/// `planning/features/world_label_split_screen_positioning.md`.
 fn world_label_screen_pos_system(
-    camera_q: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    camera_q: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut label_q: Query<(
         &crate::runtime::scene_manager::WorldLabel,
+        Option<&crate::runtime::scene_manager::WorldLabelRank>,
         &mut Transform,
         &mut Visibility,
         Option<&mut TextFont>,
     )>,
     tracked_q: Query<(&GlobalTransform, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
-    let Ok((camera, cam_global)) = camera_q.single() else { return };
     let Ok(window) = window_q.single() else { return };
     let half_w = window.width() / 2.0;
     let half_h = window.height() / 2.0;
-    let cam_pos = cam_global.translation();
 
-    for (label, mut t, mut vis, text_font_opt) in label_q.iter_mut() {
+    // Deterministic order so a point visible in 2+ active viewports always
+    // resolves the same way across frames: by `SplitViewportSlot` index first
+    // (cameras with no slot — single-camera or `PartyOrbitCamera` scenes —
+    // sort last), then by `Entity` to break ties.
+    let mut active_cameras: Vec<_> = camera_q
+        .iter()
+        .filter(|(_, camera, ..)| camera.is_active)
+        .collect();
+    active_cameras.sort_by_key(|(entity, _, _, slot)| (slot.map_or(u32::MAX, |s| s.0), *entity));
+
+    for (label, rank, mut t, mut vis, text_font_opt) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
             let Ok((gt, tracked_vis)) = tracked_q.get(tracked) else {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
@@ -526,11 +551,26 @@ fn world_label_screen_pos_system(
             label.world_pos
         };
 
+        let rank = rank.map_or(0usize, |r| r.0 as usize);
+        let selected = active_cameras
+            .iter()
+            .filter_map(|(_, camera, cam_global, _)| {
+                let vp = camera.world_to_viewport(cam_global, world_pos).ok()?;
+                let rect = camera.logical_viewport_rect()?;
+                rect.contains(vp).then_some((*cam_global, vp))
+            })
+            .nth(rank);
+
+        let Some((cam_global, vp)) = selected else {
+            if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+            continue;
+        };
+
         // Depth-based font size — only applies to Text2d-bearing WorldLabel entities.
         // Pixel bar anchors carry no TextFont, so this block is skipped for them.
         if let Some(mut text_font) = text_font_opt {
             let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
-                let dist = (world_pos - cam_pos).length().max(0.001);
+                let dist = (world_pos - cam_global.translation()).length().max(0.001);
                 let scale = (ref_dist / dist).min(1.0).max(min_floor);
                 (label.base_font_size * scale).round()
             } else {
@@ -541,24 +581,17 @@ fn world_label_screen_pos_system(
             }
         }
 
-        match camera.world_to_viewport(cam_global, world_pos) {
-            Ok(vp) => {
-                let new_x = vp.x - half_w + label.screen_offset.x;
-                let new_y = half_h - vp.y + label.screen_offset.y;
-                // Guard: only write when position meaningfully changes (≥0.5 px).
-                // An unconditional write marks the Transform dirty every frame, forcing
-                // Bevy to re-propagate transforms and re-layout every Text2d/Mesh2d child
-                // in the entire nameplate subtree — causing constant idle stutter.
-                if (t.translation.x - new_x).abs() >= 0.5 || (t.translation.y - new_y).abs() >= 0.5 {
-                    t.translation.x = new_x;
-                    t.translation.y = new_y;
-                }
-                if *vis != Visibility::Visible { *vis = Visibility::Visible; }
-            }
-            Err(_) => {
-                if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
-            }
+        let new_x = vp.x - half_w + label.screen_offset.x;
+        let new_y = half_h - vp.y + label.screen_offset.y;
+        // Guard: only write when position meaningfully changes (≥0.5 px).
+        // An unconditional write marks the Transform dirty every frame, forcing
+        // Bevy to re-propagate transforms and re-layout every Text2d/Mesh2d child
+        // in the entire nameplate subtree — causing constant idle stutter.
+        if (t.translation.x - new_x).abs() >= 0.5 || (t.translation.y - new_y).abs() >= 0.5 {
+            t.translation.x = new_x;
+            t.translation.y = new_y;
         }
+        if *vis != Visibility::Visible { *vis = Visibility::Visible; }
     }
 }
 

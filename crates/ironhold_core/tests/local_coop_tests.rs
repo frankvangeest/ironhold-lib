@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::camera::Viewport;
+use bevy::math::Mat4;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
 use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent};
+use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
@@ -1396,4 +1398,383 @@ fn test_no_split_labels_spawn_for_single_player_fallback_scene() {
         label_count, 0,
         "fallback single-camera scenes have no SplitViewportSlot and must spawn no corner label"
     );
+}
+
+// ── world_label_screen_pos_system: viewport-aware camera selection ─────────────
+//
+// world_label_screen_pos_system is private (registered directly into GamePlugin's
+// Update schedule, not exported), so these drive it via `app.update()` rather than
+// `run_system_once`, mirroring nameplate_tests.rs's pattern for the same reason.
+//
+// `setup_test_app()` uses `MinimalPlugins` — no render plugin ever runs
+// bevy_render's `camera_system`, so `Camera.computed` (clip_from_view, target_info)
+// is never populated for a bare `Camera::default()`. `ortho_camera_bundle` fills
+// it in by hand with a real orthographic projection so `world_to_viewport`/
+// `logical_viewport_rect` behave exactly as they would with a real render plugin,
+// and the screen-space math stays simple and exact enough to assert on directly.
+
+/// Builds a `(Transform, GlobalTransform, Camera)` with a working orthographic
+/// projection. `half_extent` is the view-space half-width/height mapped to NDC
+/// `[-1, 1]` — smaller values simulate a more "zoomed in" split-screen camera, so a
+/// point can be deliberately placed inside one camera's frustum and outside another's.
+fn ortho_camera_bundle(
+    position: Vec3,
+    look_at: Vec3,
+    half_extent: f32,
+    is_active: bool,
+    order: isize,
+    viewport: Option<Viewport>,
+    window_physical_size: UVec2,
+) -> (Transform, GlobalTransform, Camera) {
+    let transform = Transform::from_translation(position).looking_at(look_at, Vec3::Y);
+    let global = GlobalTransform::from(transform);
+    let clip_from_view = Mat4::orthographic_rh(-half_extent, half_extent, -half_extent, half_extent, 0.1, 1000.0);
+    let camera = Camera {
+        is_active,
+        order,
+        viewport,
+        computed: bevy::camera::ComputedCameraValues {
+            clip_from_view,
+            target_info: Some(bevy::camera::RenderTargetInfo {
+                physical_size: window_physical_size,
+                scale_factor: 1.0,
+            }),
+            ..default()
+        },
+        ..default()
+    };
+    (transform, global, camera)
+}
+
+fn fixed_world_label(world_pos: Vec3) -> WorldLabel {
+    WorldLabel {
+        world_pos,
+        tracked_entity: None,
+        offset: Vec3::ZERO,
+        base_font_size: 16.0,
+        depth_scale: None,
+        screen_offset: Vec2::ZERO,
+    }
+}
+
+#[test]
+fn test_world_label_single_camera_regression_unaffected_by_multi_camera_fix() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    let label = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO),
+        Transform::default(),
+        Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let transform = app.world().get::<Transform>(label).unwrap();
+    assert!(transform.translation.x.abs() < 0.5, "expected screen-centered x, got {}", transform.translation.x);
+    assert!(transform.translation.y.abs() < 0.5, "expected screen-centered y, got {}", transform.translation.y);
+    assert_eq!(*app.world().get::<Visibility>(label).unwrap(), Visibility::Visible);
+}
+
+#[test]
+fn test_world_label_resolves_against_the_split_camera_whose_viewport_actually_shows_it() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    // Two split cameras, each framing its own player far apart in world space —
+    // mirrors a real dynamic/grid split rig, not two coincidentally-identical cameras.
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-10.0, 0.0, 10.0), Vec3::new(-10.0, 0.0, 0.0), 5.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(10.0, 0.0, 10.0), Vec3::new(10.0, 0.0, 0.0), 5.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    let label_left = app.world_mut().spawn((
+        fixed_world_label(Vec3::new(-10.0, 0.0, 0.0)), Transform::default(), Visibility::Hidden,
+    )).id();
+    let label_right = app.world_mut().spawn((
+        fixed_world_label(Vec3::new(10.0, 0.0, 0.0)), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let tl = app.world().get::<Transform>(label_left).unwrap();
+    assert!(
+        (tl.translation.x - (-320.0)).abs() < 0.5,
+        "a point at cam0's target must resolve centered in the LEFT half, got x={}", tl.translation.x
+    );
+    assert_eq!(*app.world().get::<Visibility>(label_left).unwrap(), Visibility::Visible);
+
+    let tr = app.world().get::<Transform>(label_right).unwrap();
+    assert!(
+        (tr.translation.x - 320.0).abs() < 0.5,
+        "a point at cam1's target must resolve centered in the RIGHT half, got x={}", tr.translation.x
+    );
+    assert_eq!(*app.world().get::<Visibility>(label_right).unwrap(), Visibility::Visible);
+}
+
+#[test]
+fn test_world_label_hides_when_no_active_camera_viewport_shows_it() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-10.0, 0.0, 10.0), Vec3::new(-10.0, 0.0, 0.0), 5.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(10.0, 0.0, 10.0), Vec3::new(10.0, 0.0, 0.0), 5.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    // Far outside either camera's narrow (half_extent=5.0) frustum — off-viewport for both.
+    let label = app.world_mut().spawn((
+        fixed_world_label(Vec3::new(1000.0, 0.0, 0.0)), Transform::default(), Visibility::Visible,
+    )).id();
+
+    app.update();
+
+    assert_eq!(
+        *app.world().get::<Visibility>(label).unwrap(), Visibility::Hidden,
+        "a point off-frustum/off-viewport for every active camera must hide the label, \
+         matching the pre-existing off-frustum contract"
+    );
+}
+
+#[test]
+fn test_world_label_repositions_immediately_across_merge_split_transition_with_no_stale_frame() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t_split, g_split, cam_split) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 5.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    let cam_split_entity = app.world_mut()
+        .spawn((Camera3d::default(), cam_split, t_split, g_split, SplitViewportSlot(0)))
+        .id();
+
+    // Same transform/projection as the split camera, but full-window viewport and inactive —
+    // mirrors dynamic_split_screen_system's PartyOrbitCamera, which never has a SplitViewportSlot.
+    let (t_party, g_party, cam_party) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 5.0, false, 1, None, UVec2::new(1280, 720),
+    );
+    let cam_party_entity = app.world_mut()
+        .spawn((Camera3d::default(), cam_party, t_party, g_party))
+        .id();
+
+    let label = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+    let split_x = app.world().get::<Transform>(label).unwrap().translation.x;
+    assert!(
+        (split_x - (-320.0)).abs() < 0.5,
+        "while split is active, must resolve via the left-half split camera, got x={split_x}"
+    );
+
+    // Simulate dynamic_split_screen_system's merge — it flips is_active on both cameras
+    // atomically within one frame; the label must not lag a frame behind.
+    app.world_mut().get_mut::<Camera>(cam_split_entity).unwrap().is_active = false;
+    app.world_mut().get_mut::<Camera>(cam_party_entity).unwrap().is_active = true;
+    app.update();
+
+    let merged_x = app.world().get::<Transform>(label).unwrap().translation.x;
+    assert!(
+        (merged_x - 0.0).abs() < 0.5,
+        "immediately after merging, must resolve via the full-window party camera with no \
+         stale split-half position, got x={merged_x}"
+    );
+}
+
+// ── WorldLabelRank: multi-viewport duplication (2026-07-10 playtest amendment) ─────
+//
+// Frank's playtest of the fix above found that a portal simultaneously visible in 2 active
+// split viewports (e.g. player 1 approaches the portal where player 2 is already standing)
+// only showed its label in one viewport — correct for room5's dynamic merge (only one camera
+// is ever active then) but wrong for a fixed split screen, where both viewports are always
+// simultaneously rendered. `WorldLabelRank` lets `scene_loader.rs` spawn one sibling label per
+// possible active-camera rank so each simultaneously-visible viewport gets its own copy.
+
+#[test]
+fn test_world_label_rank_siblings_both_resolve_when_point_visible_in_both_active_viewports() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    // Two split cameras with overlapping frustums (half_extent=10 is wide enough that each
+    // camera also sees the other's target) — mirrors two players standing near the same portal.
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    // Rank 0 (implicit — no WorldLabelRank) mirrors scene_loader.rs's primary sibling.
+    let label_rank0 = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO), Transform::default(), Visibility::Hidden,
+    )).id();
+    // Rank 1 mirrors scene_loader.rs's first extra sibling.
+    let label_rank1 = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO), WorldLabelRank(1), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    // Deterministic order picks cam0 (slot 0) for rank 0, cam1 (slot 1) for rank 1.
+    let t_rank0 = app.world().get::<Transform>(label_rank0).unwrap();
+    assert!(
+        (t_rank0.translation.x - (-224.0)).abs() < 0.5,
+        "rank 0 must resolve via cam0 (left half), got x={}", t_rank0.translation.x
+    );
+    assert_eq!(*app.world().get::<Visibility>(label_rank0).unwrap(), Visibility::Visible);
+
+    let t_rank1 = app.world().get::<Transform>(label_rank1).unwrap();
+    assert!(
+        (t_rank1.translation.x - 224.0).abs() < 0.5,
+        "rank 1 must resolve via cam1 (right half) SIMULTANEOUSLY with rank 0, got x={}", t_rank1.translation.x
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(label_rank1).unwrap(), Visibility::Visible,
+        "both viewports can see the point at once — rank 1 must NOT hide just because rank 0 is shown"
+    );
+}
+
+#[test]
+fn test_world_label_rank_hides_when_fewer_active_cameras_than_ranks() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    // Only ONE active camera this time — rank 1 has no 2nd qualifying camera to bind to.
+    let (t0, g0, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t0, g0));
+
+    let label_rank0 = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO), Transform::default(), Visibility::Hidden,
+    )).id();
+    let label_rank1 = app.world_mut().spawn((
+        fixed_world_label(Vec3::ZERO), WorldLabelRank(1), Transform::default(), Visibility::Visible,
+    )).id();
+
+    app.update();
+
+    assert_eq!(
+        *app.world().get::<Visibility>(label_rank0).unwrap(), Visibility::Visible,
+        "rank 0 must still resolve via the single active camera"
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(label_rank1).unwrap(), Visibility::Hidden,
+        "rank 1 must hide independently — only one active camera exists, so there is no 2nd \
+         qualifying camera for it to bind to"
+    );
+}
+
+/// Regression guard for the exact mistake made during this fix's first pass: `local_coop_demo`'s
+/// portal room-name labels are authored via a scene entity's `label:` field (`EntityLabelDef`,
+/// `tracked_entity`), spawned by scene_loader.rs's separate `pending_labels` loop — NOT via
+/// scene-level `world_labels:` (fixed world position, no tracked entity). An earlier revision of
+/// the `WorldLabelRank` duplication only touched the `world_labels:` loop, so Frank's playtest
+/// still reproduced the bug exactly — the fix had never run for this project. This drives a real
+/// scene load through `spawn_scene_v2` (not a hand-built `WorldLabel`) so it would have caught
+/// that mistake.
+#[test]
+fn test_entity_label_ranks_spawn_for_tracked_entity_labels_not_just_world_labels() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_portal".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "portal", prefab: "test_portal", transform: (translation: (0.0, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0)), label: Some((text: "Room 4", offset: (0.0, 4.0, 0.0)))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(wl, _)| wl.tracked_entity.is_some())
+            .map(|(_, rank)| rank.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        ranks.len(), 4,
+        "an entity `label:` field must spawn MAX_SPLIT_PLAYERS (4) ranked siblings, not just 1 \
+         — this is the actual mechanism local_coop_demo's portal room-name labels use, distinct \
+         from scene-level `world_labels:`"
+    );
+    let mut sorted_ranks: Vec<u8> = ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted_ranks.sort();
+    assert_eq!(sorted_ranks, vec![0, 1, 2, 3], "expected exactly one of each rank 0-3");
 }
