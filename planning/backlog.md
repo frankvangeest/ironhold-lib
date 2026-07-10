@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Dynamically-spawned stat labels/bars inherit scene `label_depth_scale`** — `drain_dynamic_stat_ui_system` hardcodes `depth_scale: None` for `Action::Spawn` entities instead of calling `resolve_label_depth_scale` against the scene's `label_depth_scale` block, so wave-spawned enemies don't depth-scale like scene-placed ones. See `planning/features/depth_scale_dynamic_spawn.md`.
+
 ---
 
 ## Bugs
@@ -32,7 +34,6 @@
 
 - [ ] **Static scene mode (`?static=1`)** — freeze all time-driven systems (animations, NPC AI, motion, particles) immediately after `SceneEvent::Ready` so browser screenshot baselines are pixel-identical across runs. Mechanism: parse `?static=1` URL param in the WASM runner → `StaticMode(bool)` resource → pause `Time<Virtual>` + seek all `AnimationPlayer`s to t=0 on scene ready. Requires `start_app` signature change (all three crates) and a one-line change to `test_web.py`. See `planning/features/static_scene_mode.md`.
 - [ ] **Promote magic `tags` to typed prefab fields** — add `collectable: bool`, `player: bool`, and `flycam: bool` as `#[serde(default)]` fields on `PrefabDef`; `tags` remains for free-form designer labels but control-flow semantics move to typed fields; consistent with the `PrefabKind` enum casing work that cleaned up `kind`. Additive, no migration required.
-- [ ] **Per-prefab `depth_scale` honoured on dynamic spawns** — `StatLabelDef`/`WorldStatBarDef.depth_scale` overrides are silently ignored for `Action::Spawn` entities; fix by storing scene-level label depth config in a `LoadedLabelDepthScale` resource at scene load and reading it in `drain_dynamic_stat_ui_system`. See `planning/features/depth_scale_dynamic_spawn.md`
 - [ ] **Page visibility / focus-loss handling** — freeze delta time, pause audio, and drop render to zero when the browser tab loses focus; resume cleanly on tab restore without physics or audio desync; wire Bevy's `WindowFocused` / `ApplicationLifetime` events behind a `pause_on_focus_loss: bool` field on `ProjectConfig` (default `true`); opt-out lets streaming / spectator scenes keep running. Sourced from Phaser's focus-loss model.
 - [ ] **Optional `physics` Cargo feature** — gate Rapier3D behind a `physics` feature on `ironhold_core` so projects that don't use colliders skip the ~15 MB of Rapier symbols in the WASM binary; `ColliderDef` in RON becomes a validated-but-no-op field when the feature is absent; `PhysicsPlugin` conditionally compiled; `ironhold_web` enables `physics` by default but a future stripped build could omit it. Sourced from Phaser's Arcade vs Matter modular physics model.
 
