@@ -308,7 +308,19 @@ Any command accepts `--json` (before the subcommand name) for machine-readable o
 
 ---
 
+## Branching model ✅
+
+Ironhold uses a three-tier branch model — `main` (deployable, serves GitHub Pages) → `integration` (batches finished features for combined testing + the release WASM build) → `feature/{slug}` (one per backlog item, its own git worktree). This lets several features be developed in parallel without any GitHub Actions or platform automation; enforcement is via local git hooks (`.githooks/`), which are plain git and carry over to Forgejo unchanged.
+
+Full branch tiers, workflow-step mapping, and the one-time machine setup (`git config core.hooksPath .githooks`, shared `CARGO_TARGET_DIR`) live in root `CLAUDE.md` under **Branching Model** — that's the canonical reference; this section just flags that it exists.
+
+A PR (via `gh pr create`) into `integration` is optional, not required, for a solo-dev flow — a plain `git merge` is fine. Use a PR when you want a review record before merging.
+
+---
+
 ## Pull request checklist
+
+Applies whether a feature lands via a PR or a direct merge into `integration`:
 
 - [ ] Documentation updated (use ✅/🧪/🧭 labeling)
 - [ ] Example project updated or a new example added
@@ -316,6 +328,7 @@ Any command accepts `--json` (before the subcommand name) for machine-readable o
 - [ ] Browser tests pass (`python test_web.py --skip-build`); baselines updated if rendering changed
 - [ ] Schema compatibility considered (version bump + migration notes if needed)
 - [ ] No accidental platform-specific behavior in core logic
+- [ ] `pkg/` is untouched on the feature branch (release builds only happen on `integration`)
 
 ---
 

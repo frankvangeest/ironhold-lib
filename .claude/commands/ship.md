@@ -1,64 +1,91 @@
 Walk through the ironhold-lib code change workflow for the current feature. Execute each step in order, report its status, and do not skip steps. Steps marked _(conditional)_ run only when their trigger applies — say so explicitly when you skip one.
 
-Steps:
+Steps 1–10 happen **on a `feature/{slug}` branch**, in its own git worktree — parallelizable, one per feature. Steps 11–17 happen **on `integration`**, once per batch of merged feature branches, not once per feature. See root `CLAUDE.md` → Branching Model for the full branch-tier reference.
 
-1. **Feature plan complete** — Check whether the relevant feature file exists in `planning/features/` and is filled in (approach, schema changes, RON examples). If there is no plan doc for a non-trivial change, flag it and stop.
+## On a feature branch
 
-2. **Feature is Active in backlog** — Read `planning/backlog.md` and confirm the item is listed under `## Active`. If it is still Queued or Icebox, move it to Active and commit before continuing.
+1. **Feature plan complete** — Check whether the relevant feature file exists in `planning/features/` and is filled in (approach, schema changes, RON examples). If there is no plan doc for a non-trivial change, flag it and stop. Equivalent to running `/plan-review`.
+
+2. **Create the feature branch + worktree, mark it Active in the backlog, commit before coding:**
+   ```
+   git worktree add ../ironhold-lib-{slug} -b feature/{slug} main
+   ```
+   Read `planning/backlog.md`, move the item to `## Active` if it isn't already, and commit that change before writing code.
 
 3. **Code changes implemented** — Confirm the implementation is complete. Ask the user to describe what was changed if it is not clear from context.
 
-4. **Alignment review** — Invoke the `alignment-reviewer` agent to verify the change follows the data-driven design philosophy: designer-reachable from RON without recompiling, no hardcoded asset paths, no capability pushing directly to ActionQueue.
+4. **Parallel code review + tests** — Equivalent to running `/code-review` alongside the test suite. Launch in a single message (multiple tool calls, so everything runs concurrently):
+   - `alignment-reviewer` _(always)_ — verifies the change follows the data-driven design philosophy: designer-reachable from RON without recompiling, no hardcoded asset paths, no capability pushing directly to ActionQueue.
+   - `system-architect` _(always)_ — verifies crate boundaries, the Message→Interpreter→Action→Executor pipeline, schema stability, capability coupling, and long-term maintainability.
+   - `debug-detective` _(always)_ — adversarially reviews the diff for latent bugs and edge cases, not just symptoms the user already reported.
+   - `ux-gamedesigner-reviewer` _(conditional — if any files in `assets/`, `docs/`, or schema RON files changed)_ — verifies the designer experience is clear, documented, and consistent.
+   - `wasm-perf-reviewer` _(conditional — if the change touches runtime systems, rendering, the render/update hot path, asset-loading paths, per-frame work, adds a dependency, or adds schema that drives per-frame processing)_ — verifies no WASM frame-time or binary-size regressions.
+   - The test suite, at the same time as the review agents (independent of them):
+     ```
+     cargo test -p ironhold_core --test '*'
+     cargo check -p ironhold_cli
+     ```
+     Both are unconditional every time — the CLI check catches `Action`/schema changes that would silently break `query.rs` otherwise. All must pass before continuing.
 
-5. **Architecture review** _(conditional)_ — If the change is architectural, touches `crates/ironhold_core/src/schema/`, adds/alters a capability, changes crate boundaries, or affects WASM compatibility, invoke the `system-architect` agent to verify crate boundaries, the Message→Interpreter→Action→Executor pipeline, schema stability, capability coupling, and long-term maintainability. Skip (and say so) for pure asset/RON/doc tweaks.
+   **Evaluate every review finding individually**: fix it now (return to step 3) or, if it's non-blocking, log it as its own item in `planning/backlog.md` or a `planning/claude_suggestions.md` entry for later triage. Don't let a non-blocking observation stall this feature.
 
-6. **Tests pass** — Run:
+5. **Docs updated** — Check that `docs/20_data_formats.md` and any relevant `CLAUDE.md` files reflect the changes. New schema fields, new action types, and new events each need a doc entry. Also check `crates/ironhold_core/src/CLAUDE.md` for capability-level notes.
+
+6. **Schema/CLI spot-check** _(conditional)_ — If any file in `crates/ironhold_core/src/schema/` was modified (the `cargo check -p ironhold_cli` in step 4 already ran unconditionally), also verify `query actions` and `query events` output still formats correctly if `Action` or event types changed.
+
+7. **WASM dev build** — Run:
    ```
-   cargo test -p ironhold_core --test '*'
+   wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu
    ```
-   All must pass. Fix any failures before continuing.
+   Report the size of `pkg/ironhold_web_bg.wasm`. Warn if ≥ 95 MB.
+   ⚠️ **Never commit `pkg/` on a feature branch** — release builds only happen on `integration` (enforced by `.githooks/pre-commit`). This is a dev build for local play-testing only.
 
-7. **Docs updated** — Check that `docs/20_data_formats.md` and any relevant `CLAUDE.md` files reflect the changes. New schema fields, new action types, and new events each need a doc entry. Also check `crates/ironhold_core/src/CLAUDE.md` for capability-level notes.
+8. **Play-test checklist** — Provide a concrete checklist for Frank to verify the feature in the browser: which project to load, what to interact with, what to look for. Include golden path and at least one edge case.
 
-8. **UX review** _(conditional)_ — If any files in `assets/`, `docs/`, or schema RON files changed, invoke the `ux-gamedesigner-reviewer` agent to verify the designer experience is clear, documented, and consistent.
+9. **Await play-test confirmation** — Stop here. Do not proceed to step 10 until Frank explicitly confirms the feature works in the browser.
 
-9. **Schema/CLI check** _(conditional)_ — If any file in `crates/ironhold_core/src/schema/` was modified, run:
-   ```
-   cargo check -p ironhold_cli
-   ```
-   Also verify `query actions` and `query events` output still formats correctly if `Action` or event types changed.
+   If Frank reports a bug or regression during play-testing:
+   - Return to **step 3** (implement the fix)
+   - Re-run **step 4** (parallel review + tests, each conditional review only if its trigger still applies) and **steps 5 → 7** (docs, schema check, dev WASM build)
+   - Then return to **step 8** (updated play-test checklist) and **step 9** (await confirmation again)
+   - Repeat this loop until Frank confirms all is well.
 
-10. **WASM performance review** _(conditional)_ — If the change touches runtime systems, rendering, the render/update hot path, asset-loading paths, per-frame work, adds a dependency, or adds schema that drives per-frame processing, invoke the `wasm-perf-reviewer` agent to verify there are no WASM frame-time or binary-size regressions before building. Skip (and say so) for changes with no runtime/perf surface (e.g. docs, planning, RON-only content).
+10. **Mark Done, commit, merge into `integration`:**
+    - In `planning/backlog.md`, mark the item `[x]` and move its feature file from `planning/features/` to `planning/features/done/` if one exists.
+    - Commit (code + tests + docs — **never `pkg/`**).
+    - Merge **from the primary checkout** (it stays checked out on `integration` permanently — do not `git checkout integration` from inside the feature worktree, git will refuse since `integration` is already checked out elsewhere): `git merge feature/{slug}`. Expect an occasional `planning/backlog.md` conflict when several features land close together (resolve by hand — a `merge=union` auto-resolver was tried and rejected: it silently duplicates section headers and reverts moved lines instead of flagging a real conflict). Confirm the merge succeeded, then `git push origin integration`.
+    - Clean up: `git worktree remove ../ironhold-lib-{slug}` then `git branch -d feature/{slug}`.
 
-11. **WASM dev build** — Run:
+## On `integration` (once per batch, after one or more feature branches have merged in)
+
+11. **Full test suite across the combined batch** — run again on `integration` to catch cross-feature regressions the individual feature branches couldn't see:
     ```
-    wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu
+    cargo test -p ironhold_core --test '*'
+    cargo check -p ironhold_cli
     ```
-    Report the size of `pkg/ironhold_web_bg.wasm`. Warn if ≥ 95 MB.
-    ⚠️ **Never commit a `--dev` build** — it is ~180 MB and will exceed GitHub Pages' 100 MB hard limit. The `pkg/` directory must not be staged after a dev build.
 
-12. **Play-test checklist** — Provide a concrete checklist for Frank to verify the feature in the browser: which project to load, what to interact with, what to look for. Include golden path and at least one edge case.
-
-13. **Await play-test confirmation** — Stop here. Do not proceed to step 14 until Frank explicitly confirms the feature works in the browser.
-
-    If Frank reports a bug or regression during play-testing:
-    - Return to **step 3** (implement the fix)
-    - Re-run **steps 4 → 11** (alignment review, architecture review, tests, docs, UX review, schema check, perf review, dev WASM build), running each _(conditional)_ review only if its trigger still applies
-    - Then return to **step 12** (updated play-test checklist) and **step 13** (await confirmation again)
-    - Repeat this loop until Frank confirms all is well.
-
-    The same fix loop applies after step 15 if the release build reveals a regression.
-
-14. **WASM release build** — Run:
+12. **WASM release build** — Run:
     ```
     cargo clean && wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --features webgpu
     ```
     Report binary size. If ≥ 95 MB, warn Frank clearly — GitHub Pages hard-blocks at 100 MB.
 
-15. **Await release play-test confirmation** — Stop here. Ask Frank to do a quick smoke-test of the release build (`python serve.py`) — confirm no console errors and the feature still works. Do not proceed to step 16 until Frank confirms. This is a separate gate from step 13: the dev and release builds can behave differently (optimisation, size-dependent loading, missing assets).
+13. **Await release play-test confirmation** — Stop here. Ask Frank to do a quick smoke-test of the combined batch (`python serve.py`) — confirm no console errors and every merged feature still works. Do not proceed to step 14 until Frank confirms.
 
-16. **Move feature to Done** — In `planning/backlog.md`, mark the item `[x]` and move its feature file from `planning/features/` to `planning/features/done/` if one exists.
+    If the release build reveals a regression:
+    - Return to **step 3** on the relevant `feature/{slug}` branch (recreate its worktree if it was already removed) and fix it there
+    - Re-run that branch's steps 4 → 9, then re-merge into `integration`
+    - Repeat from **step 11**
+    - If the regression is hard to isolate to one feature branch, reset instead: `git branch -f integration <last-good-sha>` (typically `main`'s tip), then re-merge whichever finished feature branches were dropped by the reset.
 
-17. **Commit** — Stage all changed files and commit with a descriptive message in conventional-commit format. Include a summary of what changed and why.
+14. **Commit `pkg/` on `integration`** — use `git add -f pkg/`, not plain `git add`: `pkg/.gitignore` is a blanket `*`, so a new filename `wasm-pack` emits (as opposed to an already-tracked one) would otherwise be silently skipped.
 
-After all steps are complete, propose the next feature to activate from the backlog `## Queued` section.
+15. **Promote to `main`** — fast-forward only, then push (this is the step that updates the live GitHub Pages demo), then switch back to `integration` (its permanent home):
+    ```
+    git checkout main && git merge --ff-only integration && git push origin main && git checkout integration
+    ```
+    `.githooks/pre-push` blocks this push unless `main` exactly matches `integration`'s tip.
+
+16. **Post cleanup** — `cargo clean`; prompt the user to run `/compact`.
+
+17. **Propose the next feature(s) to activate from the backlog `## Queued` section** — one per available worktree.

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Blocks pkg/ (WASM build output) from being committed on feature/* branches.
+# Release builds are only committed on `integration` — see CLAUDE.md Branching Model.
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  feature/*)
+    if git diff --cached --name-only | grep -q '^pkg/'; then
+      echo "error: pkg/ changes staged on '$branch'." >&2
+      echo "       WASM release builds are only committed on 'integration' — see CLAUDE.md Branching Model." >&2
+      exit 1
+    fi
+    ;;
+esac
+
+exit 0

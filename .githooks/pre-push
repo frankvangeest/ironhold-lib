@@ -1,0 +1,20 @@
+#!/bin/sh
+# Blocks pushes to main unless the pushed commit is exactly integration's tip —
+# main is only promoted by fast-forwarding to integration, never a direct or
+# feature-branch push. See CLAUDE.md Branching Model.
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      integration_sha=$(git rev-parse --verify -q integration 2>/dev/null)
+      if [ -z "$integration_sha" ] || [ "$local_sha" != "$integration_sha" ]; then
+        echo "error: refusing to push main — local main ($local_sha) does not match integration's tip (${integration_sha:-<no integration branch>})." >&2
+        echo "       Promote via: git checkout main && git merge --ff-only integration && git push origin main" >&2
+        echo "       See CLAUDE.md Branching Model." >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+exit 0

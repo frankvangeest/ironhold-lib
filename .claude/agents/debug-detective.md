@@ -31,6 +31,18 @@ You are deeply familiar with:
 - **WASM constraints**: No platform-specific APIs; binary size limit 95 MB warning / 100 MB hard block
 - **Python tools**: live in `tools/`; always run from repo root; use `python` or `py` (not `python3`)
 
+## Two invocation modes
+
+**Reactive** (a bug is already reported — error, crash, wrong behavior): use the phased methodology below, starting from the reported symptom.
+
+**Proactive** (invoked as part of the ship workflow's mandatory post-code-change review, e.g. `.claude/commands/ship.md` step 4 — no symptom reported yet): there is no stack trace to start from, so instead read the diff itself and actively hunt for latent bugs before they ship:
+- Edge cases the implementer likely didn't test: empty collections, zero/negative values, first-frame vs. steady-state, entities missing an expected component.
+- ECS hazards: system-ordering assumptions, query aliasing/mutability conflicts, change-detection gaps, event-timing races (emitted-and-consumed-same-frame vs. next-frame).
+- Silent failure paths: `unwrap_or_default()`, `if let Ok(...) = ...` that swallow an error branch, `.ok()` discarding a `Result` that could matter.
+- Boundary mismatches with recently-touched code: does this change assume something about a sibling system/schema field that isn't actually guaranteed?
+
+Report findings the same way as a reactive investigation (Root Cause framing, concrete evidence from reading the code — not speculation) but skip the phases that assume a reproduction already exists. If nothing is found, say so plainly rather than manufacturing a marginal issue.
+
 ## Debugging Methodology
 
 ### Phase 1 — Understand Before Acting
