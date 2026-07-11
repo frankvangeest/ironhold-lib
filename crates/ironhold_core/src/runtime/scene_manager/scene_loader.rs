@@ -684,6 +684,7 @@ pub fn spawn_scene_v2(
 
         let tonemapping = scene.tonemapping.to_bevy();
         commands.insert_resource(crate::runtime::scene_manager::ActiveTonemapping(tonemapping));
+        commands.insert_resource(crate::runtime::scene_manager::LoadedLabelDepthScale(scene.label_depth_scale.clone()));
 
         // ── Primitive player ─────────────────────────────────────────────────────────
         if let Some((entity_id, shape, params, position, components, player_children, prefab_key, np_display_name, np_override)) = primitive_player {
@@ -2528,17 +2529,16 @@ fn apply_lighting_v2(
     }
 }
 
-// ─── Label depth scale helper ─────────────────────────────────────────────────
-
-/// Resolves the effective depth-scale config for a single label.
 /// Drains `DynamicStatUiQueue` and spawns `stat_label` / `world_stat_bar` entities for each
 /// entry. These are entities created by `Action::Spawn`; scene-placed entities still go through
-/// the inline path in `spawn_scene_v2`. Dynamic spawns never have a `label_depth_scale` scene
-/// config so depth scaling is always `None` here (matching projects that don't configure it).
+/// the inline path in `spawn_scene_v2`. Reads `LoadedLabelDepthScale` (the active scene's
+/// `label_depth_scale` block, if any) so dynamic spawns inherit the same depth-based scaling as
+/// scene-placed widgets — see `resolve_label_depth_scale` below.
 pub fn drain_dynamic_stat_ui_system(
     mut commands: Commands,
     mut queue: ResMut<DynamicStatUiQueue>,
     mut mats: SceneMaterialParams,
+    label_depth_scale: Res<crate::runtime::scene_manager::LoadedLabelDepthScale>,
 ) {
     for entry in queue.0.drain(..) {
         if let Some((stat_key, sl)) = entry.stat_label {
@@ -2554,7 +2554,7 @@ pub fn drain_dynamic_stat_ui_system(
                     tracked_entity: Some(entry.entity),
                     offset: Vec3::from(sl.offset),
                     base_font_size: sl.font_size,
-                    depth_scale: None,
+                    depth_scale: resolve_label_depth_scale(label_depth_scale.0.as_ref(), None),
                     screen_offset: Vec2::ZERO,
                 },
                 StatLabelMarker { stat_key, show_max: sl.show_max },
@@ -2568,6 +2568,7 @@ pub fn drain_dynamic_stat_ui_system(
             let (fr, fg, fb, fa) = fill_color;
             let (bgr, bgg, bgb, bga) = wb.bg_color;
             let color_bands = wb.color_bands;
+            let depth_scale = resolve_label_depth_scale(label_depth_scale.0.as_ref(), None);
 
             match wb.style {
                 WorldStatBarStyle::Ascii { cells, font_size } => {
@@ -2585,7 +2586,7 @@ pub fn drain_dynamic_stat_ui_system(
                             tracked_entity: Some(entry.entity),
                             offset: offset_v3,
                             base_font_size: font_size,
-                            depth_scale: None,
+                            depth_scale,
                             screen_offset: Vec2::ZERO,
                         },
                         LevelEntity,
@@ -2602,7 +2603,7 @@ pub fn drain_dynamic_stat_ui_system(
                             tracked_entity: Some(entry.entity),
                             offset: offset_v3,
                             base_font_size: font_size,
-                            depth_scale: None,
+                            depth_scale,
                             screen_offset: Vec2::ZERO,
                         },
                         WorldStatBarFillMarker { stat_key, cells, fill_color, color_bands },
@@ -2617,6 +2618,8 @@ pub fn drain_dynamic_stat_ui_system(
                     let color_mats = mats.color_materials.as_mut()
                         .expect("ColorMaterial assets must be available to spawn pixel stat bars");
 
+                    // Depth scaling intentionally not applied to Pixel-style bars — matches the
+                    // scene-placed anchor spawn (~line 1099), a pre-existing documented exclusion.
                     let anchor = commands.spawn((
                         Name::new(format!("PixelBarAnchor: {}", stat_key)),
                         Transform::default(),

@@ -221,6 +221,19 @@ impl Default for ActiveTonemapping {
     }
 }
 
+/// The active scene's `label_depth_scale` block, if any. Read by `drain_dynamic_stat_ui_system`
+/// so dynamically spawned (`Action::Spawn`) stat labels/bars inherit the same depth-based
+/// scaling as scene-placed ones via `resolve_label_depth_scale` — mirrors how `ActiveTonemapping`
+/// makes a scene-load-time value available to a later system.
+///
+/// Not explicitly cleared on `Action::LoadScene` (unlike `ActiveViewBox`) — `spawn_scene_v2`
+/// unconditionally re-inserts it on every scene load, so it's never stale by the time anything
+/// reads it. This relies on `PendingEntitySpawns` also being cleared on `Action::LoadScene`: no
+/// spawn queued against the old scene can drain (and read this resource) after the transition,
+/// so there's no window where a dynamic spawn sees the previous scene's depth-scale config.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedLabelDepthScale(pub Option<crate::schema::scene_v2::LabelDepthScaleDef>);
+
 /// One entry queued by `drain_spawn_queue_system` for each dynamic spawn that has a
 /// `stat_label` and/or `world_stat_bar` on its `PrefabDef`. Drained each frame by
 /// `drain_dynamic_stat_ui_system` in scene_loader.rs, which contains all the mesh/
