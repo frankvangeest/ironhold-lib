@@ -1,7 +1,7 @@
 ﻿use bevy::prelude::*;
 use std::collections::HashMap;
-use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, GameSceneV2};
+use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, DynamicStatUiQueue, DynamicStatUiEntry, LoadedLabelDepthScale, WorldLabel};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, GameSceneV2, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, LabelDepthScaleDef};
 use ironhold_core::capabilities::animation_resolver::LocomotionState;
 
 mod support;
@@ -712,4 +712,226 @@ fn test_set_entity_visible_hides_then_shows_spawned_entity() {
 
     let vis = *app.world().entity(entity).get::<Visibility>().unwrap();
     assert_eq!(vis, Visibility::Visible, "entity must be visible after SetEntityVisible(true)");
+}
+
+/// Full-scene-load regression: exercises the *populate* half of the fix
+/// (`spawn_scene_v2` wiring `scene.label_depth_scale` into `LoadedLabelDepthScale`), not just
+/// the *read* half the other two dynamic-spawn tests below cover directly against the queue.
+#[test]
+fn test_scene_load_populates_label_depth_scale_for_dynamically_spawned_prefab() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Action::Spawn's executor requires prefab.model to resolve in the asset catalog's `models`
+    // map before it will even queue the spawn (action_executor.rs) — unlike scene-placed
+    // primitive/composite prefabs, which don't need a model entry at all. Use kind: Actor with a
+    // real (if nonexistent-on-disk) model key, matching test_spawn_action_assigns_spawn_id_and_registers.
+    let prefab_ron = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "test_stat_prefab": (
+                    kind: Actor,
+                    model: "dummy",
+                    stat_label: (stat_key: "health"),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(prefab_ron)
+        .expect("inline prefab catalog must parse");
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: HashMap::from([
+            ("dummy".to_string(), ironhold_core::schema::catalog::ModelCatalogEntry {
+                path: "shared/models/dummy.glb#Scene0".to_string(),
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(catalog));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(r#"
+            (
+                schema_version: 2,
+                label_depth_scale: (reference_distance: 35.0, min_scale: 0.4),
+                entities: [],
+                ui: [],
+            )
+        "#)
+        .expect("test scene must parse");
+    let scene_handle = app
+        .world_mut()
+        .resource_mut::<Assets<GameSceneV2>>()
+        .add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update(); // state transitions to LoadingScene
+    app.update(); // spawn_scene_v2 fires — LoadedLabelDepthScale should now be populated
+    app.update(); // commands flushed
+
+    // Spawn the prefab dynamically via Action::Spawn, exactly like a wave-spawner would.
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "test_stat_prefab".to_string(), id: Some("dyn_stat_01".to_string()), position: None, spawn_point: None, yaw_deg: None }
+    );
+    app.update(); // executor -> drain_spawn_queue_system -> drain_dynamic_stat_ui_system, all chained this frame
+
+    let spawned_entity = *app.world()
+        .resource::<SpawnRegistry>()
+        .entities
+        .get("dyn_stat_01")
+        .expect("dynamically spawned entity must register in SpawnRegistry");
+
+    let label = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .find(|l| l.tracked_entity == Some(spawned_entity))
+        .expect("drain_dynamic_stat_ui_system must spawn a WorldLabel tracking the dynamically spawned entity");
+
+    assert_eq!(
+        label.depth_scale,
+        Some((35.0, 0.4)),
+        "spawn_scene_v2 must populate LoadedLabelDepthScale from the scene's label_depth_scale block, \
+         and a prefab spawned via Action::Spawn afterward must inherit it"
+    );
+}
+
+fn make_stat_label_def(stat_key: &str) -> StatLabelDef {
+    StatLabelDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.5, 0.0),
+        font_size: 16.0,
+        color: (0.2, 0.9, 0.2, 1.0),
+        show_max: true,
+    }
+}
+
+#[test]
+fn test_dynamic_stat_label_inherits_scene_label_depth_scale() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedLabelDepthScale(Some(LabelDepthScaleDef {
+        reference_distance: 40.0,
+        min_scale: Some(0.25),
+    })));
+
+    let tracked = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<DynamicStatUiQueue>()
+        .0
+        .push(DynamicStatUiEntry {
+            entity: tracked,
+            stat_label: Some(("health".to_string(), make_stat_label_def("health"))),
+            world_stat_bar: None,
+        });
+    app.update();
+
+    let label = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .find(|l| l.tracked_entity == Some(tracked))
+        .expect("drain_dynamic_stat_ui_system must spawn a WorldLabel for the queued stat_label");
+
+    assert_eq!(
+        label.depth_scale,
+        Some((40.0, 0.25)),
+        "a dynamically spawned stat label must inherit the scene's label_depth_scale, matching what a scene-placed stat label would resolve to"
+    );
+}
+
+fn make_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
+    WorldStatBarDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Ascii { cells: 10, font_size: 14.0 },
+    }
+}
+
+#[test]
+fn test_dynamic_world_stat_bar_inherits_scene_label_depth_scale() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedLabelDepthScale(Some(LabelDepthScaleDef {
+        reference_distance: 30.0,
+        min_scale: None,
+    })));
+
+    let tracked = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<DynamicStatUiQueue>()
+        .0
+        .push(DynamicStatUiEntry {
+            entity: tracked,
+            stat_label: None,
+            world_stat_bar: Some(("health".to_string(), make_world_stat_bar_def("health"))),
+        });
+    app.update();
+
+    let depth_scales: Vec<Option<(f32, f32)>> = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .filter(|l| l.tracked_entity == Some(tracked))
+        .map(|l| l.depth_scale)
+        .collect();
+
+    assert_eq!(depth_scales.len(), 2, "Ascii world_stat_bar must spawn a background and a fill WorldLabel");
+    for depth_scale in &depth_scales {
+        assert_eq!(
+            *depth_scale,
+            Some((30.0, 0.0)),
+            "a dynamically spawned world_stat_bar must inherit the scene's label_depth_scale, matching a scene-placed bar"
+        );
+    }
+}
+
+#[test]
+fn test_dynamic_stat_label_has_no_depth_scale_when_scene_has_no_block() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // LoadedLabelDepthScale defaults to None — no label_depth_scale block authored.
+    let tracked = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<DynamicStatUiQueue>()
+        .0
+        .push(DynamicStatUiEntry {
+            entity: tracked,
+            stat_label: Some(("mana".to_string(), make_stat_label_def("mana"))),
+            world_stat_bar: None,
+        });
+    app.update();
+
+    let label = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .find(|l| l.tracked_entity == Some(tracked))
+        .expect("drain_dynamic_stat_ui_system must spawn a WorldLabel for the queued stat_label");
+
+    assert_eq!(
+        label.depth_scale, None,
+        "no regression: a scene with no label_depth_scale block must still yield no depth scaling for dynamic spawns"
+    );
 }

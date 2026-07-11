@@ -67,13 +67,13 @@ block continues to mean "no depth scaling" for dynamic spawns, same as today.
 
 ## Tasks
 
-- [ ] Add `LoadedLabelDepthScale(Option<LabelDepthScaleDef>)` resource + `init_resource`
-- [ ] Populate `LoadedLabelDepthScale` in `spawn_scene_v2` (scene load) and on `Action::LoadScene`
-- [ ] Update `drain_dynamic_stat_ui_system` to call `resolve_label_depth_scale(res.0.as_ref(), None)` for both `stat_label` and `world_stat_bar` widgets, replacing the hardcoded `None`
-- [ ] Add integration test: author a scene with a `label_depth_scale` block but **no** per-widget override (none exists), spawn a `stat_label`/`world_stat_bar` prefab via `Action::Spawn`, assert the resulting `WorldLabel.depth_scale` is `Some(...)` and matches the scene's `reference_distance`/`min_scale`
-- [ ] Add a regression test: a scene with no `label_depth_scale` block still yields `depth_scale: None` for a dynamically spawned stat widget (no behavior change when the scene doesn't opt in)
-- [ ] Docs: update `docs/20_data_formats.md`'s `label_depth_scale` scene-row (~line 177) to state it also applies to entities spawned via `Action::Spawn`, not just scene-placed ones; note the existing Pixel-bar-style exclusion (~line 3083) still applies — this fix does not add depth scaling to `style: Pixel` bars
-- [ ] Correct the stale internal note in `crates/ironhold_core/src/CLAUDE.md` (Dynamic spawning section, "Known limitation" paragraph) that currently describes a `depth_scale: Some(true)` per-prefab override — replace with the corrected mechanism above
+- [x] Add `LoadedLabelDepthScale(Option<LabelDepthScaleDef>)` resource + `init_resource`
+- [x] Populate `LoadedLabelDepthScale` in `spawn_scene_v2` (scene load). **Not** explicitly re-cleared on `Action::LoadScene` (unlike the task originally said) — deliberately dropped as redundant: `spawn_scene_v2` unconditionally re-inserts on every scene load, and `PendingEntitySpawns` is separately cleared on `Action::LoadScene`, so no spawn queued against the old scene can ever drain against a stale value. See the doc comment on `LoadedLabelDepthScale` in `mod.rs`.
+- [x] Update `drain_dynamic_stat_ui_system` to call `resolve_label_depth_scale(res.0.as_ref(), None)` for both `stat_label` and `world_stat_bar` (Ascii style) widgets, replacing the hardcoded `None`. `Pixel`-style bars deliberately keep `depth_scale: None`, matching the scene-placed anchor's own pre-existing exclusion.
+- [x] Integration tests (`crates/ironhold_core/tests/spawn_tests.rs`): `test_dynamic_stat_label_inherits_scene_label_depth_scale`, `test_dynamic_world_stat_bar_inherits_scene_label_depth_scale` (both push directly onto `DynamicStatUiQueue` — cover the *read* side), and `test_scene_load_populates_label_depth_scale_for_dynamically_spawned_prefab` (drives a real scene load + `Action::Spawn` — covers the *populate* side; added after `system-architect`/`debug-detective` review both flagged the first two didn't exercise `spawn_scene_v2`'s wiring).
+- [x] Regression test: `test_dynamic_stat_label_has_no_depth_scale_when_scene_has_no_block` — a scene with no `label_depth_scale` block still yields `depth_scale: None` for a dynamically spawned stat widget.
+- [x] Docs: `docs/20_data_formats.md`'s `label_depth_scale` scene-row updated to state it also applies to entities spawned via `Action::Spawn`, and that stat widgets have no per-widget override (unlike world labels); Pixel-bar-style exclusion cross-referenced.
+- [x] Corrected the stale internal note in `crates/ironhold_core/src/CLAUDE.md` (Dynamic spawning section) that described a non-existent `depth_scale: Some(true)` per-prefab override field.
 - [ ] Correct/remove the matching entry in `planning/claude_suggestions.md` once this ships
 
 ## Acceptance criteria
