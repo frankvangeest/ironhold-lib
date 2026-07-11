@@ -7,7 +7,25 @@
   },
   textures: {},
   audio: {},
-  effects: {},
+  effects: {
+    // Stationary, long-lived, non-fading sparks — playtest aid for the split-screen particle
+    // billboard orientation fix (Phase 1 of planning/features/split_screen_camera_followups.md).
+    // Spawned in room3 (fixed vertical split) at the midpoint between the two spawn points so
+    // both players see it immediately; orbit either camera around it to confirm each viewport's
+    // quads face that viewport's own camera, not world axes or the other player's camera.
+    "billboard_test_spark": (
+      particle_count: 6,
+      lifetime_secs: 30.0,
+      speed: 0.0,
+      spread_deg: 0.0,
+      emit_radius: 0.6,
+      size: 0.4,
+      size_jitter: 0.1,
+      color_start: (1.0, 0.6, 0.1, 1.0),
+      color_end: (1.0, 0.6, 0.1, 1.0),
+      gravity: 0.0,
+    ),
+  },
   // Solid-color tints for room6's 4-way split — distinguishes 4 players who otherwise reuse just
   // the 2 existing character models (2 players per model). Standard (not unlit), so tinted
   // characters still respond to each room's lighting like every other model in this project.

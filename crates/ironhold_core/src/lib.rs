@@ -535,7 +535,9 @@ fn world_label_screen_pos_system(
         .iter()
         .filter(|(_, camera, ..)| camera.is_active)
         .collect();
-    active_cameras.sort_by_key(|(entity, _, _, slot)| (slot.map_or(u32::MAX, |s| s.0), *entity));
+    active_cameras.sort_by_key(|(entity, _, _, slot)| {
+        crate::capabilities::camera::camera_priority_key(*entity, *slot)
+    });
 
     for (label, rank, mut t, mut vis, text_font_opt) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {

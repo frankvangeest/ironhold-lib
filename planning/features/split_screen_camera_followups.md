@@ -1,6 +1,6 @@
 # Feature: Split-Screen — Remaining Single-Camera Assumption Sites
 
-_Status: Ready_
+_Status: In Progress (Phase 1 Done, Phases 2-4 Queued)_
 _Planned at: `4848727` (2026-07-11)_
 _Plan review (2026-07-11): system-architect + ux-gamedesigner-reviewer, verdict Ready. Findings
 below are incorporated; Frank resolved the two open decisions (Phase 4 perf gating, Phase 4
@@ -15,7 +15,7 @@ in.
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | `particle_renderer.rs` billboard orientation | Queued | — |
+| 1 | `particle_renderer.rs` billboard orientation | Done | `aa81cbb` (2026-07-12) |
 | 2 | `targeting.rs` viewport-aware click-to-select | Queued | — |
 | 3 | `nameplate_visibility_system` distance-culling | Queued | — |
 | 4 | `WorldLabelRank` extended to stat labels / world stat bars | Queued | — |
@@ -28,7 +28,8 @@ written) and explicitly left "not touched" by
 `planning/features/done/world_label_split_screen_positioning.md`, which fixed the fifth (portal
 room-name / entity labels) via `world_label_screen_pos_system`:
 
-1. `particle_renderer.rs:303` (`rebuild_pool_meshes_system`) — billboard orientation basis vectors.
+1. ~~`particle_renderer.rs:303` (`rebuild_pool_meshes_system`) — billboard orientation basis
+   vectors.~~ **Fixed in Phase 1 (`aa81cbb`).**
 2. `targeting.rs:122` (`click_select_system`) — click-to-select nearest-entity search.
 3. `nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.
 4. `WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
@@ -90,6 +91,9 @@ phase needs a demo-project addition before it can be play-tested at all.
   shared fn in Phase 1 (the first site that needs deterministic ordering) so Phase 2 and Phase 3
   consume it instead of re-typing it, rather than fully generalizing the selection helper (still
   premature per the original fix's own deferral — the three call shapes genuinely differ).
+  **Landed as `capabilities::camera::camera_priority_key(entity, slot)` in Phase 1** —
+  `world_label_screen_pos_system` was refactored (behavior-preserving) to call it too, so Phases 2
+  and 3 have it available already.
 - **`WorldLabelRank`'s duplication pattern is directly reusable** for Phase 4: spawn
   `MAX_SPLIT_PLAYERS` ranked sibling entities instead of 1, `rank > 0` starts `Visibility::Hidden`,
   `world_label_screen_pos_system` already resolves `.nth(rank)` generically — no changes needed to
@@ -123,14 +127,17 @@ phase needs a demo-project addition before it can be play-tested at all.
 
 ## Approach
 
-**Phase 1 — particle billboard orientation:** change `camera_q` in `rebuild_pool_meshes_system` to
-`Query<(&Camera, &GlobalTransform), With<Camera3d>>`, filter `is_active`, and pick the first
-qualifying camera using a new shared comparator fn (`SplitViewportSlot`-then-`Entity` order,
-extracted here for Phase 2/3 to reuse) instead of falling back to world axes whenever 2+ `Camera3d`
-entities merely exist. Document as a known, accepted limitation that with 2 *simultaneously* active
-split cameras at different angles, particles will only billboard correctly toward the picked
-camera — true per-viewport-correct billboarding would require duplicating particle meshes per
-viewport, out of scope here (see Not in scope).
+**Phase 1 — particle billboard orientation. DONE (`aa81cbb`).** Changed `camera_q` in
+`rebuild_pool_meshes_system` to `Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>),
+With<Camera3d>>`, filtered `camera.is_active`, and picked the highest-priority active camera via
+`.min_by_key(camera_priority_key)` (the new shared comparator, added to `capabilities/camera.rs` and
+also consumed by `world_label_screen_pos_system`) instead of falling back to world axes whenever 2+
+`Camera3d` entities merely existed. Falls back to `(Vec3::X, Vec3::Y)` only when zero cameras are
+active (unchanged edge case). **Known, accepted limitation** (documented in
+`crates/ironhold_core/src/CLAUDE.md`): with 2 simultaneously active split cameras at different
+angles, particles still only billboard correctly toward the one picked camera — true
+per-viewport-correct billboarding would require duplicating particle meshes per viewport, out of
+scope (see Not in scope).
 
 **Phase 2 — `targeting.rs` viewport-aware click-to-select:** before the existing nearest-entity
 search, resolve which active camera's `logical_viewport_rect()` contains the cursor position (using
@@ -189,9 +196,18 @@ no stat labels/world stat bars, no particle effects, and no `ClickSelectable` en
 none of the four systems have anything to observe today. Each phase needs a small demo-project
 addition before it can be dev-build play-tested, in addition to the standard ship workflow steps:
 
-- **Phase 1**: place or trigger a particle effect (e.g. reuse an existing shared effect from
-  `assets/shared/effects/` if one fits) visible from a split-screen room, so billboard orientation
-  is visually checkable from both viewports.
+- **Phase 1 — DONE.** No `assets/shared/effects/` library exists yet (confirmed empty/absent), so
+  a new `"billboard_test_spark"` `EffectDef` was added directly to
+  `assets/projects/local_coop_demo/assets.ron` instead of reusing a shared one — stationary (speed
+  0), long-lived (30s), non-fading (`color_start == color_end`) sparks, fired via a `SpawnEffect`
+  action on `scene.ready:room3` (`logic/rules.ron`) at `(0.0, 1.5, 0.0)`, the midpoint between
+  room3's two spawn points. **Playtest confirmed by Frank (2026-07-12): both split viewports render
+  correctly camera-facing particles**, with no manual orbiting needed — each player's fixed default
+  camera angle already differs enough (spawn points 8m apart in x) that the old world-axis bug would
+  have shown visibly wrong orientation in at least one viewport. (Manual camera orbiting turned out
+  to be impossible to use for this playtest in split-screen at all — see the new backlog item
+  "Per-player keyboard camera pivot for split-screen," logged separately, not part of this feature.)
+  Left in place per the "documents the fix" precedent below.
 - **Phase 2**: add a `ClickSelectable`-tagged prop or NPC to a room with a **fixed** (not dynamic)
   2-way split, so a click in each viewport can be tested independently against that viewport's own
   camera.
@@ -210,9 +226,14 @@ Stage 6 left "Room N" labels on every portal).
 
 ## Tasks
 
-- [ ] Phase 1: `rebuild_pool_meshes_system` — `is_active`-filtered, deterministically-ordered camera
+- [x] Phase 1: `rebuild_pool_meshes_system` — `is_active`-filtered, deterministically-ordered camera
       selection for billboard basis vectors (extract shared sort comparator here); regression test
-      for the non-split single-camera case; `local_coop_demo` particle-effect playtest addition
+      for the non-split single-camera case; `local_coop_demo` particle-effect playtest addition —
+      `aa81cbb`. 3 new tests in `particle_tests.rs` (2-camera split priority, single-camera
+      regression, zero-camera world-axis fallback), all passing; full `ironhold_core` test suite
+      (16 binaries) + `cargo check -p ironhold_cli` green; alignment-reviewer (ALIGNED),
+      system-architect (ready to merge), debug-detective (no bugs found), wasm-perf-reviewer (OK,
+      negligible cost) all clean. WASM dev build clean. Playtest confirmed by Frank.
 - [ ] Phase 2: `click_select_system` — viewport-aware active-camera selection by cursor position
       (reuse Phase 1's comparator); test that a click in each viewport of a 2-way fixed split
       resolves against that viewport's own camera; `local_coop_demo` `ClickSelectable` playtest
@@ -228,13 +249,14 @@ Stage 6 left "Room N" labels on every portal).
       sites, plus a regression test confirming a non-split scene spawns exactly 1 entity per widget
       (no rank siblings); `docs/20_data_formats.md` designer-facing note; `local_coop_demo` stat
       widget playtest addition (scene-placed + dynamically-spawned)
-- [ ] Docs: update `crates/ironhold_core/src/CLAUDE.md`'s known-limitations/consumer-duplication
+- [x] Docs: update `crates/ironhold_core/src/CLAUDE.md`'s known-limitations/consumer-duplication
       list as each phase ships (Phase 4 specifically: update in the same commit, per system-architect
       — list which `WorldLabel` consumers duplicate and which don't, to prevent the partial-coverage
-      enumeration from drifting out of date) and `planning/claude_suggestions.md` ▸ Camera
-- [ ] Tests (per phase, see above) + full suite green
-- [ ] WASM dev build + updated playtest checklist (per phase, using the `local_coop_demo` additions
-      above) per the standard ship workflow
+      enumeration from drifting out of date) and `planning/claude_suggestions.md` ▸ Camera —
+      done for Phase 1; repeat for Phases 2-4 as they ship
+- [x] Tests (per phase, see above) + full suite green — Phase 1 only; repeat for Phases 2-4
+- [x] WASM dev build + updated playtest checklist (per phase, using the `local_coop_demo` additions
+      above) per the standard ship workflow — Phase 1 only; repeat for Phases 2-4
 
 ## Open questions
 
@@ -245,13 +267,14 @@ Stage 6 left "Room N" labels on every portal).
   future project need visually-correct billboarding from every simultaneously active split camera?
 - Should the `local_coop_demo` playtest additions (particle effect, `ClickSelectable` prop,
   nameplate toggle, stat widget) stay in the project permanently after each phase ships, or be
-  removed once confirmed? Leaning toward keeping them (documents the fix, consistent with Stage 6
-  leaving "Room N" labels in place) — Frank's call at playtest time.
+  removed once confirmed? **Resolved for Phase 1: kept in place** (documents the fix, consistent
+  with Stage 6 leaving "Room N" labels in place). Still open for Phases 2-4.
 
 ## Acceptance criteria
 
-- Given any split-screen project, when particles render, then billboard orientation faces an actual
-  active camera's basis vectors, never the unconditional world-axis fallback.
+- ~~Given any split-screen project, when particles render, then billboard orientation faces an
+  actual active camera's basis vectors, never the unconditional world-axis fallback.~~ **Met —
+  Phase 1, confirmed by playtest.**
 - Given a 2-way fixed split screen, when the player clicks inside one viewport, then click-to-select
   evaluates against that viewport's own camera, not an arbitrary other active camera.
 - Given a split-screen scene with 2+ `Camera3d` entities (any split state, merged or active), when
@@ -268,5 +291,6 @@ Stage 6 left "Room N" labels on every portal).
 - Given an ordinary single-camera (non-split) scene, when a stat label or world stat bar spawns,
   then exactly 1 entity is created per widget — no rank-duplication overhead, pixel-identical to
   today's behavior (regression + perf guard).
-- Given any existing single-camera (non-split) scene, when any of the four systems run, then
-  behavior is unchanged from today (regression guard).
+- ~~Given any existing single-camera (non-split) scene, when any of the four systems run, then
+  behavior is unchanged from today (regression guard).~~ **Met for Phase 1** (regression tests
+  pass); still applies to Phases 2-4.

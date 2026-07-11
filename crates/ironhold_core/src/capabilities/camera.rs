@@ -255,6 +255,17 @@ pub const MAX_SPLIT_PLAYERS: u32 = 4;
 #[derive(Component)]
 pub struct SplitViewportSlot(pub u32);
 
+/// Deterministic split-screen camera priority order: cameras with a `SplitViewportSlot` sort
+/// before ones without (single-camera scenes and `PartyOrbitCamera` sort last), `Entity` breaks
+/// ties. Ensures a selection among 2+ simultaneously active `Camera3d` entities is stable across
+/// frames instead of depending on query iteration order. Shared by every system that must pick
+/// one active camera among possibly several: `world_label_screen_pos_system`,
+/// `rebuild_pool_meshes_system`'s billboard basis, and (once fixed) `nameplate_visibility_system`
+/// and `click_select_system`.
+pub fn camera_priority_key(entity: Entity, slot: Option<&SplitViewportSlot>) -> (u32, Entity) {
+    (slot.map_or(u32::MAX, |s| s.0), entity)
+}
+
 /// Fixed engine-side palette for the per-player split-screen HUD corner label, indexed by
 /// `PlayerIndex`. Chosen to visually match `local_coop_demo`'s room6 `tint_blue`/`tint_pink`/
 /// `tint_dark_green`/`tint_red` material RGB values, but this is its own independent constant —

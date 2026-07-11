@@ -10,6 +10,7 @@ use ironhold_core::capabilities::particle_renderer::ParticlePool;
 use ironhold_core::capabilities::particle::PendingParticleEffects;
 use ironhold_core::capabilities::fading_light::FadingLight;
 use ironhold_core::capabilities::decal::PendingDecalSpawns;
+use ironhold_core::capabilities::camera::SplitViewportSlot;
 
 mod support;
 use support::setup_test_app;
@@ -941,4 +942,119 @@ fn test_non_flipbook_particle_has_zero_cols() {
         assert_eq!(p.flipbook_rows, 0, "non-flipbook particle must have flipbook_rows = 0");
         assert!((p.flipbook_fps).abs() < 0.001, "non-flipbook particle must have flipbook_fps = 0");
     }
+}
+
+// ── Split-screen billboard orientation tests (rebuild_pool_meshes_system) ─────
+
+/// Spawns a single non-moving, non-rotating 2x2 square particle at the origin so its
+/// billboard mesh corners are exactly `±cam_right ± cam_up` — easy to check against a
+/// known camera orientation.
+fn spawn_square_particle(app: &mut App, key: &str) {
+    let mut effect = minimal_effect_def(1, 60.0);
+    effect.speed = 0.0;
+    effect.spread_deg = 0.0;
+    effect.size_x = Some(2.0);
+    effect.size_y = Some(2.0);
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        effects: std::collections::HashMap::from([(key.to_string(), effect)]),
+        ..Default::default()
+    }));
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
+        key: key.to_string(),
+        position: Some((0.0, 0.0, 0.0)),
+        entity: None,
+    });
+    app.update();
+}
+
+fn first_particle_mesh_positions(app: &mut App) -> Vec<Vec3> {
+    let mesh_handle = app.world_mut().query::<&Mesh3d>().iter(app.world())
+        .next().expect("rebuild_pool_meshes_system must spawn a Mesh3d entity").0.clone();
+    let meshes = app.world().resource::<Assets<Mesh>>();
+    let mesh = meshes.get(&mesh_handle).expect("mesh handle must resolve in Assets<Mesh>");
+    mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        .expect("mesh must have ATTRIBUTE_POSITION")
+        .as_float3()
+        .expect("positions must be stored as float3")
+        .iter()
+        .map(|p| Vec3::from(*p))
+        .collect()
+}
+
+#[test]
+fn test_billboard_orients_toward_highest_priority_active_camera_in_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Split-screen: 2 real Camera3d entities alive simultaneously (both is_active — a fixed
+    // split, not a merged dynamic one). SplitViewportSlot(0) must win over SplitViewportSlot(1)
+    // regardless of spawn/query order.
+    let cam_a_rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+    app.world_mut().spawn((
+        Camera3d::default(),
+        Camera { is_active: true, ..default() },
+        Transform::from_rotation(cam_a_rotation),
+        GlobalTransform::from(Transform::from_rotation(cam_a_rotation)),
+        SplitViewportSlot(0),
+    ));
+    app.world_mut().spawn((
+        Camera3d::default(),
+        Camera { is_active: true, ..default() },
+        Transform::IDENTITY,
+        GlobalTransform::IDENTITY,
+        SplitViewportSlot(1),
+    ));
+
+    spawn_square_particle(&mut app, "billboard_split_test");
+
+    let expected_right = cam_a_rotation * Vec3::X;
+    let expected_up = cam_a_rotation * Vec3::Y;
+    let expected_v0 = -expected_right - expected_up; // bottom-left corner, hw=hh=1
+
+    let positions = first_particle_mesh_positions(&mut app);
+    assert!((positions[0] - expected_v0).length() < 0.01,
+        "billboard must orient toward the SplitViewportSlot(0) camera's basis vectors, not slot 1's; got {:?}, expected {:?}",
+        positions[0], expected_v0);
+}
+
+#[test]
+fn test_billboard_orientation_matches_single_active_camera_non_split_scene() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // Ordinary single-camera scene (no SplitViewportSlot at all) — regression guard: must
+    // still orient toward the one real camera, not fall back to world axes.
+    let cam_rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+    app.world_mut().spawn((
+        Camera3d::default(),
+        Camera { is_active: true, ..default() },
+        Transform::from_rotation(cam_rotation),
+        GlobalTransform::from(Transform::from_rotation(cam_rotation)),
+    ));
+
+    spawn_square_particle(&mut app, "billboard_single_test");
+
+    let expected_right = cam_rotation * Vec3::X;
+    let expected_up = cam_rotation * Vec3::Y;
+    let expected_v0 = -expected_right - expected_up;
+
+    let positions = first_particle_mesh_positions(&mut app);
+    assert!((positions[0] - expected_v0).length() < 0.01,
+        "single-camera billboard orientation must match the one active camera, not world axes; got {:?}, expected {:?}",
+        positions[0], expected_v0);
+}
+
+#[test]
+fn test_billboard_falls_back_to_world_axes_when_no_active_camera() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // No Camera3d entities at all (matches this test harness's default, camera-less setup) —
+    // must fall back to world axes, same as before this fix, not panic.
+    spawn_square_particle(&mut app, "billboard_no_camera_test");
+
+    let expected_v0 = -Vec3::X - Vec3::Y;
+    let positions = first_particle_mesh_positions(&mut app);
+    assert!((positions[0] - expected_v0).length() < 0.01,
+        "with no active camera, billboard must fall back to world axes; got {:?}", positions[0]);
 }
