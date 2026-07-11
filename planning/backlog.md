@@ -11,6 +11,11 @@
 
 ## Active
 
+- [x] **Split-screen: remaining single-camera assumption sites — Phase 1 (particle billboard orientation)** — `rebuild_pool_meshes_system`'s `camera_q.single()` had no `is_active` filter, so it fell back to unconditional world-axis billboarding in every split-screen scene (not just an edge case — the widest-reaching of the four sites). Fixed: filters `is_active`, picks the highest-priority active camera via a new shared `camera_priority_key` helper (`capabilities/camera.rs`), which `world_label_screen_pos_system` was also refactored to use. Playtest confirmed by Frank in `local_coop_demo` room3 (new `billboard_test_spark` effect, added for this purpose) — `aa81cbb`. See `planning/features/split_screen_camera_followups.md`.
+- [ ] **Split-screen: remaining single-camera assumption sites — Phase 2 (`targeting.rs` viewport-aware click-to-select)** — see `planning/features/split_screen_camera_followups.md`.
+- [ ] **Split-screen: remaining single-camera assumption sites — Phase 3 (`nameplate_visibility_system` distance-culling, store-and-read)** — see `planning/features/split_screen_camera_followups.md`.
+- [ ] **Split-screen: remaining single-camera assumption sites — Phase 4 (`WorldLabelRank` extended to stat labels / world stat bars)** — see `planning/features/split_screen_camera_followups.md`.
+
 ---
 
 ## Bugs
