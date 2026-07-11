@@ -66,7 +66,7 @@
 
 - ~~**Tune `collider_radius`/`collider_height` on `enemy_snake` and `enemy_spider` prefabs**~~ _(promoted to backlog `0f86e07` 2026-06-17 → Queued ▸ Gameplay & Environment; see `planning/features/collider_tuning_creatures.md`)_
 
-- ~~**Per-prefab `depth_scale: Some(true)` override silently ignored on dynamic spawns**~~ _(promoted to backlog `0f86e07` 2026-06-17 → Queued ▸ Engine / Runtime; see `planning/features/depth_scale_dynamic_spawn.md`)_
+- ~~**Dynamically-spawned stat labels/bars didn't inherit scene `label_depth_scale`**~~ _(shipped `b08e447` 2026-07-11; see `planning/features/done/depth_scale_dynamic_spawn.md` — the original wording above assumed a per-prefab `depth_scale` override field that doesn't actually exist on `StatLabelDef`/`WorldStatBarDef`; the real fix purely propagates the scene-level `label_depth_scale` setting to the dynamic-spawn path)_
 
 - ~~**Extract `assemble_player_config` shared helper to prevent scene-loader/executor drift**~~ _(dropped 2026-06-23 — covered by the Queued "Consolidate conditional prefab-feature application" item)_
 

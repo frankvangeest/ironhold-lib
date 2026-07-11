@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Dynamically-spawned stat labels/bars inherit scene `label_depth_scale`** — `drain_dynamic_stat_ui_system` hardcodes `depth_scale: None` for `Action::Spawn` entities instead of calling `resolve_label_depth_scale` against the scene's `label_depth_scale` block, so wave-spawned enemies don't depth-scale like scene-placed ones. See `planning/features/depth_scale_dynamic_spawn.md`.
-
 ---
 
 ## Bugs
@@ -254,6 +252,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### July 2026
+- [x] **Dynamically-spawned stat labels/bars inherit scene `label_depth_scale`** — see `planning/features/done/depth_scale_dynamic_spawn.md`. `drain_dynamic_stat_ui_system` now calls `resolve_label_depth_scale` against the scene's `label_depth_scale` block instead of hardcoding `depth_scale: None`, so wave-spawned enemies depth-scale identically to scene-placed ones. First feature run through the new gitops branching workflow (feature branch/worktree → parallel code review → integration merge); plan review caught and corrected a wrong premise before coding started (no per-prefab override field exists — the fix purely propagates the scene-level setting). All 5 code reviews clean; 3 new integration tests; dev playtest confirmed via screenshot comparison — `b08e447`
 - [x] **Player nameplate visibility — v2: `ToggleOwnNameplate` runtime action** — see `planning/features/done/player_nameplate_visibility.md`. Lets a player flip their own nameplate visibility at runtime (mirrors `ToggleMute`'s pattern exactly, including two distinct `nameplate.own_shown`/`nameplate.own_hidden` events); an explicit per-prefab override always wins; the preference resets per scene load (documented, not a bug). Caught and fixed a real `cargo check -p ironhold_cli` compile error (missing match arm) and a real test regression in a v1 test. All reviews clean; full test suite green — `a66fce7`
 - [x] **Player nameplate visibility — v1: `Player` marker + `show_player_nameplate`** — see `planning/features/done/player_nameplate_visibility.md`. Adds a real `Player`/`PlayerOwnership` marker (multiplayer forward-compat hook), an orthogonal `show_player_nameplate: bool` scene field (default false), makes `faction_filter` bypass the player entirely, and closes the character-select nameplate bug. Also fixed a previously-undiscovered 6th nameplate-gating site found during implementation. All reviews (architect, game-designer, alignment, wasm-perf, ux) clean; full test suite + dev/release WASM builds play-tested and confirmed — `96e09c9`
 - [x] **Extract nameplate spawn-condition predicate to `should_insert_nameplate()` helper** — the `nameplate != Some(false) && (show || nameplate == Some(true))` guard was copy-pasted across 5 sites (`scene_loader.rs` ×4, `entity_spawner.rs:375`) with the `show` input differing per path (`scene.show_nameplates` vs `nameplate_config.enabled`); extracted to `fn should_insert_nameplate(nameplate: Option<bool>, show: bool) -> bool` beside `tag_spawned_entity` in `scene_manager/mod.rs`. Alignment-reviewed (ALIGNED); tri-state contract locked in with a dedicated unit test — `48889f1`

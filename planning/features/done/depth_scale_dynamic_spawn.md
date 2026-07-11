@@ -1,8 +1,9 @@
 # Feature: Dynamically-Spawned Stat Labels/Bars Inherit Scene `label_depth_scale`
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `0f86e07` (2026-06-17)_
 _Corrected at: `101851e` (2026-07-10) — see Correction below._
+_Shipped at: `b08e447` (2026-07-11) — dev playtest confirmed via screenshot comparison in `stats_demo` (regression check on the untouched scene-placed depth-scale path; the dynamic-spawn fix itself is covered by 3 automated tests, no live demo trigger exists for it yet)._
 
 ## Correction (2026-07-10)
 
