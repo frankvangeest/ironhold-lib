@@ -421,13 +421,27 @@ labels, stat labels, damage popups, and nameplate anchors all still spawn a sing
 still applies to them; extend the same pattern to a given consumer's spawn site only if a real
 project need surfaces.
 
+**`particle_renderer.rs`'s billboard orientation is now viewport-aware** (fixed — Phase 1 of
+`planning/features/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call
+`camera_q.single()` with no `is_active` filter at all, so it fell back to unconditional world-axis
+billboarding (`Vec3::X`/`Vec3::Y`) in *every* split-screen project, not just when 2 cameras were
+simultaneously active — the widest-reaching of the four sites below. It now filters `is_active` and
+picks the highest-priority active camera via the new shared
+`capabilities::camera::camera_priority_key(entity, slot)` helper (same `SplitViewportSlot`-then-
+`Entity` deterministic order as `world_label_screen_pos_system`, which was refactored to call the
+same helper instead of inlining its own copy). **Known, accepted limitation**: with 2
+simultaneously active split cameras at different angles, particles still only billboard correctly
+toward the one picked camera — true per-viewport-correct billboarding would need duplicate
+particle meshes per viewport, out of scope for this fix.
+
 **Still affected by split-screen having 2 real `Camera3d` entities per scene** (none affect
 `local_coop_demo`, which uses none of these features, but matter for any future project combining
-split-screen with them): `nameplate.rs`'s distance-culling, `particle_renderer.rs`'s billboard
-orientation, and `targeting.rs`'s click-to-select all still assume one `Camera3d` exists. None
-panic (graceful `.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or
-arbitrarily pick one of the two cameras rather than being viewport-aware. See
-`planning/claude_suggestions.md` ▸ Camera for the exact line references.
+split-screen with them): `nameplate.rs`'s distance-culling and `targeting.rs`'s click-to-select
+still assume one `Camera3d` exists (Phases 2-3 of the same feature plan). Neither panics (graceful
+`.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or arbitrarily
+pick one of the two cameras rather than being viewport-aware. See
+`planning/features/split_screen_camera_followups.md` for the fix plan and
+`planning/claude_suggestions.md` ▸ Camera for the original line references.
 
 **Split-screen player HUD labels** (`capabilities/camera.rs`) — the first real consumer of
 `PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to

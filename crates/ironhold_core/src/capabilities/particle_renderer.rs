@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use crate::runtime::scene_manager::LevelEntity;
 use crate::runtime::messages::SceneEvent;
 use crate::schema::catalog::VelocityCurve;
+use crate::capabilities::camera::{camera_priority_key, SplitViewportSlot};
 
 pub const POOL_FLAME_SHADER_HANDLE: Handle<Shader> =
     uuid_handle!("706f6f6c-666c-4061-8061-706f6f6c6101");
@@ -295,16 +296,24 @@ pub fn rebuild_pool_meshes_system(
     mut flame_materials: ResMut<Assets<PoolFlameMaterial>>,
     mut groups: ResMut<ParticlePoolGroups>,
     pool: Res<ParticlePool>,
-    camera_q: Query<&GlobalTransform, With<Camera3d>>,
+    camera_q: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
     asset_server: Res<AssetServer>,
     mut scratch: Local<RebuildScratch>,
 ) {
-    // Camera basis vectors for billboard orientation.
-    let (cam_right, cam_up) = if let Ok(cam_gt) = camera_q.single() {
-        (cam_gt.right().as_vec3(), cam_gt.up().as_vec3())
-    } else {
-        (Vec3::X, Vec3::Y)
-    };
+    // Camera basis vectors for billboard orientation. Split-screen scenes have 2+ Camera3d
+    // entities alive at once (often even when only 1 is is_active — a merged dynamic split
+    // keeps its inactive sibling around), so pick the highest-priority active camera
+    // (`camera_priority_key`, same deterministic order as `world_label_screen_pos_system`)
+    // instead of falling back to world axes whenever 2+ cameras merely exist. With 2
+    // simultaneously active split cameras at different angles, particles billboard correctly
+    // only toward the picked camera — true per-viewport billboarding would need duplicate
+    // particle meshes per viewport, out of scope (see `planning/features/split_screen_camera_followups.md`).
+    let (cam_right, cam_up) = camera_q
+        .iter()
+        .filter(|(_, camera, ..)| camera.is_active)
+        .min_by_key(|(entity, _, _, slot)| camera_priority_key(*entity, *slot))
+        .map(|(_, _, cam_gt, _)| (cam_gt.right().as_vec3(), cam_gt.up().as_vec3()))
+        .unwrap_or((Vec3::X, Vec3::Y));
 
     // Bucket alive particles by group key.
     let mut buckets: HashMap<GroupKey, Vec<usize>> = HashMap::new();
