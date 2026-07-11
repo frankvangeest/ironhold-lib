@@ -21,14 +21,33 @@ and they are DIFFERENT code (do not assume one covers the other):
    `PendingEntitySpawns`, drained only by `drain_spawn_queue_system`), so this covers every
    dynamically-spawned prefab regardless of kind (GLB/primitive/composite).
 
-**`depth_scale: None` on dynamic spawns is ACCEPTED, not a misalignment.** Dynamic spawns have no
-scene context to read `scene.label_depth_scale` from at drain time. This matches the existing
-precedent: transient `ShowDamagePopup` / `ShowFloatingText` widgets in action_executor.rs also use
-`depth_scale: None` deliberately. The per-label `depth_scale: Some(true/false)` override on the
-prefab's StatLabelDef/WorldStatBarDef is currently ignored on the dynamic path — a corner-case
-gap worth noting but low-impact (a designer overriding depth_scale on a *dynamically-spawned*
-entity is rare). If a future change needs it, the fix is to carry the resolved `Option<(f32,f32)>`
-into `DynamicStatUiEntry` from the active scene's `label_depth_scale`.
+**Dynamic-spawn stat widgets NOW inherit scene depth scaling (shipped on branch
+`feature/depth-scale-dynamic-spawn`, ~2026-07-11).** New resource
+`LoadedLabelDepthScale(Option<LabelDepthScaleDef>)` (mod.rs) is populated in `spawn_scene_v2`
+(scene_loader.rs:687, right beside `ActiveTonemapping`) and read by `drain_dynamic_stat_ui_system`
+(scene_loader.rs:2543) which now calls `resolve_label_depth_scale(label_depth_scale.0.as_ref(),
+None)` — byte-identical to the scene-placed call sites (scene_loader.rs:1022/:1038). So a
+wave-spawned enemy's stat label/bar shrinks with distance exactly like a scene-placed one. This
+supersedes the older "depth_scale: None on dynamic spawns is accepted" note. Chosen mechanism was a
+scene-load-time resource (mirrors ActiveTonemapping), NOT threading a resolved tuple through
+`DynamicStatUiEntry` as I'd earlier guessed — the resource lets the dynamic path call the *same*
+helper rather than duplicating precedence logic.
+
+NOTE — there is NO per-widget `depth_scale` override on `StatLabelDef`/`WorldStatBarDef` (both are
+`deny_unknown_fields`); `per_label` is hardcoded `None` at every stat-widget call site. Only
+`WorldLabelDef`/`EntityLabelDef` carry `depth_scale: Option<bool>`. Stat widgets purely inherit the
+scene block. `style: Pixel` bars remain excluded (anchor `depth_scale: None`) on both paths —
+pre-existing documented limitation.
+
+The still-`None` precedent for *transient* widgets stands: `ShowDamagePopup`/`ShowFloatingText`
+in action_executor.rs deliberately keep `depth_scale: None` and were correctly left untouched by
+this fix (scope guard in the plan).
+
+STALE DOC WATCH: the doc-comment block above `drain_dynamic_stat_ui_system`
+(scene_loader.rs:2534-2538) still reads "Dynamic spawns never have a label_depth_scale scene config
+so depth scaling is always None here" — factually wrong after this fix, and garbled (a stray
+"Resolves the effective depth-scale config for a single label." line that belongs to the helper at
+:2683 got left above the system). Flagged as a warning at review time.
 
 **Known duplication (refactor candidate):** the Ascii/Pixel widget-spawn match block is now
 triplicated — inline scene path, `drain_dynamic_stat_ui_system`, and the world_stat_bar section.
