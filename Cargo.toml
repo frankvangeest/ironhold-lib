@@ -24,7 +24,12 @@ debug = false       # Strip debug info for smaller binary size
 
 
 [profile.test]
-debug = true
+# line-tables-only (not full `true`/2): each of the ~19 separate ironhold_core test binaries
+# links its own full copy of Bevy + deps; full debuginfo generates a large separate PDB per binary
+# (split-debuginfo = "packed" on MSVC) and was implicated in repeated "Unexpected PDB error"
+# LNK1318 linker failures under low disk (2026-07-12). line-tables-only still gives panic
+# messages a file:line, just not full type/variable debug info -- plenty for test failures.
+debug = "line-tables-only"
 opt-level = 3
 debug-assertions = true
 overflow-checks = true

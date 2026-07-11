@@ -33,19 +33,38 @@ cargo run -p ironhold_native --all-features
 # Run a specific project by name
 cargo run -p ironhold_native -- --project 3rd_person_game_demo
 
-# Run all tests
+# ⚠️ Before any cargo/wasm-pack command: verify CARGO_TARGET_DIR is actually set in THIS shell.
+# `export` does not persist across separate tool invocations/shells, and this machine has no
+# .cargo/config.toml or shell profile file to fall back on -- if the variable is empty, cargo
+# silently creates a full local target/ (multi-GB) inside whichever directory you're in, instead
+# of the shared one. A persistent Windows user env var was set via `setx` (2026-07-12), but
+# already-running shells/sessions (including one still open from before that point) do NOT pick
+# it up until restarted. Check first:
+echo $CARGO_TARGET_DIR   # empty output -> prefix every command below with:
+export CARGO_TARGET_DIR="/c/git/rust/ironhold-cargo-target-shared"
+
+# Run all tests -- ⚠️ this machine chronically runs low on disk (single-digit GB free is common,
+# see One-time machine setup below); a full parallel `--test '*'` build has already exhausted the
+# disk more than once building 16 separate debug test binaries at once. Default to the
+# one-file-at-a-time loop below rather than treating it as a last-resort fallback.
 cargo test -p ironhold_core --test '*' -- --nocapture
 
-# Fallback if the above fails with an IO/no-space or compiler-panic error on a low-disk machine:
-# building every test binary in parallel can exceed available disk scratch space. Try capping
-# build parallelism first (single flag, keeps one command):
-cargo test -p ironhold_core --test '*' --jobs 1
-# If that still fails, fall back to compiling/running one test file at a time:
+# Preferred on this machine: compile/run one test file at a time, checking cargo's own exit code
+# (not tail's -- piping through `tail` masks a real compile failure unless you check
+# PIPESTATUS/pipefail, which is how a previous run kept "succeeding" through several disk-full
+# compiler crashes before anyone noticed):
 for t in fsm_tests entity_logic_tests scene_lifecycle_tests spawn_tests action_tests npc_tests \
          nameplate_tests ui_tests audio_tests stats_tests particle_tests ron_validation ron_lint \
          ui_panel_blocker assets_schema_version_regression; do
-  cargo test -p ironhold_core --test "$t" || break
+  echo "=== $t ==="
+  cargo test -p ironhold_core --test "$t" | tail -15
+  [ "${PIPESTATUS[0]}" -ne 0 ] && { echo "FAILED: $t"; break; }
+  df -h /c/git 2>/dev/null | tail -1   # watch free space; stop and investigate if it's dropping fast
 done
+
+# If a single test binary alone still fails with an IO/no-space or compiler-panic error, cap
+# build parallelism as a further fallback (single flag, keeps one command):
+cargo test -p ironhold_core --test '*' --jobs 1
 
 # Run a single test file
 cargo test -p ironhold_core --test fsm_tests
@@ -253,14 +272,38 @@ These hooks are local guardrails only (client-side, advisory) — they don't sto
 
 ```bash
 git config core.hooksPath .githooks
-export CARGO_TARGET_DIR=/path/to/a/shared/cargo/target   # add to shell profile
 ```
 
 `core.hooksPath` activates `.githooks/pre-commit` (blocks `pkg/` being committed on a `feature/*` branch) and `.githooks/pre-push` (blocks pushing `main` unless it exactly matches `integration`'s tip).
 
+**`CARGO_TARGET_DIR` must be a persistent environment variable, not a per-shell `export`.** This
+machine has no shell profile file (`.bashrc`/`.bash_profile`/`.profile` don't exist) for an
+`export` line to live in, and tool-invoked shells don't share state between separate invocations —
+so "add it to your shell profile" silently never took effect here, and any cargo/wasm-pack command
+run without the variable explicitly set created a full local `target/` (multi-GB) inside whichever
+directory it ran from, duplicating the shared cache and exhausting disk (root-caused 2026-07-12: a
+~12 GB stray `target/` inside a feature worktree, found and deleted manually). Set it as a real
+persistent Windows user environment variable instead:
+```bash
+setx CARGO_TARGET_DIR "C:\git\rust\ironhold-cargo-target-shared"
+```
+This only takes effect for **new** shells/processes started after the `setx` call — verify with
+`echo $CARGO_TARGET_DIR` before relying on it in an already-open session, and explicitly
+`export CARGO_TARGET_DIR=...` for that session if it's still empty (see the verification step
+above the test commands).
+
 Point every worktree of this repo at the **same** `CARGO_TARGET_DIR` — this repo's `target/` is very large (tens of GB observed), and this machine runs low on disk (single-digit GB free is common); a separate `target/` per worktree is not viable here.
 
 ⚠️ **Never run `cargo build`/`test`/`check` from two worktrees at the same moment**, even with a shared target dir — concurrent cargo invocations against the same target dir have corrupted builds on this machine before. Editing, planning, and playtesting can happen in parallel across worktrees; compiling cannot — coordinate so only one worktree runs cargo at a time. (A `cargo clean` on `integration`, per step 12, clears this shared cache for every worktree at once — the next build anywhere after that is a full rebuild.)
+
+**Don't add a `cargo clean` to a feature branch's own cleanup (step 10).** It's tempting after a
+disk scare, but it throws away the shared incremental cache every other worktree relies on,
+turning the *next* feature's build into a full ~20+ minute rebuild — directly undermining the
+"several features in parallel" point of this whole model. The mandatory clean stays scoped to step
+12 (once per batch, before the release build). If disk is genuinely critical mid-feature, check
+`df -h` and confirm with Frank before cleaning outside that step — see the `CARGO_TARGET_DIR`
+verification note above for the far more common actual cause (a stray per-worktree `target/`, not
+the shared cache itself, per the 2026-07-12 incident).
 
 ---
 
@@ -309,7 +352,10 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     - On the feature branch/worktree: move the feature from Active to Done in `planning/backlog.md` and in its own `planning/features/{name}.md`, then commit (code + tests + docs — never `pkg/`).
     - From the **primary checkout** (already on `integration` — do not run `git checkout integration` from the feature worktree, it will fail since `integration` is checked out there permanently): `git merge feature/{slug}`. Expect an occasional `planning/backlog.md` conflict when several features land close together — resolve it by hand; a `merge=union` driver was tried and rejected here (tested: it silently duplicates section headers and reverts moved lines instead of flagging a real conflict, since backlog.md entries move *between* sections rather than only being appended).
     - Confirm successful merge, then `git push origin integration` (so a batch in progress isn't only local).
-    - Clean up: `git worktree remove ../ironhold-lib-{slug}` then `git branch -d feature/{slug}`.
+    - Clean up: **stop any dev server started for this feature's playtest first** (`python serve.py`
+      running with its cwd inside the worktree holds a lock on Windows — `git worktree remove` will
+      fail with "Device or resource busy"/"Permission Denied" until it's killed; this has happened
+      more than once). Then `git worktree remove ../ironhold-lib-{slug}` then `git branch -d feature/{slug}`.
 
 **On `integration` (once per batch, after one or more feature branches have merged in):**
 
