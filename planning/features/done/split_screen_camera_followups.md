@@ -1,11 +1,13 @@
 # Feature: Split-Screen — Remaining Single-Camera Assumption Sites
 
-_Status: In Progress (Phases 1-3 Done, Phase 4 Queued)_
+_Status: Done — all 4 phases shipped._
 _Planned at: `4848727` (2026-07-11)_
 _Plan review (2026-07-11): system-architect + ux-gamedesigner-reviewer, verdict Ready. Findings
 below are incorporated; Frank resolved the two open decisions (Phase 4 perf gating, Phase 4
-dual-spawn-site scope) the same day. Re-review recommended before merging Phase 4 specifically,
-since its shape changed materially._
+dual-spawn-site scope) the same day._
+_Phase 4 re-review (2026-07-12): alignment-reviewer (ALIGNED), system-architect (merge-ready),
+debug-detective (one gating bug found and fixed — see Approach below), wasm-perf-reviewer (OK,
+minor non-blocking notes logged to `planning/claude_suggestions.md`)._
 
 ## Phases
 
@@ -18,7 +20,7 @@ in.
 | 1 | `particle_renderer.rs` billboard orientation | Done | `aa81cbb` (2026-07-12) |
 | 2 | `targeting.rs` viewport-aware click-to-select | Done | `1c3b910` (2026-07-12) |
 | 3 | `nameplate_visibility_system` distance-culling | Done | `d00c5f7` (2026-07-12) |
-| 4 | `WorldLabelRank` extended to stat labels / world stat bars | Queued | — |
+| 4 | `WorldLabelRank` extended to stat labels / world stat bars | Done | `ee3fdf8` (2026-07-13) |
 
 ## What
 
@@ -34,10 +36,12 @@ room-name / entity labels) via `world_label_screen_pos_system`:
    **Fixed in Phase 2 (`1c3b910`).**
 3. ~~`nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.~~
    **Fixed in Phase 3 (`d00c5f7`).**
-4. `WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
+4. ~~`WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
    and `label:` (`EntityLabelDef`) spawn loops. Stat labels, world stat bars (Ascii + Pixel),
    damage popups, and nameplate anchors are still single-instance (implicit rank 0), so they don't
-   duplicate across two simultaneously-visible split viewports the way room-name labels now do.
+   duplicate across two simultaneously-visible split viewports the way room-name labels now do.~~
+   **Fixed for `stat_label`/`Ascii`-style `world_stat_bar` in Phase 4 (`ee3fdf8`).** Pixel-style
+   bars, damage popups, and nameplate anchors remain single-instance (deferred, see Not in scope).
 
 ## Why
 
@@ -187,20 +191,38 @@ normal `max_distance` scales. Acceptance criteria updated to state explicitly: b
 anchors remain single-instance (Phase 4 does not extend to them), an entity's nameplate shows in
 **at most one** viewport in split-screen — a real, accepted limitation, not a bug.
 
-**Phase 4 — stat label / world stat bar duplication (revised scope):** add `WorldLabelRank(rank as
-u8)` + `Visibility::Hidden` (for `rank > 0`) to **both** the scene-loader's `pending_stat_labels` /
+**Phase 4 — stat label / world stat bar duplication. DONE (`ee3fdf8`).** Added `WorldLabelRank(rank
+as u8)` + `Visibility::Hidden` (for `rank > 0`) to **both** the scene-loader's `pending_stat_labels` /
 `WorldStatBarStyle::Ascii` spawn loops **and** `drain_dynamic_stat_ui_system`'s equivalent spawns,
 spawning `MAX_SPLIT_PLAYERS` siblings exactly like the `world_labels:`/`label:` fix — but **only
-when the loading scene is configured for split-screen** (reuse whatever scene-level flag/resource
-`ActiveSplitScreen`/`SplitViewportSlot` setup already gates on; ordinary single-camera scenes get
-exactly 1 entity per widget, zero behavior/perf change). `WorldStatBarStyle::Pixel` and nameplate
-anchors are explicitly deferred (see Open questions) since their child-hierarchy duplication is a
-materially bigger change. Docs: add a designer-facing note to `docs/20_data_formats.md` (~line
-3083, beside the existing Pixel-depth-scaling limitation note) stating that in split-screen scenes,
-stat labels and Ascii world stat bars duplicate correctly across simultaneously-visible viewports
-while Pixel-style bars and damage popups do not — since the docs already recommend combining Ascii
-+ Pixel bars on one prefab (~line 3120), this asymmetry is designer-reachable and must not ship
-undocumented.
+when the loading scene is configured for split-screen**. The two spawn sites derive that gate
+differently, by necessity: the scene-loader loops compute `player_configs.len() >= 2 &&
+player_configs.first().camera.split.is_some()` directly (captured before `player_configs` is
+potentially moved into `PendingPlayerConfig` for terrain-delayed scenes — reading
+`ActiveSplitScreen`/`DynamicSplitConfig` there would see stale values for those scenes), while
+`drain_dynamic_stat_ui_system` reads `ActiveSplitScreen.0.is_some() || DynamicSplitConfig.0.is_some()`
+(the OR is required because a dynamic split that starts/is merged reports `ActiveSplitScreen(None)`
+even though 2 real per-player cameras exist). Ordinary single-camera scenes get exactly 1 entity per
+widget, zero behavior/perf change. `WorldStatBarStyle::Pixel` and nameplate anchors are explicitly
+deferred (see Not in scope) since their child-hierarchy duplication is a materially bigger change.
+Docs: added the designer-facing note to `docs/20_data_formats.md` beside the existing
+Pixel-depth-scaling limitation note, stating that in split-screen scenes, stat labels and Ascii
+world stat bars duplicate correctly across simultaneously-visible viewports while Pixel-style bars,
+damage popups, and nameplates do not.
+
+**Debug-detective review caught a real gating bug**, fixed in the same commit: the scene-loader gate
+initially checked only `camera.split.is_some()`, omitting the `>= 2 players` half of
+`spawn_players_and_camera`'s own activation condition — a lone player whose prefab happened to
+carry a `camera.split` block (e.g. copy-pasted from a co-op prefab) would trigger 4-way rank
+duplication even though the engine renders a single full-window camera for it, and would disagree
+with `drain_dynamic_stat_ui_system`'s resource-based gate (which correctly evaluated `false` for
+that same scene). Fixed by adding the `player_configs.len() >= 2` check; regression test
+`test_stat_widgets_stay_single_instance_with_one_player_carrying_split_config` locks it in. Two
+narrower, non-blocking findings were logged to `planning/claude_suggestions.md` rather than fixed
+now: a terrain-delayed-scene edge case where `drain_dynamic_stat_ui_system` can briefly
+under-duplicate before `spawn_players_and_camera` runs, and the pre-existing
+`stat_label_update_system`/`world_stat_bar_update_system` pattern of allocating a `format!` string
+before the change-detection guard, now 4x'd in split scenes (wasm-perf-reviewer finding).
 
 ### Not in scope
 
@@ -251,16 +273,21 @@ addition before it can be dev-build play-tested, in addition to the standard shi
   `display_name: "Click Target"` so it force-shows regardless of faction filtering. **Playtest
   confirmed by Frank (2026-07-12): both nameplates showed up correctly, no console errors.** Left
   in place per the same precedent as Phases 1-2.
-- **Phase 4**: add a `stat_label` and/or Ascii `world_stat_bar` to a prefab placed where 2 fixed
-  split viewports can simultaneously see it (mirrors the portal-label bug's original repro
-  condition), to visually confirm duplication; also verify a dynamically-spawned instance (via
-  `Action::Spawn`, e.g. a wave-spawned NPC) duplicates identically, per the dual-spawn-site scope
-  above.
+- **Phase 4 — DONE.** New `"stat_widget_test"` prefab (purple sphere with a `stat_templates`
+  health stat, `stat_label`, and Ascii `world_stat_bar`) added to
+  `assets/projects/local_coop_demo/prefabs/prefabs.ron`. One instance is scene-placed on room3's
+  centerline (`stat_widget_scene_placed`, visible from both fixed split viewports at once — mirrors
+  the portal-label bug's original repro condition); a second is dynamically spawned via
+  `Action::Spawn` on `scene.ready:room3` (`stat_widget_dynamic`), exercising
+  `drain_dynamic_stat_ui_system`'s duplication path per the dual-spawn-site scope above. **Playtest
+  confirmed by Frank (2026-07-12): both spheres' stat label and Ascii bar render correctly in both
+  split viewports simultaneously, no console errors.** Left in place per the same precedent as
+  Phases 1-3.
 
 These additions are scoped to `local_coop_demo` only (the existing split-screen demo project) —
-not a new project — and should be removed or left in place per Frank's preference once each phase's
-playtest is confirmed (leaving them in place documents the fix for future reference, similar to how
-Stage 6 left "Room N" labels on every portal).
+not a new project — and were left in place per Frank's preference once each phase's playtest was
+confirmed (documents the fix for future reference, similar to how Stage 6 left "Room N" labels on
+every portal).
 
 ## Tasks
 
@@ -299,21 +326,29 @@ Stage 6 left "Room N" labels on every portal).
       finding fixed with a `warn_once!` diagnostic, low-severity numeric/doc notes addressed),
       wasm-perf-reviewer (OK, net-neutral-to-cheaper) all clean/addressed. WASM dev build clean,
       no console errors. Playtest confirmed by Frank.
-- [ ] Phase 4: `WorldLabelRank` + `Visibility::Hidden` on `pending_stat_labels` and
-      `WorldStatBarStyle::Ascii` spawn loops, gated on the scene being split-screen; identical
-      treatment for `drain_dynamic_stat_ui_system`'s stat-label/Ascii-bar spawns; tests mirroring
-      `test_entity_label_ranks_spawn_for_tracked_entity_labels_not_just_world_labels` for both spawn
-      sites, plus a regression test confirming a non-split scene spawns exactly 1 entity per widget
-      (no rank siblings); `docs/20_data_formats.md` designer-facing note; `local_coop_demo` stat
-      widget playtest addition (scene-placed + dynamically-spawned)
+- [x] Phase 4: `WorldLabelRank` + `Visibility::Hidden` on `pending_stat_labels` and
+      `WorldStatBarStyle::Ascii` spawn loops, gated on the scene being split-screen (and on
+      `player_configs.len() >= 2`, per the debug-detective fix); identical treatment for
+      `drain_dynamic_stat_ui_system`'s stat-label/Ascii-bar spawns; `local_coop_demo` stat widget
+      playtest addition (scene-placed + dynamically-spawned) — `ee3fdf8`. 5 new tests in
+      `local_coop_tests.rs` (split-screen duplication via full scene load, non-split regression,
+      single-player-with-split-config regression) and `spawn_tests.rs` (dynamic-path duplication
+      via `ActiveSplitScreen`, dynamic-path duplication via `DynamicSplitConfig` alone while
+      merged), all passing; full `ironhold_core` test suite (16 binaries, `ron_lint`/
+      `ron_validation` re-run after the late `local_coop_demo` RON additions) +
+      `cargo check -p ironhold_cli` green; alignment-reviewer (ALIGNED, 3 stale doc comments fixed),
+      system-architect (merge-ready, one non-blocking predicate-extraction suggestion logged),
+      debug-detective (one real gating bug found and fixed, one narrow edge case logged),
+      wasm-perf-reviewer (OK, non-blocking `format!`-allocation note logged) all
+      clean/addressed. WASM dev build clean, no console errors. Playtest confirmed by Frank.
 - [x] Docs: update `crates/ironhold_core/src/CLAUDE.md`'s known-limitations/consumer-duplication
       list as each phase ships (Phase 4 specifically: update in the same commit, per system-architect
       — list which `WorldLabel` consumers duplicate and which don't, to prevent the partial-coverage
       enumeration from drifting out of date) and `planning/claude_suggestions.md` ▸ Camera —
-      done for Phases 1-3; repeat for Phase 4 as it ships
-- [x] Tests (per phase, see above) + full suite green — Phases 1-3; repeat for Phase 4
+      done for all 4 phases
+- [x] Tests (per phase, see above) + full suite green — done for all 4 phases
 - [x] WASM dev build + updated playtest checklist (per phase, using the `local_coop_demo` additions
-      above) per the standard ship workflow — Phases 1-3; repeat for Phase 4
+      above) per the standard ship workflow — done for all 4 phases
 
 ## Open questions
 
@@ -324,8 +359,8 @@ Stage 6 left "Room N" labels on every portal).
   future project need visually-correct billboarding from every simultaneously active split camera?
 - Should the `local_coop_demo` playtest additions (particle effect, `ClickSelectable` prop,
   nameplate toggle, stat widget) stay in the project permanently after each phase ships, or be
-  removed once confirmed? **Resolved for Phases 1-3: kept in place** (documents the fix, consistent
-  with Stage 6 leaving "Room N" labels in place). Still open for Phase 4.
+  removed once confirmed? **Resolved for all 4 phases: kept in place** (documents the fix,
+  consistent with Stage 6 leaving "Room N" labels in place).
 
 ## Acceptance criteria
 
@@ -343,13 +378,17 @@ Stage 6 left "Room N" labels on every portal).
   simultaneously on-screen in 2+ active split viewports, then it renders in **at most one** of them
   (accepted limitation, not a regression target).~~ **Met — Phase 3 (unchanged, accepted limitation
   confirmed still in effect).**
-- Given a stat label or Ascii world stat bar simultaneously visible in 2 active split viewports
+- ~~Given a stat label or Ascii world stat bar simultaneously visible in 2 active split viewports
   (scene-placed OR dynamically spawned via `Action::Spawn`), when the frame updates, then both
   viewports render their own correctly positioned copy (same contract as the shipped
-  room-name-label fix).
-- Given an ordinary single-camera (non-split) scene, when a stat label or world stat bar spawns,
+  room-name-label fix).~~ **Met — Phase 4, confirmed by playtest +
+  `test_stat_widgets_duplicate_ranks_when_scene_is_split_screen` /
+  `test_dynamic_stat_widgets_duplicate_ranks_when_split_screen_active`.**
+- ~~Given an ordinary single-camera (non-split) scene, when a stat label or world stat bar spawns,
   then exactly 1 entity is created per widget — no rank-duplication overhead, pixel-identical to
-  today's behavior (regression + perf guard).
+  today's behavior (regression + perf guard).~~ **Met — Phase 4, confirmed by
+  `test_stat_widgets_stay_single_instance_in_non_split_scene` and the
+  single-player-with-split-config regression test.**
 - ~~Given any existing single-camera (non-split) scene, when any of the four systems run, then
-  behavior is unchanged from today (regression guard).~~ **Met for Phases 1-3** (regression tests
-  pass); still applies to Phase 4.
+  behavior is unchanged from today (regression guard).~~ **Met for all 4 phases** (regression tests
+  pass).
