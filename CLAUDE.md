@@ -326,6 +326,12 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
       - implement the feature or fix
       - update cli 
       - update tests
+      - **any playtest-aid RON/asset changes (e.g. a demo-project addition so a fix has something
+        to visually confirm) belong here too, not bolted on later right before the WASM build.**
+        Added late, they silently skip step 4's test gate entirely — this happened for real
+        (2026-07-12): a `Some(...)` RON style violation in a late-added `rules.ron` playtest aid
+        passed `asset_checker.py`/`cli validate` (schema/reference checks only) and merged, because
+        `ron_lint` had already run before the RON file existed and was never re-run afterward.
  4. **Parallel code review + tests** — launch in a single message (multiple tool calls, so they run concurrently):
     - `alignment-reviewer`, `system-architect`, `debug-detective` — always
     - `ux-gamedesigner-reviewer`, `wasm-perf-reviewer` — conditional (see Proactive Agent Reviews above); skip and say so if their trigger doesn't apply
@@ -349,6 +355,12 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
  9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
     - If the user requests changes or changes are required we go back to step **Code changes** to implement them, then re-run step 4 (review + tests) before playtesting again.
 10. **Mark the feature Done, commit, and merge into `integration`:**
+    - ⚠️ If **any** `assets/projects/` file changed since step 4's test run for any reason (a
+      playtest-aid addition, a post-playtest fix, anything) — re-run at minimum
+      `cargo test -p ironhold_core --test ron_lint --test ron_validation` before committing. Both
+      finish in well under a second combined, so there's no cost excuse for skipping this; they are
+      the *only* commands that catch RON authoring-style mistakes (`asset_checker.py`/`cli
+      validate` only check references and schema, not style).
     - On the feature branch/worktree: move the feature from Active to Done in `planning/backlog.md` and in its own `planning/features/{name}.md`, then commit (code + tests + docs — never `pkg/`).
     - From the **primary checkout** (already on `integration` — do not run `git checkout integration` from the feature worktree, it will fail since `integration` is checked out there permanently): `git merge feature/{slug}`. Expect an occasional `planning/backlog.md` conflict when several features land close together — resolve it by hand; a `merge=union` driver was tried and rejected here (tested: it silently duplicates section headers and reverts moved lines instead of flagging a real conflict, since backlog.md entries move *between* sections rather than only being appended).
     - Confirm successful merge, then `git push origin integration` (so a batch in progress isn't only local).
