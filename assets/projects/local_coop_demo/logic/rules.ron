@@ -8,7 +8,7 @@
         // planning/features/split_screen_camera_followups.md). See assets.ron's comment.
         ( on: "scene.ready:room3", do_actions: [
             Log("Local co-op demo room3 ready"),
-            SpawnEffect(key: "billboard_test_spark", position: Some((0.0, 1.5, 0.0)), entity: None),
+            SpawnEffect(key: "billboard_test_spark", position: (0.0, 1.5, 0.0), entity: None),
         ] ),
         ( on: "scene.ready:room4", do_actions: [ Log("Local co-op demo room4 ready") ] ),
         ( on: "scene.ready:room5", do_actions: [ Log("Local co-op demo room5 ready") ] ),
