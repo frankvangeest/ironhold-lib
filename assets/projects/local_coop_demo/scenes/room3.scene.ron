@@ -2,6 +2,17 @@
   schema_version: 2,
   name: "room3",
 
+  // Phase 3 (split_screen_camera_followups.md) playtest aid: exercises
+  // nameplate_visibility_system's distance-culling against 2 simultaneously active split
+  // cameras. click_target_test's own `nameplate: true` override does the actual force-show;
+  // this block only needs to exist so nameplate_setup_system/nameplate_visibility_system run
+  // at all in this scene. max_distance left at its default (20.0) — both click targets sit
+  // well within it from either split camera under normal play.
+  show_nameplates: true,
+  nameplate_options: (
+    faction_filter: All,
+  ),
+
   tonemapping: AcesFitted,
 
   // Warm/amber tone, matching the orange portal_to_room3 accent and ground_room3.

@@ -1908,3 +1908,168 @@ fn test_click_select_single_camera_regression_unaffected_by_viewport_fix() {
          viewport-aware fix — regression guard"
     );
 }
+
+// ── nameplate_visibility_system store-and-read agreement (Phase 3, split_screen_camera_followups.md) ───
+
+fn nameplate_test_config(max_distance: f32) -> ironhold_core::capabilities::nameplate::NameplateSceneConfig {
+    use ironhold_core::capabilities::nameplate::NameplateSceneConfig;
+    use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
+    NameplateSceneConfig {
+        enabled: true,
+        player_enabled: false,
+        options: Some(NameplateOptionsDef {
+            faction_filter: NameplateFactionFilter::All,
+            max_distance,
+            offset: (0.0, 0.0, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: false,
+        }),
+    }
+}
+
+/// `nameplate_visibility_system` must evaluate distance against the exact camera that
+/// `world_label_screen_pos_system` actually selected to position the anchor — not an
+/// independently re-selected one. Two split cameras are both able to *project* the tracked
+/// point (both are geometrically close enough), but only the left camera's viewport
+/// (`SplitViewportSlot(0)`) actually contains it, so it is the one that positions the anchor.
+/// Its distance to the point (10.0) is under `max_distance` (10.5); the right camera's distance
+/// to the same point (~11.66) is NOT. If `nameplate_visibility_system` picked the right camera
+/// (e.g. by re-selecting "nearest" independently) the anchor would wrongly hide.
+#[test]
+fn test_nameplate_visibility_agrees_with_world_label_selected_camera_in_split_screen() {
+    use ironhold_core::capabilities::nameplate::{
+        NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance,
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    app.world_mut().insert_resource(nameplate_test_config(10.5));
+
+    // Left camera (slot 0): 10.0 units from its own look-at target.
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    // Right camera (slot 1): ~11.66 units from the LEFT camera's target — farther, and its
+    // viewport does not contain the projected point, so it must never be the selected camera.
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    let tracked = app.world_mut().spawn((
+        NameplateTag { display_name: "Ally".to_string(), prefab_override: None },
+        Transform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(-3.0, 0.0, 0.0))),
+    )).id();
+
+    let anchor = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tracked),
+            offset: Vec3::ZERO,
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        NameplateAnchorWidget,
+        NameplateCameraDistance::default(),
+        Visibility::Hidden,
+        Transform::default(),
+    )).id();
+    app.world_mut().entity_mut(tracked).insert(NameplateAnchor(anchor));
+
+    app.update();
+
+    let stashed = app.world().get::<NameplateCameraDistance>(anchor).unwrap().0;
+    assert!(
+        stashed.is_some_and(|d| (d - 10.0).abs() < 0.01),
+        "expected the anchor to stash the LEFT camera's distance (10.0), got {:?}", stashed
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(anchor).unwrap(), Visibility::Visible,
+        "distance-culling must agree with world_label_screen_pos_system's own camera pick \
+         (left camera, distance 10.0 < max_distance 10.5) — using the right camera's distance \
+         (~11.66) would have wrongly hidden the anchor"
+    );
+}
+
+/// When the tracked point is off every active camera's viewport, `world_label_screen_pos_system`
+/// clears `NameplateCameraDistance` to `None` and `nameplate_visibility_system` must treat that
+/// as out-of-range (hidden) — even though the point may be well within `max_distance` of some
+/// camera in raw world-space terms. Matches the pre-existing `.single()` no-op contract for "no
+/// qualifying camera."
+#[test]
+fn test_nameplate_visibility_hides_when_anchor_is_off_every_active_viewport() {
+    use ironhold_core::capabilities::nameplate::{
+        NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance,
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    // Generous max_distance — a raw-distance-only check would pass easily.
+    app.world_mut().insert_resource(nameplate_test_config(1000.0));
+
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-10.0, 0.0, 10.0), Vec3::new(-10.0, 0.0, 0.0), 5.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(10.0, 0.0, 10.0), Vec3::new(10.0, 0.0, 0.0), 5.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    // Far outside either camera's narrow (half_extent=5.0) frustum — off-viewport for both,
+    // but well within the generous max_distance from either camera's position.
+    let tracked = app.world_mut().spawn((
+        NameplateTag { display_name: "OffScreenAlly".to_string(), prefab_override: None },
+        Transform::from_translation(Vec3::new(1000.0, 0.0, 0.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(1000.0, 0.0, 0.0))),
+    )).id();
+
+    let anchor = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tracked),
+            offset: Vec3::ZERO,
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        NameplateAnchorWidget,
+        NameplateCameraDistance::default(),
+        Visibility::Visible,
+        Transform::default(),
+    )).id();
+    app.world_mut().entity_mut(tracked).insert(NameplateAnchor(anchor));
+
+    app.update();
+
+    assert_eq!(
+        app.world().get::<NameplateCameraDistance>(anchor).unwrap().0, None,
+        "no active camera's viewport contains the point, so the stashed distance must be cleared"
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(anchor).unwrap(), Visibility::Hidden,
+        "an anchor off every active viewport must be treated as out-of-range regardless of \
+         max_distance"
+    );
+}

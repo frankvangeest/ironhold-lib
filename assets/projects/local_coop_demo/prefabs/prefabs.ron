@@ -75,6 +75,12 @@
         metallic: 0.1,
       ),
       click_selectable: true,
+      // Phase 3 (split_screen_camera_followups.md) playtest aid: force-show a nameplate
+      // (bypasses faction_filter entirely, so it's independent of room3's own
+      // faction_filter: All setting below) so nameplate_visibility_system's store-and-read
+      // distance-culling can be exercised against 2 simultaneously active split cameras.
+      display_name: "Click Target",
+      nameplate: true,
     ),
 
     // Room 5's ground — rose/magenta tone, matching the pink portal_to_room5 accent. Distinct

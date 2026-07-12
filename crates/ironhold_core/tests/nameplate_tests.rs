@@ -295,7 +295,7 @@ fn test_nameplate_cleanup_despawns_anchor_after_tagged_entity_removed() {
 /// `max_distance`. The camera starts at the origin; the entity is placed far away.
 #[test]
 fn test_nameplate_visibility_hides_anchor_beyond_max_distance() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig};
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
 
@@ -349,6 +349,7 @@ fn test_nameplate_visibility_hides_anchor_beyond_max_distance() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(50.0)),
         Visibility::Visible, // start visible
         Transform::default(),
     )).id();
@@ -375,7 +376,7 @@ fn test_nameplate_visibility_hides_anchor_beyond_max_distance() {
 /// `max_distance` and passes the faction filter.
 #[test]
 fn test_nameplate_visibility_does_not_hide_anchor_within_max_distance() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig};
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
 
@@ -429,6 +430,7 @@ fn test_nameplate_visibility_does_not_hide_anchor_within_max_distance() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(5.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();
@@ -455,7 +457,7 @@ fn test_nameplate_visibility_does_not_hide_anchor_within_max_distance() {
 /// even if it is within max_distance, because that flag is an unconditional suppression.
 #[test]
 fn test_nameplate_visibility_hides_anchor_when_prefab_override_is_false() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig};
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
 
@@ -506,6 +508,7 @@ fn test_nameplate_visibility_hides_anchor_when_prefab_override_is_false() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(1.0)),
         Visibility::Visible, // start visible to detect the forced hide
         Transform::default(),
     )).id();
@@ -531,7 +534,7 @@ fn test_nameplate_visibility_hides_anchor_when_prefab_override_is_false() {
 /// and the entity has no `NpcAgent` (i.e. it is not a hostile NPC).
 #[test]
 fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig};
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
 
@@ -583,6 +586,7 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(2.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();
@@ -610,7 +614,7 @@ fn test_nameplate_visibility_hostile_only_filter_hides_non_npc() {
 /// `show_player_nameplate` at spawn time, not by faction filtering.
 #[test]
 fn test_nameplate_visibility_player_bypasses_faction_filter() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig, PlayerNameplatePreference};
     use ironhold_core::capabilities::player::Player;
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
@@ -669,6 +673,7 @@ fn test_nameplate_visibility_player_bypasses_faction_filter() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(2.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();
@@ -694,7 +699,7 @@ fn test_nameplate_visibility_player_bypasses_faction_filter() {
 /// and the entity carries `NpcAgent` (i.e. it is a hostile NPC within range).
 #[test]
 fn test_nameplate_visibility_hostile_only_filter_shows_npc_within_range() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig};
     use ironhold_core::capabilities::npc::{NpcAgent, NpcState};
     use ironhold_core::schema::catalog::{NpcFaction, NpcOnPlayerNear};
     use ironhold_core::runtime::scene_manager::WorldLabel;
@@ -778,6 +783,7 @@ fn test_nameplate_visibility_hostile_only_filter_shows_npc_within_range() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(3.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();
@@ -860,7 +866,7 @@ fn test_toggle_own_nameplate_twice_returns_to_hidden() {
 /// entity is well within `max_distance`.
 #[test]
 fn test_nameplate_visibility_own_toggle_hides_player_without_override() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig, PlayerNameplatePreference};
     use ironhold_core::capabilities::player::Player;
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
@@ -914,6 +920,7 @@ fn test_nameplate_visibility_own_toggle_hides_player_without_override() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(2.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();
@@ -939,7 +946,7 @@ fn test_nameplate_visibility_own_toggle_hides_player_without_override() {
 /// `PlayerNameplatePreference` being `false` — the anchor stays visible.
 #[test]
 fn test_nameplate_visibility_prefab_override_wins_over_own_toggle() {
-    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateSceneConfig, PlayerNameplatePreference};
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateAnchorWidget, NameplateCameraDistance, NameplateSceneConfig, PlayerNameplatePreference};
     use ironhold_core::capabilities::player::Player;
     use ironhold_core::runtime::scene_manager::WorldLabel;
     use ironhold_core::schema::scene_v2::{NameplateOptionsDef, NameplateFactionFilter};
@@ -993,6 +1000,7 @@ fn test_nameplate_visibility_prefab_override_wins_over_own_toggle() {
             screen_offset: Vec2::ZERO,
         },
         NameplateAnchorWidget,
+        NameplateCameraDistance(Some(2.0)),
         Visibility::Visible,
         Transform::default(),
     )).id();

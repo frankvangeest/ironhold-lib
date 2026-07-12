@@ -446,11 +446,28 @@ per Stage 6's 3-player 2×2 case) now does nothing, whereas the old arbitrary-ca
 fall through to "clicked empty space" and clear `CurrentTarget`. Invisible in ordinary
 single-camera scenes (a full-window viewport covers every in-window cursor position).
 
-**Still affected by split-screen having 2 real `Camera3d` entities per scene**: `nameplate.rs`'s
-distance-culling still assumes one `Camera3d` exists (Phase 3 of the same feature plan, not
-touched by `local_coop_demo` since it doesn't enable nameplates). No panic (graceful
-`.single()`-as-`Result`), but it silently no-ops rather than being viewport-aware. See
-`planning/features/split_screen_camera_followups.md` for the fix plan.
+**`nameplate.rs`'s distance-culling is now viewport-aware via store-and-read** (fixed — Phase 3 of
+`planning/features/split_screen_camera_followups.md`). `nameplate_visibility_system` used to call
+`camera_q.single()` with no `is_active` filter at all, so it silently no-op'd whenever 2+
+`Camera3d` entities existed *at all* — not just when 2+ were simultaneously active (a merged
+dynamic split with one inactive sibling camera hit this too). It no longer queries cameras
+directly: `world_label_screen_pos_system` (which already selects one active camera per
+`WorldLabel` each frame, containment-tested) now also stashes that camera's distance onto a new
+`NameplateCameraDistance(Option<f32>)` component on the nameplate anchor — `None` on every
+early-return path (tracked entity gone/hidden, or no qualifying camera this frame),
+`Some(distance)` on the success path. `nameplate_visibility_system` reads that stashed value
+instead of independently re-selecting a camera, guaranteeing the two systems can never disagree on
+which camera is authoritative for a given anchor's position and visibility. An anchor with no
+stashed distance (off every active viewport) is treated as out-of-range (hidden), matching the
+prior no-op contract for "no qualifying camera." **Known, minor behavior change**: the culling
+distance is now measured from the anchor's actual world position (tracked entity origin +
+`NameplateOptionsDef.offset`, default `(0, 2.4, 0)` — the point that's actually drawn on screen)
+against the viewport-selected camera, instead of the old `.single()` path's entity-origin-to-only-camera
+distance. Arguably more correct (culling the point that's actually rendered), and the difference is
+sub-metre at normal `max_distance` scales, but it is a real change near the boundary. **Accepted
+limitation** (unchanged from before this fix): nameplate anchors remain single-instance (Phase 4
+does not extend `WorldLabelRank` to them), so an entity's nameplate still shows in **at most one**
+simultaneously-visible split viewport, never duplicated across two.
 
 **Split-screen player HUD labels** (`capabilities/camera.rs`) — the first real consumer of
 `PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to

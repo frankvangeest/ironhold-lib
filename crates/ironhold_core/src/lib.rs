@@ -511,6 +511,14 @@ fn icon_button_click_system(
 /// sibling per possible split slot (`scene_loader.rs`), so each active viewport that can
 /// see the point gets its own visible copy — see
 /// `planning/features/world_label_split_screen_positioning.md`.
+///
+/// For each `WorldLabel` that also carries a `NameplateCameraDistance` component (nameplate
+/// anchors only), this also stashes the distance from the world point to whichever camera was
+/// actually selected above (or clears it to `None` on every early-return path — tracked entity
+/// gone/hidden, or no qualifying camera this frame). `nameplate_visibility_system` reads that
+/// distance instead of independently re-selecting a camera, so the two systems can never
+/// disagree on which camera is authoritative for a given anchor's position and visibility — see
+/// `planning/features/split_screen_camera_followups.md` Phase 3.
 fn world_label_screen_pos_system(
     camera_q: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
@@ -520,6 +528,7 @@ fn world_label_screen_pos_system(
         &mut Transform,
         &mut Visibility,
         Option<&mut TextFont>,
+        Option<&mut crate::capabilities::nameplate::NameplateCameraDistance>,
     )>,
     tracked_q: Query<(&GlobalTransform, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
@@ -539,14 +548,16 @@ fn world_label_screen_pos_system(
         crate::capabilities::camera::camera_priority_key(*entity, *slot)
     });
 
-    for (label, rank, mut t, mut vis, text_font_opt) in label_q.iter_mut() {
+    for (label, rank, mut t, mut vis, text_font_opt, mut cam_dist_opt) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
             let Ok((gt, tracked_vis)) = tracked_q.get(tracked) else {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                if let Some(cam_dist) = cam_dist_opt.as_deref_mut() { cam_dist.0 = None; }
                 continue;
             };
             if tracked_vis.is_some_and(|v| *v == Visibility::Hidden) {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                if let Some(cam_dist) = cam_dist_opt.as_deref_mut() { cam_dist.0 = None; }
                 continue;
             }
             gt.translation() + label.offset
@@ -566,14 +577,20 @@ fn world_label_screen_pos_system(
 
         let Some((cam_global, vp)) = selected else {
             if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+            if let Some(cam_dist) = cam_dist_opt.as_deref_mut() { cam_dist.0 = None; }
             continue;
         };
+
+        let dist_to_selected_camera = (world_pos - cam_global.translation()).length();
+        if let Some(cam_dist) = cam_dist_opt.as_deref_mut() {
+            cam_dist.0 = Some(dist_to_selected_camera);
+        }
 
         // Depth-based font size — only applies to Text2d-bearing WorldLabel entities.
         // Pixel bar anchors carry no TextFont, so this block is skipped for them.
         if let Some(mut text_font) = text_font_opt {
             let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
-                let dist = (world_pos - cam_global.translation()).length().max(0.001);
+                let dist = dist_to_selected_camera.max(0.001);
                 let scale = (ref_dist / dist).min(1.0).max(min_floor);
                 (label.base_font_size * scale).round()
             } else {

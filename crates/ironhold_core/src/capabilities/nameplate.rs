@@ -35,6 +35,23 @@ pub struct NameplateAnchor(pub Entity);
 #[derive(Component)]
 pub struct NameplateAnchorWidget;
 
+/// Stashed on the anchor entity by `world_label_screen_pos_system` every frame: the distance
+/// from the anchor's world position to whichever active camera it actually resolved against
+/// to position it on screen this frame (or `None` if no qualifying camera was found - the
+/// anchor is off every active viewport). `nameplate_visibility_system` reads this instead of
+/// independently re-selecting a camera, guaranteeing the two systems always agree on which
+/// camera is authoritative for a given anchor - see
+/// `planning/features/split_screen_camera_followups.md` Phase 3.
+///
+/// Intentionally rewritten unconditionally every frame the anchor is on-screen (unlike
+/// `Transform`/`TextFont`/`Visibility` writes elsewhere in this pipeline, which guard against
+/// marking themselves changed when the value hasn't meaningfully moved - see
+/// `crates/ironhold_core/src/CLAUDE.md`'s change-detection discipline note). No system currently
+/// filters on `Changed<NameplateCameraDistance>`, so this is harmless; a future consumer that
+/// wants stable Bevy change-detection off this component would need to add the same guard.
+#[derive(Component, Default)]
+pub struct NameplateCameraDistance(pub Option<f32>);
+
 // ─── Resource ─────────────────────────────────────────────────────────────────
 
 /// Populated from `GameSceneV2` on scene load; cleared on `LoadScene`.
@@ -114,6 +131,7 @@ pub fn nameplate_setup_system(
             },
             LevelEntity,
             NameplateAnchorWidget,
+            NameplateCameraDistance::default(),
         )).id();
 
         // Drop-shadow text (slightly offset behind the main name).
@@ -199,32 +217,54 @@ pub fn nameplate_setup_system(
 /// Forces the nameplate anchor to `Hidden` when the entity fails distance or faction
 /// criteria. Leaves visibility untouched (Visible/Hidden) when it should be shown,
 /// so `world_label_screen_pos_system` handles the on-/off-screen toggle.
+///
+/// Distance is read from the anchor's `NameplateCameraDistance`, stashed by
+/// `world_label_screen_pos_system` for whichever active camera it actually selected to
+/// position that anchor this frame — never independently re-queried here. In split-screen
+/// scenes with 2+ simultaneously active `Camera3d` entities, re-selecting a camera
+/// independently could disagree with the one that actually drew the anchor (different
+/// containment result, different distance), reintroducing the flicker this fix prevents. An
+/// anchor with no stashed distance (off every active viewport this frame) is treated as
+/// out-of-range, matching the prior `camera_q.single()` no-op contract for the "no qualifying
+/// camera" case.
 pub fn nameplate_visibility_system(
     config: Res<NameplateSceneConfig>,
     nameplate_pref: Res<PlayerNameplatePreference>,
-    camera_q: Query<&GlobalTransform, With<Camera3d>>,
-    entity_q: Query<(Entity, &NameplateTag, &NameplateAnchor, &GlobalTransform)>,
+    entity_q: Query<(Entity, &NameplateTag, &NameplateAnchor)>,
+    dist_q: Query<&NameplateCameraDistance>,
     npc_q: Query<(), With<NpcAgent>>,
     player_q: Query<(), With<Player>>,
     mut vis_q: Query<&mut Visibility>,
 ) {
     let Some(opts) = &config.options else { return };
-    let Ok(cam_gt) = camera_q.single() else { return };
-    let cam_pos = cam_gt.translation();
 
-    for (entity, tag, anchor, gt) in entity_q.iter() {
+    for (entity, tag, anchor) in entity_q.iter() {
+        let dist_result = dist_q.get(anchor.0);
+        if dist_result.is_err() {
+            // The anchor is missing `NameplateCameraDistance` entirely — distinct from the
+            // legitimate "off every active viewport this frame" case (`Ok(None)`), which is
+            // silent. Every anchor is spawned with this component in `nameplate_setup_system`;
+            // reaching this arm means a future anchor-spawn path forgot it, which would
+            // otherwise manifest as a nameplate that is permanently and silently hidden with no
+            // diagnostic — the same failure class `tag_spawned_entity`'s single-source-of-truth
+            // pattern exists to prevent for other per-entity metadata.
+            warn_once!("Nameplate anchor is missing NameplateCameraDistance — treating as out-of-range. This should never happen; check the anchor spawn site.");
+        }
+        let cam_distance = dist_result.ok().and_then(|d| d.0);
+        let out_of_range = cam_distance.map_or(true, |d| d > opts.max_distance);
+
         let should_hide = if tag.prefab_override == Some(false) {
             true
         } else if tag.prefab_override == Some(true) {
             // Explicit force-show always wins — bypasses faction filter AND the player's own
             // runtime preference (Action::ToggleOwnNameplate); respects max_distance only.
-            (gt.translation() - cam_pos).length() > opts.max_distance
+            out_of_range
         } else if player_q.contains(entity) {
             // No prefab override: the player relies on the scene default (mirrored into
             // PlayerNameplatePreference at load), which can be flipped at runtime via
             // Action::ToggleOwnNameplate. Bypasses faction_filter (an NPC/prop-only
             // categorization); still respects max_distance.
-            !nameplate_pref.0 || (gt.translation() - cam_pos).length() > opts.max_distance
+            !nameplate_pref.0 || out_of_range
         } else {
             // Apply faction filter then distance. Never reached for Player entities (see above).
             let passes_faction = match opts.faction_filter {
@@ -232,7 +272,7 @@ pub fn nameplate_visibility_system(
                 NameplateFactionFilter::FriendlyOnly => !npc_q.contains(entity),
                 NameplateFactionFilter::All          => true,
             };
-            !passes_faction || (gt.translation() - cam_pos).length() > opts.max_distance
+            !passes_faction || out_of_range
         };
 
         if should_hide {
