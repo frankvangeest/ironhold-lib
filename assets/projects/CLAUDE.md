@@ -85,7 +85,7 @@ PlayMusicLoop(key: "bg_forest")
 PlayAnimationOn(target: "{self}", clip: "attack")
 EmitEventAfterDelay(event: "enemy.respawn:{self}", delay_secs: 5.0)
 SpawnEffect(key: "hit_spark", entity: "{self}")
-SpawnEffect(key: "explosion_burst", position: Some((0.0, 0.5, 0.0)))
+SpawnEffect(key: "explosion_burst", position: (0.0, 0.5, 0.0))
 ModifyStat(key: "health", delta: -25.0)
 SetStat(key: "health", value: 100.0)
 ApplyModifier(modifier_key: "speed_boost")
@@ -304,10 +304,10 @@ On first load, WASM lazily compiles a GPU pipeline for each material+blend varia
 
 ```ron
 ( on: "scene.ready:main", do_actions: [
-    SpawnEffect(key: "explosion_burst", position: Some((0.0, -100.0, 0.0))),  // additive sphere
-    SpawnEffect(key: "star_rain",       position: Some((0.0, -100.0, 0.0))),  // additive sprite
-    SpawnEffect(key: "campfire_smoke",  position: Some((0.0, -100.0, 0.0))),  // blend sprite
-    SpawnEffect(key: "campfire_fire",   position: Some((0.0, -100.0, 0.0))),  // flame material (multi-layer ok — one call warms all layers)
+    SpawnEffect(key: "explosion_burst", position: (0.0, -100.0, 0.0)),  // additive sphere
+    SpawnEffect(key: "star_rain",       position: (0.0, -100.0, 0.0)),  // additive sprite
+    SpawnEffect(key: "campfire_smoke",  position: (0.0, -100.0, 0.0)),  // blend sprite
+    SpawnEffect(key: "campfire_fire",   position: (0.0, -100.0, 0.0)),  // flame material (multi-layer ok — one call warms all layers)
 ]),
 ```
 
