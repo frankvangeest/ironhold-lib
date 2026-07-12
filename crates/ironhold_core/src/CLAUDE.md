@@ -415,9 +415,18 @@ spawn loop now spawns `MAX_SPLIT_PLAYERS` (4) sibling entities per authored labe
 via the `WorldLabelRank(u8)` component — instead of just one. Each sibling independently binds to
 a different active-camera priority in `world_label_screen_pos_system`'s selection above, so up to
 4 simultaneously-visible active split viewports each get their own correctly-positioned,
-independently-hideable copy. **This does NOT extend to any other `WorldLabel` consumer** — entity
-labels, stat labels, damage popups, and nameplate anchors all still spawn a single instance (no
-`WorldLabelRank`, implicit rank 0 = highest-priority camera only), so the same multi-viewport gap
+independently-hideable copy. **Extended to `stat_label` and `Ascii`-style `world_stat_bar` in
+Phase 4** (`planning/features/split_screen_camera_followups.md`) — same rank-duplication
+pattern, at both spawn sites (`scene_loader.rs`'s scene-load loops and
+`drain_dynamic_stat_ui_system`'s `Action::Spawn`/wave-spawn path), but gated on the loading scene
+actually being split-screen (`player_configs.first().camera.split.is_some()` at scene-load time,
+or `ActiveSplitScreen`/`DynamicSplitConfig` at runtime) — unlike `world_labels:`/`label:`, which
+duplicate unconditionally. The gate exists because these widgets are rewritten every frame by
+`stat_label_update_system`/`world_stat_bar_update_system` regardless of `Visibility`, so
+unconditional duplication would be pure per-frame overhead in every ordinary (non-split) scene;
+ordinary scenes get exactly 1 entity per widget, unchanged. **Entity labels, damage popups,
+`Pixel`-style world stat bars, and nameplate anchors remain single-instance** (no
+`WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same multi-viewport gap
 still applies to them; extend the same pattern to a given consumer's spawn site only if a real
 project need surfaces.
 

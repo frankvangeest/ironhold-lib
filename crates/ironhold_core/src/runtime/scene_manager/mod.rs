@@ -327,12 +327,15 @@ pub struct WorldLabel {
 /// Marks a `WorldLabel` entity as one of several visual siblings of the same logical label,
 /// each pinned to a different rank in `world_label_screen_pos_system`'s deterministic
 /// active-camera ordering (see that system's doc comment). Rank 0 is implicit — a
-/// `WorldLabel` with no `WorldLabelRank` behaves exactly like `WorldLabelRank(0)` — so every
-/// pre-existing single-instance `WorldLabel` consumer (nameplate anchors, damage popups, stat
-/// labels, entity labels) is unaffected. Only the scene-level `world_labels:` (portal
-/// room-name labels) spawn path spawns ranks 1..`MAX_SPLIT_PLAYERS` sibling entities, so a
-/// label simultaneously visible in 2+ active split viewports at once shows in every one of
-/// them rather than just the highest-priority camera.
+/// `WorldLabel` with no `WorldLabelRank` behaves exactly like `WorldLabelRank(0)`. The
+/// scene-level `world_labels:` (portal room-name labels) and per-entity `label:` spawn paths
+/// always spawn ranks 1..`MAX_SPLIT_PLAYERS` sibling entities unconditionally; `stat_label`
+/// and `Ascii`-style `world_stat_bar` (Phase 4, `split_screen_camera_followups.md`) spawn the
+/// same ranked siblings but only when the loading scene is actually split-screen (ordinary
+/// scenes get exactly 1 entity, no rank overhead, since these widgets are rewritten every
+/// frame unlike the static label text). Damage popups, `Pixel`-style world stat bars, and
+/// nameplate anchors remain single-instance (implicit rank 0 only) — an entity using one of
+/// those shows in **at most one** simultaneously-visible split viewport.
 #[derive(Component)]
 pub struct WorldLabelRank(pub u8);
 

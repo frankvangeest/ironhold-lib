@@ -9,6 +9,12 @@
         ( on: "scene.ready:room3", do_actions: [
             Log("Local co-op demo room3 ready"),
             SpawnEffect(key: "billboard_test_spark", position: (0.0, 1.5, 0.0), entity: None),
+            // Phase 4 (split_screen_camera_followups.md) playtest aid: dynamically spawns a
+            // second stat_widget_test instance (mirrors the drain_dynamic_stat_ui_system path
+            // used by wave-spawned enemies), also centered so both split viewports see it —
+            // verifies the Action::Spawn path duplicates ranks identically to the scene-placed
+            // instance above.
+            Spawn(prefab: "stat_widget_test", id: "stat_widget_dynamic", position: (0.0, 2.0, -7.0)),
         ] ),
         ( on: "scene.ready:room4", do_actions: [ Log("Local co-op demo room4 ready") ] ),
         ( on: "scene.ready:room5", do_actions: [ Log("Local co-op demo room5 ready") ] ),

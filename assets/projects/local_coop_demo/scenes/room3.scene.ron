@@ -92,6 +92,19 @@
       ),
     ),
 
+    // Phase 4 (split_screen_camera_followups.md) playtest aid: centered on the split axis so
+    // both viewports see it simultaneously — verifies stat_label/Ascii world_stat_bar duplicate
+    // into MAX_SPLIT_PLAYERS ranked siblings instead of showing in only one viewport.
+    (
+      id: "stat_widget_scene_placed",
+      prefab: "stat_widget_test",
+      transform: (
+        translation: (0.0, 2.0, -5.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // Return trip reuses the "portal_to_room2" prefab (see prefabs.ron comment) — same event
     // name as room1's forward portal, same rules.ron entry, no new prefab needed.
     (

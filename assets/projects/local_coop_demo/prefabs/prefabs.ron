@@ -83,6 +83,43 @@
       nameplate: true,
     ),
 
+    // Phase 4 (split_screen_camera_followups.md) playtest aid: floating stat_label +
+    // Ascii world_stat_bar, placed on room3's centerline so both split viewports can see the
+    // same instance simultaneously (mirrors the portal-label bug's original repro condition).
+    // One copy is scene-placed (room3.scene.ron); another is fired dynamically via
+    // Action::Spawn on scene.ready:room3 (rules.ron) to exercise drain_dynamic_stat_ui_system's
+    // duplication path too. A fixed base health value is used (no damage source in this demo) —
+    // the point of this aid is duplication across viewports, not stat gameplay.
+    "stat_widget_test": (
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
+      components: (),
+      primitive: (
+        radius: 0.4,
+        color: (0.55, 0.20, 0.75),
+        roughness: 0.4,
+        metallic: 0.1,
+      ),
+      stat_templates: [
+        (
+          key: "health",
+          base: 75.0,
+          min: 0.0,
+          max: 100.0,
+        ),
+      ],
+      stat_label: (
+        stat_key: "{self}.health",
+        offset: (0.0, 1.2, 0.0),
+      ),
+      world_stat_bar: (
+        stat_key: "{self}.health",
+        offset: (0.0, 1.6, 0.0),
+        style: Ascii( cells: 10, font_size: 14.0 ),
+      ),
+    ),
+
     // Room 5's ground — rose/magenta tone, matching the pink portal_to_room5 accent. Distinct
     // from room3's amber and room4's teal, continuing each room's one-color-identity convention.
     "ground_room5": (

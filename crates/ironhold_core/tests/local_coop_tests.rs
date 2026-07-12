@@ -9,8 +9,9 @@ use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCata
 use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
+use ironhold_core::capabilities::stat_display::{StatLabelMarker, WorldStatBarFillMarker};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
 use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
@@ -2071,5 +2072,233 @@ fn test_nameplate_visibility_hides_when_anchor_is_off_every_active_viewport() {
         *app.world().get::<Visibility>(anchor).unwrap(), Visibility::Hidden,
         "an anchor off every active viewport must be treated as out-of-range regardless of \
          max_distance"
+    );
+}
+
+// ── Phase 4 (split_screen_camera_followups.md): stat label / Ascii world stat bar
+// duplication, gated on the loading scene actually being split-screen ──────────────────
+
+fn stat_label_def(stat_key: &str) -> StatLabelDef {
+    StatLabelDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.5, 0.0),
+        font_size: 16.0,
+        color: (0.2, 0.9, 0.2, 1.0),
+        show_max: true,
+    }
+}
+
+fn ascii_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
+    WorldStatBarDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Ascii { cells: 10, font_size: 14.0 },
+    }
+}
+
+/// Drives a scene load with 2 players (first player's `camera.split` set iff `split` is
+/// `Some`) plus a third, non-player `test_stat_prop` entity carrying both `stat_label` and
+/// `world_stat_bar` (Ascii). Mirrors `two_player_catalogs_with_split`/`load_two_player_scene`
+/// above but adds the stat-widget prop needed to exercise Phase 4.
+fn load_two_player_scene_with_stat_prop(app: &mut App, split: Option<SplitScreenDef>) {
+    two_player_catalogs_with_split(app, None, split);
+    app.world_mut()
+        .resource_mut::<LoadedPrefabCatalog>()
+        .0
+        .prefabs
+        .insert("test_stat_prop".to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            model: "char_a".to_string(),
+            stat_label: Some(stat_label_def("{self}.health")),
+            world_stat_bar: Some(ascii_world_stat_bar_def("{self}.health")),
+            ..Default::default()
+        });
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "dummy_01", prefab: "test_stat_prop", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_stat_widgets_duplicate_ranks_when_scene_is_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_stat_prop(
+        &mut app,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+
+    let label_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        label_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a stat_label in a split-screen scene must spawn MAX_SPLIT_PLAYERS ranked siblings, \
+         same as the world_labels/label duplication pattern"
+    );
+    let mut sorted: Vec<u8> = label_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3], "expected exactly one stat label of each rank 0-3");
+
+    let bar_fill_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldStatBarFillMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        bar_fill_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "an Ascii world_stat_bar's fill entity must also spawn MAX_SPLIT_PLAYERS ranked siblings"
+    );
+    let mut sorted_bar: Vec<u8> = bar_fill_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted_bar.sort();
+    assert_eq!(sorted_bar, vec![0, 1, 2, 3], "expected exactly one bar fill of each rank 0-3");
+
+    // The background track has no marker component distinguishing it from other WorldLabels,
+    // but it must still duplicate 1:1 with the fill — count every WorldLabel tracking the prop
+    // entity and subtract the (already-verified) fill count to isolate the backgrounds.
+    let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("dummy_01").expect("prop entity must register in SpawnRegistry");
+    let total_tracking_prop = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .filter(|l| l.tracked_entity == Some(prop_entity))
+        .count();
+    // 4 stat-label ranks + 4 bar-bg ranks + 4 bar-fill ranks = 12.
+    assert_eq!(
+        total_tracking_prop, 12,
+        "expected 4 stat-label + 4 bar-background + 4 bar-fill WorldLabels tracking the prop"
+    );
+}
+
+#[test]
+fn test_stat_widgets_stay_single_instance_in_non_split_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_stat_prop(&mut app, None);
+
+    let label_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        label_ranks, vec![None],
+        "a non-split scene must spawn exactly 1 stat label with no WorldLabelRank at all — \
+         pixel-identical to pre-Phase-4 behavior, no rank-duplication overhead"
+    );
+
+    let bar_fill_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldStatBarFillMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        bar_fill_ranks, vec![None],
+        "a non-split scene must spawn exactly 1 Ascii world_stat_bar fill entity, no rank siblings"
+    );
+
+    let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("dummy_01").expect("prop entity must register in SpawnRegistry");
+    let total_tracking_prop = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .filter(|l| l.tracked_entity == Some(prop_entity))
+        .count();
+    // 1 stat label + 1 bar background + 1 bar fill = 3.
+    assert_eq!(
+        total_tracking_prop, 3,
+        "expected exactly 1 stat-label + 1 bar-background + 1 bar-fill WorldLabel, no duplication"
+    );
+}
+
+/// Regression guard (debug-detective finding during Phase 4 review): a lone player whose
+/// prefab happens to carry a `camera.split` block (e.g. copy-pasted from a co-op prefab) must
+/// NOT trigger rank duplication — `spawn_players_and_camera` itself falls back to a single
+/// full-window camera whenever fewer than 2 players are present, regardless of `split`, so the
+/// gate must check `player_configs.len() >= 2` too, not just `split.is_some()`.
+#[test]
+fn test_stat_widgets_stay_single_instance_with_one_player_carrying_split_config() {
+    let mut app = setup_test_app();
+    app.update();
+
+    two_player_catalogs_with_split(
+        &mut app, None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+    app.world_mut()
+        .resource_mut::<LoadedPrefabCatalog>()
+        .0
+        .prefabs
+        .insert("test_stat_prop".to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            model: "char_a".to_string(),
+            stat_label: Some(stat_label_def("{self}.health")),
+            ..Default::default()
+        });
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    // Only ONE player entity ("p1"), despite its prefab carrying `camera.split`.
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "dummy_01", prefab: "test_stat_prop", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let label_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        label_ranks, vec![None],
+        "a single-player scene must spawn exactly 1 stat label with no rank duplication, even \
+         though its prefab's camera.split block is set — matching spawn_players_and_camera's own \
+         `entities.len() < 2` fallback to a single full-window camera"
     );
 }

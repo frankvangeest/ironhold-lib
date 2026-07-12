@@ -3082,6 +3082,8 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 
 > **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel style.
 
+> **Split-screen visibility:** `stat_label` and `Ascii`-style `world_stat_bar` widgets correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `Pixel`-style bars, damage popups, and nameplates do **not** duplicate — an entity's Pixel bar, popup, or nameplate shows in **at most one** viewport at a time. Since combining Ascii + Pixel bars on one prefab is a supported pattern (see the tip below), be aware a combined bar will show its Ascii half in every simultaneously-visible viewport but its Pixel half in only one.
+
 ```ron
 // Minimal — omit style to get the default Ascii bar.
 world_stat_bar: (

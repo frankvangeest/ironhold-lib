@@ -1,6 +1,10 @@
 ﻿use bevy::prelude::*;
 use std::collections::HashMap;
-use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, DynamicStatUiQueue, DynamicStatUiEntry, LoadedLabelDepthScale, WorldLabel};
+use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, DynamicStatUiQueue, DynamicStatUiEntry, LoadedLabelDepthScale, WorldLabel, ActiveSplitScreen, DynamicSplitConfig};
+use ironhold_core::runtime::scene_manager::WorldLabelRank;
+use ironhold_core::capabilities::stat_display::{StatLabelMarker, WorldStatBarFillMarker};
+use ironhold_core::capabilities::camera::MAX_SPLIT_PLAYERS;
+use ironhold_core::schema::player::SplitOrientation;
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, GameSceneV2, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, LabelDepthScaleDef};
 use ironhold_core::capabilities::animation_resolver::LocomotionState;
 
@@ -933,5 +937,98 @@ fn test_dynamic_stat_label_has_no_depth_scale_when_scene_has_no_block() {
     assert_eq!(
         label.depth_scale, None,
         "no regression: a scene with no label_depth_scale block must still yield no depth scaling for dynamic spawns"
+    );
+}
+
+/// Phase 4 (`split_screen_camera_followups.md`): `drain_dynamic_stat_ui_system` (the
+/// `Action::Spawn`/wave-spawn path) must duplicate stat label / Ascii world stat bar ranks
+/// exactly like the scene-loader's spawn loops, gated on the same split-screen check —
+/// `ActiveSplitScreen.0.is_some() || DynamicSplitConfig.0.is_some()`. Using `DynamicSplitConfig`
+/// alone here (not `ActiveSplitScreen`) exercises the "dynamic split, currently merged" case
+/// that `ActiveSplitScreen` alone would miss (see the doc comment on the system).
+#[test]
+fn test_dynamic_stat_widgets_duplicate_ranks_when_split_screen_active() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+
+    let tracked = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<DynamicStatUiQueue>()
+        .0
+        .push(DynamicStatUiEntry {
+            entity: tracked,
+            stat_label: Some(("health".to_string(), make_stat_label_def("health"))),
+            world_stat_bar: Some(("health".to_string(), make_world_stat_bar_def("health"))),
+        });
+    app.update();
+
+    let label_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        label_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a dynamically-spawned stat label must duplicate MAX_SPLIT_PLAYERS ranks when the scene \
+         is split-screen, matching the scene-loader's own spawn loop"
+    );
+
+    let bar_fill_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldStatBarFillMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        bar_fill_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a dynamically-spawned Ascii world_stat_bar fill must also duplicate MAX_SPLIT_PLAYERS ranks"
+    );
+
+    let total_tracking = app.world_mut()
+        .query::<&WorldLabel>()
+        .iter(app.world())
+        .filter(|l| l.tracked_entity == Some(tracked))
+        .count();
+    // 4 stat-label ranks + 4 bar-bg ranks + 4 bar-fill ranks = 12.
+    assert_eq!(total_tracking, 12);
+}
+
+/// Same gate, exercised via `DynamicSplitConfig` alone (a dynamic split scene that starts, or
+/// currently is, merged) — `ActiveSplitScreen` stays `None` in that state, but 2 real
+/// per-player cameras still exist and will duplicate-visible once the players separate, so this
+/// must still duplicate ranks, not fall back to single-instance.
+#[test]
+fn test_dynamic_stat_widgets_duplicate_ranks_when_dynamic_split_configured_but_merged() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(ActiveSplitScreen(None));
+    app.world_mut().insert_resource(DynamicSplitConfig(Some(
+        ironhold_core::schema::player::DynamicSplitDef {
+            split_distance: 6.0,
+            merge_distance: 3.0,
+            merged_zoom_margin: 2.0,
+            merged_allow_manual_zoom: false,
+        }
+    )));
+
+    let tracked = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<DynamicStatUiQueue>()
+        .0
+        .push(DynamicStatUiEntry {
+            entity: tracked,
+            stat_label: Some(("health".to_string(), make_stat_label_def("health"))),
+            world_stat_bar: None,
+        });
+    app.update();
+
+    let label_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        label_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a merged dynamic split must still duplicate ranks — ActiveSplitScreen being None here \
+         does not mean the scene isn't split-screen-capable"
     );
 }
