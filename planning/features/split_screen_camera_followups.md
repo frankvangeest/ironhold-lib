@@ -1,6 +1,6 @@
 # Feature: Split-Screen — Remaining Single-Camera Assumption Sites
 
-_Status: In Progress (Phases 1-2 Done, Phases 3-4 Queued)_
+_Status: In Progress (Phases 1-3 Done, Phase 4 Queued)_
 _Planned at: `4848727` (2026-07-11)_
 _Plan review (2026-07-11): system-architect + ux-gamedesigner-reviewer, verdict Ready. Findings
 below are incorporated; Frank resolved the two open decisions (Phase 4 perf gating, Phase 4
@@ -17,7 +17,7 @@ in.
 |---|---|---|---|
 | 1 | `particle_renderer.rs` billboard orientation | Done | `aa81cbb` (2026-07-12) |
 | 2 | `targeting.rs` viewport-aware click-to-select | Done | `1c3b910` (2026-07-12) |
-| 3 | `nameplate_visibility_system` distance-culling | Queued | — |
+| 3 | `nameplate_visibility_system` distance-culling | Done | `d00c5f7` (2026-07-12) |
 | 4 | `WorldLabelRank` extended to stat labels / world stat bars | Queued | — |
 
 ## What
@@ -32,7 +32,8 @@ room-name / entity labels) via `world_label_screen_pos_system`:
    vectors.~~ **Fixed in Phase 1 (`aa81cbb`).**
 2. ~~`targeting.rs:122` (`click_select_system`) — click-to-select nearest-entity search.~~
    **Fixed in Phase 2 (`1c3b910`).**
-3. `nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.
+3. ~~`nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.~~
+   **Fixed in Phase 3 (`d00c5f7`).**
 4. `WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
    and `label:` (`EntityLabelDef`) spawn loops. Stat labels, world stat bars (Ascii + Pixel),
    damage popups, and nameplate anchors are still single-instance (implicit rank 0), so they don't
@@ -163,19 +164,28 @@ camera's viewport covers (e.g. a dead grid quadrant) now does nothing, where the
 used to fall through to "clicked empty space" and clear `CurrentTarget`; invisible in ordinary
 single-camera scenes.
 
-**Phase 3 — `nameplate_visibility_system` (store-and-read):** `world_label_screen_pos_system`
-already selects one active camera per `WorldLabel` each frame (containment-tested, deterministic
-order) and computes that camera's distance for `depth_scale`. Extend it to also stash the selected
-camera's distance onto the `WorldLabel` component itself (or a small new field/component read-only
-to `nameplate_visibility_system`) for anchors that have a `NameplateAnchor` back-reference.
-`nameplate_visibility_system` reads that stored distance instead of independently querying cameras
-and recomputing selection — guaranteeing the two systems always agree on which camera is
-authoritative for a given anchor's position and its visibility, with no drift possible between two
-independent implementations. Entities whose anchor found no qualifying camera this frame (fully
-off every active viewport) are treated as out-of-range (hidden), matching today's contract.
-Acceptance criteria updated to state explicitly: because nameplate anchors remain single-instance
-(Phase 4 does not extend to them), an entity's nameplate shows in **at most one** viewport in
-split-screen — a real, accepted limitation, not a bug.
+**Phase 3 — `nameplate_visibility_system` (store-and-read). DONE (`d00c5f7`).** Added
+`NameplateCameraDistance(Option<f32>)`, a new component attached to every nameplate anchor at spawn
+time. `world_label_screen_pos_system` (which already selects one active, containment-tested camera
+per `WorldLabel` each frame) now also stashes that camera's distance onto this component whenever
+the label carries it — `None` on every early-return path (tracked entity gone/hidden, no qualifying
+camera this frame), `Some(distance)` on the success path, reusing the same distance value already
+computed for the pre-existing `depth_scale` font-size calculation. `nameplate_visibility_system` no
+longer queries cameras at all (`camera_q.single()` removed entirely); it reads the anchor's stashed
+distance instead, guaranteeing the two systems always agree on which camera is authoritative for a
+given anchor's position and its visibility, with no drift possible between two independent
+implementations. An anchor with no stashed distance is treated as out-of-range (hidden), matching
+the prior no-op contract for "no qualifying camera." Added a `warn_once!` diagnostic (debug-detective
+finding) if an anchor is ever found with the component entirely missing (a bug) rather than present
+with `None` (a legitimate off-viewport frame), so a future anchor-spawn path that forgets the
+component fails loudly instead of producing a silently-invisible nameplate. **Known, minor behavior
+change** (debug-detective finding, documented in `crates/ironhold_core/src/CLAUDE.md`): the culling
+distance is now measured from the anchor's actual position (tracked entity origin +
+`NameplateOptionsDef.offset`) against the viewport-selected camera, rather than the old
+`.single()` path's entity-origin-to-only-camera distance — more correct, sub-metre difference at
+normal `max_distance` scales. Acceptance criteria updated to state explicitly: because nameplate
+anchors remain single-instance (Phase 4 does not extend to them), an entity's nameplate shows in
+**at most one** viewport in split-screen — a real, accepted limitation, not a bug.
 
 **Phase 4 — stat label / world stat bar duplication (revised scope):** add `WorldLabelRank(rank as
 u8)` + `Visibility::Hidden` (for `rank > 0`) to **both** the scene-loader's `pending_stat_labels` /
@@ -236,8 +246,11 @@ addition before it can be dev-build play-tested, in addition to the standard shi
   **Playtest confirmed by Frank (2026-07-12): clicking either sphere correctly triggers the
   `target.clicked:click_target_test` console message; clicking the ground clears the target; no
   console errors.** Left in place per the same precedent as Phase 1.
-- **Phase 3**: enable `show_nameplates: true` (or a per-prefab override) on at least one entity in a
-  split-screen room, to exercise distance-culling across 2+ active cameras.
+- **Phase 3 — DONE.** `room3.scene.ron` now enables `show_nameplates: true` with `faction_filter:
+  All`; the existing `"click_target_test"` prop (Phase 2's playtest aid) got `nameplate: true` +
+  `display_name: "Click Target"` so it force-shows regardless of faction filtering. **Playtest
+  confirmed by Frank (2026-07-12): both nameplates showed up correctly, no console errors.** Left
+  in place per the same precedent as Phases 1-2.
 - **Phase 4**: add a `stat_label` and/or Ascii `world_stat_bar` to a prefab placed where 2 fixed
   split viewports can simultaneously see it (mirrors the portal-label bug's original repro
   condition), to visually confirm duplication; also verify a dynamically-spawned instance (via
@@ -269,10 +282,23 @@ Stage 6 left "Room N" labels on every portal).
       green; alignment-reviewer (ALIGNED), system-architect (ready to merge), debug-detective
       (correct and safe, no blocking bugs), wasm-perf-reviewer (OK, negligible cost) all clean.
       WASM dev build clean, no console errors. Playtest confirmed by Frank.
-- [ ] Phase 3: `world_label_screen_pos_system` stashes its selected camera/distance for anchor
-      `WorldLabel`s; `nameplate_visibility_system` reads it instead of reselecting; drop
-      `.single()`; tests for merged vs. split states confirming agreement between the two systems;
-      `local_coop_demo` nameplate-enable playtest addition
+- [x] Phase 3: `world_label_screen_pos_system` stashes its selected camera's distance onto a new
+      `NameplateCameraDistance` component for anchor `WorldLabel`s; `nameplate_visibility_system`
+      reads it instead of reselecting; dropped `.single()` entirely; `local_coop_demo` nameplate-
+      enable playtest addition (room3 `show_nameplates`/`faction_filter: All` +
+      `click_target_test`'s `nameplate: true` override) — `d00c5f7`. 2 new full-pipeline tests in
+      `local_coop_tests.rs` (split-camera agreement — proves the stashed distance matches the
+      LEFT camera's pick, not the right camera's, when only the left camera's viewport actually
+      shows the point; off-viewport → hidden regardless of raw distance) plus all 8 existing
+      `nameplate_tests.rs` distance/faction/override tests updated to inject
+      `NameplateCameraDistance` directly (isolating the visibility-logic unit tests from the
+      full-pipeline camera-selection tests); full `ironhold_core` test suite (16 binaries) +
+      `cargo check -p ironhold_cli` green; alignment-reviewer (ALIGNED), system-architect
+      (mergeable — logged a forward-looking `Option<Entity>`-generalization suggestion for a
+      future 4th `WorldLabel` consumer), debug-detective (no high-severity bugs — one MEDIUM
+      finding fixed with a `warn_once!` diagnostic, low-severity numeric/doc notes addressed),
+      wasm-perf-reviewer (OK, net-neutral-to-cheaper) all clean/addressed. WASM dev build clean,
+      no console errors. Playtest confirmed by Frank.
 - [ ] Phase 4: `WorldLabelRank` + `Visibility::Hidden` on `pending_stat_labels` and
       `WorldStatBarStyle::Ascii` spawn loops, gated on the scene being split-screen; identical
       treatment for `drain_dynamic_stat_ui_system`'s stat-label/Ascii-bar spawns; tests mirroring
@@ -284,10 +310,10 @@ Stage 6 left "Room N" labels on every portal).
       list as each phase ships (Phase 4 specifically: update in the same commit, per system-architect
       — list which `WorldLabel` consumers duplicate and which don't, to prevent the partial-coverage
       enumeration from drifting out of date) and `planning/claude_suggestions.md` ▸ Camera —
-      done for Phases 1-2; repeat for Phases 3-4 as they ship
-- [x] Tests (per phase, see above) + full suite green — Phases 1-2; repeat for Phases 3-4
+      done for Phases 1-3; repeat for Phase 4 as it ships
+- [x] Tests (per phase, see above) + full suite green — Phases 1-3; repeat for Phase 4
 - [x] WASM dev build + updated playtest checklist (per phase, using the `local_coop_demo` additions
-      above) per the standard ship workflow — Phases 1-2; repeat for Phases 3-4
+      above) per the standard ship workflow — Phases 1-3; repeat for Phase 4
 
 ## Open questions
 
@@ -298,8 +324,8 @@ Stage 6 left "Room N" labels on every portal).
   future project need visually-correct billboarding from every simultaneously active split camera?
 - Should the `local_coop_demo` playtest additions (particle effect, `ClickSelectable` prop,
   nameplate toggle, stat widget) stay in the project permanently after each phase ships, or be
-  removed once confirmed? **Resolved for Phases 1-2: kept in place** (documents the fix, consistent
-  with Stage 6 leaving "Room N" labels in place). Still open for Phases 3-4.
+  removed once confirmed? **Resolved for Phases 1-3: kept in place** (documents the fix, consistent
+  with Stage 6 leaving "Room N" labels in place). Still open for Phase 4.
 
 ## Acceptance criteria
 
@@ -309,13 +335,14 @@ Stage 6 left "Room N" labels on every portal).
 - ~~Given a 2-way fixed split screen, when the player clicks inside one viewport, then
   click-to-select evaluates against that viewport's own camera, not an arbitrary other active
   camera.~~ **Met — Phase 2, confirmed by playtest.**
-- Given a split-screen scene with 2+ `Camera3d` entities (any split state, merged or active), when
+- ~~Given a split-screen scene with 2+ `Camera3d` entities (any split state, merged or active), when
   `nameplate_visibility_system` runs, then distance-culling evaluates against the exact same camera
   that positions that nameplate's anchor (via the stored selection), not an independently-reselected
-  or no-op'd one.
-- Given nameplate anchors remain single-instance after this feature, when an entity's nameplate is
+  or no-op'd one.~~ **Met — Phase 3, confirmed by playtest + `test_nameplate_visibility_agrees_with_world_label_selected_camera_in_split_screen`.**
+- ~~Given nameplate anchors remain single-instance after this feature, when an entity's nameplate is
   simultaneously on-screen in 2+ active split viewports, then it renders in **at most one** of them
-  (accepted limitation, not a regression target).
+  (accepted limitation, not a regression target).~~ **Met — Phase 3 (unchanged, accepted limitation
+  confirmed still in effect).**
 - Given a stat label or Ascii world stat bar simultaneously visible in 2 active split viewports
   (scene-placed OR dynamically spawned via `Action::Spawn`), when the frame updates, then both
   viewports render their own correctly positioned copy (same contract as the shipped
@@ -324,5 +351,5 @@ Stage 6 left "Room N" labels on every portal).
   then exactly 1 entity is created per widget — no rank-duplication overhead, pixel-identical to
   today's behavior (regression + perf guard).
 - ~~Given any existing single-camera (non-split) scene, when any of the four systems run, then
-  behavior is unchanged from today (regression guard).~~ **Met for Phases 1-2** (regression tests
-  pass); still applies to Phases 3-4.
+  behavior is unchanged from today (regression guard).~~ **Met for Phases 1-3** (regression tests
+  pass); still applies to Phase 4.
