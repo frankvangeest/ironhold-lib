@@ -60,6 +60,27 @@
       ),
     ),
 
+    // Click-target playtest aid (Phase 2, split_screen_camera_followups.md) — one per viewport
+    // so each half's click resolves against its own camera, not the other player's.
+    (
+      id: "click_target_left",
+      prefab: "click_target_test",
+      transform: (
+        translation: (-4.0, 1.5, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "click_target_right",
+      prefab: "click_target_test",
+      transform: (
+        translation: (4.0, 1.5, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
     // Return trip reuses the "portal_to_room2" prefab (see prefabs.ron comment) — same event
     // name as room1's forward portal, same rules.ron entry, no new prefab needed.
     (
