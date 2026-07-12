@@ -60,6 +60,23 @@
       ),
     ),
 
+    // Stationary click-target sphere — playtest aid for the split-screen viewport-aware
+    // click-to-select fix (Phase 2 of planning/features/split_screen_camera_followups.md).
+    // Placed once per viewport in room3 so each half's click resolves against its own camera.
+    "click_target_test": (
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
+      components: (),
+      primitive: (
+        radius: 0.5,
+        color: (0.95, 0.85, 0.10),
+        roughness: 0.3,
+        metallic: 0.1,
+      ),
+      click_selectable: true,
+    ),
+
     // Room 5's ground — rose/magenta tone, matching the pink portal_to_room5 accent. Distinct
     // from room3's amber and room4's teal, continuing each room's one-color-identity convention.
     "ground_room5": (

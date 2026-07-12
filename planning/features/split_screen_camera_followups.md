@@ -1,6 +1,6 @@
 # Feature: Split-Screen — Remaining Single-Camera Assumption Sites
 
-_Status: In Progress (Phase 1 Done, Phases 2-4 Queued)_
+_Status: In Progress (Phases 1-2 Done, Phases 3-4 Queued)_
 _Planned at: `4848727` (2026-07-11)_
 _Plan review (2026-07-11): system-architect + ux-gamedesigner-reviewer, verdict Ready. Findings
 below are incorporated; Frank resolved the two open decisions (Phase 4 perf gating, Phase 4
@@ -16,7 +16,7 @@ in.
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | 1 | `particle_renderer.rs` billboard orientation | Done | `aa81cbb` (2026-07-12) |
-| 2 | `targeting.rs` viewport-aware click-to-select | Queued | — |
+| 2 | `targeting.rs` viewport-aware click-to-select | Done | `1c3b910` (2026-07-12) |
 | 3 | `nameplate_visibility_system` distance-culling | Queued | — |
 | 4 | `WorldLabelRank` extended to stat labels / world stat bars | Queued | — |
 
@@ -30,7 +30,8 @@ room-name / entity labels) via `world_label_screen_pos_system`:
 
 1. ~~`particle_renderer.rs:303` (`rebuild_pool_meshes_system`) — billboard orientation basis
    vectors.~~ **Fixed in Phase 1 (`aa81cbb`).**
-2. `targeting.rs:122` (`click_select_system`) — click-to-select nearest-entity search.
+2. ~~`targeting.rs:122` (`click_select_system`) — click-to-select nearest-entity search.~~
+   **Fixed in Phase 2 (`1c3b910`).**
 3. `nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.
 4. `WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
    and `label:` (`EntityLabelDef`) spawn loops. Stat labels, world stat bars (Ascii + Pixel),
@@ -44,11 +45,11 @@ simultaneously — often even when only one is currently `is_active` (a merged d
 keeps the inactive sibling camera entity around). Each of the four sites above either silently
 no-ops, falls back to an arbitrary/incorrect default, or picks a non-viewport-aware camera whenever
 that's true. None of them currently break anything visibly in `local_coop_demo` today only because
-nameplates aren't enabled there and click-targeting/particles/stat-widgets aren't exercised across
-simultaneous split viewports yet — but any future project combining split-screen with these systems
-will hit the same class of bug the room-name labels did. See "Playtest setup" below: today's
-`local_coop_demo` project has *nothing* authored that exercises any of these four systems, so each
-phase needs a demo-project addition before it can be play-tested at all.
+nameplates aren't enabled there and stat-widgets aren't exercised across simultaneous split
+viewports yet — but any future project combining split-screen with these systems will hit the same
+class of bug the room-name labels did. See "Playtest setup" below: today's `local_coop_demo`
+project has *nothing* authored that exercises any of these four systems, so each phase needs a
+demo-project addition before it can be play-tested at all.
 
 ## Research findings
 
@@ -92,8 +93,8 @@ phase needs a demo-project addition before it can be play-tested at all.
   consume it instead of re-typing it, rather than fully generalizing the selection helper (still
   premature per the original fix's own deferral — the three call shapes genuinely differ).
   **Landed as `capabilities::camera::camera_priority_key(entity, slot)` in Phase 1** —
-  `world_label_screen_pos_system` was refactored (behavior-preserving) to call it too, so Phases 2
-  and 3 have it available already.
+  `world_label_screen_pos_system` was refactored (behavior-preserving) to call it too, and Phase 2
+  consumed it directly (no re-typing). Phase 3 has it available already too.
 - **`WorldLabelRank`'s duplication pattern is directly reusable** for Phase 4: spawn
   `MAX_SPLIT_PLAYERS` ranked sibling entities instead of 1, `rank > 0` starts `Visibility::Hidden`,
   `world_label_screen_pos_system` already resolves `.nth(rank)` generically — no changes needed to
@@ -124,6 +125,17 @@ phase needs a demo-project addition before it can be play-tested at all.
     stat labels + Ascii world stat bars only (flat `Text2d`, same shape as the already-fixed labels)
     and treating nameplate anchors + Pixel bars + damage popups as a follow-up keeps this phase's
     diff reviewable.
+- **(Phase 2 playtest finding) Split-screen's single shared mouse limits what click-to-select can
+  actually deliver, but doesn't invalidate the fix.** `click_select_system`'s bug was that a click
+  resolved against an *arbitrary* camera regardless of cursor position — not that two players
+  couldn't click simultaneously (impossible with one physical mouse regardless of this fix).
+  Confirmed by playtest (2026-07-12): clicking either viewport's test sphere correctly resolves
+  against that viewport's own camera, one click at a time — the fix is real and testable
+  independent of any multi-player-simultaneous concern. A separate, deeper gap surfaced during that
+  same playtest: `CurrentTarget` is one shared global resource and `tab_targeting_system` hardcodes
+  `controllers.iter().next()` (always the first `CharacterController`, never player 2's), so
+  genuine per-player-independent targeting doesn't exist regardless of this fix. Logged as its own
+  backlog item ("Per-player targeting for split-screen"), not folded into this feature.
 
 ## Approach
 
@@ -139,12 +151,17 @@ angles, particles still only billboard correctly toward the one picked camera �
 per-viewport-correct billboarding would require duplicating particle meshes per viewport, out of
 scope (see Not in scope).
 
-**Phase 2 — `targeting.rs` viewport-aware click-to-select:** before the existing nearest-entity
-search, resolve which active camera's `logical_viewport_rect()` contains the cursor position (using
-the Phase 1 comparator to break ties deterministically if the cursor is somehow in 2 viewports'
-rects, which shouldn't normally happen for non-overlapping split layouts but is a defined
-tiebreak regardless), and use only that camera for the `world_to_viewport` distance math —
-replacing `cameras.iter().find(|(c, _)| c.is_active)`'s arbitrary first-match.
+**Phase 2 — `targeting.rs` viewport-aware click-to-select. DONE (`1c3b910`).** Changed
+`click_select_system`'s `cameras` query to `Query<(Entity, &Camera, &GlobalTransform,
+Option<&SplitViewportSlot>), With<Camera3d>>`; before the nearest-entity search, filters to
+`is_active` cameras whose `logical_viewport_rect()` contains the cursor position, then picks via
+`.min_by_key(camera_priority_key)` (reusing Phase 1's comparator directly, no re-typing) to break
+ties deterministically (cursor exactly on a shared viewport boundary) — replacing
+`cameras.iter().find(|(c, _)| c.is_active)`'s arbitrary first-match. **Known, minor behavior
+change** (documented in `crates/ironhold_core/src/CLAUDE.md`): a click in a screen region no active
+camera's viewport covers (e.g. a dead grid quadrant) now does nothing, where the old arbitrary pick
+used to fall through to "clicked empty space" and clear `CurrentTarget`; invisible in ordinary
+single-camera scenes.
 
 **Phase 3 — `nameplate_visibility_system` (store-and-read):** `world_label_screen_pos_system`
 already selects one active camera per `WorldLabel` each frame (containment-tested, deterministic
@@ -188,6 +205,11 @@ undocumented.
   the sort comparator (extracted), not the full selection shape, since each site's input (no point,
   world point, cursor point) genuinely differs. Worth revisiting only if a fourth consumer needs
   the exact same shape as one of these three.
+- **Per-player targeting (per-player `CurrentTarget`, `tab_targeting_system` iterating all players)**
+  — surfaced during Phase 2's playtest, logged as its own backlog item ("Per-player targeting for
+  split-screen"), deliberately not folded into this feature. Phase 2 fixes *which camera* a click
+  resolves against; it does not (and was never meant to) give two players independent simultaneous
+  target state.
 
 ## Playtest setup — `local_coop_demo` changes needed
 
@@ -208,9 +230,12 @@ addition before it can be dev-build play-tested, in addition to the standard shi
   to be impossible to use for this playtest in split-screen at all — see the new backlog item
   "Per-player keyboard camera pivot for split-screen," logged separately, not part of this feature.)
   Left in place per the "documents the fix" precedent below.
-- **Phase 2**: add a `ClickSelectable`-tagged prop or NPC to a room with a **fixed** (not dynamic)
-  2-way split, so a click in each viewport can be tested independently against that viewport's own
-  camera.
+- **Phase 2 — DONE.** New `"click_target_test"` prefab (stationary yellow sphere,
+  `click_selectable: true`) added to `assets/projects/local_coop_demo/prefabs/prefabs.ron`, placed
+  once per viewport in room3 (`click_target_left`/`click_target_right`, one near each spawn point).
+  **Playtest confirmed by Frank (2026-07-12): clicking either sphere correctly triggers the
+  `target.clicked:click_target_test` console message; clicking the ground clears the target; no
+  console errors.** Left in place per the same precedent as Phase 1.
 - **Phase 3**: enable `show_nameplates: true` (or a per-prefab override) on at least one entity in a
   split-screen room, to exercise distance-culling across 2+ active cameras.
 - **Phase 4**: add a `stat_label` and/or Ascii `world_stat_bar` to a prefab placed where 2 fixed
@@ -234,10 +259,16 @@ Stage 6 left "Room N" labels on every portal).
       (16 binaries) + `cargo check -p ironhold_cli` green; alignment-reviewer (ALIGNED),
       system-architect (ready to merge), debug-detective (no bugs found), wasm-perf-reviewer (OK,
       negligible cost) all clean. WASM dev build clean. Playtest confirmed by Frank.
-- [ ] Phase 2: `click_select_system` — viewport-aware active-camera selection by cursor position
-      (reuse Phase 1's comparator); test that a click in each viewport of a 2-way fixed split
-      resolves against that viewport's own camera; `local_coop_demo` `ClickSelectable` playtest
-      addition
+- [x] Phase 2: `click_select_system` — viewport-aware active-camera selection by cursor position
+      (reused Phase 1's comparator directly); `local_coop_demo` `click_target_test` playtest
+      addition — `1c3b910`. 3 new tests in `local_coop_tests.rs` (left-viewport click resolves
+      correctly even when the right camera spawns first — proving it's not iteration-order
+      dependent, right-viewport click resolves correctly, single-camera regression), all passing;
+      full `ironhold_core` test suite (16 binaries, including a `ron_lint` fix for a `Some(...)`
+      style violation left over from Phase 1's own playtest RON) + `cargo check -p ironhold_cli`
+      green; alignment-reviewer (ALIGNED), system-architect (ready to merge), debug-detective
+      (correct and safe, no blocking bugs), wasm-perf-reviewer (OK, negligible cost) all clean.
+      WASM dev build clean, no console errors. Playtest confirmed by Frank.
 - [ ] Phase 3: `world_label_screen_pos_system` stashes its selected camera/distance for anchor
       `WorldLabel`s; `nameplate_visibility_system` reads it instead of reselecting; drop
       `.single()`; tests for merged vs. split states confirming agreement between the two systems;
@@ -253,10 +284,10 @@ Stage 6 left "Room N" labels on every portal).
       list as each phase ships (Phase 4 specifically: update in the same commit, per system-architect
       — list which `WorldLabel` consumers duplicate and which don't, to prevent the partial-coverage
       enumeration from drifting out of date) and `planning/claude_suggestions.md` ▸ Camera —
-      done for Phase 1; repeat for Phases 2-4 as they ship
-- [x] Tests (per phase, see above) + full suite green — Phase 1 only; repeat for Phases 2-4
+      done for Phases 1-2; repeat for Phases 3-4 as they ship
+- [x] Tests (per phase, see above) + full suite green — Phases 1-2; repeat for Phases 3-4
 - [x] WASM dev build + updated playtest checklist (per phase, using the `local_coop_demo` additions
-      above) per the standard ship workflow — Phase 1 only; repeat for Phases 2-4
+      above) per the standard ship workflow — Phases 1-2; repeat for Phases 3-4
 
 ## Open questions
 
@@ -267,16 +298,17 @@ Stage 6 left "Room N" labels on every portal).
   future project need visually-correct billboarding from every simultaneously active split camera?
 - Should the `local_coop_demo` playtest additions (particle effect, `ClickSelectable` prop,
   nameplate toggle, stat widget) stay in the project permanently after each phase ships, or be
-  removed once confirmed? **Resolved for Phase 1: kept in place** (documents the fix, consistent
-  with Stage 6 leaving "Room N" labels in place). Still open for Phases 2-4.
+  removed once confirmed? **Resolved for Phases 1-2: kept in place** (documents the fix, consistent
+  with Stage 6 leaving "Room N" labels in place). Still open for Phases 3-4.
 
 ## Acceptance criteria
 
 - ~~Given any split-screen project, when particles render, then billboard orientation faces an
   actual active camera's basis vectors, never the unconditional world-axis fallback.~~ **Met —
   Phase 1, confirmed by playtest.**
-- Given a 2-way fixed split screen, when the player clicks inside one viewport, then click-to-select
-  evaluates against that viewport's own camera, not an arbitrary other active camera.
+- ~~Given a 2-way fixed split screen, when the player clicks inside one viewport, then
+  click-to-select evaluates against that viewport's own camera, not an arbitrary other active
+  camera.~~ **Met — Phase 2, confirmed by playtest.**
 - Given a split-screen scene with 2+ `Camera3d` entities (any split state, merged or active), when
   `nameplate_visibility_system` runs, then distance-culling evaluates against the exact same camera
   that positions that nameplate's anchor (via the stored selection), not an independently-reselected
@@ -292,5 +324,5 @@ Stage 6 left "Room N" labels on every portal).
   then exactly 1 entity is created per widget — no rank-duplication overhead, pixel-identical to
   today's behavior (regression + perf guard).
 - ~~Given any existing single-camera (non-split) scene, when any of the four systems run, then
-  behavior is unchanged from today (regression guard).~~ **Met for Phase 1** (regression tests
-  pass); still applies to Phases 2-4.
+  behavior is unchanged from today (regression guard).~~ **Met for Phases 1-2** (regression tests
+  pass); still applies to Phases 3-4.
