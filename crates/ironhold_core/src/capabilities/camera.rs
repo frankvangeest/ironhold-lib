@@ -260,8 +260,8 @@ pub struct SplitViewportSlot(pub u32);
 /// ties. Ensures a selection among 2+ simultaneously active `Camera3d` entities is stable across
 /// frames instead of depending on query iteration order. Shared by every system that must pick
 /// one active camera among possibly several: `world_label_screen_pos_system`,
-/// `rebuild_pool_meshes_system`'s billboard basis, and (once fixed) `nameplate_visibility_system`
-/// and `click_select_system`.
+/// `rebuild_pool_meshes_system`'s billboard basis, `click_select_system`'s viewport-aware
+/// click-to-select, and (once fixed) `nameplate_visibility_system`.
 pub fn camera_priority_key(entity: Entity, slot: Option<&SplitViewportSlot>) -> (u32, Entity) {
     (slot.map_or(u32::MAX, |s| s.0), entity)
 }

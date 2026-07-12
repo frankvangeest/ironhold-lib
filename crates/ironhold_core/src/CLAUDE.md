@@ -434,14 +434,23 @@ simultaneously active split cameras at different angles, particles still only bi
 toward the one picked camera — true per-viewport-correct billboarding would need duplicate
 particle meshes per viewport, out of scope for this fix.
 
-**Still affected by split-screen having 2 real `Camera3d` entities per scene** (none affect
-`local_coop_demo`, which uses none of these features, but matter for any future project combining
-split-screen with them): `nameplate.rs`'s distance-culling and `targeting.rs`'s click-to-select
-still assume one `Camera3d` exists (Phases 2-3 of the same feature plan). Neither panics (graceful
-`.single()`-as-`Result` or `.iter().find(...)` patterns), but they silently no-op or arbitrarily
-pick one of the two cameras rather than being viewport-aware. See
-`planning/features/split_screen_camera_followups.md` for the fix plan and
-`planning/claude_suggestions.md` ▸ Camera for the original line references.
+**`targeting.rs`'s click-to-select is now viewport-aware** (fixed — Phase 2 of
+`planning/features/split_screen_camera_followups.md`). `click_select_system` used to pick the
+first active `Camera3d` via `.find(|c| c.is_active)`, ignoring where the cursor actually was — a
+click in player 2's viewport could silently be evaluated against player 1's camera. It now filters
+to active cameras whose `logical_viewport_rect()` contains the cursor position before running the
+nearest-entity search, using the same shared `camera_priority_key` comparator as Phase 1 to break
+ties (cursor exactly on a shared viewport boundary) deterministically. **Known, minor behavior
+change**: a click in a screen region no active camera's viewport covers (e.g. a dead grid quadrant
+per Stage 6's 3-player 2×2 case) now does nothing, whereas the old arbitrary-camera pick used to
+fall through to "clicked empty space" and clear `CurrentTarget`. Invisible in ordinary
+single-camera scenes (a full-window viewport covers every in-window cursor position).
+
+**Still affected by split-screen having 2 real `Camera3d` entities per scene**: `nameplate.rs`'s
+distance-culling still assumes one `Camera3d` exists (Phase 3 of the same feature plan, not
+touched by `local_coop_demo` since it doesn't enable nameplates). No panic (graceful
+`.single()`-as-`Result`), but it silently no-ops rather than being viewport-aware. See
+`planning/features/split_screen_camera_followups.md` for the fix plan.
 
 **Split-screen player HUD labels** (`capabilities/camera.rs`) — the first real consumer of
 `PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to
@@ -534,9 +543,9 @@ PreloadPrefab("enemy_orc_melee"),
 
 ```ron
 // logic/state_machine.ron — playing state entry_actions
-SpawnEffect(key: "hit_spark",     position: Some((0.0, -100.0, 0.0))),  // warms additive pipeline
-SpawnEffect(key: "campfire_smoke",position: Some((0.0, -100.0, 0.0))),  // warms blend pipeline
-SpawnEffect(key: "campfire_body", position: Some((0.0, -100.0, 0.0))),  // warms PoolFlameMaterial pipeline
+SpawnEffect(key: "hit_spark",     position: (0.0, -100.0, 0.0)),  // warms additive pipeline
+SpawnEffect(key: "campfire_smoke",position: (0.0, -100.0, 0.0)),  // warms blend pipeline
+SpawnEffect(key: "campfire_body", position: (0.0, -100.0, 0.0)),  // warms PoolFlameMaterial pipeline
 ```
 
 Place these alongside `PreloadScene` / `PreloadPrefab` calls so they fire during the natural loading pause, before the player can interact.
