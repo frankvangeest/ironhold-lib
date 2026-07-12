@@ -6,7 +6,9 @@ use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
 use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent};
-use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank};
+use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
+use ironhold_core::capabilities::targeting::ClickSelectable;
+use ironhold_core::capabilities::action_bar::CurrentTarget;
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
@@ -1777,4 +1779,132 @@ fn test_entity_label_ranks_spawn_for_tracked_entity_labels_not_just_world_labels
     let mut sorted_ranks: Vec<u8> = ranks.iter().map(|r| r.unwrap_or(0)).collect();
     sorted_ranks.sort();
     assert_eq!(sorted_ranks, vec![0, 1, 2, 3], "expected exactly one of each rank 0-3");
+}
+
+// ── Split-screen viewport-aware click-to-select (Phase 2, split_screen_camera_followups.md) ───
+
+fn set_cursor_position(app: &mut App, x: f64, y: f64) {
+    let mut win_q = app.world_mut().query::<&mut Window>();
+    let mut window = win_q.single_mut(app.world_mut()).unwrap();
+    window.set_physical_cursor_position(Some((x, y).into()));
+}
+
+#[test]
+fn test_click_select_resolves_against_the_viewport_the_cursor_is_actually_over() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    // Deliberately spawn the RIGHT camera (slot 1) first and the LEFT camera (slot 0) second, so
+    // a naive "first active camera in query iteration order" pick (the old bug's
+    // `.find(|c| c.is_active)`) would choose the wrong one regardless of where the cursor
+    // actually is — proving the fix picks by viewport-contains-cursor, not iteration order.
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    // One selectable sits exactly at the left camera's look-at target (projects to the left
+    // viewport's centre, screen (320, 360)); another at the right camera's look-at target
+    // (projects to the right viewport's centre, screen (960, 360)).
+    app.world_mut().spawn((
+        SpawnId("left_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
+        ClickSelectable,
+    ));
+    app.world_mut().spawn((
+        SpawnId("right_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::new(3.0, 0.0, 0.0)),
+        ClickSelectable,
+    ));
+
+    // Click at the LEFT viewport's centre.
+    set_cursor_position(&mut app, 320.0, 360.0);
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<CurrentTarget>().0.as_deref(), Some("left_entity"),
+        "a click in the left viewport must select the entity actually near the left camera's \
+         view, not silently evaluate against the right camera (which was spawned first)"
+    );
+}
+
+#[test]
+fn test_click_select_resolves_against_the_other_viewport_when_cursor_moves_there() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+
+    app.world_mut().spawn((
+        SpawnId("left_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
+        ClickSelectable,
+    ));
+    app.world_mut().spawn((
+        SpawnId("right_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::new(3.0, 0.0, 0.0)),
+        ClickSelectable,
+    ));
+
+    // Click at the RIGHT viewport's centre this time.
+    set_cursor_position(&mut app, 960.0, 360.0);
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<CurrentTarget>().0.as_deref(), Some("right_entity"),
+        "a click in the right viewport must select the entity near the right camera's view"
+    );
+}
+
+#[test]
+fn test_click_select_single_camera_regression_unaffected_by_viewport_fix() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    app.world_mut().spawn((
+        SpawnId("only_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::ZERO),
+        ClickSelectable,
+    ));
+
+    set_cursor_position(&mut app, 640.0, 360.0);
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<CurrentTarget>().0.as_deref(), Some("only_entity"),
+        "an ordinary single-camera (non-split) scene must still select correctly after the \
+         viewport-aware fix — regression guard"
+    );
 }

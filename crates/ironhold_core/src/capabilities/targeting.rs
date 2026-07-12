@@ -8,6 +8,7 @@ use crate::capabilities::player::CharacterController;
 use crate::schema::player::InputMap;
 use crate::GameVariables;
 use crate::capabilities::inventory::LoadedInventoryUi;
+use crate::capabilities::camera::{camera_priority_key, SplitViewportSlot};
 
 /// Pixel radius around the cursor within which a left-click selects an entity.
 const SELECT_PIXEL_RADIUS: f32 = 70.0;
@@ -96,10 +97,19 @@ fn apply_target(
 
 /// Left-click selects the `ClickSelectable` entity whose screen projection is nearest the
 /// cursor (within `SELECT_PIXEL_RADIUS`). Clicking with nothing nearby clears the target.
+///
+/// Split-screen scenes have 2+ active `Camera3d` entities at once, each owning its own
+/// on-screen viewport rect (`SplitViewportSlot`). The cursor is only ever meaningfully "in" the
+/// viewport it's actually positioned over, so this picks the active camera whose own
+/// `logical_viewport_rect()` contains the cursor, instead of an arbitrary first-active match —
+/// otherwise a click in player 2's viewport could be evaluated against player 1's camera,
+/// silently selecting the wrong entity. Ties (cursor inside 2+ viewport rects at once, not
+/// expected for non-overlapping split layouts) break deterministically via `camera_priority_key`,
+/// the same ordering `world_label_screen_pos_system` and `rebuild_pool_meshes_system` use.
 fn click_select_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    cameras: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
     selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>, Option<&SelectAimHeight>), With<ClickSelectable>>,
     visibility_q: Query<&Visibility>,
     mut current_target: ResMut<CurrentTarget>,
@@ -119,7 +129,12 @@ fn click_select_system(
     }
     let Ok(window) = windows.single() else { return };
     let Some(cursor) = window.cursor_position() else { return };
-    let Some((camera, cam_tf)) = cameras.iter().find(|(c, _)| c.is_active) else { return };
+    let Some((_, camera, cam_tf, _)) = cameras
+        .iter()
+        .filter(|(_, camera, ..)| camera.is_active)
+        .filter(|(_, camera, ..)| camera.logical_viewport_rect().is_some_and(|r| r.contains(cursor)))
+        .min_by_key(|(entity, _, _, slot)| camera_priority_key(*entity, *slot))
+    else { return };
 
     // Find the nearest visible selectable to the cursor in screen space.
     let mut best: Option<(f32, String, Option<String>)> = None;
