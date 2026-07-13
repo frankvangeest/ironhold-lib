@@ -33,6 +33,27 @@ scene-load-time resource (mirrors ActiveTonemapping), NOT threading a resolved t
 `DynamicStatUiEntry` as I'd earlier guessed — the resource lets the dynamic path call the *same*
 helper rather than duplicating precedence logic.
 
+**SPLIT-SCREEN RANK DUPLICATION (Phase 4 of split_screen_camera_followups, reviewed 2026-07-12,
+ALIGNED):** `stat_label` + Ascii `world_stat_bar` now spawn `MAX_SPLIT_PLAYERS` (4) `WorldLabelRank`
+sibling entities in split-screen scenes (rank 0 visible primary + ranks 1..3 `Visibility::Hidden`
+until `world_label_screen_pos_system` resolves a camera), matching the scene-`world_labels:` pattern.
+Non-split scenes still spawn exactly 1 (no rank component) — zero behavior change. Gate:
+- Scene-load path (both spawn loops): `let is_split_screen = player_configs.first().is_some_and(|p|
+  p.camera.split.is_some())` captured at scene_loader.rs:693 BEFORE player_configs is moved into
+  PendingPlayerConfig (terrain-delayed path). `.split.is_some()` alone is correct here — at scene
+  load `split` is always Some for fixed/dynamic/Grid split scenes.
+- Dynamic `Action::Spawn` path (`drain_dynamic_stat_ui_system`): ORs `ActiveSplitScreen.0.is_some()
+  || DynamicSplitConfig.0.is_some()` — MUST check both, because a dynamic split reports
+  `ActiveSplitScreen(None)` while merged even though 2 real cameras are alive; DynamicSplitConfig
+  stays Some for the scene lifetime.
+Safe because `stat_label_update_system`/`world_stat_bar_update_system` rewrite EVERY instance's
+Text2d each frame with no Visibility gate (verified: neither query filters on Visibility) — unlike
+the static world_labels text, so hidden ranks stay current. No ActionQueue, no schema, gate derived
+from existing `camera.split`. `Pixel`-style bars + nameplate anchors deliberately NOT duplicated
+(child-hierarchy dup deferred). STALE-DOC WARNING at review time: mod.rs:331-335 (WorldLabelRank
+doc) and lib.rs:505-513 (world_label_screen_pos_system doc) and src/CLAUDE.md:418-422 all still list
+stat labels as single-instance/rank-0-only consumers — factually wrong after Phase 4.
+
 NOTE — there is NO per-widget `depth_scale` override on `StatLabelDef`/`WorldStatBarDef` (both are
 `deny_unknown_fields`); `per_label` is hardcoded `None` at every stat-widget call site. Only
 `WorldLabelDef`/`EntityLabelDef` carry `depth_scale: Option<bool>`. Stat widgets purely inherit the

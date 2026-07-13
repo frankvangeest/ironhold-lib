@@ -92,3 +92,18 @@ load (scene_loader.rs ~1285), so a scene with show_nameplates:false correctly re
 
 **Faction filter is a documented v1 stub:** HostileOnly == `has NpcAgent`. Replace when Group
 system ships. Acceptable as-is.
+
+**Split-screen distance-culling fix (Phase 3 of split_screen_camera_followups, 2026-07-12):**
+`nameplate_visibility_system` no longer queries cameras at all. A new INTERNAL-ONLY component
+`NameplateCameraDistance(pub Option<f32>)` (nameplate.rs) is attached to each anchor in
+`nameplate_setup_system` (beside NameplateAnchorWidget). `world_label_screen_pos_system` (lib.rs
+~522) — which already selects the one authoritative active camera per WorldLabel — now stashes
+`(world_pos - selected_cam.translation()).length()` onto that component (Option<&mut> in its query,
+graceful when absent), clearing it to `None` on every early-return (tracked entity gone/hidden, no
+qualifying camera). visibility_system reads it via `dist_q.get(anchor.0)` and treats `None` as
+out-of-range (matches prior `.single()` no-op contract). This is a "store-and-read" pattern that
+guarantees the two systems agree on which camera is authoritative — the `.after(
+world_label_screen_pos_system)` ordering (lib.rs ~308) is now load-bearing for correctness, not
+just the two-writer visibility contract. NameplateCameraDistance is NOT designer-facing (correct —
+same class as PlayerOwnership; culling threshold stays the designer-authored
+NameplateOptionsDef.max_distance). Pure runtime bugfix, no schema/RON/CLI surface change.
