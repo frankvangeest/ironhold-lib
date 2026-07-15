@@ -18,4 +18,5 @@
 - [IconButton bind wiring](project_iconbutton_bind_wiring.md) — IconButton bind var is designer-wired via SetVariable, NOT auto-populated; scene RON lacks wiring comment; canonical 3rd_person_game_demo hud_audio_toggle
 - [Local co-op system](project_local_coop_system.md) — Stage 1 single-machine co-op; first-scene-entity-wins party camera; player_index/gamepad_index/max_view_box; canonical local_coop_demo; distinct from unshipped LAN networking
 - [Split-screen doc gap](project_split_screen_doc_gap.md) — split-screen internal fixes update only CLAUDE.md, not designer-facing docs/20_data_formats.md; v2 Ascii-vs-Pixel asymmetry needs a note
+- [Per-player targeting gating](project_per_player_targeting_gating.md) — ring-tint + target-var-blank trigger on CharacterController count>=2 (party mode too), but target_hud only on split viewports; docs conflate the two; Tab default breaks in WASM
 - [depth_scale field scope](project_depth_scale_field_scope.md) — depth_scale exists ONLY on scene labels (EntityLabelDef/WorldLabelDef); StatLabelDef/WorldStatBarDef have NO such field despite docs+plan claiming it; deny_unknown_fields makes it a parse error
