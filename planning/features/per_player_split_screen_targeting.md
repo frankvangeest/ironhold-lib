@@ -1,18 +1,25 @@
 # Feature: Per-Player Independent Targeting for Split-Screen
 
-_Status: Ready_
+_Status: In Progress (Phase 1 Done, Phase 2 Queued)_
 _Planned at: `34a957f` (2026-07-13)_
 _Plan review (2026-07-13): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work. Both reviewers independently flagged the same core contradiction (see Approach) and
 converged on the same resolution; their findings are incorporated below. Frank resolved the
 remaining 3 open decisions (HUD format block, ring color/dedup, legacy label suppression) the
 same day — see Approach and Open questions._
+_Phase 1 code review (2026-07-13): alignment-reviewer (ALIGNED), system-architect (found and fixed
+a real bug — `Action::SetTarget`/`ClearTarget` weren't mirroring into the primary player's
+`PlayerTarget`), debug-detective (found and fixed a duplicate-`player_index: 0` gap via a runtime
+warning; 3 low-severity findings logged to `claude_suggestions.md`), ux-gamedesigner-reviewer
+(found and fixed a real WASM playtest blocker — `"Tab"` is browser-intercepted, plus 3 doc/
+playtest-aid gaps), wasm-perf-reviewer (OK, 1 negligible nit logged). Playtest confirmed by Frank,
+no console errors._
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Queued | — |
+| 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Done | `e677921` (2026-07-13) |
 | 2 | Per-player action-bar ability execution against each player's own target | Queued | — |
 
 Phase 2 is scoped separately (see "Not in scope") because the action bar has its own,
@@ -234,29 +241,43 @@ playtest checklist.
 
 ## Tasks
 
-- [ ] Phase 1: `PlayerTarget` component added alongside `CurrentTarget` (not replacing it) at the
+- [x] Phase 1: `PlayerTarget` component added alongside `CurrentTarget` (not replacing it) at the
       four player-construction sites; `tab_targeting_system`/`click_select_system`/
       `target_auto_clear_system` made per-player with primary-player mirroring into
       `CurrentTarget`; per-player target indicator (tinted via `PLAYER_LABEL_COLORS` when 2+
       players present) + new `target_hud:`-driven per-viewport HUD readout; existing global
-      `target_display`/`target_name`/`target_id` `GameVariables` blanked in split-screen scenes;
-      `local_coop_demo` playtest addition (including device-appropriate `target_next` bindings
-      per player)
-- [ ] Tests: per-player tab-cycle independence, click resolving to the clicking player only,
-      single-player regression (behavior unchanged from today, `PlayerTarget` and `CurrentTarget`
-      always in lockstep), target auto-clear per player, non-primary player's target changes do
-      NOT affect `{target}`-driven actions or emit global `target.changed`/`target.cleared` events
-- [ ] Docs (unconditional): add a per-player-targeting subsection to `docs/20_data_formats.md`
-      (beside the existing "Split-screen player HUD labels" section — the precedent for engine-
-      automatic split-screen HUD spawning), documenting the new `target_hud:` block's fields/RON
-      example, the per-player ring tinting, the legacy `target_display`/etc. `GameVariables`
-      blanking in split-screen, the single-shared-mouse click limitation, and the
-      `{target}`-still-resolves-to-primary-player carve-out — so none of this reads as a bug to a
-      designer testing it. Also update `crates/ironhold_core/src/CLAUDE.md`'s `{target}`
-      substitution and target indicator sections.
-- [ ] Log the per-player-`{target}`/Phase-2-action-bar/Beta-0.6-`PlayerOwnership` convergence
-      insight to `planning/claude_suggestions.md` (system-architect finding, see Not in scope)
-- [ ] WASM dev build + playtest checklist
+      `target_display`/`target_name`/`target_id` `GameVariables` blanked whenever 2+ players
+      present; `local_coop_demo` playtest addition (distinct `target_next` keys per player —
+      `KeyT`/`KeyM`, not the browser-intercepted `"Tab"` default) — `e677921`. 2 code-review-driven
+      fixes: `Action::SetTarget`/`ClearTarget` now mirror into the primary player's `PlayerTarget`
+      (previously only wrote `CurrentTarget`, silently breaking the ring for that action path); a
+      runtime `warn!` fires when 2+ players share `player_index: 0` (both would be treated as
+      primary, causing `CurrentTarget` stomping). All 5 reviews clean/addressed; full
+      `ironhold_core` test suite (16 binaries) + `cargo check -p ironhold_cli` green. WASM dev
+      build clean, no console errors. Playtest confirmed by Frank.
+- [x] Tests: per-player tab-cycle independence
+      (`test_tab_targeting_each_player_cycles_independently`), click resolving to the clicking
+      player only (`test_click_select_only_changes_the_clicking_players_target`), single-player
+      regression (`test_legacy_target_vars_populate_when_single_player`), target auto-clear per
+      player (`test_target_auto_clear_is_per_player`), non-primary player's target changes do NOT
+      mirror into `CurrentTarget`/emit global events
+      (`test_only_primary_player_target_mirrors_into_current_target_and_global_events`), per-player
+      ring tinting (`test_target_indicator_tints_rings_per_player_when_multiplayer`), per-viewport
+      HUD readout (`test_target_hud_shows_each_players_own_target_independently`), and the
+      `Action::SetTarget`/`ClearTarget` regression that caught the primary-mirroring bug
+      (`test_set_target_and_clear_target_actions_mirror_into_primary_player`)
+- [x] Docs: added a "Per-player split-screen targeting" subsection to `docs/20_data_formats.md`
+      (beside "Split-screen player HUD labels"), covering the `target_hud:` block's fields/RON
+      example, per-player ring tinting, legacy `GameVariables` blanking (including the party-mode
+      gap), the single-shared-mouse limitation, and the `{target}`/`target.clicked` primary-player
+      carve-out. Updated `crates/ironhold_core/src/CLAUDE.md`'s `{target}` substitution and target
+      indicator sections.
+- [x] Logged the per-player-`{target}`/Phase-2-action-bar/Beta-0.6-`PlayerOwnership` convergence
+      insight to `planning/claude_suggestions.md` (system-architect finding, see Not in scope),
+      plus 3 debug-detective findings (divergent player-count query shapes, no system ordering
+      vs. the camera chain, the duplicate-`player_index` footgun) and 1 wasm-perf-reviewer nit
+      (`target_hud_update_system`'s uncached `format!`)
+- [x] WASM dev build + playtest checklist — clean, playtest confirmed by Frank, no console errors
 
 ## Open questions
 
@@ -289,25 +310,33 @@ All resolved — plan reaches Ready.
 
 ## Acceptance criteria
 
-- Given a split-screen scene with 2 players and 2+ `Targetable` entities, when player 1 presses
-  their `target_next` key, then only player 1's target changes — player 2's target is unaffected.
-- Given the same scene, when player 2 clicks a `ClickSelectable` entity in their own viewport, then
-  only player 2's target changes.
-- Given a single-player (non-split) scene, when the player Tab-cycles or clicks a target, then
+- ~~Given a split-screen scene with 2 players and 2+ `Targetable` entities, when player 1 presses
+  their `target_next` key, then only player 1's target changes — player 2's target is unaffected.~~
+  **Met — confirmed by `test_tab_targeting_each_player_cycles_independently` and Frank's playtest.**
+- ~~Given the same scene, when player 2 clicks a `ClickSelectable` entity in their own viewport,
+  then only player 2's target changes.~~ **Met —
+  `test_click_select_only_changes_the_clicking_players_target`, confirmed by playtest.**
+- ~~Given a single-player (non-split) scene, when the player Tab-cycles or clicks a target, then
   behavior is unchanged from today (regression guard) — `PlayerTarget` and `CurrentTarget` stay in
-  lockstep.
-- Given 2 players each with a different current target, when either target becomes hidden/despawned,
-  then only that player's target auto-clears — the other player's target is unaffected.
-- Given a non-primary player selects a target (Tab or click), when a `rules.ron`/behavior action
+  lockstep.~~ **Met — `test_legacy_target_vars_populate_when_single_player` and the click-select/
+  tab-targeting single-camera regression tests.**
+- ~~Given 2 players each with a different current target, when either target becomes hidden/despawned,
+  then only that player's target auto-clears — the other player's target is unaffected.~~ **Met —
+  `test_target_auto_clear_is_per_player`.**
+- ~~Given a non-primary player selects a target (Tab or click), when a `rules.ron`/behavior action
   using `{target}` fires, or the action bar's `{target}`-gated cost check runs, then it resolves
   against the primary player's target only — the non-primary player's selection has no gameplay
-  effect (Phase 1's documented scope boundary, not a bug).
-- Given a split-screen scene with a `target_hud:` block authored, when either player selects a
+  effect (Phase 1's documented scope boundary, not a bug).~~ **Met —
+  `test_only_primary_player_target_mirrors_into_current_target_and_global_events`.**
+- ~~Given a split-screen scene with a `target_hud:` block authored, when either player selects a
   target, then a per-viewport HUD readout appears in that player's own viewport showing the
-  configured format, independent of the other player's readout.
-- Given a split-screen scene, when a `Label` bound to the legacy `target_display`/`target_name`/
+  configured format, independent of the other player's readout.~~ **Met —
+  `test_target_hud_shows_each_players_own_target_independently`, confirmed by playtest.**
+- ~~Given a split-screen scene, when a `Label` bound to the legacy `target_display`/`target_name`/
   `target_id` `GameVariables` is present, then it renders blank — not the primary player's value
-  with no explanation of why the second player's target isn't shown.
-- Given a split-screen scene where 2 players select different `Targetable` entities, when their
+  with no explanation of why the second player's target isn't shown.~~ **Met —
+  `test_legacy_target_vars_blank_when_multiplayer`, confirmed by playtest via the room3 Label.**
+- ~~Given a split-screen scene where 2 players select different `Targetable` entities, when their
   target indicator rings render, then each is tinted per the `PLAYER_LABEL_COLORS` palette; if
-  both players select the same entity, two coincident tinted rings render.
+  both players select the same entity, two coincident tinted rings render.~~ **Met —
+  `test_target_indicator_tints_rings_per_player_when_multiplayer`, confirmed by playtest.**
