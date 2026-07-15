@@ -125,6 +125,14 @@ pub struct LoadedDecalHandles(pub Vec<Handle<Image>>);
 #[derive(Resource, Default)]
 pub struct LoadedTargetIndicator(pub Option<ResolvedTargetIndicator>);
 
+/// Active `GameSceneV2.target_hud` config for the current scene — no catalog lookup needed
+/// (unlike `LoadedTargetIndicator`, there's no texture reference), so this is just a direct
+/// clone of the scene field. `None` means the per-viewport target HUD readout is disabled —
+/// `target_hud_spawn_system` never spawns anything. Populated by `spawn_scene_v2` on scene load;
+/// cleared on full `LoadScene`. See `planning/features/per_player_split_screen_targeting.md`.
+#[derive(Resource, Default)]
+pub struct LoadedTargetHud(pub Option<crate::schema::scene_v2::TargetHudDef>);
+
 /// Active `GameSceneV2.max_view_box` for the current scene, as `(min_x, min_z, max_x, max_z)`.
 /// `None` means no clamp — `player_view_box_clamp_system` early-exits silently.
 /// Populated by `spawn_scene_v2` on scene load; cleared on full `LoadScene`.
@@ -495,6 +503,12 @@ pub struct SceneStateParams<'w, 's> {
     pub current_target: ResMut<'w, crate::capabilities::action_bar::CurrentTarget>,
     /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
     pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
+    /// Lets `Action::SetTarget`/`ClearTarget` mirror the primary player's `PlayerTarget` alongside
+    /// `current_target` above — without this, the ring (`target_indicator_system`) and
+    /// `target_auto_clear_system`, both now driven by `PlayerTarget` rather than `CurrentTarget`,
+    /// would silently stop reacting to these two rule-driven actions. See
+    /// `planning/features/per_player_split_screen_targeting.md`.
+    pub player_targets: Query<'w, 's, (Entity, &'static mut crate::capabilities::player::PlayerTarget, Option<&'static crate::capabilities::player::PlayerIndex>), With<crate::capabilities::player::CharacterController>>,
     pub audio_state: ResMut<'w, AudioState>,
     /// Runtime player preference for their own nameplate, flipped by `Action::ToggleOwnNameplate`.
     pub nameplate_pref: ResMut<'w, crate::capabilities::nameplate::PlayerNameplatePreference>,

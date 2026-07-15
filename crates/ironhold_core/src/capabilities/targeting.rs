@@ -4,11 +4,11 @@ use bevy::window::PrimaryWindow;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
 use crate::capabilities::action_bar::CurrentTarget;
-use crate::capabilities::player::CharacterController;
+use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
 use crate::schema::player::InputMap;
 use crate::GameVariables;
 use crate::capabilities::inventory::LoadedInventoryUi;
-use crate::capabilities::camera::{camera_priority_key, SplitViewportSlot};
+use crate::capabilities::camera::{camera_priority_key, OrbitCamera, SplitViewportSlot};
 
 /// Pixel radius around the cursor within which a left-click selects an entity.
 const SELECT_PIXEL_RADIUS: f32 = 70.0;
@@ -71,26 +71,77 @@ pub(crate) fn write_target_vars(vars: &mut GameVariables, prefab: Option<&str>, 
     vars.0.insert("target_id".to_string(), id.to_string());
 }
 
-/// Blanks all target UI variables (target cleared).
+/// Blanks all target UI variables (target cleared, or 2+ players present — see
+/// `apply_player_target`'s doc comment).
 pub(crate) fn clear_target_vars(vars: &mut GameVariables) {
     vars.0.insert("target_display".to_string(), String::new());
     vars.0.insert("target_name".to_string(), String::new());
     vars.0.insert("target_id".to_string(), String::new());
 }
 
-/// Commits a new current target: updates the resource + UI vars and emits pipeline events.
-fn apply_target(
+/// A player entity carries either no `PlayerIndex` (the primitive/capsule single-player path,
+/// which never gets one) or `PlayerIndex(0)` — both mean "the primary player". See
+/// `planning/features/per_player_split_screen_targeting.md`. `pub(crate)` so
+/// `action_executor.rs`'s `Action::SetTarget`/`ClearTarget` handlers can resolve the same primary
+/// player these systems do, instead of writing `CurrentTarget` directly and leaving every
+/// player's `PlayerTarget` untouched.
+pub(crate) fn is_primary_player(player_index: Option<&PlayerIndex>) -> bool {
+    player_index.map_or(true, |i| i.0 == 0)
+}
+
+/// Commits `id` as `player_target`'s new selection, mirrors it into the global `CurrentTarget`
+/// resource when `is_primary` (so `{target}` substitution in `rules.ron`/`state_machine.ron`/
+/// behaviors and the action bar's `{target}`-gated cost check keep resolving against the primary
+/// player exactly as before per-player targets existed — this is Phase 1's documented scope
+/// boundary, not a bug: a non-primary player's selection never reaches the shared action
+/// pipeline), and syncs the legacy global `target_display`/`target_name`/`target_id`
+/// `GameVariables`. Those vars go blank whenever 2+ players are present — there is no single
+/// meaningful "the" target across independent players, so silently showing only the primary
+/// player's value would be more confusing than a blank readout (use the per-viewport
+/// `target_hud:` HUD instead for 2+ player scenes). Global pipeline events (`target.changed`/
+/// `target.changed:{id}`) only fire for the primary player, for the same reason `CurrentTarget`
+/// only mirrors the primary player.
+pub(crate) fn apply_player_target(
     id: &str,
     prefab: Option<&str>,
+    is_primary: bool,
+    is_multiplayer: bool,
+    player_target: &mut PlayerTarget,
     current_target: &mut CurrentTarget,
     game_vars: &mut GameVariables,
     game_events: &mut MessageWriter<GameEvent>,
 ) {
-    current_target.0 = Some(id.to_string());
-    write_target_vars(game_vars, prefab, id);
-    game_events.write(GameEvent::Trigger(format!("target.changed:{}", id)));
-    game_events.write(GameEvent::Trigger("target.changed".to_string()));
-    info!("Targeting: selected {:?} (prefab {:?})", id, prefab);
+    player_target.0 = Some(id.to_string());
+    if is_primary {
+        current_target.0 = Some(id.to_string());
+        game_events.write(GameEvent::Trigger(format!("target.changed:{}", id)));
+        game_events.write(GameEvent::Trigger("target.changed".to_string()));
+    }
+    if is_multiplayer {
+        clear_target_vars(game_vars);
+    } else {
+        write_target_vars(game_vars, prefab, id);
+    }
+    info!("Targeting: selected {:?} (prefab {:?}, primary: {})", id, prefab, is_primary);
+}
+
+/// Clears `player_target`'s selection, mirrors the clear into `CurrentTarget` when `is_primary`,
+/// and blanks the legacy global vars — safe unconditionally: in a single-player scene this
+/// correctly reflects "no target"; in a multiplayer scene the vars are already supposed to be
+/// blank regardless (see `apply_player_target`).
+pub(crate) fn clear_player_target(
+    is_primary: bool,
+    player_target: &mut PlayerTarget,
+    current_target: &mut CurrentTarget,
+    game_vars: &mut GameVariables,
+    game_events: &mut MessageWriter<GameEvent>,
+) {
+    player_target.0 = None;
+    if is_primary {
+        current_target.0 = None;
+        game_events.write(GameEvent::Trigger("target.cleared".to_string()));
+    }
+    clear_target_vars(game_vars);
 }
 
 // ─── Systems ──────────────────────────────────────────────────────────────────
@@ -106,12 +157,21 @@ fn apply_target(
 /// silently selecting the wrong entity. Ties (cursor inside 2+ viewport rects at once, not
 /// expected for non-overlapping split layouts) break deterministically via `camera_priority_key`,
 /// the same ordering `world_label_screen_pos_system` and `rebuild_pool_meshes_system` use.
+///
+/// The click is then attributed to *the player who owns that camera* — a split-screen camera's
+/// `OrbitCamera.target` points directly at its player entity. Cameras with no `OrbitCamera` at
+/// all (a shared `PartyOrbitCamera`, or the default fallback camera in a scene with no player)
+/// have no single "owning" player, so the click falls back to the primary player instead — one
+/// physical mouse can only ever act for one player per click regardless (an accepted, unavoidable
+/// limitation, not something this system can fix — see
+/// `planning/features/per_player_split_screen_targeting.md`).
 fn click_select_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
+    cameras: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>, Option<&OrbitCamera>), With<Camera3d>>,
     selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>, Option<&SelectAimHeight>), With<ClickSelectable>>,
     visibility_q: Query<&Visibility>,
+    mut player_targets: Query<(Entity, &mut PlayerTarget, Option<&PlayerIndex>)>,
     mut current_target: ResMut<CurrentTarget>,
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
@@ -129,12 +189,22 @@ fn click_select_system(
     }
     let Ok(window) = windows.single() else { return };
     let Some(cursor) = window.cursor_position() else { return };
-    let Some((_, camera, cam_tf, _)) = cameras
+    let Some((_, camera, cam_tf, _, orbit)) = cameras
         .iter()
         .filter(|(_, camera, ..)| camera.is_active)
         .filter(|(_, camera, ..)| camera.logical_viewport_rect().is_some_and(|r| r.contains(cursor)))
-        .min_by_key(|(entity, _, _, slot)| camera_priority_key(*entity, *slot))
+        .min_by_key(|(entity, _, _, slot, _)| camera_priority_key(*entity, *slot))
     else { return };
+
+    // Resolve which player this click acts for.
+    let player_count = player_targets.iter().count();
+    let acting_player = orbit.map(|o| o.target).or_else(|| {
+        player_targets.iter().find(|(_, _, idx)| is_primary_player(*idx)).map(|(e, _, _)| e)
+    });
+    let Some(acting_player) = acting_player else { return };
+    let Ok((_, mut player_target, player_index)) = player_targets.get_mut(acting_player) else { return };
+    let is_primary = is_primary_player(player_index);
+    let is_multiplayer = player_count >= 2;
 
     // Find the nearest visible selectable to the cursor in screen space.
     let mut best: Option<(f32, String, Option<String>)> = None;
@@ -154,25 +224,33 @@ fn click_select_system(
     match best {
         Some((_, id, prefab)) => {
             game_events.write(GameEvent::Trigger(format!("target.clicked:{}", id)));
-            apply_target(&id, prefab.as_deref(), &mut current_target, &mut game_vars, &mut game_events);
+            apply_player_target(
+                &id, prefab.as_deref(), is_primary, is_multiplayer,
+                &mut player_target, &mut current_target, &mut game_vars, &mut game_events,
+            );
         }
         None => {
-            // Clicked empty space — clear any current target.
-            if current_target.0.is_some() {
-                current_target.0 = None;
-                clear_target_vars(&mut game_vars);
-                game_events.write(GameEvent::Trigger("target.cleared".to_string()));
+            // Clicked empty space — clear this player's target.
+            if player_target.0.is_some() {
+                clear_player_target(is_primary, &mut player_target, &mut current_target, &mut game_vars, &mut game_events);
                 info!("Targeting: cleared (clicked empty space)");
             }
         }
     }
 }
 
-/// Cycles `CurrentTarget` through nearby `Targetable` entities on the configured key.
-/// Hold Shift to cycle in reverse (nearest-last).
+/// Cycles each player's own `PlayerTarget` through nearby `Targetable` entities on that player's
+/// own `target_next` key (from their `InputMap`). Hold Shift to cycle in reverse (nearest-last).
+/// Processes every player independently in the same frame — player 1 and player 2 pressing their
+/// own keys the same tick cycle their own, unrelated targets, with no shared state between them.
+///
+/// If two players' `InputMap.target_next` happen to bind to the same physical key (e.g. both left
+/// at the "Tab" default on one shared keyboard), pressing it once cycles both players' targets
+/// the same frame — expected, not a bug, exactly like every other per-player keybinding in this
+/// engine (movement, jump, etc.) already behaves when two players share a keyboard.
 pub fn tab_targeting_system(
     keys: Res<ButtonInput<KeyCode>>,
-    controllers: Query<(&CharacterController, &GlobalTransform)>,
+    mut controllers: Query<(&CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>)>,
     targetable: Query<(Entity, &SpawnId, &GlobalTransform), With<Targetable>>,
     prefab_keys: Query<&PrefabKey>,
     visibility_q: Query<&Visibility>,
@@ -182,49 +260,55 @@ pub fn tab_targeting_system(
     inventory_ui: Res<LoadedInventoryUi>,
 ) {
     if inventory_ui.panels_open > 0 { return; }
-    let Some((controller, player_gt)) = controllers.iter().next() else { return };
+    let is_multiplayer = controllers.iter().count() >= 2;
 
-    let tab_key = InputMap::parse_key(&controller.inputs.target_next)
-        .unwrap_or(KeyCode::Tab);
-    if !keys.just_pressed(tab_key) {
-        return;
-    }
-
-    let reverse = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
-    let player_pos = player_gt.translation();
-    let range = controller.inputs.target_range;
-
-    let mut candidates: Vec<(Entity, String, f32)> = targetable
-        .iter()
-        .filter_map(|(entity, spawn_id, gt)| {
-            if visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
-                return None;
-            }
-            let dist = gt.translation().distance(player_pos);
-            if dist <= range { Some((entity, spawn_id.0.clone(), dist)) } else { None }
-        })
-        .collect();
-
-    if candidates.is_empty() {
-        debug!("Tab targeting: no targetable entities within {:.1} units of the player", range);
-        return;
-    }
-
-    candidates.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
-    if reverse { candidates.reverse(); }
-
-    let next_idx = match &current_target.0 {
-        Some(cur) => {
-            let idx = candidates.iter().position(|(_, id, _)| id == cur);
-            idx.map_or(0, |i| (i + 1) % candidates.len())
+    for (controller, player_gt, mut player_target, player_index) in &mut controllers {
+        let tab_key = InputMap::parse_key(&controller.inputs.target_next)
+            .unwrap_or(KeyCode::Tab);
+        if !keys.just_pressed(tab_key) {
+            continue;
         }
-        None => 0,
-    };
-    let (next_entity, next_id, _) = &candidates[next_idx];
-    let next_id = next_id.clone();
-    let prefab = prefab_keys.get(*next_entity).ok().map(|p| p.0.clone());
 
-    apply_target(&next_id, prefab.as_deref(), &mut current_target, &mut game_vars, &mut game_events);
+        let reverse = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        let player_pos = player_gt.translation();
+        let range = controller.inputs.target_range;
+
+        let mut candidates: Vec<(Entity, String, f32)> = targetable
+            .iter()
+            .filter_map(|(entity, spawn_id, gt)| {
+                if visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
+                    return None;
+                }
+                let dist = gt.translation().distance(player_pos);
+                if dist <= range { Some((entity, spawn_id.0.clone(), dist)) } else { None }
+            })
+            .collect();
+
+        if candidates.is_empty() {
+            debug!("Tab targeting: no targetable entities within {:.1} units of the player", range);
+            continue;
+        }
+
+        candidates.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
+        if reverse { candidates.reverse(); }
+
+        let next_idx = match &player_target.0 {
+            Some(cur) => {
+                let idx = candidates.iter().position(|(_, id, _)| id == cur);
+                idx.map_or(0, |i| (i + 1) % candidates.len())
+            }
+            None => 0,
+        };
+        let (next_entity, next_id, _) = &candidates[next_idx];
+        let next_id = next_id.clone();
+        let prefab = prefab_keys.get(*next_entity).ok().map(|p| p.0.clone());
+
+        let is_primary = is_primary_player(player_index);
+        apply_player_target(
+            &next_id, prefab.as_deref(), is_primary, is_multiplayer,
+            &mut player_target, &mut current_target, &mut game_vars, &mut game_events,
+        );
+    }
 }
 
 /// Draws a yellow wireframe sphere at each `ClickSelectable` entity's aim point
@@ -245,22 +329,26 @@ fn debug_selectables_system(
     }
 }
 
-/// Clears `CurrentTarget` when the targeted entity becomes hidden (e.g. dead/despawned).
-/// Prevents the action bar from firing at invisible enemies and keeps the target UI clean.
+/// Clears each player's `PlayerTarget` independently when their targeted entity becomes hidden
+/// (e.g. dead/despawned) — one player's target being hidden does not touch any other player's
+/// target. Prevents the action bar from firing at invisible enemies and keeps the target UI
+/// clean.
 pub fn target_auto_clear_system(
+    mut controllers: Query<(&mut PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>,
     mut current_target: ResMut<CurrentTarget>,
     mut game_vars: ResMut<GameVariables>,
     mut game_events: MessageWriter<GameEvent>,
     registry: Res<SpawnRegistry>,
     visibility_q: Query<&Visibility>,
 ) {
-    let Some(target_id) = current_target.0.clone() else { return };
-    let Some(&entity) = registry.entities.get(&target_id) else { return };
-    let Ok(vis) = visibility_q.get(entity) else { return };
-    if *vis == Visibility::Hidden {
-        current_target.0 = None;
-        clear_target_vars(&mut game_vars);
-        game_events.write(GameEvent::Trigger("target.cleared".to_string()));
-        info!("Targeting: auto-cleared '{}' (entity hidden)", target_id);
+    for (mut player_target, player_index) in &mut controllers {
+        let Some(target_id) = player_target.0.clone() else { continue };
+        let Some(&entity) = registry.entities.get(&target_id) else { continue };
+        let Ok(vis) = visibility_q.get(entity) else { continue };
+        if *vis == Visibility::Hidden {
+            let is_primary = is_primary_player(player_index);
+            clear_player_target(is_primary, &mut player_target, &mut current_target, &mut game_vars, &mut game_events);
+            info!("Targeting: auto-cleared '{}' (entity hidden)", target_id);
+        }
     }
 }

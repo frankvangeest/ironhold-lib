@@ -177,6 +177,7 @@ File extension must be `.scene.ron`.
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab) have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). `style: Pixel` world stat bars are the one exception — depth scaling is not yet implemented for that style, see below. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
+| `target_hud` | `Option<TargetHudDef>` | Per-viewport target-name HUD readout for split-screen scenes (2+ players). Omit to disable. See [Per-player split-screen targeting](#per-player-split-screen-targeting) below. |
 | `show_nameplates` | `bool` | Enable the nameplate system for NPCs/props in this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does **not** govern the player's own nameplate — see `show_player_nameplate` below. |
 | `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Cosmetic fields (offset, font, colors, bars) apply regardless of `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when `show_nameplates: true`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
 | `max_view_box` | `Option<(f32,f32,f32,f32)>` | Hard XZ movement boundary `(min_x, min_z, max_x, max_z)` in world units. Every player's position is clamped inside this box each physics tick (vertical movement/jumping is unaffected); velocity on the clamped axis is zeroed so the player doesn't jitter against the edge. Intended for local co-op scenes with a shared camera, so players can't wander out of frame — but works for any scene. Omit to disable (most scenes have no boundary). |
@@ -442,6 +443,87 @@ target_indicator: (
 ),
 ```
 
+### Per-player split-screen targeting
+
+_Used in: local co-op / split-screen scenes with 2+ `tags: ["player"]` entities._
+
+Each player has their own independent target — clicking or Tab-cycling as player 2 no longer
+overwrites player 1's selection. This changes three things about the pre-existing targeting
+feature (click-to-select, Tab-cycle, the target indicator ring, above) once **2+ players are
+present**, and adds one new opt-in RON block:
+
+**Target indicator rings are tinted per-player.** Whenever 2+ players are present (checked by
+counting player entities directly — **including party/shared-camera mode**, not just real
+split-screen), every ring uses the same fixed palette as the "P{n}" corner HUD label
+(`PLAYER_LABEL_COLORS` — P1 blue, P2 pink, P3 green, P4 red, matching `local_coop_demo`'s room6
+tints; see "Split-screen player HUD labels" below) instead of the usual
+`indicator_color`/`indicator_category`/scene `color` precedence — so it's visually obvious whose
+ring belongs to whom when two players are looking at different (or the same) entity at once. If
+both players select the same entity, both rings render, coincident, each in its own player's
+colour — there is no deduplication. **Single-player scenes are completely unaffected** — the ring
+keeps the usual prefab/category/scene colour precedence exactly as documented above.
+
+**The legacy `target_display`/`target_name`/`target_id` `GameVariables` (see "GameVariables
+auto-written by capabilities" below) go blank whenever 2+ players are present** — the same
+player-count check as the ring tinting above, **including party mode** — rather than showing only
+one player's value with no indication that a second player's selection isn't reflected. If your
+project authored a `Label` bound to `target_display` for a single-player HUD and later adds a
+second player, that label will read blank once a second player is present. Use the new
+`target_hud:` block below instead — **but only for split-screen scenes**: a party-mode 2-player
+scene has no `SplitViewportSlot` camera for `target_hud:` to attach to, so it gets no readout at
+all today (blank legacy vars, no replacement) — a known Phase 1 gap, not yet built. **Single-player
+scenes are unaffected** — the vars keep populating exactly as before.
+
+**Only the primary player's selection drives gameplay through the shared pipeline.** The first
+player-tagged scene entity (matching `PlayerIndex(0)`, or a player with no `PlayerIndex` at all —
+e.g. the primitive/capsule player path) is "primary". `{target}` substitution in
+`rules.ron`/`state_machine.ron`/behaviors, and the action bar's `{target}`-gated cost check, both
+still resolve against the primary player's target only — a second (or third, or fourth) player's
+selection drives their own visual feedback (ring, HUD readout) but has no effect on shared
+`do_actions`. Per-player ability execution is a larger, not-yet-built feature.
+
+> **`target.clicked:{id}` fires for every player's click, unlike `target.changed`/
+> `target.cleared` (primary-player only).** A rule matched on `target.clicked:{id}` already has
+> the clicked entity's exact id in the event name itself — write the rule's `do_actions` against
+> that id directly (or `{self}` inside a matching behavior file), not `{target}`. Using `{target}`
+> in a `target.clicked:{id}`-triggered rule resolves against the *primary* player's target, which
+> may be a different entity than the one just clicked if a non-primary player did the clicking.
+
+**One physical mouse can only ever click-select for one player per click** — an unavoidable,
+accepted limitation, not a bug. Tab-cycling (each player bound to their own `target_next` key —
+or a gamepad button, since co-op commonly pairs one keyboard player with one gamepad player) is the
+only mechanism that lets both players change their target in the same moment.
+
+#### Per-viewport target HUD readout (`TargetHudDef`)
+
+_Used in: `GameSceneV2.target_hud`_
+
+Opt-in — omit this field entirely to skip the per-viewport readout (the legacy `target_display`
+`GameVariables` above still exist for single-player scenes regardless). When set, each
+split-screen viewport (any camera tagged `SplitViewportSlot` — `Vertical`/`Horizontal`/`Grid`)
+automatically gets its own bottom-left-anchored text readout showing that viewport's own player's
+currently selected target — independent of every other player's. **Fully engine-automatic
+placement**, same "no opt-out, no repositioning" precedent as the "P{n}" corner label (below) —
+only the text format/font/colour are configurable.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `show` | `TargetHudDisplay` | `Full` | Which of prefab/id/name to display. `Full` = `"prefab_key id"` (matches the legacy `target_display` format, e.g. `"enemy_orc_melee orc_01"`); `NameOnly` = prefab catalog key only; `IdOnly` = per-instance spawn id only. |
+| `font_size` | `f32` | `16.0` | Screen-space font size in pixels. |
+| `color` | `(f32, f32, f32, f32)` | `(0.9, 0.9, 0.9, 1.0)` | Text colour (sRGB RGBA). |
+
+```ron
+// scene.ron
+target_hud: (
+  show: Full,
+  font_size: 16.0,
+  color: (0.9, 0.9, 0.9, 1.0),
+),
+```
+
+Party-mode and single-player scenes never get a readout — like the corner label, there is no
+`SplitViewportSlot` camera to attach one to. Has no effect if authored on a scene with 0-1 players.
+
 ### Nameplate system (`NameplateOptionsDef`) ✅
 
 _Used in: `GameSceneV2.nameplate_options`_
@@ -679,6 +761,13 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `score` | action executor | running score, derived from `IncrementVariable("score", …)` |
 
 The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`. Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
+
+> **2+ players present (including party mode):** these three variables go blank whenever 2+
+> players are present, rather than reflecting only one player's target with no indication a
+> second player's selection isn't shown. Use the per-viewport `target_hud:` block instead for a
+> **split-screen** scene's target readout — party mode has no readout replacement today (no
+> `SplitViewportSlot` camera for `target_hud:` to attach to). See
+> [Per-player split-screen targeting](#per-player-split-screen-targeting) above.
 
 #### `Rect((...))`
 
@@ -2055,6 +2144,11 @@ merge/split transitions. Party-mode and single-player scenes never get a label �
 No other configuration exists for this feature today — no opt-out, no repositioning, no
 controller-icon variant. See `crates/ironhold_core/src/CLAUDE.md` for the underlying
 `SplitScreenPlayerLabel`/`LinkedPlayerLabel` component pattern.
+
+> The per-viewport **target HUD readout** (`target_hud:`, see
+> [Per-player split-screen targeting](#per-player-split-screen-targeting) above) follows this exact
+> same "no opt-out, no repositioning" placement precedent, anchored bottom-left instead of
+> top-right so the two never collide.
 
 ### NPC behaviour (`components.npc`) ✅
 

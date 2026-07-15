@@ -127,37 +127,94 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 
 **`{target}` substitution** — in global rules.ron, state_machine.ron, and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in all three interpreter systems before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
 
+**Per-player targeting (Phase 1, `planning/features/per_player_split_screen_targeting.md`)** —
+each player entity carries its own `PlayerTarget(Option<String>)` component
+(`capabilities/player.rs`), inserted at both player-construction sites
+(`entity_spawner.rs::spawn_player_entity_core` for GLB players; the primitive/capsule inline
+spawn in `scene_loader.rs`). `CurrentTarget` (`capabilities/action_bar.rs`) was deliberately kept
+as a resource rather than deleted — it is now "the primary player's `PlayerTarget`, mirrored".
+The **primary player** is whichever player entity has `PlayerIndex(0)` or no `PlayerIndex` at all
+(the primitive/capsule path never gets one). `{target}` substitution above, and the action bar's
+`{target}`-gated cost check, both keep reading `CurrentTarget` exactly as before this feature —
+only the primary player's selection reaches the shared action pipeline. A non-primary player's
+`PlayerTarget` drives only their own visual feedback (ring, per-viewport HUD readout); it has no
+effect on `rules.ron`/`state_machine.ron`/behavior actions or the action bar. This is a documented
+scope boundary, not a bug — full per-player gameplay-action execution (Phase 2) would need player
+identity threaded through the whole Message → Interpreter → Action → Executor pipeline, a
+materially larger change (see `planning/claude_suggestions.md` ▸ Camera for the cross-feature
+note on this).
+
 **`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
 `click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
 proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the
 nearest to the cursor) — NOT mesh raycasting, which raycasts bind-pose geometry and misses
-animated/skinned GLB characters. Tab-cycle is nearest-first by world distance.
+animated/skinned GLB characters. Tab-cycle is nearest-first by world distance, and now processes
+**every player independently each frame** — each `CharacterController`'s own `InputMap.target_next`
+key press only ever changes that player's own `PlayerTarget`. `click_select_system`'s
+viewport-aware camera resolution (see the split-screen section below) additionally maps the
+resolved camera to its **owning player** via `OrbitCamera.target`, falling back to the primary
+player for camera modes with no single owner (`PartyOrbitCamera`, the no-player default camera) —
+one physical mouse can still only act for one player per click, an accepted, unavoidable
+limitation.
 `select_aim_height: f32` (default `1.0`) on `PrefabDef` controls how many metres above the entity
 origin the click-projection aim point sits. Set lower for ground-hugging creatures (e.g. `0.4` for
 a snake, `0.6` for a spider) so the selectable zone aligns with the visible body.
 - `target.clicked:{id}` / `target.changed:{id}` / `target.changed` — new target selected
-- `target.cleared` — target cleared (click on empty space, `ClearTarget` action, or `LoadScene`)
+  (`target.changed*` only fires for the primary player — see "Per-player targeting" above)
+- `target.cleared` — target cleared (click on empty space, `ClearTarget` action, or `LoadScene`;
+  same primary-player-only gate)
 
 The capability also writes three `GameVariables` for UI labels (bind whichever you need):
 `target_display` (`"<prefab> <id>"`), `target_name` (prefab key), `target_id` (spawn id).
 Entities carry a `PrefabKey` component (catalog key) alongside `SpawnId` (instance id) to
-support this.
+support this. **These three vars go blank whenever 2+ players are present** (computed via a plain
+`CharacterController` entity count, not gated on real split-screen camera state) — there is no
+single meaningful "the" target across independent players; use the new per-viewport `target_hud:`
+scene block (`docs/20_data_formats.md`) instead for a 2+ player scene's readout. Single-player
+scenes are unaffected — the vars keep populating exactly as before this feature.
 
 **Target indicator** (`capabilities/target_indicator.rs`) — a ground-ring decal that tracks the
-selected entity. Activated via `target_indicator:` in scene RON (references a `decals:` catalog key).
-The `target_indicator_system` runs in `Update`, watches `CurrentTarget` and `LoadedTargetIndicator`
-via change detection, and manages one `TrackingTarget` entity. The indicator is tagged `LevelEntity`
-and does NOT go through the action pipeline (it is a pure cosmetic side-effect of the target state).
+selected entity, now **one independent ring per player**. Activated via `target_indicator:` in
+scene RON (references a `decals:` catalog key). `target_indicator_system` runs in `Update`,
+watches `LoadedTargetIndicator` (mesh-cache rebuild) and each player's `Changed<PlayerTarget>`
+(spawn/despawn that player's own ring only), and manages one `TrackingTarget` entity per player.
+`TrackingTarget` now carries both `target: Entity` (the tracked world entity) and
+`owner: Entity` (the player entity whose ring this is), instead of just the tracked entity — the
+`owner` field is what lets one player's target change despawn/respawn only their own ring without
+touching any other player's. The indicator is tagged `LevelEntity` and does NOT go through the
+action pipeline (it is a pure cosmetic side-effect of the target state).
 
-Ring colour is resolved per-target at target-switch time via three-tier precedence:
+Ring colour is resolved per-target at target-switch time via three-tier precedence **only in a
+single-player scene**:
 1. `PrefabDef.indicator_color` — direct RGBA override on the prefab (highest priority)
 2. `PrefabDef.indicator_category` — string key looked up in `TargetIndicatorDef.named_colors`
 3. `TargetIndicatorDef.color` — scene-level fallback
 
+**Whenever 2+ players are present, every ring is tinted by the fixed `PLAYER_LABEL_COLORS`
+palette instead** (same palette the split-screen "P{n}" corner HUD label uses, see
+`capabilities/camera.rs`) — the per-target precedence above is overridden entirely, so it's
+visually obvious whose ring belongs to whom. If two players target the same entity, both rings
+render, coincident, each in its own player's colour; there is no deduplication. This is a
+deliberate design decision (`planning/features/per_player_split_screen_targeting.md`), not an
+oversight — a per-target colour would make it impossible to tell whose ring is whose once two
+players can each select something different.
+
 The system reads the target entity's `PrefabKey` component, looks up the prefab in `LoadedPrefabCatalog`,
-and applies the precedence chain. Material handles are memoised by resolved `[u32;4]` colour bits —
-alternating between two targets of the same colour creates no new `StandardMaterial`. The mesh handle
+and applies the precedence chain (single-player only). Material handles are memoised by resolved `[u32;4]` colour bits —
+alternating between two targets/players of the same resolved colour creates no new `StandardMaterial`. The mesh handle
 (radius-driven, colour-independent) is a single cached `Local`; both caches clear on scene change.
+
+**Per-viewport target HUD readout** (`capabilities/camera.rs`'s `target_hud_spawn_system`/
+`target_hud_update_system`) — opt-in via the new `GameSceneV2.target_hud: Option<TargetHudDef>`
+scene field (`docs/20_data_formats.md`). Mirrors the existing `split_viewport_player_label_spawn_
+system`/`_update_system` pattern exactly: one `Text` entity per `SplitViewportSlot` camera
+(`Added<SplitViewportSlot>`-triggered spawn, only when the scene authors a `target_hud:` block),
+kept in sync every frame with that camera's owning player's `PlayerTarget` (via
+`OrbitCamera.target`) and the camera's live `Camera.viewport`/`is_active`. Anchored bottom-left
+(the corner label is top-right) so the two never collide. `target_hud_update_system` is chained
+`.after(split_screen_viewport_system)` in `lib.rs`, same ordering guarantee as the corner-label
+update system, so there's no stale-frame risk across a `dynamic` split's merge/split transition.
+`TargetHudDisplay` (`Full`/`NameOnly`/`IdOnly`) controls which of prefab/id/name the readout shows.
 
 **New capabilities for entity logic:**
 
@@ -299,9 +356,16 @@ Sites 1 and 3 both hand-assemble a `PlayerConfig` — routed through the shared
 `assemble_player_config()` helper (`entity_spawner.rs`) so a new `PlayerConfig` field (e.g.
 `player_index`) only needs adding in one place. `spawn_player_entity_core` inserts
 `player_config.player_index` as a queryable `PlayerIndex(u32)` component
-(`capabilities/player.rs`) on every GLB player entity — no system reads it yet (input routing
-uses `gamepad_index`, camera targeting uses scene entity order), but it's a real ECS fact a
-future per-player system (nameplate/HUD labeling) can query without another schema pass.
+(`capabilities/player.rs`) on every GLB player entity — consumed by the split-screen "P{n}" corner
+HUD label and per-player targeting's "which player is primary" check (see "Per-player targeting"
+above). `spawn_player_entity_core` also inserts `PlayerTarget::default()` (also
+`capabilities/player.rs`) on every GLB player entity — **site 2 (the primitive/capsule inline
+spawn in `scene_loader.rs`) needs its own separate `PlayerTarget::default()` insertion**, since it
+does not route through `spawn_player_entity_core` at all (same class of divergence risk the
+four-site inventory above exists to flag — check any future "every player gets X" component
+against both spawn paths, not just the generic GLB one). Note `PlayerIndex` itself is still GLB-only
+— the primitive/capsule path never gets one, which is exactly why "primary player" is defined as
+"`PlayerIndex(0)` **or no `PlayerIndex` at all**," not just "`PlayerIndex(0)`".
 
 **`PrefabDef.material` does NOT automatically apply to players — this bit Stage 6's local co-op
 4-way split during playtest.** `spawn_prefab_instance` (the generic Actor/Prop/NPC path) reads

@@ -41,6 +41,21 @@ pub enum PlayerOwnership {
 #[derive(Component, Clone, Copy, Default)]
 pub struct PlayerIndex(pub u32);
 
+/// This player's currently selected target (spawn ID), independent of every other player's.
+/// Inserted alongside `PlayerIndex`/`CharacterController` at both player-construction sites
+/// (GLB: `spawn_player_entity_core` in `entity_spawner.rs`; primitive: inline in
+/// `scene_loader.rs`) — always present on any player entity, defaulting to `None`.
+///
+/// The player with no `PlayerIndex` or `PlayerIndex(0)` is "primary" — `capabilities/targeting.rs`
+/// mirrors the primary player's `PlayerTarget` into the global `CurrentTarget` resource, so
+/// `{target}` substitution (`rules.ron`/`state_machine.ron`/behaviors) and the action bar's
+/// `{target}`-gated cost check keep resolving against the primary player exactly as before this
+/// component existed — see `planning/features/per_player_split_screen_targeting.md`. A
+/// non-primary player's `PlayerTarget` only drives their own visual feedback (target indicator
+/// ring, per-viewport HUD readout); it has no gameplay effect through the shared action pipeline.
+#[derive(Component, Default)]
+pub struct PlayerTarget(pub Option<String>);
+
 #[derive(Component)]
 pub struct CharacterController {
     pub walk_speed: f32,

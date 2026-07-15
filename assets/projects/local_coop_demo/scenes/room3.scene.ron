@@ -13,6 +13,19 @@
     faction_filter: All,
   ),
 
+  // Phase 1 (per_player_split_screen_targeting.md) playtest aid: exercises per-player
+  // Tab-targeting/click-select, the per-player-tinted target indicator ring (2+ players present
+  // in this scene, so both click_target_left/right rings tint by PLAYER_LABEL_COLORS instead of
+  // the usual per-target colour), and the per-viewport target_hud: readout. Reuses
+  // click_target_test's own `targetable: true` override (prefabs.ron) — no new prop needed.
+  target_indicator: (
+    texture: "target_ring",
+    radius: 0.8,
+  ),
+  target_hud: (
+    show: Full,
+  ),
+
   tonemapping: AcesFitted,
 
   // Warm/amber tone, matching the orange portal_to_room3 accent and ground_room3.
@@ -146,6 +159,28 @@
       // at this box size) — see Stage 4 plan's note on avoiding Stage 2's label-overflow bug.
       text: "Room 3: vertical split | Blue portal -> room 2 | Cyan portal -> room 4",
       position: (20.0, 64.0),
+      size: (900.0, 32.0),
+    )),
+    // Phase 1 (per_player_split_screen_targeting.md) playtest aid: separate line so the existing
+    // two hints above stay under their own width budget. Each player's target_next key is
+    // deliberately distinct (KeyT / KeyM, not the InputMap "Tab" default — Tab is intercepted by
+    // browsers for focus navigation in WASM builds).
+    Label((
+      id: "targeting_hint",
+      text: "Target: P1=T P2=M | Click a sphere to select",
+      position: (20.0, 108.0),
+      size: (900.0, 32.0),
+    )),
+    // Phase 1 playtest aid: the legacy single-player target_display GameVariable — bound here so
+    // it's visible it stays blank once 2 players are present (this scene always has 2), proving
+    // the per-player targeting fix without needing to inspect anything but the screen. Compare
+    // against the per-viewport target_hud: readout (bottom-left of each split half), which does
+    // update per-player.
+    Label((
+      id: "legacy_target_var",
+      bind: "target_display",
+      format: "Legacy target_display (blank with 2+ players): {}",
+      position: (20.0, 152.0),
       size: (900.0, 32.0),
     )),
   ],

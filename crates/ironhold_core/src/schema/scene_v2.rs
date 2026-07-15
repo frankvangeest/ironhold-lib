@@ -94,6 +94,15 @@ pub struct GameSceneV2 {
     /// Omit this field to disable the indicator for this scene (no ring, no error).
     #[serde(default)]
     pub target_indicator: Option<TargetIndicatorDef>,
+    /// Per-viewport target-name HUD readout for local co-op split-screen scenes. When set, each
+    /// `SplitViewportSlot` camera gets its own automatically-positioned readout showing that
+    /// player's currently selected target — independent of every other player's. Has no effect
+    /// in non-split scenes (there are no `SplitViewportSlot` cameras to attach to). Omit this
+    /// field to disable the per-viewport readout entirely — the legacy global `target_display`/
+    /// `target_name`/`target_id` `GameVariables` still exist for single-player scenes regardless.
+    /// See `planning/features/per_player_split_screen_targeting.md`.
+    #[serde(default)]
+    pub target_hud: Option<TargetHudDef>,
     /// Enable the nameplate system for NPCs/props in this scene. When `true`, entities tagged
     /// with `NameplateTag` at spawn time display a floating name + pixel stat bars above them.
     /// Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does NOT
@@ -666,6 +675,41 @@ pub struct TargetIndicatorDef {
 fn default_indicator_radius() -> f32 { 1.0 }
 fn default_indicator_color() -> (f32, f32, f32, f32) { (1.0, 0.15, 0.15, 0.85) }
 fn default_indicator_offset_y() -> f32 { 0.05 }
+
+/// Per-viewport target HUD readout configuration for local co-op split-screen scenes. Spawned
+/// automatically once per `SplitViewportSlot` camera (same pattern as the "P{n}" corner label,
+/// see `capabilities/camera.rs`'s `target_hud_spawn_system`) — there is no per-widget placement
+/// control beyond that, matching the corner label's own "no opt-out, no repositioning" precedent.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct TargetHudDef {
+    /// Which of prefab/id/name to display. Default: `Full` (`"prefab_key id"`, matching the
+    /// legacy `target_display` `GameVariables` format).
+    #[serde(default)]
+    pub show: TargetHudDisplay,
+    /// Font size in screen pixels. Default: 16.0.
+    #[serde(default = "default_target_hud_font_size")]
+    pub font_size: f32,
+    /// Text colour as sRGB RGBA (0.0-1.0). Default: near-white `(0.9, 0.9, 0.9, 1.0)`.
+    #[serde(default = "default_target_hud_color")]
+    pub color: (f32, f32, f32, f32),
+}
+
+/// Which part of the selected target's identity `TargetHudDef` shows.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TargetHudDisplay {
+    /// `"prefab_key id"` — e.g. `"enemy_orc_melee orc_01"`. Matches the legacy
+    /// `target_display` `GameVariables` format.
+    #[default]
+    Full,
+    /// Prefab catalog key only — e.g. `"enemy_orc_melee"`.
+    NameOnly,
+    /// Per-instance spawn ID only — e.g. `"orc_01"`.
+    IdOnly,
+}
+
+fn default_target_hud_font_size() -> f32 { 16.0 }
+fn default_target_hud_color() -> (f32, f32, f32, f32) { (0.9, 0.9, 0.9, 1.0) }
 
 /// Scene-level depth-scale configuration for all labels.
 /// Labels shrink as camera distance increases; `font_size` is the size at `reference_distance`.

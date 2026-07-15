@@ -7,6 +7,11 @@
   },
   textures: {},
   audio: {},
+  // Phase 1 (per_player_split_screen_targeting.md) playtest aid: target-indicator ring texture,
+  // referenced by room3.scene.ron's target_indicator: block.
+  decals: {
+    "target_ring": "shared/textures/decals/ring_thick.png",
+  },
   effects: {
     // Stationary, long-lived, non-fading sparks — playtest aid for the split-screen particle
     // billboard orientation fix (Phase 1 of planning/features/split_screen_camera_followups.md).

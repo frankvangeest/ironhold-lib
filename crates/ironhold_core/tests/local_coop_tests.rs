@@ -5,7 +5,7 @@ use bevy::math::Mat4;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry};
 use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
@@ -13,7 +13,7 @@ use ironhold_core::capabilities::stat_display::{StatLabelMarker, WorldStatBarFil
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
-use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, player_view_box_clamp_system};
+use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
@@ -21,6 +21,7 @@ use ironhold_core::capabilities::camera::{
     split_viewport_player_label_spawn_system, split_viewport_player_label_update_system,
 };
 use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trigger_zone_system};
+use ironhold_core::GameVariables;
 
 mod support;
 use support::setup_test_app;
@@ -1790,6 +1791,7 @@ fn set_cursor_position(app: &mut App, x: f64, y: f64) {
     window.set_physical_cursor_position(Some((x, y).into()));
 }
 
+
 #[test]
 fn test_click_select_resolves_against_the_viewport_the_cursor_is_actually_over() {
     let mut app = setup_test_app();
@@ -1800,19 +1802,21 @@ fn test_click_select_resolves_against_the_viewport_the_cursor_is_actually_over()
     // a naive "first active camera in query iteration order" pick (the old bug's
     // `.find(|c| c.is_active)`) would choose the wrong one regardless of where the cursor
     // actually is — proving the fix picks by viewport-contains-cursor, not iteration order.
+    let right_player = app.world_mut().spawn(PlayerTarget::default()).id();
     let (t1, g1, cam1) = ortho_camera_bundle(
         Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
         Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
         UVec2::new(1280, 720),
     );
-    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1), test_orbit_camera(right_player)));
 
+    let left_player = app.world_mut().spawn(PlayerTarget::default()).id();
     let (t0, g0, cam0) = ortho_camera_bundle(
         Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
         Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
         UVec2::new(1280, 720),
     );
-    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0), test_orbit_camera(left_player)));
 
     // One selectable sits exactly at the left camera's look-at target (projects to the left
     // viewport's centre, screen (320, 360)); another at the right camera's look-at target
@@ -1846,19 +1850,21 @@ fn test_click_select_resolves_against_the_other_viewport_when_cursor_moves_there
     app.update();
     spawn_primary_window(&mut app, 1280, 720, 1.0);
 
+    let left_player = app.world_mut().spawn(PlayerTarget::default()).id();
     let (t0, g0, cam0) = ortho_camera_bundle(
         Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
         Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
         UVec2::new(1280, 720),
     );
-    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0)));
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0), test_orbit_camera(left_player)));
 
+    let right_player = app.world_mut().spawn(PlayerTarget::default()).id();
     let (t1, g1, cam1) = ortho_camera_bundle(
         Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
         Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
         UVec2::new(1280, 720),
     );
-    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1)));
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1), test_orbit_camera(right_player)));
 
     app.world_mut().spawn((
         SpawnId("left_entity".to_string()),
@@ -1888,10 +1894,11 @@ fn test_click_select_single_camera_regression_unaffected_by_viewport_fix() {
     app.update();
     spawn_primary_window(&mut app, 1280, 720, 1.0);
 
+    let player = app.world_mut().spawn(PlayerTarget::default()).id();
     let (t, g, camera) = ortho_camera_bundle(
         Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
     );
-    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+    app.world_mut().spawn((Camera3d::default(), camera, t, g, test_orbit_camera(player)));
 
     app.world_mut().spawn((
         SpawnId("only_entity".to_string()),
@@ -1907,6 +1914,232 @@ fn test_click_select_single_camera_regression_unaffected_by_viewport_fix() {
         app.world().resource::<CurrentTarget>().0.as_deref(), Some("only_entity"),
         "an ordinary single-camera (non-split) scene must still select correctly after the \
          viewport-aware fix — regression guard"
+    );
+}
+
+// ── Per-player targeting (Phase 1, per_player_split_screen_targeting.md) ───────────
+
+fn test_targetable_at(id: &str, pos: Vec3) -> impl Bundle {
+    (
+        SpawnId(id.to_string()),
+        Transform::from_translation(pos),
+        GlobalTransform::from_translation(pos),
+        ironhold_core::capabilities::targeting::Targetable,
+    )
+}
+
+#[test]
+fn test_click_select_only_changes_the_clicking_players_target() {
+
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let left_player = app.world_mut().spawn((PlayerTarget::default(), PlayerIndex(0))).id();
+    let (t0, g0, cam0) = ortho_camera_bundle(
+        Vec3::new(-3.0, 0.0, 10.0), Vec3::new(-3.0, 0.0, 0.0), 10.0, true, 0,
+        Some(Viewport { physical_position: UVec2::ZERO, physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam0, t0, g0, SplitViewportSlot(0), test_orbit_camera(left_player)));
+
+    let right_player = app.world_mut().spawn((PlayerTarget::default(), PlayerIndex(1))).id();
+    let (t1, g1, cam1) = ortho_camera_bundle(
+        Vec3::new(3.0, 0.0, 10.0), Vec3::new(3.0, 0.0, 0.0), 10.0, true, 1,
+        Some(Viewport { physical_position: UVec2::new(640, 0), physical_size: UVec2::new(640, 720), ..default() }),
+        UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1), test_orbit_camera(right_player)));
+
+    app.world_mut().spawn((
+        SpawnId("left_entity".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
+        ClickSelectable,
+    ));
+
+    // Click the left viewport — only the left (primary) player should get a target.
+    set_cursor_position(&mut app, 320.0, 360.0);
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+
+    assert_eq!(
+        app.world().get::<PlayerTarget>(left_player).unwrap().0.as_deref(), Some("left_entity"),
+        "the clicking player's own PlayerTarget must be set"
+    );
+    assert_eq!(
+        app.world().get::<PlayerTarget>(right_player).unwrap().0, None,
+        "the non-clicking player's PlayerTarget must be completely unaffected"
+    );
+}
+
+#[test]
+fn test_tab_targeting_each_player_cycles_independently() {
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut p1_inputs = test_input_map();
+    p1_inputs.target_next = "Tab".to_string();
+    let player1 = app.world_mut().spawn((
+        CharacterController { inputs: p1_inputs, ..test_character_controller() },
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        Transform::default(),
+        GlobalTransform::default(),
+    )).id();
+
+    let mut p2_inputs = test_input_map();
+    p2_inputs.target_next = "KeyT".to_string();
+    let player2 = app.world_mut().spawn((
+        CharacterController { inputs: p2_inputs, ..test_character_controller() },
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        Transform::default(),
+        GlobalTransform::default(),
+    )).id();
+
+    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+    app.world_mut().spawn(test_targetable_at("enemy_b", Vec3::new(-2.0, 0.0, 0.0)));
+
+    // Player 2 presses their own key first — only player 2's target should change.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyT);
+    app.update();
+
+    assert_eq!(app.world().get::<PlayerTarget>(player1).unwrap().0, None, "player 1 pressed nothing, must stay untargeted");
+    assert!(app.world().get::<PlayerTarget>(player2).unwrap().0.is_some(), "player 2's own key press must select a target for player 2");
+
+    // `release()` alone doesn't clear the `just_pressed` bookkeeping (only `pressed`) — without
+    // this, KeyT's stale just_pressed bit would still be set below when Tab is pressed, making
+    // player 2 spuriously react a second time in the same frame as player 1's Tab press.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().release(KeyCode::KeyT);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear_just_pressed(KeyCode::KeyT);
+    app.update();
+
+    // Now player 1 presses Tab — only player 1's target should change; player 2's is untouched.
+    let player2_target_before = app.world().get::<PlayerTarget>(player2).unwrap().0.clone();
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Tab);
+    app.update();
+
+    assert!(app.world().get::<PlayerTarget>(player1).unwrap().0.is_some(), "player 1's own Tab press must select a target for player 1");
+    assert_eq!(
+        app.world().get::<PlayerTarget>(player2).unwrap().0, player2_target_before,
+        "player 1's Tab press must not disturb player 2's already-selected target"
+    );
+}
+
+#[test]
+fn test_only_primary_player_target_mirrors_into_current_target_and_global_events() {
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut p2_inputs = test_input_map();
+    p2_inputs.target_next = "KeyT".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p2_inputs, ..test_character_controller() },
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        Transform::default(),
+        GlobalTransform::default(),
+    ));
+    // A primary (index 0) player must also exist for `is_multiplayer` to reflect 2 players —
+    // absent here on purpose to isolate "does a non-primary change ever leak into CurrentTarget",
+    // matching the primitive-player path's "no PlayerIndex at all" shape too.
+
+    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyT);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<CurrentTarget>().0, None,
+        "a non-primary player's target selection must never mirror into the global CurrentTarget resource"
+    );
+    let changed_fired = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name.starts_with("target.changed")));
+    assert!(!changed_fired, "a non-primary player's target selection must not emit global target.changed events");
+}
+
+#[test]
+fn test_target_auto_clear_is_per_player() {
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let player1 = app.world_mut().spawn((
+        test_character_controller(), PlayerTarget(Some("hidden_enemy".to_string())), PlayerIndex(0),
+    )).id();
+    let player2 = app.world_mut().spawn((
+        test_character_controller(), PlayerTarget(Some("visible_enemy".to_string())), PlayerIndex(1),
+    )).id();
+
+    let hidden = app.world_mut().spawn((SpawnId("hidden_enemy".to_string()), Visibility::Hidden)).id();
+    let visible = app.world_mut().spawn((SpawnId("visible_enemy".to_string()), Visibility::Visible)).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("hidden_enemy".to_string(), hidden);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("visible_enemy".to_string(), visible);
+
+    app.update();
+
+    assert_eq!(app.world().get::<PlayerTarget>(player1).unwrap().0, None, "player 1's target must auto-clear once hidden");
+    assert_eq!(
+        app.world().get::<PlayerTarget>(player2).unwrap().0.as_deref(), Some("visible_enemy"),
+        "player 2's target must be untouched — it is still visible"
+    );
+}
+
+#[test]
+fn test_legacy_target_vars_blank_when_multiplayer() {
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut p1_inputs = test_input_map();
+    p1_inputs.target_next = "Tab".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p1_inputs, ..test_character_controller() },
+        PlayerTarget::default(), PlayerIndex(0),
+        Transform::default(), GlobalTransform::default(),
+    ));
+    // Second player present so this scene counts as multiplayer, even though only player 1 acts.
+    app.world_mut().spawn((
+        CharacterController { ..test_character_controller() },
+        PlayerTarget::default(), PlayerIndex(1),
+        Transform::default(), GlobalTransform::default(),
+    ));
+
+    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Tab);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("target_display").map(String::as_str), Some(""), "target_display must be blank in a 2+ player scene");
+    assert_eq!(vars.0.get("target_name").map(String::as_str), Some(""), "target_name must be blank in a 2+ player scene");
+    assert_eq!(vars.0.get("target_id").map(String::as_str), Some(""), "target_id must be blank in a 2+ player scene");
+}
+
+#[test]
+fn test_legacy_target_vars_populate_when_single_player() {
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn((
+        CharacterController { ..test_character_controller() },
+        PlayerTarget::default(),
+        Transform::default(), GlobalTransform::default(),
+    ));
+    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Tab);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("target_display").map(String::as_str), Some("enemy_a"),
+        "single-player scenes must keep populating the legacy target_display var, unchanged from before per-player targeting"
     );
 }
 
@@ -2300,5 +2533,113 @@ fn test_stat_widgets_stay_single_instance_with_one_player_carrying_split_config(
         "a single-player scene must spawn exactly 1 stat label with no rank duplication, even \
          though its prefab's camera.split block is set — matching spawn_players_and_camera's own \
          `entities.len() < 2` fallback to a single full-window camera"
+    );
+}
+
+// ── Per-viewport target HUD readout (Phase 1, per_player_split_screen_targeting.md) ─────
+
+fn load_two_player_scene_with_target_hud(app: &mut App, author_target_hud: bool) {
+    two_player_catalogs_with_split(
+        app, None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+    app.world_mut()
+        .resource_mut::<LoadedPrefabCatalog>()
+        .0
+        .prefabs
+        .insert("test_hud_enemy".to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            model: "char_a".to_string(),
+            targetable: true,
+            ..Default::default()
+        });
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let target_hud_block = if author_target_hud { "target_hud: Some((show: Full))," } else { "" };
+    let ron_text = format!(
+        r#"(
+        schema_version: 2,
+        {}
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "enemy_01", prefab: "test_hud_enemy", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#,
+        target_hud_block
+    );
+    let scene: GameSceneV2 = ron::de::from_str(&ron_text).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_target_hud_shows_each_players_own_target_independently() {
+    use ironhold_core::capabilities::player::PlayerTarget;
+    use ironhold_core::capabilities::camera::LinkedTargetHud;
+
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    load_two_player_scene_with_target_hud(&mut app, true);
+
+    let enemy_entity = *app.world().resource::<SpawnRegistry>()
+        .entities.get("enemy_01").expect("enemy must register in SpawnRegistry");
+
+    // Map each split camera's HUD readout entity to its owning player entity.
+    let cams: Vec<(Entity, Entity)> = {
+        let mut q = app.world_mut().query::<(&OrbitCamera, &LinkedTargetHud)>();
+        q.iter(app.world()).map(|(o, l)| (o.target, l.0)).collect()
+    };
+    assert_eq!(cams.len(), 2, "both split cameras must get a target-HUD readout entity");
+
+    // Only player 1 (the first split camera's target) selects the enemy.
+    let (player1, hud1) = cams[0];
+    let (_player2, hud2) = cams[1];
+    app.world_mut().get_mut::<PlayerTarget>(player1).unwrap().0 = Some("enemy_01".to_string());
+    let _ = enemy_entity; // registered above purely to confirm the scene wired the prop correctly
+    app.update();
+
+    let text1 = app.world().get::<Text>(hud1).unwrap();
+    assert!(text1.0.contains("enemy_01"), "player 1's own readout must show their selected target, got {:?}", text1.0);
+    let vis1 = app.world().get::<Visibility>(hud1).unwrap();
+    assert_eq!(*vis1, Visibility::Visible, "player 1's readout must be visible once a target is selected");
+
+    let text2 = app.world().get::<Text>(hud2).unwrap();
+    assert!(text2.0.is_empty(), "player 2's readout must stay empty — player 2 selected nothing");
+    let vis2 = app.world().get::<Visibility>(hud2).unwrap();
+    assert_eq!(*vis2, Visibility::Hidden, "player 2's readout must stay hidden — player 2 has no target");
+}
+
+#[test]
+fn test_target_hud_absent_without_scene_config_block() {
+    use ironhold_core::capabilities::camera::SplitScreenTargetHud;
+
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_target_hud(&mut app, false);
+
+    let hud_count = app.world_mut().query::<&SplitScreenTargetHud>().iter(app.world()).count();
+    assert_eq!(
+        hud_count, 0,
+        "a scene with no target_hud: block must spawn zero HUD readout entities — opt-in, \
+         matching target_indicator:'s own opt-in pattern"
     );
 }

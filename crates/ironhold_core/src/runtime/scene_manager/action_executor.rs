@@ -50,6 +50,7 @@ pub fn action_executor_system(
                 scene_state.active_dialogue.clear();
                 scene_state.inventory_ui.panels_open = 0;
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
+                commands.insert_resource(crate::runtime::scene_manager::LoadedTargetHud(None));
                 commands.insert_resource(crate::runtime::scene_manager::ActiveViewBox(None));
                 commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
                 commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
@@ -715,24 +716,55 @@ pub fn action_executor_system(
             }
             Action::SetTarget(id) => {
                 info!("Action::SetTarget: {:?}", id);
-                scene_state.current_target.0 = Some(id.clone());
                 // Update the target UI variables so a rule-driven SetTarget updates a bound
                 // label identically to click/Tab selection (resolve the prefab key via the
                 // spawn registry, falling back to id-only display if it isn't found).
                 let prefab = spawn_params.registry.entities.get(&id)
                     .and_then(|e| scene_state.prefab_keys.get(*e).ok())
                     .map(|p| p.0.clone());
-                crate::capabilities::targeting::write_target_vars(
-                    &mut scene_state.game_vars, prefab.as_deref(), &id,
-                );
-                game_events.write(GameEvent::Trigger(format!("target.changed:{}", id)));
-                game_events.write(GameEvent::Trigger("target.changed".to_string()));
+                let is_multiplayer = scene_state.player_targets.iter().count() >= 2;
+                let primary = scene_state.player_targets.iter()
+                    .find(|(_, _, idx)| crate::capabilities::targeting::is_primary_player(*idx))
+                    .map(|(e, _, _)| e);
+                // Mirror into the primary player's PlayerTarget (not just CurrentTarget) —
+                // otherwise the ring (target_indicator_system) and target_auto_clear_system,
+                // both now driven by PlayerTarget, would never react to a rule-driven SetTarget.
+                if let Some(entity) = primary {
+                    if let Ok((_, mut player_target, _)) = scene_state.player_targets.get_mut(entity) {
+                        crate::capabilities::targeting::apply_player_target(
+                            &id, prefab.as_deref(), true, is_multiplayer,
+                            &mut player_target, &mut scene_state.current_target,
+                            &mut scene_state.game_vars, &mut game_events,
+                        );
+                    }
+                } else {
+                    // No player entities in this scene at all (e.g. a menu) — fall back to the
+                    // resource/vars-only behavior that predates per-player targeting.
+                    scene_state.current_target.0 = Some(id.clone());
+                    crate::capabilities::targeting::write_target_vars(
+                        &mut scene_state.game_vars, prefab.as_deref(), &id,
+                    );
+                    game_events.write(GameEvent::Trigger(format!("target.changed:{}", id)));
+                    game_events.write(GameEvent::Trigger("target.changed".to_string()));
+                }
             }
             Action::ClearTarget => {
                 info!("Action::ClearTarget");
-                scene_state.current_target.0 = None;
-                crate::capabilities::targeting::clear_target_vars(&mut scene_state.game_vars);
-                game_events.write(GameEvent::Trigger("target.cleared".to_string()));
+                let primary = scene_state.player_targets.iter()
+                    .find(|(_, _, idx)| crate::capabilities::targeting::is_primary_player(*idx))
+                    .map(|(e, _, _)| e);
+                if let Some(entity) = primary {
+                    if let Ok((_, mut player_target, _)) = scene_state.player_targets.get_mut(entity) {
+                        crate::capabilities::targeting::clear_player_target(
+                            true, &mut player_target, &mut scene_state.current_target,
+                            &mut scene_state.game_vars, &mut game_events,
+                        );
+                    }
+                } else {
+                    scene_state.current_target.0 = None;
+                    crate::capabilities::targeting::clear_target_vars(&mut scene_state.game_vars);
+                    game_events.write(GameEvent::Trigger("target.cleared".to_string()));
+                }
             }
             Action::CameraShake { duration_secs, intensity } => {
                 info!("Action::CameraShake: duration={:.2}s intensity={:.3}", duration_secs, intensity);

@@ -152,6 +152,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedAudioHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedDecalHandles>()
             .init_resource::<crate::runtime::scene_manager::LoadedTargetIndicator>()
+            .init_resource::<crate::runtime::scene_manager::LoadedTargetHud>()
             .init_resource::<crate::runtime::scene_manager::ActiveViewBox>()
             .init_resource::<crate::runtime::scene_manager::ActiveSplitScreen>()
             .init_resource::<crate::runtime::scene_manager::DynamicSplitConfig>()
@@ -295,11 +296,13 @@ impl Plugin for GamePlugin {
                 dynamic_split_screen_system,
                 split_screen_viewport_system,
                 split_viewport_player_label_update_system,
+                target_hud_update_system,
                 camera_shake_system,
                 fly_camera_system,
                 animation_playback_system,
             ).chain())
             .add_systems(Update, split_viewport_player_label_spawn_system)
+            .add_systems(Update, target_hud_spawn_system)
             .add_systems(Update, motion_system)
             .add_systems(Update, pipeline_warmup_system)
             .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))

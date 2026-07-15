@@ -524,6 +524,25 @@ pub(crate) fn spawn_players_and_camera(
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     registry: &mut SpawnRegistry,
 ) {
+    // Per-player targeting (capabilities/targeting.rs) treats `player_index: 0` (the default —
+    // `#[serde(default)]` on `PrefabDef.player_index`) as "the primary player": the one whose
+    // target mirrors into the shared `CurrentTarget` resource and fires global `target.changed`/
+    // `target.cleared` events. Two players sharing that status (both explicit `0`, or both
+    // omitting the field) fight over `CurrentTarget` and each emit their own global events the
+    // same frame, in query-iteration-order-dependent ways — no crash, but nondeterministic
+    // `{target}`-driven rule behavior. Same class of authoring mistake the split-screen HUD
+    // corner label already warns designers to avoid via unique `player_index` values; this is
+    // the runtime-visible half of that same requirement.
+    if player_configs.iter().filter(|pc| pc.player_index == 0).count() > 1 {
+        warn!(
+            "Scene has 2+ players with `player_index: 0` (or `player_index` omitted, which \
+             defaults to 0) — per-player targeting treats player_index 0 as the sole \"primary\" \
+             player. With 2+ players sharing that status, they will fight over the shared \
+             CurrentTarget resource and each emit their own global target.changed/target.cleared \
+             events. Give each player a unique player_index (0, 1, 2, ...) to fix."
+        );
+    }
+
     let entities: Vec<Entity> = player_configs.iter().map(|pc| {
         spawn_player_entity_core(commands, asset_server, fixes, model_spawner, pc, project_root, registry)
     }).collect();
@@ -789,6 +808,7 @@ fn spawn_player_entity_core(
         crate::capabilities::player::Player,
         crate::capabilities::player::PlayerOwnership::Local,
         crate::capabilities::player::PlayerIndex(player_config.player_index),
+        crate::capabilities::player::PlayerTarget::default(),
     ));
 
     if let Some(display_name) = &player_config.nameplate_display_name {

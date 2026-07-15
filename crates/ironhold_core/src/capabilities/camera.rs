@@ -470,6 +470,114 @@ pub fn split_viewport_player_label_update_system(
     }
 }
 
+/// Marks a `SplitViewportSlot` camera's per-viewport target-HUD readout as spawned. Companion to
+/// `LinkedTargetHud`. Opt-in — only spawns when the scene authors a `target_hud:` block; a scene
+/// with none gets no readout entities at all, matching `target_indicator:`'s own opt-in pattern.
+/// See `planning/features/per_player_split_screen_targeting.md`.
+#[derive(Component)]
+pub struct SplitScreenTargetHud;
+
+/// Points at the UI `Text` entity spawned for this split camera's target-HUD readout. Read every
+/// frame by `target_hud_update_system` to sync text/position/visibility.
+#[derive(Component)]
+pub struct LinkedTargetHud(pub Entity);
+
+/// Spawns one per-viewport target-HUD readout `Text` entity for every newly-added split-screen
+/// camera, mirroring `split_viewport_player_label_spawn_system`'s `Added<SplitViewportSlot>`
+/// idiom — but only when the scene authors a `target_hud:` block at all. Starts empty/hidden;
+/// `target_hud_update_system` fills in text and shows it once that camera's owning player
+/// actually has a target selected.
+pub fn target_hud_spawn_system(
+    mut commands: Commands,
+    new_cameras: Query<Entity, Added<SplitViewportSlot>>,
+    target_hud_cfg: Res<crate::runtime::scene_manager::LoadedTargetHud>,
+) {
+    let Some(cfg) = &target_hud_cfg.0 else { return };
+    for camera_entity in &new_cameras {
+        let (r, g, b, a) = cfg.color;
+        let hud = commands.spawn((
+            Name::new("TargetHud"),
+            Text::new(String::new()),
+            TextFont { font_size: cfg.font_size, ..default() },
+            TextColor(Color::srgba(r, g, b, a)),
+            TextShadow::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            Visibility::Hidden,
+            LevelEntity,
+        )).id();
+
+        commands.entity(camera_entity).insert((
+            SplitScreenTargetHud,
+            LinkedTargetHud(hud),
+        ));
+    }
+}
+
+/// Keeps every spawned target-HUD readout's text synced to its camera's owning player's
+/// `PlayerTarget`, and its position/visibility synced to that camera's live `Camera.viewport`/
+/// `is_active` — same viewport-tracking approach as `split_viewport_player_label_update_system`,
+/// anchored bottom-left (distinct from that system's top-right "P{n}" corner label) so the two
+/// never collide. Hidden whenever the owning player has no target selected, not just when the
+/// camera itself is inactive.
+pub fn target_hud_update_system(
+    window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    cameras: Query<(&Camera, &OrbitCamera, &LinkedTargetHud), With<SplitScreenTargetHud>>,
+    player_targets: Query<&crate::capabilities::player::PlayerTarget>,
+    prefab_keys: Query<&crate::runtime::scene_manager::PrefabKey>,
+    registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
+    target_hud_cfg: Res<crate::runtime::scene_manager::LoadedTargetHud>,
+    mut huds: Query<(&mut Text, &mut Node, &mut Visibility)>,
+) {
+    use crate::schema::scene_v2::TargetHudDisplay;
+
+    let Some(cfg) = &target_hud_cfg.0 else { return };
+    let Ok(window) = window_q.single() else { return };
+    let scale_factor = window.scale_factor();
+
+    const MARGIN_PX: f32 = 8.0;
+    const READOUT_HEIGHT_PX: f32 = 24.0;
+
+    for (camera, orbit, linked) in &cameras {
+        let Ok((mut text, mut node, mut visibility)) = huds.get_mut(linked.0) else { continue };
+
+        if !camera.is_active {
+            if *visibility != Visibility::Hidden { *visibility = Visibility::Hidden; }
+            continue;
+        }
+
+        let Ok(player_target) = player_targets.get(orbit.target) else { continue };
+        let Some(target_id) = &player_target.0 else {
+            if *visibility != Visibility::Hidden { *visibility = Visibility::Hidden; }
+            continue;
+        };
+
+        let prefab_key = registry.entities.get(target_id)
+            .and_then(|&e| prefab_keys.get(e).ok())
+            .map(|p| p.0.as_str());
+        let new_text = match cfg.show {
+            TargetHudDisplay::Full => match prefab_key {
+                Some(p) => format!("{} {}", p, target_id),
+                None => target_id.clone(),
+            },
+            TargetHudDisplay::NameOnly => prefab_key.unwrap_or(target_id).to_string(),
+            TargetHudDisplay::IdOnly => target_id.clone(),
+        };
+        if text.0 != new_text { text.0 = new_text; }
+        if *visibility != Visibility::Visible { *visibility = Visibility::Visible; }
+
+        let Some(viewport) = &camera.viewport else { continue };
+        let left_edge = viewport.physical_position.x as f32 / scale_factor;
+        let bottom_edge = (viewport.physical_position.y + viewport.physical_size.y) as f32 / scale_factor;
+        let new_left = Val::Px(left_edge + MARGIN_PX);
+        let new_top = Val::Px(bottom_edge - READOUT_HEIGHT_PX - MARGIN_PX);
+        if node.left != new_left { node.left = new_left; }
+        if node.top != new_top { node.top = new_top; }
+    }
+}
+
 /// Local co-op dynamic split (Stage 5): decides every frame whether the scene should be merged
 /// (one shared `PartyOrbitCamera`) or split (two per-player `OrbitCamera`s), and flips
 /// `Camera.is_active` accordingly. Runs after `party_camera_follow_system` (so the distance read

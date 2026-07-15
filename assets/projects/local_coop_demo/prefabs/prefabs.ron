@@ -81,6 +81,12 @@
       // distance-culling can be exercised against 2 simultaneously active split cameras.
       display_name: "Click Target",
       nameplate: true,
+      // Phase 1 (per_player_split_screen_targeting.md) playtest aid: also Tab-cycle-targetable,
+      // reusing these same two scene-placed instances (one per viewport) to exercise per-player
+      // Tab-targeting, the per-player-tinted target indicator ring, and the per-viewport
+      // target_hud: readout — no new prop needed since click_target_test already sits one per
+      // viewport in room3.
+      targetable: true,
     ),
 
     // Phase 4 (split_screen_camera_followups.md) playtest aid: floating stat_label +
@@ -369,6 +375,12 @@
           jump:         "Space",
           run:          "ShiftLeft",
           strafe_mouse_button: None,
+          // Phase 1 (per_player_split_screen_targeting.md) playtest aid: explicit override of
+          // InputMap's "Tab" default — Tab is intercepted by browsers for focus navigation in
+          // WASM builds (see the InputMap field table in docs/20_data_formats.md), so it would
+          // silently fail to cycle this player's target in the exact browser playtest meant to
+          // confirm this feature. Also deliberately distinct from player 2's key below.
+          target_next: "KeyT",
         ),
         movement: (
           walk_speed: 5.0,
@@ -407,6 +419,10 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
+          // Phase 1 (per_player_split_screen_targeting.md) playtest aid: deliberately distinct
+          // from player 1's "Tab" above (both defaulting to "Tab" would make both players
+          // Tab-cycle in lockstep on a single keyboard press, masking the per-player fix).
+          target_next: "KeyM",
         ),
         movement: (
           walk_speed: 5.0,

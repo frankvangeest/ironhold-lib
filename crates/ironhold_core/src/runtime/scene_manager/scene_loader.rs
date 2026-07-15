@@ -782,6 +782,7 @@ pub fn spawn_scene_v2(
             commands.entity(player_entity).insert((
                 crate::capabilities::player::Player,
                 crate::capabilities::player::PlayerOwnership::Local,
+                crate::capabilities::player::PlayerTarget::default(),
             ));
 
             if should_insert_nameplate(np_override, show_player_nameplate) {
@@ -1213,6 +1214,9 @@ pub fn spawn_scene_v2(
             });
             commands.insert_resource(LoadedTargetIndicator(resolved));
         }
+
+        // Per-viewport target HUD readout config — no catalog lookup needed, just a direct clone.
+        commands.insert_resource(crate::runtime::scene_manager::LoadedTargetHud(scene.target_hud.clone()));
 
         commands.insert_resource(crate::runtime::scene_manager::ActiveViewBox(scene.max_view_box));
 

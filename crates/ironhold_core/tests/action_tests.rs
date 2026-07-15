@@ -386,7 +386,7 @@ fn test_show_floating_text_offset_overrides_default_spawn_offset() {
 #[test]
 fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
     use ironhold_core::capabilities::target_indicator::TrackingTarget;
-    use ironhold_core::capabilities::action_bar::CurrentTarget;
+    use ironhold_core::capabilities::player::PlayerTarget;
     use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
 
     let mut app = setup_test_app();
@@ -403,6 +403,28 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
         .entities
         .insert("target_01".to_string(), entity);
 
+    // The indicator system reads each player entity's own PlayerTarget (Phase 1 of
+    // per_player_split_screen_targeting.md) — a CharacterController + PlayerTarget stand-in for
+    // a real player here, since the full spawn pipeline isn't exercised in this test.
+    let player = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0,
+                gamepad_index: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget::default(),
+    )).id();
+
     // Configure a target indicator (texture path need not resolve in tests).
     app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
         texture_path: "shared/textures/decals/ring_thick.png".to_string(),
@@ -413,7 +435,7 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
     })));
 
     // Selecting a target must spawn a TrackingTarget indicator entity.
-    app.world_mut().resource_mut::<CurrentTarget>().0 = Some("target_01".to_string());
+    app.world_mut().get_mut::<PlayerTarget>(player).unwrap().0 = Some("target_01".to_string());
     app.update();
 
     let indicator_count = app.world_mut()
@@ -423,7 +445,7 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
     assert_eq!(indicator_count, 1, "one TrackingTarget entity must exist after selecting a target");
 
     // Clearing the target must despawn the indicator within one frame.
-    app.world_mut().resource_mut::<CurrentTarget>().0 = None;
+    app.world_mut().get_mut::<PlayerTarget>(player).unwrap().0 = None;
     app.update();
     // Despawn is deferred (Commands); run one more update to flush.
     app.update();
@@ -433,4 +455,175 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
         .iter(app.world())
         .count();
     assert_eq!(indicator_count_after, 0, "TrackingTarget entity must be despawned after clearing the target");
+}
+
+/// Phase 1 (`per_player_split_screen_targeting.md`): when 2+ players are present, every target
+/// indicator ring is tinted by the fixed `PLAYER_LABEL_COLORS` palette (same one the split-screen
+/// "P{n}" corner HUD label uses) instead of the usual per-target prefab/category/scene colour
+/// precedence, so it's visually obvious whose ring is whose.
+#[test]
+fn test_target_indicator_tints_rings_per_player_when_multiplayer() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::player::{PlayerTarget, PlayerIndex};
+    use ironhold_core::capabilities::camera::PLAYER_LABEL_COLORS;
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let entity_a = app.world_mut().spawn((
+        SpawnId("enemy_a".to_string()),
+        GlobalTransform::from_translation(Vec3::new(1.0, 0.0, 0.0)),
+    )).id();
+    let entity_b = app.world_mut().spawn((
+        SpawnId("enemy_b".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-1.0, 0.0, 0.0)),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_a".to_string(), entity_a);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_b".to_string(), entity_b);
+
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.2,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
+    })));
+
+    let player1 = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0, gamepad_index: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget(Some("enemy_a".to_string())),
+        PlayerIndex(0),
+    )).id();
+    let _player2 = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0, gamepad_index: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget(Some("enemy_b".to_string())),
+        PlayerIndex(1),
+    )).id();
+
+    app.update();
+
+    let rings: Vec<(Entity, Handle<StandardMaterial>)> = {
+        let mut q = app.world_mut().query::<(&TrackingTarget, &MeshMaterial3d<StandardMaterial>)>();
+        q.iter(app.world()).map(|(t, m)| (t.owner, m.0.clone())).collect()
+    };
+    assert_eq!(rings.len(), 2, "each player must get their own ring");
+
+    let materials = app.world().resource::<Assets<StandardMaterial>>();
+    for (owner, mat_handle) in rings {
+        let expected_idx = if owner == player1 { 0 } else { 1 };
+        let expected = PLAYER_LABEL_COLORS[expected_idx].to_srgba();
+        let actual = materials.get(&mat_handle).unwrap().base_color.to_srgba();
+        assert!(
+            (actual.red - expected.red).abs() < 0.001
+                && (actual.green - expected.green).abs() < 0.001
+                && (actual.blue - expected.blue).abs() < 0.001,
+            "ring for player index {} must be tinted by PLAYER_LABEL_COLORS[{}], got {:?} expected {:?}",
+            expected_idx, expected_idx, actual, expected
+        );
+    }
+}
+
+/// System-architect review finding (Phase 1, `per_player_split_screen_targeting.md`):
+/// `Action::SetTarget`/`ClearTarget` must mirror the primary player's `PlayerTarget`, not just
+/// write the global `CurrentTarget` resource — otherwise the ring (`target_indicator_system`)
+/// and `target_auto_clear_system`, both now driven by `PlayerTarget`, would silently stop
+/// reacting to these two rule-driven actions. Drives the actual `Action` pipeline (not a direct
+/// `PlayerTarget` mutation) so this test would have caught that regression.
+#[test]
+fn test_set_target_and_clear_target_actions_mirror_into_primary_player() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::player::{PlayerTarget, PlayerIndex};
+    use ironhold_core::capabilities::action_bar::CurrentTarget;
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0, gamepad_index: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget::default(),
+        PlayerIndex(0),
+    )).id();
+
+    let target_entity = app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        GlobalTransform::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_01".to_string(), target_entity);
+
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.0,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
+    })));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetTarget("enemy_01".to_string()));
+    app.update();
+    // action_executor_system and target_indicator_system have no relative ordering constraint,
+    // so target_indicator_system may run before action_executor_system within this same frame —
+    // its Changed<PlayerTarget> read wouldn't see the write until the following frame. One more
+    // update lets it observe the change (same "despawn is deferred" pattern used elsewhere below).
+    app.update();
+
+    assert_eq!(
+        app.world().get::<PlayerTarget>(player).unwrap().0.as_deref(), Some("enemy_01"),
+        "Action::SetTarget must mirror into the primary player's PlayerTarget, not just CurrentTarget"
+    );
+    assert_eq!(app.world().resource::<CurrentTarget>().0.as_deref(), Some("enemy_01"));
+    let ring_count = app.world_mut().query::<&TrackingTarget>().iter(app.world()).count();
+    assert_eq!(ring_count, 1, "the ring must actually spawn via the real Action::SetTarget path, not just a direct PlayerTarget mutation");
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ClearTarget);
+    app.update();
+    app.update(); // despawn is deferred via Commands
+
+    assert_eq!(
+        app.world().get::<PlayerTarget>(player).unwrap().0, None,
+        "Action::ClearTarget must clear the primary player's PlayerTarget, not just CurrentTarget"
+    );
+    assert_eq!(app.world().resource::<CurrentTarget>().0, None);
+    let ring_count_after = app.world_mut().query::<&TrackingTarget>().iter(app.world()).count();
+    assert_eq!(ring_count_after, 0, "the ring must despawn via the real Action::ClearTarget path");
 }
