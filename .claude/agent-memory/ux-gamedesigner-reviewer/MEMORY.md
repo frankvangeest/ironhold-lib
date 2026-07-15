@@ -20,3 +20,4 @@
 - [Split-screen doc gap](project_split_screen_doc_gap.md) — split-screen internal fixes update only CLAUDE.md, not designer-facing docs/20_data_formats.md; v2 Ascii-vs-Pixel asymmetry needs a note
 - [Per-player targeting gating](project_per_player_targeting_gating.md) — ring-tint + target-var-blank trigger on CharacterController count>=2 (party mode too), but target_hud only on split viewports; docs conflate the two; Tab default breaks in WASM
 - [depth_scale field scope](project_depth_scale_field_scope.md) — depth_scale exists ONLY on scene labels (EntityLabelDef/WorldLabelDef); StatLabelDef/WorldStatBarDef have NO such field despite docs+plan claiming it; deny_unknown_fields makes it a parse error
+- [ActionBar single-player assumptions](project_action_bar_single_player_assumptions.md) — keyboard-only (dead gamepad bar), global cost pool (both bars dim), scene-wide slot_key (collisions); co-op action-bar traps for Phase 2
