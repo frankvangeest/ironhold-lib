@@ -66,6 +66,15 @@ done
 # build parallelism as a further fallback (single flag, keeps one command):
 cargo test -p ironhold_core --test '*' --jobs 1
 
+# ⚠️ The same disk risk applies to `cargo check|test|run -p ironhold_cli` -- not just the
+# ironhold_core test loop above. Real incident (2026-07-16): the core test loop finished clean at
+# 8GB free; `cargo test -p ironhold_cli` immediately after failed with "no space on device" at
+# 3.2GB, and later in the same session `cargo run -p ironhold_cli -- validate ...` failed again at
+# 2.4GB after other commands had quietly eaten the headroom a second time. Treat every one of these
+# three CLI-crate invocations as its own disk checkpoint: run `df -h /c/git` immediately before
+# each, and stop to investigate (don't just retry) if free space is under ~10GB -- a `cargo clean`
+# may be needed even mid-feature; see the confirm-with-Frank guidance above.
+
 # Run a single test file
 cargo test -p ironhold_core --test fsm_tests
 cargo test -p ironhold_core --test ron_validation
@@ -363,6 +372,7 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
       validate` only check references and schema, not style).
     - On the feature branch/worktree: move the feature from Active to Done in `planning/backlog.md` and in its own `planning/features/{name}.md`, then commit (code + tests + docs — never `pkg/`).
     - From the **primary checkout** (already on `integration` — do not run `git checkout integration` from the feature worktree, it will fail since `integration` is checked out there permanently): `git merge feature/{slug}`. Expect an occasional `planning/backlog.md` conflict when several features land close together — resolve it by hand; a `merge=union` driver was tried and rejected here (tested: it silently duplicates section headers and reverts moved lines instead of flagging a real conflict, since backlog.md entries move *between* sections rather than only being appended).
+    - **Same root cause, different shape: moving a feature file into `planning/features/done/` on the feature branch can produce a modify/delete conflict** — if `integration` picked up its own edits to that file at the old path in between (e.g. from a plan-review pass done after the feature branch was created), git sees "deleted on their side, modified on ours" and leaves the old-path copy in the tree instead of resolving the rename automatically. Real incident (2026-07-16, `action_bar_custom_hotkeys.md`). Resolution: `git rm` the stale old-path copy — the renamed file under `done/` is usually already staged correctly by the merge — then carry forward any content-level edits `integration`'s copy had (diff it against the feature branch's version first) before committing.
     - **Commit any `.claude/agent-memory/` changes here, directly on `integration`** — review-agent memory writes (from plan-review and step 4's post-implementation reviews) always land in the **primary checkout's** working tree, never inside the feature worktree, regardless of which branch the actual code change was made on. They will NOT be brought in by the `feature/{slug}` merge above (that branch's worktree never had them) — check `git status` here after the merge and commit them separately (e.g. `chore(agent-memory): update from {slug} review cycle`) before pushing.
     - Confirm successful merge, then `git push origin integration` (so a batch in progress isn't only local).
     - Clean up: **stop any dev server started for this feature's playtest first** (`python serve.py`
