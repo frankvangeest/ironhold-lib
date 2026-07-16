@@ -767,7 +767,7 @@ StatSpread((
 
 #### `ActionBar((...))` ✅
 
-A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires the slot's `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely.
+A row of skill slots, each bound to any keyboard key. Pressing a slot's key fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **Keyboard only** — there is no gamepad-button or mouse-click binding for slots (a designer-clicked slot button does nothing; only the bound key fires it).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -786,13 +786,17 @@ A row of up to 9 skill slots bound to keyboard keys 1–9. Pressing a key fires 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `key` | `String` | required | Key that activates the slot: `"1"` through `"9"` |
+| `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string |
 | `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. White pixels show the exact specified color; dark pixels stay dark. Omit to render the icon untinted (see note below) |
 | `do_actions` | `Vec<Action>` | required | Actions fired through the pipeline on activation |
 | `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again |
 | `cost` | `Option<SlotCost>` | `None` | Stat cost checked and deducted at activation time |
+| `label` | `Option<String>` | `None` | Ability/tooltip name (e.g. `"Heavy Strike"`) — **reserved for a future hover tooltip, not yet rendered anywhere.** Does **not** affect the on-screen corner glyph — see `key_hint` |
+| `key_hint` | `Option<String>` | `None` | Overrides the on-screen corner key glyph. Omit to pretty-print `key` (strips the `"Key"` prefix, so `"KeyQ"` → `"Q"`; digits and `"F2"`-style names render as-is — but modifier/arrow keys render their full raw name, e.g. `"ShiftLeft"`/`"ArrowUp"`, since only the `"Key"` prefix is stripped; set `key_hint` to a short glyph for those). Distinct from `label` — set both when you want a named ability with a custom glyph |
+
+**Accepted key names** (`key` / any `parse_key`-recognised string): digits `"0"`-`"9"`; numpad digits `"Numpad0"`-`"Numpad9"`; bare letters (`"q"`, `"Q"`, case-insensitive) or `"KeyQ"`-style names; function keys `"F1"`-`"F12"`; `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`; arrow keys `"ArrowUp"`/`"ArrowDown"`/`"ArrowLeft"`/`"ArrowRight"`; modifier keys `"ShiftLeft"`/`"ShiftRight"`/`"ControlLeft"`/`"ControlRight"`/`"AltLeft"`/`"AltRight"`. **Not supported** (the slot renders but never fires — a `warn!` at scene load and an `ironhold_cli validate` error both flag this): mouse buttons, modifier chords (e.g. `"Shift+1"`), gamepad buttons. Two slots in the same bar resolving to the same key is also flagged (both the runtime `warn!` and `validate`) — the first-listed slot fires, the other never does. **Only within one bar** — two *different* action bars using the same key are not currently cross-checked (see `planning/claude_suggestions.md`).
 
 > **Icon colors are sRGB** — author values the same way you would in an image editor or CSS.
 > `(0.85, 0.15, 0.15, 1.0)` renders as the red you expect; no gamma conversion needed.
@@ -871,6 +875,17 @@ ActionBar((
       do_actions: [ ApplyModifier(modifier_key: "speed_boost") ],
       cooldown_secs: 12.0,
       cost: (stat: "player_mana", amount: 20.0),
+    ),
+    // Non-digit key — `label` (tooltip name, not yet rendered anywhere) and `key_hint`
+    // (the corner glyph the player actually sees) are independent fields, shown together
+    // here so the distinction is unambiguous.
+    (
+      key: "KeyE",
+      icon_index: 2,
+      label: "Dodge Roll",
+      key_hint: "Dash",  // <- this is what renders in the slot's corner, not `label`
+      do_actions: [ PlayAnimationOn(target: "player_01", clip: "roll") ],
+      cooldown_secs: 2.0,
     ),
   ],
 ))
@@ -1623,7 +1638,7 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | Common | `"Space"`, `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"` |
 | Arrows | `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"` |
 
-Invalid key strings produce a `warn!` at load time and that binding has no effect. Case is significant — `"space"` and `"shiftleft"` are not valid.
+Invalid key strings produce a `warn!` at load time and that binding has no effect. Case is significant for multi-character names — `"space"` and `"shiftleft"` are not valid. **Exception:** a single bare letter (e.g. `"q"`) is case-insensitive and resolves the same as `"Q"`; only letter keys get this leniency.
 
 **`MovementConfig` fields** (all optional — defaults apply when omitted):
 

@@ -854,8 +854,9 @@ fn default_radar_background_color() -> (f32, f32, f32, f32) { (0.10, 0.12, 0.20,
 
 // ─── Action bar ───────────────────────────────────────────────────────────────
 
-/// A row of up to 9 skill slots bound to keys 1–9.
-/// Pressing a slot key fires its `do_actions` through the existing pipeline,
+/// A row of skill slots, each bound to any key name recognised by `InputMap::parse_key()`
+/// (digits, letters, `F1`-`F12`, `Space`, `Escape`, `Tab`, arrows, etc. — see `ActionSlotDef.key`).
+/// Pressing a slot's key fires its `do_actions` through the existing pipeline,
 /// checks an optional cooldown, and deducts an optional stat cost.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -893,7 +894,15 @@ pub struct ActionBarDef {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ActionSlotDef {
-    /// Key that activates this slot: `"1"` through `"9"`.
+    /// Key that activates this slot. Accepts any name `InputMap::parse_key()` recognises:
+    /// digits (`"1"`-`"9"`), bare letters (`"q"`/`"Q"`) or `"KeyQ"`-style names, function keys
+    /// (`"F1"`-`"F12"`), `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`,
+    /// arrow keys (`"ArrowUp"` etc). Not supported: mouse buttons, modifier chords (`"Shift+1"`),
+    /// gamepad buttons — an unrecognised key name logs a `warn!` at scene load and the slot never
+    /// fires. This string is also the slot's identity: `CooldownMap`/`PendingIntentActions` keys
+    /// and every emitted `action_bar.*:{key}` event use it verbatim, so rebinding a slot (changing
+    /// `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired
+    /// to the old key string.
     pub key: String,
     /// Per-slot texture catalog key override. When non-empty, overrides the bar's `icon_sheet`
     /// for this slot. Leave empty to use the bar-level `icon_sheet`.
@@ -915,9 +924,17 @@ pub struct ActionSlotDef {
     /// below `amount`; emits `action_bar.insufficient_resource:{key}` instead.
     #[serde(default)]
     pub cost: Option<SlotCost>,
-    /// Optional tooltip label shown on hover (future use).
+    /// Optional tooltip label shown on hover (future use). Distinct from `key_hint` below —
+    /// `label` is the ability/tooltip name (e.g. `"Heavy Strike"`); it does not affect the
+    /// on-screen corner glyph.
     #[serde(default)]
     pub label: Option<String>,
+    /// Overrides the on-screen corner key glyph. When omitted, the corner renders a pretty-print
+    /// of `key` (the `"Key"` prefix stripped, so `"KeyQ"` -> `"Q"`; digits and `"F2"`-style names
+    /// render as-is). Set this for a custom glyph/word (e.g. `key_hint: "Dash"`) instead of the
+    /// raw key string. Distinct from `label` above.
+    #[serde(default)]
+    pub key_hint: Option<String>,
 }
 
 /// Stat cost for an `ActionSlotDef`.

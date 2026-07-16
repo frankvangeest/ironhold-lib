@@ -246,6 +246,16 @@ impl InputMap {
     }
 
     pub fn parse_key(s: &str) -> Option<KeyCode> {
+        // Normalize a single lowercase ASCII letter (e.g. "q" -> "Q") so the single-character
+        // letter form is case-insensitive; multi-character key names (e.g. "Escape", "KeyQ")
+        // stay case-sensitive as authored.
+        let normalized;
+        let s = if s.len() == 1 && s.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+            normalized = s.to_ascii_uppercase();
+            normalized.as_str()
+        } else {
+            s
+        };
         match s {
             // Letters
             "KeyA" | "A" => Some(KeyCode::KeyA),
