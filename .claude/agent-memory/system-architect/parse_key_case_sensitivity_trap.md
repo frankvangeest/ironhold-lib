@@ -1,26 +1,29 @@
 ---
 name: parse_key-case-sensitivity-trap
-description: InputMap::parse_key is case-sensitive uppercase-only for letters; DIGIT_KEYS used lowercase "i" — a migration trap for action_bar_custom_hotkeys / Phase 2
+description: InputMap::parse_key was uppercase-only for letters; feature/action-bar-custom-hotkeys added a single-lowercase-letter normalization. Fixed on that branch, verify on main before relying.
 metadata:
   type: project
 ---
 
-`InputMap::parse_key` (`schema/player.rs`) is **case-sensitive** and has **no lowercase
-single-letter arms** and no `.to_uppercase()` normalization: letters match only `"KeyA"`/`"A"`
-(uppercase), digits match `"Digit1"`/`"1"`. So `parse_key("i")` returns `None`, not
-`KeyCode::KeyI`.
+`InputMap::parse_key` (`schema/player.rs`) was historically **case-sensitive** with
+**uppercase-only letter arms** and no normalization: `parse_key("i")` returned `None`, not
+`KeyCode::KeyI`. This was a live trap: the legacy action-bar `DIGIT_KEYS` table hardcoded a
+lowercase `(KeyCode::KeyI, "i")` entry and `3rd_person_game_demo`'s inventory slot ships
+`key: "i"`, so migrating off `DIGIT_KEYS` to `parse_key` would silently kill that slot.
 
-**Why this matters:** the legacy action-bar `DIGIT_KEYS` table (`capabilities/action_bar.rs`)
-hardcoded a lowercase `(KeyCode::KeyI, "i")` entry, and `3rd_person_game_demo`'s inventory slot
-ships `key: "i"` (`scenes/main.scene.ron`). The `action_bar_custom_hotkeys.md` plan's Migration
-section wrongly claimed `parse_key("i")` resolves and "no migration is needed" — following it
-verbatim ships a silently-dead inventory slot (the exact failure the feature exists to remove).
-`"i"` is the ONLY letter slot key across all projects; every other action-bar slot is a digit
-(`"1"`..`"9"`), which parses fine.
+**Status (as of the `action_bar_custom_hotkeys` review):** FIXED on branch
+`feature/action-bar-custom-hotkeys` (not yet verified on `main` — grep `parse_key` in
+`schema/player.rs` before relying). The fix adds a normalization pass at the top of `parse_key`:
+a **single** lowercase ASCII letter (`s.len() == 1 && is_ascii_lowercase`) is upper-cased before
+the match; multi-character names (`"escape"`, `"keyq"`, `"f2"`) stay case-sensitive and still
+return `None` if not authored in canonical form. So `parse_key("i")`/`("q")` now resolve;
+`parse_key("keyq")`/`("f2")` still don't.
 
-**How to apply:** any migration off `DIGIT_KEYS` to `parse_key` (this feature, and its follow-on
-`per_player_split_screen_targeting.md` Phase 2, which rebuilds the same `action_bar_input_system`)
-must first resolve the lowercase-`"i"` gap: either add a lowercase-letter arm to `parse_key`
-(non-breaking, keeps the `"i"` slot identity/hint/events intact) OR migrate the RON to `"KeyI"`
-(changes slot_key identity → breaks `action_bar.activated:i` event wiring and flips the on-screen
-hint from "i" to "I"). Prefer extending `parse_key`. Related: [[event_pipeline_intent_layer]].
+**Blast radius to remember:** `parse_key` is a shared helper with 8+ callers beyond the action
+bar (`runtime/input.rs` global/scene bindings, `project_loader.rs` + `scene_loader.rs` validation
+`.is_none()` checks, `scene_loader.rs` flycam `.unwrap_or(default)`, `targeting.rs` target_next).
+The normalization is strictly **widening** — it only converts former-`None` single lowercase
+letters to `Some`, never changes an existing `Some`. So it can only revive previously-dead
+bindings across all those callers, never break a working one. Low risk, but it's a shared-helper
+change tested only via the action bar. Related: [[event_pipeline_intent_layer]],
+[[parse_key-action-bar-resolution]].

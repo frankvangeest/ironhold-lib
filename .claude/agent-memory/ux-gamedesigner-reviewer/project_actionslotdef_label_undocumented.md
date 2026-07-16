@@ -1,19 +1,34 @@
 ---
 name: actionslotdef-label-undocumented
-description: ActionSlotDef has a `label` field used in every shipped action bar but it is missing from the docs field table; collides in naming with proposed key_label
+description: ActionSlotDef.label is NOT rendered anywhere (future-use tooltip); key_hint is the only on-screen slot text; docs table now lists both but omits the not-yet-rendered caveat
 metadata:
   type: project
 ---
 
-`ActionSlotDef` already has a `label: String` field. It is used in every shipped action bar slot:
-`3rd_person_game_demo/scenes/main.scene.ron` ("Attack"/"Heavy Strike"/"Poke"/"Mana Blast"/"Heal"/"Inventory"),
-`primitive_world/scenes/main.scene.ron` ("Heal"/"Speed Boost"/"Fire Burst"),
-`stats_demo/scenes/main.scene.ron` ("Heal"/"Speed+"/"Mana+"). The canonical docs example (`docs/20_data_formats.md` ~L955) also uses `label: "Heal"`.
+`ActionSlotDef` has two text-ish fields, and only ONE of them renders:
 
-**BUT** `label` is NOT listed in the `ActionSlotDef` field table in `docs/20_data_formats.md` (~L876-884, which lists only key/icon/icon_index/icon_color/do_actions/cooldown_secs/cost). Pre-existing doc gap.
+- **`key_hint: Option<String>`** (added by the action-bar-custom-hotkeys feature) — renders as the
+  bottom-right **corner glyph** of the slot. When omitted, the corner shows a pretty-print of
+  `key` (strips only the `"Key"` prefix, so `"KeyQ"` -> `"Q"`; digits and `"F2"` render as-is;
+  `"ShiftLeft"`/`"ArrowUp"` render literally — recommend `key_hint` for those).
+- **`label: Option<String>`** — **NOT rendered anywhere.** Genuinely "future use" (a hover tooltip
+  that does not exist yet). Verified: neither `scene_loader.rs`'s ActionBar arm nor
+  `capabilities/action_bar.rs` reads `slot.label`. Pre-feature the bar rendered only
+  `Text::new(key.clone())`.
 
-The action bar renders TWO distinct texts per slot per the `action_bar_custom_hotkeys.md` plan's own analysis: a corner key-hint (`Text::new(key.clone())`) and, separately, `label`. Any change to slot text/hint must account for both.
+**CORRECTION of a prior wrong memory:** an earlier version of this note (and the feature plan's own
+analysis) claimed the bar "renders TWO distinct texts per slot (corner key-hint AND label)." That
+was FALSE — `label` has never rendered on the bar. Only the corner hint renders.
 
-**Why it matters:** the `action_bar_custom_hotkeys.md` plan proposes adding `key_label: Option<String>` to override the corner key-hint, without ever mentioning the existing `label`. Two near-identical field names (`label` vs `key_label`) with a subtle distinction is a designer confusion trap. Consider `key_hint` instead, and document `label` at the same time.
+**Doc state after the feature:** `docs/20_data_formats.md` ActionSlotDef field table now DOES list
+both `label` and `key_hint` (the pre-existing gap I flagged is fixed). BUT the `label` row reads
+"Tooltip/ability name (e.g. `"Heavy Strike"`)" with NO "(not yet rendered / future use)" caveat —
+even though the schema doc comment in `scene_v2.rs` does say "(future use)". So a designer who sets
+`label: "Battle Cry"` (as the docs example AND the shipped `3rd_person_game_demo` KeyE slot both do)
+sees it nowhere. This directly undercuts the demo slot's stated purpose as a copy-reference for the
+label-vs-key_hint distinction: the distinction is half-invisible.
 
-**How to apply:** when reviewing any action-bar RON/doc change, verify the docs field table lists BOTH `label` and any new hint field, and that at least one example shows both in one slot so the distinction is unambiguous.
+**How to apply:** when reviewing action-bar docs/examples, insist the `label` doc row carries an
+explicit "not yet displayed — reserved for a future hover tooltip" note, matching the schema comment.
+Any example/demo that sets `label` should either drop it or annotate that it currently produces no
+visible output.
