@@ -906,6 +906,15 @@ fn default_radar_background_color() -> (f32, f32, f32, f32) { (0.10, 0.12, 0.20,
 #[serde(deny_unknown_fields)]
 pub struct ActionBarDef {
     pub id: String,
+    /// Which player this bar belongs to, matched against that player entity's `PlayerIndex`.
+    /// Omit (or `None`) for the default single-shared-bar behavior: resolves against the primary
+    /// player (`PlayerIndex(0)` or no `PlayerIndex` at all) — unchanged from before this field
+    /// existed. `Some(n)` scopes this bar's slots to whichever player entity carries
+    /// `PlayerIndex(n)`; a split-screen scene authors one `ActionBar` block per player, each
+    /// positioned in that player's half and tagged with their index. See
+    /// `planning/features/per_player_split_screen_targeting.md` (Phase 2).
+    #[serde(default)]
+    pub owner_player: Option<u32>,
     /// Top-left corner in pixels (always absolute).
     #[serde(default)]
     pub position: (f32, f32),

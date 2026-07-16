@@ -474,13 +474,18 @@ scene has no `SplitViewportSlot` camera for `target_hud:` to attach to, so it ge
 all today (blank legacy vars, no replacement) — a known Phase 1 gap, not yet built. **Single-player
 scenes are unaffected** — the vars keep populating exactly as before.
 
-**Only the primary player's selection drives gameplay through the shared pipeline.** The first
-player-tagged scene entity (matching `PlayerIndex(0)`, or a player with no `PlayerIndex` at all —
-e.g. the primitive/capsule player path) is "primary". `{target}` substitution in
-`rules.ron`/`state_machine.ron`/behaviors, and the action bar's `{target}`-gated cost check, both
-still resolve against the primary player's target only — a second (or third, or fourth) player's
-selection drives their own visual feedback (ring, HUD readout) but has no effect on shared
-`do_actions`. Per-player ability execution is a larger, not-yet-built feature.
+**Only the primary player's selection drives `rules.ron`/`state_machine.ron`/behavior `do_actions`
+through the shared pipeline.** The first player-tagged scene entity (matching `PlayerIndex(0)`, or
+a player with no `PlayerIndex` at all — e.g. the primitive/capsule player path) is "primary".
+`{target}` substitution in `rules.ron`/`state_machine.ron`/behaviors still resolves against the
+primary player's target only — a second (or third, or fourth) player's selection drives their own
+visual feedback (ring, HUD readout) but has no effect on those global `do_actions`.
+
+**Action bars are the one exception, as of per-player action bars (below).** A bar tagged with
+`owner_player` resolves its own slots' `{target}` (the rewrite and the no-target gate) against
+*that bar's own player's* selection, not the primary player's — see "Per-player action bars
+(split-screen)" under `ActionBar` for the field and its scope boundaries (a rule that overrides a
+slot's intent is the one path that still falls back to the primary player's target).
 
 > **`target.clicked:{id}` fires for every player's click, unlike `target.changed`/
 > `target.cleared` (primary-player only).** A rule matched on `target.clicked:{id}` already has
@@ -856,11 +861,12 @@ StatSpread((
 
 #### `ActionBar((...))` ✅
 
-A row of skill slots, each bound to any keyboard key. Pressing a slot's key fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **Keyboard only** — there is no gamepad-button or mouse-click binding for slots (a designer-clicked slot button does nothing; only the bound key fires it).
+A row of skill slots, each bound to any keyboard key. Pressing a slot's key fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **Keyboard only** — there is no gamepad-button or mouse-click binding for slots (a designer-clicked slot button does nothing; only the bound key fires it). This remains true per-player (see `owner_player` below): in a split-screen scene with one keyboard player and one gamepad player, the gamepad player's bar renders fully but can never fire — the only fully-usable multi-player configuration today is two players sharing one keyboard with disjoint slot keys.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier |
+| `owner_player` | `Option<u32>` | `None` | Which player this bar belongs to — set to the same value as that player's `player_index` field (`PrefabDef.player_index`, see `PrefabDef`'s field table). `None` (default): resolves against the primary player (`player_index: 0` or the field omitted entirely) — unchanged single-bar behavior. `Some(n)`: this bar's slots act on whichever player prefab has `player_index: n` — a split-screen scene authors one `ActionBar` per player, each positioned in that player's own half, each `owner_player` matching that player's `player_index`. A slot whose `owner_player` matches no player present in the scene never fires. Edge cases and the full RON example are under "Per-player action bars" below |
 | `position` | `(f32, f32)` | `(0.0, 0.0)` | Top-left corner in pixels (always absolute) |
 | `slot_size` | `f32` | `64.0` | Width and height of each slot square in pixels |
 | `slot_gap` | `f32` | `4.0` | Pixel gap between slots |
@@ -902,6 +908,16 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 | `stat` | `String` | Key of the stat to check and deduct from (matches a key in `stats.ron`) |
 | `amount` | `f32` | Amount to deduct. Slot blocks if `current < amount` |
 
+> **Cost/resource gating is global, not per-player.** `cost` checks and deducts against the single
+> shared `LoadedStats` resource — not a per-entity stat pool — even when `owner_player` scopes a bar
+> to one player in a split-screen scene. Concretely: if two split-screen players each have their own
+> `ActionBar` with a `cost:`-gated slot, spending the stat from player 1's bar also dims/blocks
+> player 2's bar, since both read the same global stat. Each bar looks independently positioned and
+> owned, but silently shares one invisible pool. This is a documented interim limitation, not a bug
+> — a genuinely separate per-player economy is tracked as its own backlog item
+> ("Per-player stat/resource pools"). Until then, split-screen demo/skill bars should either omit
+> `cost:` entirely or accept the shared-pool behavior explicitly.
+
 **Pipeline events emitted by the action bar:**
 
 | Event | When fired |
@@ -931,6 +947,17 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 
 // No rule on intent.slot.1 → slot's own do_actions run as normal
 ```
+
+> **In a split-screen scene with per-player `owner_player` bars, a rule that intercepts a
+> non-primary player's slot intent (like the "rage-strike" example above) still resolves `{target}`
+> against the **primary player's** target, not the firing player's own selection.** The slot's own
+> built-in `do_actions` (bypassed when a rule handles the intent) do resolve per-owning-player — only
+> a *rule's replacement* `do_actions` fall back to the global, primary-player-only `{target}`
+> substitution the interpreter has always used. This is a documented scope boundary (see
+> `planning/features/per_player_split_screen_targeting.md`), not an inconsistency to fix — designers
+> writing an intent-override rule for a non-primary player's bar should avoid `{target}` in that
+> rule's `do_actions`, or expect it to affect the primary player's target instead of that bar's own
+> player.
 
 **`{target}` substitution:** Any occurrence of `{target}` in a slot's `do_actions` (and in all rule / FSM `do_actions`) is replaced with the spawn ID of the entity in `CurrentTarget`. For action bar slots, if `CurrentTarget` is `None` the slot emits `action_bar.no_target:{key}` and does not fire. `CurrentTarget` is populated by the targeting system — set `click_selectable: true` or `targetable: true` on a `PrefabDef` to enable.
 
@@ -986,6 +1013,57 @@ Wire feedback events in `rules.ron` or `state_machine.ron` to surface cooldown o
 ( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("status", "Skill on cooldown") ] ),
 ( event: "action_bar.insufficient_resource:1", do_actions: [ SetVariable("status", "Not enough mana") ] ),
 ```
+
+**Per-player action bars (split-screen):** author one `ActionBar` block per player, each tagged
+with `owner_player` and positioned in that player's own half of the screen. No new engine
+duplication mechanism is involved — `position` is always absolute, so this is manual authoring
+the same way a split-screen scene already authors two corner-label-adjacent UI elements per
+player. Give each bar's slots disjoint `key`s — two bars sharing a key are flagged by both a
+runtime `warn!` at scene load and an `ironhold_cli validate` error, since the intent/cooldown
+pipeline (`CooldownMap`/`PendingIntentActions`/`HandledIntentSlots`) is keyed by the slot key
+string alone, scene-wide — a collision silently suppresses the *other* bar's pending slot, not
+just picks the wrong target.
+
+```ron
+ActionBar((
+  id: "action_bar_p1",
+  owner_player: 0,           // matches the player prefab with player_index: 0 (or omitted)
+  position: (200.0, 560.0),  // left half of a vertical split
+  slot_size: 56.0,
+  slots: [
+    (
+      key: "KeyG",           // disjoint from action_bar_p2's key below
+      key_hint: "P1",
+      do_actions: [
+        ModifyStat(key: "{target}.health", delta: -10.0),
+        ShowDamagePopup(entity: "{target}", amount: -10.0),
+      ],
+    ),
+  ],
+)),
+ActionBar((
+  id: "action_bar_p2",
+  owner_player: 1,           // matches the player prefab with player_index: 1
+  position: (900.0, 560.0),  // right half of a vertical split
+  slot_size: 56.0,
+  slots: [
+    (
+      key: "KeyL",
+      key_hint: "P2",
+      do_actions: [
+        ModifyStat(key: "{target}.health", delta: -10.0),
+        ShowDamagePopup(entity: "{target}", amount: -10.0),
+      ],
+    ),
+  ],
+)),
+```
+
+Each bar's `{target}` resolves against **that bar's own player's** `PlayerTarget` (their own
+Tab-cycle/click selection, independent of the other player's) — not the global `CurrentTarget` —
+so player 1 pressing `G` only ever affects whichever entity player 1 has selected, regardless of
+what player 2 currently has targeted. See the shared-cost-pool and rule-override caveats above for
+the two things that stay *not* per-player even with `owner_player` set.
 
 #### `DialoguePanel((...))` ✅
 
@@ -1617,7 +1695,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
 | `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
-| `player_index` | `u32` | `0` | **Local co-op only.** Which player slot this prefab controls (P1 = `0`, P2 = `1`, ...) when a scene has 2+ entities tagged `"player"`. Meaningless for single-player scenes. Forwarded onto the spawned entity as a queryable `PlayerIndex` component — reserved for future per-player systems (e.g. nameplate/HUD labeling); no shipped system reads it yet, since input routing uses `gamepad_index` and camera targeting uses scene entity order. Always assign a unique index per player so a future consumer doesn't collide. |
+| `player_index` | `u32` | `0` | **Local co-op only.** Which player slot this prefab controls (P1 = `0`, P2 = `1`, ...) when a scene has 2+ entities tagged `"player"`. Meaningless for single-player scenes. Forwarded onto the spawned entity as a queryable `PlayerIndex` component, read by: the split-screen "P{n}" corner HUD label; per-player targeting (which player is "primary" — see the Targeting section); and `ActionBar((owner_player: n))`, which matches a bar's slots to whichever player entity carries this value (see `ActionBar`'s "Per-player action bars" subsection). Always assign a unique index per player — a duplicate `player_index: 0` (or omitting it on 2+ players) makes them fight over "primary" status; a runtime `warn!` fires if this happens. |
 
 ### Special tag: `"flycam"` ✅
 

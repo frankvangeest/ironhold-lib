@@ -183,5 +183,61 @@
       position: (20.0, 152.0),
       size: (900.0, 32.0),
     )),
+    // Phase 2 (per_player_split_screen_targeting.md) playtest aid: own line, kept short and
+    // separate from targeting_hint above so neither line risks exceeding the box's known-good
+    // ~59-char budget at this font size (see the room_hint comment for that budget's origin).
+    Label((
+      id: "ability_hint",
+      text: "Ability: P1=G  P2=L (hits your own selected target only)",
+      position: (20.0, 196.0),
+      size: (900.0, 32.0),
+    )),
+    // Phase 2 (per_player_split_screen_targeting.md) playtest aid: one ActionBar per player,
+    // owner_player-tagged, positioned in that player's own split half, disjoint keys (G/L — not
+    // used by either player's movement/jump/run/target_next bindings above, and not the shared
+    // "KeyF" interact default both players otherwise use). Each slot fires against its own
+    // player's PlayerTarget (Tab/click-selected via T/M above) — a cost-free hit, so the shared
+    // LoadedStats cost pool's cross-bar dimming (documented, out of scope this phase) never
+    // surfaces during this playtest. ShowDamagePopup gives an immediate visual confirmation
+    // without needing a stat bar widget on click_target_test — a real playtest issue surfaced
+    // that damage popups were single-instance (no WorldLabelRank), so a popup rendered in the
+    // *other* player's viewport half whenever both were simultaneously active, even though the
+    // hit was per-player-correct underneath. Fixed the same day by extending WorldLabelRank
+    // duplication to Action::ShowDamagePopup/ShowFloatingText (see action_executor.rs) — the
+    // popup now shows correctly per-viewport, same as stat_label/world_stat_bar already did.
+    ActionBar((
+      id: "action_bar_p1",
+      owner_player: 0,
+      position: (200.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyG",
+          key_hint: "P1",
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
+    ActionBar((
+      id: "action_bar_p2",
+      owner_player: 1,
+      position: (900.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyL",
+          key_hint: "P2",
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
   ],
 )

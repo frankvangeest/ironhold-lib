@@ -341,9 +341,13 @@ pub struct WorldLabel {
 /// and `Ascii`-style `world_stat_bar` (Phase 4, `split_screen_camera_followups.md`) spawn the
 /// same ranked siblings but only when the loading scene is actually split-screen (ordinary
 /// scenes get exactly 1 entity, no rank overhead, since these widgets are rewritten every
-/// frame unlike the static label text). Damage popups, `Pixel`-style world stat bars, and
-/// nameplate anchors remain single-instance (implicit rank 0 only) — an entity using one of
-/// those shows in **at most one** simultaneously-visible split viewport.
+/// frame unlike the static label text). `ShowDamagePopup`/`ShowFloatingText` (Phase 2,
+/// `per_player_split_screen_targeting.md`) spawn the same ranked siblings, same split-screen
+/// gate as the stat widgets above — needed so a damage popup shows in whichever viewport the
+/// target is actually visible in, not just the single highest-priority active camera regardless
+/// of which player's action triggered it. `Pixel`-style world stat bars and nameplate anchors
+/// remain single-instance (implicit rank 0 only) — an entity using one of those shows in
+/// **at most one** simultaneously-visible split viewport.
 #[derive(Component)]
 pub struct WorldLabelRank(pub u8);
 
@@ -503,6 +507,13 @@ pub struct SceneStateParams<'w, 's> {
     pub current_target: ResMut<'w, crate::capabilities::action_bar::CurrentTarget>,
     /// Lets `SetTarget` resolve a target's prefab key for the target UI variables.
     pub prefab_keys: Query<'w, 's, &'static PrefabKey>,
+    /// Read by `Action::ShowDamagePopup`/`ShowFloatingText` to decide whether to spawn
+    /// `WorldLabelRank` siblings (same split-screen gate `drain_dynamic_stat_ui_system` uses) —
+    /// otherwise a popup only ever renders in one simultaneously-visible split viewport,
+    /// regardless of which player's action actually triggered it. See
+    /// `planning/features/per_player_split_screen_targeting.md` Phase 2.
+    pub active_split: Res<'w, ActiveSplitScreen>,
+    pub dynamic_split: Res<'w, DynamicSplitConfig>,
     /// Lets `Action::SetTarget`/`ClearTarget` mirror the primary player's `PlayerTarget` alongside
     /// `current_target` above — without this, the ring (`target_indicator_system`) and
     /// `target_auto_clear_system`, both now driven by `PlayerTarget` rather than `CurrentTarget`,

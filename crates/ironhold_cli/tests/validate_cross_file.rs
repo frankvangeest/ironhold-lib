@@ -121,6 +121,20 @@ fn duplicate_resolved_action_bar_key_exits_1() {
     );
 }
 
+/// Per-player action bars (Phase 2, `per_player_split_screen_targeting.md`) are the first
+/// feature to author 2+ `ActionBar`s in one scene — a shared slot key across different bars must
+/// be caught too, not just within one bar's own slots (the intent/cooldown pipeline is keyed by
+/// slot_key alone, scene-wide).
+#[test]
+fn cross_bar_duplicate_action_bar_key_exits_1() {
+    let (code, stdout) = validate("cross_bar_duplicate_action_bar_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bar_p1") && stdout.contains("bar_p2"),
+        "expected both colliding bar ids in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

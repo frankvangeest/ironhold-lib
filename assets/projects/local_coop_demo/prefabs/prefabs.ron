@@ -87,6 +87,19 @@
       // target_hud: readout — no new prop needed since click_target_test already sits one per
       // viewport in room3.
       targetable: true,
+      // Phase 2 (per_player_split_screen_targeting.md) playtest aid: gives this prop a real
+      // StatMap so the per-player action bars' ModifyStat({target}.health, ...) slot has
+      // something to subtract from instead of warning "no StatMap component" every press. No
+      // stat_label/world_stat_bar attached — invisible on its own, matching the "reuse existing
+      // playtest aids without changing what Phase 1's playtest already looks like" intent.
+      stat_templates: [
+        (
+          key: "health",
+          base: 100.0,
+          min: 0.0,
+          max: 100.0,
+        ),
+      ],
     ),
 
     // Phase 4 (split_screen_camera_followups.md) playtest aid: floating stat_label +
@@ -263,8 +276,9 @@
     // the sole switch for the shared camera; player_p1 is placed first on purpose.
     // IMPORTANT: `party` on player_p2 (or any non-first player) would be silently ignored —
     // there is no validation error, so always author it on the first player only.
-    // `player_index` is stored on the entity (queryable `PlayerIndex` component) but not yet
-    // read by any system in this stage — reserved for a future per-player HUD/nameplate feature.
+    // `player_index` is stored on the entity (queryable `PlayerIndex` component) — read by the
+    // split-screen "P{n}" corner HUD label, per-player targeting (which player is "primary"),
+    // and per-player `ActionBar((owner_player: n))` bars (see room3.scene.ron).
     "player_p1": (
       kind: Actor,
       model: "character_male",

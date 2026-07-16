@@ -7,11 +7,13 @@ use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
+use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
 use crate::capabilities::damage_popup::DamagePopup;
 use crate::capabilities::particle::QueuedParticleEffect;
 use super::{
     BackgroundMusic, LevelEntity, LoadedAssetCatalog, OverlayEntity, PendingSceneLoadMode,
-    SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, resolve_project_path,
+    SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, WorldLabelRank,
+    resolve_project_path,
 };
 use super::entity_spawner::assemble_player_config;
 
@@ -518,39 +520,54 @@ pub fn action_executor_system(
                         );
                         let (ox, oy, oz) = style.spawn_offset;
                         let popup_offset = Vec3::new(ox, oy, oz);
-                        let popup_duration = DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed };
-                        commands.spawn((
-                            Text2d::new(text.clone()),
-                            TextFont { font_size: style.font_size, ..default() },
-                            TextColor(Color::srgba(0.0, 0.0, 0.0, a)),
-                            Transform::from_xyz(0.0, 0.0, 9.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(e),
-                                offset: popup_offset,
-                                base_font_size: style.font_size,
-                                depth_scale: None,
-                                screen_offset: Vec2::new(1.0, -1.0),
-                            },
-                            DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
-                            LevelEntity,
-                        ));
-                        commands.spawn((
-                            Text2d::new(text),
-                            TextFont { font_size: style.font_size, ..default() },
-                            TextColor(Color::srgba(r, g, b, a)),
-                            Transform::from_xyz(0.0, 0.0, 10.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(e),
-                                offset: popup_offset,
-                                base_font_size: style.font_size,
-                                depth_scale: None,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            popup_duration,
-                            LevelEntity,
-                        ));
+                        // Split-screen scenes duplicate one rank-0 primary plus rank
+                        // 1..MAX_SPLIT_PLAYERS siblings — same gate drain_dynamic_stat_ui_system
+                        // uses — so the popup renders in whichever viewport(s) the target is
+                        // actually visible in, not just the single highest-priority active camera
+                        // regardless of which player's action triggered it. See
+                        // planning/features/per_player_split_screen_targeting.md Phase 2.
+                        let is_split_screen = scene_state.active_split.0.is_some() || scene_state.dynamic_split.0.is_some();
+                        let popup_ranks = if is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
+                        for rank in 0..popup_ranks {
+                            let mut shadow_entity = commands.spawn((
+                                Text2d::new(text.clone()),
+                                TextFont { font_size: style.font_size, ..default() },
+                                TextColor(Color::srgba(0.0, 0.0, 0.0, a)),
+                                Transform::from_xyz(0.0, 0.0, 9.0),
+                                WorldLabel {
+                                    world_pos: Vec3::ZERO,
+                                    tracked_entity: Some(e),
+                                    offset: popup_offset,
+                                    base_font_size: style.font_size,
+                                    depth_scale: None,
+                                    screen_offset: Vec2::new(1.0, -1.0),
+                                },
+                                DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                                LevelEntity,
+                            ));
+                            if rank > 0 {
+                                shadow_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                            }
+                            let mut main_entity = commands.spawn((
+                                Text2d::new(text.clone()),
+                                TextFont { font_size: style.font_size, ..default() },
+                                TextColor(Color::srgba(r, g, b, a)),
+                                Transform::from_xyz(0.0, 0.0, 10.0),
+                                WorldLabel {
+                                    world_pos: Vec3::ZERO,
+                                    tracked_entity: Some(e),
+                                    offset: popup_offset,
+                                    base_font_size: style.font_size,
+                                    depth_scale: None,
+                                    screen_offset: Vec2::ZERO,
+                                },
+                                DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                                LevelEntity,
+                            ));
+                            if rank > 0 {
+                                main_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                            }
+                        }
                     } else {
                         warn!("Action::ShowDamagePopup: entity '{}' has no GlobalTransform", entity_id);
                     }
@@ -570,38 +587,50 @@ pub fn action_executor_system(
                         let (ox, oy, oz) = offset_override.unwrap_or(style.spawn_offset);
                         let popup_offset = Vec3::new(ox, oy, oz);
                         info!("Action::ShowFloatingText: '{}' \"{}\" at {:?}", entity_id, text, gtf.translation());
-                        commands.spawn((
-                            Text2d::new(text.clone()),
-                            TextFont { font_size: style.font_size, ..default() },
-                            TextColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
-                            Transform::from_xyz(0.0, 0.0, 9.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(e),
-                                offset: popup_offset,
-                                base_font_size: style.font_size,
-                                depth_scale: None,
-                                screen_offset: Vec2::new(1.0, -1.0),
-                            },
-                            DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
-                            LevelEntity,
-                        ));
-                        commands.spawn((
-                            Text2d::new(text),
-                            TextFont { font_size: style.font_size, ..default() },
-                            TextColor(Color::srgba(1.0, 0.92, 0.3, 1.0)),
-                            Transform::from_xyz(0.0, 0.0, 10.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(e),
-                                offset: popup_offset,
-                                base_font_size: style.font_size,
-                                depth_scale: None,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
-                            LevelEntity,
-                        ));
+                        // Same split-screen rank-duplication gate as Action::ShowDamagePopup above
+                        // — see planning/features/per_player_split_screen_targeting.md Phase 2.
+                        let is_split_screen = scene_state.active_split.0.is_some() || scene_state.dynamic_split.0.is_some();
+                        let popup_ranks = if is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
+                        for rank in 0..popup_ranks {
+                            let mut shadow_entity = commands.spawn((
+                                Text2d::new(text.clone()),
+                                TextFont { font_size: style.font_size, ..default() },
+                                TextColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
+                                Transform::from_xyz(0.0, 0.0, 9.0),
+                                WorldLabel {
+                                    world_pos: Vec3::ZERO,
+                                    tracked_entity: Some(e),
+                                    offset: popup_offset,
+                                    base_font_size: style.font_size,
+                                    depth_scale: None,
+                                    screen_offset: Vec2::new(1.0, -1.0),
+                                },
+                                DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                                LevelEntity,
+                            ));
+                            if rank > 0 {
+                                shadow_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                            }
+                            let mut main_entity = commands.spawn((
+                                Text2d::new(text.clone()),
+                                TextFont { font_size: style.font_size, ..default() },
+                                TextColor(Color::srgba(1.0, 0.92, 0.3, 1.0)),
+                                Transform::from_xyz(0.0, 0.0, 10.0),
+                                WorldLabel {
+                                    world_pos: Vec3::ZERO,
+                                    tracked_entity: Some(e),
+                                    offset: popup_offset,
+                                    base_font_size: style.font_size,
+                                    depth_scale: None,
+                                    screen_offset: Vec2::ZERO,
+                                },
+                                DamagePopup { elapsed: 0.0, duration: style.duration_secs, rise_speed: style.rise_speed },
+                                LevelEntity,
+                            ));
+                            if rank > 0 {
+                                main_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                            }
+                        }
                     } else {
                         warn!("Action::ShowFloatingText: entity '{}' has no GlobalTransform", entity_id);
                     }

@@ -383,6 +383,89 @@ fn test_show_floating_text_offset_overrides_default_spawn_offset() {
     }
 }
 
+/// Regression: a non-split (ordinary) scene must keep spawning exactly the pre-existing
+/// shadow+main pair, no `WorldLabelRank` overhead — `ActiveSplitScreen`/`DynamicSplitConfig`
+/// both default to `None` via `setup_test_app()`.
+#[test]
+fn test_show_damage_popup_spawns_exactly_two_entities_when_not_split_screen() {
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+    use ironhold_core::capabilities::damage_popup::DamagePopup;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let entity = app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("enemy_01".to_string(), entity);
+
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::ShowDamagePopup { entity: "enemy_01".to_string(), amount: -10.0 });
+    app.update();
+
+    let count = app
+        .world_mut()
+        .query::<(&WorldLabel, &DamagePopup)>()
+        .iter(app.world())
+        .count();
+    assert_eq!(count, 2,
+        "a non-split scene must spawn exactly 2 WorldLabel+DamagePopup entities (shadow + main), \
+         unchanged from before per-player split-screen support");
+}
+
+/// Phase 2 (`per_player_split_screen_targeting.md`): in a split-screen scene, `ShowDamagePopup`
+/// must duplicate across `WorldLabelRank`s (same mechanism `stat_label`/`world_stat_bar` already
+/// use) — otherwise the popup only ever renders in the single highest-priority active viewport,
+/// regardless of which player's action actually triggered it.
+#[test]
+fn test_show_damage_popup_duplicates_ranks_when_split_screen_active() {
+    use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, ActiveSplitScreen};
+    use ironhold_core::capabilities::damage_popup::DamagePopup;
+    use ironhold_core::capabilities::camera::MAX_SPLIT_PLAYERS;
+    use ironhold_core::schema::player::SplitOrientation;
+
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(ActiveSplitScreen(Some(SplitOrientation::Vertical)));
+
+    let entity = app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    )).id();
+    app.world_mut()
+        .resource_mut::<SpawnRegistry>()
+        .entities
+        .insert("enemy_01".to_string(), entity);
+
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::ShowDamagePopup { entity: "enemy_01".to_string(), amount: -10.0 });
+    app.update();
+
+    let ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldLabel, &DamagePopup, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, _, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        ranks.len(), 2 * MAX_SPLIT_PLAYERS as usize,
+        "split-screen must spawn a shadow+main pair per rank (0..MAX_SPLIT_PLAYERS), not just one pair"
+    );
+    for rank in 0..MAX_SPLIT_PLAYERS as u8 {
+        let expected = if rank == 0 { None } else { Some(rank) };
+        assert_eq!(
+            ranks.iter().filter(|r| **r == expected).count(), 2,
+            "expected exactly 2 entities (shadow + main) at rank {}", rank
+        );
+    }
+}
+
 #[test]
 fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
     use ironhold_core::capabilities::target_indicator::TrackingTarget;

@@ -225,12 +225,14 @@ fn test_intent_slot_no_rule_fires_slot_do_actions() {
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
 
     // Player entity (needed so player_query resolves in action_bar_input_system)
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     // Press key 1
@@ -273,12 +275,14 @@ fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
 
     // Player entity
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
@@ -314,10 +318,12 @@ fn test_intent_slot_rule_match_does_not_start_cooldown() {
         do_actions: vec![],
         cooldown_secs: Some(5.0),
         cost: None,
+        owner_player: None,
     });
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
@@ -368,10 +374,12 @@ fn test_activated_fires_only_on_commit() {
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
@@ -406,10 +414,12 @@ fn test_activated_fires_only_on_commit() {
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
     app2.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app2.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
@@ -438,10 +448,12 @@ fn test_letter_key_slot_fires_on_its_own_key() {
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyQ);
@@ -468,10 +480,12 @@ fn test_function_key_slot_fires_on_its_own_key() {
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::F2);
@@ -508,10 +522,12 @@ fn test_lowercase_letter_key_slot_resolves_case_insensitively() {
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
+        owner_player: None,
     });
     app.world_mut().spawn((
         SpawnId("player_01".to_string()),
         intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyI);
@@ -522,4 +538,241 @@ fn test_lowercase_letter_key_slot_resolves_case_insensitively() {
         vars.0.get("hotkey_test").map(String::as_str), Some("fired"),
         "the existing key: \"i\" slot must still fire on I after removing DIGIT_KEYS"
     );
+}
+
+// ── Phase 2 (per_player_split_screen_targeting.md): per-player action-bar execution ─────────────
+
+/// Two independent bars, each `owner_player`-tagged, each resolve `{target}` against their own
+/// player's `PlayerTarget` — not the global `CurrentTarget`. Pressing only player 1's key must
+/// leave player 2's slot untouched.
+#[test]
+fn test_owner_player_slot_resolves_against_its_own_players_target() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("p1_hit".to_string(), "{target}".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(0),
+    });
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: Some(KeyCode::Digit2),
+        do_actions: vec![Action::SetVariable("p2_hit".to_string(), "{target}".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(1),
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("enemy_a".to_string())),
+        PlayerIndex(0),
+    ));
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("enemy_b".to_string())),
+        PlayerIndex(1),
+    ));
+
+    // Only player 1's key this frame.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("p1_hit").map(String::as_str), Some("enemy_a"),
+        "player 1's slot must resolve {{target}} against player 1's own PlayerTarget");
+    assert_eq!(vars.0.get("p2_hit"), None,
+        "player 2's slot must not fire from player 1's key press");
+}
+
+/// Regression guard for the `find`+`return` bug the old single-shared-bar code had: if both
+/// players' bars fire in the same frame, neither press may be silently dropped.
+#[test]
+fn test_both_players_bars_firing_same_frame_neither_press_dropped() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("p1_hit".to_string(), "{target}".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(0),
+    });
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: Some(KeyCode::Digit2),
+        do_actions: vec![Action::SetVariable("p2_hit".to_string(), "{target}".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(1),
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("enemy_a".to_string())),
+        PlayerIndex(0),
+    ));
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("enemy_b".to_string())),
+        PlayerIndex(1),
+    ));
+
+    // Both keys pressed the same frame.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit2);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("p1_hit").map(String::as_str), Some("enemy_a"),
+        "player 1's press must not be dropped when player 2 also presses this frame");
+    assert_eq!(vars.0.get("p2_hit").map(String::as_str), Some("enemy_b"),
+        "player 2's press must not be dropped when player 1 also presses this frame");
+}
+
+/// Single-player regression: a slot with no `owner_player` (`None`, the default) still resolves
+/// `{target}` against the sole player's `PlayerTarget`, mutating a real entity `StatMap` exactly
+/// as `CurrentTarget`-based resolution did before Phase 2 — no behavior change for existing
+/// single-player projects.
+#[test]
+fn test_single_player_slot_with_no_owner_still_resolves_via_player_target() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::capabilities::player::PlayerTarget;
+    use ironhold_core::schema::{StatDef, LiveStat};
+    use ironhold_core::schema::stats::StatMap;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(StatDef {
+        base: 100.0, min: 0.0, max: 100.0, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+    }));
+    let target_entity = app.world_mut().spawn((SpawnId("enemy_01".to_string()), stat_map)).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_01".to_string(), target_entity);
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::ModifyStat { key: "{target}.health".to_string(), delta: -25.0 }],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("enemy_01".to_string())),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let sm = app.world().get::<StatMap>(target_entity).unwrap();
+    assert_eq!(sm.0["health"].current, 75.0,
+        "a slot with no owner_player must still resolve {{target}} via the sole player's PlayerTarget");
+}
+
+/// A slot whose bar's `owner_player` doesn't match any `PlayerIndex` present in the scene never
+/// fires — there's no acting player to resolve a target or an intent-event player id against.
+#[test]
+fn test_slot_with_unmatched_owner_player_never_fires() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("orphan_hit".to_string(), "fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(5),
+    });
+    // Only player index 0 exists — no PlayerIndex(5) entity in the scene.
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(0),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("orphan_hit"), None,
+        "a slot whose owner_player matches no PlayerIndex present must never fire");
+}
+
+/// Documents the accepted Phase 2 scope boundary: when a `rules.ron` rule intercepts a
+/// non-primary player's slot intent, the rule's own `{target}`-using actions still resolve via
+/// the interpreter's `rewrite_target`, which reads the global `CurrentTarget` (the primary
+/// player) — not the firing (non-primary) player's own `PlayerTarget`. This is unchanged by
+/// Phase 2 (see "Not in scope (Phase 2)" in the plan) and must keep holding, not silently drift.
+#[test]
+fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CurrentTarget};
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Primary player's mirrored target (would normally be kept in lockstep with PlayerTarget by
+    // targeting.rs's apply_player_target — set directly here since this test only exercises the
+    // interpreter's rule-override path, not the targeting capability).
+    app.world_mut().insert_resource(CurrentTarget(Some("primary_target".to_string())));
+
+    {
+        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
+        rules.0 = vec![LogicRule {
+            on: "intent.slot.1:player_02".to_string(),
+            when: None,
+            do_actions: vec![Action::SetVariable("rule_target_seen".to_string(), "{target}".to_string())],
+        }];
+    }
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("slot_target_seen".to_string(), "{target}".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(1),
+    });
+    // Non-primary player, with its own distinct target.
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        intent_test_player_controller(),
+        PlayerTarget(Some("player2_own_target".to_string())),
+        PlayerIndex(1),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("rule_target_seen").map(String::as_str), Some("primary_target"),
+        "a rule overriding a non-primary player's slot intent must resolve {{target}} against the \
+         primary player's CurrentTarget, not the firing player's own PlayerTarget"
+    );
+    assert_eq!(vars.0.get("slot_target_seen"), None,
+        "the slot's own built-in do_actions must be suppressed when a rule handles the intent");
 }

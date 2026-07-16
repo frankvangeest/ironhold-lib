@@ -266,12 +266,25 @@ fn cross_file_checks(
     }
 
     for (scene_path, scene) in scenes {
-        for node in &scene.ui {
+        // Scene-wide (not per-bar) so a slot key shared across two different `ActionBar`s is
+        // also caught here, not just within one bar's own slots — per-player action bars
+        // (`owner_player`, see `planning/features/per_player_split_screen_targeting.md` Phase 2)
+        // are the first feature to author 2+ `ActionBar`s in one scene, and a cross-bar collision
+        // is worse than "the wrong slot fires": `CooldownMap`/`PendingIntentActions`/
+        // `HandledIntentSlots` are keyed by the literal slot_key string alone, scene-wide, so a
+        // `rules.ron` rule handling one bar's intent on a colliding key silently suppresses the
+        // other bar's pending slot too.
+        // `_` lets the compiler infer bevy's `KeyCode` from `InputMap::parse_key`'s return
+        // type without this file needing its own `use`/import to name it (this crate already
+        // links bevy transitively via ironhold_core — this only avoids one import line).
+        //
+        // Keyed by positional ui-node index, not `bar.id` — `id` is documented "Unique
+        // identifier" but nothing actually enforces that, and comparing by `id` would
+        // misclassify (or silently miss) a real cross-bar collision if two bars happened to
+        // share an id (system-architect finding, per_player_split_screen_targeting.md Phase 2).
+        let mut seen: std::collections::HashMap<_, (usize, &str, &str)> = std::collections::HashMap::new();
+        for (node_index, node) in scene.ui.iter().enumerate() {
             let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
-            // `_` lets the compiler infer bevy's `KeyCode` from `InputMap::parse_key`'s return
-            // type without this file needing its own `use`/import to name it (this crate already
-            // links bevy transitively via ironhold_core — this only avoids one import line).
-            let mut seen: std::collections::HashMap<_, &str> = std::collections::HashMap::new();
             for slot in &bar.slots {
                 match ironhold_core::schema::player::InputMap::parse_key(&slot.key) {
                     None => errors.push(CrossFileError {
@@ -283,15 +296,29 @@ fn cross_file_checks(
                         error_type: "invalid_key",
                     }),
                     Some(kc) => {
-                        if let Some(prev) = seen.insert(kc, &slot.key) {
-                            errors.push(CrossFileError {
-                                source_file: scene_path.clone(),
-                                message: format!(
-                                    "ActionBar {:?}: slots {:?} and {:?} both resolve to {:?} — only {:?} will fire on press",
-                                    bar.id, prev, slot.key, kc, prev
-                                ),
-                                error_type: "duplicate_key",
-                            });
+                        if let Some((prev_node_index, prev_bar, prev_key)) = seen.insert(kc, (node_index, &bar.id, &slot.key)) {
+                            if prev_node_index == node_index {
+                                errors.push(CrossFileError {
+                                    source_file: scene_path.clone(),
+                                    message: format!(
+                                        "ActionBar {:?}: slots {:?} and {:?} both resolve to {:?} — only {:?} will fire on press",
+                                        bar.id, prev_key, slot.key, kc, prev_key
+                                    ),
+                                    error_type: "duplicate_key",
+                                });
+                            } else {
+                                errors.push(CrossFileError {
+                                    source_file: scene_path.clone(),
+                                    message: format!(
+                                        "ActionBar {:?} slot {:?} and ActionBar {:?} slot {:?} both resolve to {:?} — \
+                                         the intent/cooldown pipeline is keyed by slot_key alone, scene-wide, so a \
+                                         rules.ron rule handling one bar's intent on this key will also silently \
+                                         suppress the other bar's pending slot",
+                                        prev_bar, prev_key, bar.id, slot.key, kc
+                                    ),
+                                    error_type: "cross_bar_duplicate_key",
+                                });
+                            }
                         }
                     }
                 }

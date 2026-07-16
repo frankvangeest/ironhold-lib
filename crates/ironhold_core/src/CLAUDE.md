@@ -134,15 +134,51 @@ each player entity carries its own `PlayerTarget(Option<String>)` component
 spawn in `scene_loader.rs`). `CurrentTarget` (`capabilities/action_bar.rs`) was deliberately kept
 as a resource rather than deleted — it is now "the primary player's `PlayerTarget`, mirrored".
 The **primary player** is whichever player entity has `PlayerIndex(0)` or no `PlayerIndex` at all
-(the primitive/capsule path never gets one). `{target}` substitution above, and the action bar's
-`{target}`-gated cost check, both keep reading `CurrentTarget` exactly as before this feature —
-only the primary player's selection reaches the shared action pipeline. A non-primary player's
-`PlayerTarget` drives only their own visual feedback (ring, per-viewport HUD readout); it has no
-effect on `rules.ron`/`state_machine.ron`/behavior actions or the action bar. This is a documented
-scope boundary, not a bug — full per-player gameplay-action execution (Phase 2) would need player
-identity threaded through the whole Message → Interpreter → Action → Executor pipeline, a
-materially larger change (see `planning/claude_suggestions.md` ▸ Camera for the cross-feature
-note on this).
+(the primitive/capsule path never gets one). `{target}` substitution above, and any `rules.ron`-
+overridden slot intent's `do_actions` (see Phase 2 below), keep reading `CurrentTarget` exactly as
+before this feature — those two paths only ever resolve against the primary player. A non-primary
+player's `PlayerTarget` drives their own visual feedback (ring, per-viewport HUD readout) *and*,
+as of Phase 2, their own action bar's slots — but never `rules.ron`/`state_machine.ron`/behavior
+actions fired outside the action bar, nor a rule that overrides a slot's intent event. This is a
+documented scope boundary, not a bug.
+
+**Per-player action bars (Phase 2, `planning/features/per_player_split_screen_targeting.md`)** —
+`ActionBarDef.owner_player: Option<u32>` (`#[serde(default)]`), copied onto `ActionSlotUi` at scene
+load, scopes a bar's slots to whichever player entity carries `PlayerIndex(owner_player)`; `None`
+(or `Some(0)`) means the primary player, same definition as above. **This did *not* need player
+identity threaded through the Message → Interpreter → Action → Executor pipeline** — the original
+Phase 1 speculation about that (see `planning/claude_suggestions.md` ▸ Camera) turned out to be
+wrong once `action_bar_input_system` was re-read: the action bar already calls `rewrite_target`
+itself, locally, before anything reaches `ActionQueue`, so `{target}` is already a concrete entity
+ID by the time the interpreter chain sees it. `action_bar_input_system` was rewritten from a single
+`find`+`return` (which silently dropped one player's press if 2+ slots fired the same frame) to a
+loop over **every** slot whose resolved key is `just_pressed`; for each, `owns_slot(owner_player,
+player_index)` resolves the acting player, and that player's own `PlayerTarget` — not the global
+`CurrentTarget` — drives the `{target}` rewrite, the no-target gate, and the
+`intent.slot.*:{player_id}` event's player id. For the primary player this is a no-op in practice
+(`PlayerTarget` is already kept in lockstep with `CurrentTarget` for the primary player). **What
+stays global, deliberately out of scope**: the `cost:`/`SlotCost` check still reads the single
+shared `LoadedStats` resource (no per-player economy — see `docs/20_data_formats.md`'s `SlotCost`
+caveat), and a `rules.ron` rule that intercepts a non-primary player's slot intent still resolves
+its own replacement `do_actions`' `{target}` via the interpreter against `CurrentTarget` (the
+primary player), not the firing player's `PlayerTarget` — only the slot's *own* built-in
+`do_actions` (bypassed when a rule takes over) get the per-owning-player resolution. Two bars
+sharing a slot key get both a scene-load `warn!` (`scene_loader.rs::warn_cross_bar_duplicate_keys`,
+scene-wide, unlike the pre-existing per-bar-only check) and an `ironhold_cli validate` error
+(`cross_bar_duplicate_key`), since `CooldownMap`/`PendingIntentActions`/`HandledIntentSlots` are
+still keyed by the literal slot key string alone, scene-wide. Both detectors key their "same bar
+vs. different bar" check by positional index, not `ActionBar.id` — nothing enforces `id`
+uniqueness, so comparing by `id` would misclassify a real cross-bar collision if two bars happened
+to share one (system-architect finding, plan-review).
+
+**`action_bar_input_system` now hard-depends on every `CharacterController` entity also carrying
+`PlayerTarget`** — its player-resolution query widened from `Query<&SpawnId, With<CharacterController>>`
+to `Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>`, so a player
+entity missing `PlayerTarget` silently drops out of the match and that player's entire action bar
+never fires (not just a missing ring/HUD, as a `PlayerTarget` omission would have meant before this
+phase). Every player-construction site already inserts `PlayerTarget` (see the four-site inventory
+above), so this holds today — but check it again against both spawn paths if a future change ever
+touches player-entity construction.
 
 **`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
 `click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
@@ -488,11 +524,17 @@ or `ActiveSplitScreen`/`DynamicSplitConfig` at runtime) — unlike `world_labels
 duplicate unconditionally. The gate exists because these widgets are rewritten every frame by
 `stat_label_update_system`/`world_stat_bar_update_system` regardless of `Visibility`, so
 unconditional duplication would be pure per-frame overhead in every ordinary (non-split) scene;
-ordinary scenes get exactly 1 entity per widget, unchanged. **Entity labels, damage popups,
-`Pixel`-style world stat bars, and nameplate anchors remain single-instance** (no
-`WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same multi-viewport gap
-still applies to them; extend the same pattern to a given consumer's spawn site only if a real
-project need surfaces.
+ordinary scenes get exactly 1 entity per widget, unchanged. **Extended to `ShowDamagePopup`/
+`ShowFloatingText` in Phase 2 of `per_player_split_screen_targeting.md`** — same gate
+(`action_executor.rs`'s `Action::ShowDamagePopup`/`ShowFloatingText` handlers read
+`SceneStateParams.active_split`/`dynamic_split`), needed so a damage popup or floating text shows
+in whichever viewport the target is actually visible in, not just the single highest-priority
+active camera regardless of which player's action triggered it — surfaced during that phase's
+playtest (a damage popup consistently appeared in player 1's viewport even when player 2 was the
+one dealing the hit). **Entity labels, `Pixel`-style world stat bars, and nameplate anchors remain
+single-instance** (no `WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same
+multi-viewport gap still applies to them; extend the same pattern to a given consumer's spawn site
+only if a real project need surfaces.
 
 **`particle_renderer.rs`'s billboard orientation is now viewport-aware** (fixed — Phase 1 of
 `planning/features/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call

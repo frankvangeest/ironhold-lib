@@ -1,0 +1,33 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "box_01",
+            prefab: "box",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        ActionBar((
+            id: "bar_p1",
+            owner_player: 0,
+            slots: [
+                (
+                    key: "KeyQ",
+                    do_actions: [Log("p1")],
+                ),
+            ],
+        )),
+        ActionBar((
+            id: "bar_p2",
+            owner_player: 1,
+            slots: [
+                (
+                    key: "KeyQ",
+                    do_actions: [Log("p2")],
+                ),
+            ],
+        )),
+    ],
+)
