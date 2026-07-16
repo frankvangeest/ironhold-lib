@@ -23,3 +23,4 @@
 - [ActionBar single-player assumptions](project_action_bar_single_player_assumptions.md) — keyboard-only (dead gamepad bar), global cost pool (both bars dim), scene-wide slot_key (collisions); co-op action-bar traps for Phase 2
 - [owner_player ↔ player_index wiring](project_player_index_owner_player.md) — owner_player matches prefab player_index; terminology gap + recurring "nothing reads player_index yet" stale claims
 - [ActionSlotDef.label is future-use](project_actionslotdef_label_undocumented.md) — `label` renders NOWHERE (future tooltip); only key_hint/key shows on-screen; docs now list both but omit label's not-rendered caveat
+- [Warn vs silent fallback principle](project_warn_vs_silent_fallback_principle.md) — engine warns when authored intent is contradictory (cross-bar dup, dup player_index, missing animation_policy), silent when fallback is a legit common choice; prefer load/validate-time over per-frame
