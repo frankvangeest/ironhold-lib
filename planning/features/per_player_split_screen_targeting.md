@@ -1,6 +1,6 @@
 # Feature: Per-Player Independent Targeting for Split-Screen
 
-_Status: In Progress (Phase 1 Done, Phase 2 Queued)_
+_Status: In Progress (Phase 1 Done, Phase 2 Active)_
 _Planned at: `34a957f` (2026-07-13)_
 _Plan review (2026-07-13): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work. Both reviewers independently flagged the same core contradiction (see Approach) and
@@ -29,7 +29,7 @@ criteria. One open question remains for Frank (custom-hotkeys sequencing, cost-f
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Done | `e677921` (2026-07-13) |
-| 2 | Per-player action-bar ability execution against each player's own target | Ready | — |
+| 2 | Per-player action-bar ability execution against each player's own target | Active | — |
 
 Phase 2 is scoped separately (see "Not in scope") because the action bar has its own,
 pre-existing single-player limitation unrelated to targeting — see Research findings.
@@ -445,16 +445,20 @@ playtest checklist.
 
 ## Open questions
 
-**Phase 2 (new, needs Frank's input before this phase moves to Active):**
+**Phase 2 (resolved 2026-07-16 — plan moves to Active):**
 - ~~Sequencing of `action_bar_custom_hotkeys.md`~~ — **resolved: shipped first, on its own branch,
   2026-07-16 (`8df3cfc`)**, per Frank's confirmation. Phase 2 now branches off the updated `main`.
-- **Shared vs. per-player stats/resources** — confirmed out of scope for Phase 2 (see "Not in scope
-  (Phase 2)"), but worth confirming Frank agrees a shared cost pool across 2 split-screen players is
-  an acceptable interim limitation, not a blocker to ship Phase 2 without it.
-- **`local_coop_demo` demo design** — what ability should the playtest slot demonstrate? A simple
-  `ModifyStat(key: "{target}.health", delta: -10.0)` against the existing `click_target_test` prop
-  (already `targetable: true` since Phase 1) is the minimal option reusing Phase 1's playtest aids
-  rather than inventing new ones.
+- ~~Shared vs. per-player stats/resources~~ — **resolved: confirmed acceptable as a documented
+  interim limitation, not a blocker.** `LoadedStats` is touched by 13 files across the codebase
+  (stat bars/HUD, dialogue conditions, inventory costs, stat radar, `ModifyStat` action executor —
+  not just the action bar's cost check), so making it per-player would be a substantial
+  cross-cutting change in its own right, not a small Phase 2 prerequisite, and no current project
+  needs a per-player economy. Logged as its own future backlog item (see `backlog.md` ▸ Gameplay &
+  Environment ▸ "Per-player stat/resource pools") to design properly if/when a real need surfaces,
+  rather than building it speculatively now.
+- ~~`local_coop_demo` demo design~~ — **resolved: `ModifyStat(key: "{target}.health", delta: -10.0)`
+  against the existing `click_target_test` prop** (already `targetable: true` since Phase 1) — the
+  minimal option, reusing Phase 1's playtest aids rather than inventing new ones.
 
 **Phase 1 (resolved — plan reached Ready):**
 
