@@ -21,4 +21,5 @@
 - [Per-player targeting gating](project_per_player_targeting_gating.md) — ring-tint + target-var-blank trigger on CharacterController count>=2 (party mode too), but target_hud only on split viewports; docs conflate the two; Tab default breaks in WASM
 - [depth_scale field scope](project_depth_scale_field_scope.md) — depth_scale exists ONLY on scene labels (EntityLabelDef/WorldLabelDef); StatLabelDef/WorldStatBarDef have NO such field despite docs+plan claiming it; deny_unknown_fields makes it a parse error
 - [ActionBar single-player assumptions](project_action_bar_single_player_assumptions.md) — keyboard-only (dead gamepad bar), global cost pool (both bars dim), scene-wide slot_key (collisions); co-op action-bar traps for Phase 2
+- [owner_player ↔ player_index wiring](project_player_index_owner_player.md) — owner_player matches prefab player_index; terminology gap + recurring "nothing reads player_index yet" stale claims
 - [ActionSlotDef.label is future-use](project_actionslotdef_label_undocumented.md) — `label` renders NOWHERE (future tooltip); only key_hint/key shows on-screen; docs now list both but omit label's not-rendered caveat
