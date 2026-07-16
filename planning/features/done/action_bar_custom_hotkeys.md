@@ -1,6 +1,6 @@
 # Feature: Action Bar Custom Hotkeys
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `a6acab8` (2026-06-22)_
 _Plan review (2026-07-15): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work on both passes. system-architect caught a real, shippable regression: the Migration
@@ -12,6 +12,18 @@ already-shipped `ActionSlotDef.label` field, creating a `label`/`key_hint` namin
 that unparseable key names and duplicate-key collisions both need a load-time `warn!` (not just an
 opt-in CLI `validate()` a designer never runs). All incorporated below — see Approach, Tasks,
 Decisions, and the new "Relationship to Phase 2" section. Reaches Ready._
+_Code review (2026-07-16): alignment-reviewer (ALIGNED), system-architect (no blockers; 2 minor —
+a misleading CLI comment fixed, cross-bar duplicate-key gap logged to `claude_suggestions.md`),
+debug-detective (essentially clean; same cross-bar gap independently flagged, converged with
+system-architect's finding; a slightly overstated code comment fixed), ux-gamedesigner-reviewer
+(no blockers; `label` field silently rendered nowhere — added a "not yet displayed" doc caveat and
+reconciled the demo slot's `label`/`key_hint` strings so they agree; added modifier/arrow-key
+corner-glyph guidance and numpad/digit-0 to the accepted-key-names list), wasm-perf-reviewer (OK,
+neutral-to-positive frame-time impact, no concerns). All findings addressed or logged. Full
+`ironhold_core` test suite (16 binaries) + `ironhold_cli` test suite green. WASM dev build clean.
+Playtest confirmed by Frank in `3rd_person_game_demo` — existing `1`-`9`/`i` slots unaffected, new
+`KeyE` "Taunt" slot works (including monster aggro, added after Frank's playtest feedback that the
+demo slot should actually deal damage). No console warnings about keys — `8df3cfc`._
 
 ## What
 Make action-bar slot hotkeys fully designer-configurable from RON. Today a slot can only be
@@ -142,47 +154,47 @@ modifier chords (`"Shift+1"`), and gamepad buttons all silently fail to bind tod
 unparseable-key handling above) and are out of scope for this feature (see Out of scope).
 
 ## Tasks
-- [ ] **Fix `InputMap::parse_key()` to accept lowercase single letters (must land before the
+- [x] **Fix `InputMap::parse_key()` to accept lowercase single letters (must land before the
       `DIGIT_KEYS` removal below — see Migration).** `parse_key` (`schema/player.rs:248`) is
       case-sensitive with uppercase-only letter arms (`"KeyI" | "I" => ...`) and `_ => None` —
       `parse_key("i")` returns `None` today. Add lowercase arms (or a `.to_ascii_uppercase()`
       normalization pass) so `"i"` keeps resolving to `KeyCode::KeyI`. This is a real code task,
       not a docs note (system-architect, Critical finding).
-- [ ] Remove `DIGIT_KEYS` from `capabilities/action_bar.rs`.
-- [ ] Rewrite `action_bar_input_system` to resolve each slot's `slot_key` via
+- [x] Remove `DIGIT_KEYS` from `capabilities/action_bar.rs`.
+- [x] Rewrite `action_bar_input_system` to resolve each slot's `slot_key` via
       `InputMap::parse_key()` and check `just_pressed` on the resulting `KeyCode`.
       Keep the existing cooldown / cost / `{target}` / fire logic unchanged; only the
       key-detection front of the system changes.
-- [ ] Handle unparseable key names: when `parse_key(&slot.slot_key)` returns `None`, emit a
+- [x] Handle unparseable key names: when `parse_key(&slot.slot_key)` returns `None`, emit a
       scene-load-time `warn!` naming the slot and the bad key string, and add a matching
       `validate()` error in the CLI tool (ux-gamedesigner-reviewer — without the runtime `warn!`,
       this reintroduces the exact silent-dead-slot bug the feature exists to close, since a
       designer testing in the browser never sees CLI output).
-- [ ] Handle the multi-slot edge case: if two slots resolve to the same `KeyCode`, the system
+- [x] Handle the multi-slot edge case: if two slots resolve to the same `KeyCode`, the system
       currently fires the first match. **Duplicate-key warning must be a scene-load-time `warn!`,
       not `validate()`-only** (ux-gamedesigner-reviewer — same reasoning as the unparseable-key
       task above), in addition to a `validate()` check in the CLI tool. See Decisions.
-- [ ] Add `key_hint: Option<String>` to `ActionSlotDef` (`#[serde(default)]`) — **distinct from the
+- [x] Add `key_hint: Option<String>` to `ActionSlotDef` (`#[serde(default)]`) — **distinct from the
       pre-existing `label` field** (ux-gamedesigner-reviewer headline finding: an earlier draft
       named this `key_label`, which collides with `label`). `label` is the ability/tooltip name;
       `key_hint` is only the corner key-glyph override.
-- [ ] Scene loader: render `key_hint` when set; otherwise pretty-print `key` (strip `Key` prefix).
-- [ ] Update the `ActionSlotDef.key` doc comment (currently says "`\"1\"` through `\"9\"`") and the
+- [x] Scene loader: render `key_hint` when set; otherwise pretty-print `key` (strip `Key` prefix).
+- [x] Update the `ActionSlotDef.key` doc comment (currently says "`\"1\"` through `\"9\"`") and the
       `ActionBarDef` doc comment (currently says "bound to keys 1–9") to state any `parse_key` name
       is accepted.
-- [ ] Add `label` to the `docs/20_data_formats.md` `ActionSlotDef` field table (currently missing
+- [x] Add `label` to the `docs/20_data_formats.md` `ActionSlotDef` field table (currently missing
       entirely, a pre-existing gap this feature is already editing that table for).
-- [ ] Add a working non-digit example slot (e.g. `key: "KeyQ"`) to a shipped project
+- [x] Add a working non-digit example slot (e.g. `key: "KeyQ"`) to a shipped project
       (`3rd_person_game_demo`'s action bar) so there's a real, browsable reference — not just a
       docs-only example (ux-gamedesigner-reviewer).
-- [ ] CLI: `cargo check -p ironhold_cli` (new optional field must not break `query.rs`).
-- [ ] Tests: extend the action-bar integration tests to cover a letter-key slot
+- [x] CLI: `cargo check -p ironhold_cli` (new optional field must not break `query.rs`).
+- [x] Tests: extend the action-bar integration tests to cover a letter-key slot
       (`key: "KeyQ"`) firing on `KeyCode::KeyQ`, an `F2` slot firing on `KeyCode::F2`, and a
       regression test that `3rd_person_game_demo`'s existing `key: "i"` inventory slot still fires
       after the `parse_key` fix above (system-architect: this is the one real migration case, not
       hypothetical — must be covered, not just asserted). Add a `ron_validation`/`ron_lint` case for
       both the duplicate-key and unparseable-key `validate()` checks.
-- [ ] Docs: `docs/20_data_formats.md` (ActionSlotDef field table incl. `label` + `key_hint`,
+- [x] Docs: `docs/20_data_formats.md` (ActionSlotDef field table incl. `label` + `key_hint`,
       accepted-key-name-forms reference, "not supported" list — see the new section above),
       `docs/30_runtime_events_and_logic.md` if action-bar events are documented there, and the
       action-bar notes in `crates/ironhold_core/src/CLAUDE.md` if present. Include the

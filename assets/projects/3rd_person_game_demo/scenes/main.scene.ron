@@ -453,6 +453,25 @@
           label: "Heal",
         ),
         (
+          // Non-digit hotkey reference slot — demonstrates key/key_hint/label together.
+          // key_hint is what actually renders in the slot's corner; label is reserved for a
+          // future hover tooltip and isn't displayed anywhere yet (see docs/20_data_formats.md).
+          key: "KeyE",
+          icon_index: 4,
+          icon_color: (0.6, 0.9, 0.6, 1.0),
+          key_hint: "Taunt",
+          label: "Taunt",
+          do_actions: [
+            PlaySound(key: "swing"),
+            ShowFloatingText(entity: "player_01", text: "Taunt!"),
+            ModifyStat(key: "{target}.health", delta: -5.0),
+            ShowDamagePopup(entity: "{target}", amount: -5.0),
+            SpawnEffect(key: "hit_spark", entity: "{target}"),
+            EmitEvent("entity.attacked:{target}"),
+          ],
+          cooldown_secs: 3.0,
+        ),
+        (
           key: "i",
           icon: "icons_items",   // uses items sheet; index 56 = Coin Pouch (magic bag)
           icon_index: 56,

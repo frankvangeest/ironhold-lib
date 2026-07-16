@@ -1,0 +1,22 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "box_01",
+            prefab: "box",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        ActionBar((
+            id: "skill_bar",
+            slots: [
+                (
+                    key: "MouseLeft",
+                    do_actions: [Log("test")],
+                ),
+            ],
+        )),
+    ],
+)

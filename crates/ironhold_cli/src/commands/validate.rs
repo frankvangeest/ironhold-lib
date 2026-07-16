@@ -265,6 +265,40 @@ fn cross_file_checks(
         }
     }
 
+    for (scene_path, scene) in scenes {
+        for node in &scene.ui {
+            let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+            // `_` lets the compiler infer bevy's `KeyCode` from `InputMap::parse_key`'s return
+            // type without this file needing its own `use`/import to name it (this crate already
+            // links bevy transitively via ironhold_core — this only avoids one import line).
+            let mut seen: std::collections::HashMap<_, &str> = std::collections::HashMap::new();
+            for slot in &bar.slots {
+                match ironhold_core::schema::player::InputMap::parse_key(&slot.key) {
+                    None => errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "ActionBar {:?}: slot {:?} has an unrecognised key {:?} — it will never fire",
+                            bar.id, slot.key, slot.key
+                        ),
+                        error_type: "invalid_key",
+                    }),
+                    Some(kc) => {
+                        if let Some(prev) = seen.insert(kc, &slot.key) {
+                            errors.push(CrossFileError {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "ActionBar {:?}: slots {:?} and {:?} both resolve to {:?} — only {:?} will fire on press",
+                                    bar.id, prev, slot.key, kc, prev
+                                ),
+                                error_type: "duplicate_key",
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(catalog) = prefab_catalog {
         for (key, def) in &catalog.prefabs {
             if let Some(behavior_path) = &def.behavior {

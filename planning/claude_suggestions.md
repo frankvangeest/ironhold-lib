@@ -11,6 +11,8 @@
 
 - ~~**Overlay Backdrop (z=100) lacks `FocusPolicy::Block` — may only block clicks incidentally**~~ _(observed at `ba01c5e` 2026-06-30; fixed 2026-07-02, architect-reviewed, logged as a Bug not a feature — self-contained one-node fix)_ — Added `FocusPolicy::Block` + `Interaction::default()` to the "Overlay Backdrop" node, matching the panel-root pattern from `ec84bcf`. Regression tests in `tests/ui_panel_blocker.rs`.
 
+- **Action bar duplicate-hotkey collision detection is per-bar, not scene-wide** _(observed at `d86bdac` 2026-07-15, code review of `action_bar_custom_hotkeys.md` — system-architect and debug-detective independently flagged this)_ — Both `scene_loader.rs`'s spawn-time `warn!` and `ironhold_cli validate`'s cross-file check scope their duplicate-resolved-key detection to one `ActionBar` node at a time (`seen`/`seen_resolved_keys` reset per bar). Correct for today (one bar per scene in every shipped project), but the feature's own plan asked for scene-wide structure specifically so the upcoming per-player action-bar feature (`per_player_split_screen_targeting.md` Phase 2, which introduces multiple bars per scene) could reuse the check directly — instead it will have to restructure both check sites rather than extend them. Worth collecting all resolved keys across every `ActionBar` in a scene before reporting collisions, once Phase 2 makes multi-bar scenes real.
+
 ## Performance
 
 

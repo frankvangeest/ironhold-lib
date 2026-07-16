@@ -730,6 +730,24 @@ fn test_numpad_key_parsing() {
     assert_eq!(InputMap::parse_key("Numpad9"), Some(KeyCode::Numpad9));
 }
 
+/// A single lowercase ASCII letter is case-insensitive (e.g. `"q"` resolves the same as `"Q"`) —
+/// this is what keeps `3rd_person_game_demo`'s existing `key: "i"` action-bar slot alive across
+/// `action_bar_custom_hotkeys`'s removal of the old hardcoded `DIGIT_KEYS` table. Only single
+/// letters get this leniency; multi-character names stay case-sensitive.
+#[test]
+fn test_parse_key_single_lowercase_letter_is_case_insensitive() {
+    assert_eq!(InputMap::parse_key("q"), Some(KeyCode::KeyQ));
+    assert_eq!(InputMap::parse_key("Q"), Some(KeyCode::KeyQ));
+    assert_eq!(InputMap::parse_key("i"), Some(KeyCode::KeyI));
+}
+
+#[test]
+fn test_parse_key_multi_character_names_stay_case_sensitive() {
+    assert_eq!(InputMap::parse_key("space"), None, "\"Space\" is valid; \"space\" is not");
+    assert_eq!(InputMap::parse_key("keyq"), None, "\"KeyQ\" is valid; \"keyq\" is not");
+    assert_eq!(InputMap::parse_key("f2"), None, "\"F2\" is valid; \"f2\" is not");
+}
+
 /// Builds `n` player prefabs (`test_player_1`..`test_player_n`), alternating the two shared
 /// character models. Only the first player's `camera.split` is set — mirrors
 /// `two_player_catalogs_with_split`'s pattern, generalized to N players for Stage 6's Grid tests.

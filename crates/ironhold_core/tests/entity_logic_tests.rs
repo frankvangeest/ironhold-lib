@@ -221,6 +221,7 @@ fn test_intent_slot_no_rule_fires_slot_do_actions() {
     // Slot 1: sets "intent_test" = "slot_fired"
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -268,6 +269,7 @@ fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
     // Slot 1: would set "slot_fired" — this must be suppressed
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -308,6 +310,7 @@ fn test_intent_slot_rule_match_does_not_start_cooldown() {
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
         do_actions: vec![],
         cooldown_secs: Some(5.0),
         cost: None,
@@ -361,6 +364,7 @@ fn test_activated_fires_only_on_commit() {
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
@@ -398,6 +402,7 @@ fn test_activated_fires_only_on_commit() {
 
     app2.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
@@ -415,5 +420,106 @@ fn test_activated_fires_only_on_commit() {
     assert_eq!(
         vars.0.get("status").map(String::as_str), Some(""),
         "action_bar.activated must fire when intent is committed (no suppressing rule)"
+    );
+}
+
+/// A slot bound to a letter key (via `key: "KeyQ"`) fires on that key, not just digits —
+/// the core `action_bar_custom_hotkeys` capability.
+#[test]
+fn test_letter_key_slot_fires_on_its_own_key() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "KeyQ".to_string(),
+        resolved_key: Some(KeyCode::KeyQ),
+        do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyQ);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("hotkey_test").map(String::as_str), Some("fired"),
+        "a slot bound to KeyQ must fire when Q is pressed"
+    );
+}
+
+/// A slot bound to a function key (`key: "F2"`) fires on that key.
+#[test]
+fn test_function_key_slot_fires_on_its_own_key() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "F2".to_string(),
+        resolved_key: Some(KeyCode::F2),
+        do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::F2);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("hotkey_test").map(String::as_str), Some("fired"),
+        "a slot bound to F2 must fire when F2 is pressed"
+    );
+}
+
+/// Migration regression: `3rd_person_game_demo`'s existing `key: "i"` inventory slot must keep
+/// firing on the `I` key after `DIGIT_KEYS` is replaced by `InputMap::parse_key()` — `parse_key`
+/// is case-sensitive with uppercase-only letter arms, so this only holds because `parse_key` was
+/// given a single-lowercase-letter normalization pass (see `schema/player.rs::parse_key`).
+#[test]
+fn test_lowercase_letter_key_slot_resolves_case_insensitively() {
+    use ironhold_core::schema::player::InputMap;
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    assert_eq!(
+        InputMap::parse_key("i"), Some(KeyCode::KeyI),
+        "parse_key(\"i\") must resolve to KeyI — this is the exact migration case for \
+         3rd_person_game_demo's existing inventory slot"
+    );
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "i".to_string(),
+        resolved_key: InputMap::parse_key("i"),
+        do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
+        cooldown_secs: None,
+        cost: None,
+    });
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyI);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(
+        vars.0.get("hotkey_test").map(String::as_str), Some("fired"),
+        "the existing key: \"i\" slot must still fire on I after removing DIGIT_KEYS"
     );
 }

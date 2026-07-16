@@ -101,6 +101,26 @@ fn missing_foliage_leaf_texture_exits_1() {
     );
 }
 
+#[test]
+fn unparseable_action_bar_key_exits_1() {
+    let (code, stdout) = validate("bad_action_bar_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("MouseLeft"),
+        "expected the unrecognised key name in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn duplicate_resolved_action_bar_key_exits_1() {
+    let (code, stdout) = validate("duplicate_action_bar_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("q") && stdout.contains("KeyQ"),
+        "expected both colliding slot keys in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

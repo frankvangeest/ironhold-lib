@@ -45,6 +45,10 @@ pub struct HandledIntentSlots(pub HashSet<String>);
 #[derive(Component, Clone)]
 pub struct ActionSlotUi {
     pub slot_key: String,
+    /// `InputMap::parse_key(&slot_key)`, resolved once at scene load. `None` if `slot_key` isn't
+    /// a recognised key name (the scene loader already `warn!`s about this at spawn time) — such
+    /// a slot never fires, since there's no `KeyCode` to check `just_pressed` against.
+    pub resolved_key: Option<KeyCode>,
     pub do_actions: Vec<Action>,
     pub cooldown_secs: Option<f32>,
     pub cost: Option<SlotCost>,
@@ -98,13 +102,24 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
     });
 }
 
-/// Listens for digit key presses (1–9), finds the matching `ActionSlotUi`, and either:
-/// - emits `intent.slot.{n}:{entity}` + stores pending actions for the interpreter pass, or
+/// Listens for any slot's resolved key being pressed, and either:
+/// - emits `intent.slot.{key}:{entity}` + stores pending actions for the interpreter pass, or
 /// - emits an `action_bar.*` event describing why the slot didn't fire.
 ///
 /// Pending actions are flushed to `ActionQueue` by `flush_pending_intent_system` after all
 /// interpreter systems run. If a designer rule matches the intent event, the slot's built-in
 /// `do_actions` are suppressed; otherwise they fire unchanged.
+///
+/// Fire-first semantics: if 2+ slots' keys are `just_pressed` in the same frame, only the first
+/// one found (query/spawn iteration order) fires this frame — exactly one slot fired per frame
+/// under the old `DIGIT_KEYS` table lookup too (same net behavior for the common case), though the
+/// old code tie-broke by fixed key-table order rather than spawn order; the two coincide unless a
+/// scene's slots are authored out of digit order and 2+ distinct keys are pressed in one frame, a
+/// rare case with no observable difference (one slot fires either way). See
+/// `action_bar_custom_hotkeys.md`'s Decisions for why (and its "Relationship to Phase 2" note —
+/// the per-player action-bar feature restructures this into a loop over every pressed slot, since
+/// two independent players' bars must not drop each other's same-frame presses; that
+/// restructuring is out of scope here, where there's exactly one bar).
 pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     slots: Query<&ActionSlotUi>,
@@ -115,11 +130,9 @@ pub fn action_bar_input_system(
     mut pending: ResMut<PendingIntentActions>,
     player_query: Query<&SpawnId, With<CharacterController>>,
 ) {
-    let pressed_key = DIGIT_KEYS.iter().find(|(kc, _)| keys.just_pressed(*kc));
-    let Some(&(_, key_str)) = pressed_key else { return };
-
-    let slot = slots.iter().find(|s| s.slot_key == *key_str);
+    let slot = slots.iter().find(|s| s.resolved_key.is_some_and(|kc| keys.just_pressed(kc)));
     let Some(slot) = slot else { return };
+    let key_str = slot.slot_key.as_str();
 
     // ── Cooldown check ────────────────────────────────────────────────────────
     if cooldowns.0.contains_key(key_str) {
@@ -260,20 +273,6 @@ pub fn action_bar_visual_system(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const DIGIT_KEYS: &[(KeyCode, &str)] = &[
-    (KeyCode::Digit1, "1"),
-    (KeyCode::Digit2, "2"),
-    (KeyCode::Digit3, "3"),
-    (KeyCode::Digit4, "4"),
-    (KeyCode::Digit5, "5"),
-    (KeyCode::Digit6, "6"),
-    (KeyCode::Digit7, "7"),
-    (KeyCode::Digit8, "8"),
-    (KeyCode::Digit9, "9"),
-    // Letter slots — used for utility actions (e.g. "i" = inventory toggle).
-    (KeyCode::KeyI, "i"),
-];
 
 fn action_needs_target(action: &Action) -> bool {
     match action {

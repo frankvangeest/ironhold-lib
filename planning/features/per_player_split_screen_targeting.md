@@ -220,14 +220,18 @@ This makes Phase 2 materially narrower than originally scoped. (The one place th
 see "Not in scope" below — a `rules.ron` rule overriding a slot's intent still resolves `{target}`
 via the interpreter against the primary player only.)
 
-**Hard dependency: `planning/features/action_bar_custom_hotkeys.md`.** Today all action bars share
-one hardcoded `DIGIT_KEYS` table (`1`-`9`, `i`) — two players sharing one keyboard cannot have two
-independent action bars without colliding on the same physical keys (the exact class of problem
-`target_next` hit before Phase 1 gave each player prefab its own key). That feature is already
-fully designed and at Ready-equivalent detail (Draft status only because it hasn't been
-plan-reviewed yet) — recommend shipping it as its own small feature branch first, then branching
-Phase 2 off the updated `main`, rather than bundling it into this branch. Flagged as an open
-question below for Frank to confirm the sequencing.
+**Hard dependency: `planning/features/done/action_bar_custom_hotkeys.md` — shipped 2026-07-16
+(`8df3cfc`), no longer blocking.** Action bars previously shared one hardcoded `DIGIT_KEYS` table
+(`1`-`9`, `i`) — two players sharing one keyboard couldn't have two independent action bars without
+colliding on the same physical keys (the exact class of problem `target_next` hit before Phase 1
+gave each player prefab its own key). Now any `InputMap::parse_key()`-recognised key name can be
+bound per slot, plus a `key_hint` field and both a runtime `warn!` and an `ironhold_cli validate`
+check for unparseable/duplicate-within-a-bar keys — see that feature's own "Relationship to Phase
+2" section for two things this Phase 2 implementation must still account for: don't over-invest in
+matching its fire-first single-match semantics (Phase 2 restructures the loop anyway, see Approach
+below), and its duplicate-key check is per-bar only, not scene-wide (logged to
+`claude_suggestions.md` — Phase 2 introduces multiple bars per scene, so this phase should extend
+that check to be scene-wide rather than leaving the per-bar gap in place).
 
 **Approach:**
 - **New field `ActionBarDef.owner_player: Option<u32>`** (`#[serde(default)]`, mirrors
@@ -399,8 +403,9 @@ playtest checklist.
       vs. the camera chain, the duplicate-`player_index` footgun) and 1 wasm-perf-reviewer nit
       (`target_hud_update_system`'s uncached `format!`)
 - [x] WASM dev build + playtest checklist — clean, playtest confirmed by Frank, no console errors
-- [ ] Phase 2: ship `action_bar_custom_hotkeys.md` first (own feature branch), pending the open
-      question below on sequencing
+- [x] Phase 2: ship `action_bar_custom_hotkeys.md` first — shipped 2026-07-16 (`8df3cfc`), see the
+      "Hard dependency" note in Approach for what it delivered and what Phase 2 still owes it
+      (cross-bar duplicate-key check, fire-first loop restructuring)
 - [ ] Phase 2: `ActionBarDef.owner_player: Option<u32>` schema field (`#[serde(default)]`), copied
       onto `ActionSlotUi` at scene-load time
 - [ ] Phase 2: rewrite `action_bar_input_system` to (a) loop over **every** slot whose resolved key
@@ -441,11 +446,8 @@ playtest checklist.
 ## Open questions
 
 **Phase 2 (new, needs Frank's input before this phase moves to Active):**
-- **Sequencing of `action_bar_custom_hotkeys.md`** — ship it as its own feature branch first (merge
-  to `integration`/`main`, then branch Phase 2 off the updated `main`), or fold its tasks into this
-  phase's own branch? Recommend shipping it first — it's independently useful even in
-  single-player projects (QWER/F-key ability layouts), and keeps Phase 2's own diff focused on the
-  per-player routing change rather than mixing in an unrelated input-binding fix.
+- ~~Sequencing of `action_bar_custom_hotkeys.md`~~ — **resolved: shipped first, on its own branch,
+  2026-07-16 (`8df3cfc`)**, per Frank's confirmation. Phase 2 now branches off the updated `main`.
 - **Shared vs. per-player stats/resources** — confirmed out of scope for Phase 2 (see "Not in scope
   (Phase 2)"), but worth confirming Frank agrees a shared cost pool across 2 split-screen players is
   an acceptable interim limitation, not a blocker to ship Phase 2 without it.

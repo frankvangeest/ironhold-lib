@@ -1837,6 +1837,7 @@ fn spawn_ui_element_node(
                 }).collect();
 
             let slots = bar.slots.clone();
+            let mut seen_resolved_keys: HashMap<KeyCode, String> = HashMap::new();
             parent
                 .spawn((
                     Name::new(format!("ActionBar: {}", bar.id)),
@@ -1851,6 +1852,24 @@ fn spawn_ui_element_node(
                             Some((r, g, b, a)) => Color::srgba(r, g, b, a),
                             None => Color::WHITE,
                         };
+                        let resolved_key = InputMap::parse_key(&key);
+                        match resolved_key {
+                            None => warn!(
+                                "ActionBar '{}': slot '{}' has an unrecognised key {:?} — it will never fire",
+                                bar.id, key, key
+                            ),
+                            Some(kc) => {
+                                if let Some(prev) = seen_resolved_keys.insert(kc, key.clone()) {
+                                    warn!(
+                                        "ActionBar '{}': slots '{}' and '{}' both resolve to {:?} — only '{}' will fire on press",
+                                        bar.id, prev, key, kc, prev
+                                    );
+                                }
+                            }
+                        }
+                        let hint_text = slot.key_hint.clone().unwrap_or_else(|| {
+                            key.strip_prefix("Key").map(str::to_string).unwrap_or_else(|| key.clone())
+                        });
                         parent
                             .spawn((
                                 Name::new(format!("Slot:{}", key)),
@@ -1869,6 +1888,7 @@ fn spawn_ui_element_node(
                                 BorderColor::from(Color::srgba(0.45, 0.45, 0.55, 0.8)),
                                 ActionSlotUi {
                                     slot_key: key.clone(),
+                                    resolved_key,
                                     do_actions: slot.do_actions.clone(),
                                     cooldown_secs: slot.cooldown_secs,
                                     cost: slot.cost.clone(),
@@ -1914,7 +1934,8 @@ fn spawn_ui_element_node(
                                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
                                     CooldownOverlay { slot_key: key.clone() },
                                 ));
-                                // Keybind label — bottom-right corner.
+                                // Keybind hint — bottom-right corner. `key_hint` overrides;
+                                // otherwise a pretty-print of `key` (strip "Key" prefix).
                                 parent.spawn((
                                     Name::new(format!("Key:{}", key)),
                                     Node {
@@ -1923,7 +1944,7 @@ fn spawn_ui_element_node(
                                         right: Val::Px(5.0),
                                         ..default()
                                     },
-                                    Text::new(key.clone()),
+                                    Text::new(hint_text.clone()),
                                     TextFont { font_size: 13.0, ..default() },
                                     TextColor(Color::srgba(0.85, 0.85, 0.85, 0.75)),
                                 ));
