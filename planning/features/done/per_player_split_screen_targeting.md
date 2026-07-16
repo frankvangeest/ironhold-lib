@@ -1,6 +1,6 @@
 # Feature: Per-Player Independent Targeting for Split-Screen
 
-_Status: In Progress (Phase 1 Done, Phase 2 Active)_
+_Status: Done (Phase 1 + Phase 2 both shipped)_
 _Planned at: `34a957f` (2026-07-13)_
 _Plan review (2026-07-13): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work. Both reviewers independently flagged the same core contradiction (see Approach) and
@@ -23,13 +23,26 @@ would get a permanently non-functional bar (Major), and that the shared-`LoadedS
 cross-bar slot-key collisions need explicit runtime warnings/doc placement, not just a plan-file
 footnote. All incorporated below — see Approach, Not in scope, Tasks, and Phase 2 acceptance
 criteria. One open question remains for Frank (custom-hotkeys sequencing, cost-free demo choice)._
+_Phase 2 code review (2026-07-17): alignment-reviewer (ALIGNED), system-architect (found and fixed
+a real bug — the cross-bar duplicate-key check compared `ActionBar.id`, which nothing enforces as
+unique, instead of positional bar index; fixed in both the runtime `warn!` and the CLI check),
+debug-detective (no blocking bugs; flagged the damage-popup viewport gap that playtest then
+actually reproduced), ux-gamedesigner-reviewer (found and fixed 3 stale "`player_index` not read
+by any system yet" doc claims, now false since this phase reads it), wasm-perf-reviewer (OK, the
+`find`→loop restructure is cost-neutral on idle frames). Playtest surfaced a real bug beyond the
+reviews: `ShowDamagePopup`/`ShowFloatingText` are single-instance (no `WorldLabelRank`), so a
+popup only ever rendered in the single highest-priority active split viewport regardless of which
+player's action triggered it — fixed by extending the same `WorldLabelRank` duplication mechanism
+`stat_label`/`world_stat_bar` already use to both actions, gated on split-screen exactly like
+those. Playtest re-confirmed by Frank after the fix (popup now correctly duplicates per visible
+viewport), no console errors — `b48bc00`._
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Done | `e677921` (2026-07-13) |
-| 2 | Per-player action-bar ability execution against each player's own target | Active | — |
+| 2 | Per-player action-bar ability execution against each player's own target | Done | `b48bc00` (2026-07-17) |
 
 Phase 2 is scoped separately (see "Not in scope") because the action bar has its own,
 pre-existing single-player limitation unrelated to targeting — see Research findings.
@@ -406,40 +419,40 @@ playtest checklist.
 - [x] Phase 2: ship `action_bar_custom_hotkeys.md` first — shipped 2026-07-16 (`8df3cfc`), see the
       "Hard dependency" note in Approach for what it delivered and what Phase 2 still owes it
       (cross-bar duplicate-key check, fire-first loop restructuring)
-- [ ] Phase 2: `ActionBarDef.owner_player: Option<u32>` schema field (`#[serde(default)]`), copied
+- [x] Phase 2: `ActionBarDef.owner_player: Option<u32>` schema field (`#[serde(default)]`), copied
       onto `ActionSlotUi` at scene-load time
-- [ ] Phase 2: rewrite `action_bar_input_system` to (a) loop over **every** slot whose resolved key
+- [x] Phase 2: rewrite `action_bar_input_system` to (a) loop over **every** slot whose resolved key
       is `just_pressed` this frame instead of `find`+`return`ing on the first match
       (system-architect finding — the current structure silently drops one player's press if both
       fire in the same frame), and (b) resolve the acting player per slot (`owner_player` →
       matching `PlayerIndex` entity, `None` → primary player) and read that player's own
       `PlayerTarget` for the `{target}` rewrite/no-target gate/intent-event player ID, replacing
       the `player_query.single()` call (already silently wrong with 2+ players)
-    - [ ] Cross-bar duplicate-slot-key check: a scene-load-time runtime `warn!` (mirroring Phase 1's
+    - [x] Cross-bar duplicate-slot-key check: a scene-load-time runtime `warn!` (mirroring Phase 1's
         duplicate-`player_index: 0` precedent), in addition to extending `action_bar_custom_
         hotkeys.md`'s own within-bar `validate()` warning to also cover across-bar collisions in
         the CLI tool (system-architect + ux-gamedesigner-reviewer — an opt-in CLI check alone
         isn't a real safety net, and the collision silently suppresses the *other* player's slot
         via `HandledIntentSlots`, not just picks the wrong target)
-- [ ] `local_coop_demo` playtest addition: two `ActionBar` blocks (one per player, `owner_player`
+- [x] `local_coop_demo` playtest addition: two `ActionBar` blocks (one per player, `owner_player`
       tagged, disjoint hotkeys, positioned in each player's half), **both players on the keyboard**
       (not keyboard+gamepad — the gamepad player's bar would render but never fire, see Approach),
       with at least one **cost-free** slot (no `cost:` field, to avoid the shared-`LoadedStats`
       dimming-both-bars confusion during playtest) whose `do_actions` uses `{target}` against a
       `targetable` prop, so per-player resolution is visually confirmable
-- [ ] Tests: two players' bars fire independently against their own `PlayerTarget`; both players'
+- [x] Tests: two players' bars fire independently against their own `PlayerTarget`; both players'
       slots firing in the same frame both take effect (regression for the find+return bug);
       primary-player bar behavior is unchanged in a single-player scene (regression); duplicate
       slot key across two bars triggers the scene-load `warn!`; a `rules.ron`-overridden slot
       intent still resolves `{target}` against the primary player only (documents the accepted
       gap, not a silent inconsistency)
-- [ ] Docs: `docs/20_data_formats.md` — `ActionBarDef.owner_player` field + per-player action-bar
+- [x] Docs: `docs/20_data_formats.md` — `ActionBarDef.owner_player` field + per-player action-bar
       RON example; the shared-`LoadedStats` cost-pool caveat placed next to the `SlotCost` field
       docs (not just this plan file); the `rules.ron`-override `{target}` gap placed inline next to
       the existing intent-interception example (ux-gamedesigner-reviewer: designers copying that
       documented pattern need the caveat right there); the keyboard-only limitation stated plainly.
       Update `crates/ironhold_core/src/CLAUDE.md`'s action-bar/targeting sections.
-- [ ] Backlog: log "gamepad-routed action-bar slots" as a new follow-up item (both reviewers
+- [x] Backlog: log "gamepad-routed action-bar slots" as a new follow-up item (both reviewers
       independently flagged that without it, the realistic keyboard+gamepad co-op configuration
       leaves one player's action bar permanently unusable).
 
@@ -522,24 +535,37 @@ playtest checklist.
 
 ### Phase 2 acceptance criteria
 
-- Given a split-screen scene with two `ActionBar`s, each tagged with a different `owner_player`
+- ~~Given a split-screen scene with two `ActionBar`s, each tagged with a different `owner_player`
   and disjoint slot keys, when player 1 fires a slot whose `do_actions` includes
   `ModifyStat(key: "{target}.health", ...)`, then it resolves against player 1's own `PlayerTarget`
-  — player 2's target is unaffected, regardless of which entity player 2 currently has selected.
-- Given the same scene, when player 2 fires their own bar's slot, then it resolves against player
-  2's own `PlayerTarget` independently of player 1's.
-- Given both players press their own bar's key in the **same frame**, when the system updates, then
+  — player 2's target is unaffected, regardless of which entity player 2 currently has selected.~~
+  **Met — `test_owner_player_slot_resolves_against_its_own_players_target`, confirmed by playtest.**
+- ~~Given the same scene, when player 2 fires their own bar's slot, then it resolves against player
+  2's own `PlayerTarget` independently of player 1's.~~ **Met — same test, confirmed by playtest.**
+- ~~Given both players press their own bar's key in the **same frame**, when the system updates, then
   both slots fire and both actions resolve against their respective players' targets — neither
-  press is silently dropped (regression guard for the `find`+`return` bug).
-- Given a single-player (non-split) scene with one `ActionBar` and no `owner_player` authored, when
-  the player fires a slot, then behavior is unchanged from today (regression guard).
-- Given two action bars in the same scene that share a slot key, when the scene loads, then a
+  press is silently dropped (regression guard for the `find`+`return` bug).~~ **Met —
+  `test_both_players_bars_firing_same_frame_neither_press_dropped`.**
+- ~~Given a single-player (non-split) scene with one `ActionBar` and no `owner_player` authored, when
+  the player fires a slot, then behavior is unchanged from today (regression guard).~~ **Met —
+  `test_single_player_slot_with_no_owner_still_resolves_via_player_target` and the pre-existing
+  intent-layer tests, all still passing unchanged.**
+- ~~Given two action bars in the same scene that share a slot key, when the scene loads, then a
   runtime `warn!` fires identifying the collision (mirrors Phase 1's duplicate-`player_index: 0`
-  precedent).
-- Given a slot's cost check, when either player's bar fires a cost-gated slot, then the shared
+  precedent).~~ **Met — `warn_cross_bar_duplicate_keys` (runtime) +
+  `cross_bar_duplicate_action_bar_key_exits_1` (CLI, hard error).**
+- ~~Given a slot's cost check, when either player's bar fires a cost-gated slot, then the shared
   global `LoadedStats` resource is checked/deducted (documented shared-pool limitation, not a bug)
-  — not a per-player pool.
-- Given a `rules.ron` rule that overrides a slot's intent event with its own `{target}`-using
+  — not a per-player pool.~~ **Met — unchanged `SlotCost` behavior, documented in
+  `docs/20_data_formats.md`.**
+- ~~Given a `rules.ron` rule that overrides a slot's intent event with its own `{target}`-using
   `do_actions`, when a non-primary player fires that slot, then the rule's actions resolve against
   the primary player's target, not the firing player's (documented gap, matches Phase 1's existing
-  interpreter-level boundary).
+  interpreter-level boundary).~~ **Met —
+  `test_rule_overridden_intent_still_resolves_target_against_primary_player_only`.**
+- **(Found during playtest, not originally listed)** Given a split-screen scene where a target is
+  visible in 2+ active viewports, when either player's slot deals damage, then the damage popup
+  renders in every viewport the target is visible in — not just the single highest-priority active
+  camera regardless of which player triggered it. **Met —
+  `test_show_damage_popup_duplicates_ranks_when_split_screen_active`, confirmed by Frank's playtest
+  after the `WorldLabelRank` duplication fix.**
