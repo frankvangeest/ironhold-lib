@@ -577,7 +577,11 @@ ordinary scenes get exactly 1 entity per widget, unchanged. **Extended to `ShowD
 in whichever viewport the target is actually visible in, not just the single highest-priority
 active camera regardless of which player's action triggered it — surfaced during that phase's
 playtest (a damage popup consistently appeared in player 1's viewport even when player 2 was the
-one dealing the hit). **Entity labels, `Pixel`-style world stat bars, and nameplate anchors remain
+one dealing the hit). **Extended to `Pixel`-style `world_stat_bar` in
+`pixel_world_stat_bar_split_screen_duplication.md`** — `spawn_world_stat_bar_widget`'s `Pixel`
+arm now duplicates its whole anchor+children hierarchy per rank exactly like the `Ascii` arm
+already did (border/background mesh+material handles are registered once and cloned across
+ranks; the fill is created fresh per rank). **Damage popups and nameplate anchors remain
 single-instance** (no `WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same
 multi-viewport gap still applies to them; extend the same pattern to a given consumer's spawn site
 only if a real project need surfaces.

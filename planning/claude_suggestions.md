@@ -26,6 +26,8 @@
 
 - **Particle texture atlas for ≤4 total draw calls** _(observed at `0221d9e` 2026-05-19)_ — The pool renderer gives O(distinct textures) draw calls; the campfire's 6 Kenney flame sprites still cost 6 draw calls — packing them into one atlas PNG at startup (or as a prebuilt asset) and remapping UVs would hit the ≤4 target. Concrete basis: campfire_body uses sprites: [flame_01..04] = 4 groups, campfire_core [flame_05..06] = 2 groups.
 
+- **Pixel `world_stat_bar` fill mesh/material could be shared across split-screen ranks like border/bg already are** _(observed during `pixel_world_stat_bar_split_screen_duplication.md` code review, system-architect and debug-detective independently flagged this)_ — `spawn_world_stat_bar_widget`'s `Pixel` arm creates a fresh fill `Mesh2d`/`ColorMaterial` per rank (up to 4x), but `world_pixel_bar_update_system` only ever mutates `Transform.scale`/material color, never the mesh geometry, and every rank resolves the identical stat/color (same tracked entity, same `color_bands`) — so both the fill mesh and material could in principle be hoisted and cloned exactly like border/bg already are, saving up to 3 mesh + 3 material assets per bar instance in a 4-way split. Kept per-rank deliberately for now (simpler, and the asset-count regression test locks in the current per-rank behavior) — worth revisiting only if per-bar-instance asset counts become a measured concern.
+
 
 ## Particles / Visual
 

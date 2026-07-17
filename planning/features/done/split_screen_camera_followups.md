@@ -230,6 +230,9 @@ before the change-detection guard, now 4x'd in split scenes (wasm-perf-reviewer 
   simultaneously-visible split viewports** — deferred out of Phase 4 due to child-hierarchy
   duplication complexity (see Research findings). Track as a follow-up phase if a real project need
   surfaces; the pattern to reuse is identical, just applied to a subtree instead of a single entity.
+  **Pixel-style `world_stat_bar` duplication resolved** — see
+  `planning/features/pixel_world_stat_bar_split_screen_duplication.md`. Nameplate anchors and
+  damage popups remain deferred.
 - **Per-viewport-correct particle billboarding** (Phase 1) — duplicating particle meshes per active
   camera. The single-shared-mesh particle pool architecture makes this a much larger change than
   picking a better camera; not attempted here.

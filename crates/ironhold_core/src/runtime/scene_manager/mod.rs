@@ -345,9 +345,11 @@ pub struct WorldLabel {
 /// `per_player_split_screen_targeting.md`) spawn the same ranked siblings, same split-screen
 /// gate as the stat widgets above — needed so a damage popup shows in whichever viewport the
 /// target is actually visible in, not just the single highest-priority active camera regardless
-/// of which player's action triggered it. `Pixel`-style world stat bars and nameplate anchors
-/// remain single-instance (implicit rank 0 only) — an entity using one of those shows in
-/// **at most one** simultaneously-visible split viewport.
+/// of which player's action triggered it. `Pixel`-style `world_stat_bar` (see
+/// `pixel_world_stat_bar_split_screen_duplication.md`) uses this same gate too, duplicating its
+/// whole anchor+children hierarchy per rank. Only damage popups' and nameplates' anchors remain
+/// single-instance (implicit rank 0 only) — an entity using one of those shows in **at most one**
+/// simultaneously-visible split viewport.
 #[derive(Component)]
 pub struct WorldLabelRank(pub u8);
 

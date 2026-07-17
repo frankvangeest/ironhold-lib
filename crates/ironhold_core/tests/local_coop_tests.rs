@@ -2353,6 +2353,17 @@ fn ascii_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     }
 }
 
+fn pixel_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
+    WorldStatBarDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Pixel { size: (48.0, 6.0), border: 1.5, border_color: (0.05, 0.05, 0.05, 1.0) },
+    }
+}
+
 /// Drives a scene load with 2 players (first player's `camera.split` set iff `split` is
 /// `Some`) plus a third, non-player `test_stat_prop` entity carrying both `stat_label` and
 /// `world_stat_bar` (Ascii). Mirrors `two_player_catalogs_with_split`/`load_two_player_scene`
@@ -2554,6 +2565,110 @@ fn test_stat_widgets_stay_single_instance_with_one_player_carrying_split_config(
         "a single-player scene must spawn exactly 1 stat label with no rank duplication, even \
          though its prefab's camera.split block is set — matching spawn_players_and_camera's own \
          `entities.len() < 2` fallback to a single full-window camera"
+    );
+}
+
+// ── pixel_world_stat_bar_split_screen_duplication.md: Pixel-style world_stat_bar duplication
+// through the real spawn_scene_v2 pipeline (not just the isolated ctx-level unit tests above) ──
+
+/// Mirrors `load_two_player_scene_with_stat_prop` but the prop's `world_stat_bar` uses `Pixel`
+/// style instead of `Ascii`, and registers `Assets<ColorMaterial>` (needed by Pixel bars, not
+/// registered by `setup_test_app`'s headless plugin set).
+fn load_two_player_scene_with_pixel_stat_prop(app: &mut App, split: Option<SplitScreenDef>) {
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+    two_player_catalogs_with_split(app, None, split);
+    app.world_mut()
+        .resource_mut::<LoadedPrefabCatalog>()
+        .0
+        .prefabs
+        .insert("test_stat_prop".to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            model: "char_a".to_string(),
+            world_stat_bar: Some(pixel_world_stat_bar_def("{self}.health")),
+            ..Default::default()
+        });
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "dummy_01", prefab: "test_stat_prop", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_pixel_world_stat_bar_duplicates_ranks_when_scene_is_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_pixel_stat_prop(
+        &mut app,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+
+    // Fill children carry no WorldLabelRank of their own (only the anchor does — see
+    // spawn_world_stat_bar_widget's doc comment), so assert fill COUNT here and rank identity
+    // on the anchors (the WorldLabel-bearing entities) below.
+    let fill_count = app.world_mut().query::<&WorldPixelBarFillMarker>().iter(app.world()).count();
+    assert_eq!(
+        fill_count, MAX_SPLIT_PLAYERS as usize,
+        "a Pixel world_stat_bar spawned via the real scene-load pipeline in a split-screen scene \
+         must spawn MAX_SPLIT_PLAYERS fill entities, same as Ascii already does"
+    );
+
+    let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("dummy_01").expect("prop entity must register in SpawnRegistry");
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(l, _)| l.tracked_entity == Some(prop_entity))
+            .map(|(_, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "must spawn MAX_SPLIT_PLAYERS anchors (one WorldLabel each) tracking the prop"
+    );
+    let mut sorted: Vec<u8> = anchor_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3], "expected exactly one anchor of each rank 0-3");
+}
+
+#[test]
+fn test_pixel_world_stat_bar_stays_single_instance_in_non_split_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_pixel_stat_prop(&mut app, None);
+
+    let fill_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldPixelBarFillMarker, Option<&WorldLabelRank>)>();
+        q.iter(app.world()).map(|(_, rank)| rank.map(|r| r.0)).collect()
+    };
+    assert_eq!(
+        fill_ranks, vec![None],
+        "a non-split scene must spawn exactly 1 Pixel world_stat_bar fill entity via the real \
+         scene-load pipeline — pixel-identical to pre-fix behavior, no rank-duplication overhead"
     );
 }
 
@@ -3057,7 +3172,7 @@ fn test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_witho
     }).unwrap();
 
     let fill_count = app.world_mut().query::<&WorldPixelBarFillMarker>().iter(app.world()).count();
-    assert_eq!(fill_count, 1, "exactly one Pixel fill entity must spawn — Pixel bars do not rank-duplicate");
+    assert_eq!(fill_count, 1, "a non-split ctx must spawn exactly one Pixel fill entity, no rank overhead");
 
     // Anchor + border + bg + fill = 4 entities total tracking the entity via WorldLabel (the
     // anchor is the only one with a WorldLabel; border/bg/fill are its Bevy-hierarchy children).
@@ -3068,6 +3183,82 @@ fn test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_witho
     let mut q = app.world_mut().query::<&ChildOf>();
     let child_count = q.iter(app.world()).count();
     assert!(child_count >= 3, "border + background + fill must all be spawned as children of the anchor");
+}
+
+/// `pixel_world_stat_bar_split_screen_duplication.md`: a split-screen ctx must duplicate the
+/// Pixel bar's whole anchor+children hierarchy per rank, exactly like Ascii already does, while
+/// sharing the border/background mesh+material assets across ranks (only the fill scales 1:1
+/// with rank count).
+#[test]
+fn test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = WorldStatBarDef {
+        stat_key: "{self}.health".to_string(),
+        offset: (0.0, 2.5, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 1.0),
+        bg_color: (0.2, 0.05, 0.05, 0.85),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Pixel { size: (48.0, 6.0), border: 1.5, border_color: (0.05, 0.05, 0.05, 1.0) },
+    };
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: color_materials.as_deref_mut(),
+            depth_scale: None,
+            is_split_screen: true,
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    // Fill (and border/bg) children carry no WorldLabelRank of their own — only the anchor does,
+    // since Bevy's hierarchy visibility propagation (InheritedVisibility) cascades the anchor's
+    // Visibility::Hidden to its children automatically (see spawn_world_stat_bar_widget's doc
+    // comment). So: fill COUNT must scale with rank, and rank identity is asserted on the anchor.
+    let fill_count = app.world_mut().query::<&WorldPixelBarFillMarker>().iter(app.world()).count();
+    assert_eq!(
+        fill_count, MAX_SPLIT_PLAYERS as usize,
+        "a split-screen ctx must spawn MAX_SPLIT_PLAYERS Pixel fill entities, same as Ascii"
+    );
+
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(l, _)| l.tracked_entity == Some(tracked))
+            .map(|(_, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "must spawn MAX_SPLIT_PLAYERS anchors (one WorldLabel each), not just MAX_SPLIT_PLAYERS fills"
+    );
+    let mut sorted_anchor_ranks: Vec<u8> = anchor_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted_anchor_ranks.sort();
+    assert_eq!(sorted_anchor_ranks, vec![0, 1, 2, 3], "expected exactly one anchor of each rank 0-3");
+
+    // Regression guard: border/background geometry is shared (registered once, cloned per rank),
+    // so Assets<Mesh>/<ColorMaterial> must NOT grow 4x — only the per-rank fill mesh/material,
+    // which must remain independent (rank count), should scale.
+    let mesh_count = app.world().resource::<Assets<Mesh>>().iter().count();
+    let mat_count = app.world().resource::<Assets<ColorMaterial>>().iter().count();
+    // 1 shared border mesh + 1 shared bg mesh + 4 distinct fill meshes (one per rank) = 6.
+    assert_eq!(
+        mesh_count, 2 + MAX_SPLIT_PLAYERS as usize,
+        "border/bg meshes must be registered once and shared across ranks — only fill meshes \
+         (one per rank) should scale with MAX_SPLIT_PLAYERS"
+    );
+    assert_eq!(
+        mat_count, 2 + MAX_SPLIT_PLAYERS as usize,
+        "border/bg materials must be registered once and shared across ranks — only fill \
+         materials (one per rank) should scale with MAX_SPLIT_PLAYERS"
+    );
 }
 
 // Part B: players get first-class stat widgets via the same DynamicStatUiQueue mechanism —

@@ -369,9 +369,10 @@
     // past 20 with repeated KeyG presses and watch only P1's bar dim, not P2's), AND (since
     // `player_stat_widgets.md`) a real floating `world_stat_bar` overhead — `stat_label`/
     // `world_stat_bar` now take effect on player prefabs exactly like any NPC/prop, giving each
-    // player their own independent overhead mana readout (Ascii style, not Pixel — only
-    // `stat_label`/Ascii bars duplicate across simultaneously-visible split viewports; a Pixel bar
-    // would only ever render in one). Fields NOT yet honored on a player prefab: `behavior`,
+    // player their own independent overhead mana readout. Uses Pixel style deliberately (not
+    // Ascii): Pixel bars now duplicate correctly across simultaneously-visible split viewports
+    // just like Ascii already did, so either style works on a co-op player — this demo picks
+    // Pixel for the production-quality look. Fields NOT yet honored on a player prefab: `behavior`,
     // `interactable`, `dialogue`, `inventory`, `trigger_zone` (see
     // `planning/features/player_model_source_unification.md`'s "explicitly out of scope" note).
     "player_p1_split": (
@@ -394,7 +395,7 @@
         stat_key: "{self}.mana",
         offset: (0.0, 2.8, 0.0),
         fill_color: (0.35, 0.45, 0.95, 0.95),
-        style: Ascii( cells: 10, font_size: 14.0 ),
+        style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
         tags: ["player"],
@@ -457,7 +458,7 @@
         stat_key: "{self}.mana",
         offset: (0.0, 2.8, 0.0),
         fill_color: (0.95, 0.35, 0.55, 0.95),
-        style: Ascii( cells: 10, font_size: 14.0 ),
+        style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
         tags: ["player"],

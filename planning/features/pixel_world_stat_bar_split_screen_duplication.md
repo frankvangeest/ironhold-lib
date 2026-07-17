@@ -1,7 +1,26 @@
 # Feature: Pixel-style `world_stat_bar` Split-Screen Duplication
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `d80e73b` (2026-07-17)_
+
+**Code review note (2026-07-17):** alignment-reviewer, system-architect, debug-detective, and
+ux-gamedesigner-reviewer all ran in parallel post-implementation. No blocking findings from any of
+the four. alignment-reviewer confirmed zero new RON schema and full designer-reachability, and
+caught one stale doc comment (`lib.rs`'s `world_label_screen_pos_system` doc still listed Pixel
+among rank-0-only consumers) — fixed. system-architect confirmed the mesh/material sharing is safe
+and `LevelEntity` is preserved on every rank, and logged one non-blocking observation (the fill
+mesh/material could technically be shared across ranks too, since neither is ever mutated in
+place) to `planning/claude_suggestions.md`. debug-detective independently verified the same safety
+properties by tracing `world_pixel_bar_update_system` directly and confirmed the revised test
+assertions test the real invariant (rank lives on the anchor, not on border/bg/fill children — an
+assumption the first draft of the new tests got wrong, caught by two failing test runs before this
+review). ux-gamedesigner-reviewer caught a real doc defect: the initial docs draft named `Icon` as
+an already-available production style — `Icon` does not exist yet (see `world_icon_stat_bar.md`,
+a separate not-yet-implemented plan) — fixed in both `docs/20_data_formats.md` and the
+`local_coop_demo` prefab comment. Full `ironhold_core` test suite (all 16 test files) + `cargo
+check -p ironhold_cli` green. WASM dev build succeeded; playtest confirmed by Frank in
+`local_coop_demo` room3 (both split-screen players' mana bars render as Pixel style, correctly
+duplicated in both viewports), no console errors.
 
 **Plan-review note (2026-07-17):** system-architect — Ready. All three technical claims verified
 directly against source (single Pixel-arm call site confirmed; `InheritedVisibility` cascade
@@ -118,32 +137,32 @@ independently, exactly like `world_stat_bar_update_system` already handles N Asc
   feature and not touched by it).
 
 ## Tasks
-- [ ] `capabilities/stat_display.rs`: wrap `spawn_world_stat_bar_widget`'s `Pixel` arm in a
+- [x] `capabilities/stat_display.rs`: wrap `spawn_world_stat_bar_widget`'s `Pixel` arm in a
       `for rank in 0..ranks` loop; hoist the shared (border/background) mesh+material `.add()`
       calls outside the loop and clone handles per rank; keep the fill mesh/material creation
       inside the loop (one fresh instance per rank, as today). Ensure every rank's border/bg/fill
       child keeps its `LevelEntity` tag (present today) so scene-change cleanup frees all ranks,
       not just rank 0 — easy to lose when restructuring the spawn block into a loop
       (system-architect finding).
-- [ ] Tests — a new split-screen Pixel-bar duplication test (mirroring
+- [x] Tests — a new split-screen Pixel-bar duplication test (mirroring
       `test_stat_widgets_duplicate_ranks_when_scene_is_split_screen`, but asserting
       `WorldPixelBarFillMarker` count == `MAX_SPLIT_PLAYERS` and that non-split scenes still spawn
       exactly 1); a regression test that mesh/material asset counts don't grow 4x for the
       shared (border/bg) geometry specifically — only the fill entities should scale with rank count
-- [ ] `local_coop_demo`: switch `player_p1_split`/`player_p2_split`'s `world_stat_bar` from
+- [x] `local_coop_demo`: switch `player_p1_split`/`player_p2_split`'s `world_stat_bar` from
       `style: Ascii(cells: 10, font_size: 14.0)` to an explicit `style: Pixel(size: (60.0, 6.0))`
       (not a bare `Pixel()` default — ux-gamedesigner-reviewer's suggestion, so the demo bars read
       as deliberately tuned for the showcase, not defaulted) as the playtest aid proving this
       feature. Confirmed a clean drop-in: `stat_key`/`offset`/`fill_color` are shared top-level
       `WorldStatBarDef` fields valid under either style; neither prefab sets `color_bands`, so
       there's no Ascii-vs-Pixel band-fallback difference to reconcile.
-- [ ] **Update the inline comment block above `player_p1_split`/`player_p2_split`**
+- [x] **Update the inline comment block above `player_p1_split`/`player_p2_split`**
       (`local_coop_demo/prefabs/prefabs.ron`) that currently explains *why* Ascii (not Pixel) was
       chosen — that reasoning becomes actively wrong once this feature ships and the swap above
       lands; rewrite it to state the opposite (Pixel now duplicates correctly; these prefabs use
       Pixel deliberately to showcase it) (ux-gamedesigner-reviewer finding — the plan's original
       task list only mentioned the `style:` swap itself, not this adjacent designer-facing comment).
-- [ ] Docs — `docs/20_data_formats.md`'s "Split-screen visibility" callout needs a full rewrite,
+- [x] Docs — `docs/20_data_formats.md`'s "Split-screen visibility" callout needs a full rewrite,
       not a one-word removal (ux-gamedesigner-reviewer finding: the existing paragraph has **three**
       claims that go stale, not one) — (1) remove Pixel from the "do not duplicate" list (now only
       damage popups and nameplates); (2) delete the "a combined bar will show its Ascii half in
@@ -151,14 +170,14 @@ independently, exactly like `world_stat_bar_update_system` already handles N Asc
       now duplicate); (3) **flip** the co-op guidance that currently tells designers to prefer
       Ascii over Pixel on split-screen players — it is now backwards and would actively steer
       designers to the wrong choice; state that any style works correctly on a co-op player.
-- [ ] `crates/ironhold_core/src/CLAUDE.md`'s "Pixel-style world stat bars ... remain single-instance"
+- [x] `crates/ironhold_core/src/CLAUDE.md`'s "Pixel-style world stat bars ... remain single-instance"
       note: remove Pixel from that list (only damage popups/nameplates remain single-instance) —
       broader than the plan's original wording, this line lists Pixel by name and must change, not
       just get a pointer added (system-architect finding).
-- [ ] `planning/features/done/split_screen_camera_followups.md`: add a one-line pointer to this
+- [x] `planning/features/done/split_screen_camera_followups.md`: add a one-line pointer to this
       feature as the resolution of its historical "Not in scope" note (the done-feature doc itself
       is not reopened/rewritten, per convention).
-- [ ] Docs — add one soft-deprecation sentence for the Ascii style to `docs/20_data_formats.md`
+- [x] Docs — add one soft-deprecation sentence for the Ascii style to `docs/20_data_formats.md`
       (cross-cutting finding, ux-gamedesigner-reviewer): Ascii is the silent default when `style` is
       omitted, so every project not explicitly setting `style` is building on the one style Frank is
       considering eventually retiring, with zero signal today. A single sentence — "`Ascii` is a
@@ -166,6 +185,10 @@ independently, exactly like `world_stat_bar_update_system` already handles N Asc
       production-quality styles; `Ascii` may be retired in a future version" — costs nothing now and
       makes an eventual removal far less disruptive. No hard warning or migration pass; just honest
       signposting. Whichever of this feature or `world_icon_stat_bar.md` lands first should add it.
+      **Landed wording differs slightly** (ux-gamedesigner-reviewer caught during code review that
+      `Icon` doesn't exist yet and would mislead designers into trying `style: Icon(...)`): shipped
+      as "`Ascii` is a prototyping/debug style; `Pixel` is the production-quality choice," with no
+      `Icon` mention — `world_icon_stat_bar.md` can add its own note once that style actually ships.
 
 ## Open questions
 - None — the mechanism to reuse (`WorldLabelRank` + hierarchy visibility propagation) is already
@@ -173,14 +196,19 @@ independently, exactly like `world_stat_bar_update_system` already handles N Asc
   of a bare entity), in one already-consolidated function.
 
 ## Acceptance criteria
-- Given a split-screen scene with a Pixel-style `world_stat_bar` on any entity (NPC, prop, or
+- [x] Given a split-screen scene with a Pixel-style `world_stat_bar` on any entity (NPC, prop, or
   player), when that entity is visible in 2+ active split viewports simultaneously, then the bar
-  renders correctly in every one of them (browser-observable).
-- Given a non-split-screen scene with a Pixel-style `world_stat_bar`, when it spawns, then exactly
-  one anchor+children set is created (regression — pixel-identical to before this feature).
-- Given a Pixel bar's border/background geometry, when it spawns in a split-screen scene, then the
+  renders correctly in every one of them (browser-observable). **Met** — confirmed by
+  `test_pixel_world_stat_bar_duplicates_ranks_when_scene_is_split_screen` (real `spawn_scene_v2`
+  pipeline) and browser playtest.
+- [x] Given a non-split-screen scene with a Pixel-style `world_stat_bar`, when it spawns, then exactly
+  one anchor+children set is created (regression — pixel-identical to before this feature). **Met**
+  — `test_pixel_world_stat_bar_stays_single_instance_in_non_split_scene` and the pre-existing
+  `test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_without_duplication`.
+- [x] Given a Pixel bar's border/background geometry, when it spawns in a split-screen scene, then the
   mesh/material assets for the shared (unchanging) parts are created once and reused across ranks,
-  not re-registered per rank.
-- Given `local_coop_demo`'s `player_p1_split`/`player_p2_split` switched to Pixel style, when both
+  not re-registered per rank. **Met** — `test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_screen`
+  asserts `Assets<Mesh>`/`Assets<ColorMaterial>` counts stay at `2 + MAX_SPLIT_PLAYERS`, not `4x`.
+- [x] Given `local_coop_demo`'s `player_p1_split`/`player_p2_split` switched to Pixel style, when both
   players play split-screen, then both bars render correctly in both viewports with a
-  production-quality (non-Ascii) look.
+  production-quality (non-Ascii) look. **Met** — playtest confirmed by Frank.

@@ -345,9 +345,11 @@ pub fn spawn_stat_label_widget(
 
 /// Spawns the floating widget for a `world_stat_bar` (`WorldStatBarDef`), tracking `tracked`.
 /// Dispatches on `def.style`: `Ascii` → two rank-duplicated `Text2d` entities (background +
-/// fill), following the same split-screen duplication as `spawn_stat_label_widget`; `Pixel` →
-/// a single (non-duplicated — see `WorldLabelRank`'s doc comment) anchor with up to 3 `Mesh2d`
-/// children.
+/// fill); `Pixel` → an anchor with up to 3 `Mesh2d` children (border/background/fill). Both
+/// styles duplicate one full set per split-screen rank when `ctx.is_split_screen` (see
+/// `WorldLabelRank`'s doc comment); for `Pixel`, the border/background mesh and material handles
+/// are registered once and cloned across ranks (identical geometry per rank), while the fill is
+/// created fresh per rank since each tracks and updates independently.
 pub fn spawn_world_stat_bar_widget(
     commands: &mut Commands,
     tracked: Entity,
@@ -423,60 +425,77 @@ pub fn spawn_world_stat_bar_widget(
             let color_mats = ctx.color_materials.as_mut()
                 .expect("ColorMaterial assets must be available to spawn pixel stat bars");
 
-            // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
-            // Depth scaling intentionally not applied to Pixel-style bars (pre-existing
-            // documented exclusion — see docs/20_data_formats.md's Pixel bar depth-scaling note).
-            let anchor = commands.spawn((
-                Name::new(format!("PixelBarAnchor: {}", stat_key)),
-                Transform::default(),
-                Visibility::default(),
-                WorldLabel {
-                    world_pos: Vec3::ZERO,
-                    tracked_entity: Some(tracked),
-                    offset: offset_v3,
-                    base_font_size: 1.0,
-                    depth_scale: None,
-                    screen_offset: Vec2::ZERO,
-                },
-                LevelEntity,
-            )).id();
+            // Border/background geometry and material are identical across every rank of the
+            // same bar instance (only the fill differs, and even then all ranks track the same
+            // entity's same stat) — registered once here and cloned into each rank below, rather
+            // than re-registered per rank.
+            let border_mesh = (b > 0.0).then(|| ctx.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b)));
+            let border_mat = (b > 0.0).then(|| color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda))));
+            let bg_mesh = ctx.meshes.add(Rectangle::new(w, h));
+            let bg_mat = color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)));
 
-            // Border quad (skip when border <= 0).
-            if b > 0.0 {
-                let border_child = commands.spawn((
-                    Name::new(format!("PixelBarBorder: {}", stat_key)),
-                    Mesh2d(ctx.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
-                    MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
-                    Transform::from_xyz(0.0, 0.0, 1.0),
+            for rank in 0..ranks {
+                // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
+                // Depth scaling intentionally not applied to Pixel-style bars (pre-existing
+                // documented exclusion — see docs/20_data_formats.md's Pixel bar depth-scaling note).
+                let mut anchor_cmds = commands.spawn((
+                    Name::new(format!("PixelBarAnchor: {} (rank {})", stat_key, rank)),
+                    Transform::default(),
+                    Visibility::default(),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: offset_v3,
+                        base_font_size: 1.0,
+                        depth_scale: None,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    anchor_cmds.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+                let anchor = anchor_cmds.id();
+
+                // Border quad (skip when border <= 0) — shared mesh/material, cloned per rank.
+                if let (Some(border_mesh), Some(border_mat)) = (&border_mesh, &border_mat) {
+                    let border_child = commands.spawn((
+                        Name::new(format!("PixelBarBorder: {} (rank {})", stat_key, rank)),
+                        Mesh2d(border_mesh.clone()),
+                        MeshMaterial2d(border_mat.clone()),
+                        Transform::from_xyz(0.0, 0.0, 1.0),
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(border_child);
+                }
+
+                // Background quad — full bar size, static; shared mesh/material, cloned per rank.
+                let bg_child = commands.spawn((
+                    Name::new(format!("PixelBarBg: {} (rank {})", stat_key, rank)),
+                    Mesh2d(bg_mesh.clone()),
+                    MeshMaterial2d(bg_mat.clone()),
+                    Transform::from_xyz(0.0, 0.0, 2.0),
                     LevelEntity,
                 )).id();
-                commands.entity(anchor).add_child(border_child);
+                commands.entity(anchor).add_child(bg_child);
+
+                // Fill quad — width=1 mesh scaled per frame; left-aligned via transform.
+                // scale.x = ratio * w; translation.x = -w/2 + (ratio*w)/2. Created fresh per rank:
+                // each rank's fill entity is updated independently by world_pixel_bar_update_system.
+                let fill_child = commands.spawn((
+                    Name::new(format!("PixelBarFill: {} (rank {})", stat_key, rank)),
+                    Mesh2d(ctx.meshes.add(Rectangle::new(1.0, h))),
+                    MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
+                    Transform::from_xyz(-w / 2.0, 0.0, 3.0)
+                        .with_scale(Vec3::new(0.0, 1.0, 1.0)),
+                    WorldPixelBarFillMarker {
+                        stat_key: stat_key.to_string(), full_width: w, fill_color,
+                        color_bands: color_bands.clone(),
+                    },
+                    LevelEntity,
+                )).id();
+                commands.entity(anchor).add_child(fill_child);
             }
-
-            // Background quad — full bar size, static.
-            let bg_child = commands.spawn((
-                Name::new(format!("PixelBarBg: {}", stat_key)),
-                Mesh2d(ctx.meshes.add(Rectangle::new(w, h))),
-                MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
-                Transform::from_xyz(0.0, 0.0, 2.0),
-                LevelEntity,
-            )).id();
-            commands.entity(anchor).add_child(bg_child);
-
-            // Fill quad — width=1 mesh scaled per frame; left-aligned via transform.
-            // scale.x = ratio * w; translation.x = -w/2 + (ratio*w)/2.
-            let fill_child = commands.spawn((
-                Name::new(format!("PixelBarFill: {}", stat_key)),
-                Mesh2d(ctx.meshes.add(Rectangle::new(1.0, h))),
-                MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
-                Transform::from_xyz(-w / 2.0, 0.0, 3.0)
-                    .with_scale(Vec3::new(0.0, 1.0, 1.0)),
-                WorldPixelBarFillMarker {
-                    stat_key: stat_key.to_string(), full_width: w, fill_color, color_bands,
-                },
-                LevelEntity,
-            )).id();
-            commands.entity(anchor).add_child(fill_child);
         }
     }
 }
