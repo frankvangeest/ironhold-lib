@@ -9,7 +9,10 @@ use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCata
 use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
-use ironhold_core::capabilities::stat_display::{StatLabelMarker, WorldStatBarFillMarker};
+use ironhold_core::capabilities::stat_display::{
+    StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker,
+    StatWidgetSpawnCtx, spawn_stat_label_widget, spawn_world_stat_bar_widget,
+};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
@@ -2960,4 +2963,228 @@ fn test_action_bar_cost_regen_on_one_players_pool_does_not_affect_the_others_dim
     assert!(bg1_after.0.alpha() < 0.01, "player 1's overlay must clear once their own pool crosses the cost threshold");
     let bg2_after = app.world().get::<BackgroundColor>(overlay2).unwrap();
     assert!(bg2_after.0.alpha() < 0.01, "player 2's overlay must remain unaffected by player 1's pool change");
+}
+
+// ── Player stat widgets (player_stat_widgets.md) ────────────────────────────────
+
+// Part A: direct unit coverage of the extracted spawn_stat_label_widget/spawn_world_stat_bar_widget
+// helpers (capabilities/stat_display.rs) — the actual entity-spawning logic factored out of
+// scene_loader.rs's two Phase-B loops and drain_dynamic_stat_ui_system. These exercise the helpers
+// in isolation (a bare tracked entity, no scene/player involved) so a regression here can't be
+// confused with a player-wiring bug (covered separately below).
+
+#[test]
+fn test_spawn_stat_label_widget_spawns_one_entity_when_not_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = stat_label_def("{self}.health");
+    app.world_mut().run_system_once(move |mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>| {
+        let ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: false,
+        };
+        spawn_stat_label_widget(&mut commands, tracked, "dummy_01.health", &def, &ctx);
+    }).unwrap();
+
+    let mut q = app.world_mut().query::<(&StatLabelMarker, &WorldLabel, Option<&WorldLabelRank>)>();
+    let results: Vec<_> = q.iter(app.world()).collect();
+    assert_eq!(results.len(), 1, "a non-split scene must spawn exactly one stat label entity, no ranked siblings");
+    let (marker, label, rank) = results[0];
+    assert_eq!(marker.stat_key, "dummy_01.health");
+    assert_eq!(label.tracked_entity, Some(tracked));
+    assert!(rank.is_none(), "rank 0 (implicit) must carry no WorldLabelRank component");
+}
+
+#[test]
+fn test_spawn_stat_label_widget_spawns_ranked_siblings_when_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = stat_label_def("{self}.health");
+    app.world_mut().run_system_once(move |mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>| {
+        let ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: true,
+        };
+        spawn_stat_label_widget(&mut commands, tracked, "dummy_01.health", &def, &ctx);
+    }).unwrap();
+
+    let mut q = app.world_mut().query::<(&StatLabelMarker, Option<&WorldLabelRank>)>();
+    let ranks: Vec<u8> = q.iter(app.world()).map(|(_, r)| r.map(|r| r.0).unwrap_or(0)).collect();
+    assert_eq!(ranks.len(), MAX_SPLIT_PLAYERS as usize, "a split-screen ctx must spawn MAX_SPLIT_PLAYERS ranked siblings");
+    let mut sorted = ranks.clone();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3]);
+}
+
+#[test]
+fn test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_without_duplication() {
+    let mut app = setup_test_app();
+    app.update();
+    // Pixel-style bars need Assets<ColorMaterial> — not registered by setup_test_app (headless,
+    // no 2D rendering plugin), so this test provides it locally, matching the real runtime's
+    // SceneMaterialParams.color_materials being Option-typed for exactly this reason.
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = WorldStatBarDef {
+        stat_key: "{self}.health".to_string(),
+        offset: (0.0, 2.5, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 1.0),
+        bg_color: (0.2, 0.05, 0.05, 0.85),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Pixel { size: (48.0, 6.0), border: 1.5, border_color: (0.05, 0.05, 0.05, 1.0) },
+    };
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: color_materials.as_deref_mut(),
+            depth_scale: None,
+            is_split_screen: false,
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let fill_count = app.world_mut().query::<&WorldPixelBarFillMarker>().iter(app.world()).count();
+    assert_eq!(fill_count, 1, "exactly one Pixel fill entity must spawn — Pixel bars do not rank-duplicate");
+
+    // Anchor + border + bg + fill = 4 entities total tracking the entity via WorldLabel (the
+    // anchor is the only one with a WorldLabel; border/bg/fill are its Bevy-hierarchy children).
+    let anchor_count = app.world_mut().query::<&WorldLabel>().iter(app.world())
+        .filter(|l| l.tracked_entity == Some(tracked)).count();
+    assert_eq!(anchor_count, 1, "exactly one anchor WorldLabel must track the entity");
+
+    let mut q = app.world_mut().query::<&ChildOf>();
+    let child_count = q.iter(app.world()).count();
+    assert!(child_count >= 3, "border + background + fill must all be spawned as children of the anchor");
+}
+
+// Part B: players get first-class stat widgets via the same DynamicStatUiQueue mechanism —
+// end-to-end coverage through the real spawn_scene_v2 path (test_player_1 declares
+// stat_templates/stat_label/world_stat_bar; test_player_2 declares neither).
+
+fn load_two_player_scene_with_player_stat_widget(app: &mut App) {
+    two_player_catalogs(app, None);
+    {
+        let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
+        let p1 = catalog.0.prefabs.get_mut("test_player_1").expect("test_player_1 must exist");
+        p1.stat_templates = vec![ironhold_core::schema::stats::StatTemplateDef {
+            key: "mana".to_string(),
+            base: 40.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: vec![],
+        }];
+        p1.stat_label = Some(stat_label_def("{self}.mana"));
+        p1.world_stat_bar = Some(ascii_world_stat_bar_def("{self}.mana"));
+        // test_player_2 deliberately keeps neither field — the "no widget authored, no widget
+        // spawned, no warning" baseline case.
+    }
+    load_two_player_scene(app);
+}
+
+#[test]
+fn test_player_stat_widget_spawns_and_resolves_against_that_players_own_stat_map() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_player_stat_widget(&mut app);
+
+    let p1_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("p1").expect("player 1 must register in SpawnRegistry");
+    let p2_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("p2").expect("player 2 must register in SpawnRegistry");
+
+    // {self} must resolve against THIS player's own spawn_id ("p1"), not the literal template.
+    let label_query_result: Vec<(String, Entity)> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, &WorldLabel)>();
+        q.iter(app.world()).map(|(m, l)| (m.stat_key.clone(), l.tracked_entity.unwrap())).collect()
+    };
+    assert_eq!(label_query_result.len(), 1, "only player 1 authored a stat_label — exactly one must spawn");
+    assert_eq!(label_query_result[0].0, "p1.mana", "{{self}} must resolve against player 1's own spawn_id");
+    assert_eq!(label_query_result[0].1, p1_entity, "the widget must track player 1's entity, not player 2's");
+
+    let bar_fill_count_tracking_p2 = {
+        let mut q = app.world_mut().query::<(&WorldStatBarFillMarker, &WorldLabel)>();
+        q.iter(app.world()).filter(|(_, l)| l.tracked_entity == Some(p2_entity)).count()
+    };
+    assert_eq!(bar_fill_count_tracking_p2, 0, "player 2 authored no world_stat_bar — none should track them");
+
+    // Let stat_label_update_system resolve the text against player 1's real StatMap component
+    // (built by spawn_player_entity_core from the same stat_templates field).
+    app.update();
+    let p1_stat_map = app.world().get::<ironhold_core::schema::stats::StatMap>(p1_entity)
+        .expect("player 1 must have a StatMap — stat_templates was declared on their prefab");
+    assert_eq!(p1_stat_map.0["mana"].current, 40.0);
+
+    let text_query_result: Vec<String> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, &Text2d)>();
+        q.iter(app.world()).map(|(_, t)| t.0.clone()).collect()
+    };
+    assert_eq!(
+        text_query_result, vec!["40 / 100".to_string()],
+        "the label must resolve the live value from player 1's own StatMap, proving the full \
+         PrefabDef.stat_label -> PlayerConfig -> DynamicStatUiQueue -> resolve_stat pipeline works"
+    );
+}
+
+#[test]
+fn test_player_stat_widget_duplicates_ranks_when_scene_is_split_screen() {
+    // Debug-detective finding (2026-07-17): the non-split end-to-end test above proves the
+    // player -> DynamicStatUiQueue -> drain pipeline resolves correctly, but drain_dynamic_stat_ui_
+    // system's split-screen rank-duplication gate reads ActiveSplitScreen/DynamicSplitConfig,
+    // which spawn_players_and_camera sets via DEFERRED commands.insert_resource — a different
+    // code path than the non-split test exercises (that path short-circuits before any split
+    // resource is touched). This test proves the split-screen case specifically, through the real
+    // scene-load pipeline (not by passing is_split_screen: true directly into a ctx, which would
+    // bypass the exact resource-timing this is meant to verify).
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app, None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+    {
+        let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
+        let p1 = catalog.0.prefabs.get_mut("test_player_1").expect("test_player_1 must exist");
+        p1.stat_templates = vec![ironhold_core::schema::stats::StatTemplateDef {
+            key: "mana".to_string(), base: 40.0, min: 0.0, max: 100.0,
+            regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+        }];
+        p1.stat_label = Some(stat_label_def("{self}.mana"));
+    }
+    load_two_player_scene(&mut app);
+
+    let p1_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("p1").expect("player 1 must register in SpawnRegistry");
+
+    let ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&StatLabelMarker, &WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(_, l, _)| l.tracked_entity == Some(p1_entity))
+            .map(|(_, _, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a player's stat_label, pushed through DynamicStatUiQueue in a split-screen scene, must \
+         spawn MAX_SPLIT_PLAYERS ranked siblings tracking that player — same as any NPC/prop \
+         stat_label — proving ActiveSplitScreen/DynamicSplitConfig are actually populated by the \
+         time drain_dynamic_stat_ui_system runs for a player-triggered push"
+    );
+    let mut sorted: Vec<u8> = ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3]);
 }

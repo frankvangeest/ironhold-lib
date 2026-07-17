@@ -354,6 +354,7 @@ pub fn drain_spawn_queue_system(
                 &queued.project_root,
                 active_tonemapping.0,
                 &mut registry,
+                &mut stat_ui_queue,
             );
             continue;
         }
@@ -479,6 +480,7 @@ pub fn spawn_player_when_terrain_ready(
     merged_fixes: Res<MergedModelFixes>,
     project_root: Res<ProjectRoot>,
     mut registry: ResMut<SpawnRegistry>,
+    mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
 ) {
     if terrain_query.is_empty() {
         return;
@@ -498,6 +500,7 @@ pub fn spawn_player_when_terrain_ready(
             &project_root.0,
             tonemapping,
             &mut registry,
+            &mut stat_ui_queue,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -518,9 +521,11 @@ pub(crate) fn spawn_player_entity(
     project_root: &str,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     registry: &mut SpawnRegistry,
+    stat_ui_queue: &mut DynamicStatUiQueue,
 ) {
     let player_entity = spawn_player_entity_core(
         commands, asset_server, fixes, model_spawner, player_config, project_root, registry,
+        stat_ui_queue,
     );
     spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
 }
@@ -543,6 +548,7 @@ pub(crate) fn spawn_players_and_camera(
     project_root: &str,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     registry: &mut SpawnRegistry,
+    stat_ui_queue: &mut DynamicStatUiQueue,
 ) {
     // Per-player targeting (capabilities/targeting.rs) treats `player_index: 0` (the default —
     // `#[serde(default)]` on `PrefabDef.player_index`) as "the primary player": the one whose
@@ -563,9 +569,12 @@ pub(crate) fn spawn_players_and_camera(
         );
     }
 
-    let entities: Vec<Entity> = player_configs.iter().map(|pc| {
-        spawn_player_entity_core(commands, asset_server, fixes, model_spawner, pc, project_root, registry)
-    }).collect();
+    let mut entities: Vec<Entity> = Vec::with_capacity(player_configs.len());
+    for pc in player_configs {
+        entities.push(spawn_player_entity_core(
+            commands, asset_server, fixes, model_spawner, pc, project_root, registry, stat_ui_queue,
+        ));
+    }
 
     let Some(first) = player_configs.first() else { return };
     if entities.len() < 2 {
@@ -740,6 +749,7 @@ fn spawn_player_entity_core(
     player_config: &PlayerConfig,
     project_root: &str,
     registry: &mut SpawnRegistry,
+    stat_ui_queue: &mut DynamicStatUiQueue,
 ) -> Entity {
     let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
     let gltf_handle = asset_server.load(gltf_path.clone());
@@ -842,6 +852,26 @@ fn spawn_player_entity_core(
         &player_config.prefab_key,
     ) {
         commands.entity(player_entity).insert(stat_map);
+    }
+
+    // Gives this player a floating stat_label/world_stat_bar widget when their prefab declares
+    // one — routed through the same DynamicStatUiQueue/drain_dynamic_stat_ui_system mechanism
+    // NPC/prop Action::Spawn entities use (mirrors drain_spawn_queue_system's own push below),
+    // rather than a player-specific spawn path. `{self}` is resolved against this player's own
+    // spawn_id, exactly like every other entity kind. See
+    // `planning/features/player_stat_widgets.md`.
+    let stat_label = player_config.stat_label.as_ref().map(|sl| {
+        let key = sl.stat_key.replace("{self}", &player_config.spawn_id);
+        (key, sl.clone())
+    });
+    let world_stat_bar = player_config.world_stat_bar.as_ref().map(|wb| {
+        let key = wb.stat_key.replace("{self}", &player_config.spawn_id);
+        (key, wb.clone())
+    });
+    if stat_label.is_some() || world_stat_bar.is_some() {
+        stat_ui_queue.0.push(super::DynamicStatUiEntry {
+            entity: player_entity, stat_label, world_stat_bar,
+        });
     }
 
     if let Some(display_name) = &player_config.nameplate_display_name {
@@ -994,5 +1024,7 @@ pub(crate) fn assemble_player_config(
         nameplate_override: prefab.nameplate,
         material: prefab.material.clone(),
         stat_templates: prefab.stat_templates.clone(),
+        stat_label: prefab.stat_label.clone(),
+        world_stat_bar: prefab.world_stat_bar.clone(),
     }
 }

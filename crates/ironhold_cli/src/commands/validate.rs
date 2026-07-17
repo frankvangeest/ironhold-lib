@@ -397,6 +397,34 @@ fn cross_file_checks(
                     }
                 }
             }
+
+            // stat_label/world_stat_bar authored with an entity-local ("{self}.<stat>") key
+            // require a matching entry in this SAME prefab's stat_templates, or the widget
+            // silently renders empty forever with no runtime feedback. Generic across every
+            // prefab kind (players included, since a player prefab is just a prefab with
+            // `tags: ["player"]`) — NPCs/props have had this exact silent-failure mode all
+            // along; `player_stat_widgets` just makes it far more likely a designer hits it on
+            // a player prefab for the first time (carrying over a `{self}.mana` habit onto a
+            // player prefab with no matching `stat_templates` entry).
+            // See `planning/features/player_stat_widgets.md` Part C.
+            for (widget_kind, stat_key) in [
+                ("stat_label", def.stat_label.as_ref().map(|sl| &sl.stat_key)),
+                ("world_stat_bar", def.world_stat_bar.as_ref().map(|wb| &wb.stat_key)),
+            ] {
+                let Some(stat_key) = stat_key else { continue };
+                let Some(local_stat) = stat_key.strip_prefix("{self}.") else { continue };
+                if !def.stat_templates.iter().any(|t| t.key == local_stat) {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: {} keyed {:?}, but this prefab's stat_templates has no \
+                             entry for {:?} — the widget will render empty with no further warning",
+                            key, widget_kind, stat_key, local_stat
+                        ),
+                        error_type: "missing_stat_widget_template",
+                    });
+                }
+            }
         }
     }
 

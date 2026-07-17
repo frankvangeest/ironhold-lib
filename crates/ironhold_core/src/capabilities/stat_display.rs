@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::schema::scene_v2::BarOrientation;
-use crate::runtime::scene_manager::SpawnId;
+use crate::schema::catalog::{StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
+use crate::runtime::scene_manager::{SpawnId, WorldLabel, WorldLabelRank, LevelEntity};
+use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
 
 /// Resolves a stat by key from either `LoadedStats` (global) or `StatMap` (per-entity).
 ///
@@ -282,6 +284,199 @@ pub fn stat_label_update_system(
         };
         if text.0 != new_text {
             text.0 = new_text;
+        }
+    }
+}
+
+/// Shared spawn-time context for `spawn_stat_label_widget`/`spawn_world_stat_bar_widget`.
+/// Bundles the handful of things that differ between the scene-load and dynamic-spawn call
+/// sites (both resolve their own `depth_scale`/`is_split_screen` beforehand) so the widget
+/// entity construction itself — previously duplicated across `scene_loader.rs`'s two spawn
+/// loops and `drain_dynamic_stat_ui_system` — lives in exactly one place.
+pub struct StatWidgetSpawnCtx<'a> {
+    /// Only touched by `Pixel`-style bars.
+    pub meshes: &'a mut Assets<Mesh>,
+    /// Only touched by `Pixel`-style bars; `None` panics if a `Pixel` bar is actually spawned
+    /// (mirrors the pre-extraction `.expect(...)` — every real caller has this available).
+    pub color_materials: Option<&'a mut Assets<ColorMaterial>>,
+    /// Pre-resolved via `resolve_label_depth_scale` at the call site (each call site reads a
+    /// different source: the scene's `label_depth_scale` block vs. the `LoadedLabelDepthScale`
+    /// resource) — this helper does not know or care which.
+    pub depth_scale: Option<(f32, f32)>,
+    /// Whether the loading/active scene is split-screen — gates `WorldLabelRank` sibling
+    /// duplication for `stat_label`/Ascii bars (see `WorldLabelRank`'s doc comment).
+    pub is_split_screen: bool,
+}
+
+/// Spawns the floating `Text2d` widget for a `stat_label` (`StatLabelDef`), tracking `tracked`.
+/// Duplicates one sibling per split-screen rank when `ctx.is_split_screen` (see `WorldLabelRank`).
+pub fn spawn_stat_label_widget(
+    commands: &mut Commands,
+    tracked: Entity,
+    stat_key: &str,
+    def: &StatLabelDef,
+    ctx: &StatWidgetSpawnCtx,
+) {
+    let (r, g, b, a) = def.color;
+    let ranks = if ctx.is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
+    for rank in 0..ranks {
+        let mut label_entity = commands.spawn((
+            Name::new(format!("StatLabel: {} (rank {})", stat_key, rank)),
+            Text2d::new(String::new()),
+            TextFont { font_size: def.font_size, ..default() },
+            TextColor(Color::srgba(r, g, b, a)),
+            Transform::from_xyz(0.0, 0.0, 1.0),
+            WorldLabel {
+                world_pos: Vec3::ZERO,
+                tracked_entity: Some(tracked),
+                offset: Vec3::from(def.offset),
+                base_font_size: def.font_size,
+                depth_scale: ctx.depth_scale,
+                screen_offset: Vec2::ZERO,
+            },
+            StatLabelMarker { stat_key: stat_key.to_string(), show_max: def.show_max },
+            LevelEntity,
+        ));
+        if rank > 0 {
+            label_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+        }
+    }
+}
+
+/// Spawns the floating widget for a `world_stat_bar` (`WorldStatBarDef`), tracking `tracked`.
+/// Dispatches on `def.style`: `Ascii` → two rank-duplicated `Text2d` entities (background +
+/// fill), following the same split-screen duplication as `spawn_stat_label_widget`; `Pixel` →
+/// a single (non-duplicated — see `WorldLabelRank`'s doc comment) anchor with up to 3 `Mesh2d`
+/// children.
+pub fn spawn_world_stat_bar_widget(
+    commands: &mut Commands,
+    tracked: Entity,
+    stat_key: &str,
+    def: &WorldStatBarDef,
+    ctx: &mut StatWidgetSpawnCtx,
+) {
+    let offset_v3 = Vec3::from(def.offset);
+    let fill_color = def.fill_color;
+    let (fr, fg, fb, fa) = fill_color;
+    let (bgr, bgg, bgb, bga) = def.bg_color;
+    let color_bands = def.color_bands.clone();
+    let ranks = if ctx.is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
+
+    match def.style {
+        WorldStatBarStyle::Ascii { cells, font_size } => {
+            let cells_clamped = cells.max(1) as usize;
+            let bg_chars = " ".repeat(cells_clamped);
+
+            for rank in 0..ranks {
+                // Background track — static, never updated.
+                let mut bg_entity = commands.spawn((
+                    Name::new(format!("StatBarBg: {} (rank {})", stat_key, rank)),
+                    Text2d::new(bg_chars.clone()),
+                    TextFont { font_size, ..default() },
+                    TextColor(Color::srgba(bgr, bgg, bgb, bga)),
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: offset_v3,
+                        base_font_size: font_size,
+                        depth_scale: ctx.depth_scale,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    bg_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+
+                // Fill entity — text and colour updated each frame by world_stat_bar_update_system.
+                let mut fill_entity = commands.spawn((
+                    Name::new(format!("StatBarFill: {} (rank {})", stat_key, rank)),
+                    Text2d::new(String::new()),
+                    TextFont { font_size, ..default() },
+                    TextColor(Color::srgba(fr, fg, fb, fa)),
+                    Transform::from_xyz(0.0, 0.0, 2.0),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: offset_v3,
+                        base_font_size: font_size,
+                        depth_scale: ctx.depth_scale,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    WorldStatBarFillMarker {
+                        stat_key: stat_key.to_string(), cells, fill_color,
+                        color_bands: color_bands.clone(),
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    fill_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+            }
+        }
+        WorldStatBarStyle::Pixel { size, border, border_color } => {
+            let w = size.0.max(1.0);
+            let h = size.1.max(1.0);
+            let b = border.clamp(0.0, h / 2.0);
+            let (bdr, bdg, bdb, bda) = border_color;
+            let color_mats = ctx.color_materials.as_mut()
+                .expect("ColorMaterial assets must be available to spawn pixel stat bars");
+
+            // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
+            // Depth scaling intentionally not applied to Pixel-style bars (pre-existing
+            // documented exclusion — see docs/20_data_formats.md's Pixel bar depth-scaling note).
+            let anchor = commands.spawn((
+                Name::new(format!("PixelBarAnchor: {}", stat_key)),
+                Transform::default(),
+                Visibility::default(),
+                WorldLabel {
+                    world_pos: Vec3::ZERO,
+                    tracked_entity: Some(tracked),
+                    offset: offset_v3,
+                    base_font_size: 1.0,
+                    depth_scale: None,
+                    screen_offset: Vec2::ZERO,
+                },
+                LevelEntity,
+            )).id();
+
+            // Border quad (skip when border <= 0).
+            if b > 0.0 {
+                let border_child = commands.spawn((
+                    Name::new(format!("PixelBarBorder: {}", stat_key)),
+                    Mesh2d(ctx.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
+                    MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                    LevelEntity,
+                )).id();
+                commands.entity(anchor).add_child(border_child);
+            }
+
+            // Background quad — full bar size, static.
+            let bg_child = commands.spawn((
+                Name::new(format!("PixelBarBg: {}", stat_key)),
+                Mesh2d(ctx.meshes.add(Rectangle::new(w, h))),
+                MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
+                Transform::from_xyz(0.0, 0.0, 2.0),
+                LevelEntity,
+            )).id();
+            commands.entity(anchor).add_child(bg_child);
+
+            // Fill quad — width=1 mesh scaled per frame; left-aligned via transform.
+            // scale.x = ratio * w; translation.x = -w/2 + (ratio*w)/2.
+            let fill_child = commands.spawn((
+                Name::new(format!("PixelBarFill: {}", stat_key)),
+                Mesh2d(ctx.meshes.add(Rectangle::new(1.0, h))),
+                MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
+                Transform::from_xyz(-w / 2.0, 0.0, 3.0)
+                    .with_scale(Vec3::new(0.0, 1.0, 1.0)),
+                WorldPixelBarFillMarker {
+                    stat_key: stat_key.to_string(), full_width: w, fill_color, color_bands,
+                },
+                LevelEntity,
+            )).id();
+            commands.entity(anchor).add_child(fill_child);
         }
     }
 }

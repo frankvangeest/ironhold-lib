@@ -135,6 +135,21 @@ fn cross_bar_duplicate_action_bar_key_exits_1() {
     );
 }
 
+/// `player_stat_widgets.md` Part C: a `stat_label`/`world_stat_bar` keyed `"{self}.<stat>"` with
+/// no matching `stat_templates` entry on that SAME prefab used to render empty forever with no
+/// diagnostic — this cross-file check (and its scene-load `warn!` counterpart) catches it.
+/// Generic across every prefab kind, not player-specific — this fixture uses a plain `Primitive`
+/// prop precisely to prove that.
+#[test]
+fn missing_stat_widget_template_exits_1() {
+    let (code, stdout) = validate("bad_stat_widget_template");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bad_widget_prop") && stdout.contains("stat_templates has no entry"),
+        "expected the offending prefab key and the missing-template message in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

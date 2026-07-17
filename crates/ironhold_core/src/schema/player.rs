@@ -53,6 +53,16 @@ pub struct PlayerConfig {
     /// field existed. See `planning/features/per_player_stat_pools.md`.
     #[serde(default)]
     pub stat_templates: Vec<crate::schema::stats::StatTemplateDef>,
+    /// Forwarded from `PrefabDef.stat_label`. When set, `spawn_player_entity_core` queues a
+    /// floating stat-label widget for this player via `DynamicStatUiQueue`, the same mechanism
+    /// NPC/prop `Action::Spawn` entities use — giving players first-class stat widgets instead
+    /// of the field silently parsing and doing nothing. See
+    /// `planning/features/player_stat_widgets.md`.
+    #[serde(default)]
+    pub stat_label: Option<crate::schema::catalog::StatLabelDef>,
+    /// Forwarded from `PrefabDef.world_stat_bar`. Same mechanism as `stat_label` above.
+    #[serde(default)]
+    pub world_stat_bar: Option<crate::schema::catalog::WorldStatBarDef>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

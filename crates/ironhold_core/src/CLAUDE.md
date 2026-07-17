@@ -425,7 +425,29 @@ one is **not** unconditional per player-construction site — most players get n
 (empty `stat_templates` is the default), which is exactly what keeps every existing single-player
 project byte-for-byte unaffected. Site 2 (the primitive/capsule path) is deliberately **not**
 touched, matching its existing single-player-only status (no `PlayerIndex`, no `owner_player`
-action bars either).
+action bars either) — **so a primitive player prefab that declares `stat_templates` never actually
+gets a runtime `StatMap`**, even though the schema/`ironhold_cli validate` happily accept the
+field on any prefab kind. Collapsing this remaining gap is `player_model_source_unification.md`'s
+job, not a widget-display concern — see below.
+
+**`stat_label`/`world_stat_bar` on players** (`planning/features/player_stat_widgets.md`) —
+players get the exact same floating-widget mechanism NPCs/props/`Action::Spawn` entities use,
+routed through the existing `DynamicStatUiQueue`/`drain_dynamic_stat_ui_system` rather than a
+player-specific spawn path: `spawn_player_entity_core` (site 1/3/4, GLB) and the primitive/capsule
+inline block (site 2) both push a `DynamicStatUiEntry` (with `{self}` already resolved against
+that player's own spawn ID) when `PlayerConfig.stat_label`/`.world_stat_bar` is set — the actual
+`Text2d`/`Mesh2d` entity-spawning logic itself was extracted from `scene_loader.rs`'s two Phase-B
+loops into `capabilities/stat_display.rs::spawn_stat_label_widget`/`spawn_world_stat_bar_widget`
+(the same duplication `drain_dynamic_stat_ui_system` already had a near-byte-for-byte copy of, now
+gone). Since `spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling,
+`DynamicStatUiQueue` is bundled into the existing `SceneV2Params` struct rather than added as a
+bare param. **Known gap, not fixed here:** because site 2 still gets no `StatMap` (see the
+paragraph above), a `{self}.<stat>` widget on a *primitive* player prefab always renders empty
+even when `stat_templates` correctly declares the key — the new `missing_stat_widget_template`
+warn/validate check (generic across every prefab kind, catching an unresolved `{self}.<stat>`
+key with no matching `stat_templates` entry) does not catch this specific case, since the
+prefab-level schema data is present; only the runtime `StatMap` is missing. GLB players are
+unaffected, since site 1/3/4 already build the `StatMap` from the same `stat_templates` field.
 
 **`PrefabDef.material` does NOT automatically apply to players — this bit Stage 6's local co-op
 4-way split during playtest.** `spawn_prefab_instance` (the generic Actor/Prop/NPC path) reads

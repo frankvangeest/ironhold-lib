@@ -1,0 +1,12 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "bad_widget_prop": (
+            kind: Primitive,
+            model: "Cuboid",
+            stat_label: (
+                stat_key: "{self}.mana",
+            ),
+        ),
+    },
+)

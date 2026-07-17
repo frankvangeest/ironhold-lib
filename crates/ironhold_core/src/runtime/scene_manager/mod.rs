@@ -488,6 +488,10 @@ pub struct SceneV2Params<'w> {
     pub inventory_ui: ResMut<'w, crate::capabilities::inventory::LoadedInventoryUi>,
     pub container_ui: ResMut<'w, crate::capabilities::inventory::LoadedContainerUi>,
     pub loaded_item_catalog: Res<'w, crate::capabilities::inventory::LoadedItemCatalog>,
+    /// `spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling, so a
+    /// player's `stat_label`/`world_stat_bar` widget queue (`DynamicStatUiQueue`) is bundled
+    /// here rather than added as a bare param. See `planning/features/player_stat_widgets.md`.
+    pub dynamic_stat_ui_queue: ResMut<'w, DynamicStatUiQueue>,
 }
 
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.

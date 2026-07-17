@@ -25,8 +25,10 @@ use super::{
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
 use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
-use crate::capabilities::stat_display::{StatBarFill, StatValueText, StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker};
-use crate::schema::catalog::WorldStatBarStyle;
+use crate::capabilities::stat_display::{
+    StatBarFill, StatValueText, spawn_stat_label_widget, spawn_world_stat_bar_widget,
+    StatWidgetSpawnCtx,
+};
 use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
 use crate::schema::scene_v2::BarOrientation;
 
@@ -160,6 +162,7 @@ pub fn spawn_scene_v2(
         let prefab_catalog = &params.prefab_catalog.0;
         let asset_catalog  = &params.asset_catalog.0;
         let project_root   = params.project_root.0.as_str();
+        let dyn_stat_ui_queue: &mut DynamicStatUiQueue = &mut params.dynamic_stat_ui_queue;
 
         // Spawn entities from prefabs
         let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
@@ -701,6 +704,7 @@ pub fn spawn_scene_v2(
             && player_configs.first().is_some_and(|p| p.camera.split.is_some());
 
         warn_missing_player_stat_templates(scene, &player_configs);
+        warn_missing_stat_widget_templates(scene, prefab_catalog);
 
         // ── Primitive player ─────────────────────────────────────────────────────────
         if let Some((entity_id, shape, params, position, components, player_children, prefab_key, np_display_name, np_override)) = primitive_player {
@@ -797,6 +801,29 @@ pub fn spawn_scene_v2(
                 });
             }
 
+            // Gives this player a floating stat_label/world_stat_bar widget when their prefab
+            // declares one — same DynamicStatUiQueue mechanism the GLB player path
+            // (spawn_player_entity_core) and NPC/prop Action::Spawn entities use. `{self}` is
+            // resolved against this player's own entity_id. Re-fetches the PrefabDef by key
+            // since this destructured tuple doesn't carry it directly (unlike `components`,
+            // which was captured for the movement/camera/inputs fields already needed above).
+            // See `planning/features/player_stat_widgets.md`.
+            if let Some(prefab_for_widgets) = prefab_catalog.prefabs.get(&prefab_key) {
+                let stat_label = prefab_for_widgets.stat_label.as_ref().map(|sl| {
+                    let key = sl.stat_key.replace("{self}", &entity_id);
+                    (key, sl.clone())
+                });
+                let world_stat_bar = prefab_for_widgets.world_stat_bar.as_ref().map(|wb| {
+                    let key = wb.stat_key.replace("{self}", &entity_id);
+                    (key, wb.clone())
+                });
+                if stat_label.is_some() || world_stat_bar.is_some() {
+                    dyn_stat_ui_queue.0.push(crate::runtime::scene_manager::DynamicStatUiEntry {
+                        entity: player_entity, stat_label, world_stat_bar,
+                    });
+                }
+            }
+
             // Visual body child — mesh centred at body_y above the feet so it aligns
             // with the compound collider above.
             let mesh_child = commands.spawn((
@@ -887,6 +914,7 @@ pub fn spawn_scene_v2(
                     &params.project_root.0,
                     tonemapping,
                     &mut spawn_registry,
+                    dyn_stat_ui_queue,
                 );
             }
         } else if let Some((fc_transform, fc_def)) = flycam_start {
@@ -1032,32 +1060,15 @@ pub fn spawn_scene_v2(
         // rewrites every instance's `Text2d` each frame regardless of `Visibility`, unlike the
         // static world_labels/label text this pattern was first used for. See
         // `planning/features/split_screen_camera_followups.md` Phase 4.
-        let stat_widget_ranks = if is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
         for (tracked, stat_key, sl) in pending_stat_labels {
-            let (r, g, b, a) = sl.color;
             let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None);
-            for rank in 0..stat_widget_ranks {
-                let mut label_entity = commands.spawn((
-                    Name::new(format!("StatLabel: {} (rank {})", stat_key, rank)),
-                    Text2d::new(String::new()),
-                    TextFont { font_size: sl.font_size, ..default() },
-                    TextColor(Color::srgba(r, g, b, a)),
-                    Transform::from_xyz(0.0, 0.0, 1.0),
-                    WorldLabel {
-                        world_pos: Vec3::ZERO,
-                        tracked_entity: Some(tracked),
-                        offset: Vec3::from(sl.offset),
-                        base_font_size: sl.font_size,
-                        depth_scale,
-                        screen_offset: Vec2::ZERO,
-                    },
-                    StatLabelMarker { stat_key: stat_key.clone(), show_max: sl.show_max },
-                    LevelEntity,
-                ));
-                if rank > 0 {
-                    label_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                }
-            }
+            let ctx = StatWidgetSpawnCtx {
+                meshes: &mut mats.meshes,
+                color_materials: mats.color_materials.as_deref_mut(),
+                depth_scale,
+                is_split_screen,
+            };
+            spawn_stat_label_widget(&mut commands, tracked, &stat_key, &sl, &ctx);
         }
 
         // Spawn world-space stat bars from PrefabDef.world_stat_bar.
@@ -1065,123 +1076,14 @@ pub fn spawn_scene_v2(
         // Ascii bars follow the same split-screen rank-duplication as stat labels above;
         // Pixel bars are excluded (child-hierarchy duplication deferred, see Phase 4 Approach).
         for (tracked, stat_key, wb) in pending_world_bars {
-            let offset_v3 = Vec3::from(wb.offset);
-            let fill_color = wb.fill_color;
-            let (fr, fg, fb, fa) = fill_color;
-            let (bgr, bgg, bgb, bga) = wb.bg_color;
-            let color_bands = wb.color_bands;
             let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None);
-
-            match wb.style {
-                WorldStatBarStyle::Ascii { cells, font_size } => {
-                    let cells_clamped = cells.max(1) as usize;
-                    let bg_chars = " ".repeat(cells_clamped);
-
-                    for rank in 0..stat_widget_ranks {
-                        // Background track — static, never updated.
-                        let mut bg_entity = commands.spawn((
-                            Name::new(format!("StatBarBg: {} (rank {})", stat_key, rank)),
-                            Text2d::new(bg_chars.clone()),
-                            TextFont { font_size, ..default() },
-                            TextColor(Color::srgba(bgr, bgg, bgb, bga)),
-                            Transform::from_xyz(0.0, 0.0, 1.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(tracked),
-                                offset: offset_v3,
-                                base_font_size: font_size,
-                                depth_scale,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            LevelEntity,
-                        ));
-                        if rank > 0 {
-                            bg_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                        }
-
-                        // Fill entity — text and colour updated each frame by world_stat_bar_update_system.
-                        let mut fill_entity = commands.spawn((
-                            Name::new(format!("StatBarFill: {} (rank {})", stat_key, rank)),
-                            Text2d::new(String::new()),
-                            TextFont { font_size, ..default() },
-                            TextColor(Color::srgba(fr, fg, fb, fa)),
-                            Transform::from_xyz(0.0, 0.0, 2.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(tracked),
-                                offset: offset_v3,
-                                base_font_size: font_size,
-                                depth_scale,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            WorldStatBarFillMarker { stat_key: stat_key.clone(), cells, fill_color, color_bands: color_bands.clone() },
-                            LevelEntity,
-                        ));
-                        if rank > 0 {
-                            fill_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                        }
-                    }
-                }
-                WorldStatBarStyle::Pixel { size, border, border_color } => {
-                    let w = size.0.max(1.0);
-                    let h = size.1.max(1.0);
-                    let b = border.clamp(0.0, h / 2.0);
-                    let (bdr, bdg, bdb, bda) = border_color;
-                    let color_mats = mats.color_materials.as_mut()
-                        .expect("ColorMaterial assets must be available to spawn pixel stat bars");
-
-                    // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
-                    let anchor = commands.spawn((
-                        Name::new(format!("PixelBarAnchor: {}", stat_key)),
-                        Transform::default(),
-                        Visibility::default(),
-                        WorldLabel {
-                            world_pos: Vec3::ZERO,
-                            tracked_entity: Some(tracked),
-                            offset: offset_v3,
-                            base_font_size: 1.0,
-                            depth_scale: None,
-                            screen_offset: Vec2::ZERO,
-                        },
-                        LevelEntity,
-                    )).id();
-
-                    // Border quad (skip when border <= 0).
-                    if b > 0.0 {
-                        let border_child = commands.spawn((
-                            Name::new(format!("PixelBarBorder: {}", stat_key)),
-                            Mesh2d(mats.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
-                            MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
-                            Transform::from_xyz(0.0, 0.0, 1.0),
-                            LevelEntity,
-                        )).id();
-                        commands.entity(anchor).add_child(border_child);
-                    }
-
-                    // Background quad — full bar size, static.
-                    let bg_child = commands.spawn((
-                        Name::new(format!("PixelBarBg: {}", stat_key)),
-                        Mesh2d(mats.meshes.add(Rectangle::new(w, h))),
-                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
-                        Transform::from_xyz(0.0, 0.0, 2.0),
-                        LevelEntity,
-                    )).id();
-                    commands.entity(anchor).add_child(bg_child);
-
-                    // Fill quad — width=1 mesh scaled per frame; left-aligned via transform.
-                    // scale.x = ratio * w; translation.x = -w/2 + (ratio*w)/2.
-                    let fill_child = commands.spawn((
-                        Name::new(format!("PixelBarFill: {}", stat_key)),
-                        Mesh2d(mats.meshes.add(Rectangle::new(1.0, h))),
-                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
-                        Transform::from_xyz(-w / 2.0, 0.0, 3.0)
-                            .with_scale(Vec3::new(0.0, 1.0, 1.0)),
-                        WorldPixelBarFillMarker { stat_key, full_width: w, fill_color, color_bands },
-                        LevelEntity,
-                    )).id();
-                    commands.entity(anchor).add_child(fill_child);
-                }
-            }
+            let mut ctx = StatWidgetSpawnCtx {
+                meshes: &mut mats.meshes,
+                color_materials: mats.color_materials.as_deref_mut(),
+                depth_scale,
+                is_split_screen,
+            };
+            spawn_world_stat_bar_widget(&mut commands, tracked, &stat_key, &wb, &mut ctx);
         }
 
         // Apply lighting
@@ -1452,6 +1354,43 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
             }
         }
         bar_index += 1;
+    }
+}
+
+/// `stat_label`/`world_stat_bar` authored with an entity-local (`"{self}.<stat>"`) key require a
+/// matching entry in that SAME prefab's `stat_templates`, or the widget silently renders empty
+/// forever with no runtime feedback. Generic across every entity kind (players included, since a
+/// player prefab is just a prefab with `tags: ["player"]`) — NPCs/props have had this exact
+/// silent-failure mode all along; `player_stat_widgets` just makes it far more likely a designer
+/// hits it on a player prefab for the first time (carrying over a `{self}.mana` habit onto a
+/// player prefab with no matching `stat_templates` entry). Checking every `scene.entities` entry
+/// against its own prefab (rather than a separate `player_configs` pass) already covers GLB and
+/// primitive players uniformly with everything else — a player entity's prefab lookup doesn't
+/// depend on `is_player`, so a second player-specific pass would just double-warn the same
+/// entity. Mirrors the CLI-side `missing_stat_widget_template` check in
+/// `ironhold_cli::commands::validate`. See `planning/features/player_stat_widgets.md` Part C.
+fn warn_missing_stat_widget_templates(
+    scene: &GameSceneV2,
+    prefab_catalog: &crate::schema::catalog::PrefabCatalog,
+) {
+    for entity_def in &scene.entities {
+        let Some(prefab) = prefab_catalog.prefabs.get(&entity_def.prefab) else { continue };
+        for (widget_kind, stat_key) in [
+            ("stat_label", prefab.stat_label.as_ref().map(|sl| sl.stat_key.as_str())),
+            ("world_stat_bar", prefab.world_stat_bar.as_ref().map(|wb| wb.stat_key.as_str())),
+        ] {
+            let Some(stat_key) = stat_key else { continue };
+            let Some(local_stat) = stat_key.strip_prefix("{self}.") else { continue };
+            if !prefab.stat_templates.iter().any(|t| t.key == local_stat) {
+                warn!(
+                    "Entity '{}' (prefab '{}') has a {} keyed \"{{self}}.{}\", but this prefab's \
+                     stat_templates has no entry for '{}' — the widget will render empty (no \
+                     value to show) with no further warning. Add a stat_templates entry for \
+                     '{}', or point the widget at a global stat instead.",
+                    entity_def.id, entity_def.prefab, widget_kind, local_stat, local_stat, local_stat
+                );
+            }
+        }
     }
 }
 
@@ -2696,148 +2635,27 @@ pub fn drain_dynamic_stat_ui_system(
     // will duplicate-visible once split; `DynamicSplitConfig` stays `Some` for the scene's whole
     // lifetime regardless of merge state.
     let is_split_screen = active_split.0.is_some() || dynamic_split.0.is_some();
-    let stat_widget_ranks = if is_split_screen { MAX_SPLIT_PLAYERS } else { 1 };
     for entry in queue.0.drain(..) {
         if let Some((stat_key, sl)) = entry.stat_label {
-            let (r, g, b, a) = sl.color;
             let depth_scale = resolve_label_depth_scale(label_depth_scale.0.as_ref(), None);
-            for rank in 0..stat_widget_ranks {
-                let mut label_entity = commands.spawn((
-                    Name::new(format!("StatLabel: {} (rank {})", stat_key, rank)),
-                    Text2d::new(String::new()),
-                    TextFont { font_size: sl.font_size, ..default() },
-                    TextColor(Color::srgba(r, g, b, a)),
-                    Transform::from_xyz(0.0, 0.0, 1.0),
-                    WorldLabel {
-                        world_pos: Vec3::ZERO,
-                        tracked_entity: Some(entry.entity),
-                        offset: Vec3::from(sl.offset),
-                        base_font_size: sl.font_size,
-                        depth_scale,
-                        screen_offset: Vec2::ZERO,
-                    },
-                    StatLabelMarker { stat_key: stat_key.clone(), show_max: sl.show_max },
-                    LevelEntity,
-                ));
-                if rank > 0 {
-                    label_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                }
-            }
+            let ctx = StatWidgetSpawnCtx {
+                meshes: &mut mats.meshes,
+                color_materials: mats.color_materials.as_deref_mut(),
+                depth_scale,
+                is_split_screen,
+            };
+            spawn_stat_label_widget(&mut commands, entry.entity, &stat_key, &sl, &ctx);
         }
 
         if let Some((stat_key, wb)) = entry.world_stat_bar {
-            let offset_v3 = Vec3::from(wb.offset);
-            let fill_color = wb.fill_color;
-            let (fr, fg, fb, fa) = fill_color;
-            let (bgr, bgg, bgb, bga) = wb.bg_color;
-            let color_bands = wb.color_bands;
             let depth_scale = resolve_label_depth_scale(label_depth_scale.0.as_ref(), None);
-
-            match wb.style {
-                WorldStatBarStyle::Ascii { cells, font_size } => {
-                    let cells_clamped = cells.max(1) as usize;
-                    let bg_chars = " ".repeat(cells_clamped);
-
-                    for rank in 0..stat_widget_ranks {
-                        let mut bg_entity = commands.spawn((
-                            Name::new(format!("StatBarBg: {} (rank {})", stat_key, rank)),
-                            Text2d::new(bg_chars.clone()),
-                            TextFont { font_size, ..default() },
-                            TextColor(Color::srgba(bgr, bgg, bgb, bga)),
-                            Transform::from_xyz(0.0, 0.0, 1.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(entry.entity),
-                                offset: offset_v3,
-                                base_font_size: font_size,
-                                depth_scale,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            LevelEntity,
-                        ));
-                        if rank > 0 {
-                            bg_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                        }
-
-                        let mut fill_entity = commands.spawn((
-                            Name::new(format!("StatBarFill: {} (rank {})", stat_key, rank)),
-                            Text2d::new(String::new()),
-                            TextFont { font_size, ..default() },
-                            TextColor(Color::srgba(fr, fg, fb, fa)),
-                            Transform::from_xyz(0.0, 0.0, 2.0),
-                            WorldLabel {
-                                world_pos: Vec3::ZERO,
-                                tracked_entity: Some(entry.entity),
-                                offset: offset_v3,
-                                base_font_size: font_size,
-                                depth_scale,
-                                screen_offset: Vec2::ZERO,
-                            },
-                            WorldStatBarFillMarker { stat_key: stat_key.clone(), cells, fill_color, color_bands: color_bands.clone() },
-                            LevelEntity,
-                        ));
-                        if rank > 0 {
-                            fill_entity.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
-                        }
-                    }
-                }
-                WorldStatBarStyle::Pixel { size, border, border_color } => {
-                    let w = size.0.max(1.0);
-                    let h = size.1.max(1.0);
-                    let b = border.clamp(0.0, h / 2.0);
-                    let (bdr, bdg, bdb, bda) = border_color;
-                    let color_mats = mats.color_materials.as_mut()
-                        .expect("ColorMaterial assets must be available to spawn pixel stat bars");
-
-                    // Depth scaling intentionally not applied to Pixel-style bars — matches the
-                    // scene-placed anchor spawn (~line 1099), a pre-existing documented exclusion.
-                    let anchor = commands.spawn((
-                        Name::new(format!("PixelBarAnchor: {}", stat_key)),
-                        Transform::default(),
-                        Visibility::default(),
-                        WorldLabel {
-                            world_pos: Vec3::ZERO,
-                            tracked_entity: Some(entry.entity),
-                            offset: offset_v3,
-                            base_font_size: 1.0,
-                            depth_scale: None,
-                            screen_offset: Vec2::ZERO,
-                        },
-                        LevelEntity,
-                    )).id();
-
-                    if b > 0.0 {
-                        let border_child = commands.spawn((
-                            Name::new(format!("PixelBarBorder: {}", stat_key)),
-                            Mesh2d(mats.meshes.add(Rectangle::new(w + 2.0 * b, h + 2.0 * b))),
-                            MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bdr, bdg, bdb, bda)))),
-                            Transform::from_xyz(0.0, 0.0, 1.0),
-                            LevelEntity,
-                        )).id();
-                        commands.entity(anchor).add_child(border_child);
-                    }
-
-                    let bg_child = commands.spawn((
-                        Name::new(format!("PixelBarBg: {}", stat_key)),
-                        Mesh2d(mats.meshes.add(Rectangle::new(w, h))),
-                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(bgr, bgg, bgb, bga)))),
-                        Transform::from_xyz(0.0, 0.0, 2.0),
-                        LevelEntity,
-                    )).id();
-                    commands.entity(anchor).add_child(bg_child);
-
-                    let fill_child = commands.spawn((
-                        Name::new(format!("PixelBarFill: {}", stat_key)),
-                        Mesh2d(mats.meshes.add(Rectangle::new(1.0, h))),
-                        MeshMaterial2d(color_mats.add(ColorMaterial::from(Color::srgba(fr, fg, fb, fa)))),
-                        Transform::from_xyz(-w / 2.0, 0.0, 3.0)
-                            .with_scale(Vec3::new(0.0, 1.0, 1.0)),
-                        WorldPixelBarFillMarker { stat_key, full_width: w, fill_color, color_bands },
-                        LevelEntity,
-                    )).id();
-                    commands.entity(anchor).add_child(fill_child);
-                }
-            }
+            let mut ctx = StatWidgetSpawnCtx {
+                meshes: &mut mats.meshes,
+                color_materials: mats.color_materials.as_deref_mut(),
+                depth_scale,
+                is_split_screen,
+            };
+            spawn_world_stat_bar_widget(&mut commands, entry.entity, &stat_key, &wb, &mut ctx);
         }
     }
 }

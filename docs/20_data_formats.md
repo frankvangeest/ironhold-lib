@@ -3243,9 +3243,15 @@ These fields on `PrefabDef` attach floating UI to a spawned entity. Both widgets
 
 **Auto-hide:** When the tracked entity is hidden (`SetEntityVisible(visible: false)`), both widgets automatically hide. They restore automatically when the entity is shown again.
 
+**Player prefabs support `stat_label`/`world_stat_bar` too**, exactly the same fields and syntax as any NPC/prop prefab (`tags: ["player"]` doesn't change anything about how they're read) — see `planning/features/player_stat_widgets.md`. A player-authored widget is queued through the same `DynamicStatUiQueue` mechanism `Action::Spawn`-created entities use, so it appears one frame after the player spawns; in split-screen it duplicates across viewports exactly like any other entity's widget (see the split-screen visibility note below).
+
 **Stat key routing:**
 - `"{self}.health"` — entity-local stat (requires `stat_templates`; `{self}` is resolved to the spawn ID at scene load)
 - `"player_health"` — global stat (from `stats.ron`)
+
+> **Global vs. `{self}` in local co-op.** A **global** key (no dot, e.g. `"player_health"`) reads the single shared `LoadedStats` resource — in a split-screen scene with 2+ players, every player's widget using that key shows and moves **identically**, which reads as a bug (both players sharing one value) rather than the intentional shared-state case it's meant for. Use `"{self}.<stat>"`, paired with a `stat_templates` entry on that specific player's own prefab (see [Instance stats](#instance-stats-stat_templates-) above), to give each player an independent readout — the same global-vs-per-player distinction `SlotCost` already has (see "Per-player action bars" above).
+
+> **`{self}.<stat>` requires a matching `stat_templates` entry on that SAME prefab, or the widget silently renders empty forever with no further warning.** This is the identical footgun already documented above for nameplates (`{self}.stat` requires a per-entity `stat_templates` entry) — it applies the same way to `stat_label`/`world_stat_bar`, on any prefab kind including players. A scene-load `warn!` and an `ironhold_cli validate` check (`missing_stat_widget_template`) both catch this misconfiguration so it's never silent — the widget still renders empty (unchanged runtime behavior), but the mistake is now diagnosable instead of invisible.
 
 ### `StatLabelDef` fields (`stat_label`)
 
@@ -3301,7 +3307,7 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 
 > **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel style.
 
-> **Split-screen visibility:** `stat_label` and `Ascii`-style `world_stat_bar` widgets correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `Pixel`-style bars, damage popups, and nameplates do **not** duplicate — an entity's Pixel bar, popup, or nameplate shows in **at most one** viewport at a time. Since combining Ascii + Pixel bars on one prefab is a supported pattern (see the tip below), be aware a combined bar will show its Ascii half in every simultaneously-visible viewport but its Pixel half in only one.
+> **Split-screen visibility:** `stat_label` and `Ascii`-style `world_stat_bar` widgets correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `Pixel`-style bars, damage popups, and nameplates do **not** duplicate — an entity's Pixel bar, popup, or nameplate shows in **at most one** viewport at a time. Since combining Ascii + Pixel bars on one prefab is a supported pattern (see the tip below), be aware a combined bar will show its Ascii half in every simultaneously-visible viewport but its Pixel half in only one. **This applies to co-op players too**: give a split-screen player prefab an `Ascii`-style bar if you want every viewport where that player is visible to show it — a `Pixel`-style bar on a co-op player will only ever render in one viewport, which usually isn't the intended result.
 
 ```ron
 // Minimal — omit style to get the default Ascii bar.

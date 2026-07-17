@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "prop_01",
+            prefab: "bad_widget_prop",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+)

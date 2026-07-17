@@ -366,13 +366,14 @@
     // the bug this feature exists to fix. Base/max deliberately differ from player 2's pool below
     // (100 vs. 60) so the two players' independent bars are visually distinguishable in playtest.
     // Visual confirmation is the action bar's own cooldown-overlay dim (spend player 1's mana down
-    // past 20 with repeated KeyG presses and watch only P1's bar dim, not P2's) — NOT a
-    // `stat_label`/`world_stat_bar`: those are only wired up for the generic NPC/prop spawn path
-    // (`spawn_prefab_instance`/`attach_prefab_features`), not the separate player spawn path
-    // (`spawn_player_entity_core`), so a `stat_label` block on a player prefab is silently dropped
-    // at spawn today (alignment-reviewer finding — logged as a follow-up in claude_suggestions.md,
-    // not fixed here since it's a separate "every player gets X widget" capability gap, not part
-    // of this feature's scope).
+    // past 20 with repeated KeyG presses and watch only P1's bar dim, not P2's), AND (since
+    // `player_stat_widgets.md`) a real floating `world_stat_bar` overhead — `stat_label`/
+    // `world_stat_bar` now take effect on player prefabs exactly like any NPC/prop, giving each
+    // player their own independent overhead mana readout (Ascii style, not Pixel — only
+    // `stat_label`/Ascii bars duplicate across simultaneously-visible split viewports; a Pixel bar
+    // would only ever render in one). Fields NOT yet honored on a player prefab: `behavior`,
+    // `interactable`, `dialogue`, `inventory`, `trigger_zone` (see
+    // `planning/features/player_model_source_unification.md`'s "explicitly out of scope" note).
     "player_p1_split": (
       kind: Actor,
       model: "character_male",
@@ -389,6 +390,12 @@
           regen_delay: 1.0,
         ),
       ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.35, 0.45, 0.95, 0.95),
+        style: Ascii( cells: 10, font_size: 14.0 ),
+      ),
       components: (
         tags: ["player"],
         camera: (
@@ -446,6 +453,12 @@
           regen_delay: 1.0,
         ),
       ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.95, 0.35, 0.55, 0.95),
+        style: Ascii( cells: 10, font_size: 14.0 ),
+      ),
       components: (
         tags: ["player"],
         // No `split`/`party` here — only the first player's camera block is read for those.
