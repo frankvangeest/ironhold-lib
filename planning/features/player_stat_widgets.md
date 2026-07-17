@@ -1,6 +1,6 @@
 # Feature: Player Stat Widgets (stat_label / world_stat_bar for players)
 
-_Status: Ready_
+_Status: In Progress_
 _Planned at: `6e38aa1` (2026-07-17)_
 
 **Plan-review note (2026-07-17):** system-architect — Ready, fit confirmed against actual source
