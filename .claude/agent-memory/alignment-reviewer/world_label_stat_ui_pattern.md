@@ -70,12 +70,16 @@ so depth scaling is always None here" — factually wrong after this fix, and ga
 "Resolves the effective depth-scale config for a single label." line that belongs to the helper at
 :2683 got left above the system). Flagged as a warning at review time.
 
-**Known duplication (refactor candidate):** the Ascii/Pixel widget-spawn match block is now
-triplicated — inline scene path, `drain_dynamic_stat_ui_system`, and the world_stat_bar section.
-Same shape as the StatMap-build triplication noted in [[stat_overrides_pattern]]. If reviewing a
-change that adds a new WorldStatBarStyle variant or a new widget knob, expect to touch all copies;
-flag the divergence risk and suggest extracting a `spawn_world_stat_bar(commands, mats, tracked,
-stat_key, wb, depth_scale)` helper.
+**Known duplication NOW RESOLVED (2026-07-17, `feature/player-stat-widgets` — see
+[[player-stat-widgets-pattern]]).** The triplicated Ascii/Pixel widget-spawn blocks were extracted
+into `spawn_stat_label_widget`/`spawn_world_stat_bar_widget` (both `pub` in
+`capabilities/stat_display.rs`), taking a `StatWidgetSpawnCtx { meshes, color_materials,
+depth_scale, is_split_screen }`. All three call sites (both Phase-B loops + `drain_dynamic_stat_ui_system`)
+now call the helpers; each site still resolves its own `depth_scale`/`is_split_screen` beforehand
+(scene path: `scene.label_depth_scale` + captured `is_split_screen`; dynamic path:
+`LoadedLabelDepthScale` + `active_split.0.is_some() || dynamic_split.0.is_some()`). A new
+`WorldStatBarStyle` variant or widget knob now only needs the ONE helper touched. If reviewing a
+change here, verify the two depth_scale/is_split_screen sources still differ per-site (they must).
 
 Motion has the parallel structure: see [[prefab_marker_three_spawn_paths]] — `motion` is inserted
 in `spawn_prefab_instance` (covers GLB actors + all dynamic spawns) AND separately in the

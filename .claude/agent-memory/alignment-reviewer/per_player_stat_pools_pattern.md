@@ -38,7 +38,13 @@ already use). Builds on [[per-player-action-bar-pattern]] and [[stat-overrides-f
 `stat_templates` non-empty AND the cost stat absent from them. A single-player bar (owner_player
 omitted) or a player with no stat_templates is skipped → no spurious warnings on existing projects.
 
-**FOOTGUN found (WARNING, not a core blocker): the player spawn path silently drops `stat_label`
+**FOOTGUN NOW FIXED (2026-07-17, `feature/player-stat-widgets` — see [[player-stat-widgets-pattern]]).**
+`PlayerConfig` gained `stat_label`/`world_stat_bar` (forwarded in `assemble_player_config`);
+`spawn_player_entity_core` + the primitive inline path + `drain_spawn_queue_system` all push a
+`{self}`-resolved `DynamicStatUiEntry`, so a player prefab's floating stat widget now renders
+exactly like any NPC/prop. The description below is the PRE-FIX state, kept for history:
+
+**FOOTGUN (pre-2026-07-17): the player spawn path silently dropped `stat_label`
 and `world_stat_bar`.** Players branch at scene_loader.rs ~625 (`is_player` →
 `assemble_player_config`) BEFORE the generic path's stat_label/world_stat_bar push (~657/~592/~387).
 `PlayerConfig` has NO stat_label/world_stat_bar field, so those blocks authored on a player prefab
