@@ -1,6 +1,6 @@
 # Feature: Player Stat Widgets (stat_label / world_stat_bar for players)
 
-_Status: In Progress_
+_Status: Done_
 _Planned at: `6e38aa1` (2026-07-17)_
 
 **Plan-review note (2026-07-17):** system-architect — Ready, fit confirmed against actual source
@@ -12,6 +12,27 @@ work → resolved: the plan's original RON example used the removed flat `world_
 (`cells` at top level, now `style: Ascii(...)`, a `deny_unknown_fields` parse error — fixed in the
 example above); added Part C (generic `{self}.<stat>`-with-no-matching-template warn/validate
 check) and the global-vs-`{self}` co-op doc guidance per its findings.
+
+**Code-review note (2026-07-17):** All 4 post-implementation reviews run in parallel.
+alignment-reviewer — Aligned, no blocking issues (one non-blocking note logged: the primitive
+player path re-reads `PrefabDef` directly rather than through `PlayerConfig`, a pre-existing
+divergence-risk class already tracked by `player_model_source_unification.md`, not new here).
+system-architect — no blockers, all 6 of its own earlier plan-review points confirmed correctly
+implemented; caught that the acceptance criteria still claimed the `{self}` widget works on "GLB
+or primitive path" when the primitive path can never resolve one (no runtime `StatMap`) — fixed
+by scoping that criterion to GLB and documenting the known gap explicitly. debug-detective — found
+and fixed a real doc-comment misattribution (a new function's doc block had been inserted above an
+existing function, leaving both mis-documented); found and closed two real test gaps (the CLI-side
+`missing_stat_widget_template` check had zero test coverage — added a new CLI fixture test; the
+split-screen player-widget pipeline was only proven via an isolated helper call, not through the
+real scene-load path — added an end-to-end split-screen test); logged one narrow, unreproducible-
+today latent timing edge case (terrain + split-screen + a player widget) to `claude_suggestions.md`
+rather than fixing, since no current project combines terrain with split-screen at all.
+wasm-perf-reviewer — clean, no findings (spawn-time only, no per-frame cost, no binary-size impact).
+Full `ironhold_core` test suite (191 tests) + `ironhold_cli` test suite (17 tests, including the
+new fixture) green; `cargo check -p ironhold_cli` clean. Playtest confirmed by Frank in
+`local_coop_demo` room3 — both players' Ascii mana bars visible and correctly duplicated across
+both split viewports, no console errors.
 
 ## What
 `PrefabDef.stat_label` (floating text tracking a stat) and `PrefabDef.world_stat_bar` (floating
@@ -179,35 +200,35 @@ plan) — this feature only makes the primitive path's *existing* inline spawn a
 `DynamicStatUiEntry`, it does not collapse the two paths into one.
 
 ## Tasks
-- [ ] Extract `spawn_stat_label_widget`/`spawn_world_stat_bar_widget` into `capabilities/stat_display.rs`
-- [ ] Refactor `scene_loader.rs`'s two Phase-B spawner loops to call the shared helpers
-- [ ] Refactor `drain_dynamic_stat_ui_system` to call the same shared helpers
-- [ ] Add `stat_label`/`world_stat_bar` fields to `PlayerConfig`; forward in `assemble_player_config`
-- [ ] Thread `DynamicStatUiQueue` through `spawn_player_entity_core`'s callers (`spawn_player_entity`,
+- [x] Extract `spawn_stat_label_widget`/`spawn_world_stat_bar_widget` into `capabilities/stat_display.rs`
+- [x] Refactor `scene_loader.rs`'s two Phase-B spawner loops to call the shared helpers
+- [x] Refactor `drain_dynamic_stat_ui_system` to call the same shared helpers
+- [x] Add `stat_label`/`world_stat_bar` fields to `PlayerConfig`; forward in `assemble_player_config`
+- [x] Thread `DynamicStatUiQueue` through `spawn_player_entity_core`'s callers (`spawn_player_entity`,
       `spawn_players_and_camera`, `spawn_delayed_players_system`); bundle it into the existing
       `SceneV2Params` `SystemParam` struct for `spawn_scene_v2` rather than adding a bare 17th
       top-level param (that system is already at Bevy's 16-param `SystemParam` ceiling — a compile
       error, not a runtime one, if added directly)
-- [ ] `spawn_player_entity_core`: push a `{self}`-resolved (against `player_config.spawn_id`)
+- [x] `spawn_player_entity_core`: push a `{self}`-resolved (against `player_config.spawn_id`)
       `DynamicStatUiEntry` when either field is set
-- [ ] Primitive/capsule inline player spawn: push the same `{self}`-resolved `DynamicStatUiEntry`
+- [x] Primitive/capsule inline player spawn: push the same `{self}`-resolved `DynamicStatUiEntry`
       when either field is set
-- [ ] `local_coop_demo`: add a `stat_label`/`world_stat_bar` (Ascii style, not Pixel — see the
+- [x] `local_coop_demo`: add a `stat_label`/`world_stat_bar` (Ascii style, not Pixel — see the
       split-screen duplication caveat above) to a split-screen player prefab as a playtest aid,
       confirming per-player independent readouts (this is the widget `per_player_stat_pools`
       originally wanted and had to drop)
-- [ ] Scene-load `warn!` + `ironhold_cli validate` check (Part C): `{self}`-form `stat_label`/
+- [x] Scene-load `warn!` + `ironhold_cli validate` check (Part C): `{self}`-form `stat_label`/
       `world_stat_bar` `stat_key` with no matching `stat_templates` entry on that prefab — generic
       across all entity kinds, not player-specific
-- [ ] Tests — regression coverage that Part A's refactor is behavior-identical for NPCs/props/dynamic
+- [x] Tests — regression coverage that Part A's refactor is behavior-identical for NPCs/props/dynamic
       spawns; new coverage that a player-authored `stat_label`/`world_stat_bar` actually spawns
       and updates from that player's own `StatMap`; new coverage for the Part C warn/validate check
-- [ ] Docs — `docs/20_data_formats.md`'s `StatLabelDef`/`WorldStatBarDef` sections: note player
+- [x] Docs — `docs/20_data_formats.md`'s `StatLabelDef`/`WorldStatBarDef` sections: note player
       prefab applicability (same pattern as the `stat_templates` doc update from `per_player_stat_pools`),
       cross-reference the existing nameplate `{self}.stat` footgun note for the new Part C warning,
       and add the global-vs-`{self}` co-op guidance above
-- [ ] `crates/ironhold_core/src/CLAUDE.md` — note in "The four player-construction sites" section
-- [ ] Remove the now-resolved `claude_suggestions.md` entry (line 81) once shipped
+- [x] `crates/ironhold_core/src/CLAUDE.md` — note in "The four player-construction sites" section
+- [x] Remove the now-resolved `claude_suggestions.md` entry (line 81) once shipped
 
 ## Open questions
 - None outstanding — the two questions ux-gamedesigner-reviewer raised (RON example correctness;
@@ -215,19 +236,31 @@ plan) — this feature only makes the primitive path's *existing* inline spawn a
   the Tasks/Approach.
 
 ## Acceptance criteria
-- Given an existing NPC/prop project with `stat_label`/`world_stat_bar` prefabs, when the Part A
+- ~~Given an existing NPC/prop project with `stat_label`/`world_stat_bar` prefabs, when the Part A
   refactor lands, then their visual output is pixel-identical to before (regression, not a new
-  feature).
-- Given a player prefab with a `stat_label`/`world_stat_bar` block referencing `"{self}.<stat>"`,
-  when that player spawns (GLB or primitive path), then the floating widget appears and tracks
-  that player's own `StatMap` value, independently of any other player's.
-- Given a split-screen scene with 2+ players each having their own **Ascii-style**
+  feature).~~ **Met** — confirmed by the pre-existing `test_stat_widgets_duplicate_ranks_when_scene_is_split_screen`/`test_stat_widgets_stay_single_instance_*` tests passing unchanged after the refactor.
+- ~~Given a **GLB** player prefab with a `stat_label`/`world_stat_bar` block referencing
+  `"{self}.<stat>"`, when that player spawns, then the floating widget appears and tracks that
+  player's own `StatMap` value, independently of any other player's.~~ **Met** — confirmed by
+  `test_player_stat_widget_spawns_and_resolves_against_that_players_own_stat_map` and playtest.
+  **Known gap (documented in `crates/ironhold_core/src/CLAUDE.md`, not fixed here):** a
+  *primitive*-bodied player's `{self}.<stat>` widget still spawns (the queue push is generic) but
+  always renders empty, since the primitive spawn path never builds a runtime `StatMap` regardless
+  of `stat_templates` — that gap belongs to `player_model_source_unification.md`, not this feature.
+  A **global**-key widget (no `{self}`) works correctly on either body type today, since it only
+  reads `LoadedStats`.
+- ~~Given a split-screen scene with 2+ players each having their own **Ascii-style**
   `stat_label`/`world_stat_bar`, when both are visible in 2+ active viewports simultaneously, then
   each viewport's rank-duplicated copy shows the correct owning player's value (reusing
-  `WorldLabelRank`, not a new mechanism).
-- Given a player prefab with no `stat_label`/`world_stat_bar`, when that player spawns, then no
-  widget entity is created and no warning is logged (this is the ordinary/majority case).
-- Given a prefab (player or NPC) whose `stat_label`/`world_stat_bar` `stat_key` is `{self}.<stat>`
+  `WorldLabelRank`, not a new mechanism).~~ **Met** — confirmed by
+  `test_player_stat_widget_duplicates_ranks_when_scene_is_split_screen` (added during code review,
+  debug-detective finding) and playtest in `local_coop_demo` room3.
+- ~~Given a player prefab with no `stat_label`/`world_stat_bar`, when that player spawns, then no
+  widget entity is created and no warning is logged (this is the ordinary/majority case).~~ **Met**
+  — confirmed by the same end-to-end test (player 2 authors neither field, gets no widget).
+- ~~Given a prefab (player or NPC) whose `stat_label`/`world_stat_bar` `stat_key` is `{self}.<stat>`
   where `<stat>` has no matching `stat_templates` entry on that prefab, when the scene loads, then
   a `warn!` is logged and `ironhold_cli validate` reports it as an error — the widget still renders
-  empty (unchanged runtime behavior) but the misconfiguration is no longer silent.
+  empty (unchanged runtime behavior) but the misconfiguration is no longer silent.~~ **Met** —
+  confirmed by the new `missing_stat_widget_template_exits_1` CLI fixture test (added during code
+  review, debug-detective finding: this check had zero test coverage until then).
