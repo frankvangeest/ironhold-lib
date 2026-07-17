@@ -55,4 +55,5 @@ either (unlikely authoring; pre-existing shape).
 resolves against the same id the SpawnId component gets on every path; playtest aid
 (local_coop_demo player_p1_split/p2_split each declare a `mana` template + Ascii `{self}.mana`
 world_stat_bar — no Part C warning). Pixel-style bars remain single-viewport (not rank-duplicated)
-— correct per split-screen limitation.
+— correct per split-screen limitation. SUPERSEDED 2026-07-17: Pixel bars now rank-duplicate too
+(see [[world-label-stat-ui-pattern]]); local_coop_demo player_p1/p2_split switched Ascii to Pixel.

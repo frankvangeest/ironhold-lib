@@ -49,10 +49,30 @@ Non-split scenes still spawn exactly 1 (no rank component) — zero behavior cha
 Safe because `stat_label_update_system`/`world_stat_bar_update_system` rewrite EVERY instance's
 Text2d each frame with no Visibility gate (verified: neither query filters on Visibility) — unlike
 the static world_labels text, so hidden ranks stay current. No ActionQueue, no schema, gate derived
-from existing `camera.split`. `Pixel`-style bars + nameplate anchors deliberately NOT duplicated
-(child-hierarchy dup deferred). STALE-DOC WARNING at review time: mod.rs:331-335 (WorldLabelRank
-doc) and lib.rs:505-513 (world_label_screen_pos_system doc) and src/CLAUDE.md:418-422 all still list
-stat labels as single-instance/rank-0-only consumers — factually wrong after Phase 4.
+from existing `camera.split`.
+
+**PIXEL BARS NOW DUPLICATE TOO (reviewed 2026-07-17, `feature/pixel-world-stat-bar-split-screen-duplication`,
+ALIGNED).** `spawn_world_stat_bar_widget`'s `Pixel` arm (stat_display.rs) now wraps its whole
+anchor+children hierarchy in `for rank in 0..ranks` (`ranks = if is_split_screen {MAX_SPLIT_PLAYERS}
+else {1}`), same gate as Ascii. Border/bg mesh+material registered ONCE and `.clone()`d per rank
+(handle clone = cheap Arc, identical geometry); fill mesh/material created fresh per rank (each
+updated independently by `world_pixel_bar_update_system`). Anchor carries the `WorldLabelRank`;
+children carry none (Bevy `InheritedVisibility` cascades the anchor's `Visibility::Hidden`). Pure
+runtime fix, NO schema change — a designer writes `style: Pixel(...)` and gets correct split-screen
+behavior with zero new fields. Pixel bars still get NO depth scaling (anchor `depth_scale: None`,
+pre-existing documented exclusion). local_coop_demo player_p1_split/p2_split switched Ascii→Pixel as
+the playtest aid. Tests in local_coop_tests.rs assert fill COUNT scales to MAX_SPLIT_PLAYERS, anchor
+rank identity 0-3, AND a regression guard that mesh/mat counts == `2 + MAX_SPLIT_PLAYERS` (proves
+border/bg shared, only fills scale). Nameplate anchors + damage popups remain single-instance
+(only remaining rank-0-only consumers).
+
+STALE-DOC WATCH: mod.rs WorldLabelRank doc (~348-352) and src/CLAUDE.md WERE updated for Pixel. BUT
+`lib.rs` `world_label_screen_pos_system` doc (lines 508-509 + 514-516) was MISSED — still lists
+`Pixel`-style world stat bars among "always bind to rank 0" single-instance consumers AND omits
+Pixel from the "spawn ranked siblings only in split-screen" list. Factually wrong after this fix;
+flagged as a warning at review. (Original Phase-4 flag mentioned lib.rs:505-513 + src/CLAUDE.md:418-422
+still listing STAT LABELS as single-instance — those were fixed then; the Pixel-specific lib.rs
+staleness is new.)
 
 NOTE — there is NO per-widget `depth_scale` override on `StatLabelDef`/`WorldStatBarDef` (both are
 `deny_unknown_fields`); `per_label` is hardcoded `None` at every stat-widget call site. Only
