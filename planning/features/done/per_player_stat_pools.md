@@ -1,12 +1,26 @@
 # Feature: Per-Player Stat Pools (Action-Bar Costs)
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `612111e` (2026-07-17)_
 _Plan review (2026-07-17): system-architect (Ready — every specific claim verified against real
 code; flagged one Major correctness footgun, folded into Approach/Tasks below) +
 ux-gamedesigner-reviewer (Needs-minor-design-work — no rework, just scoping: resolve the warning
 question, expand the docs checklist, pair the RON example with an explicit fallback callout; all
 incorporated below)._
+_Code review (2026-07-17): alignment-reviewer (found and fixed a real dead-code gap — `stat_label`/
+`world_stat_bar` don't work on player prefabs at all, `PlayerConfig` has no such fields; the
+demo's stat_label playtest aid was reverted, action-bar dim used instead, gap logged to
+`claude_suggestions.md`), system-architect (APPROVE, re-verified every plan claim against the
+final code including the post-review wasm-perf fix, no blocking issues), debug-detective (found
+and fixed a real diagnostic-coverage gap — the missing-template warning/validate check skipped
+`owner_player: None` bars even though the runtime treats `None`/`Some(0)` identically as "the
+primary player"; also strengthened a weak test assertion and clarified a playtest instruction; a
+pre-existing same-frame same-player multi-slot over-spend edge case logged as non-blocking),
+wasm-perf-reviewer (found and fixed a real per-frame `String` allocation in
+`action_bar_visual_system` — `resolve_cost_source` now returns `(f32, bool)` instead of
+`(f32, Option<String>)`, building the dot-routed key only at the input-gated deduct site). Full
+test suite + `cargo check -p ironhold_cli` green after every fix. Playtest confirmed by Frank in
+`local_coop_demo` room3, no console errors — `ebb1cd0` (2026-07-17)._
 
 ## What
 Split-screen players who each own an `ActionBar` with a `cost:`-gated slot (mana, stamina, etc.)
@@ -103,19 +117,19 @@ behavior a designer should just know about):**
   it isn't mistaken for a bug.
 
 ## Tasks
-- [ ] Extract the `StatMap`-building block from `attach_prefab_features` into a shared helper
+- [x] Extract the `StatMap`-building block from `attach_prefab_features` into a shared helper
       callable from both the generic prefab path and player spawn.
-- [ ] Add `stat_templates: Vec<StatTemplateDef>` to `PlayerConfig`; forward in
+- [x] Add `stat_templates: Vec<StatTemplateDef>` to `PlayerConfig`; forward in
       `assemble_player_config`.
-- [ ] Insert the built `StatMap` (when non-empty) in `spawn_player_entity_core`.
-- [ ] Rewire `action_bar_input_system` to resolve "own pool vs. global" **once** per firing slot
+- [x] Insert the built `StatMap` (when non-empty) in `spawn_player_entity_core`.
+- [x] Rewire `action_bar_input_system` to resolve "own pool vs. global" **once** per firing slot
       and use that single resolution for both the cost check and the deduct action's key (not two
       independent checks — see Approach's correctness requirement). Falls back to global
       `LoadedStats` when the player has no matching `StatMap` entry.
-- [ ] Add a player-resolution query and the same fallback logic to `action_bar_visual_system`.
-- [ ] Add the load-time missing-template `warn!` (scoped per Approach point 6) plus the matching
+- [x] Add a player-resolution query and the same fallback logic to `action_bar_visual_system`.
+- [x] Add the load-time missing-template `warn!` (scoped per Approach point 6) plus the matching
       `ironhold_cli validate` error.
-- [ ] Update `local_coop_demo`: give `player_p1`/`player_p2` their own `stat_templates` (e.g.
+- [x] Update `local_coop_demo`: give `player_p1`/`player_p2` their own `stat_templates` (e.g.
       `mana`, with **visibly different base values**, e.g. 100 vs. 60, so independence is obvious
       at a glance), author a `cost:`-gated slot on each existing action bar, and a per-player
       `world_stat_bar`/`stat_label` bound to `"{spawn_id}.mana"` so each pool is visually
@@ -123,41 +137,47 @@ behavior a designer should just know about):**
       `stat_templates` block, and note in the demo comment that `local_coop_demo` has no
       `stats/stats.ron` at all, so mana here is fully per-player by design (no global fallback to
       muddy the example).
-- [ ] Tests: cost check/deduct resolves per-player when the acting player has a matching
+- [x] Tests: cost check/deduct resolves per-player when the acting player has a matching
       `StatMap` entry; falls back to global when absent (regression covering existing
       single-player behavior); two players with independent pools don't cross-drain or cross-dim;
       regen on one player's pool doesn't affect the other's cooldown-overlay dim state; the
       missing-template warning fires when expected and stays silent on the ordinary single-player
       global-fallback case.
-- [ ] Docs — full checklist (ux-gamedesigner-reviewer finding: more spots go stale than just the
+- [x] Docs — full checklist (ux-gamedesigner-reviewer finding: more spots go stale than just the
       two obvious ones):
-  - [ ] `docs/20_data_formats.md`'s `SlotCost` "global, not per-player" caveat prose
-  - [ ] `docs/20_data_formats.md`'s `SlotCost.stat` field-table row (currently says the key
+  - [x] `docs/20_data_formats.md`'s `SlotCost` "global, not per-player" caveat prose
+  - [x] `docs/20_data_formats.md`'s `SlotCost.stat` field-table row (currently says the key
         "matches a key in `stats.ron`" — needs the per-player alternative added right there, not
         just in the prose above/below it)
-  - [ ] `docs/20_data_formats.md`'s "Instance stats (`stat_templates`)" section — note players may
+  - [x] `docs/20_data_formats.md`'s "Instance stats (`stat_templates`)" section — note players may
         now carry it too, and what that unlocks
-  - [ ] `docs/20_data_formats.md`'s nameplate example comment that currently says a player using a
+  - [x] `docs/20_data_formats.md`'s nameplate example comment that currently says a player using a
         global stat "silently fails to match `{self}`" — a player with matching `stat_templates`
         now *does* resolve it; update so the note doesn't actively mislead post-feature
-  - [ ] `CLAUDE.md`'s "Per-player action bars (Phase 2)" paragraph (the `SlotCost`
+  - [x] `CLAUDE.md`'s "Per-player action bars (Phase 2)" paragraph (the `SlotCost`
         deliberately-global note)
-  - [ ] `CLAUDE.md`'s "four player-construction sites" section — record that
+  - [x] `CLAUDE.md`'s "four player-construction sites" section — record that
         `spawn_player_entity_core` now conditionally inserts `StatMap`, the same class of
         "every player gets X component" note that section exists to track
-  - [ ] A paired RON example: the player prefab's `stat_templates` block **and** the cost slot
+  - [x] A paired RON example: the player prefab's `stat_templates` block **and** the cost slot
         that consumes it, shown together, with an explicit callout — *"omit the `stat_templates`
         block on this player's prefab and `cost` silently falls back to the shared global pool,
         the exact behavior this feature exists to fix."*
 
 ## Acceptance criteria
-- Given two split-screen players, each with their own `ActionBar` and a `cost:`-gated slot
+- ~~Given two split-screen players, each with their own `ActionBar` and a `cost:`-gated slot
   referencing a stat declared in their own player prefab's `stat_templates`, when player 1 fires
   their ability, then only player 1's pool is deducted and player 2's slot/cooldown-overlay dim
-  state is unaffected.
-- Given a single-player project, or any player prefab with no `stat_templates` declared, with a
+  state is unaffected.~~ **Met** — playtest-confirmed in `local_coop_demo` room3.
+- ~~Given a single-player project, or any player prefab with no `stat_templates` declared, with a
   `cost:`-gated action-bar slot, when the ability fires, then behavior is unchanged from before
-  this feature (global `LoadedStats` deduction).
-- Given a player's stat pool regenerates via `regen_rate`, when time passes, then the action bar's
+  this feature (global `LoadedStats` deduction).~~ **Met** — regression test
+  (`test_action_bar_cost_falls_back_to_global_pool_when_player_has_no_stat_map`).
+- ~~Given a player's stat pool regenerates via `regen_rate`, when time passes, then the action bar's
   cooldown-overlay dim clears once that player's own pool (not the global one) crosses the cost
-  threshold.
+  threshold.~~ **Met** — test + playtest confirmed.
+- **Added during review**: given a `cost.stat` isn't declared on the owning player's own
+  `stat_templates` (but the player declares some), whether the bar's `owner_player` is explicit or
+  omitted (defaults to the primary player), a scene-load `warn!` and an `ironhold_cli validate`
+  error must both fire — **Met** (debug-detective finding, fixed to cover the omitted-`owner_player`
+  case too).
