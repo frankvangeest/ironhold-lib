@@ -65,3 +65,7 @@ Collider trap for procedural-XZ phase: if positions live only in the vertex shad
 ## Spawn queue (`runtime/scene_manager/action_executor.rs`)
 
 `Action::Spawn` does not call `spawn_prefab_instance` inline. It pushes to `PendingEntitySpawns`; `drain_spawn_queue_system` processes at most `SPAWNS_PER_FRAME = 2` per frame. This caps WebGPU pipeline-compile stalls on WASM. Do not change this cap without testing large wave spawns in a WASM build.
+
+## `spawn_scene_v2` is at the 16-param SystemParam ceiling (`runtime/scene_manager/scene_loader.rs` ~L43)
+
+As of 2026-07-17, `spawn_scene_v2` has **exactly 16 top-level system params** (commands, `SceneV2Params`, asset_server, events, next_state, state, level_entities, overlay_entities, scene_events, model_spawner, merged_fixes, `SceneMaterialParams`, spawn_registry, load_mode, project_key_bindings, loaded_key_bindings). Bevy derives `SystemParam` tuples only up to arity 16 — **adding a 17th top-level param is a compile error**. Any change that needs a new resource in the scene-load system (e.g. threading `DynamicStatUiQueue` in to route players through the dynamic-widget queue) must bundle it into an existing `SystemParam` struct (`SceneV2Params` is the natural home), not add a bare param. Two sibling player-spawn callers are ordinary systems with headroom: `drain_spawn_queue_system` already holds `ResMut<DynamicStatUiQueue>`; `spawn_delayed_players_system` (terrain-delayed) can add it freely.
