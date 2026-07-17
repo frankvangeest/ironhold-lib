@@ -45,6 +45,14 @@ pub struct PlayerConfig {
     /// otherwise read `PrefabDef.material` at all.
     #[serde(default)]
     pub material: Option<String>,
+    /// Forwarded from `PrefabDef.stat_templates`. When non-empty, `spawn_player_entity_core`
+    /// inserts a `StatMap` component on the player entity (same mechanism NPCs/props already use
+    /// via `attach_prefab_features`) — giving this player their own independent stat pool. Empty
+    /// by default, so a player prefab with no `stat_templates` gets no `StatMap` and the action
+    /// bar's `SlotCost` falls back to the global `LoadedStats` resource exactly as before this
+    /// field existed. See `planning/features/per_player_stat_pools.md`.
+    #[serde(default)]
+    pub stat_templates: Vec<crate::schema::stats::StatTemplateDef>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

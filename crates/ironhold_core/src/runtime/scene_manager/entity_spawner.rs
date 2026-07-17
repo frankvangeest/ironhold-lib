@@ -24,7 +24,7 @@ use super::{
 };
 use crate::runtime::actions::ActionQueue;
 use super::message_interpreter::rewrite_self;
-use crate::schema::stats::{LiveStat, StatMap};
+use crate::schema::stats::{LiveStat, StatMap, StatTemplateDef};
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::capabilities::motion::Motion;
 use super::DynamicStatUiQueue;
@@ -78,38 +78,9 @@ pub(super) fn attach_prefab_features(
         commands.entity(entity).insert(inv);
     }
 
-    if !prefab.stat_templates.is_empty() {
-        for key in stat_overrides.keys() {
-            if !prefab.stat_templates.iter().any(|t| &t.key == key) {
-                warn!(
-                    "stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')",
-                    entity_id, key, prefab_key
-                );
-            }
-        }
-        let mut stat_map = StatMap::default();
-        for tpl in &prefab.stat_templates {
-            let base = stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
-            if base > tpl.max {
-                warn!(
-                    "stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max",
-                    entity_id, tpl.key, base, tpl.max
-                );
-            }
-            let def = crate::schema::stats::StatDef {
-                base,
-                min: tpl.min,
-                max: tpl.max,
-                soft_max: None,
-                regen_rate: tpl.regen_rate,
-                regen_delay: tpl.regen_delay,
-                thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
-                    when: t.when.clone(),
-                    emit: t.emit.replace("{self}", entity_id),
-                }).collect(),
-            };
-            stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
-        }
+    if let Some(stat_map) = build_stat_map_from_templates(
+        &prefab.stat_templates, stat_overrides, entity_id, prefab_key,
+    ) {
         commands.entity(entity).insert(stat_map);
     }
 
@@ -127,6 +98,55 @@ pub(super) fn attach_prefab_features(
         )).id();
         commands.entity(entity).add_child(sensor);
     }
+}
+
+/// Builds a `StatMap` from a `PrefabDef.stat_templates` list, applying `stat_overrides` and
+/// `{self}` substitution in threshold `emit` strings. Returns `None` for an empty template list
+/// (the caller should simply not insert a `StatMap` in that case) — this is the single source of
+/// truth for the stat-template-to-`StatMap` conversion, shared by `attach_prefab_features` (every
+/// NPC/prop/composite prefab) and `spawn_player_entity_core` (players that declare their own
+/// `stat_templates`, see `planning/features/per_player_stat_pools.md`).
+pub(super) fn build_stat_map_from_templates(
+    templates: &[StatTemplateDef],
+    stat_overrides: &HashMap<String, f32>,
+    entity_id: &str,
+    prefab_key: &str,
+) -> Option<StatMap> {
+    if templates.is_empty() {
+        return None;
+    }
+    for key in stat_overrides.keys() {
+        if !templates.iter().any(|t| &t.key == key) {
+            warn!(
+                "stat_overrides: entity '{}' has unknown stat key '{}' (not in prefab '{}')",
+                entity_id, key, prefab_key
+            );
+        }
+    }
+    let mut stat_map = StatMap::default();
+    for tpl in templates {
+        let base = stat_overrides.get(&tpl.key).copied().unwrap_or(tpl.base);
+        if base > tpl.max {
+            warn!(
+                "stat_overrides: entity '{}' stat '{}' override {} exceeds template max {}; value will exceed max",
+                entity_id, tpl.key, base, tpl.max
+            );
+        }
+        let def = crate::schema::stats::StatDef {
+            base,
+            min: tpl.min,
+            max: tpl.max,
+            soft_max: None,
+            regen_rate: tpl.regen_rate,
+            regen_delay: tpl.regen_delay,
+            thresholds: tpl.thresholds.iter().map(|t| crate::schema::stats::StatThreshold {
+                when: t.when.clone(),
+                emit: t.emit.replace("{self}", entity_id),
+            }).collect(),
+        };
+        stat_map.0.insert(tpl.key.clone(), LiveStat::new(def));
+    }
+    Some(stat_map)
 }
 
 /// Instantiates a prefab entity: spawns the model, applies material overrides and
@@ -811,6 +831,19 @@ fn spawn_player_entity_core(
         crate::capabilities::player::PlayerTarget::default(),
     ));
 
+    // Gives this player their own stat pool (e.g. a per-player action-bar mana cost) when their
+    // prefab declares `stat_templates` — empty by default, so most players get no `StatMap` and
+    // `SlotCost` keeps reading the global `LoadedStats` exactly as before this field existed.
+    // See `planning/features/per_player_stat_pools.md`.
+    if let Some(stat_map) = build_stat_map_from_templates(
+        &player_config.stat_templates,
+        &HashMap::new(),
+        &player_config.spawn_id,
+        &player_config.prefab_key,
+    ) {
+        commands.entity(player_entity).insert(stat_map);
+    }
+
     if let Some(display_name) = &player_config.nameplate_display_name {
         commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
             display_name: display_name.clone(),
@@ -960,5 +993,6 @@ pub(crate) fn assemble_player_config(
         },
         nameplate_override: prefab.nameplate,
         material: prefab.material.clone(),
+        stat_templates: prefab.stat_templates.clone(),
     }
 }

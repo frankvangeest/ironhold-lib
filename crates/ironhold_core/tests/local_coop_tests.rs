@@ -2661,3 +2661,303 @@ fn test_target_hud_absent_without_scene_config_block() {
          matching target_indicator:'s own opt-in pattern"
     );
 }
+
+// ── Per-player stat pools (per_player_stat_pools.md) ────────────────────────────
+
+fn stat_def(base: f32, max: f32) -> ironhold_core::schema::StatDef {
+    ironhold_core::schema::StatDef {
+        base, min: 0.0, max, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+    }
+}
+
+#[test]
+fn test_action_bar_cost_deducts_from_owning_players_own_stat_map_independently() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::schema::scene_v2::SlotCost;
+    use ironhold_core::schema::stats::{StatMap, LoadedStats, LiveStat};
+    use ironhold_core::schema::Action;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // A global "mana" stat with an easily-distinguishable value — if either player's deduct
+    // wrongly routed here instead of their own StatMap, this value would move and the final
+    // assertion below would catch it (debug-detective finding: an absent-key assertion alone
+    // can't discriminate a misroute, since a global miss just warns and no-ops either way).
+    app.world_mut().resource_mut::<LoadedStats>().0.insert("mana".to_string(), LiveStat::new(stat_def(999.0, 999.0)));
+
+    let mut p1_stats = StatMap::default();
+    p1_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(50.0, 50.0)));
+    let mut p2_stats = StatMap::default();
+    p2_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(30.0, 30.0)));
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("p1_fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(0),
+    });
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: Some(KeyCode::Digit2),
+        do_actions: vec![Action::SetVariable("p2_fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(1),
+    });
+
+    let p1_entity = app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        p1_stats,
+    )).id();
+    let p2_entity = app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        p2_stats,
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("player_01".to_string(), p1_entity);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("player_02".to_string(), p2_entity);
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit2);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("p1_fired").map(String::as_str), Some("yes"), "player 1's slot must fire — their own pool covers the cost");
+    assert_eq!(vars.0.get("p2_fired").map(String::as_str), Some("yes"), "player 2's slot must fire — their own pool covers the cost");
+
+    let p1_after = app.world().get::<StatMap>(p1_entity).unwrap();
+    assert_eq!(p1_after.0["mana"].current, 30.0, "player 1's own pool must be deducted (50 - 20)");
+    let p2_after = app.world().get::<StatMap>(p2_entity).unwrap();
+    assert_eq!(p2_after.0["mana"].current, 10.0, "player 2's own pool must be deducted independently (30 - 20), not cross-drained from player 1's spend");
+
+    let loaded_stats = app.world().resource::<LoadedStats>();
+    assert_eq!(loaded_stats.0["mana"].current, 999.0, "the shared global pool must never be touched when both players have their own StatMap-backed pool");
+}
+
+#[test]
+fn test_action_bar_cost_falls_back_to_global_pool_when_player_has_no_stat_map() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::schema::scene_v2::SlotCost;
+    use ironhold_core::schema::stats::{LoadedStats, LiveStat};
+    use ironhold_core::schema::Action;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().resource_mut::<LoadedStats>().0.insert("mana".to_string(), LiveStat::new(stat_def(40.0, 40.0)));
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 15.0 }),
+        owner_player: None,
+    });
+    // No StatMap component at all — matches every existing single-player project (and any player
+    // prefab that doesn't declare `stat_templates`).
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("fired").map(String::as_str), Some("yes"));
+    let loaded_stats = app.world().resource::<LoadedStats>();
+    assert_eq!(loaded_stats.0["mana"].current, 25.0, "must fall back to the shared global pool exactly as before per-player stat pools existed, when the player has no StatMap");
+}
+
+#[test]
+fn test_action_bar_cost_check_uses_own_pool_even_when_global_pool_would_cover_it() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::schema::scene_v2::SlotCost;
+    use ironhold_core::schema::stats::{StatMap, LoadedStats, LiveStat};
+    use ironhold_core::schema::Action;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // A huge global "mana" pool that would easily cover the cost — must be irrelevant once the
+    // player has their own (too-low) StatMap entry for the same key.
+    app.world_mut().resource_mut::<LoadedStats>().0.insert("mana".to_string(), LiveStat::new(stat_def(999.0, 999.0)));
+
+    let mut p1_stats = StatMap::default();
+    p1_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(5.0, 100.0)));
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(0),
+    });
+    let p1_entity = app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        p1_stats,
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("player_01".to_string(), p1_entity);
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("fired"), None, "must be blocked by the player's own insufficient pool, not silently pass because the global pool has plenty");
+    let p1_after = app.world().get::<StatMap>(p1_entity).unwrap();
+    assert_eq!(p1_after.0["mana"].current, 5.0, "the player's own pool must be untouched — the slot never fired");
+}
+
+#[test]
+fn test_action_bar_visual_dim_reflects_owning_players_own_pool_independently() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownOverlay};
+    use ironhold_core::schema::scene_v2::SlotCost;
+    use ironhold_core::schema::stats::{StatMap, LiveStat};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut p1_stats = StatMap::default();
+    p1_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(5.0, 100.0))); // below cost
+    let mut p2_stats = StatMap::default();
+    p2_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(100.0, 100.0))); // covers cost
+
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        p1_stats,
+    ));
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        p2_stats,
+    ));
+
+    let slot1 = app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(0),
+    }).id();
+    let overlay1 = app.world_mut().spawn((
+        CooldownOverlay { slot_key: "1".to_string() },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        ChildOf(slot1),
+    )).id();
+
+    let slot2 = app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: Some(KeyCode::Digit2),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(1),
+    }).id();
+    let overlay2 = app.world_mut().spawn((
+        CooldownOverlay { slot_key: "2".to_string() },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        ChildOf(slot2),
+    )).id();
+
+    app.update();
+
+    let bg1 = app.world().get::<BackgroundColor>(overlay1).unwrap();
+    assert!((bg1.0.alpha() - 0.45).abs() < 0.01, "player 1's overlay must dim — their own pool (5) is below the cost (20)");
+    let bg2 = app.world().get::<BackgroundColor>(overlay2).unwrap();
+    assert!(bg2.0.alpha() < 0.01, "player 2's overlay must stay undimmed — their own pool (100) covers the cost, independent of player 1's shortage");
+}
+
+#[test]
+fn test_action_bar_cost_regen_on_one_players_pool_does_not_affect_the_others_dim_state() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownOverlay};
+    use ironhold_core::schema::scene_v2::SlotCost;
+    use ironhold_core::schema::stats::{StatMap, LiveStat};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // Player 1 regenerates past the cost threshold; player 2 starts already-sufficient and never
+    // changes — the point is that player 1 crossing their own threshold must not perturb player
+    // 2's independently-resolved dim state.
+    let mut p1_stats = StatMap::default();
+    p1_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(0.0, 100.0)));
+    let mut p2_stats = StatMap::default();
+    p2_stats.0.insert("mana".to_string(), LiveStat::new(stat_def(100.0, 100.0)));
+
+    let p1_entity = app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        p1_stats,
+    )).id();
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        test_character_controller(),
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        p2_stats,
+    ));
+
+    let slot1 = app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(0),
+    }).id();
+    let overlay1 = app.world_mut().spawn((
+        CooldownOverlay { slot_key: "1".to_string() },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        ChildOf(slot1),
+    )).id();
+
+    let slot2 = app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: Some(KeyCode::Digit2),
+        do_actions: vec![],
+        cooldown_secs: None,
+        cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
+        owner_player: Some(1),
+    }).id();
+    let overlay2 = app.world_mut().spawn((
+        CooldownOverlay { slot_key: "2".to_string() },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        ChildOf(slot2),
+    )).id();
+
+    app.update();
+    let bg1_before = app.world().get::<BackgroundColor>(overlay1).unwrap().0.alpha();
+    assert!((bg1_before - 0.45).abs() < 0.01, "player 1 starts below the cost — dimmed");
+
+    // Directly push player 1's own pool past the threshold (simulating regen having occurred),
+    // without touching player 2's at all.
+    app.world_mut().get_mut::<StatMap>(p1_entity).unwrap().0.get_mut("mana").unwrap().current = 50.0;
+    app.update();
+
+    let bg1_after = app.world().get::<BackgroundColor>(overlay1).unwrap();
+    assert!(bg1_after.0.alpha() < 0.01, "player 1's overlay must clear once their own pool crosses the cost threshold");
+    let bg2_after = app.world().get::<BackgroundColor>(overlay2).unwrap();
+    assert!(bg2_after.0.alpha() < 0.01, "player 2's overlay must remain unaffected by player 1's pool change");
+}

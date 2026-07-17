@@ -156,10 +156,22 @@ loop over **every** slot whose resolved key is `just_pressed`; for each, `owns_s
 player_index)` resolves the acting player, and that player's own `PlayerTarget` — not the global
 `CurrentTarget` — drives the `{target}` rewrite, the no-target gate, and the
 `intent.slot.*:{player_id}` event's player id. For the primary player this is a no-op in practice
-(`PlayerTarget` is already kept in lockstep with `CurrentTarget` for the primary player). **What
-stays global, deliberately out of scope**: the `cost:`/`SlotCost` check still reads the single
-shared `LoadedStats` resource (no per-player economy — see `docs/20_data_formats.md`'s `SlotCost`
-caveat), and a `rules.ron` rule that intercepts a non-primary player's slot intent still resolves
+(`PlayerTarget` is already kept in lockstep with `CurrentTarget` for the primary player). **The
+`cost:`/`SlotCost` check/deduct is now per-player too** (`planning/features/per_player_stat_pools.md`):
+it resolves against the acting player's own `StatMap` first — populated from `PlayerConfig.
+stat_templates`, forwarded from `PrefabDef.stat_templates` exactly like any NPC/prop prefab, and
+inserted by `spawn_player_entity_core` — falling back to the single shared `LoadedStats` resource
+only when that player's prefab declares no matching `stat_templates` entry (see
+`docs/20_data_formats.md`'s `SlotCost` section). The check and the deferred deduct action's key are
+resolved **once** per firing slot (`resolve_cost_source` in `action_bar.rs`) and reused for both,
+rather than independently re-resolved, so the two can never disagree about which pool a slot's cost
+hits. A scene-load `warn!` (`scene_loader.rs::warn_missing_player_stat_templates`) plus an
+`ironhold_cli validate` error (`missing_player_stat_template`) both flag the one likely-mistake
+case: an `owner_player`-scoped bar's `cost.stat` isn't among that player's *own* declared
+`stat_templates`, even though the player clearly opted into a per-player pool by declaring some.
+Declaring **no** `stat_templates` at all is never flagged — that's the ordinary, unchanged global
+fallback every single-player project (and any bar that doesn't opt in) still gets. **What remains
+out of scope**: a `rules.ron` rule that intercepts a non-primary player's slot intent still resolves
 its own replacement `do_actions`' `{target}` via the interpreter against `CurrentTarget` (the
 primary player), not the firing player's `PlayerTarget` — only the slot's *own* built-in
 `do_actions` (bypassed when a rule takes over) get the per-owning-player resolution. Two bars
@@ -402,6 +414,18 @@ four-site inventory above exists to flag — check any future "every player gets
 against both spawn paths, not just the generic GLB one). Note `PlayerIndex` itself is still GLB-only
 — the primitive/capsule path never gets one, which is exactly why "primary player" is defined as
 "`PlayerIndex(0)` **or no `PlayerIndex` at all**," not just "`PlayerIndex(0)`".
+
+`spawn_player_entity_core` also **conditionally** inserts a `StatMap` component
+(`planning/features/per_player_stat_pools.md`) — `PlayerConfig.stat_templates` (forwarded from
+`PrefabDef.stat_templates` in `assemble_player_config`, same one-place-to-edit function as
+`player_index`/`material`) is built into a `StatMap` via the shared
+`build_stat_map_from_templates` helper (factored out of `attach_prefab_features`, so NPCs/props
+and players share one conversion) and inserted only when non-empty. Unlike `PlayerTarget`, this
+one is **not** unconditional per player-construction site — most players get no `StatMap` at all
+(empty `stat_templates` is the default), which is exactly what keeps every existing single-player
+project byte-for-byte unaffected. Site 2 (the primitive/capsule path) is deliberately **not**
+touched, matching its existing single-player-only status (no `PlayerIndex`, no `owner_player`
+action bars either).
 
 **`PrefabDef.material` does NOT automatically apply to players — this bit Stage 6's local co-op
 4-way split during playtest.** `spawn_prefab_instance` (the generic Actor/Prop/NPC path) reads

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::schema::actions::Action;
 use crate::schema::scene_v2::SlotCost;
-use crate::schema::stats::LoadedStats;
+use crate::schema::stats::{LoadedStats, StatMap};
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::message_interpreter::rewrite_target;
@@ -138,7 +138,7 @@ pub fn action_bar_input_system(
     cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
     mut pending: ResMut<PendingIntentActions>,
-    players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>,
+    players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>), With<CharacterController>>,
 ) {
     for slot in slots.iter().filter(|s| s.resolved_key.is_some_and(|kc| keys.just_pressed(kc))) {
         let key_str = slot.slot_key.as_str();
@@ -152,18 +152,19 @@ pub fn action_bar_input_system(
         }
 
         // ── Resolve the acting player for this slot ─────────────────────────────
-        let Some((spawn_id, player_target, _)) = players.iter()
-            .find(|(_, _, idx)| owns_slot(slot.owner_player, *idx))
+        let Some((spawn_id, player_target, _, player_stats)) = players.iter()
+            .find(|(_, _, idx, _)| owns_slot(slot.owner_player, *idx))
         else { continue };
 
         // ── Cost check ────────────────────────────────────────────────────────
-        if let Some(cost) = &slot.cost {
-            let current = loaded_stats
-                .as_ref()
-                .and_then(|ls| ls.0.get(&cost.stat))
-                .map(|s| s.current)
-                .unwrap_or(0.0);
-            if current < cost.amount {
+        // Resolved once (own StatMap vs. global LoadedStats) and reused below for the deduct —
+        // must not be independently re-resolved at each site, or the two could disagree about
+        // which pool to hit (system-architect finding, per_player_stat_pools.md).
+        let cost_resolution = slot.cost.as_ref().map(|cost| {
+            resolve_cost_source(&cost.stat, player_stats, loaded_stats.as_deref())
+        });
+        if let (Some(cost), Some((current, _))) = (&slot.cost, &cost_resolution) {
+            if *current < cost.amount {
                 game_events.write(GameEvent::Trigger(
                     format!("action_bar.insufficient_resource:{}", key_str),
                 ));
@@ -196,11 +197,13 @@ pub fn action_bar_input_system(
         let mut actions: Vec<Action> = slot.do_actions.iter()
             .map(|a| rewrite_target(a.clone(), target_id))
             .collect();
-        if let Some(cost) = &slot.cost {
-            actions.push(Action::ModifyStat {
-                key: cost.stat.clone(),
-                delta: -cost.amount,
-            });
+        if let (Some(cost), Some((_, use_player_pool))) = (&slot.cost, &cost_resolution) {
+            let key = if *use_player_pool {
+                format!("{}.{}", spawn_id.0, cost.stat)
+            } else {
+                cost.stat.clone()
+            };
+            actions.push(Action::ModifyStat { key, delta: -cost.amount });
         }
         pending.0.insert(key_str.to_string(), (actions, slot.cooldown_secs));
 
@@ -221,6 +224,36 @@ fn owns_slot(owner_player: Option<u32>, idx: Option<&PlayerIndex>) -> bool {
         None | Some(0) => is_primary_player(idx),
         Some(n) => idx.is_some_and(|i| i.0 == n),
     }
+}
+
+/// Resolves a `SlotCost.stat` against the acting player's own `StatMap` first, falling back to
+/// the global `LoadedStats` resource exactly as before per-player stat pools existed. Returns the
+/// current value plus whether the player's own pool was the source — deliberately does **not**
+/// build the dot-routed deduct key here (that requires a `format!` allocation): this is called
+/// every frame from `action_bar_visual_system` for every cost-gated slot, so building a string
+/// that call site immediately discards would allocate on a per-frame hot path for no reason
+/// (wasm-perf-reviewer finding). The one call site that actually needs the key
+/// (`action_bar_input_system`'s deduct push) builds it itself, already gated behind
+/// `just_pressed` — see that call site.
+///
+/// Called once per firing slot and the result reused for both the cost gate and the deduct
+/// action's key (see the two call sites in `action_bar_input_system` and
+/// `action_bar_visual_system`) — computing this independently at each site risks the two
+/// disagreeing about which pool a slot's cost resolves against. See
+/// `planning/features/per_player_stat_pools.md`.
+fn resolve_cost_source(
+    stat: &str,
+    player_stats: Option<&StatMap>,
+    loaded_stats: Option<&LoadedStats>,
+) -> (f32, bool) {
+    if let Some(live) = player_stats.and_then(|sm| sm.0.get(stat)) {
+        return (live.current, true);
+    }
+    let current = loaded_stats
+        .and_then(|ls| ls.0.get(stat))
+        .map(|s| s.current)
+        .unwrap_or(0.0);
+    (current, false)
 }
 
 /// Drains `PendingIntentActions` after all interpreter systems have run.
@@ -258,6 +291,7 @@ pub fn action_bar_visual_system(
     cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
     slots: Query<(&ActionSlotUi, &Children)>,
+    players: Query<(Option<&PlayerIndex>, Option<&StatMap>), With<CharacterController>>,
     mut overlays: Query<(&CooldownOverlay, &mut BackgroundColor)>,
 ) {
     for (slot, children) in &slots {
@@ -265,13 +299,15 @@ pub fn action_bar_visual_system(
             .map(|(remaining, total)| (remaining / total).clamp(0.0, 1.0))
             .unwrap_or(0.0);
 
+        // Same per-player-first, global-fallback resolution as action_bar_input_system's cost
+        // check, so the dim overlay never disagrees with whether the slot will actually fire.
+        // Only the current value is needed here, never the dot-routed deduct key — resolve_cost_
+        // source is written so this never allocates a string on this per-frame path.
         let cost_ok = slot.cost.as_ref().map(|c| {
-            loaded_stats
-                .as_ref()
-                .and_then(|ls| ls.0.get(&c.stat))
-                .map(|s| s.current)
-                .unwrap_or(0.0)
-                >= c.amount
+            let player_stats = players.iter()
+                .find(|(idx, _)| owns_slot(slot.owner_player, *idx))
+                .and_then(|(_, ps)| ps);
+            resolve_cost_source(&c.stat, player_stats, loaded_stats.as_deref()).0 >= c.amount
         }).unwrap_or(true);
 
         // On cooldown: alpha tracks remaining fraction (bright when just used, fades as it clears).

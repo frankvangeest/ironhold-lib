@@ -326,6 +326,45 @@ fn cross_file_checks(
         }
     }
 
+    // Per-player action-bar cost slots whose stat isn't declared on the owning player's own
+    // `stat_templates` — the player clearly opted into a per-player pool (declares
+    // `stat_templates` at all), so a slot costing an undeclared key would silently fall back to
+    // the shared global `LoadedStats` pool for just that one stat. Deliberately does not error
+    // when the owning player declares no `stat_templates` at all — that's the ordinary, unchanged
+    // shared-pool fallback. `owner_player.unwrap_or(0)`, not an early-continue on `None` — mirrors
+    // `owns_slot`'s runtime "None/Some(0) both mean the primary player" resolution, so a default
+    // (owner_player omitted) bar gets the same coverage as an explicit `owner_player: 0` one
+    // (debug-detective finding). See `planning/features/per_player_stat_pools.md`.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            for node in &scene.ui {
+                let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+                let owner_player = bar.owner_player.unwrap_or(0);
+                let player_prefab = scene.entities.iter()
+                    .filter_map(|e| catalog.prefabs.get(&e.prefab))
+                    .find(|p| p.player_index == owner_player && p.components.tags.iter().any(|t| t == "player"));
+                let Some(prefab) = player_prefab else { continue };
+                if prefab.stat_templates.is_empty() { continue; }
+                for slot in &bar.slots {
+                    let Some(cost) = &slot.cost else { continue };
+                    if !prefab.stat_templates.iter().any(|t| t.key == cost.stat) {
+                        errors.push(CrossFileError {
+                            source_file: scene_path.clone(),
+                            message: format!(
+                                "ActionBar {:?} slot {:?} costs stat {:?}, but player_index {}'s \
+                                 prefab declares stat_templates without that key — this slot's \
+                                 cost will silently fall back to the shared global LoadedStats \
+                                 pool instead of this player's own pool",
+                                bar.id, slot.key, cost.stat, owner_player
+                            ),
+                            error_type: "missing_player_stat_template",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(catalog) = prefab_catalog {
         for (key, def) in &catalog.prefabs {
             if let Some(behavior_path) = &def.behavior {

@@ -188,7 +188,7 @@
     // ~59-char budget at this font size (see the room_hint comment for that budget's origin).
     Label((
       id: "ability_hint",
-      text: "Ability: P1=G  P2=L (hits your own selected target only)",
+      text: "Ability: P1=G  P2=L (own target only, costs own mana pool)",
       position: (20.0, 196.0),
       size: (900.0, 32.0),
     )),
@@ -196,15 +196,24 @@
     // owner_player-tagged, positioned in that player's own split half, disjoint keys (G/L — not
     // used by either player's movement/jump/run/target_next bindings above, and not the shared
     // "KeyF" interact default both players otherwise use). Each slot fires against its own
-    // player's PlayerTarget (Tab/click-selected via T/M above) — a cost-free hit, so the shared
-    // LoadedStats cost pool's cross-bar dimming (documented, out of scope this phase) never
-    // surfaces during this playtest. ShowDamagePopup gives an immediate visual confirmation
-    // without needing a stat bar widget on click_target_test — a real playtest issue surfaced
-    // that damage popups were single-instance (no WorldLabelRank), so a popup rendered in the
-    // *other* player's viewport half whenever both were simultaneously active, even though the
-    // hit was per-player-correct underneath. Fixed the same day by extending WorldLabelRank
-    // duplication to Action::ShowDamagePopup/ShowFloatingText (see action_executor.rs) — the
-    // popup now shows correctly per-viewport, same as stat_label/world_stat_bar already did.
+    // player's PlayerTarget (Tab/click-selected via T/M above). ShowDamagePopup gives an
+    // immediate visual confirmation without needing a stat bar widget on click_target_test — a
+    // real playtest issue surfaced that damage popups were single-instance (no WorldLabelRank),
+    // so a popup rendered in the *other* player's viewport half whenever both were simultaneously
+    // active, even though the hit was per-player-correct underneath. Fixed the same day by
+    // extending WorldLabelRank duplication to Action::ShowDamagePopup/ShowFloatingText (see
+    // action_executor.rs) — the popup now shows correctly per-viewport, same as
+    // stat_label/world_stat_bar already did.
+    //
+    // per_player_stat_pools.md playtest aid: each slot now costs "mana" — since
+    // player_p1_split/player_p2_split (prefabs.ron) each declare their own `stat_templates` for
+    // "mana", this check/deduct resolves against that specific player's own pool, not the shared
+    // global LoadedStats resource. P1's 100-mana pool affords 5 casts before the bar dims; P2's
+    // 60-mana pool affords 3 — spending on one bar must never dim or drain the other's.
+    // Playtest note (debug-detective finding): each slot's do_actions target "{target}", so the
+    // cost is only actually deducted on a press where that player already has a target selected
+    // (Tab-cycle via T/M, or click) — pressing G/L with no target fires `action_bar.no_target` and
+    // never touches mana at all. Select a target first, THEN spend down to see the dim.
     ActionBar((
       id: "action_bar_p1",
       owner_player: 0,
@@ -215,6 +224,7 @@
         (
           key: "KeyG",
           key_hint: "P1",
+          cost: (stat: "mana", amount: 20.0),
           do_actions: [
             ModifyStat(key: "{target}.health", delta: -10.0),
             ShowDamagePopup(entity: "{target}", amount: -10.0),
@@ -232,6 +242,7 @@
         (
           key: "KeyL",
           key_hint: "P2",
+          cost: (stat: "mana", amount: 20.0),
           do_actions: [
             ModifyStat(key: "{target}.health", delta: -10.0),
             ShowDamagePopup(entity: "{target}", amount: -10.0),

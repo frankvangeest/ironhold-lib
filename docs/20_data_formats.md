@@ -620,8 +620,11 @@ nameplate_options: (
 // the scene's show_player_nameplate default (per-prefab override wins, same as any entity).
 // Note: this will show a NAME ONLY, no bars — the scene's stat_bars above use "{self}.health"/
 // "{self}.mana", which only resolve for entities with a matching per-entity stat_templates
-// entry. The player here uses global stats (e.g. player_health from stats/stats.ron), which
-// are not entity-scoped and silently fail to match {self}.* — see the {self}.stat note below.
+// entry. This specific player prefab has none, so it falls back to global stats (e.g.
+// player_health from stats/stats.ron), which are not entity-scoped and silently fail to match
+// {self}.* — see the {self}.stat note below. Player prefabs CAN declare their own stat_templates
+// (same field as any NPC/prop prefab) to make {self}.* resolve for them too — this also gives the
+// player their own independent action-bar SlotCost pool, see "Per-player action bars" below.
 "player_warrior": (
     kind: Actor,
     model: "hero",
@@ -641,7 +644,7 @@ nameplate_options: (
 
 > **Stat bar visibility:** bars for stats the entity does not have are silently skipped — no error is logged. For example, if `stat_bars` contains `"{self}.mana"` but a skeleton enemy has no mana stat, the skeleton only shows the health bar while mana-capable entities show both bars.
 >
-> **`{self}.stat` requires a per-entity `stat_templates` entry.** `{self}.health` resolves to `"spawn_id.health"` and is looked up in the entity's `StatMap`. Only entities that declare a `stat_templates` block with key `"health"` have this stat in their `StatMap`. Global stats defined in `stats/stats.ron` (such as `player_health` or `score`) are not entity-scoped and will never satisfy a `{self}.` stat key — they belong to the shared game-variable pool, not any individual entity's `StatMap`. If you want a nameplate bar on the player, add a `stat_templates` entry to the player's prefab (see [Instance stats](#instance-stats-stat_templates-) for the format) and update your logic to use `ModifyStat(key: "{self}.health", ...)` targeting the player's spawn ID.
+> **`{self}.stat` requires a per-entity `stat_templates` entry.** `{self}.health` resolves to `"spawn_id.health"` and is looked up in the entity's `StatMap`. Only entities that declare a `stat_templates` block with key `"health"` have this stat in their `StatMap`. Global stats defined in `stats/stats.ron` (such as `player_health` or `score`) are not entity-scoped and will never satisfy a `{self}.` stat key — they belong to the shared game-variable pool, not any individual entity's `StatMap`. If you want a nameplate bar on the player, add a `stat_templates` entry to the player's prefab (see [Instance stats](#instance-stats-stat_templates-) for the format) and update your logic to use `ModifyStat(key: "{self}.health", ...)` targeting the player's spawn ID — player prefabs now support `stat_templates` the same as any NPC/prop prefab (this also gives the player their own independent action-bar `SlotCost` pool, see "Per-player action bars" below).
 
 > **Coexistence with `world_stat_bar`:** an entity can have both a nameplate (scene-managed, distance-culled) and a `world_stat_bar` (always visible, per-prefab). If the overlap is visually undesirable, remove `world_stat_bar` from the prefab and use the nameplate's `stat_bars` alone.
 
@@ -905,18 +908,43 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `stat` | `String` | Key of the stat to check and deduct from (matches a key in `stats.ron`) |
+| `stat` | `String` | Key of the stat to check and deduct from — either a key in `stats.ron` (shared, global) **or** a key in the owning player's own `stat_templates` (per-player, see below) |
 | `amount` | `f32` | Amount to deduct. Slot blocks if `current < amount` |
 
-> **Cost/resource gating is global, not per-player.** `cost` checks and deducts against the single
-> shared `LoadedStats` resource — not a per-entity stat pool — even when `owner_player` scopes a bar
-> to one player in a split-screen scene. Concretely: if two split-screen players each have their own
-> `ActionBar` with a `cost:`-gated slot, spending the stat from player 1's bar also dims/blocks
-> player 2's bar, since both read the same global stat. Each bar looks independently positioned and
-> owned, but silently shares one invisible pool. This is a documented interim limitation, not a bug
-> — a genuinely separate per-player economy is tracked as its own backlog item
-> ("Per-player stat/resource pools"). Until then, split-screen demo/skill bars should either omit
-> `cost:` entirely or accept the shared-pool behavior explicitly.
+> **Cost/resource gating is per-player when the owning player opts in, global otherwise.** `cost`
+> resolves against the acting player's own `stat_templates`-backed pool first — the exact same
+> `stat_templates` field NPCs already use to declare stats like `health` — and only falls back to
+> the single shared `LoadedStats` resource when that player's prefab declares no matching
+> `stat_templates` entry for this stat. **Give the player prefab its own pool by adding
+> `stat_templates` to it** (same field, same syntax as any NPC prefab):
+> ```ron
+> // prefabs.ron
+> "player_p1": (
+>   kind: Actor,
+>   model: "character_male",
+>   player_index: 0,
+>   stat_templates: [
+>     ( key: "mana", base: 100.0, min: 0.0, max: 100.0, regen_rate: 5.0, regen_delay: 1.0 ),
+>   ],
+>   components: ( tags: ["player"], /* ... */ ),
+> ),
+> ```
+> ```ron
+> // scene.ron — this bar's cost now resolves against player_p1's own "mana" pool above
+> ActionBar((
+>   id: "action_bar_p1",
+>   owner_player: 0,
+>   slots: [ ( key: "KeyG", cost: (stat: "mana", amount: 20.0), do_actions: [ /* ... */ ] ) ],
+> )),
+> ```
+> **Omit the `stat_templates` block on this player's prefab and `cost` silently falls back to the
+> shared global `LoadedStats` pool instead** — spending on one player's bar would then also dim/
+> block another player's bar referencing the same stat key, since both would read the same global
+> stat. `ironhold_cli validate` and a scene-load `warn!` both catch the case where a player
+> declares *some* `stat_templates` but not the specific key a `cost:` slot references (a likely
+> authoring mistake, not an intentional shared-pool choice) — but declaring **no** `stat_templates`
+> at all is the ordinary, silent fallback and is never flagged, since that's simply "this player
+> doesn't have their own economy," not a mistake.
 
 **Pipeline events emitted by the action bar:**
 
@@ -1062,8 +1090,10 @@ ActionBar((
 Each bar's `{target}` resolves against **that bar's own player's** `PlayerTarget` (their own
 Tab-cycle/click selection, independent of the other player's) — not the global `CurrentTarget` —
 so player 1 pressing `G` only ever affects whichever entity player 1 has selected, regardless of
-what player 2 currently has targeted. See the shared-cost-pool and rule-override caveats above for
-the two things that stay *not* per-player even with `owner_player` set.
+what player 2 currently has targeted. A `cost:`-gated slot resolves per-player too, as long as the
+owning player's own prefab declares a matching `stat_templates` entry (see `SlotCost` above) —
+otherwise it falls back to the shared global pool. See the rule-override caveat above for the one
+thing that stays *not* per-player even with `owner_player` set.
 
 #### `DialoguePanel((...))` ✅
 
@@ -1689,7 +1719,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `indicator_color` | `Option<(f32,f32,f32,f32)>` | `None` | Direct RGBA override for the target-indicator ring colour when this entity is selected. Takes precedence over `indicator_category` and the scene-level `target_indicator.color`. Only meaningful when the prefab is selectable. |
 | `indicator_category` | `Option<String>` | `None` | Category key (e.g. `"enemy"`, `"ally"`) looked up in the scene's `target_indicator.named_colors` map. Used only when `indicator_color` is unset; falls through to scene-level `color` if the key is absent. |
 | `select_aim_height` | `f32` | `1.0` | Vertical offset (metres) from the entity world origin used when projecting to screen space for click-selection. Default `1.0` is correct for human-scale characters (~1.8 m capsule). Lower this for ground-hugging creatures: `0.4` for a snake (`collider_height: 0.8`), `0.6` for a spider (`collider_height: 1.2`). Only meaningful when `click_selectable: true`. |
-| `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. See [Instance stats](#instance-stats-stat_templates-) below. |
+| `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. Works on player prefabs too — a player prefab that declares this gets an independent action-bar `SlotCost` pool instead of sharing the global one. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
@@ -3139,6 +3169,8 @@ Threshold events are **edge-triggered**: they fire once when the condition trans
 ## Instance stats (`stat_templates`) ✅
 
 While `stats.ron` holds **global** stats that persist across scene transitions (e.g. player health, score), `stat_templates` on a `PrefabDef` declare **per-entity** stats. Every spawned instance gets its own independent `StatMap` component — there is no shared state between instances of the same prefab.
+
+**Player prefabs support `stat_templates` too**, exactly the same field and syntax as any NPC/prop prefab (`tags: ["player"]` doesn't change anything about how `stat_templates` is read). This is the mechanism behind per-player action-bar resource pools in split-screen: give each player prefab its own `stat_templates` entry (e.g. `"mana"`) and that player's `ActionBar` `SlotCost` checks resolve against their own pool instead of the shared global `LoadedStats` resource — see `SlotCost` and "Per-player action bars" above.
 
 ### Authoring
 

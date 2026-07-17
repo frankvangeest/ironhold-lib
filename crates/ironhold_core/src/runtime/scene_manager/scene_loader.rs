@@ -700,6 +700,8 @@ pub fn spawn_scene_v2(
         let is_split_screen = player_configs.len() >= 2
             && player_configs.first().is_some_and(|p| p.camera.split.is_some());
 
+        warn_missing_player_stat_templates(scene, &player_configs);
+
         // ── Primitive player ─────────────────────────────────────────────────────────
         if let Some((entity_id, shape, params, position, components, player_children, prefab_key, np_display_name, np_override)) = primitive_player {
             let cap_radius = params.radius.unwrap_or(0.4);
@@ -1450,6 +1452,45 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
             }
         }
         bar_index += 1;
+    }
+}
+
+/// Warns at scene load when a player's `ActionBar` has a `cost:` slot referencing a stat that
+/// isn't among that player's own declared `stat_templates` — even though the player clearly
+/// opted into a per-player pool by declaring *some* `stat_templates`. Silently falling back to
+/// the shared global `LoadedStats` pool in that one case would reproduce, for that single stat
+/// key, the exact cross-player bleed per-player stat pools exist to fix. Deliberately does
+/// **not** warn when the owning player declares no `stat_templates` at all — that's the ordinary,
+/// unchanged fallback (every ActionBar/single-player project without an opt-in `stat_templates`
+/// block behaves exactly as before this feature), not a mistake.
+///
+/// `bar.owner_player.unwrap_or(0)` — **not** an early-continue on `None` — matches `owns_slot`'s
+/// own "`None`/`Some(0)` both mean the primary player" resolution exactly (debug-detective
+/// finding): the primary player's own `stat_templates` are just as reachable via a default
+/// (`owner_player` omitted) bar as via an explicit `owner_player: 0`, so this check must cover
+/// both the same way the runtime does, or the most common single-bar authoring form would get no
+/// diagnostic coverage at all. See `planning/features/per_player_stat_pools.md`.
+fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
+    use crate::schema::scene_v2::UiNodeDef;
+    for el in &scene.ui {
+        let UiNodeDef::ActionBar(bar) = el else { continue };
+        let owner_player = bar.owner_player.unwrap_or(0);
+        let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)
+        else { continue };
+        if player_config.stat_templates.is_empty() { continue; }
+        for slot in &bar.slots {
+            let Some(cost) = &slot.cost else { continue };
+            if !player_config.stat_templates.iter().any(|t| t.key == cost.stat) {
+                warn!(
+                    "ActionBar '{}' slot '{}' costs stat '{}', but player_index {}'s prefab \
+                     declares stat_templates without that key — this slot's cost will silently \
+                     fall back to the shared global LoadedStats pool instead of this player's own \
+                     pool. Add a stat_templates entry for '{}' to this player's prefab, or remove \
+                     the cost if the shared pool is intended.",
+                    bar.id, slot.key, cost.stat, owner_player, cost.stat
+                );
+            }
+        }
     }
 }
 

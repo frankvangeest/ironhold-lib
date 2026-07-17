@@ -358,12 +358,37 @@
     // (scroll x 0 has no effect) and `orbit_button: "None"` (new parse_orbit_button arm). One
     // shared mouse would otherwise rotate/zoom both players' cameras together — see the Stage 3
     // plan's "Research findings" for why disabling is the fix, not per-camera input masking.
+    // Per-player stat pools (per_player_stat_pools.md) playtest aid: this player's own `mana`
+    // pool for room3's `action_bar_p1` cost-gated slot. Declaring `stat_templates` here (the same
+    // field NPCs like `click_target_test` above already use) is what gives this specific player a
+    // real `StatMap`-backed pool instead of the shared global `LoadedStats` resource — omit this
+    // block entirely and the cost would silently fall back to that shared pool instead, exactly
+    // the bug this feature exists to fix. Base/max deliberately differ from player 2's pool below
+    // (100 vs. 60) so the two players' independent bars are visually distinguishable in playtest.
+    // Visual confirmation is the action bar's own cooldown-overlay dim (spend player 1's mana down
+    // past 20 with repeated KeyG presses and watch only P1's bar dim, not P2's) — NOT a
+    // `stat_label`/`world_stat_bar`: those are only wired up for the generic NPC/prop spawn path
+    // (`spawn_prefab_instance`/`attach_prefab_features`), not the separate player spawn path
+    // (`spawn_player_entity_core`), so a `stat_label` block on a player prefab is silently dropped
+    // at spawn today (alignment-reviewer finding — logged as a follow-up in claude_suggestions.md,
+    // not fixed here since it's a separate "every player gets X widget" capability gap, not part
+    // of this feature's scope).
     "player_p1_split": (
       kind: Actor,
       model: "character_male",
       display_name: "Player 1",
       animation_policy: "prefabs/animation/player_locomotion.ron",
       player_index: 0,
+      stat_templates: [
+        (
+          key: "mana",
+          base: 100.0,
+          min: 0.0,
+          max: 100.0,
+          regen_rate: 5.0,
+          regen_delay: 1.0,
+        ),
+      ],
       components: (
         tags: ["player"],
         camera: (
@@ -403,12 +428,24 @@
       ),
     ),
 
+    // Per-player stat pools (per_player_stat_pools.md) playtest aid — see player_p1_split's
+    // comment above. Base/max (60 vs. player 1's 100) deliberately differ for visual contrast.
     "player_p2_split": (
       kind: Actor,
       model: "character_female",
       display_name: "Player 2",
       animation_policy: "prefabs/animation/player_locomotion.ron",
       player_index: 1,
+      stat_templates: [
+        (
+          key: "mana",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          regen_rate: 3.0,
+          regen_delay: 1.0,
+        ),
+      ],
       components: (
         tags: ["player"],
         // No `split`/`party` here — only the first player's camera block is read for those.
