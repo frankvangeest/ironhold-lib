@@ -105,6 +105,19 @@ Icon {
 },
 ```
 
+**Texture dimensions — power-of-2 is recommended, not required.** WebGPU (and WebGL2, and
+Vulkan/Metal/D3D12) don't require power-of-2 (POT) texture dimensions for sampling — that was a
+WebGL1/OpenGL ES 2.0-era constraint (mipmapping, `REPEAT` wrap mode on old hardware), not a
+WebGPU/WebGL2 one. This feature introduces no new atlas-building code — `Icon` reuses the exact
+same `TextureAtlasLayout::from_grid` call path `ActionBarDef`/`ItemDef` icon sheets already use in
+production, so it inherits whatever dimension behavior those already have (which today is: works
+fine at any dimensions, POT or not — confirmed, no POT check exists anywhere in the engine or
+`tools/asset_checker/check.py`). The three shipped icon sheets happen to be POT (512×512,
+512×512, 256×256) by hand-authored coincidence, not validation. Docs task below should note this
+so a designer producing the new filled/empty pip art (see the Demo task) isn't left guessing:
+non-POT sheets work, but keeping the sheet POT (matching the other shipped sheets) is recommended
+for mip-mapping/compression parity with the rest of the engine's icon atlases.
+
 ```ron
 // A 5-pip heart bar using a shared item/UI icon sheet.
 world_stat_bar: (
@@ -236,7 +249,9 @@ that is identical across all ranks of the same bar (all ranks track the same ent
       convention used elsewhere, and stating `size`/`spacing` are screen pixels like `Pixel.size`,
       not metres); RON example; the `ceil`-based rounding rule with the 1%/95% edge cases spelled
       out; split-screen behavior (correctly documented as duplicating from day one, unlike Pixel's
-      historical caveat)
+      historical caveat); a one-line texture-dimensions note (power-of-2 not required by
+      WebGPU/WebGL2, but recommended for parity with the other shipped icon sheets — see Schema
+      section above) so whoever produces the new pip art isn't left guessing
 - [ ] WASM rebuild + `python test_web.py` — confirm the `Sprite` pipeline (this engine's first use
       of it — everything else uses `Mesh2d`/`ColorMaterial` or Bevy UI `ImageNode`) compiles/warms
       without a stall on first Icon-bar draw; if it does stall, fall back to the cropped-UV-mesh
