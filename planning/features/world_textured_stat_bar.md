@@ -1,6 +1,6 @@
 # Feature: World-space Textured Stat Bar (`WorldStatBarStyle::Textured`)
 
-_Status: Ready_
+_Status: Ready (schema/demo corrected 2026-07-18 against the actual supplied art)_
 _Planned at: `7168ccc` (2026-07-17)_
 
 ## What
@@ -21,7 +21,7 @@ same continuous-fill update mechanism, just a 9-sliced textured `Sprite` in plac
 
 ## Why
 `world_stat_bar` now has three production-relevant looks in flight: `Pixel` (flat solid fill,
-production-quality, split-screen-complete), `Icon` (discrete pips/hearts, planned), and `Ascii`
+production-quality, split-screen-complete), `Icon` (discrete pips/hearts, shipped `672d003`), and `Ascii`
 (prototyping-only, slated for eventual retirement). None of them let a designer ship an
 **art-directed** continuous bar — the single most common shippable HUD element in the genre this
 engine targets (action/RPG floating enemy health bars, boss bars, player overhead health). Today a
@@ -58,16 +58,42 @@ The continuous fill is driven by **`Sprite.custom_size.x`**, the direct textured
 | `Sprite.rect` crop (reveal a sub-rect of a full texture) | **Clips** the right cap flat — no rounded receding edge | none new | Rejected for capped art (viable only for flat/patterned fills) |
 | Custom UV-mask shader | Correct, but reinvents 9-slice in WGSL + a new material/pipeline | new pipeline | Rejected — unjustified complexity vs. built-in slicing |
 
-**Two `Sprite` layers per bar** (mirroring `Pixel`'s bg + fill split, minus the border/bg flat
-quads — the texture art supplies its own frame and background):
-- **Empty/track layer** — sliced `Sprite` using `empty_texture`, `custom_size = (width, height)`,
-  **static** (never updated), lower z.
-- **Fill layer** — sliced `Sprite` using `fill_texture`, `custom_size = (ratio * width, height)`,
+**Correction vs. the original draft (2026-07-18, after Frank supplied the actual art)** — Frank
+added `assets/shared/ui/rounded-healthbar-texture-sheet.png`: a single 48×48 **sheet**, not two
+separate fill/empty PNGs as first drafted. Inspecting it (`PIL`, per-row alpha profile) shows two
+frames stacked vertically in the one file: rows 0–16 (~38px wide, cols 5–42) are a **solid filled
+pill** (opaque middle); rows 17–31 are a **hollow outline pill** (only the border stroke is
+opaque, alpha≈4–9 in the middle — a see-through track ring); rows 32–47 are unused padding. Both
+frames are flat mid-grey (`R==G==B`, varying only in edge-antialiasing alpha) — colorless, exactly
+so a single sheet can be tinted red for health, blue for mana, etc. (Frank's own framing). Verified
+against the Cargo-locked `bevy_sprite_render-0.18.0` source
+(`texture_slice/computed_slices.rs::compute_sprite_slices`) that 9-slicing composes correctly with
+a plain `Sprite.rect` crop of a larger image — `rect` (or the atlas rect, if a `TextureAtlas` were
+used instead) is passed straight through as `compute_slices`' `texture_rect` argument, so slicing
+happens **within** the cropped sub-rect's own coordinate space, not the full sheet. No
+`TextureAtlasLayout` is needed for this (unlike `Icon`, which genuinely needs grid-index swapping)
+— a static `Sprite.rect` crop is simpler and sufficient here since each layer only ever draws one
+fixed sub-rect for its whole lifetime.
+
+This replaces the schema's `fill_texture`/`empty_texture` two-catalog-key design with **one**
+`texture_sheet` catalog key plus two designer-authored sub-rects (`fill_rect`, `empty_rect`, in
+texture pixels) — see Schema below. It also means both `Sprite` layers share **one**
+`Handle<Image>` (one asset load, not two), differing only in their static `Sprite.rect` crop —
+strictly cheaper than the original two-handle design, not just different.
+
+**Two `Sprite` layers per bar**, both referencing the same `texture_sheet` image handle, cropped
+via `Sprite.rect` to their own sub-rect:
+- **Empty/track layer** — sliced `Sprite`, `rect = empty_rect`, `custom_size = (width, height)`,
+  **static** (never updated), lower z. Tinted by `bg_color` (see Schema below — flipped from the
+  original draft's "bg_color has no equivalent here", now that the art is a colorless outline
+  meant to be recolored).
+- **Fill layer** — sliced `Sprite`, `rect = fill_rect`, `custom_size = (ratio * width, height)`,
   updated per frame, higher z, **left-aligned by mirroring `Pixel`'s proven translation math**
   (`translation.x = -width/2 + fill_width/2`) so the fill grows from the left edge and its rounded
   right end recedes as the stat drops. (Using the translation shift rather than an `Anchor`
   component sidesteps any anchor-API specifics and reuses a pattern already shipped in
-  `world_pixel_bar_update_system`.)
+  `world_pixel_bar_update_system`.) Tinted by `fill_color`/`color_bands`, unchanged from the
+  original draft.
 
 **Low-fill behavior (document, don't fight):** when `custom_size.x` shrinks below the summed cap
 widths, `TextureSlicer`'s `min_coef = coef.x.min(coef.y).min(max_corner_scale)` scales the corner
@@ -95,42 +121,57 @@ first-use-of-`Sprite` risk `world_icon_stat_bar.md` already flags** (the engine 
 ### Schema — a separate `Textured` variant, reusing the shared colour fields as a tint
 ```rust
 /// Textured continuous fill bar: a 9-sliced "empty" track sprite with a 9-sliced "full" fill
-/// sprite drawn on top, fill width driven continuously by the stat ratio. Caps/border are part
-/// of the art and stay undistorted at every width via Bevy's `SpriteImageMode::Sliced`.
+/// sprite drawn on top, both cropped from one shared sheet, fill width driven continuously by
+/// the stat ratio. Caps/border are part of the art and stay undistorted at every width via
+/// Bevy's `SpriteImageMode::Sliced`.
 Textured {
-    /// Catalog key into `AssetCatalog.textures` — the FULL/fill bar art (9-sliced, drawn on top,
-    /// width = ratio * size.0). Same catalog convention as `EffectDef.sprite`, `Icon.icon_sheet`,
-    /// and every other texture reference in the engine (key → path → `asset_server.load`).
-    fill_texture: String,
-    /// Catalog key into `AssetCatalog.textures` — the EMPTY/track art (9-sliced, static, full width,
-    /// drawn underneath). The art supplies its own border/background, so `bg_color`/`border` from
-    /// other styles have no equivalent here.
-    empty_texture: String,
+    /// Catalog key into `AssetCatalog.textures` — ONE sheet containing both the fill and empty
+    /// frames (see `fill_rect`/`empty_rect`). Same catalog convention as `EffectDef.sprite`,
+    /// `Icon.icon_sheet`, and every other texture reference in the engine (key → path →
+    /// `asset_server.load`). Both Sprite layers share this single `Handle<Image>`.
+    texture_sheet: String,
+    /// Sub-rect `(x, y, w, h)` in **TEXTURE pixels** — the FULL/fill frame within `texture_sheet`
+    /// (9-sliced, drawn on top, width = ratio * size.0). Cropped via `Sprite.rect`.
+    fill_rect: (f32, f32, f32, f32),
+    /// Sub-rect `(x, y, w, h)` in **TEXTURE pixels** — the EMPTY/track frame within
+    /// `texture_sheet` (9-sliced, static, full width, drawn underneath). Cropped via `Sprite.rect`.
+    empty_rect: (f32, f32, f32, f32),
     /// Bar dimensions in **screen pixels** `(width, height)` — same coordinate space as
     /// `Pixel.size`/`Icon.size` (Camera2d, 1 unit = 1 px; constant at all camera distances, no
     /// depth scaling in v1). Clamped to a min of `(1.0, 1.0)`. Default: `(64.0, 12.0)`.
     #[serde(default = "default_textured_bar_size")]
     size: (f32, f32),
-    /// 9-slice cap insets in **TEXTURE pixels** `(left, right, top, bottom)` — the fixed
-    /// corner/cap regions of the source art that must NOT stretch. Maps directly to
-    /// `TextureSlicer.border` (`BorderRect { min_inset: (left, top), max_inset: (right, bottom) }`).
-    /// Author this to match the actual cap width/height of your fill/empty art. Default:
-    /// `(6.0, 6.0, 6.0, 6.0)`. (Distinct unit from `size`: `size` is on-screen pixels, `slice_border`
-    /// is source-image pixels — spelled out in the docs so it isn't mistaken for screen space.)
+    /// 9-slice cap insets in **TEXTURE pixels** `(left, right, top, bottom)`, relative to each
+    /// rect's own origin — the fixed corner/cap regions of the source art that must NOT stretch.
+    /// Maps directly to `TextureSlicer.border` (`BorderRect { min_inset: (left, top), max_inset:
+    /// (right, bottom) }`). Author this to match the actual cap radius of your fill/empty art
+    /// (for a stadium/pill shape, cap width ≈ frame height / 2). Applied identically to both the
+    /// fill and empty layers (both frames share one cap geometry in every sheet seen so far — a
+    /// per-layer override can be added later if a sheet ever needs asymmetric caps). Default:
+    /// `(6.0, 6.0, 6.0, 6.0)`. (Distinct unit from `size`: `size` is on-screen pixels,
+    /// `slice_border` is source-image pixels — spelled out in the docs so it isn't mistaken for
+    /// screen space.)
     #[serde(default = "default_textured_bar_slice")]
     slice_border: (f32, f32, f32, f32),
 },
 ```
 
-**No new colour/tint fields — reuse the shared `WorldStatBarDef.fill_color` + `color_bands`.**
-The fill `Sprite.color` multiplies its texture, so the existing shared `fill_color` (and
-threshold-based `color_bands`) drive a state tint on the fill sprite exactly like they drive
-`Pixel`'s `ColorMaterial.color` today — one colour convention across all styles, no `Textured`-only
-field. **Caveat to document:** the shared `fill_color` default is bright green
-`(0.15, 0.85, 0.15, 0.95)`, which would *tint* an already-coloured fill texture. A designer using
-pre-coloured art should set `fill_color: (1.0, 1.0, 1.0, 1.0)` (white = no tint); a designer using
-greyscale/white art can lean on `fill_color`/`color_bands` for green→yellow→red state colouring.
-`empty_texture` is never tinted (its own art is authoritative); `bg_color` is ignored by this style.
+**No new colour/tint fields — reuse the shared `WorldStatBarDef.fill_color`/`bg_color` +
+`color_bands`.** Both frames in the reference sheet are flat, colorless mid-grey — authored
+specifically to be recolored by multiply-tint (Frank: *"this texture can be multiplied with a
+color, e.g. red for health, blue for mana"*). The fill `Sprite.color` multiplies `fill_rect`'s
+pixels exactly like it drives `Pixel`'s `ColorMaterial.color` today, and — **correction vs. the
+original draft** — the empty/track `Sprite.color` is now multiplied by the existing shared
+`bg_color` field the same way, rather than being left untinted. This is a straight reuse of a
+field that already exists on `WorldStatBarDef` and is already used this way for `Pixel`'s
+background quad (`stat_display.rs:437`) — no `Textured`-only field needed, one colour convention
+across all three production styles. **Caveat to document:** the shared `fill_color` default is
+bright green `(0.15, 0.85, 0.15, 0.95)` and `bg_color`'s default is dark red
+`(0.25, 0.08, 0.08, 0.75)` — both would tint an already-coloured sheet. A designer using
+pre-coloured art should set both to white/neutral; a designer using the shipped greyscale sheet
+leans on `fill_color`/`color_bands` (state tint) and `bg_color` (track tint) exactly as intended.
+If a designer supplies a *pre-colored, opaque* empty-track frame and wants zero tint on it, they
+set `bg_color: (1.0, 1.0, 1.0, 1.0)`.
 
 **`deny_unknown_fields` note (correction vs. the `Icon` plan).** The existing `Ascii` and `Pixel`
 enum variants do **not** carry `#[serde(deny_unknown_fields)]` (only the outer `WorldStatBarDef`
@@ -140,28 +181,35 @@ stat_bar.md`'s schema section claims to add it to `Icon`; that would introduce a
 should be corrected there too (logged in Documentation & Planning below).
 
 ```ron
-// A textured rounded health bar on an enemy — greyscale fill art, coloured by state bands.
+// The shipped reference sheet — greyscale fill art, coloured by state bands, dark track tint.
 world_stat_bar: (
-  stat_key: "{self}.health",
-  offset: (0.0, 2.6, 0.0),
+  stat_key: "player_health",
+  offset: (0.0, 2.3, 0.0),
+  bg_color: (0.15, 0.15, 0.15, 0.6),  // dim neutral track tint
   color_bands: [
     (0.0, (0.85, 0.12, 0.12, 1.0)),  // < 30% → red
     (0.3, (0.95, 0.75, 0.10, 1.0)),  // ≥ 30% → yellow
     (0.6, (0.15, 0.85, 0.15, 1.0)),  // ≥ 60% → green
   ],
   style: Textured(
-    fill_texture:  "hpbar_fill",
-    empty_texture: "hpbar_empty",
+    texture_sheet: "healthbar_sheet",
+    fill_rect:  (0.0, 0.0, 48.0, 17.0),   // solid pill frame, top of the sheet
+    empty_rect: (0.0, 17.0, 48.0, 15.0),  // hollow outline frame, below it
     size: (72.0, 14.0),
-    slice_border: (8.0, 8.0, 6.0, 6.0),
+    slice_border: (8.0, 8.0, 8.0, 8.0),
   ),
 ),
 
-// Pre-coloured art — disable the tint by setting fill_color to white.
+// Pre-coloured, opaque art — disable both tints by setting fill_color/bg_color to white.
 world_stat_bar: (
   stat_key: "{self}.health",
   fill_color: (1.0, 1.0, 1.0, 1.0),
-  style: Textured( fill_texture: "boss_hp_full", empty_texture: "boss_hp_empty" ),
+  bg_color: (1.0, 1.0, 1.0, 1.0),
+  style: Textured(
+    texture_sheet: "boss_hp_sheet",
+    fill_rect: (0.0, 0.0, 64.0, 20.0),
+    empty_rect: (0.0, 20.0, 64.0, 20.0),
+  ),
 ),
 ```
 
@@ -176,13 +224,14 @@ world_stat_bar: (
   src/CLAUDE.md`'s change-detection discipline). Register it alongside `world_pixel_bar_update_system`.
 - Extend `spawn_world_stat_bar_widget`'s `match def.style` with a `Textured` arm.
 
-**`StatWidgetSpawnCtx` needs image handles.** The current ctx carries `meshes` + `color_materials`
-but no `AssetServer`/`AssetCatalog` — the `Textured` arm needs to resolve two catalog keys to
-`Handle<Image>` (`catalog.textures.get(key)` → path → `asset_server.load`, the exact pattern in
-`capabilities/particle.rs`). Add the resolved `Handle<Image>` pair (or an `&AssetServer` +
-`&AssetCatalog`) to `StatWidgetSpawnCtx`. **Coordinate with `Icon`** — that plan needs the same
-extension (sheet image + `TextureAtlasLayout`); do it once. Both scene-load and
-`drain_dynamic_stat_ui_system` call sites already have `AssetServer`/catalog in scope. Missing-key
+**`StatWidgetSpawnCtx` already has what this needs — no further extension required.** `world_icon_
+stat_bar.md` (shipped, `672d003`) already added `asset_server: Option<&'a AssetServer>` and
+`asset_catalog: Option<&'a AssetCatalog>` to `StatWidgetSpawnCtx` for exactly this purpose (the
+"coordinate with Icon, do it once" note in the original draft is now resolved — `Icon` landed
+first and paid that cost). `Textured` resolves **one** catalog key (`texture_sheet` →
+`catalog.textures.get(key)` → path → `asset_server.load::<Image>()`) and clones the resulting
+`Handle<Image>` for both the fill and empty `Sprite` layers — it needs no `TextureAtlasLayout`
+(unlike `Icon`), since a static `Sprite.rect` crop is sufficient (verified above). Missing-key
 handling: `warn!` once and skip the bar (never fabricate a `shared/...` path — per the
 shader/asset-fallback rule in `crates/ironhold_core/src/CLAUDE.md`).
 
@@ -222,62 +271,72 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
   continuous fill), not a shape/geometry authoring framework.
 
 ## Tasks
-- [ ] Schema — `WorldStatBarStyle::Textured { fill_texture, empty_texture, size, slice_border }`
-      struct variant in `catalog.rs` (inline fields matching `Ascii`/`Pixel`; **no** per-variant
-      `deny_unknown_fields`, matching the existing variants), with `default_textured_bar_size` /
-      `default_textured_bar_slice` default fns and full doc comments (esp. the two coordinate
-      spaces: `size` = screen px, `slice_border` = texture px; and that `fill_color`/`color_bands`
-      tint the fill while `bg_color`/`border` don't apply).
+- [ ] Schema — `WorldStatBarStyle::Textured { texture_sheet, fill_rect, empty_rect, size,
+      slice_border }` struct variant in `catalog.rs` (inline fields matching `Ascii`/`Pixel`; **no**
+      per-variant `deny_unknown_fields`, matching the existing variants), with
+      `default_textured_bar_size` / `default_textured_bar_slice` default fns and full doc comments
+      (esp. the two coordinate spaces: `size` = screen px, `fill_rect`/`empty_rect`/`slice_border` =
+      texture px; and that `fill_color` tints the fill while `bg_color` now tints the empty/track
+      layer — both reused, no `Textured`-only colour field).
 - [ ] `capabilities/stat_display.rs` — `WorldTexturedBarFillMarker` component;
       `world_textured_bar_update_system` (writes `Sprite.custom_size.x` + `Sprite.color`, guarded
       for change-detection, left-align translation, `color_bands`/`fill_color` selection identical
       to the Pixel system); `Textured` arm in `spawn_world_stat_bar_widget`, rank-duplicated, with
-      the `TextureSlicer` + both `Handle<Image>` built once and cloned per rank, two `Sprite`
-      children (empty static + fill marked) per rank, `LevelEntity` on every child.
-- [ ] `StatWidgetSpawnCtx` — add the image-handle resolution path (`&AssetServer` + `&AssetCatalog`,
-      or pre-resolved handle pair); wire both call sites (`scene_loader.rs` Phase B loops +
-      `drain_dynamic_stat_ui_system`). **Coordinate with `world_icon_stat_bar.md`** — same ctx
-      extension; land it once. Missing catalog key → `warn!` once + skip (no fabricated paths).
+      **one** `Handle<Image>` (`texture_sheet`) resolved once and cloned across both layers and every
+      rank, two `Sprite` children (empty static + fill marked) per rank — each with its own static
+      `Sprite.rect` crop (`empty_rect`/`fill_rect`) and `SpriteImageMode::Sliced(TextureSlicer)`
+      built from `slice_border` — `LevelEntity` on every child.
+- [ ] `StatWidgetSpawnCtx` — **no extension needed.** `asset_server`/`asset_catalog` already exist
+      on the ctx (added by `world_icon_stat_bar.md`, shipped `672d003`); the `Textured` arm reuses
+      them as-is. Missing catalog key → `warn!` once + skip (no fabricated paths).
 - [ ] Register `world_textured_bar_update_system` alongside `world_pixel_bar_update_system` in
       `lib.rs`.
 - [ ] Tests — parse/defaults tests for the `Textured` variant in `ron_validation.rs` (matching the
-      `Ascii`/`Pixel` set: minimal RON parses, defaults resolve, a full RON parses); spawn-behavior
-      test (a `Textured` bar spawns exactly one anchor + two `Sprite` children in a non-split scene;
-      the fill child carries `WorldTexturedBarFillMarker`); split-screen rank-duplication test
-      (`Sprite`/marker counts scale to `MAX_SPLIT_PLAYERS`, and the shared image handles are cloned
-      not re-loaded), mirroring the Pixel duplication feature's tests.
+      `Ascii`/`Pixel`/`Icon` set: minimal RON parses, defaults resolve, a full RON parses);
+      spawn-behavior test (a `Textured` bar spawns exactly one anchor + two `Sprite` children in a
+      non-split scene; the fill child carries `WorldTexturedBarFillMarker`; both children share one
+      cloned `Handle<Image>` but differ in `Sprite.rect`); split-screen rank-duplication test
+      (`Sprite`/marker counts scale to `MAX_SPLIT_PLAYERS`, image handle cloned not re-loaded),
+      mirroring the Pixel/Icon duplication tests.
 - [ ] CLI — `cargo check -p ironhold_cli` (new enum variant must not break `query.rs`); run
       `cargo run -p ironhold_cli -- query <project>` on the demo to confirm the new style surfaces
       and nothing crashes.
-- [ ] Demo — add a `Textured` bar to `3rd_person_game_demo`, on an **NPC/enemy** (e.g. the training
-      dummy or an orc) tracking `{self}.health`, **not** the player and **not** `local_coop_demo`'s
-      per-player bars — the player overhead slot is where `world_icon_stat_bar.md`'s hearts demo
-      goes and `local_coop_demo`'s bars are `pixel_world_stat_bar_split_screen_duplication.md`'s;
-      using a separate entity avoids colliding with either. **Includes producing/sourcing the actual
-      fill + empty bar art** (two 9-sliceable PNGs with clear cap regions), added to `assets.ron`
-      `textures:`, following `assets/CLAUDE.md`'s art direction — no shipped texture is a
-      9-sliceable bar today. Run `python tools/asset_checker/check.py` after editing `assets.ron`.
+- [ ] Demo — **replace** `3rd_person_game_demo`'s `player_male`/`player_female` `world_stat_bar`
+      (currently `Icon`, the hearts bar shipped in `world_icon_stat_bar.md`) with this `Textured`
+      style, tracking the same global `player_health` key, using the already-supplied
+      `assets/shared/ui/rounded-healthbar-texture-sheet.png`. **Scope change vs. the original
+      draft** (2026-07-18, Frank's explicit instruction) — the original draft placed `Textured` on
+      an NPC specifically to avoid colliding with the not-yet-built `Icon` player demo; `Icon` has
+      since shipped and is now the thing being replaced, so that avoidance no longer applies.
+      Register `texture_sheet` in `assets.ron` `textures:` (already placed at the shared path, no
+      new art to produce/source this time). Measured sub-rects for the shipped sheet:
+      `fill_rect: (0,0,48,17)`, `empty_rect: (0,17,48,15)`, `slice_border: (8,8,8,8)` (see the
+      per-row alpha-profile measurement in Approach above). Run
+      `python tools/asset_checker/check.py` after editing `assets.ron`.
 - [ ] Docs — new `WorldStatBarStyle::Textured` section in `docs/20_data_formats.md`: fields table
-      (the two coordinate spaces called out explicitly; `fill_texture`/`empty_texture` anchored to
-      the catalog `textures:` convention; the `fill_color`/`color_bands`-tint note incl. the
-      "set to white for pre-coloured art" guidance; `bg_color`/`border` do-not-apply note); RON
-      example; the low-fill cap-scaling behavior note; split-screen behavior (duplicates from day
-      one). Update the two summary tables (lines ~1724 and the style-list intro at ~3280) to list
-      `Textured` as a third style. Update `crates/ironhold_core/src/CLAUDE.md`'s stat-widget /
-      split-screen notes to mention the `Textured` style + its update system.
-- [ ] WASM dev build + `python test_web.py` — confirm the standard 2D sprite pipeline (first
-      `Sprite` use in the engine unless `Icon` landed first) compiles/warms without a first-draw
-      stall on the demo NPC's textured bar. If it stalls, see the sequencing mitigation in Approach
-      (land `Icon` first to prove the pipeline) — there is no clean 9-sliced degraded fallback.
+      (the two coordinate spaces called out explicitly; `texture_sheet`/`fill_rect`/`empty_rect`
+      anchored to the catalog `textures:` convention and the single-sheet-two-frames layout;
+      the `fill_color`/`bg_color`/`color_bands`-tint note incl. the "set to white for pre-coloured
+      art" guidance); RON example; the low-fill cap-scaling behavior note; split-screen behavior
+      (duplicates from day one). Update the two summary tables (lines ~1724 and the style-list
+      intro at ~3280) to list `Textured` as a fourth style (alongside the now-shipped `Icon`).
+      Update `crates/ironhold_core/src/CLAUDE.md`'s stat-widget / split-screen notes to mention the
+      `Textured` style + its update system, and to note the player `world_stat_bar` swapped from
+      `Icon` to `Textured` in `3rd_person_game_demo`.
+- [ ] WASM dev build + `python test_web.py` — confirm the standard 2D sprite pipeline compiles/
+      warms without a first-draw stall on the player's textured bar in `3rd_person_game_demo`.
+      `Icon` already shipped and proved this same sprite pipeline in the same project (`672d003`),
+      so this is a low-risk confirmation, not first-use.
 
 ## Open questions
-- **None blocking.** Rendering (sliced `Sprite` + `custom_size.x`, verified against
-  `bevy_sprite-0.18.0` source), schema (separate `Textured` variant reusing shared colour fields),
-  split-screen (day-one rank duplication), and scope are all resolved above.
-- **WASM sprite-pipeline risk** — shared with `Icon`, mitigated by sequencing (`Icon` first proves
-  the pipeline) + the `test_web.py` gate; the fallback is weaker than `Icon`'s (no clean 9-sliced
-  degraded mode), so if Frank wants zero risk, hold `Textured` until `Icon` has shipped and warmed
-  the sprite path. Not a design gap — an implementation-ordering preference for Frank to confirm.
+- **None blocking.** Rendering (sliced `Sprite` + `custom_size.x` against a cropped `Sprite.rect`,
+  verified against `bevy_sprite_render-0.18.0` source), schema (separate `Textured` variant reusing
+  shared colour fields, corrected to a single-sheet `texture_sheet`/`fill_rect`/`empty_rect` design
+  once the actual art was supplied), split-screen (day-one rank duplication), and scope are all
+  resolved above.
+- **WASM sprite-pipeline risk** — was shared with `Icon`; now resolved, since `Icon` shipped first
+  and already proved the sprite pipeline in `3rd_person_game_demo` itself. The `test_web.py` gate
+  remains as ordinary regression coverage, not a first-use risk mitigation.
 - **`SliceScaleMode::Tile` for patterned middles** — deliberately deferred (see Out of scope); a
   one-field future addition, not an open question blocking v1.
 - **Shared scaffolding across `Pixel`/`Icon`/`Textured`** — all three now share the anchor + rank
@@ -286,10 +345,10 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
   have shipped and can be compared directly (same conclusion `world_icon_stat_bar.md` reached).
 
 ## Acceptance criteria
-- Given `world_stat_bar: (stat_key: "{self}.health", style: Textured(fill_texture: "...",
-  empty_texture: "..."))`, when the tracked stat is at 60% of its range, then the fill sprite's
-  visible width is ~60% of the bar width and its rounded caps render undistorted (9-slice), over a
-  static full-width empty track sprite.
+- Given `world_stat_bar: (stat_key: "...", style: Textured(texture_sheet: "...", fill_rect: ...,
+  empty_rect: ...))`, when the tracked stat is at 60% of its range, then the fill sprite's visible
+  width is ~60% of the bar width and its rounded caps render undistorted (9-slice), over a static
+  full-width empty track sprite.
 - Given the same bar as the stat changes (`ModifyStat`/`SetStat`), when the next frame runs, then
   the fill width updates smoothly to the new ratio, with the fill left-aligned (grows/recedes from
   the right end) and change-detection guarding every write.
@@ -301,8 +360,10 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
 - Given a non-split scene, when a `Textured` bar spawns, then exactly one anchor + two `Sprite`
   children are created (regression parity with `Pixel`'s single-instance behavior).
 - Given an existing project with no `Textured` bars, when this feature ships, then all existing
-  `Ascii`/`Pixel`/`style`-less bars are byte-for-byte unaffected (purely additive enum variant).
+  `Ascii`/`Pixel`/`Icon`/`style`-less bars are byte-for-byte unaffected (purely additive enum
+  variant).
 - RON validation: parse/defaults tests pass for the `Textured` variant, matching existing
-  `Ascii`/`Pixel` coverage; `cargo check -p ironhold_cli` stays green.
-- The `3rd_person_game_demo` NPC textured bar renders with real, purpose-made 9-sliceable fill +
-  empty art — not a placeholder or a stretched non-sliced texture.
+  `Ascii`/`Pixel`/`Icon` coverage; `cargo check -p ironhold_cli` stays green.
+- The `3rd_person_game_demo` player's `world_stat_bar` renders as the rounded textured health bar
+  (replacing the `Icon` hearts bar), using the real `rounded-healthbar-texture-sheet.png` art —
+  not a placeholder or a stretched non-sliced texture.
