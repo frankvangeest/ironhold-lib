@@ -1721,7 +1721,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `select_aim_height` | `f32` | `1.0` | Vertical offset (metres) from the entity world origin used when projecting to screen space for click-selection. Default `1.0` is correct for human-scale characters (~1.8 m capsule). Lower this for ground-hugging creatures: `0.4` for a snake (`collider_height: 0.8`), `0.6` for a spider (`collider_height: 1.2`). Only meaningful when `click_selectable: true`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. Works on player prefabs too — a player prefab that declares this gets an independent action-bar `SlotCost` pool instead of sharing the global one. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
-| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities), `Pixel` (a `Mesh2d` quad hierarchy), or `Icon` (a row of per-cell `Sprite` icons, e.g. hearts) — all rendered by the 2D camera and updated every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
+| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities), `Pixel` (a `Mesh2d` quad hierarchy), `Icon` (a row of per-cell `Sprite` icons, e.g. hearts), or `Textured` (a 9-sliced continuous fill bar from designer art) — all rendered by the 2D camera and updated every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
 | `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
@@ -3277,7 +3277,7 @@ stat_label: (
 
 ### `WorldStatBarDef` fields (`world_stat_bar`)
 
-A floating stat bar above an entity. The visual style is set by the `style` field — `Ascii` (text characters), `Pixel` (solid-colour mesh quads), or `Icon` (a row of per-cell sprite icons, e.g. hearts). All three styles update every frame and auto-hide when the tracked entity is hidden.
+A floating stat bar above an entity. The visual style is set by the `style` field — `Ascii` (text characters), `Pixel` (solid-colour mesh quads), `Icon` (a row of per-cell sprite icons, e.g. hearts), or `Textured` (a 9-sliced continuous fill bar built from designer art). All four styles update every frame and auto-hide when the tracked entity is hidden.
 
 **Shared top-level fields:**
 
@@ -3287,10 +3287,10 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 | `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity origin in metres |
 | `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour; used when `color_bands` is empty or no band matches |
 | `bg_color` | `(f32,f32,f32,f32)` | dark red-brown | Background track colour |
-| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; the `Pixel` style uses `fill_color` directly. Ignored by `Icon` (its filled/empty look comes from the atlas cells, not a colour). |
+| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; `Pixel`/`Textured` use `fill_color` directly. Ignored by `Icon` (its filled/empty look comes from the atlas cells, not a colour). |
 | `style` | `WorldStatBarStyle` | `Ascii()` | Visual style; see variants below |
 
-`fill_color`, `bg_color`, and `color_bands` all have **no effect** on the `Icon` style — there is no fill tint and no background quad; the filled/empty look comes entirely from `filled_index`/`empty_index` in the atlas art itself.
+`fill_color`, `bg_color`, and `color_bands` all have **no effect** on the `Icon` style — there is no fill tint and no background quad; the filled/empty look comes entirely from `filled_index`/`empty_index` in the atlas art itself. `Textured` reuses both colour fields as **multiply-tints**: `fill_color`/`color_bands` tint the fill layer, `bg_color` tints the empty/track layer — see the `Textured` section below.
 
 **`WorldStatBarStyle::Ascii` fields** (use `style: Ascii(...)` or omit `style` entirely for the default):
 
@@ -3325,11 +3325,37 @@ Texture dimensions for `icon_sheet` do **not** need to be power-of-2 — that wa
 
 **`Icon` fill rounding — `ceil`, not `round`:** the number of filled cells is `filled = 0` only at exactly `ratio == 0.0`; otherwise `filled = max(1, ceil(ratio * cells))`. On a 5-cell bar this means 1% health always shows **at least 1** filled cell (never reads as dead while the entity is alive), and anything above 80% shows as **full** (`ceil(0.81 * 5) = 5`) — this is expected/idiomatic for a discrete pip display, not a bug. There is no partial-cell (half-heart) rendering.
 
-> **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel or Icon styles.
+**`WorldStatBarStyle::Textured` fields** (use `style: Textured(...)`):
 
-> **Split-screen visibility:** `stat_label` and all three `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. Damage popups and nameplates do **not** duplicate — an entity's popup or nameplate shows in **at most one** viewport at a time. **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `texture_sheet` | `String` | — (required) | Catalog key into `AssetCatalog.textures` — ONE sheet containing both the fill and empty frames (see `fill_rect`/`empty_rect` below). Same catalog convention as `Icon.icon_sheet`. Both the fill and empty-track `Sprite` layers share this one image handle (resolved/loaded once, not twice). |
+| `fill_rect` | `(f32,f32,f32,f32)` | — (required) | `(x, y, w, h)` in **texture pixels** — the sub-rect of `texture_sheet` containing the FULL/fill frame (the solid, "100% health" art). Cropped via `Sprite.rect`. |
+| `empty_rect` | `(f32,f32,f32,f32)` | — (required) | `(x, y, w, h)` in **texture pixels** — the sub-rect of `texture_sheet` containing the EMPTY/track frame (the "0% health" / background art). |
+| `size` | `(f32,f32)` | `(64.0, 12.0)` | Bar width × height in **screen pixels**. Constant at all camera distances (no depth scaling, same limitation Pixel has). |
+| `slice_border` | `(f32,f32,f32,f32)` | `(6.0, 6.0, 6.0, 6.0)` | 9-slice cap insets `(left, right, top, bottom)` in **texture pixels**, relative to each rect's own origin — the fixed corner/cap regions of your art that must not stretch as the fill grows/shrinks. Applied identically to both `fill_rect` and `empty_rect` (both frames are assumed to share one cap geometry). For a stadium/pill shape, cap width ≈ frame height / 2. **`left + right` must be less than the rect's own `w`, and `top + bottom` less than its own `h`** — for *both* `fill_rect` and `empty_rect` — or Bevy logs a console error and renders that layer un-sliced (a plain stretched quad, caps included) instead. There is no engine-side validation of this today; check it yourself when authoring. |
+
+**What "9-slice" means, briefly:** the source rect is divided into a 3×3 grid — four fixed-size corners, four edges that stretch along one axis, and a center that stretches along both. As the bar resizes, only the edges/center stretch; the corners (and therefore your rounded caps/border) stay a constant pixel size. `slice_border` is what defines where those corner boundaries sit within your source art.
+
+**Two different pixel spaces — don't mix them up:** `size` is on-screen pixels (how big the bar renders in the game); `fill_rect`/`empty_rect`/`slice_border` are all source-image pixels (where things live inside your sheet file). A 72×14 on-screen bar can crop from a 96×40 source sheet just fine — the two numbers are unrelated. Coordinates are measured from the sheet's **top-left corner**, with X increasing right and Y increasing **down** — the same readout your image editor shows when you hover the cursor. In the shipped sheet, `fill_rect` starts at `(0, 0)` (the top of the file) and `empty_rect` at `(0, 17)` (the frame directly below it).
+
+**Getting the numbers for your own art:** open your sheet in any image editor and, for each frame, read off the pixel coordinates of its top-left corner and its width/height — those four numbers are the rect. There's no in-engine tool for this; it's manual measurement against the source file.
+
+**Corners don't stay pixel-perfect if `size` doesn't match your source rect's dimensions.** The claim "corners stay round" means corners are scaled *uniformly* (never stretched into an oval) — not that they're rendered at a fixed pixel size regardless of `size`. Concretely: Bevy computes a single scale factor from the smaller of the horizontal and vertical fit ratios and applies it to both corner axes together. If your `size` height doesn't equal the source rect's height, corners will render slightly smaller than "native" even at 100% fill (matching whichever axis is more cropped) — round, not stretched, just not 1:1. This compounds at low fill, where the corners shrink further as the fill's on-screen width drops below the summed cap widths (documented below). For the tightest fidelity, pick `size` so its height matches your source rect's height at the render scale you're using.
+
+**One sheet, two frames — not two separate textures.** Unlike an early draft of this feature, `Textured` does **not** take separate `fill_texture`/`empty_texture` catalog keys. Both layers crop from one shared `texture_sheet` via `Sprite.rect` — e.g. the shipped `rounded-healthbar-texture-sheet.png` is a single 48×48 PNG: rows 0–16 hold a solid filled pill, rows 17–33 hold a hollow track outline (with a couple of rows of transparent padding at the bottom to keep both frames the same 17px height — matching heights avoids the corner-scale mismatch described above). Author your own sheets the same way (any layout — top/bottom, side-by-side — as long as `fill_rect`/`empty_rect` point at the right sub-regions); matching frame heights isn't required, but makes the corner math simpler to reason about.
+
+**Default tints are not neutral.** `Textured` reuses the shared `fill_color` (default bright green) and `bg_color` (default dark red-brown) as *multiply*-tints over your art — a bar that omits both will render as `art × green` (fill) and `art × dark-red-brown` (track), not your art's own colours. If your art is already fully coloured, set both to `(1.0, 1.0, 1.0, 1.0)` (white = no tint); if your art is greyscale/white, set your own `fill_color`/`color_bands`/`bg_color` for the look you want — don't rely on the defaults being neutral.
+
+**Colour tinting — reuses `fill_color`/`bg_color`, no `Textured`-only field.** Both frames in the shipped reference sheet are flat, colourless mid-grey, authored specifically to be recoloured by multiply-tint: the fill layer's `Sprite.color` is set from `fill_color`/`color_bands` (identical selection logic to `Pixel`), and the empty/track layer's `Sprite.color` is set **once at spawn** from `bg_color` (it never changes after that, since the track doesn't animate). If you supply pre-coloured, opaque art instead and want zero tint, set both `fill_color: (1.0, 1.0, 1.0, 1.0)` and `bg_color: (1.0, 1.0, 1.0, 1.0)` (white = no tint).
+
+**Low-fill behavior:** when the fill's on-screen width shrinks below the summed cap widths (very low health on a small bar), Bevy's 9-slicer scales the corner slices down proportionally rather than clipping or overlapping them — so near-empty, the rounded caps get tighter (a smaller effective radius) instead of glitching. This is benign and often looks fine; just be aware the corners "un-round" slightly at very low ratios on a tightly-sized bar.
+
+> **Pixel/Icon/Textured bar depth scaling:** these three styles render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for any of them (only `Ascii`/`stat_label` support it).
+
+> **Split-screen visibility:** `stat_label` and all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. Damage popups and nameplates do **not** duplicate — an entity's popup or nameplate shows in **at most one** viewport at a time. **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
 >
-> **`Ascii` is a prototyping/debug style; `Pixel` and `Icon` are the production-quality choices.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a solid-fill bar or `style: Icon(...)` for a discrete pip/heart display. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
+> **`Ascii` is a prototyping/debug style; `Pixel`, `Icon`, and `Textured` are the production-quality choices.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a solid-fill bar, `style: Icon(...)` for a discrete pip/heart display, or `style: Textured(...)` for an art-directed continuous bar with rounded caps/borders. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
 
 ```ron
 // Minimal — omit style to get the default Ascii bar.
@@ -3374,6 +3400,26 @@ world_stat_bar: (
     icon_cols: 2, icon_rows: 1,
     filled_index: 0, empty_index: 1,
     cells: 5,
+  ),
+),
+
+// Textured bar — a rounded, 9-sliced continuous health bar cropped from one shared sheet.
+// This is the shipped 3rd_person_game_demo player bar (prefabs/prefabs.ron).
+world_stat_bar: (
+  stat_key: "player_health",
+  offset: (0.0, 2.3, 0.0),
+  bg_color: (0.15, 0.15, 0.15, 0.6),  // dim neutral track tint
+  color_bands: [
+    (0.0, (0.85, 0.12, 0.12, 1.0)),  // < 30% -> red
+    (0.3, (0.95, 0.75, 0.10, 1.0)),  // >= 30% -> yellow
+    (0.6, (0.15, 0.85, 0.15, 1.0)),  // >= 60% -> green
+  ],
+  style: Textured(
+    texture_sheet: "healthbar_sheet",
+    fill_rect:  (0.0, 0.0, 48.0, 17.0),   // solid pill frame, top of the sheet
+    empty_rect: (0.0, 17.0, 48.0, 17.0),  // hollow outline frame, below it
+    size: (72.0, 14.0),
+    slice_border: (8.0, 8.0, 8.0, 8.0),
   ),
 ),
 ```

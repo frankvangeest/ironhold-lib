@@ -11,6 +11,7 @@ use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
 use ironhold_core::capabilities::stat_display::{
     StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker, WorldIconBar,
+    WorldTexturedBarFillMarker,
     StatWidgetSpawnCtx, spawn_stat_label_widget, spawn_world_stat_bar_widget,
 };
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
@@ -3571,6 +3572,139 @@ fn test_spawn_world_stat_bar_widget_icon_style_duplicates_ranks_when_split_scree
     // per rank — only the per-rank/per-cell Sprite entities should scale, not the atlas asset.
     let layout_count = app.world().resource::<Assets<TextureAtlasLayout>>().iter().count();
     assert_eq!(layout_count, 1, "TextureAtlasLayout must be registered once and cloned across ranks/cells");
+}
+
+// ── world_textured_stat_bar.md: Textured-style world_stat_bar (9-sliced continuous fill) ──
+
+fn textured_test_catalog() -> AssetCatalog {
+    let mut catalog = AssetCatalog::default();
+    catalog.textures.insert("healthbar_sheet".to_string(), "shared/ui/rounded-healthbar-texture-sheet.png".to_string());
+    catalog
+}
+
+fn textured_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
+    WorldStatBarDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.3, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Textured {
+            texture_sheet: "healthbar_sheet".to_string(),
+            fill_rect: (0.0, 0.0, 48.0, 17.0),
+            empty_rect: (0.0, 17.0, 48.0, 17.0),
+            size: (72.0, 14.0),
+            slice_border: (8.0, 8.0, 8.0, 8.0),
+        },
+    }
+}
+
+#[test]
+fn test_spawn_world_stat_bar_widget_textured_style_spawns_anchor_and_two_sprites_without_duplication() {
+    let mut app = setup_test_app();
+    app.update();
+    let catalog = textured_test_catalog();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = textured_world_stat_bar_def("{self}.health");
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        asset_server: Res<AssetServer>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: false,
+            atlas_layouts: None,
+            asset_server: Some(&asset_server),
+            asset_catalog: Some(&catalog),
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let fill_count = app.world_mut().query::<&WorldTexturedBarFillMarker>().iter(app.world()).count();
+    assert_eq!(fill_count, 1, "a non-split ctx must spawn exactly one Textured fill entity, no rank overhead");
+
+    let anchor_count = app.world_mut().query::<&WorldLabel>().iter(app.world())
+        .filter(|l| l.tracked_entity == Some(tracked)).count();
+    assert_eq!(anchor_count, 1, "exactly one anchor WorldLabel must track the entity");
+
+    let sprites: Vec<Entity> = app.world_mut().query::<(Entity, &Sprite)>().iter(app.world())
+        .map(|(e, _)| e).collect();
+    assert_eq!(sprites.len(), 2, "empty + fill = exactly 2 Sprite children");
+
+    // Both layers must share ONE image handle (one asset_server.load call, cloned) rather than
+    // resolving the catalog key twice.
+    let images: Vec<_> = sprites.iter()
+        .map(|&e| app.world().get::<Sprite>(e).unwrap().image.clone())
+        .collect();
+    assert_eq!(images[0], images[1], "empty and fill layers must share one cloned Handle<Image>");
+}
+
+/// `world_textured_stat_bar.md`: a split-screen ctx must duplicate the Textured bar's whole
+/// anchor+children hierarchy per rank, exactly like Pixel/Icon already do, while sharing the one
+/// image handle across every layer and every rank (only entity counts scale with rank).
+#[test]
+fn test_spawn_world_stat_bar_widget_textured_style_duplicates_ranks_when_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    let catalog = textured_test_catalog();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = textured_world_stat_bar_def("{self}.health");
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        asset_server: Res<AssetServer>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: true,
+            atlas_layouts: None,
+            asset_server: Some(&asset_server),
+            asset_catalog: Some(&catalog),
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let fill_count = app.world_mut().query::<&WorldTexturedBarFillMarker>().iter(app.world()).count();
+    assert_eq!(
+        fill_count, MAX_SPLIT_PLAYERS as usize,
+        "a split-screen ctx must spawn MAX_SPLIT_PLAYERS Textured fill entities, same as Pixel/Icon"
+    );
+
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(l, _)| l.tracked_entity == Some(tracked))
+            .map(|(_, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "must spawn MAX_SPLIT_PLAYERS anchors, same as Pixel/Icon"
+    );
+    let mut sorted: Vec<u8> = anchor_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3], "expected exactly one anchor of each rank 0-3");
+
+    let sprites: Vec<Entity> = app.world_mut().query::<(Entity, &Sprite)>().iter(app.world())
+        .map(|(e, _)| e).collect();
+    assert_eq!(
+        sprites.len(), 2 * MAX_SPLIT_PLAYERS as usize,
+        "2 layers x MAX_SPLIT_PLAYERS ranks = 8 Sprite children total"
+    );
+
+    // Regression guard: the one image handle is shared across every layer and rank, not
+    // re-resolved per rank — otherwise this would silently multiply asset_server.load calls.
+    let images: std::collections::HashSet<_> = sprites.iter()
+        .map(|&e| app.world().get::<Sprite>(e).unwrap().image.id())
+        .collect();
+    assert_eq!(images.len(), 1, "all 8 sprites across every rank must share one Handle<Image>");
 }
 
 // Part B: players get first-class stat widgets via the same DynamicStatUiQueue mechanism —

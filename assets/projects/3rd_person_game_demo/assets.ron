@@ -46,10 +46,11 @@
     "icons_status_effects": "shared/ui/iconsheet-status-effects-01.png",
     // Item icon atlas — 8×8 grid, 64 px per cell, 512×512 total
     "icons_items": "shared/ui/iconsheet-items-01.png",
-    // Heart pip atlas (Icon-style world_stat_bar) — 2×1 grid, 64 px per cell, 128×64 total.
-    // Procedurally generated placeholder (not hand-painted) — functional and clearly readable,
-    // but flagged for an art pass to match assets/CLAUDE.md's stylized hand-painted direction.
-    "icons_hearts": "shared/ui/iconsheet-hearts-01.png",
+    // Textured-style world_stat_bar sheet — single 48x48 sheet with two stacked frames: a solid
+    // fill pill (rows 0-16) and a hollow track outline (rows 17-31). Colorless mid-grey, tinted
+    // via fill_color/bg_color at spawn time. Replaces the "icons_hearts" Icon-style bar this
+    // project used to carry on player_male/player_female (world_textured_stat_bar.md).
+    "healthbar_sheet": "shared/ui/rounded-healthbar-texture-sheet.png",
     // Common UI icons (50×50 px each)
     "ui/cross": "shared/ui/common-ui-icons/cross.png",
     "ui/audio_on": "shared/ui/common-ui-icons/audioOn.png",

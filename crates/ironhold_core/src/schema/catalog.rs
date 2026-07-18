@@ -1055,6 +1055,39 @@ pub enum WorldStatBarStyle {
         #[serde(default = "default_icon_size")]
         size: (f32, f32),
     },
+    /// Continuous 9-sliced textured fill bar: a static "empty/track" sprite with a "fill" sprite
+    /// drawn on top, both cropped from one shared sheet, fill width driven continuously by the
+    /// stat ratio via `Sprite.custom_size.x` (the textured analog of `Pixel`'s `Transform.scale.x`).
+    /// Caps/border scale uniformly (never stretched into an oval) via Bevy's
+    /// `SpriteImageMode::Sliced` (9-slice) as the fill width changes — see
+    /// `docs/20_data_formats.md`'s Textured section for exactly when corners render at native
+    /// pixel size vs. uniformly scaled down. Size is in screen pixels — constant at all camera
+    /// distances (no depth scaling in v1). `fill_color` tints the fill layer, `bg_color` tints
+    /// the empty/track layer — reuses the shared colour fields, no `Textured`-only tint field.
+    Textured {
+        /// Catalog key into `AssetCatalog.textures` — ONE sheet containing both the fill and
+        /// empty frames (see `fill_rect`/`empty_rect`). Both Sprite layers share this one
+        /// `Handle<Image>`.
+        texture_sheet: String,
+        /// Sub-rect `(x, y, w, h)` in TEXTURE pixels — the FULL/fill frame within
+        /// `texture_sheet`. Cropped via `Sprite.rect`.
+        fill_rect: (f32, f32, f32, f32),
+        /// Sub-rect `(x, y, w, h)` in TEXTURE pixels — the EMPTY/track frame within
+        /// `texture_sheet`. Cropped via `Sprite.rect`.
+        empty_rect: (f32, f32, f32, f32),
+        /// Bar dimensions in screen pixels `(width, height)`. Clamped to min `(1.0, 1.0)`.
+        /// Default: `(64.0, 12.0)`.
+        #[serde(default = "default_textured_bar_size")]
+        size: (f32, f32),
+        /// 9-slice cap insets in TEXTURE pixels `(left, right, top, bottom)`, relative to each
+        /// rect's own origin — the fixed corner/cap regions of the source art that must not
+        /// stretch. Maps to `TextureSlicer.border` (`BorderRect { min_inset: (left, top),
+        /// max_inset: (right, bottom) }`). Applied identically to both the fill and empty layers.
+        /// Author to match the actual cap radius of your art (for a stadium/pill shape, cap
+        /// width ≈ frame height / 2). Default: `(6.0, 6.0, 6.0, 6.0)`.
+        #[serde(default = "default_textured_bar_slice")]
+        slice_border: (f32, f32, f32, f32),
+    },
 }
 
 impl Default for WorldStatBarStyle {
@@ -1080,6 +1113,8 @@ fn default_icon_cell_size() -> u32 { 64 }
 fn default_icon_cells() -> u8 { 5 }
 fn default_icon_spacing() -> f32 { 4.0 }
 fn default_icon_size() -> (f32, f32) { (24.0, 24.0) }
+fn default_textured_bar_size() -> (f32, f32) { (64.0, 12.0) }
+fn default_textured_bar_slice() -> (f32, f32, f32, f32) { (6.0, 6.0, 6.0, 6.0) }
 
 /// NPC faction — determines intent and which events fire.
 #[derive(Deserialize, Debug, Clone, PartialEq)]

@@ -584,10 +584,20 @@ already did (border/background mesh+material handles are registered once and clo
 ranks; the fill is created fresh per rank). **`Icon`-style `world_stat_bar` built in with
 day-one split-screen support** (`world_icon_stat_bar.md`) — its arm uses the same per-rank anchor
 pattern from the start (texture + `TextureAtlasLayout` registered once and cloned across
-ranks/cells; each `Sprite` cell created fresh, matching Pixel's fill-sharing precedent). **Damage
-popups and nameplate anchors remain single-instance** (no `WorldLabelRank`, implicit rank 0 =
-highest-priority camera only) — the same multi-viewport gap still applies to them; extend the
-same pattern to a given consumer's spawn site only if a real project need surfaces.
+ranks/cells; each `Sprite` cell created fresh, matching Pixel's fill-sharing precedent).
+**`Textured`-style `world_stat_bar` also built in with day-one split-screen support**
+(`world_textured_stat_bar.md`) — a 9-sliced continuous fill bar cropped from one shared
+`texture_sheet` via a static `Sprite.rect` per layer (no `TextureAtlasLayout` needed, unlike
+`Icon`, since each layer only ever draws one fixed sub-rect). The one `Handle<Image>` and the
+`TextureSlicer`/`SpriteImageMode` are registered once and cloned across both layers and every
+rank; the empty/track layer is static (`bg_color`-tinted once at spawn), only the fill layer's
+`custom_size`/`color` update per frame via `world_textured_bar_update_system`
+(`WorldTexturedBarFillMarker`), mirroring `world_pixel_bar_update_system`'s translation math and
+change-detection guards exactly. Replaced the `Icon` hearts bar on `3rd_person_game_demo`'s
+`player_male`/`player_female` as its playtest demo. **Damage popups and nameplate anchors remain
+single-instance** (no `WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same
+multi-viewport gap still applies to them; extend the same pattern to a given consumer's spawn site
+only if a real project need surfaces.
 
 **`particle_renderer.rs`'s billboard orientation is now viewport-aware** (fixed — Phase 1 of
 `planning/features/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call

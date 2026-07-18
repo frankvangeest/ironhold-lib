@@ -326,6 +326,67 @@ pub fn world_icon_bar_update_system(
     }
 }
 
+/// Marker on the fill `Sprite` child of a `WorldStatBarStyle::Textured` bar.
+/// The entity is a child of an invisible anchor that carries `WorldLabel`.
+/// `world_textured_bar_update_system` drives `Sprite.custom_size.x` (fill width) and
+/// `Sprite.color` each frame — the 9-sliced textured analog of `WorldPixelBarFillMarker`.
+#[derive(Component, Clone)]
+pub struct WorldTexturedBarFillMarker {
+    pub stat_key: String,
+    /// Full bar width in screen pixels — fixed at spawn, used to compute fill width.
+    pub full_width: f32,
+    pub fill_color: (f32, f32, f32, f32),
+    pub color_bands: Vec<(f32, (f32, f32, f32, f32))>,
+}
+
+/// Updates the fill sprite size and color of every `WorldTexturedBarFillMarker` entity.
+/// `Sprite.custom_size.x = ratio * full_width` (fill width; height stays fixed).
+/// `Transform.translation.x` is kept left-aligned within the bar, mirroring
+/// `world_pixel_bar_update_system`'s translation math exactly.
+/// Writes are guarded for change-detection efficiency.
+pub fn world_textured_bar_update_system(
+    loaded_stats: Res<LoadedStats>,
+    stat_map_query: Query<(&SpawnId, &StatMap)>,
+    mut fill_query: Query<(&WorldTexturedBarFillMarker, &mut Sprite, &mut Transform)>,
+) {
+    for (marker, mut sprite, mut transform) in fill_query.iter_mut() {
+        let ratio = if let Some((effective, min, max)) =
+            resolve_stat(&marker.stat_key, &loaded_stats, &stat_map_query)
+        {
+            let range = max - min;
+            if range <= 0.0 { 1.0 } else { ((effective - min) / range).clamp(0.0, 1.0) }
+        } else {
+            if cfg!(debug_assertions) {
+                warn!("WorldTexturedBar: stat_key {:?} not found — bar renders empty", marker.stat_key);
+            }
+            0.0
+        };
+
+        let new_width = ratio * marker.full_width;
+        let current_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+        if (current_width - new_width).abs() > 0.5 {
+            let height = sprite.custom_size.map(|s| s.y).unwrap_or(1.0);
+            sprite.custom_size = Some(Vec2::new(new_width, height));
+            transform.translation.x = -marker.full_width / 2.0 + new_width / 2.0;
+        }
+
+        let chosen = if !marker.color_bands.is_empty() {
+            marker.color_bands.iter()
+                .filter(|(t, _)| ratio >= *t)
+                .max_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(_, c)| *c)
+                .unwrap_or(marker.fill_color)
+        } else {
+            marker.fill_color
+        };
+        let (r, g, b, a) = chosen;
+        let new_color = Color::srgba(r, g, b, a);
+        if sprite.color != new_color {
+            sprite.color = new_color;
+        }
+    }
+}
+
 /// Updates floating stat labels spawned from `PrefabDef.stat_label` each frame.
 /// Uses `resolve_stat` so both global (`"player_health"`) and entity-local
 /// (`"dummy_01.health"`) keys work transparently.
@@ -416,14 +477,19 @@ pub fn spawn_stat_label_widget(
 /// Spawns the floating widget for a `world_stat_bar` (`WorldStatBarDef`), tracking `tracked`.
 /// Dispatches on `def.style`: `Ascii` → two rank-duplicated `Text2d` entities (background +
 /// fill); `Pixel` → an anchor with up to 3 `Mesh2d` children (border/background/fill); `Icon` →
-/// an anchor with `cells` `Sprite` children (per-cell atlas index, filled/empty). All three
-/// styles duplicate one full set per split-screen rank when `ctx.is_split_screen` (see
-/// `WorldLabelRank`'s doc comment). For `Pixel`, the border/background mesh and material handles
-/// are registered once and cloned across ranks (identical geometry per rank), while the fill is
-/// created fresh per rank since each tracks and updates independently. For `Icon`, the texture
-/// and `TextureAtlasLayout` are likewise registered once and cloned across every rank/cell —
-/// every cell of every rank shares identical atlas geometry, only the per-cell atlas *index*
-/// (set by `world_icon_bar_update_system`) ever changes.
+/// an anchor with `cells` `Sprite` children (per-cell atlas index, filled/empty); `Textured` →
+/// an anchor with 2 9-sliced `Sprite` children (empty/track + fill), both cropped from one
+/// shared sheet via `Sprite.rect`. All four styles duplicate one full set per split-screen rank
+/// when `ctx.is_split_screen` (see `WorldLabelRank`'s doc comment). For `Pixel`, the
+/// border/background mesh and material handles are registered once and cloned across ranks
+/// (identical geometry per rank), while the fill is created fresh per rank since each tracks and
+/// updates independently. For `Icon`, the texture and `TextureAtlasLayout` are likewise
+/// registered once and cloned across every rank/cell — every cell of every rank shares identical
+/// atlas geometry, only the per-cell atlas *index* (set by `world_icon_bar_update_system`) ever
+/// changes. For `Textured`, the one image `Handle` and the `TextureSlicer`/`SpriteImageMode` are
+/// registered once and cloned across both layers and every rank; the empty/track layer is static
+/// (tinted once by `bg_color` at spawn), only the fill layer's `custom_size`/`color` update per
+/// frame (`world_textured_bar_update_system`).
 pub fn spawn_world_stat_bar_widget(
     commands: &mut Commands,
     tracked: Entity,
@@ -651,6 +717,105 @@ pub fn spawn_world_stat_bar_widget(
                     )).id();
                     commands.entity(anchor).add_child(cell_child);
                 }
+            }
+        }
+        WorldStatBarStyle::Textured {
+            ref texture_sheet,
+            fill_rect, empty_rect, size, slice_border,
+        } => {
+            let w = size.0.max(1.0);
+            let h = size.1.max(1.0);
+
+            let asset_server = ctx.asset_server
+                .expect("AssetServer must be available to spawn textured stat bars");
+            let asset_catalog = ctx.asset_catalog
+                .expect("AssetCatalog must be available to spawn textured stat bars");
+
+            // Both layers share ONE image handle, resolved once here and cloned per layer/rank
+            // below — cheaper than Icon's texture+atlas pair, since a static `Sprite.rect` crop
+            // needs no `TextureAtlasLayout` (verified against `bevy_sprite_render-0.18.0` source
+            // that 9-slicing composes correctly with a plain rect crop of a larger image).
+            let Some(sheet_path) = asset_catalog.textures.get(texture_sheet.as_str()) else {
+                warn!(
+                    "WorldTexturedBar: texture_sheet {:?} not found in catalog — skipping bar for {:?}",
+                    texture_sheet, stat_key
+                );
+                return;
+            };
+            let texture: Handle<Image> = asset_server.load(sheet_path.clone());
+
+            let (fx, fy, fw, fh) = fill_rect;
+            let fill_source_rect = Rect { min: Vec2::new(fx, fy), max: Vec2::new(fx + fw, fy + fh) };
+            let (ex, ey, ew, eh) = empty_rect;
+            let empty_source_rect = Rect { min: Vec2::new(ex, ey), max: Vec2::new(ex + ew, ey + eh) };
+            let (sl, sr, st, sb) = slice_border;
+            let slicer = TextureSlicer {
+                border: BorderRect { min_inset: Vec2::new(sl, st), max_inset: Vec2::new(sr, sb) },
+                ..default()
+            };
+            let image_mode = SpriteImageMode::Sliced(slicer);
+
+            for rank in 0..ranks {
+                // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
+                // Depth scaling intentionally not applied (same pre-existing exclusion as
+                // Pixel/Icon bars).
+                let mut anchor_cmds = commands.spawn((
+                    Name::new(format!("TexturedBarAnchor: {} (rank {})", stat_key, rank)),
+                    Transform::default(),
+                    Visibility::default(),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: offset_v3,
+                        base_font_size: 1.0,
+                        depth_scale: None,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    anchor_cmds.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+                let anchor = anchor_cmds.id();
+
+                // Empty/track layer — static, full width, tinted by bg_color (never updated).
+                let empty_child = commands.spawn((
+                    Name::new(format!("TexturedBarEmpty: {} (rank {})", stat_key, rank)),
+                    Sprite {
+                        image: texture.clone(),
+                        image_mode: image_mode.clone(),
+                        rect: Some(empty_source_rect),
+                        custom_size: Some(Vec2::new(w, h)),
+                        color: Color::srgba(bgr, bgg, bgb, bga),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 0.0, 2.0),
+                    LevelEntity,
+                )).id();
+                commands.entity(anchor).add_child(empty_child);
+
+                // Fill layer — width=0 initially, updated per frame by
+                // world_textured_bar_update_system; left-aligned via translation, mirroring
+                // Pixel's fill positioning math exactly. Created fresh per rank: each rank's fill
+                // entity is updated independently.
+                let fill_child = commands.spawn((
+                    Name::new(format!("TexturedBarFill: {} (rank {})", stat_key, rank)),
+                    Sprite {
+                        image: texture.clone(),
+                        image_mode: image_mode.clone(),
+                        rect: Some(fill_source_rect),
+                        custom_size: Some(Vec2::new(0.0, h)),
+                        color: Color::srgba(fr, fg, fb, fa),
+                        ..default()
+                    },
+                    Transform::from_xyz(-w / 2.0, 0.0, 3.0),
+                    WorldTexturedBarFillMarker {
+                        stat_key: stat_key.to_string(), full_width: w, fill_color,
+                        color_bands: color_bands.clone(),
+                    },
+                    LevelEntity,
+                )).id();
+                commands.entity(anchor).add_child(fill_child);
             }
         }
     }

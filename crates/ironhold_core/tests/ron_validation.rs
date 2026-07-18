@@ -2753,6 +2753,79 @@ fn test_world_stat_bar_icon_style_defaults() {
 }
 
 #[test]
+fn test_world_stat_bar_textured_style_parses() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "dummy": (
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Textured(
+                            texture_sheet: "healthbar_sheet",
+                            fill_rect: (0.0, 0.0, 48.0, 17.0),
+                            empty_rect: (0.0, 17.0, 48.0, 17.0),
+                            size: (72.0, 14.0),
+                            slice_border: (8.0, 8.0, 8.0, 8.0),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Textured style world_stat_bar should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Textured {
+        ref texture_sheet, fill_rect, empty_rect, size, slice_border,
+    } = wb.style {
+        assert_eq!(texture_sheet, "healthbar_sheet");
+        assert_eq!(fill_rect, (0.0, 0.0, 48.0, 17.0));
+        assert_eq!(empty_rect, (0.0, 17.0, 48.0, 17.0));
+        assert_eq!(size, (72.0, 14.0));
+        assert_eq!(slice_border, (8.0, 8.0, 8.0, 8.0));
+    } else {
+        panic!("Expected Textured style");
+    }
+}
+
+#[test]
+fn test_world_stat_bar_textured_style_defaults() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "dummy": (
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Textured(
+                            texture_sheet: "healthbar_sheet",
+                            fill_rect: (0.0, 0.0, 48.0, 17.0),
+                            empty_rect: (0.0, 17.0, 48.0, 17.0),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Textured style with defaults should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Textured { size, slice_border, .. } = wb.style {
+        assert_eq!(size, (64.0, 12.0));
+        assert_eq!(slice_border, (6.0, 6.0, 6.0, 6.0));
+    } else {
+        panic!("Expected Textured style");
+    }
+}
+
+#[test]
 fn test_world_stat_bar_rejects_unknown_top_level_field() {
     let ron_str = r#"
         (

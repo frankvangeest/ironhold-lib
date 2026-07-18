@@ -314,7 +314,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, update_flycam_position_label.after(fly_camera_system))
             .add_systems(Update, update_dynamic_labels_system)
             .add_systems(Update, icon_button_sync_system)
-            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, world_icon_bar_update_system))
+            .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, world_icon_bar_update_system, world_textured_bar_update_system))
             .add_systems(Update, stat_radar_update_system)
             .add_systems(Update, crate::capabilities::inventory::inventory_ui_system)
             .add_systems(Update, crate::capabilities::inventory::container_ui_system)

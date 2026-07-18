@@ -46,7 +46,8 @@
       // and toggleable at runtime via the "Toggle Nameplate" button (Action::ToggleOwnNameplate).
       // An explicit true/false override here would always win and make that button a no-op.
       animation_policy: "prefabs/animation/player_policy_human.ron",
-      // world_icon_stat_bar.md playtest aid: a 5-heart pip display of the player's own health.
+      // world_textured_stat_bar.md playtest aid: a rounded, 9-sliced continuous health bar,
+      // replacing the world_icon_stat_bar.md hearts display this prefab used to carry.
       // This project tracks health as the GLOBAL "player_health" stat (stats/stats.ron), not an
       // entity-scoped "{self}.health" — the same reason main.scene.ron's nameplate_options
       // comment gives for why the player has no nameplate stat bar today (a global key can't
@@ -54,15 +55,22 @@
       // routes any non-dotted key straight to LoadedStats regardless of which entity the widget
       // is attached to, so "player_health" here tracks the correct global value directly. Spawned
       // dynamically on Action::Spawn (character-select → state_machine.ron), so this exercises
-      // drain_dynamic_stat_ui_system's Icon path, not just the scene-load path.
+      // drain_dynamic_stat_ui_system's Textured path, not just the scene-load path.
       world_stat_bar: (
         stat_key: "player_health",
         offset: (0.0, 2.3, 0.0),
-        style: Icon(
-          icon_sheet: "icons_hearts",
-          icon_cols: 2, icon_rows: 1,
-          filled_index: 0, empty_index: 1,
-          cells: 5,
+        bg_color: (0.15, 0.15, 0.15, 0.6),
+        color_bands: [
+          (0.0, (0.85, 0.12, 0.12, 1.0)),  // < 30% -> red
+          (0.3, (0.95, 0.75, 0.10, 1.0)),  // >= 30% -> yellow
+          (0.6, (0.15, 0.85, 0.15, 1.0)),  // >= 60% -> green
+        ],
+        style: Textured(
+          texture_sheet: "healthbar_sheet",
+          fill_rect:  (0.0, 0.0, 48.0, 17.0),
+          empty_rect: (0.0, 17.0, 48.0, 17.0),
+          size: (72.0, 14.0),
+          slice_border: (8.0, 8.0, 8.0, 8.0),
         ),
       ),
       components: (
@@ -95,15 +103,22 @@
       display_name: "Heroine",
       // nameplate omitted — see player_male's comment above.
       animation_policy: "prefabs/animation/player_policy_human.ron",
-      // world_icon_stat_bar.md playtest aid — see player_male's comment above.
+      // world_textured_stat_bar.md playtest aid — see player_male's comment above.
       world_stat_bar: (
         stat_key: "player_health",
         offset: (0.0, 2.3, 0.0),
-        style: Icon(
-          icon_sheet: "icons_hearts",
-          icon_cols: 2, icon_rows: 1,
-          filled_index: 0, empty_index: 1,
-          cells: 5,
+        bg_color: (0.15, 0.15, 0.15, 0.6),
+        color_bands: [
+          (0.0, (0.85, 0.12, 0.12, 1.0)),
+          (0.3, (0.95, 0.75, 0.10, 1.0)),
+          (0.6, (0.15, 0.85, 0.15, 1.0)),
+        ],
+        style: Textured(
+          texture_sheet: "healthbar_sheet",
+          fill_rect:  (0.0, 0.0, 48.0, 17.0),
+          empty_rect: (0.0, 17.0, 48.0, 17.0),
+          size: (72.0, 14.0),
+          slice_border: (8.0, 8.0, 8.0, 8.0),
         ),
       ),
       components: (
