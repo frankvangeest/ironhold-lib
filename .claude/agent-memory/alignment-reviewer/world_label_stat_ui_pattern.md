@@ -135,6 +135,32 @@ now call the helpers; each site still resolves its own `depth_scale`/`is_split_s
 `WorldStatBarStyle` variant or widget knob now only needs the ONE helper touched. If reviewing a
 change here, verify the two depth_scale/is_split_screen sources still differ per-site (they must).
 
+**FOURTH STYLE `WorldStatBarStyle::Textured` ADDED (reviewed 2026-07-18,
+`feature/world-textured-stat-bar`, ALIGNED).** 9-sliced continuous-fill "rounded health bar" —
+two `Sprite` layers (empty/track + fill) both cropped via `Sprite.rect` from ONE shared
+`texture_sheet` catalog key, with per-layer `fill_rect`/`empty_rect` sub-rects (TEXTURE px) and
+`slice_border` (TEXTURE px) → `TextureSlicer.border`. `size` is SCREEN px. New
+`WorldTexturedBarFillMarker` + `world_textured_bar_update_system` (writes `Sprite.custom_size.x` +
+`Sprite.color`, left-align translation, 0.5px change-detection guard — direct textured analog of
+`world_pixel_bar_update_system`). Fill tinted by `fill_color`/`color_bands`; the empty/track layer
+NEWLY tinted by the shared `bg_color` (previously bg_color had no effect on any Icon/Pixel bg
+substitute) — repurposed data-drivenly, no Textured-only tint field. Rank-duplicates in
+split-screen (`for rank in 0..ranks`); image `Handle` + `TextureSlicer`/`SpriteImageMode` built
+ONCE outside the loop and cloned across both layers + all ranks. Anchor `depth_scale: None` (same
+pre-existing exclusion as Pixel/Icon). Pure cosmetic (no ActionQueue). Reuses `StatWidgetSpawnCtx`
+`asset_server`/`asset_catalog` (added by Icon) — `.expect()` if a Textured bar spawns without them.
+3rd_person_game_demo player_male/female swapped Icon(hearts)→Textured as playtest aid; orphaned
+`icons_hearts` key removed from THAT project's assets.ron only (primitive_world still uses its own
+independently — not an orphan there). CLI `query.rs` does NOT match on `WorldStatBarStyle` → new
+variant is not an exhaustiveness break.
+TWO FOOTGUNS (both non-blocking, both consistent with Icon precedent so accepted): (1) missing
+`texture_sheet` catalog key → `unwrap_or_default()` blank `Handle<Image>`, NO spawn-time warn, bar
+still spawns (does NOT fabricate a path — the critical anti-pattern rule IS satisfied; but deviates
+from the plan's promised "warn! once + skip" AND from the codebase rule's "warn + 1×1 white
+fallback"). Same shape as Icon's typo'd-icon_sheet footgun. (2) `TextureSlicer` center/sides scale
+mode + `max_corner_scale` hardcoded via `..default()` (Stretch) — middle-fill mode not
+RON-configurable; documented out-of-scope (`SliceScaleMode::Tile` deferred), not a misalignment.
+
 Motion has the parallel structure: see [[prefab_marker_three_spawn_paths]] — `motion` is inserted
 in `spawn_prefab_instance` (covers GLB actors + all dynamic spawns) AND separately in the
 single-mesh (scene_loader.rs ~401) and composite (~521) primitive branches that don't call
