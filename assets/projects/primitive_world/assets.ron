@@ -3,6 +3,11 @@
   models: {},
 
   textures: {
+    // Heart pip atlas (Icon-style world_stat_bar) — 2×1 grid, 64 px per cell, 128×64 total.
+    // Procedurally generated placeholder (not hand-painted) — functional and clearly readable,
+    // but flagged for an art pass to match assets/CLAUDE.md's stylized hand-painted direction.
+    "icons_hearts": "shared/ui/iconsheet-hearts-01.png",
+
     // ── Kenney Particle Pack (256×256 RGBA) ───────────────────────────────
     "particle/circle_01":         "shared/textures/particles/kenney-particle-pack/circle_01.png",
     "particle/circle_02":         "shared/textures/particles/kenney-particle-pack/circle_02.png",

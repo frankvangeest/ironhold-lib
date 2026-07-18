@@ -1021,6 +1021,40 @@ pub enum WorldStatBarStyle {
         #[serde(default = "default_pixel_bar_border_color")]
         border_color: (f32, f32, f32, f32),
     },
+    /// Row of per-cell icon sprites (hearts, shields, or any catalog icon) — each cell shows
+    /// either `filled_index` or `empty_index` from the same atlas. No partial-cell rendering
+    /// (a cell is either fully filled or fully empty; the fill count is whole-cell `ceil`-rounded).
+    /// Reuses the same `icon_sheet`/`icon_cols`/`icon_rows`/`icon_cell_size` atlas convention as
+    /// `ActionBarDef`/`ItemDef`. Size/spacing are in screen pixels — same coordinate space as
+    /// `Pixel.size` (constant at all camera distances, no depth scaling in v1).
+    Icon {
+        /// Catalog key into `AssetCatalog.textures` — the sprite sheet both icon variants come from.
+        icon_sheet: String,
+        /// Columns in the icon atlas grid. Default: 8.
+        #[serde(default = "default_icon_cols")]
+        icon_cols: u32,
+        /// Rows in the icon atlas grid. Default: 8.
+        #[serde(default = "default_icon_rows")]
+        icon_rows: u32,
+        /// Pixel size of each square cell in the atlas. Default: 64.
+        #[serde(default = "default_icon_cell_size")]
+        icon_cell_size: u32,
+        /// Row-major index of the "filled" cell variant (e.g. a solid heart).
+        /// Same indexing as `icon_index` elsewhere in the engine (`col + row * icon_cols`).
+        filled_index: u32,
+        /// Row-major index of the "empty" cell variant (e.g. a hollow heart outline).
+        empty_index: u32,
+        /// Total number of cells (pips) the bar represents. Practical range 1–20. Default: 5.
+        #[serde(default = "default_icon_cells")]
+        cells: u8,
+        /// Gap between adjacent cell edges, in screen pixels (same convention as
+        /// `ActionBarDef.slot_gap` — not centre-to-centre distance). Default: `4.0`.
+        #[serde(default = "default_icon_spacing")]
+        spacing: f32,
+        /// Per-cell size `(width, height)` in screen pixels. Default: `(24.0, 24.0)`.
+        #[serde(default = "default_icon_size")]
+        size: (f32, f32),
+    },
 }
 
 impl Default for WorldStatBarStyle {
@@ -1040,6 +1074,12 @@ fn default_world_bar_bg_color() -> (f32, f32, f32, f32) { (0.25, 0.08, 0.08, 0.7
 fn default_pixel_bar_size() -> (f32, f32) { (64.0, 8.0) }
 fn default_pixel_bar_border() -> f32 { 1.5 }
 fn default_pixel_bar_border_color() -> (f32, f32, f32, f32) { (0.05, 0.05, 0.05, 1.0) }
+fn default_icon_cols() -> u32 { 8 }
+fn default_icon_rows() -> u32 { 8 }
+fn default_icon_cell_size() -> u32 { 64 }
+fn default_icon_cells() -> u8 { 5 }
+fn default_icon_spacing() -> f32 { 4.0 }
+fn default_icon_size() -> (f32, f32) { (24.0, 24.0) }
 
 /// NPC faction — determines intent and which events fire.
 #[derive(Deserialize, Debug, Clone, PartialEq)]

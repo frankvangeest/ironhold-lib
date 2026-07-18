@@ -1067,14 +1067,17 @@ pub fn spawn_scene_v2(
                 color_materials: mats.color_materials.as_deref_mut(),
                 depth_scale,
                 is_split_screen,
+                atlas_layouts: None,
+                asset_server: None,
+                asset_catalog: None,
             };
             spawn_stat_label_widget(&mut commands, tracked, &stat_key, &sl, &ctx);
         }
 
         // Spawn world-space stat bars from PrefabDef.world_stat_bar.
-        // Dispatches on wb.style: Ascii → two Text2d entities; Pixel → anchor + 3 Mesh2d children.
-        // Ascii bars follow the same split-screen rank-duplication as stat labels above;
-        // Pixel bars are excluded (child-hierarchy duplication deferred, see Phase 4 Approach).
+        // Dispatches on wb.style: Ascii → two Text2d entities; Pixel → anchor + 3 Mesh2d
+        // children; Icon → anchor + N Sprite children. All three duplicate per split-screen
+        // rank (see spawn_world_stat_bar_widget's doc comment).
         for (tracked, stat_key, wb) in pending_world_bars {
             let depth_scale = resolve_label_depth_scale(scene.label_depth_scale.as_ref(), None);
             let mut ctx = StatWidgetSpawnCtx {
@@ -1082,6 +1085,9 @@ pub fn spawn_scene_v2(
                 color_materials: mats.color_materials.as_deref_mut(),
                 depth_scale,
                 is_split_screen,
+                atlas_layouts: mats.atlas_layouts.as_deref_mut(),
+                asset_server: Some(&asset_server),
+                asset_catalog: Some(asset_catalog),
             };
             spawn_world_stat_bar_widget(&mut commands, tracked, &stat_key, &wb, &mut ctx);
         }
@@ -2627,6 +2633,8 @@ pub fn drain_dynamic_stat_ui_system(
     label_depth_scale: Res<crate::runtime::scene_manager::LoadedLabelDepthScale>,
     active_split: Res<crate::runtime::scene_manager::ActiveSplitScreen>,
     dynamic_split: Res<crate::runtime::scene_manager::DynamicSplitConfig>,
+    asset_server: Res<AssetServer>,
+    asset_catalog: Res<crate::runtime::scene_manager::LoadedAssetCatalog>,
 ) {
     // Same split-screen rank-duplication gate as the scene-loader's stat label/Ascii bar spawn
     // loops (see `planning/features/split_screen_camera_followups.md` Phase 4) — checks both
@@ -2643,6 +2651,9 @@ pub fn drain_dynamic_stat_ui_system(
                 color_materials: mats.color_materials.as_deref_mut(),
                 depth_scale,
                 is_split_screen,
+                atlas_layouts: None,
+                asset_server: None,
+                asset_catalog: None,
             };
             spawn_stat_label_widget(&mut commands, entry.entity, &stat_key, &sl, &ctx);
         }
@@ -2654,6 +2665,9 @@ pub fn drain_dynamic_stat_ui_system(
                 color_materials: mats.color_materials.as_deref_mut(),
                 depth_scale,
                 is_split_screen,
+                atlas_layouts: mats.atlas_layouts.as_deref_mut(),
+                asset_server: Some(&asset_server),
+                asset_catalog: Some(&asset_catalog.0),
             };
             spawn_world_stat_bar_widget(&mut commands, entry.entity, &stat_key, &wb, &mut ctx);
         }

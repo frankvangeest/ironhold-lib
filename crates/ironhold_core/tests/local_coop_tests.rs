@@ -10,7 +10,7 @@ use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId}
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
 use ironhold_core::capabilities::stat_display::{
-    StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker,
+    StatLabelMarker, WorldStatBarFillMarker, WorldPixelBarFillMarker, WorldIconBar,
     StatWidgetSpawnCtx, spawn_stat_label_widget, spawn_world_stat_bar_widget,
 };
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
@@ -2672,6 +2672,108 @@ fn test_pixel_world_stat_bar_stays_single_instance_in_non_split_scene() {
     );
 }
 
+// ── world_icon_stat_bar.md: Icon-style world_stat_bar through the real spawn_scene_v2
+// pipeline (not just the isolated ctx-level unit tests above) ───────────────────────────
+
+fn load_two_player_scene_with_icon_stat_prop(app: &mut App, split: Option<SplitScreenDef>) {
+    app.world_mut().init_resource::<Assets<TextureAtlasLayout>>();
+    two_player_catalogs_with_split(app, None, split);
+    app.world_mut()
+        .resource_mut::<LoadedAssetCatalog>()
+        .0
+        .textures
+        .insert("ui_icons".to_string(), "shared/ui/ui_icons.png".to_string());
+    app.world_mut()
+        .resource_mut::<LoadedPrefabCatalog>()
+        .0
+        .prefabs
+        .insert("test_stat_prop".to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            model: "char_a".to_string(),
+            world_stat_bar: Some(icon_world_stat_bar_def("{self}.health")),
+            ..Default::default()
+        });
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "dummy_01", prefab: "test_stat_prop", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_icon_world_stat_bar_duplicates_ranks_when_scene_is_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_icon_stat_prop(
+        &mut app,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+
+    let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("dummy_01").expect("prop entity must register in SpawnRegistry");
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldIconBar, &WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(_, l, _)| l.tracked_entity == Some(prop_entity))
+            .map(|(_, _, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "an Icon world_stat_bar spawned via the real scene-load pipeline in a split-screen scene \
+         must spawn MAX_SPLIT_PLAYERS anchors, same as Pixel already does"
+    );
+    let mut sorted: Vec<u8> = anchor_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3], "expected exactly one anchor of each rank 0-3");
+}
+
+#[test]
+fn test_icon_world_stat_bar_stays_single_instance_in_non_split_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    load_two_player_scene_with_icon_stat_prop(&mut app, None);
+
+    let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
+        .entities.get("dummy_01").expect("prop entity must register in SpawnRegistry");
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldIconBar, &WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(_, l, _)| l.tracked_entity == Some(prop_entity))
+            .map(|(_, _, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks, vec![None],
+        "a non-split scene must spawn exactly 1 Icon world_stat_bar anchor via the real \
+         scene-load pipeline — no rank-duplication overhead"
+    );
+}
+
 // ── Per-viewport target HUD readout (Phase 1, per_player_split_screen_targeting.md) ─────
 
 fn load_two_player_scene_with_target_hud(app: &mut App, author_target_hud: bool) {
@@ -3101,6 +3203,9 @@ fn test_spawn_stat_label_widget_spawns_one_entity_when_not_split_screen() {
             color_materials: None,
             depth_scale: None,
             is_split_screen: false,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
         };
         spawn_stat_label_widget(&mut commands, tracked, "dummy_01.health", &def, &ctx);
     }).unwrap();
@@ -3127,6 +3232,9 @@ fn test_spawn_stat_label_widget_spawns_ranked_siblings_when_split_screen() {
             color_materials: None,
             depth_scale: None,
             is_split_screen: true,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
         };
         spawn_stat_label_widget(&mut commands, tracked, "dummy_01.health", &def, &ctx);
     }).unwrap();
@@ -3167,6 +3275,9 @@ fn test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_witho
             color_materials: color_materials.as_deref_mut(),
             depth_scale: None,
             is_split_screen: false,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
         };
         spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
     }).unwrap();
@@ -3214,6 +3325,9 @@ fn test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_scre
             color_materials: color_materials.as_deref_mut(),
             depth_scale: None,
             is_split_screen: true,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
         };
         spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
     }).unwrap();
@@ -3259,6 +3373,204 @@ fn test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_scre
         "border/bg materials must be registered once and shared across ranks — only fill \
          materials (one per rank) should scale with MAX_SPLIT_PLAYERS"
     );
+}
+
+// ── world_icon_stat_bar.md: Icon-style world_stat_bar (discrete per-cell sprites) ────────
+
+fn icon_test_catalog() -> AssetCatalog {
+    let mut catalog = AssetCatalog::default();
+    catalog.textures.insert("ui_icons".to_string(), "shared/ui/ui_icons.png".to_string());
+    catalog
+}
+
+fn icon_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
+    WorldStatBarDef {
+        stat_key: stat_key.to_string(),
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 0.95),
+        bg_color: (0.25, 0.08, 0.08, 0.75),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Icon {
+            icon_sheet: "ui_icons".to_string(),
+            icon_cols: 8, icon_rows: 8, icon_cell_size: 64,
+            filled_index: 12, empty_index: 13,
+            cells: 5, spacing: 4.0, size: (24.0, 24.0),
+        },
+    }
+}
+
+#[test]
+fn test_world_icon_bar_update_system_computes_ceil_rounded_fill_count() {
+    use ironhold_core::capabilities::stat_display::world_icon_bar_update_system;
+    use ironhold_core::schema::stats::{StatMap, LiveStat};
+
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<TextureAtlasLayout>>();
+    let catalog = icon_test_catalog();
+
+    let mut stats = StatMap::default();
+    stats.0.insert("health".to_string(), LiveStat::new(stat_def(100.0, 100.0)));
+    let tracked = app.world_mut().spawn((SpawnId("dummy_01".to_string()), stats)).id();
+
+    let def = icon_world_stat_bar_def("dummy_01.health");
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+        asset_server: Res<AssetServer>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: false,
+            atlas_layouts: Some(&mut atlas_layouts),
+            asset_server: Some(&asset_server),
+            asset_catalog: Some(&catalog),
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    // Cells are spawned in order 0..cells as children of the (only, non-split) anchor —
+    // capture that order once so each ratio check reads cells in spawn order.
+    let cell_entities: Vec<Entity> = {
+        let mut q = app.world_mut().query::<(&WorldIconBar, &Children)>();
+        q.iter(app.world()).next().expect("exactly one Icon anchor").1.iter().collect()
+    };
+    assert_eq!(cell_entities.len(), 5, "test def uses cells: 5");
+
+    let set_health = |app: &mut App, value: f32| {
+        let mut stat_map = app.world_mut().get_mut::<StatMap>(tracked).unwrap();
+        let s = stat_map.0.get_mut("health").unwrap();
+        s.current = value;
+        s.effective = value;
+    };
+    let filled_cells = |app: &mut App| -> usize {
+        cell_entities.iter()
+            .filter(|&&e| app.world().get::<Sprite>(e).unwrap()
+                .texture_atlas.as_ref().unwrap().index == 12)
+            .count()
+    };
+
+    // 0% (dead) -> 0 filled — the only ratio where 0 filled cells is correct.
+    set_health(&mut app, 0.0);
+    app.world_mut().run_system_once(world_icon_bar_update_system).unwrap();
+    assert_eq!(filled_cells(&mut app), 0, "exactly 0%% health must show 0 filled cells");
+
+    // 1% (barely alive) -> ceil(0.01*5)=1, floored up to max(1, ..) -> 1 filled, never 0.
+    set_health(&mut app, 1.0);
+    app.world_mut().run_system_once(world_icon_bar_update_system).unwrap();
+    assert_eq!(filled_cells(&mut app), 1, "1%% health must never round down to 0 filled cells");
+
+    // 60% -> ceil(0.6*5)=3 filled.
+    set_health(&mut app, 60.0);
+    app.world_mut().run_system_once(world_icon_bar_update_system).unwrap();
+    assert_eq!(filled_cells(&mut app), 3, "60%% health on a 5-cell bar must show 3 filled cells");
+
+    // 95% -> ceil(0.95*5)=ceil(4.75)=5 filled — full, even though not literally 100%%.
+    set_health(&mut app, 95.0);
+    app.world_mut().run_system_once(world_icon_bar_update_system).unwrap();
+    assert_eq!(filled_cells(&mut app), 5, "95%% health on a 5-cell bar must show full (ceil rounds up)");
+
+    // 100% -> 5 filled (regression: full health must never show fewer than all cells).
+    set_health(&mut app, 100.0);
+    app.world_mut().run_system_once(world_icon_bar_update_system).unwrap();
+    assert_eq!(filled_cells(&mut app), 5, "100%% health must show all 5 cells filled");
+}
+
+#[test]
+fn test_spawn_world_stat_bar_widget_icon_style_spawns_anchor_and_cells_without_duplication() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<TextureAtlasLayout>>();
+    let catalog = icon_test_catalog();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = icon_world_stat_bar_def("{self}.health");
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+        asset_server: Res<AssetServer>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: false,
+            atlas_layouts: Some(&mut atlas_layouts),
+            asset_server: Some(&asset_server),
+            asset_catalog: Some(&catalog),
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let anchor_count = app.world_mut().query::<(&WorldIconBar, &WorldLabel)>().iter(app.world())
+        .filter(|(_, l)| l.tracked_entity == Some(tracked)).count();
+    assert_eq!(anchor_count, 1, "a non-split ctx must spawn exactly one Icon anchor, no rank overhead");
+
+    let mut q = app.world_mut().query::<&Sprite>();
+    let sprite_count = q.iter(app.world()).count();
+    assert_eq!(sprite_count, 5, "must spawn exactly `cells` (5) Sprite children, one per cell");
+}
+
+/// `world_icon_stat_bar.md`: a split-screen ctx must duplicate the Icon bar's whole
+/// anchor+children hierarchy per rank, exactly like Pixel already does, while sharing the
+/// texture + TextureAtlasLayout across ranks/cells (only the anchor count and Sprite count
+/// scale with rank — the underlying atlas asset does not).
+#[test]
+fn test_spawn_world_stat_bar_widget_icon_style_duplicates_ranks_when_split_screen() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<TextureAtlasLayout>>();
+    let catalog = icon_test_catalog();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = icon_world_stat_bar_def("{self}.health");
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+        asset_server: Res<AssetServer>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: None,
+            depth_scale: None,
+            is_split_screen: true,
+            atlas_layouts: Some(&mut atlas_layouts),
+            asset_server: Some(&asset_server),
+            asset_catalog: Some(&catalog),
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let anchor_ranks: Vec<Option<u8>> = {
+        let mut q = app.world_mut().query::<(&WorldIconBar, &WorldLabel, Option<&WorldLabelRank>)>();
+        q.iter(app.world())
+            .filter(|(_, l, _)| l.tracked_entity == Some(tracked))
+            .map(|(_, _, r)| r.map(|r| r.0))
+            .collect()
+    };
+    assert_eq!(
+        anchor_ranks.len(), MAX_SPLIT_PLAYERS as usize,
+        "a split-screen ctx must spawn MAX_SPLIT_PLAYERS Icon anchors, same as Pixel"
+    );
+    let mut sorted: Vec<u8> = anchor_ranks.iter().map(|r| r.unwrap_or(0)).collect();
+    sorted.sort();
+    assert_eq!(sorted, vec![0, 1, 2, 3], "expected exactly one anchor of each rank 0-3");
+
+    let sprite_count = app.world_mut().query::<&Sprite>().iter(app.world()).count();
+    assert_eq!(
+        sprite_count, 5 * MAX_SPLIT_PLAYERS as usize,
+        "5 cells x MAX_SPLIT_PLAYERS ranks = 20 Sprite children total"
+    );
+
+    // Regression guard: the shared TextureAtlasLayout asset must be registered once, not once
+    // per rank — only the per-rank/per-cell Sprite entities should scale, not the atlas asset.
+    let layout_count = app.world().resource::<Assets<TextureAtlasLayout>>().iter().count();
+    assert_eq!(layout_count, 1, "TextureAtlasLayout must be registered once and cloned across ranks/cells");
 }
 
 // Part B: players get first-class stat widgets via the same DynamicStatUiQueue mechanism —

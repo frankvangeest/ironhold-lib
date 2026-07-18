@@ -2665,6 +2665,94 @@ fn test_world_stat_bar_pixel_minimal_parses() {
 }
 
 #[test]
+fn test_world_stat_bar_icon_style_parses() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "dummy": (
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Icon(
+                            icon_sheet: "ui_icons",
+                            icon_cols: 8,
+                            icon_rows: 8,
+                            icon_cell_size: 64,
+                            filled_index: 12,
+                            empty_index: 13,
+                            cells: 5,
+                            spacing: 4.0,
+                            size: (24.0, 24.0),
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Icon style world_stat_bar should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Icon {
+        ref icon_sheet, icon_cols, icon_rows, icon_cell_size,
+        filled_index, empty_index, cells, spacing, size,
+    } = wb.style {
+        assert_eq!(icon_sheet, "ui_icons");
+        assert_eq!(icon_cols, 8);
+        assert_eq!(icon_rows, 8);
+        assert_eq!(icon_cell_size, 64);
+        assert_eq!(filled_index, 12);
+        assert_eq!(empty_index, 13);
+        assert_eq!(cells, 5);
+        assert_eq!(spacing, 4.0);
+        assert_eq!(size, (24.0, 24.0));
+    } else {
+        panic!("Expected Icon style");
+    }
+}
+
+#[test]
+fn test_world_stat_bar_icon_style_defaults() {
+    use ironhold_core::schema::catalog::WorldStatBarStyle;
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "dummy": (
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
+                    world_stat_bar: (
+                        stat_key: "{self}.health",
+                        style: Icon(
+                            icon_sheet: "ui_icons",
+                            filled_index: 12,
+                            empty_index: 13,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str).expect("Icon style with defaults should parse");
+    let wb = catalog.prefabs["dummy"].world_stat_bar.as_ref().unwrap();
+    if let WorldStatBarStyle::Icon {
+        icon_cols, icon_rows, icon_cell_size, cells, spacing, size, ..
+    } = wb.style {
+        assert_eq!(icon_cols, 8);
+        assert_eq!(icon_rows, 8);
+        assert_eq!(icon_cell_size, 64);
+        assert_eq!(cells, 5);
+        assert_eq!(spacing, 4.0);
+        assert_eq!(size, (24.0, 24.0));
+    } else {
+        panic!("Expected Icon style");
+    }
+}
+
+#[test]
 fn test_world_stat_bar_rejects_unknown_top_level_field() {
     let ron_str = r#"
         (

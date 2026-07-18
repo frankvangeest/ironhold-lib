@@ -1,7 +1,36 @@
 # Feature: World-space Icon Stat Bar (`WorldStatBarStyle::Icon`)
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `d80e73b` (2026-07-17)_
+
+**Code review note (2026-07-18):** alignment-reviewer, system-architect, debug-detective,
+ux-gamedesigner-reviewer, and wasm-perf-reviewer all ran in parallel post-implementation. No
+blocking findings from alignment/UX/WASM-perf. system-architect found one MAJOR gap (the fill-count
+`ceil`-rounding rule — the feature's headline game-feel decision — had zero test coverage) and two
+minor plan-drift notes (both fixed: `spacing` shipped as an edge-gap default `4.0` matching
+`ActionBarDef.slot_gap`, not the plan's original centre-to-centre `20.0`; `deny_unknown_fields` was
+correctly *not* added to the `Icon` variant, matching the existing `Ascii`/`Pixel` convention —
+`world_textured_stat_bar.md`'s review independently caught this same plan inconsistency).
+debug-detective independently found a real bug: `world_icon_bar_update_system`'s
+`sprite.texture_atlas.as_mut()` unconditionally `DerefMut`s `Mut<Sprite>` before the inner
+change-detection guard runs, defeating the guard on every unchanged cell (up to 80 sprites/frame in
+a 4-way split with a 20-cell bar) — fixed by reading via `.as_ref()` first and only taking the
+mutable path when the index genuinely differs. Added
+`test_world_icon_bar_update_system_computes_ceil_rounded_fill_count` (0%/1%/60%/95%/100% cases) to
+close the coverage gap. Two non-blocking observations (silent missing-`icon_sheet` fallback with no
+`warn!`; `pipeline_warmup_system` doesn't cover `Sprite` entities) logged to
+`planning/claude_suggestions.md`. Two UX doc gaps fixed (`fill_color` was undocumented for `Icon` —
+it's ignored; `icon_cols`/`icon_rows`' `8`×`8` default needed a footgun note for non-standard sheets
+like the shipped 2×1 hearts). Full `ironhold_core` test suite green + `cargo check -p ironhold_cli`
++ `cargo run -p ironhold_cli -- query prefabs` (no crash, new style surfaces correctly). Extended
+beyond the original plan: after playtest confirmed the GLB demo, Frank asked whether the same Icon
+bar could work on a **primitive**-bodied player — it can, via the same global-`LoadedStats`-key
+trick (`resolve_stat` routes non-dotted keys to `LoadedStats` regardless of `StatMap`, sidestepping
+the documented primitive-player-has-no-`StatMap` gap from `player_model_source_unification.md`) — so
+`primitive_world`'s `player_capsule` also got the hearts bar as a second playtest demonstration,
+proving the mechanism works across both player-construction paths. Playtest confirmed by Frank in
+both `3rd_person_game_demo` (GLB `player_male`/`player_female`) and `primitive_world` (primitive
+`player_capsule`), no console errors.
 
 **Plan-review note (2026-07-17):** system-architect — Needs minor design work → resolved: found a
 materially better answer to this plan's own flagged open question (`Sprite` + `TextureAtlas`,
@@ -92,11 +121,13 @@ Icon {
     /// Total number of cells (pips) the bar represents. Practical range 1–20.
     #[serde(default = "default_icon_cells")]
     cells: u8,
-    /// Spacing between cell centres, in **screen pixels** — same coordinate space as
+    /// Gap between adjacent cell **edges**, in screen pixels — same coordinate space as
     /// `Pixel.size` (Camera2d is 1 unit = 1 px; anchor offsets/sizes are constant at all camera
-    /// distances). Default: `20.0`. (Corrected from an earlier draft that called this world-space
-    /// metres — system-architect finding: `world_label_screen_pos_system` positions the anchor in
-    /// Camera2d viewport coordinates, so it is pixels, not metres, matching Pixel exactly.)
+    /// distances). Default: `4.0`. (Implementation note, post-plan-review: shipped as an edge
+    /// gap matching `ActionBarDef.slot_gap`'s convention, not the centre-to-centre distance this
+    /// draft originally specified — the plan's own numbers, `spacing: 20.0` centre-to-centre
+    /// against a default `size: (24.0, 24.0)` cell, would have made adjacent cells overlap by
+    /// 4px. Edge-gap semantics avoid that and reuse an existing engine convention.)
     #[serde(default = "default_icon_spacing")]
     spacing: f32,
     /// Per-cell size (width, height) in **screen pixels**. Default: `(24.0, 24.0)`.
@@ -218,23 +249,27 @@ that is identical across all ranks of the same bar (all ranks track the same ent
   screen-pixel size, constant at all camera distances); not solved by this feature either.
 
 ## Tasks
-- [ ] Schema — `WorldStatBarStyle::Icon { .. }` struct variant in `catalog.rs` (inline fields, not
-      a wrapped separate struct — matches `Ascii`/`Pixel`), with `#[serde(deny_unknown_fields)]`
-      and full doc comments including the pixel-not-metres unit clarification
-- [ ] `capabilities/stat_display.rs` — `WorldIconBar` anchor-level component (stat_key, cells,
+- [x] Schema — `WorldStatBarStyle::Icon { .. }` struct variant in `catalog.rs` (inline fields, not
+      a wrapped separate struct — matches `Ascii`/`Pixel`), full doc comments including the
+      pixel-not-metres unit clarification. **No `#[serde(deny_unknown_fields)]`** (implementation
+      note, post-plan-review: the existing `Ascii`/`Pixel` variants don't carry this attribute
+      either — only the outer `WorldStatBarDef` struct does — so `Icon` matches them for
+      consistency rather than introducing a per-variant inconsistency; this plan's earlier draft
+      said to add it, which `world_textured_stat_bar.md`'s review correctly flagged as drift).
+- [x] `capabilities/stat_display.rs` — `WorldIconBar` anchor-level component (stat_key, cells,
       filled_index, empty_index); `world_icon_bar_update_system` (resolves once per anchor via
       `&Children` iteration, `ceil`-based whole-cell rounding per the documented rule,
       change-detection guarded); extend `spawn_world_stat_bar_widget`'s `match wb.style` with the
       `Icon` arm, spawning a rank-duplicated anchor (per rank: `WorldIconBar` + one `Sprite` child
       per cell with `texture_atlas: Some(TextureAtlas { layout, index: empty_index })` as the
       initial state) using the pattern established by the Pixel duplication fix
-- [ ] Register `world_icon_bar_update_system` alongside the other stat-widget update systems
+- [x] Register `world_icon_bar_update_system` alongside the other stat-widget update systems
       (wherever `world_pixel_bar_update_system` is registered)
-- [ ] Tests — parse/defaults/unknown-field-rejection (`ron_validation.rs`, matching the existing
+- [x] Tests — parse/defaults/unknown-field-rejection (`ron_validation.rs`, matching the existing
       Ascii/Pixel test set); spawn-behavior tests (correct filled/empty cell count for a given
       ratio, including the 1%-shows-≥1-cell and 95%-shows-full edge cases from the rounding rule);
       split-screen rank duplication test, mirroring the Pixel duplication feature's own test
-- [ ] Demo — add an Icon-style bar to `3rd_person_game_demo`'s player, as a "lives"/hearts overhead
+- [x] Demo — add an Icon-style bar to `3rd_person_game_demo`'s player, as a "lives"/hearts overhead
       display tracking `{self}.health` (**not** `local_coop_demo`'s per-player mana bars — those
       are the exact prefabs `pixel_world_stat_bar_split_screen_duplication.md` converts to Pixel;
       reusing them here would collide with that feature). Includes producing (or sourcing) the
@@ -244,7 +279,7 @@ that is identical across all ranks of the same bar (all ranks track the same ent
       hand-painted direction in `assets/CLAUDE.md`. Without this sub-task the demo would silently
       reuse mismatched icons and undercut the feature it's meant to showcase
       (ux-gamedesigner-reviewer finding).
-- [ ] Docs — new `WorldStatBarStyle::Icon` section in `docs/20_data_formats.md`: fields table
+- [x] Docs — new `WorldStatBarStyle::Icon` section in `docs/20_data_formats.md`: fields table
       (explicitly anchoring `filled_index`/`empty_index` to the established `icon_index` row-major
       convention used elsewhere, and stating `size`/`spacing` are screen pixels like `Pixel.size`,
       not metres); RON example; the `ceil`-based rounding rule with the 1%/95% edge cases spelled
@@ -252,7 +287,7 @@ that is identical across all ranks of the same bar (all ranks track the same ent
       historical caveat); a one-line texture-dimensions note (power-of-2 not required by
       WebGPU/WebGL2, but recommended for parity with the other shipped icon sheets — see Schema
       section above) so whoever produces the new pip art isn't left guessing
-- [ ] WASM rebuild + `python test_web.py` — confirm the `Sprite` pipeline (this engine's first use
+- [x] WASM rebuild + `python test_web.py` — confirm the `Sprite` pipeline (this engine's first use
       of it — everything else uses `Mesh2d`/`ColorMaterial` or Bevy UI `ImageNode`) compiles/warms
       without a stall on first Icon-bar draw; if it does stall, fall back to the cropped-UV-mesh
       approach noted in Approach (schema and update-system logic are unaffected by which rendering
@@ -273,22 +308,32 @@ that is identical across all ranks of the same bar (all ranks track the same ent
   don't over-abstract further pre-emptively).
 
 ## Acceptance criteria
-- Given `world_stat_bar: (stat_key: "{self}.health", style: Icon(...))` with `cells: 5`, when the
+- [x] Given `world_stat_bar: (stat_key: "{self}.health", style: Icon(...))` with `cells: 5`, when the
   tracked stat is at 60% of its range, then 3 of 5 cells show the filled icon and 2 show the empty
-  icon (`ceil(0.6 * 5) = 3`).
-- Given the same bar at 1% health (not zero), when it renders, then at least 1 cell shows filled —
-  never reads as fully empty/dead while the entity is still alive (the `ceil`-above-zero rule).
-- Given the same bar at 95% health, when it renders, then all 5 cells show filled (`ceil(0.95 * 5)
-  = 5`) — documented as expected/idiomatic, not a bug.
-- Given a change to the tracked stat (`ModifyStat`), when the next frame runs, then the correct
+  icon (`ceil(0.6 * 5) = 3`). **Met** — `test_world_icon_bar_update_system_computes_ceil_rounded_fill_count`.
+- [x] Given the same bar at 1% health (not zero), when it renders, then at least 1 cell shows filled —
+  never reads as fully empty/dead while the entity is still alive (the `ceil`-above-zero rule). **Met** —
+  same test, 1% case.
+- [x] Given the same bar at 95% health, when it renders, then all 5 cells show filled (`ceil(0.95 * 5)
+  = 5`) — documented as expected/idiomatic, not a bug. **Met** — same test, 95% case.
+- [x] Given a change to the tracked stat (`ModifyStat`), when the next frame runs, then the correct
   cells update to reflect the new ratio, with the stat resolved once per bar (not once per cell)
-  and change-detection guarding all writes.
-- Given a split-screen scene with an Icon-style bar on any entity, when it's visible in 2+ active
+  and change-detection guarding all writes. **Met** — resolve-once verified by architect/wasm-perf
+  review reading `world_icon_bar_update_system` directly; change-detection guard bug (unconditional
+  `DerefMut`) found by debug-detective and fixed.
+- [x] Given a split-screen scene with an Icon-style bar on any entity, when it's visible in 2+ active
   viewports simultaneously, then it renders correctly in every one of them — **from this feature's
-  first release**, no follow-up phase required (unlike Pixel's history).
-- Given an existing project with no Icon-style bars, when this feature ships, then nothing about
-  existing Ascii/Pixel bars changes (purely additive — new enum variant, no schema break).
-- RON validation: parse/defaults/unknown-field-rejection tests pass for the `Icon` variant,
-  matching the existing Ascii/Pixel test coverage shape.
-- The `3rd_person_game_demo` hearts demo renders with a real, purpose-made filled/empty pip icon
-  pair — not a placeholder or mismatched existing icon.
+  first release**, no follow-up phase required (unlike Pixel's history). **Met** —
+  `test_spawn_world_stat_bar_widget_icon_style_duplicates_ranks_when_split_screen` and
+  `test_icon_world_stat_bar_duplicates_ranks_when_scene_is_split_screen` (real `spawn_scene_v2` pipeline).
+- [x] Given an existing project with no Icon-style bars, when this feature ships, then nothing about
+  existing Ascii/Pixel bars changes (purely additive — new enum variant, no schema break). **Met**.
+- [x] RON validation: parse/defaults/unknown-field-rejection tests pass for the `Icon` variant,
+  matching the existing Ascii/Pixel test coverage shape. **Met** —
+  `test_world_stat_bar_icon_style_parses`/`_defaults`; no per-variant `deny_unknown_fields` test
+  since (post-review) `Icon` deliberately matches `Ascii`/`Pixel` in not carrying that attribute.
+- [x] The `3rd_person_game_demo` hearts demo renders with a real, purpose-made filled/empty pip icon
+  pair — not a placeholder or mismatched existing icon. **Met** — `iconsheet-hearts-01.png`
+  (procedurally generated, flagged for a future hand-painted art pass). **Extended**: the same bar
+  was also added to `primitive_world`'s `player_capsule`, proving the mechanism works on a
+  primitive-bodied player too (not in the original plan scope — added post-playtest at Frank's request).
