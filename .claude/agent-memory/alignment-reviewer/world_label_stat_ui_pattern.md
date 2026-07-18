@@ -84,6 +84,40 @@ The still-`None` precedent for *transient* widgets stands: `ShowDamagePopup`/`Sh
 in action_executor.rs deliberately keep `depth_scale: None` and were correctly left untouched by
 this fix (scope guard in the plan).
 
+**THIRD STYLE `WorldStatBarStyle::Icon` ADDED (reviewed 2026-07-18,
+`feature/world-icon-stat-bar`, ALIGNED).** Row of per-cell `Sprite` icons (hearts/pips) — each
+cell shows `filled_index` or `empty_index` from a designer-authored atlas, reusing the
+`icon_sheet`/`icon_cols`/`icon_rows`/`icon_cell_size` convention `ActionBarDef`/`ItemDef` use. New
+`WorldIconBar` anchor component + `world_icon_bar_update_system` (resolves stat ONCE per anchor,
+walks `&Children` in spawn order to set each `Sprite`'s atlas index — no per-cell marker; relies on
+cell spawn order 0..cells). Fill count is `ceil`-based (`filled = max(1, ceil(ratio*cells))`, 0 only
+at exactly `ratio==0.0`) — deliberately different from Ascii/Pixel's `round`, documented in the plan.
+Texture resolved via `asset_catalog.textures.get(icon_sheet).map(load).unwrap_or_default()` (no
+fabricated path); atlas built at runtime from `TextureAtlasLayout::from_grid(icon_cell_size,
+icon_cols, icon_rows)` — the companion `.json` sidecar files next to iconsheet PNGs are docs-only,
+NOT consumed by the engine or referenced in assets.ron. Pure cosmetic (no ActionQueue). Rank-
+duplicates in split-screen like Ascii/Pixel (`for rank in 0..ranks`); anchor `depth_scale: None`
+(same pre-existing exclusion as Pixel). `StatWidgetSpawnCtx` gained THREE `Option` fields
+(`atlas_layouts`/`asset_server`/`asset_catalog`) — only touched by the Icon arm, `.expect()` if an
+Icon bar spawns without them; both `spawn_world_stat_bar_widget` call sites (scene-load ~1083 +
+`drain_dynamic_stat_ui_system` ~2663) pass `Some(...)`, stat_label sites pass `None`.
+Two footguns flagged (both non-blocking, both consistent with existing precedent so accepted): (1)
+typo'd `icon_sheet` key → `unwrap_or_default()` blank Handle with NO spawn-time warn (same as
+IconButton; runtime warn only fires for a missing *stat*, not a missing *texture*); (2) CLI
+`validate.rs` does NOT cross-check `icon_sheet` against `assets.ron` textures — but it doesn't for
+`ActionBarDef`/`ItemDef` `icon_sheet` either (only foliage `leaf_texture` at validate.rs:387 gets
+that treatment), so Icon is merely consistent, not a regression.
+
+**Global-vs-`{self}` stat_key on a PLAYER prefab is a documented first-class choice, NOT a
+shortcut.** 3rd_person_game_demo's player_male/player_female use `stat_key: "player_health"` (a
+GLOBAL `stats/stats.ron`/`LoadedStats` key) on their Icon bars, not `{self}.health`. This is
+correct: `resolve_stat` routes any non-dotted key to `LoadedStats` regardless of the attached
+entity, and `WorldStatBarDef.stat_key`/`StatLabelDef.stat_key` docstrings explicitly list a global
+key as a valid form. This project has no `health` `stat_template` on the player, so `{self}.health`
+would resolve empty AND trip the player-stat-widgets Part C warn/CLI guard — global is the only
+correct form here. When reviewing a world_stat_bar/stat_label on a player, do NOT flag a global key
+as a `{self}` mismatch; check whether the project tracks that stat globally or per-entity first.
+
 STALE DOC WATCH: the doc-comment block above `drain_dynamic_stat_ui_system`
 (scene_loader.rs:2534-2538) still reads "Dynamic spawns never have a label_depth_scale scene config
 so depth scaling is always None here" — factually wrong after this fix, and garbled (a stray
