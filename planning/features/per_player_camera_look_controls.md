@@ -19,9 +19,16 @@ only the developer `CLAUDE.md`); (c) pitch discoverability closed via a commente
 `look_down` pair in one demo prefab, per the project's existing commented-optional-field
 convention; (d) the demo-wiring task is now enumerated exactly (10 named prefabs, confirmed against
 `local_coop_demo`'s actual scheme assignments) instead of a vague pointer, plus a "why no look
-keys" comment on the party-mode prefabs; (e) `keyboard_look_speed`'s doc entry must state its unit
+keys" comment on the party-mode prefabs; (e) `look_speed`'s doc entry must state its unit
 (rad/s) and a feel anchor, cross-referenced against `orbit_speed` so two "speed" fields on one
 `camera:` block don't read as redundant.
+
+**Amendment (2026-07-19, ahead of `gamepad_controller_input.md`'s plan review):** renamed
+`keyboard_look_speed` → `look_speed` throughout (field, default fn, doc references) before any
+code exists to change. Both this feature's own reviewers and the gamepad-input plan's reviewers
+(which reuses this same dial for right-stick-Y analog pitch) independently flagged that a field
+named "keyboard" governing a gamepad player's stick speed would read as a naming bug, not a
+deliberate shared dial — cheaper to fix now than after either feature ships.
 
 ## What
 Adds keyboard-bound camera yaw/pitch turning, per player, to `OrbitCamera` — so a player in a
@@ -59,7 +66,7 @@ arbitrary pair added for one demo: `Comma`, `Period`, `Semicolon`, `Quote`, `Sla
 variants — a mechanical, purely-additive widening of the match, same pattern as the existing
 letter/digit/Numpad/F-key/Arrow/modifier arms).
 
-**New `CameraConfig` field**: `keyboard_look_speed: f32` (default `2.0`, i.e. ~2 rad/s — a full yaw
+**New `CameraConfig` field**: `look_speed: f32` (default `2.0`, i.e. ~2 rad/s — a full yaw
 revolution in ~3.1s held). **Deliberately not reusing the existing `orbit_speed` field**: `orbit_
 speed` is tuned as a mouse-pixel-delta multiplier (`mouse_delta.x * orbit_speed * dt`); the existing
 split-screen demo prefabs already set it to `0.4` for that purpose. Reusing `0.4` directly as a
@@ -74,7 +81,7 @@ pub look_left_key: Option<KeyCode>,
 pub look_right_key: Option<KeyCode>,
 pub look_up_key: Option<KeyCode>,
 pub look_down_key: Option<KeyCode>,
-pub keyboard_look_speed: f32,
+pub look_speed: f32,
 ```
 Populated in `scene_loader.rs`/`entity_spawner.rs` alongside the existing `parse_orbit_button` call
 site.
@@ -83,10 +90,10 @@ site.
 `CharacterController`/`InputMap` needed, since the keys are already resolved onto `OrbitCamera`
 itself. After the existing mouse `orbit_active` block (untouched), a new, unconditional block:
 ```rust
-if let Some(key) = orbit.look_left_key  { if keyboard_input.pressed(key) { orbit.yaw += orbit.keyboard_look_speed * dt; } }
-if let Some(key) = orbit.look_right_key { if keyboard_input.pressed(key) { orbit.yaw -= orbit.keyboard_look_speed * dt; } }
-if let Some(key) = orbit.look_up_key    { if keyboard_input.pressed(key) { orbit.pitch = (orbit.pitch + orbit.keyboard_look_speed * dt).min(orbit.max_pitch); } }
-if let Some(key) = orbit.look_down_key  { if keyboard_input.pressed(key) { orbit.pitch = (orbit.pitch - orbit.keyboard_look_speed * dt).max(orbit.min_pitch); } }
+if let Some(key) = orbit.look_left_key  { if keyboard_input.pressed(key) { orbit.yaw += orbit.look_speed * dt; } }
+if let Some(key) = orbit.look_right_key { if keyboard_input.pressed(key) { orbit.yaw -= orbit.look_speed * dt; } }
+if let Some(key) = orbit.look_up_key    { if keyboard_input.pressed(key) { orbit.pitch = (orbit.pitch + orbit.look_speed * dt).min(orbit.max_pitch); } }
+if let Some(key) = orbit.look_down_key  { if keyboard_input.pressed(key) { orbit.pitch = (orbit.pitch - orbit.look_speed * dt).max(orbit.min_pitch); } }
 ```
 This runs additively and independently of the mouse-orbit gate — a scene could in principle bind
 both mouse and keyboard look for the same camera (harmless; last-writer-per-frame wins, same as any
@@ -148,9 +155,9 @@ which are demo-bound.
 - [ ] `InputMap`: add `look_left`/`look_right`/`look_up`/`look_down: Option<String>` (schema/player.rs)
 - [ ] `InputMap::parse_key`: add `Comma`, `Period`, `Semicolon`, `Quote`, `Slash`, `BracketLeft`,
       `BracketRight`, `Minus`, `Equal` arms
-- [ ] `CameraConfig`: add `keyboard_look_speed: f32` with `default_keyboard_look_speed() -> f32 { 2.0 }`
+- [ ] `CameraConfig`: add `look_speed: f32` with `default_look_speed() -> f32 { 2.0 }`
 - [ ] `OrbitCamera`: add `look_left_key`/`look_right_key`/`look_up_key`/`look_down_key: Option<KeyCode>`
-      and `keyboard_look_speed: f32`; populate at both spawn sites (`scene_loader.rs`,
+      and `look_speed: f32`; populate at both spawn sites (`scene_loader.rs`,
       `entity_spawner.rs`) alongside the existing `parse_orbit_button` call
 - [ ] `camera_orbit_system`: add `Res<ButtonInput<KeyCode>>` param and the keyboard-look block
       (independent of the existing mouse `orbit_active` gate); pin the pitch direction convention
@@ -171,7 +178,7 @@ which are demo-bound.
       `pitch` toward `max_pitch`) in addition to clamping to `min_pitch`/`max_pitch` under sustained
       hold
 - [ ] Docs — `docs/20_data_formats.md`: `InputMap` and `CameraConfig` tables get the new fields
-      (the `keyboard_look_speed` entry states its unit, rad/s, a feel anchor — "~3s per full turn
+      (the `look_speed` entry states its unit, rad/s, a feel anchor — "~3s per full turn
       at the default" — and cross-references `orbit_speed` as the separate mouse-sensitivity dial);
       the "Valid key name strings" table gets the 9 new punctuation entries; one RON example shows
       all four `look_*` fields even though the shipped demo only binds yaw
