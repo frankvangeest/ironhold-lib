@@ -1,0 +1,12 @@
+{
+  "sheet": {
+    "size": "128x64",
+    "iconSize": "64x64",
+    "columns": 2,
+    "rows": 1
+  },
+  "icons": [
+    { "id": 0, "name": "Heart Full", "type": "pip", "description": "Filled heart pip for Icon-style world_stat_bar (e.g. player lives/health)." },
+    { "id": 1, "name": "Heart Empty", "type": "pip", "description": "Hollow heart pip — the empty-cell counterpart to Heart Full." }
+  ]
+}

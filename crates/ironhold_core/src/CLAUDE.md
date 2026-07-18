@@ -581,10 +581,13 @@ one dealing the hit). **Extended to `Pixel`-style `world_stat_bar` in
 `pixel_world_stat_bar_split_screen_duplication.md`** — `spawn_world_stat_bar_widget`'s `Pixel`
 arm now duplicates its whole anchor+children hierarchy per rank exactly like the `Ascii` arm
 already did (border/background mesh+material handles are registered once and cloned across
-ranks; the fill is created fresh per rank). **Damage popups and nameplate anchors remain
-single-instance** (no `WorldLabelRank`, implicit rank 0 = highest-priority camera only) — the same
-multi-viewport gap still applies to them; extend the same pattern to a given consumer's spawn site
-only if a real project need surfaces.
+ranks; the fill is created fresh per rank). **`Icon`-style `world_stat_bar` built in with
+day-one split-screen support** (`world_icon_stat_bar.md`) — its arm uses the same per-rank anchor
+pattern from the start (texture + `TextureAtlasLayout` registered once and cloned across
+ranks/cells; each `Sprite` cell created fresh, matching Pixel's fill-sharing precedent). **Damage
+popups and nameplate anchors remain single-instance** (no `WorldLabelRank`, implicit rank 0 =
+highest-priority camera only) — the same multi-viewport gap still applies to them; extend the
+same pattern to a given consumer's spawn site only if a real project need surfaces.
 
 **`particle_renderer.rs`'s billboard orientation is now viewport-aware** (fixed — Phase 1 of
 `planning/features/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call

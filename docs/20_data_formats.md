@@ -1721,7 +1721,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `select_aim_height` | `f32` | `1.0` | Vertical offset (metres) from the entity world origin used when projecting to screen space for click-selection. Default `1.0` is correct for human-scale characters (~1.8 m capsule). Lower this for ground-hugging creatures: `0.4` for a snake (`collider_height: 0.8`), `0.6` for a spider (`collider_height: 1.2`). Only meaningful when `click_selectable: true`. |
 | `stat_templates` | `Vec<StatTemplateDef>` | Per-entity stat shapes. Every spawned instance gets an independent `StatMap` component; stats are addressed as `"spawn_id.stat_name"` in `ModifyStat`/`SetStat`. Works on player prefabs too — a player prefab that declares this gets an independent action-bar `SlotCost` pool instead of sharing the global one. See [Instance stats](#instance-stats-stat_templates-) below. |
 | `stat_label` | `Option<StatLabelDef>` | Floating world-space numeric stat label above the entity. Tracks a live stat and updates every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
-| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities) or `Pixel` (a `Mesh2d` quad hierarchy rendered by the 2D camera). Both update every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
+| `world_stat_bar` | `Option<WorldStatBarDef>` | Floating world-space stat bar above the entity. Style is configurable: `Ascii` (two overlapping `Text2d` entities), `Pixel` (a `Mesh2d` quad hierarchy), or `Icon` (a row of per-cell `Sprite` icons, e.g. hearts) — all rendered by the 2D camera and updated every frame. See [World-space stat widgets](#world-space-stat-widgets-stat_label-and-world_stat_bar-) below. |
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
 | `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
@@ -3277,7 +3277,7 @@ stat_label: (
 
 ### `WorldStatBarDef` fields (`world_stat_bar`)
 
-A floating stat bar above an entity. The visual style is set by the `style` field — either `Ascii` (text characters) or `Pixel` (solid-colour mesh quads). Both styles update every frame and auto-hide when the tracked entity is hidden.
+A floating stat bar above an entity. The visual style is set by the `style` field — `Ascii` (text characters), `Pixel` (solid-colour mesh quads), or `Icon` (a row of per-cell sprite icons, e.g. hearts). All three styles update every frame and auto-hide when the tracked entity is hidden.
 
 **Shared top-level fields:**
 
@@ -3287,8 +3287,10 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 | `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity origin in metres |
 | `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour; used when `color_bands` is empty or no band matches |
 | `bg_color` | `(f32,f32,f32,f32)` | dark red-brown | Background track colour |
-| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; the `Pixel` style uses `fill_color` directly. |
+| `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; the `Pixel` style uses `fill_color` directly. Ignored by `Icon` (its filled/empty look comes from the atlas cells, not a colour). |
 | `style` | `WorldStatBarStyle` | `Ascii()` | Visual style; see variants below |
+
+`fill_color`, `bg_color`, and `color_bands` all have **no effect** on the `Icon` style — there is no fill tint and no background quad; the filled/empty look comes entirely from `filled_index`/`empty_index` in the atlas art itself.
 
 **`WorldStatBarStyle::Ascii` fields** (use `style: Ascii(...)` or omit `style` entirely for the default):
 
@@ -3305,11 +3307,29 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 | `border` | `f32` | `1.5` | Border thickness in pixels. Set to `0.0` to disable. |
 | `border_color` | `(f32,f32,f32,f32)` | near-black `(0.05,0.05,0.05,1.0)` | Border quad colour |
 
-> **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel style.
+**`WorldStatBarStyle::Icon` fields** (use `style: Icon(...)`):
 
-> **Split-screen visibility:** `stat_label` and both `world_stat_bar` styles (`Ascii` and `Pixel`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. Damage popups and nameplates do **not** duplicate — an entity's popup or nameplate shows in **at most one** viewport at a time. **This applies to co-op players too**: either `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `icon_sheet` | `String` | — (required) | Catalog key into `AssetCatalog.textures` — the sprite sheet both `filled_index`/`empty_index` come from. Same convention as `ActionBarDef`/`ItemDef`. |
+| `icon_cols` | `u32` | `8` | Columns in the icon atlas grid. The `8`×`8` default matches the engine's status-effect/item atlases; a dedicated pip sheet (like the shipped hearts) is usually smaller (e.g. `2`×`1`) — set both `icon_cols`/`icon_rows` to match your actual sheet, or the wrong cells will be sampled with no error. |
+| `icon_rows` | `u32` | `8` | Rows in the icon atlas grid — see `icon_cols` note |
+| `icon_cell_size` | `u32` | `64` | Pixel size of each square cell **in the source atlas image** |
+| `filled_index` | `u32` | — (required) | Row-major index (`col + row * icon_cols`) of the "filled" cell, e.g. a solid heart |
+| `empty_index` | `u32` | — (required) | Row-major index of the "empty" cell, e.g. a hollow heart outline |
+| `cells` | `u8` | `5` | Total number of cells (pips) the bar represents. Practical range: 1–20. |
+| `spacing` | `f32` | `4.0` | Gap between adjacent cell **edges**, in screen pixels — same convention as `ActionBarDef.slot_gap` (not centre-to-centre distance) |
+| `size` | `(f32,f32)` | `(24.0, 24.0)` | Per-cell size in screen pixels |
+
+Texture dimensions for `icon_sheet` do **not** need to be power-of-2 — that was a WebGL1-era constraint, not a WebGPU/WebGL2 one. Power-of-2 (matching the engine's other shipped icon sheets, e.g. 512×512) is still a reasonable default for mip-mapping/compression parity, but not required.
+
+**`Icon` fill rounding — `ceil`, not `round`:** the number of filled cells is `filled = 0` only at exactly `ratio == 0.0`; otherwise `filled = max(1, ceil(ratio * cells))`. On a 5-cell bar this means 1% health always shows **at least 1** filled cell (never reads as dead while the entity is alive), and anything above 80% shows as **full** (`ceil(0.81 * 5) = 5`) — this is expected/idiomatic for a discrete pip display, not a bug. There is no partial-cell (half-heart) rendering.
+
+> **Pixel bar depth scaling:** Pixel bars render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for the Pixel or Icon styles.
+
+> **Split-screen visibility:** `stat_label` and all three `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. Damage popups and nameplates do **not** duplicate — an entity's popup or nameplate shows in **at most one** viewport at a time. **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
 >
-> **`Ascii` is a prototyping/debug style; `Pixel` is the production-quality choice.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a shippable look. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
+> **`Ascii` is a prototyping/debug style; `Pixel` and `Icon` are the production-quality choices.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a solid-fill bar or `style: Icon(...)` for a discrete pip/heart display. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
 
 ```ron
 // Minimal — omit style to get the default Ascii bar.
@@ -3344,9 +3364,21 @@ world_stat_bar: (
   ],
   style: Pixel( size: (48.0, 6.0) ),
 ),
+
+// Icon bar — a 5-heart lives/health display, reusing the standard icon-atlas convention.
+world_stat_bar: (
+  stat_key: "player_health", // a global LoadedStats key here, illustratively — {self}.health works too
+  offset: (0.0, 2.3, 0.0),
+  style: Icon(
+    icon_sheet: "icons_hearts",
+    icon_cols: 2, icon_rows: 1,
+    filled_index: 0, empty_index: 1,
+    cells: 5,
+  ),
+),
 ```
 
-> **Tip:** Use `stat_label` for a compact numeric readout, `world_stat_bar` for a graphical bar. Both styles can coexist on the same prefab (useful for demos), but in production most designs pick one style per entity.
+> **Tip:** Use `stat_label` for a compact numeric readout, `world_stat_bar` for a graphical bar. All three styles can coexist on the same prefab (useful for demos), but in production most designs pick one style per entity.
 
 **Migration from the pre-style schema:** The old flat fields `cells` and `font_size` at the top level of `WorldStatBarDef` are no longer supported. Move them inside `style: Ascii(...)`:
 

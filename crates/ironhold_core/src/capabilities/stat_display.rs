@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::schema::scene_v2::BarOrientation;
-use crate::schema::catalog::{StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
+use crate::schema::catalog::{StatLabelDef, WorldStatBarDef, WorldStatBarStyle, AssetCatalog};
 use crate::runtime::scene_manager::{SpawnId, WorldLabel, WorldLabelRank, LevelEntity};
 use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
 
@@ -262,6 +262,70 @@ pub fn world_pixel_bar_update_system(
     }
 }
 
+/// On the anchor entity of a `WorldStatBarStyle::Icon` bar. `world_icon_bar_update_system`
+/// resolves the stat ONCE per anchor, then walks its children (`Sprite` entities, spawned in
+/// cell order 0..cells) to set each one's atlas index — not once per cell, since `resolve_stat`'s
+/// dotted-key lookup is O(entities-with-`StatMap`) and paying that cost per cell would multiply
+/// it up to 20x per bar per frame for no reason.
+#[derive(Component, Clone)]
+pub struct WorldIconBar {
+    pub stat_key: String,
+    pub cells: u8,
+    pub filled_index: u32,
+    pub empty_index: u32,
+}
+
+/// Updates every `WorldIconBar` anchor's child `Sprite` atlas indices each frame.
+/// Fill count uses `ceil`, not `round`: `filled = 0` only at exactly `ratio == 0.0`, otherwise
+/// `filled = max(1, ceil(ratio * cells))` — so e.g. 1% health always shows ≥1 filled cell (never
+/// reads as dead while alive), and 95% shows full on a 5-cell bar (expected/idiomatic for this
+/// style, not a bug — see `planning/features/world_icon_stat_bar.md`). Writes are guarded for
+/// change-detection efficiency.
+pub fn world_icon_bar_update_system(
+    loaded_stats: Res<LoadedStats>,
+    stat_map_query: Query<(&SpawnId, &StatMap)>,
+    bar_query: Query<(&WorldIconBar, &Children)>,
+    mut sprite_query: Query<&mut Sprite>,
+) {
+    for (bar, children) in bar_query.iter() {
+        let ratio = if let Some((effective, min, max)) =
+            resolve_stat(&bar.stat_key, &loaded_stats, &stat_map_query)
+        {
+            let range = max - min;
+            if range <= 0.0 { 1.0 } else { ((effective - min) / range).clamp(0.0, 1.0) }
+        } else {
+            if cfg!(debug_assertions) {
+                warn!("WorldIconBar: stat_key {:?} not found — bar renders empty", bar.stat_key);
+            }
+            0.0
+        };
+
+        let filled_count: u8 = if ratio <= 0.0 {
+            0
+        } else {
+            (ratio * bar.cells as f32).ceil().max(1.0) as u8
+        };
+
+        for (i, child) in children.iter().enumerate() {
+            let Ok(mut sprite) = sprite_query.get_mut(child) else { continue };
+            let want_index = if (i as u8) < filled_count { bar.filled_index } else { bar.empty_index } as usize;
+            // Read via `.as_ref()` first so an unchanged cell never triggers `Mut<Sprite>`'s
+            // `DerefMut` (which would mark the Sprite changed regardless of whether the inner
+            // field write actually happens) — `.as_mut()` is only reached on the branch that
+            // genuinely writes.
+            let needs_update = match sprite.texture_atlas.as_ref() {
+                Some(a) => a.index != want_index,
+                None => true,
+            };
+            if needs_update {
+                if let Some(atlas) = sprite.texture_atlas.as_mut() {
+                    atlas.index = want_index;
+                }
+            }
+        }
+    }
+}
+
 /// Updates floating stat labels spawned from `PrefabDef.stat_label` each frame.
 /// Uses `resolve_stat` so both global (`"player_health"`) and entity-local
 /// (`"dummy_01.health"`) keys work transparently.
@@ -304,8 +368,14 @@ pub struct StatWidgetSpawnCtx<'a> {
     /// resource) — this helper does not know or care which.
     pub depth_scale: Option<(f32, f32)>,
     /// Whether the loading/active scene is split-screen — gates `WorldLabelRank` sibling
-    /// duplication for `stat_label`/Ascii bars (see `WorldLabelRank`'s doc comment).
+    /// duplication for `stat_label`/Ascii/Icon bars (see `WorldLabelRank`'s doc comment).
     pub is_split_screen: bool,
+    /// Only touched by `Icon`-style bars; `None` panics if an `Icon` bar is actually spawned.
+    pub atlas_layouts: Option<&'a mut Assets<TextureAtlasLayout>>,
+    /// Only touched by `Icon`-style bars; `None` panics if an `Icon` bar is actually spawned.
+    pub asset_server: Option<&'a AssetServer>,
+    /// Only touched by `Icon`-style bars; `None` panics if an `Icon` bar is actually spawned.
+    pub asset_catalog: Option<&'a AssetCatalog>,
 }
 
 /// Spawns the floating `Text2d` widget for a `stat_label` (`StatLabelDef`), tracking `tracked`.
@@ -345,11 +415,15 @@ pub fn spawn_stat_label_widget(
 
 /// Spawns the floating widget for a `world_stat_bar` (`WorldStatBarDef`), tracking `tracked`.
 /// Dispatches on `def.style`: `Ascii` → two rank-duplicated `Text2d` entities (background +
-/// fill); `Pixel` → an anchor with up to 3 `Mesh2d` children (border/background/fill). Both
+/// fill); `Pixel` → an anchor with up to 3 `Mesh2d` children (border/background/fill); `Icon` →
+/// an anchor with `cells` `Sprite` children (per-cell atlas index, filled/empty). All three
 /// styles duplicate one full set per split-screen rank when `ctx.is_split_screen` (see
-/// `WorldLabelRank`'s doc comment); for `Pixel`, the border/background mesh and material handles
+/// `WorldLabelRank`'s doc comment). For `Pixel`, the border/background mesh and material handles
 /// are registered once and cloned across ranks (identical geometry per rank), while the fill is
-/// created fresh per rank since each tracks and updates independently.
+/// created fresh per rank since each tracks and updates independently. For `Icon`, the texture
+/// and `TextureAtlasLayout` are likewise registered once and cloned across every rank/cell —
+/// every cell of every rank shares identical atlas geometry, only the per-cell atlas *index*
+/// (set by `world_icon_bar_update_system`) ever changes.
 pub fn spawn_world_stat_bar_widget(
     commands: &mut Commands,
     tracked: Entity,
@@ -495,6 +569,88 @@ pub fn spawn_world_stat_bar_widget(
                     LevelEntity,
                 )).id();
                 commands.entity(anchor).add_child(fill_child);
+            }
+        }
+        WorldStatBarStyle::Icon {
+            ref icon_sheet,
+            icon_cols, icon_rows, icon_cell_size,
+            filled_index, empty_index, cells, spacing, size,
+        } => {
+            let cells_clamped = cells.max(1);
+            let cell_w = size.0.max(1.0);
+            let cell_h = size.1.max(1.0);
+            let gap = spacing.max(0.0);
+            let total_width = cells_clamped as f32 * cell_w + (cells_clamped as f32 - 1.0).max(0.0) * gap;
+
+            let atlas_layouts = ctx.atlas_layouts.as_mut()
+                .expect("Assets<TextureAtlasLayout> must be available to spawn icon stat bars");
+            let asset_server = ctx.asset_server
+                .expect("AssetServer must be available to spawn icon stat bars");
+            let asset_catalog = ctx.asset_catalog
+                .expect("AssetCatalog must be available to spawn icon stat bars");
+
+            // Texture + atlas layout are identical across every rank and every cell of the same
+            // bar instance — built once here and cloned per rank/cell below, not re-registered
+            // per entity (same sharing principle as Pixel's border/background mesh+material).
+            let texture: Handle<Image> = asset_catalog.textures.get(icon_sheet.as_str())
+                .map(|path| asset_server.load(path.clone()))
+                .unwrap_or_default();
+            let layout: Handle<TextureAtlasLayout> = atlas_layouts.add(TextureAtlasLayout::from_grid(
+                UVec2::splat(icon_cell_size), icon_cols, icon_rows, None, None,
+            ));
+
+            for rank in 0..ranks {
+                // Invisible anchor — WorldLabel tracks the entity; WorldIconBar resolves the
+                // stat ONCE per anchor (not once per cell — see WorldIconBar's doc comment);
+                // children follow via hierarchy. Depth scaling intentionally not applied
+                // (same pre-existing exclusion as Pixel bars).
+                let mut anchor_cmds = commands.spawn((
+                    Name::new(format!("IconBarAnchor: {} (rank {})", stat_key, rank)),
+                    Transform::default(),
+                    Visibility::default(),
+                    WorldLabel {
+                        world_pos: Vec3::ZERO,
+                        tracked_entity: Some(tracked),
+                        offset: offset_v3,
+                        base_font_size: 1.0,
+                        depth_scale: None,
+                        screen_offset: Vec2::ZERO,
+                    },
+                    WorldIconBar {
+                        stat_key: stat_key.to_string(),
+                        cells: cells_clamped,
+                        filled_index,
+                        empty_index,
+                    },
+                    LevelEntity,
+                ));
+                if rank > 0 {
+                    anchor_cmds.insert((WorldLabelRank(rank as u8), Visibility::Hidden));
+                }
+                let anchor = anchor_cmds.id();
+
+                // Cells spawned in order 0..cells_clamped — world_icon_bar_update_system relies
+                // on this spawn order (walks &Children) to map cell index to fill state without
+                // a per-cell marker component. Initial atlas index is empty_index; the update
+                // system corrects it on the first tick after resolving the stat.
+                for cell in 0..cells_clamped {
+                    let x = -total_width / 2.0 + cell_w / 2.0 + cell as f32 * (cell_w + gap);
+                    let cell_child = commands.spawn((
+                        Name::new(format!("IconBarCell: {} #{} (rank {})", stat_key, cell, rank)),
+                        Sprite {
+                            image: texture.clone(),
+                            texture_atlas: Some(TextureAtlas {
+                                layout: layout.clone(),
+                                index: empty_index as usize,
+                            }),
+                            custom_size: Some(Vec2::new(cell_w, cell_h)),
+                            ..default()
+                        },
+                        Transform::from_xyz(x, 0.0, 1.0),
+                        LevelEntity,
+                    )).id();
+                    commands.entity(anchor).add_child(cell_child);
+                }
             }
         }
     }
