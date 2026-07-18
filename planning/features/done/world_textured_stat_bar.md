@@ -1,6 +1,6 @@
 # Feature: World-space Textured Stat Bar (`WorldStatBarStyle::Textured`)
 
-_Status: Ready (schema/demo corrected 2026-07-18 against the actual supplied art)_
+_Status: Done_
 _Planned at: `7168ccc` (2026-07-17)_
 
 ## What
@@ -271,62 +271,75 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
   continuous fill), not a shape/geometry authoring framework.
 
 ## Tasks
-- [ ] Schema — `WorldStatBarStyle::Textured { texture_sheet, fill_rect, empty_rect, size,
+- [x] Schema — `WorldStatBarStyle::Textured { texture_sheet, fill_rect, empty_rect, size,
       slice_border }` struct variant in `catalog.rs` (inline fields matching `Ascii`/`Pixel`; **no**
       per-variant `deny_unknown_fields`, matching the existing variants), with
       `default_textured_bar_size` / `default_textured_bar_slice` default fns and full doc comments
       (esp. the two coordinate spaces: `size` = screen px, `fill_rect`/`empty_rect`/`slice_border` =
       texture px; and that `fill_color` tints the fill while `bg_color` now tints the empty/track
-      layer — both reused, no `Textured`-only colour field).
-- [ ] `capabilities/stat_display.rs` — `WorldTexturedBarFillMarker` component;
+      layer — both reused, no `Textured`-only colour field). Met.
+- [x] `capabilities/stat_display.rs` — `WorldTexturedBarFillMarker` component;
       `world_textured_bar_update_system` (writes `Sprite.custom_size.x` + `Sprite.color`, guarded
       for change-detection, left-align translation, `color_bands`/`fill_color` selection identical
       to the Pixel system); `Textured` arm in `spawn_world_stat_bar_widget`, rank-duplicated, with
       **one** `Handle<Image>` (`texture_sheet`) resolved once and cloned across both layers and every
       rank, two `Sprite` children (empty static + fill marked) per rank — each with its own static
       `Sprite.rect` crop (`empty_rect`/`fill_rect`) and `SpriteImageMode::Sliced(TextureSlicer)`
-      built from `slice_border` — `LevelEntity` on every child.
-- [ ] `StatWidgetSpawnCtx` — **no extension needed.** `asset_server`/`asset_catalog` already exist
+      built from `slice_border` — `LevelEntity` on every child. Met. Debug-detective confirmed the
+      change-detection guards correctly avoid the `Icon` feature's `DerefMut` bug (reads via
+      `Deref`, writes only inside the guarded branch). Also added a `warn!`+skip on missing
+      `texture_sheet` catalog key (not in the original task list — added post-review, see Code
+      review note below).
+- [x] `StatWidgetSpawnCtx` — **no extension needed.** `asset_server`/`asset_catalog` already exist
       on the ctx (added by `world_icon_stat_bar.md`, shipped `672d003`); the `Textured` arm reuses
-      them as-is. Missing catalog key → `warn!` once + skip (no fabricated paths).
-- [ ] Register `world_textured_bar_update_system` alongside `world_pixel_bar_update_system` in
-      `lib.rs`.
-- [ ] Tests — parse/defaults tests for the `Textured` variant in `ron_validation.rs` (matching the
+      them as-is. Met.
+- [x] Register `world_textured_bar_update_system` alongside `world_pixel_bar_update_system` in
+      `lib.rs`. Met.
+- [x] Tests — parse/defaults tests for the `Textured` variant in `ron_validation.rs` (matching the
       `Ascii`/`Pixel`/`Icon` set: minimal RON parses, defaults resolve, a full RON parses);
       spawn-behavior test (a `Textured` bar spawns exactly one anchor + two `Sprite` children in a
       non-split scene; the fill child carries `WorldTexturedBarFillMarker`; both children share one
       cloned `Handle<Image>` but differ in `Sprite.rect`); split-screen rank-duplication test
       (`Sprite`/marker counts scale to `MAX_SPLIT_PLAYERS`, image handle cloned not re-loaded),
-      mirroring the Pixel/Icon duplication tests.
-- [ ] CLI — `cargo check -p ironhold_cli` (new enum variant must not break `query.rs`); run
+      mirroring the Pixel/Icon duplication tests. Met — all pass (`ron_validation`: 195,
+      `local_coop_tests`: 90).
+- [x] CLI — `cargo check -p ironhold_cli` (new enum variant must not break `query.rs`); run
       `cargo run -p ironhold_cli -- query <project>` on the demo to confirm the new style surfaces
-      and nothing crashes.
-- [ ] Demo — **replace** `3rd_person_game_demo`'s `player_male`/`player_female` `world_stat_bar`
+      and nothing crashes. Met — `validate`/`query prefabs` both ran clean against the demo.
+- [x] Demo — **replace** `3rd_person_game_demo`'s `player_male`/`player_female` `world_stat_bar`
       (currently `Icon`, the hearts bar shipped in `world_icon_stat_bar.md`) with this `Textured`
       style, tracking the same global `player_health` key, using the already-supplied
       `assets/shared/ui/rounded-healthbar-texture-sheet.png`. **Scope change vs. the original
       draft** (2026-07-18, Frank's explicit instruction) — the original draft placed `Textured` on
       an NPC specifically to avoid colliding with the not-yet-built `Icon` player demo; `Icon` has
       since shipped and is now the thing being replaced, so that avoidance no longer applies.
-      Register `texture_sheet` in `assets.ron` `textures:` (already placed at the shared path, no
-      new art to produce/source this time). Measured sub-rects for the shipped sheet:
-      `fill_rect: (0,0,48,17)`, `empty_rect: (0,17,48,15)`, `slice_border: (8,8,8,8)` (see the
-      per-row alpha-profile measurement in Approach above). Run
-      `python tools/asset_checker/check.py` after editing `assets.ron`.
-- [ ] Docs — new `WorldStatBarStyle::Textured` section in `docs/20_data_formats.md`: fields table
+      Registered `texture_sheet` in `assets.ron` `textures:` (already placed at the shared path, no
+      new art to produce/source this time; the now-orphaned `icons_hearts` entry was removed from
+      this project's `assets.ron` — it's still used by `primitive_world`, untouched). Final
+      sub-rects: `fill_rect: (0,0,48,17)`, `empty_rect: (0,17,48,17)`, `slice_border: (8,8,8,8)` —
+      `empty_rect`'s height was corrected from an initial `15` to `17` during code review (see
+      Code review note below; the sheet has blank padding rows available to absorb the extra 2px).
+      `python tools/asset_checker/check.py` clean. Met.
+- [x] Docs — new `WorldStatBarStyle::Textured` section in `docs/20_data_formats.md`: fields table
       (the two coordinate spaces called out explicitly; `texture_sheet`/`fill_rect`/`empty_rect`
       anchored to the catalog `textures:` convention and the single-sheet-two-frames layout;
       the `fill_color`/`bg_color`/`color_bands`-tint note incl. the "set to white for pre-coloured
       art" guidance); RON example; the low-fill cap-scaling behavior note; split-screen behavior
-      (duplicates from day one). Update the two summary tables (lines ~1724 and the style-list
+      (duplicates from day one). Updated the two summary tables (line ~1724 and the style-list
       intro at ~3280) to list `Textured` as a fourth style (alongside the now-shipped `Icon`).
-      Update `crates/ironhold_core/src/CLAUDE.md`'s stat-widget / split-screen notes to mention the
+      Updated `crates/ironhold_core/src/CLAUDE.md`'s stat-widget / split-screen notes to mention the
       `Textured` style + its update system, and to note the player `world_stat_bar` swapped from
-      `Icon` to `Textured` in `3rd_person_game_demo`.
-- [ ] WASM dev build + `python test_web.py` — confirm the standard 2D sprite pipeline compiles/
+      `Icon` to `Textured` in `3rd_person_game_demo`. Met — plus several UX-review-driven additions
+      (coordinate-origin/Y-down clarification, an image-editor authoring workflow tip, a
+      default-tints-aren't-neutral warning, a brief "what 9-slice means" primer, and a corrected
+      "corners stay undistorted" claim) — see Code review note below.
+- [x] WASM dev build + `python test_web.py` — confirmed the standard 2D sprite pipeline compiles/
       warms without a first-draw stall on the player's textured bar in `3rd_person_game_demo`.
-      `Icon` already shipped and proved this same sprite pipeline in the same project (`672d003`),
-      so this is a low-risk confirmation, not first-use.
+      `Icon` already shipped and proved this same sprite pipeline in the same project (`672d003`);
+      wasm-perf-reviewer additionally confirmed a *sliced* `Sprite` renders through the identical
+      `SpritePipeline` as a plain/atlas `Sprite` (9-slicing is CPU-side geometry expansion, not a
+      distinct pipeline variant) — no new pipeline risk at all. Met — playtest confirmed by Frank,
+      no console errors, correct fill/tint/color-band behavior.
 
 ## Open questions
 - **None blocking.** Rendering (sliced `Sprite` + `custom_size.x` against a cropped `Sprite.rect`,
@@ -341,29 +354,84 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
   one-field future addition, not an open question blocking v1.
 - **Shared scaffolding across `Pixel`/`Icon`/`Textured`** — all three now share the anchor + rank
   loop in `spawn_world_stat_bar_widget`; their child primitives (Mesh2d vs Sprite-atlas vs
-  Sprite-sliced) diverge enough that further abstraction is premature. Revisit only once all three
-  have shipped and can be compared directly (same conclusion `world_icon_stat_bar.md` reached).
+  Sprite-sliced) diverge enough that further abstraction is premature to do inline here. **Update
+  (code review, 2026-07-18):** system-architect noted the condition for revisiting ("once all
+  three have shipped") is now met — logged a `spawn_bar_anchor(...)` extraction suggestion to
+  `planning/claude_suggestions.md` rather than doing it as part of this diff, to keep this feature
+  branch scoped to the `Textured` style itself.
 
 ## Acceptance criteria
 - Given `world_stat_bar: (stat_key: "...", style: Textured(texture_sheet: "...", fill_rect: ...,
   empty_rect: ...))`, when the tracked stat is at 60% of its range, then the fill sprite's visible
   width is ~60% of the bar width and its rounded caps render undistorted (9-slice), over a static
-  full-width empty track sprite.
+  full-width empty track sprite. Confirmed — playtest + `test_spawn_world_stat_bar_widget_
+  textured_style_spawns_anchor_and_two_sprites_without_duplication`.
 - Given the same bar as the stat changes (`ModifyStat`/`SetStat`), when the next frame runs, then
   the fill width updates smoothly to the new ratio, with the fill left-aligned (grows/recedes from
-  the right end) and change-detection guarding every write.
+  the right end) and change-detection guarding every write. Confirmed — playtest; debug-detective
+  verified the change-detection guards are correct (no `Icon`-style `DerefMut` bug).
 - Given `color_bands` set, when the ratio crosses a threshold, then the fill sprite's `color` tint
   updates to the matching band colour (highest `above_ratio` ≤ ratio wins), identically to `Pixel`.
+  Confirmed — playtest (red→yellow→green on the demo player).
 - Given a split-screen scene with a `Textured` bar on any entity visible in 2+ active viewports,
   when it renders, then it appears correctly in every one of them — **from this feature's first
   release**, with the `TextureSlicer` + image handles shared (cloned, not reloaded) across ranks.
+  Confirmed — `test_spawn_world_stat_bar_widget_textured_style_duplicates_ranks_when_split_screen`
+  (not separately playtested in a split-screen project; this demo is single-player).
 - Given a non-split scene, when a `Textured` bar spawns, then exactly one anchor + two `Sprite`
-  children are created (regression parity with `Pixel`'s single-instance behavior).
+  children are created (regression parity with `Pixel`'s single-instance behavior). Confirmed.
 - Given an existing project with no `Textured` bars, when this feature ships, then all existing
   `Ascii`/`Pixel`/`Icon`/`style`-less bars are byte-for-byte unaffected (purely additive enum
-  variant).
+  variant). Confirmed — full `ironhold_core` test suite green, no other project touched.
 - RON validation: parse/defaults tests pass for the `Textured` variant, matching existing
-  `Ascii`/`Pixel`/`Icon` coverage; `cargo check -p ironhold_cli` stays green.
+  `Ascii`/`Pixel`/`Icon` coverage; `cargo check -p ironhold_cli` stays green. Confirmed.
 - The `3rd_person_game_demo` player's `world_stat_bar` renders as the rounded textured health bar
   (replacing the `Icon` hearts bar), using the real `rounded-healthbar-texture-sheet.png` art —
-  not a placeholder or a stretched non-sliced texture.
+  not a placeholder or a stretched non-sliced texture. Confirmed — playtest.
+
+## Code review note (2026-07-18)
+
+All 5 parallel post-implementation reviews ran (alignment-reviewer, system-architect,
+debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer). Two real, concrete issues were
+found and fixed before playtest; the rest were confirmed-clean, doc-precision, or logged as
+non-blocking follow-ups:
+
+- **Fixed (debug-detective + ux-gamedesigner-reviewer, independently) — shipped demo RON
+  authored an out-of-bounds 9-slice border.** The original `empty_rect: (0,17,48,15)` paired with
+  `slice_border: (8,8,8,8)` summed to 16 on the vertical axis against the rect's own height of 15
+  — Bevy's `TextureSlicer::compute_slices` has an internal `min_inset + max_inset >= rect.size()`
+  check that trips a `tracing::error!` (console.error on web) and falls back to an un-sliced,
+  stretched quad for that layer, silently distorting the track's rounded caps. Fixed by padding
+  `empty_rect`'s height to `17` (matching `fill_rect`) — the source sheet has blank transparent
+  padding rows available to absorb it. Applied consistently to the demo RON, the docs example, and
+  both test fixtures.
+- **Fixed (alignment-reviewer + system-architect + debug-detective, independently, 3 of 5
+  reviewers) — missing `texture_sheet` catalog key silently spawned a broken bar.** The spawn arm
+  originally used `unwrap_or_default()` with no diagnostic, contradicting this very plan's own
+  stated contract ("`warn!` once and skip the bar"). Fixed: a missing key now logs a `warn!` and
+  skips spawning the bar entirely (no orphaned/invisible entities). Note `Icon`'s equivalent
+  `icon_sheet` gap was deliberately left alone (already shipped/merged; logged as a follow-up in
+  `planning/claude_suggestions.md` rather than reopening that feature here).
+- **Doc-precision fixes (ux-gamedesigner-reviewer)** — added the sheet's coordinate origin
+  (top-left, Y-down) and a one-line "how to get the numbers from your own art" workflow tip (both
+  were previously unstated — the single biggest blocker to authoring a *new* sheet from scratch);
+  corrected the schema/doc claim that corners "stay undistorted at every width" to precisely
+  describe when they scale down uniformly instead; added a brief plain-language definition of
+  "9-slice"; flagged that `fill_color`/`bg_color`'s defaults are coloured, not neutral, and a bar
+  that omits both will visibly tint pre-coloured art; fixed a stale `WorldStatBarDef` summary-table
+  row that still only listed 3 styles.
+- **Confirmed clean (debug-detective)** — the per-frame update system's change-detection guards
+  correctly avoid the `Icon` feature's earlier `DerefMut` bug (reads via `Deref`, only reaches a
+  mutating write inside the genuinely-different branch); first-frame spawn state (`custom_size.x
+  = 0`) grows safely with no visual pop.
+- **Confirmed clean (wasm-perf-reviewer)** — a 9-sliced `Sprite` renders through the identical
+  `SpritePipeline` as a plain/atlas `Sprite` (9-slicing is CPU-side geometry expansion, not a
+  distinct pipeline specialization), so replacing `Icon`'s hearts bar with this style on the same
+  player prefabs carries zero first-use pipeline risk — it inherits `Icon`'s already-warmed path.
+  Zero per-frame heap allocation in the update system; the demo's global `player_health` key takes
+  the O(1) `LoadedStats` path, not the O(entities-with-StatMap) dotted-key scan.
+- **Logged, not fixed (non-blocking)** — a `cli validate` cross-check for `texture_sheet`/
+  `icon_sheet` catalog-key existence and `slice_border`-vs-rect geometry bounds (architect +
+  debug-detective); a `spawn_bar_anchor` extraction now that `Pixel`/`Icon`/`Textured` all share
+  near-identical anchor-spawn scaffolding (architect). Both logged to
+  `planning/claude_suggestions.md`.
