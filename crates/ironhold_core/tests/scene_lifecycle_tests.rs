@@ -88,7 +88,7 @@ fn test_input_abstraction_flow() {
                 strafe_mouse_button: Some("Left".to_string()),
                 target_next: "Tab".to_string(),
                 target_range: 30.0,
-                gamepad_index: None,
+                gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
             },
             is_running: false,
             jump_velocity: 5.94,

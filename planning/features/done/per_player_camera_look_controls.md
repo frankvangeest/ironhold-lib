@@ -1,7 +1,26 @@
 # Feature: Per-Player Keyboard Camera Look Controls
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `be0a3ea` (2026-07-19)_
+
+**Shipped (2026-07-19):** implemented on `feature/camera-look-controls`. All 5 reviews
+(alignment, system-architect, debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer) came
+back clean or with only non-blocking findings, all folded in: a stale doc-comment overclaiming
+gamepad support (this feature doesn't touch gamepad — fixed), a test-coverage gap where the
+RON-string-to-`OrbitCamera`-field spawn-site resolution was never exercised end-to-end (added
+`test_scene_load_resolves_look_keys_and_look_speed_onto_spawned_split_orbit_camera`), and a
+weaker-than-claimed independence test (strengthened to bind the sibling camera to a *different*
+key rather than leaving it unbound). A latent `InputMap`-key-validation gap (no `ActionBar`-style
+duplicate-key/cross-player collision check exists for `look_left`/etc.) was logged to
+`claude_suggestions.md` as out-of-scope follow-up work, not fixed here. Full test suite green
+(97 tests in `local_coop_tests.rs` alone), `cargo check -p ironhold_core -p ironhold_cli` clean,
+WASM dev build succeeded. Playtest confirmed by Frank across the vertical-split, 4-way-grid,
+horizontal-split, and dynamic-split `local_coop_demo` rooms plus a single-player regression check
+— per-player camera look worked correctly with no cross-talk between viewports. Playtest also
+surfaced one **unrelated, confirmed pre-existing** console warning (a double-despawn race in
+`target_indicator_system`, nothing to do with this feature — this branch never touches
+`target_indicator.rs`/`targeting.rs`) — logged to `planning/backlog.md` ▸ Bugs with repro steps
+and a suggested fix, not addressed here to keep this feature's scope intact.
 
 **Plan-review note (2026-07-19):** **system-architect** returned Ready with two minor corrections,
 both folded in below: (1) the `PartyOrbitCamera` out-of-scope rationale was wrong (`party_camera_
@@ -152,24 +171,24 @@ this file (e.g. `// gamepad_index: 0,`). The docs RON example shows all four fie
 which are demo-bound.
 
 ## Tasks
-- [ ] `InputMap`: add `look_left`/`look_right`/`look_up`/`look_down: Option<String>` (schema/player.rs)
-- [ ] `InputMap::parse_key`: add `Comma`, `Period`, `Semicolon`, `Quote`, `Slash`, `BracketLeft`,
+- [x] `InputMap`: add `look_left`/`look_right`/`look_up`/`look_down: Option<String>` (schema/player.rs)
+- [x] `InputMap::parse_key`: add `Comma`, `Period`, `Semicolon`, `Quote`, `Slash`, `BracketLeft`,
       `BracketRight`, `Minus`, `Equal` arms
-- [ ] `CameraConfig`: add `look_speed: f32` with `default_look_speed() -> f32 { 2.0 }`
-- [ ] `OrbitCamera`: add `look_left_key`/`look_right_key`/`look_up_key`/`look_down_key: Option<KeyCode>`
+- [x] `CameraConfig`: add `look_speed: f32` with `default_look_speed() -> f32 { 2.0 }`
+- [x] `OrbitCamera`: add `look_left_key`/`look_right_key`/`look_up_key`/`look_down_key: Option<KeyCode>`
       and `look_speed: f32`; populate at both spawn sites (`scene_loader.rs`,
       `entity_spawner.rs`) alongside the existing `parse_orbit_button` call
-- [ ] `camera_orbit_system`: add `Res<ButtonInput<KeyCode>>` param and the keyboard-look block
+- [x] `camera_orbit_system`: add `Res<ButtonInput<KeyCode>>` param and the keyboard-look block
       (independent of the existing mouse `orbit_active` gate); pin the pitch direction convention
       described above
-- [ ] Update every `CameraConfig`/`InputMap` struct literal that doesn't go through RON deserialization
+- [x] Update every `CameraConfig`/`InputMap` struct literal that doesn't go through RON deserialization
       (neither type derives `Default`): `default_camera_config()`/`default_input_map()`
       (`entity_spawner.rs:953`/`972`) and the test-fixture builders in `local_coop_tests.rs`,
       `action_tests.rs`, `npc_tests.rs`, `entity_logic_tests.rs`, `scene_lifecycle_tests.rs`
-- [ ] Wire the 10-prefab demo table above into `local_coop_demo/prefabs/prefabs.ron`; add the
+- [x] Wire the 10-prefab demo table above into `local_coop_demo/prefabs/prefabs.ron`; add the
       commented-out pitch pair to `player_p1_split`; add the "why no look keys" comment to
       `player_p1`/`player_p2`
-- [ ] Tests — regression: an unmodified pre-existing scene (`3rd_person_game_demo` or `quick_scene`)
+- [x] Tests — regression: an unmodified pre-existing scene (`3rd_person_game_demo` or `quick_scene`)
       has identical mouse-orbit yaw/pitch behavior after this change (no `look_*` fields authored →
       `Option<KeyCode>` fields are `None` → the new block never fires); new: a player with
       `look_left`/`look_right` bound rotates *only* its own camera's yaw when its key is held across
@@ -177,17 +196,17 @@ which are demo-bound.
       entity, no keys bound) is unaffected; pitch test asserts *direction* (`look_up` increases
       `pitch` toward `max_pitch`) in addition to clamping to `min_pitch`/`max_pitch` under sustained
       hold
-- [ ] Docs — `docs/20_data_formats.md`: `InputMap` and `CameraConfig` tables get the new fields
+- [x] Docs — `docs/20_data_formats.md`: `InputMap` and `CameraConfig` tables get the new fields
       (the `look_speed` entry states its unit, rad/s, a feel anchor — "~3s per full turn
       at the default" — and cross-references `orbit_speed` as the separate mouse-sensitivity dial);
       the "Valid key name strings" table gets the 9 new punctuation entries; one RON example shows
       all four `look_*` fields even though the shipped demo only binds yaw
-- [ ] Docs — fix the ~5 now-stale "split-screen camera is fully fixed / no manual control" passages
+- [x] Docs — fix the ~5 now-stale "split-screen camera is fully fixed / no manual control" passages
       in `docs/20_data_formats.md` (the `orbit_button: "None"` note and the split/dynamic/grid
       section blockquotes) to read "no manual *mouse* control; keyboard look can still be bound per
       player" — and add the designer-facing worked scheme-table example there (not only in the
       developer-facing `CLAUDE.md`)
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`'s Local co-op section: note that split-screen's
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`'s Local co-op section: note that split-screen's
       mouse-orbit-disabled limitation is now addressed via per-player keyboard look, cross-referencing
       the docs/20 worked example rather than duplicating the full table
 

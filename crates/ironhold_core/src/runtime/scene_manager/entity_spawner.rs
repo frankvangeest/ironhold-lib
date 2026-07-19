@@ -920,6 +920,11 @@ fn spawn_orbit_camera_for_player(
         .as_deref()
         .map(crate::capabilities::camera::parse_orbit_button)
         .unwrap_or((false, false));
+    let inputs = &player_config.inputs;
+    let look_left_key = inputs.look_left.as_deref().and_then(InputMap::parse_key);
+    let look_right_key = inputs.look_right.as_deref().and_then(InputMap::parse_key);
+    let look_up_key = inputs.look_up.as_deref().and_then(InputMap::parse_key);
+    let look_down_key = inputs.look_down.as_deref().and_then(InputMap::parse_key);
     let start_pos =
         Vec3::from(player_config.initial_position) + Vec3::from(cam.offset);
     commands.spawn((
@@ -946,6 +951,11 @@ fn spawn_orbit_camera_for_player(
             orbit_rmb,
             character_rotate_lmb: char_rot_lmb,
             character_rotate_rmb: char_rot_rmb,
+            look_left_key,
+            look_right_key,
+            look_up_key,
+            look_down_key,
+            look_speed: cam.look_speed,
         },
     )).id()
 }
@@ -966,6 +976,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         initial_yaw: 0.0,
         party: None,
         split: None,
+        look_speed: 2.0,
     }
 }
 
@@ -984,6 +995,10 @@ pub(crate) fn default_input_map() -> InputMap {
         target_next: "Tab".to_string(),
         target_range: 30.0,
         gamepad_index: None,
+        look_left: None,
+        look_right: None,
+        look_up: None,
+        look_down: None,
     }
 }
 

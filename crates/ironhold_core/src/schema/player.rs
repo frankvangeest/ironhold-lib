@@ -109,6 +109,13 @@ pub struct CameraConfig {
     /// warning is logged.
     #[serde(default)]
     pub split: Option<SplitScreenDef>,
+    /// Angular rate (radians/sec) for keyboard-held camera look (`InputMap.look_left`/
+    /// `look_right`/`look_up`/`look_down`). Deliberately NOT the same field as `orbit_speed`,
+    /// which is tuned as a mouse-pixel-delta multiplier and would be far too slow
+    /// (~15s/revolution at this scene's `orbit_speed: 0.4`) if reused as a keyboard-hold rate.
+    /// Default: 2.0 (~3.1s per full yaw revolution held).
+    #[serde(default = "default_look_speed")]
+    pub look_speed: f32,
 }
 
 /// Local co-op shared-camera zoom behavior, authored on the first player's `camera.party`.
@@ -192,6 +199,7 @@ fn default_max_pitch() -> f32 { 0.9 }
 fn default_orbit_button() -> String { "Either".to_string() }
 fn default_character_rotate_button() -> Option<String> { Some("Right".to_string()) }
 fn default_initial_pitch() -> f32 { 0.5 }
+fn default_look_speed() -> f32 { 2.0 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct InputMap {
@@ -223,6 +231,20 @@ pub struct InputMap {
     /// keeps keyboard-only behavior identical to before this field existed.
     #[serde(default)]
     pub gamepad_index: Option<usize>,
+    /// Keyboard-held camera yaw/pitch turning, independent of every other player's camera —
+    /// needed because split-screen scenes disable mouse-orbit per camera (`orbit_button: "None"`,
+    /// since one shared mouse can't drive 2+ independently-active `OrbitCamera`s). `None`
+    /// (default) leaves that axis unbound; all four are optional and independent of each other.
+    /// See `docs/20_data_formats.md`'s `InputMap` table for the "valid key name strings" this
+    /// accepts (parsed the same way as `forward`/`jump`/etc., via `InputMap::parse_key`).
+    #[serde(default)]
+    pub look_left: Option<String>,
+    #[serde(default)]
+    pub look_right: Option<String>,
+    #[serde(default)]
+    pub look_up: Option<String>,
+    #[serde(default)]
+    pub look_down: Option<String>,
 }
 
 fn default_run_key() -> String {
@@ -356,6 +378,18 @@ impl InputMap {
             "ArrowDown"  => Some(KeyCode::ArrowDown),
             "ArrowLeft"  => Some(KeyCode::ArrowLeft),
             "ArrowRight" => Some(KeyCode::ArrowRight),
+            // Punctuation — added for the Arrows control scheme's camera-look bindings
+            // (Comma/Period sit physically beside the arrow cluster on a standard layout); the
+            // rest of the row is added alongside for a complete, non-arbitrary set.
+            "Comma"        => Some(KeyCode::Comma),
+            "Period"       => Some(KeyCode::Period),
+            "Semicolon"    => Some(KeyCode::Semicolon),
+            "Quote"        => Some(KeyCode::Quote),
+            "Slash"        => Some(KeyCode::Slash),
+            "BracketLeft"  => Some(KeyCode::BracketLeft),
+            "BracketRight" => Some(KeyCode::BracketRight),
+            "Minus"        => Some(KeyCode::Minus),
+            "Equal"        => Some(KeyCode::Equal),
             _ => None,
         }
     }

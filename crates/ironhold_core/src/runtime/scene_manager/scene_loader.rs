@@ -860,6 +860,7 @@ pub fn spawn_scene_v2(
 
             let cam = components.camera.clone().unwrap_or_else(default_camera_config);
             let cam_offset = Vec3::from(cam.offset);
+            let player_inputs = components.inputs.clone().unwrap_or_else(default_input_map);
             commands.spawn((
                 Name::new("Orbit Camera"),
                 Camera3d::default(),
@@ -869,6 +870,7 @@ pub fn spawn_scene_v2(
                 LevelEntity,
                 {
                     use crate::capabilities::camera::parse_orbit_button;
+                    use crate::schema::player::InputMap;
                     let (orbit_lmb, orbit_rmb) = parse_orbit_button(&cam.orbit_button);
                     let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
                         .as_deref()
@@ -891,6 +893,11 @@ pub fn spawn_scene_v2(
                         orbit_rmb,
                         character_rotate_lmb:   char_rot_lmb,
                         character_rotate_rmb:   char_rot_rmb,
+                        look_left_key:  player_inputs.look_left.as_deref().and_then(InputMap::parse_key),
+                        look_right_key: player_inputs.look_right.as_deref().and_then(InputMap::parse_key),
+                        look_up_key:    player_inputs.look_up.as_deref().and_then(InputMap::parse_key),
+                        look_down_key:  player_inputs.look_down.as_deref().and_then(InputMap::parse_key),
+                        look_speed:     cam.look_speed,
                     }
                 },
             ));
