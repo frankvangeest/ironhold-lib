@@ -102,6 +102,16 @@ fn missing_foliage_leaf_texture_exits_1() {
 }
 
 #[test]
+fn primitive_player_on_terrain_exits_1() {
+    let (code, stdout) = validate("primitive_player_on_terrain");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("primitive_player") && stdout.contains("terrain"),
+        "expected a primitive-player-on-terrain error in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn unparseable_action_bar_key_exits_1() {
     let (code, stdout) = validate("bad_action_bar_key");
     assert_eq!(code, 1, "expected exit 1, got {code}");

@@ -79,8 +79,12 @@ pub(crate) fn clear_target_vars(vars: &mut GameVariables) {
     vars.0.insert("target_id".to_string(), String::new());
 }
 
-/// A player entity carries either no `PlayerIndex` (the primitive/capsule single-player path,
-/// which never gets one) or `PlayerIndex(0)` — both mean "the primary player". See
+/// A player entity carries either no `PlayerIndex` at all or `PlayerIndex(0)` — both mean "the
+/// primary player". Since `player_model_source_unification.md` v1, a primitive-shaped player
+/// spawned via the immediate scene-load path always gets a `PlayerIndex` (same as GLB players);
+/// the "no `PlayerIndex` at all" case is now only reachable in practice via the v3-deferred
+/// terrain/character-select paths, which don't spawn primitive players at all yet (see
+/// `crates/ironhold_core/src/CLAUDE.md`'s "player-construction" section). See
 /// `planning/features/per_player_split_screen_targeting.md`. `pub(crate)` so
 /// `action_executor.rs`'s `Action::SetTarget`/`ClearTarget` handlers can resolve the same primary
 /// player these systems do, instead of writing `CurrentTarget` directly and leaving every

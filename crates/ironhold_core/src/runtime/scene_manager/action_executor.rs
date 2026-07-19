@@ -108,6 +108,28 @@ pub fn action_executor_system(
                     warn!("Action::Spawn: prefab {:?} not found in catalog", prefab);
                     continue;
                 };
+                // Reject a primitive-shaped player prefab unconditionally, BEFORE the model
+                // lookup below — not just when that lookup happens to fail. `model: ""` is only
+                // a convention for `kind: Primitive` prefabs (schema/catalog.rs), not enforced;
+                // a primitive player prefab that also sets a resolvable `model` key would
+                // otherwise sail past the lookup, get assembled with
+                // `PlayerModelSource::Primitive`, and panic at spawn time (`spawn_player_entity`
+                // always passes `None` for `PrimitivePlayerCtx` on this path — debug-detective
+                // finding, player_model_source_unification.md). Dynamic (character-select) spawn
+                // of a primitive-bodied player is v3-deferred, regardless of what `model` is set to.
+                if prefab_def.kind == crate::schema::catalog::PrefabKind::Primitive
+                    && prefab_def.components.tags.iter().any(|t| t == "player")
+                {
+                    warn!(
+                        "Action::Spawn: primitive-shaped player prefab '{}' can't be spawned \
+                         dynamically (via character-select/Action::Spawn) yet — only the \
+                         immediate scene-load path supports primitive players in v1. Use a \
+                         GLB (Actor-kind) player prefab for character-select, or place this \
+                         player directly in the scene's `entities:` list instead.",
+                        prefab
+                    );
+                    continue;
+                }
                 let Some(model_entry) = asset_catalog.0.models.get(&prefab_def.model) else {
                     warn!("Action::Spawn: model key {:?} not found in asset catalog", prefab_def.model);
                     continue;
@@ -156,7 +178,7 @@ pub fn action_executor_system(
                         &prefab_def,
                         &prefab,
                         &spawn_id,
-                        model_path.clone(),
+                        Some(model_path.clone()),
                         (sx, sy, sz),
                         spawn_params.nameplate_config.player_enabled,
                     ))

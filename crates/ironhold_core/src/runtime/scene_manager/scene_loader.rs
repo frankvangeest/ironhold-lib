@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 use bevy_rapier3d::prelude::{
-    Collider, RigidBody, LockedAxes, Damping, Velocity, ExternalImpulse,
+    Collider, RigidBody, LockedAxes, Damping, Velocity,
     Friction, CoefficientCombineRule, Sensor, ActiveEvents,
 };
 use crate::schema::*;
@@ -10,9 +10,6 @@ use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::player::PlayerConfig;
 use crate::runtime::messages::*;
 use crate::runtime::material_factory::MaterialFactory;
-use crate::capabilities::player::CharacterController;
-use crate::capabilities::camera::OrbitCamera;
-use crate::capabilities::animation_resolver::{AnimationRequests, LocomotionState, ActiveOverride};
 use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
@@ -38,8 +35,7 @@ const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::PipelineWarmup;
 use super::entity_spawner::{
-    spawn_prefab_instance, default_camera_config, default_input_map,
-    attach_prefab_features, assemble_player_config,
+    spawn_prefab_instance, attach_prefab_features, assemble_player_config,
 };
 
 pub fn spawn_scene_v2(
@@ -158,7 +154,6 @@ pub fn spawn_scene_v2(
             info!("Built {} material(s) from asset catalog", params.asset_catalog.0.materials.len());
         }
 
-        // Capture these refs before the primitive_player destructure shadows `params`.
         let prefab_catalog = &params.prefab_catalog.0;
         let asset_catalog  = &params.asset_catalog.0;
         let project_root   = params.project_root.0.as_str();
@@ -168,12 +163,11 @@ pub fn spawn_scene_v2(
         let mut pending_labels: Vec<(Entity, crate::schema::scene_v2::EntityLabelDef)> = Vec::new();
         let mut pending_stat_labels: Vec<(Entity, String, crate::schema::catalog::StatLabelDef)> = Vec::new();
         let mut pending_world_bars: Vec<(Entity, String, crate::schema::catalog::WorldStatBarDef)> = Vec::new();
-        // One entry per `tags: ["player"]` GLB prefab in the scene — supports local co-op
-        // (2+ players). The primitive/capsule player path below is separate and stays
-        // single-player-only (see `primitive_player`).
+        // One entry per `tags: ["player"]` prefab in the scene (GLB or primitive, for the
+        // non-terrain case) — supports local co-op (2+ players) with no structural cap on
+        // either model source. See
+        // `planning/features/done/player_model_source_unification.md`.
         let mut player_configs: Vec<PlayerConfig> = Vec::new();
-        // A primitive prefab with tags: ["player"]: shape + params + spawn position + components.
-        let mut primitive_player: Option<(String, PrimitiveShapeKind, crate::schema::catalog::PrimitiveParams, Vec3, crate::schema::catalog::PrefabComponents, Vec<crate::schema::catalog::ChildPrimitiveDef>, String, Option<String>, Option<bool>)> = None;
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
@@ -248,10 +242,35 @@ pub fn spawn_scene_v2(
             }
 
             if prefab.kind == PrefabKind::Primitive {
-                // ── Primitive player: collect and defer; camera spawned after entity loop ──
+                // ── Primitive player: fold into the same `player_configs` flow the GLB
+                // collector uses, via `assemble_player_config` — removes the old single-
+                // primitive-player structural cap (see
+                // `planning/features/done/player_model_source_unification.md`). Only for the
+                // non-terrain case in v1; terrain-deferred primitive-player spawn is a distinct,
+                // deferred resource-architecture problem (v3), not a v1 regression — a primitive
+                // player in a terrain scene simply doesn't spawn yet, with a clear warning
+                // instead of the silent "spawns immediately regardless of terrain" behavior this
+                // path had before (untested territory, not a v1 regression: terrain+primitive-
+                // player was never validated to work correctly to begin with).
                 if is_player {
-                    let p = prefab.primitive.as_ref().cloned().unwrap_or_default();
-                    primitive_player = Some((entity_def.id.clone(), prefab.shape.as_ref().cloned().unwrap_or(PrimitiveShapeKind::Capsule3d), p, translation, prefab.components.clone(), prefab.children.clone(), entity_def.prefab.clone(), prefab.display_name.clone(), prefab.nameplate));
+                    if scene.terrain.is_some() {
+                        warn!(
+                            "entity '{}': primitive-shaped player prefabs in a scene with \
+                             `terrain:` set aren't supported yet (v3 of \
+                             player_model_source_unification.md) — entity skipped. Use a GLB \
+                             (Actor-kind) player prefab in terrain scenes for now.",
+                            entity_def.id
+                        );
+                        continue;
+                    }
+                    player_configs.push(assemble_player_config(
+                        prefab,
+                        &entity_def.prefab,
+                        &entity_def.id,
+                        None,
+                        (translation.x, translation.y, translation.z),
+                        show_player_nameplate,
+                    ));
                     continue;
                 }
 
@@ -630,7 +649,7 @@ pub fn spawn_scene_v2(
                     prefab,
                     &entity_def.prefab,
                     &entity_def.id,
-                    model_path,
+                    Some(model_path),
                     (translation.x, translation.y, translation.z),
                     show_player_nameplate,
                 ));
@@ -706,204 +725,11 @@ pub fn spawn_scene_v2(
         warn_missing_player_stat_templates(scene, &player_configs);
         warn_missing_stat_widget_templates(scene, prefab_catalog);
 
-        // ── Primitive player ─────────────────────────────────────────────────────────
-        if let Some((entity_id, shape, params, position, components, player_children, prefab_key, np_display_name, np_override)) = primitive_player {
-            let cap_radius = params.radius.unwrap_or(0.4);
-            // `height` always means total visual height (cylindrical body + two hemispheres).
-            let player_height = params.height.unwrap_or(1.8);
-            let cap_half = (player_height / 2.0 - cap_radius).max(0.0);
-
-            let mv = &components.movement;
-            let walk_speed = mv.walk_speed;
-            let run_speed  = mv.run_speed;
-            let double_jump_enabled = mv.double_jump;
-            let max_jumps: u8 = if double_jump_enabled { 2 } else { 1 };
-            let jump_velocity = resolve_jump_velocity(mv.jump.as_ref(), player_height);
-            let double_jump_velocity = if double_jump_enabled {
-                resolve_jump_velocity(mv.double_jump_height.as_ref(), player_height)
-            } else {
-                jump_velocity
-            };
-
-            let mesh = build_primitive_mesh(&shape, &params);
-            let mesh_handle = mats.meshes.add(mesh);
-            let mat_handle  = mats.standard.add(primitive_material(&params, project.primitive_default_color));
-
-            // `body_y` is the offset from the entity origin (feet) to the capsule centre.
-            // Both the visual mesh and the physics collider are children at this offset,
-            // so the capsule bottom sits exactly at the entity origin (ground-contact point).
-            let body_y = cap_half + cap_radius;
-
-            let player_entity = commands.spawn((
-                (
-                    Name::new("Player"),
-                    Transform::from_translation(position),
-                    Visibility::default(),
-                ),
-                (
-                    CharacterController {
-                        walk_speed,
-                        run_speed,
-                        rot_speed: mv.rot_speed.unwrap_or(3.0),
-                        inputs: components.inputs.clone().unwrap_or_else(default_input_map),
-                        is_running: false,
-                        jump_velocity,
-                        double_jump_enabled,
-                        double_jump_velocity,
-                        jumps_used: 0,
-                        max_jumps,
-                        collider_radius: cap_radius,
-                        ground_cast_length: mv.ground_cast_length,
-                        idle_drag: mv.idle_drag,
-                    },
-                    crate::capabilities::player::SpeedMultiplier(1.0),
-                    LocomotionState::default(),
-                    AnimationRequests::default(),
-                    ActiveOverride::default(),
-                ),
-                (
-                    // Compound collider: capsule centre offset up by body_y so its bottom
-                    // coincides with entity origin (feet). Collider stays on the main entity
-                    // so CollisionEvent reports the entity that has CharacterController.
-                    RigidBody::Dynamic,
-                    Collider::compound(vec![(
-                        Vec3::new(0.0, body_y, 0.0),
-                        Quat::IDENTITY,
-                        Collider::capsule_y(cap_half, cap_radius),
-                    )]),
-                    LockedAxes::ROTATION_LOCKED,
-                    Damping { linear_damping: 0.5, angular_damping: 0.5 },
-                    Velocity::default(),
-                    ExternalImpulse::default(),
-                    // Zero friction prevents the capsule from catching on cube edges.
-                    Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
-                ),
-            )).id();
-
-            // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper
-            // so the player is addressable by id — same pattern as every other entity. Players
-            // are never click/Tab targets, so markers are off.
-            tag_spawned_entity(
-                &mut commands.entity(player_entity), &mut spawn_registry,
-                &entity_id, &prefab_key, false, false, 1.0,
-            );
-            commands.entity(player_entity).insert((
-                crate::capabilities::player::Player,
-                crate::capabilities::player::PlayerOwnership::Local,
-                crate::capabilities::player::PlayerTarget::default(),
-            ));
-
-            if should_insert_nameplate(np_override, show_player_nameplate) {
-                let display_name = np_display_name.clone().unwrap_or_else(|| prefab_key.clone());
-                commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
-                    display_name,
-                    prefab_override: np_override,
-                });
-            }
-
-            // Gives this player a floating stat_label/world_stat_bar widget when their prefab
-            // declares one — same DynamicStatUiQueue mechanism the GLB player path
-            // (spawn_player_entity_core) and NPC/prop Action::Spawn entities use. `{self}` is
-            // resolved against this player's own entity_id. Re-fetches the PrefabDef by key
-            // since this destructured tuple doesn't carry it directly (unlike `components`,
-            // which was captured for the movement/camera/inputs fields already needed above).
-            // See `planning/features/player_stat_widgets.md`.
-            if let Some(prefab_for_widgets) = prefab_catalog.prefabs.get(&prefab_key) {
-                let stat_label = prefab_for_widgets.stat_label.as_ref().map(|sl| {
-                    let key = sl.stat_key.replace("{self}", &entity_id);
-                    (key, sl.clone())
-                });
-                let world_stat_bar = prefab_for_widgets.world_stat_bar.as_ref().map(|wb| {
-                    let key = wb.stat_key.replace("{self}", &entity_id);
-                    (key, wb.clone())
-                });
-                if stat_label.is_some() || world_stat_bar.is_some() {
-                    dyn_stat_ui_queue.0.push(crate::runtime::scene_manager::DynamicStatUiEntry {
-                        entity: player_entity, stat_label, world_stat_bar,
-                    });
-                }
-            }
-
-            // Visual body child — mesh centred at body_y above the feet so it aligns
-            // with the compound collider above.
-            let mesh_child = commands.spawn((
-                Name::new("Player Body"),
-                Mesh3d(mesh_handle),
-                MeshMaterial3d(mat_handle),
-                Transform::from_xyz(0.0, body_y, 0.0),
-                Visibility::default(),
-            )).id();
-            commands.entity(player_entity).add_child(mesh_child);
-
-            // Spawn cosmetic children (cap, eyes, nose, etc.) defined in the prefab.
-            // Offsets are relative to the entity origin (feet), matching all other prefabs.
-            {
-                let mut ctx = ChildSpawnCtx {
-                    meshes:    &mut mats.meshes,
-                    standard:  &mut mats.standard,
-                    built_mats: &mats.built.0,
-                    custom_mats: &mats.custom,
-                    primitive_default_color: project.primitive_default_color,
-                    asset_server:  &asset_server,
-                    model_spawner: &model_spawner,
-                    fixes: &merged_fixes.0,
-                    asset_catalog,
-                    project_root,
-                };
-                spawn_primitive_children(
-                    &mut commands, player_entity, &player_children,
-                    prefab_catalog, &mut ctx,
-                    &mut load_errors, "player", 0, &mut HashSet::new(),
-                    Transform::IDENTITY,
-                );
-            }
-
-            let cam = components.camera.clone().unwrap_or_else(default_camera_config);
-            let cam_offset = Vec3::from(cam.offset);
-            let player_inputs = components.inputs.clone().unwrap_or_else(default_input_map);
-            commands.spawn((
-                Name::new("Orbit Camera"),
-                Camera3d::default(),
-                tonemapping,
-                Transform::from_translation(position + cam_offset)
-                    .looking_at(position + Vec3::from(cam.look_at_offset), Vec3::Y),
-                LevelEntity,
-                {
-                    use crate::capabilities::camera::parse_orbit_button;
-                    use crate::schema::player::InputMap;
-                    let (orbit_lmb, orbit_rmb) = parse_orbit_button(&cam.orbit_button);
-                    let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
-                        .as_deref()
-                        .map(parse_orbit_button)
-                        .unwrap_or((false, false));
-                    OrbitCamera {
-                        target:                 player_entity,
-                        radius:                 cam_offset.length(),
-                        offset:                 cam_offset,
-                        zoom_speed:             cam.zoom_speed,
-                        orbit_speed:            cam.orbit_speed,
-                        min_radius:             cam.min_radius,
-                        max_radius:             cam.max_radius,
-                        pitch:                  cam.initial_pitch,
-                        yaw:                    cam.initial_yaw,
-                        look_at_offset:         Vec3::from(cam.look_at_offset),
-                        min_pitch:              cam.min_pitch,
-                        max_pitch:              cam.max_pitch,
-                        orbit_lmb,
-                        orbit_rmb,
-                        character_rotate_lmb:   char_rot_lmb,
-                        character_rotate_rmb:   char_rot_rmb,
-                        look_left_key:  player_inputs.look_left.as_deref().and_then(InputMap::parse_key),
-                        look_right_key: player_inputs.look_right.as_deref().and_then(InputMap::parse_key),
-                        look_up_key:    player_inputs.look_up.as_deref().and_then(InputMap::parse_key),
-                        look_down_key:  player_inputs.look_down.as_deref().and_then(InputMap::parse_key),
-                        look_speed:     cam.look_speed,
-                    }
-                },
-            ));
-        }
-        // Spawn player(s) (delayed if terrain present), flycam, or fallback camera.
-        else if !player_configs.is_empty() {
+        // Spawn player(s) (delayed if terrain present), flycam, or fallback camera. GLB and
+        // primitive players share this one path — `spawn_players_and_camera` dispatches body
+        // construction per player via `PlayerConfig.model_source`. See
+        // `planning/features/done/player_model_source_unification.md`.
+        if !player_configs.is_empty() {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
                 commands.spawn((
@@ -912,6 +738,24 @@ pub fn spawn_scene_v2(
                     LevelEntity,
                 ));
             } else {
+                // Built unconditionally (cheap borrows) even if every player in this scene is
+                // GLB — only actually read by `spawn_player_entity_core`'s `Primitive` arm.
+                let mut primitive_ctx = super::entity_spawner::PrimitivePlayerCtx {
+                    child_ctx: ChildSpawnCtx {
+                        meshes:    &mut mats.meshes,
+                        standard:  &mut mats.standard,
+                        built_mats: &mats.built.0,
+                        custom_mats: &mats.custom,
+                        primitive_default_color: project.primitive_default_color,
+                        asset_server:  &asset_server,
+                        model_spawner: &model_spawner,
+                        fixes: &merged_fixes.0,
+                        asset_catalog,
+                        project_root,
+                    },
+                    prefab_catalog,
+                    load_errors: &mut load_errors,
+                };
                 super::entity_spawner::spawn_players_and_camera(
                     &mut commands,
                     &asset_server,
@@ -922,6 +766,7 @@ pub fn spawn_scene_v2(
                     tonemapping,
                     &mut spawn_registry,
                     dyn_stat_ui_queue,
+                    Some(&mut primitive_ctx),
                 );
             }
         } else if let Some((fc_transform, fc_def)) = flycam_start {
@@ -2736,23 +2581,23 @@ pub(super) fn resolve_jump_velocity(config: Option<&crate::schema::catalog::Jump
 /// Holds the asset references needed by `spawn_primitive_children`.
 /// Splits out the mutable and read-only slices of `SceneMaterialParams` so we can
 /// pass them into a recursive free function without fighting the borrow checker.
-struct ChildSpawnCtx<'a> {
-    meshes:    &'a mut Assets<Mesh>,
-    standard:  &'a mut Assets<StandardMaterial>,
-    built_mats: &'a std::collections::HashMap<String, crate::runtime::material_factory::BuiltMaterialHandle>,
-    custom_mats: &'a Assets<crate::capabilities::custom_material::CustomMaterial>,
-    primitive_default_color: Option<(f32, f32, f32)>,
-    asset_server:  &'a AssetServer,
-    model_spawner: &'a crate::runtime::model_spawner::ModelSpawner,
-    fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>,
-    asset_catalog: &'a crate::schema::catalog::AssetCatalog,
-    project_root:  &'a str,
+pub(crate) struct ChildSpawnCtx<'a> {
+    pub(crate) meshes:    &'a mut Assets<Mesh>,
+    pub(crate) standard:  &'a mut Assets<StandardMaterial>,
+    pub(crate) built_mats: &'a std::collections::HashMap<String, crate::runtime::material_factory::BuiltMaterialHandle>,
+    pub(crate) custom_mats: &'a Assets<crate::capabilities::custom_material::CustomMaterial>,
+    pub(crate) primitive_default_color: Option<(f32, f32, f32)>,
+    pub(crate) asset_server:  &'a AssetServer,
+    pub(crate) model_spawner: &'a crate::runtime::model_spawner::ModelSpawner,
+    pub(crate) fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>,
+    pub(crate) asset_catalog: &'a crate::schema::catalog::AssetCatalog,
+    pub(crate) project_root:  &'a str,
 }
 
 /// Spawns the `children` list of a composite prefab under `parent`, recursing into
 /// nested prefab references.  `visiting` tracks the keys currently on the call stack
 /// for cycle detection; `depth` enforces a hard nesting limit.
-fn spawn_primitive_children(
+pub(crate) fn spawn_primitive_children(
     commands: &mut Commands,
     parent: Entity,
     children: &[crate::schema::catalog::ChildPrimitiveDef],
@@ -2982,7 +2827,7 @@ fn spawn_primitive_children(
 
 // ─── Primitive shape helpers ───────────────────────────────────────────────────
 
-fn build_primitive_mesh(shape: &PrimitiveShapeKind, p: &crate::schema::catalog::PrimitiveParams) -> Mesh {
+pub(crate) fn build_primitive_mesh(shape: &PrimitiveShapeKind, p: &crate::schema::catalog::PrimitiveParams) -> Mesh {
     use bevy::math::primitives as bmp;
     match shape {
         PrimitiveShapeKind::Cuboid => {

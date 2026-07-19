@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use bevy::gltf::Gltf;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::ProjectRoot;
 use crate::schema::*;
 use crate::schema::catalog::ColliderShapeKind;
-use crate::schema::player::{PlayerConfig, AnimationPolicy, CameraConfig, InputMap};
+use crate::schema::player::{PlayerConfig, PlayerModelSource, AnimationPolicy, CameraConfig, InputMap};
 use crate::runtime::model_spawner::ModelSpawner;
 use crate::runtime::material_factory::PendingMaterialOverride;
 use crate::capabilities::player::CharacterController;
@@ -20,7 +20,7 @@ use super::{
     PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
     PendingEntitySpawns, tag_spawned_entity, should_insert_nameplate,
     resolve_project_path,
-    scene_loader::resolve_jump_velocity,
+    scene_loader::{resolve_jump_velocity, ChildSpawnCtx, build_primitive_mesh, primitive_material, spawn_primitive_children},
 };
 use crate::runtime::actions::ActionQueue;
 use super::message_interpreter::rewrite_self;
@@ -491,6 +491,10 @@ pub fn spawn_player_when_terrain_ready(
         let tonemapping = pending_tm
             .map(|pt| pt.0)
             .unwrap_or(bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted);
+        // `None`: terrain-deferred primitive-player spawn is v3-deferred (see the feature
+        // plan) — `scene_loader.rs` already warns and skips a primitive player prefab combined
+        // with `scene.terrain: Some(...)` before it ever reaches `PendingPlayerConfig`, so every
+        // config here is guaranteed `PlayerModelSource::Glb`.
         spawn_players_and_camera(
             &mut commands,
             &asset_server,
@@ -501,6 +505,7 @@ pub fn spawn_player_when_terrain_ready(
             tonemapping,
             &mut registry,
             &mut stat_ui_queue,
+            None,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -523,9 +528,13 @@ pub(crate) fn spawn_player_entity(
     registry: &mut SpawnRegistry,
     stat_ui_queue: &mut DynamicStatUiQueue,
 ) {
+    // `None`: this function's callers (dynamic `Action::Spawn`/character-select,
+    // terrain-delayed spawn) never build a `Primitive` `PlayerModelSource` in v1 — that path's
+    // resources aren't threaded this far yet (v3-deferred, see the feature plan). Character-
+    // select already actively rejects primitive player prefabs before reaching this function.
     let player_entity = spawn_player_entity_core(
         commands, asset_server, fixes, model_spawner, player_config, project_root, registry,
-        stat_ui_queue,
+        stat_ui_queue, None,
     );
     spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
 }
@@ -549,6 +558,7 @@ pub(crate) fn spawn_players_and_camera(
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     registry: &mut SpawnRegistry,
     stat_ui_queue: &mut DynamicStatUiQueue,
+    mut primitive_ctx: Option<&mut PrimitivePlayerCtx<'_>>,
 ) {
     // Per-player targeting (capabilities/targeting.rs) treats `player_index: 0` (the default —
     // `#[serde(default)]` on `PrefabDef.player_index`) as "the primary player": the one whose
@@ -571,8 +581,11 @@ pub(crate) fn spawn_players_and_camera(
 
     let mut entities: Vec<Entity> = Vec::with_capacity(player_configs.len());
     for pc in player_configs {
+        // Reborrow `primitive_ctx` fresh each iteration — `ChildSpawnCtx`'s `&mut Assets<...>`
+        // fields can't be moved/cloned, only reborrowed for the duration of one player's spawn.
         entities.push(spawn_player_entity_core(
             commands, asset_server, fixes, model_spawner, pc, project_root, registry, stat_ui_queue,
+            primitive_ctx.as_mut().map(|ctx| &mut **ctx),
         ));
     }
 
@@ -741,6 +754,20 @@ pub(crate) fn spawn_players_and_camera(
     }
 }
 
+/// Bundles everything a `PlayerModelSource::Primitive` body needs that a `Glb` one doesn't —
+/// mesh/material asset access, the built-materials memo, cosmetic-children resolution, and
+/// error collection. `None` at every caller except the immediate (non-terrain) scene-load path,
+/// which is the only one with these resources in scope — see the resource-threading note in
+/// `planning/features/done/player_model_source_unification.md`. If `spawn_player_entity_core`
+/// ever receives a `Primitive` `model_source` with no ctx, that's a v1-scope violation (only the
+/// scene-load path builds `Primitive` configs at all) and it panics rather than silently
+/// constructing a broken player.
+pub(crate) struct PrimitivePlayerCtx<'a> {
+    pub(crate) child_ctx: ChildSpawnCtx<'a>,
+    pub(crate) prefab_catalog: &'a crate::schema::catalog::PrefabCatalog,
+    pub(crate) load_errors: &'a mut Vec<String>,
+}
+
 fn spawn_player_entity_core(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -750,32 +777,74 @@ fn spawn_player_entity_core(
     project_root: &str,
     registry: &mut SpawnRegistry,
     stat_ui_queue: &mut DynamicStatUiQueue,
+    primitive_ctx: Option<&mut PrimitivePlayerCtx<'_>>,
 ) -> Entity {
-    let gltf_path = player_config.model_path.split('#').next().unwrap_or("").to_string();
-    let gltf_handle = asset_server.load(gltf_path.clone());
+    // Body construction dispatches on `model_source`; everything after this match is shared
+    // unconditionally by both variants (PlayerIndex, StatMap, material override, nameplate, stat
+    // widgets) — that sharing is the whole point of this unification.
+    let (player_entity, cap_radius, player_height, glb_anim): (Entity, f32, f32, Option<(String, Handle<Gltf>)>) = match &player_config.model_source {
+        PlayerModelSource::Glb(model_path) => {
+            let gltf_path = model_path.split('#').next().unwrap_or("").to_string();
+            let gltf_handle = asset_server.load(gltf_path.clone());
+            let spawned = model_spawner.spawn_instance(
+                commands, asset_server, fixes, model_path.clone(),
+                Transform::from_translation(Vec3::from(player_config.initial_position)),
+            );
+            let mv = &player_config.movement;
+            let cap_radius = mv.collider_radius.unwrap_or(0.4);
+            let player_height = mv.collider_height.unwrap_or(1.8);
+            (spawned.parent, cap_radius, player_height, Some((gltf_path, gltf_handle)))
+        }
+        PlayerModelSource::Primitive { shape, params, children } => {
+            let ctx = primitive_ctx.expect(
+                "PlayerModelSource::Primitive requires a PrimitivePlayerCtx — only the immediate \
+                 scene-load path builds Primitive player configs in v1, and it always supplies one",
+            );
+            let cap_radius = params.radius.unwrap_or(0.4);
+            let player_height = params.height.unwrap_or(1.8);
+            let cap_half = (player_height / 2.0 - cap_radius).max(0.0);
+            let body_y = cap_half + cap_radius;
 
-    let policy_handle_opt: Option<Handle<AnimationPolicy>> =
-        player_config.animation_policy.as_deref().map(|rel| {
-            let path = resolve_project_path(project_root, rel);
-            info!("Loading AnimationPolicy from: {}", path);
-            asset_server.load(path)
-        });
+            let mesh = build_primitive_mesh(shape, params);
+            let mesh_handle = ctx.child_ctx.meshes.add(mesh);
+            let mat_handle = ctx.child_ctx.standard.add(
+                primitive_material(params, ctx.child_ctx.primitive_default_color),
+            );
 
-    let spawned = model_spawner.spawn_instance(
-        commands,
-        asset_server,
-        fixes,
-        player_config.model_path.clone(),
-        Transform::from_translation(Vec3::from(player_config.initial_position)),
-    );
+            // `Name::new("Player")` is applied once, unconditionally, in the shared section below
+            // (same as the GLB arm) — not duplicated here.
+            let player_entity = commands.spawn((
+                Transform::from_translation(Vec3::from(player_config.initial_position)),
+                Visibility::default(),
+            )).id();
 
-    let player_entity = spawned.parent;
+            // Visual body child — mesh centred at body_y above the feet so it aligns with the
+            // compound collider inserted in the shared section below.
+            let mesh_child = commands.spawn((
+                Name::new("Player Body"),
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(mat_handle),
+                Transform::from_xyz(0.0, body_y, 0.0),
+                Visibility::default(),
+            )).id();
+            commands.entity(player_entity).add_child(mesh_child);
+
+            // Cosmetic children (cap, eyes, nose, etc.) defined in the prefab. Offsets are
+            // relative to the entity origin (feet), matching every other primitive prefab.
+            spawn_primitive_children(
+                commands, player_entity, children, ctx.prefab_catalog, &mut ctx.child_ctx,
+                ctx.load_errors, &player_config.spawn_id, 0, &mut HashSet::new(),
+                Transform::IDENTITY,
+            );
+
+            (player_entity, cap_radius, player_height, None)
+        }
+    };
+
     if let Some(mat_key) = &player_config.material {
         commands.entity(player_entity).insert(PendingMaterialOverride(mat_key.clone()));
     }
     let mv = &player_config.movement;
-    let cap_radius = mv.collider_radius.unwrap_or(0.4);
-    let player_height = mv.collider_height.unwrap_or(1.8);
     let cap_half = (player_height / 2.0 - cap_radius).max(0.0);
     let double_jump_enabled = mv.double_jump;
     let max_jumps: u8 = if double_jump_enabled { 2 } else { 1 };
@@ -806,9 +875,8 @@ fn spawn_player_entity_core(
         LocomotionState::default(),
         AnimationRequests::default(),
         ActiveOverride::default(),
-        // Required by player_movement_system's query. Without it the GLB player is
-        // silently filtered out of that query and never moves (the primitive player
-        // path inserts this at scene_loader.rs; the GLB path historically did not).
+        // Required by player_movement_system's query. Without it the player is silently
+        // filtered out of that query and never moves.
         crate::capabilities::player::SpeedMultiplier(1.0),
         RigidBody::Dynamic,
         Collider::compound(vec![(
@@ -821,6 +889,15 @@ fn spawn_player_entity_core(
         Velocity::default(),
         ExternalImpulse::default(),
     ));
+    // Zero friction prevents the primitive capsule from catching on cube edges — the same
+    // component NPC primitives already get (`entity_spawner.rs`'s NPC spawn path). GLB players
+    // don't get this; the inconsistency is a known, deliberately-deferred v2 item (see the
+    // feature plan's "Friction reconciliation" task), not touched here.
+    if matches!(player_config.model_source, PlayerModelSource::Primitive { .. }) {
+        commands.entity(player_entity).insert(
+            Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
+        );
+    }
 
     // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper, so
     // the GLB player is addressable by id like every other entity. Players are never
@@ -881,22 +958,32 @@ fn spawn_player_entity_core(
         });
     }
 
-    if let Some(policy_handle) = policy_handle_opt {
-        commands.entity(player_entity).insert((
-            PendingAnimationPolicy(policy_handle.clone()),
-            AnimationController {
-                current: String::new(),
-                last_played: String::new(),
-                gltf_path,
-                gltf_handle,
-                source_handles: Vec::new(),
-                node_indices: HashMap::new(),
-                graph_initialized: false,
-                transition_ms: 0,
-                should_loop: true,
-                last_player_entity: None,
-            },
-        ));
+    // Animation policy only applies to GLB players — a primitive body has no skeleton/animation
+    // graph to drive. `assemble_player_config` sets `animation_policy` from the prefab
+    // unconditionally regardless of model source, so this gate (not just `animation_policy.
+    // is_some()`) is what actually prevents a copy-pasted `animation_policy` field on a
+    // primitive player prefab from trying to load a policy against a nonexistent GLTF.
+    if let Some((gltf_path, gltf_handle)) = glb_anim {
+        if let Some(rel) = player_config.animation_policy.as_deref() {
+            let path = resolve_project_path(project_root, rel);
+            info!("Loading AnimationPolicy from: {}", path);
+            let policy_handle: Handle<AnimationPolicy> = asset_server.load(path);
+            commands.entity(player_entity).insert((
+                PendingAnimationPolicy(policy_handle),
+                AnimationController {
+                    current: String::new(),
+                    last_played: String::new(),
+                    gltf_path,
+                    gltf_handle,
+                    source_handles: Vec::new(),
+                    node_indices: HashMap::new(),
+                    graph_initialized: false,
+                    transition_ms: 0,
+                    should_loop: true,
+                    last_player_entity: None,
+                },
+            ));
+        }
     }
 
     player_entity
@@ -1003,26 +1090,43 @@ pub(crate) fn default_input_map() -> InputMap {
 }
 
 /// Builds a `PlayerConfig` from a `tags: ["player"]` prefab. Single source of truth for the
-/// two sites that assemble one by hand: the scene-load GLB player path (`scene_loader.rs`)
-/// and the dynamic `Action::Spawn` character-select path (`action_executor.rs`). Adding a new
-/// `PlayerConfig` field means editing this function once instead of both call sites.
+/// sites that assemble one by hand: the scene-load GLB/primitive collector (`scene_loader.rs`)
+/// and the dynamic `Action::Spawn` character-select path (`action_executor.rs`, GLB only — see
+/// `planning/features/done/player_model_source_unification.md`'s v1 scope). Adding a new
+/// `PlayerConfig` field means editing this function once instead of every call site.
+///
+/// `model_path` is only meaningful for a GLB (`PrefabKind::Actor`/etc.) prefab — callers resolve
+/// it from the asset catalog themselves (that lookup can fail) and pass `None` for a
+/// `PrefabKind::Primitive` prefab, whose body comes from `prefab.shape`/`primitive`/`children`
+/// instead. Dispatches on `prefab.kind`, not `shape`/`children` presence — a valid primitive
+/// prefab may have `shape: None` (defaults to `Capsule3d`) and empty `children`, which a
+/// presence-based check would misclassify as GLB.
 pub(crate) fn assemble_player_config(
     prefab: &crate::schema::catalog::PrefabDef,
     prefab_key: &str,
     spawn_id: &str,
-    model_path: String,
+    model_path: Option<String>,
     initial_position: (f32, f32, f32),
     player_nameplate_enabled: bool,
 ) -> PlayerConfig {
-    if prefab.animation_policy.is_none() {
-        warn!(
-            "Player prefab '{}' has no animation_policy — no animations will play. \
-             Set animation_policy in prefabs.ron to enable locomotion animation.",
-            prefab_key
-        );
-    }
+    let model_source = if prefab.kind == crate::schema::catalog::PrefabKind::Primitive {
+        PlayerModelSource::Primitive {
+            shape: prefab.shape.clone().unwrap_or(crate::schema::catalog::PrimitiveShapeKind::Capsule3d),
+            params: prefab.primitive.clone().unwrap_or_default(),
+            children: prefab.children.clone(),
+        }
+    } else {
+        if prefab.animation_policy.is_none() {
+            warn!(
+                "Player prefab '{}' has no animation_policy — no animations will play. \
+                 Set animation_policy in prefabs.ron to enable locomotion animation.",
+                prefab_key
+            );
+        }
+        PlayerModelSource::Glb(model_path.unwrap_or_default())
+    };
     PlayerConfig {
-        model_path,
+        model_source,
         initial_position,
         camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
         inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),

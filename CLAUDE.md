@@ -4,26 +4,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
+### Caching the ironhold_cli binary
+
+`cargo run -p ironhold_cli --`/`cargo check -p ironhold_cli` rebuild the whole dependency tree
+from scratch after any `cargo clean` (~10-25 min on this machine) even though `ironhold_cli`
+itself changes rarely — on a disk-constrained machine that needs frequent `cargo clean`s (see
+`CARGO_TARGET_DIR` notes below), this repeatedly triggered exactly the disk-exhaustion/thrashing
+scenario those notes warn about (real incident, 2026-07-19: a `cargo run -p ironhold_cli --
+query` took 18+ minutes and drove free space down to 3GB while other builds were also using the
+shared target dir). Build a release binary once and cache it **outside** `target/` so it survives
+`cargo clean`:
+
+```bash
+cargo build -p ironhold_cli --release
+cp "$CARGO_TARGET_DIR/release/ironhold.exe" tools/bin/ironhold.exe   # Windows; drop .exe elsewhere
+```
+
+`tools/bin/` is gitignored — this is a local, machine-specific cache, never committed. **Only
+re-run the two lines above when `ironhold_cli` or `ironhold_core` source actually changes**, not
+after every `cargo clean` of the shared target dir (`cargo clean` doesn't touch `tools/bin/`, so
+the cached binary is still valid immediately after one). Every command below uses the cached
+binary directly — no `cargo` invocation, no rebuild, effectively instant:
+
 ```bash
 # Ironhold CLI — inspect, validate, and query project assets (no engine startup required)
-cargo run -p ironhold_cli -- validate <project_dir>              # parse & cross-check all RON files; exit 0=ok 1=errors 2=tool-error
-cargo run -p ironhold_cli -- validate --strict <project_dir>    # also report defined keys never referenced anywhere (orphan detection)
-cargo run -p ironhold_cli -- inspect glb     <path.glb>          # animations, meshes, materials, root nodes
-cargo run -p ironhold_cli -- inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
-cargo run -p ironhold_cli -- inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
-cargo run -p ironhold_cli -- query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
-cargo run -p ironhold_cli -- query effects <project_dir>         # list particle effects (count, layers, flags)
-cargo run -p ironhold_cli -- query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
-cargo run -p ironhold_cli -- query rules    <project_dir>        # list rules.ron and/or state_machine.ron
-cargo run -p ironhold_cli -- query actions  <project_dir>        # list all action types used across logic files
-cargo run -p ironhold_cli -- query events   <project_dir>        # list all event triggers used across logic files
-cargo run -p ironhold_cli -- query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
-cargo run -p ironhold_cli -- query effects <project_dir> --filter additive=true  # filter by field=value
-cargo run -p ironhold_cli -- watch  <project_dir>               # watch for .ron changes and re-validate on every save
-cargo run -p ironhold_cli -- stats  <project_dir>               # compact summary: scenes, prefabs, effects, logic, catalog size
-cargo run -p ironhold_cli -- --json <command>                    # any command accepts --json for machine-readable output
-cargo build -p ironhold_cli --release   # produces target/release/ironhold.exe
+tools/bin/ironhold validate <project_dir>              # parse & cross-check all RON files; exit 0=ok 1=errors 2=tool-error
+tools/bin/ironhold validate --strict <project_dir>    # also report defined keys never referenced anywhere (orphan detection)
+tools/bin/ironhold inspect glb     <path.glb>          # animations, meshes, materials, root nodes
+tools/bin/ironhold inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
+tools/bin/ironhold inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
+tools/bin/ironhold query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
+tools/bin/ironhold query effects <project_dir>         # list particle effects (count, layers, flags)
+tools/bin/ironhold query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
+tools/bin/ironhold query rules    <project_dir>        # list rules.ron and/or state_machine.ron
+tools/bin/ironhold query actions  <project_dir>        # list all action types used across logic files
+tools/bin/ironhold query events   <project_dir>        # list all event triggers used across logic files
+tools/bin/ironhold query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
+tools/bin/ironhold query effects <project_dir> --filter additive=true  # filter by field=value
+tools/bin/ironhold watch  <project_dir>               # watch for .ron changes and re-validate on every save
+tools/bin/ironhold stats  <project_dir>               # compact summary: scenes, prefabs, effects, logic, catalog size
+tools/bin/ironhold --json <command>                    # any command accepts --json for machine-readable output
+```
 
+Still needed occasionally, and NOT replaced by the cached binary: `cargo check -p ironhold_cli`
+(the mandatory schema-change gate, step 6 of the Code change workflow below — it must compile
+against the current source, not a stale cached binary) and `cargo test -p ironhold_cli` (its own
+test suite). Both rebuild from source deliberately.
+
+```bash
 # Run native (desktop) build
 cargo run -p ironhold_native
 
@@ -353,11 +381,12 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
 
     **Evaluate every review finding individually**: fix it now (go back to step **Code changes**) or, if it's non-blocking, log it as its own item in `planning/backlog.md` or a `planning/claude_suggestions.md` entry — don't let a non-blocking finding stall this feature. All tests must pass before continuing regardless of review outcome.
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
- 6. **Schema/CLI verify** — if any `schema/` type was added, renamed, or had a field type changed, also spot-check the query output:
+ 6. **Schema/CLI verify** — if any `schema/` type was added, renamed, or had a field type changed, also spot-check the query output. Use `cargo run -p ironhold_cli --`, **not** the cached `tools/bin/ironhold` binary (see "Caching the ironhold_cli binary" above) — the schema change was just made, so a stale cached binary would silently show the old output instead of catching a break:
     ```
     cargo run -p ironhold_cli -- query actions assets/projects/3rd_person_game_demo
     ```
-    Verify new action kinds appear in the output and nothing crashes.
+    Verify new action kinds appear in the output and nothing crashes. Re-run the two cache-build
+    lines above afterward so `tools/bin/ironhold` picks up the schema change for later use.
  7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu`
     Fast (~2 min). For local play-testing only — **never commit `pkg/` on a feature branch** (enforced by `.githooks/pre-commit`).
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.

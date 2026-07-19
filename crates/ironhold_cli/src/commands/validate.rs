@@ -265,6 +265,35 @@ fn cross_file_checks(
         }
     }
 
+    // A primitive-shaped (`kind: Primitive`) player prefab combined with `scene.terrain:
+    // Some(...)` isn't supported yet — v3 of `player_model_source_unification.md`. Mirrors the
+    // scene-load-time `warn!` in `scene_loader.rs`; this is the design-time counterpart so a
+    // scene author sees it before ever running the project.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            if scene.terrain.is_none() { continue; }
+            for entity in &scene.entities {
+                let Some(prefab) = catalog.prefabs.get(&entity.prefab) else { continue };
+                if prefab.kind == PrefabKind::Primitive
+                    && prefab.components.tags.iter().any(|t| t == "player")
+                {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "entity {:?}: primitive-shaped player prefab {:?} combined with \
+                             scene.terrain — primitive players aren't supported on terrain-\
+                             deferred spawn yet (v3 of player_model_source_unification.md); use a \
+                             GLB (Actor-kind) player prefab for terrain scenes, or remove terrain \
+                             from this scene",
+                            entity.id, entity.prefab
+                        ),
+                        error_type: "unsupported_primitive_player_on_terrain",
+                    });
+                }
+            }
+        }
+    }
+
     for (scene_path, scene) in scenes {
         // Scene-wide (not per-bar) so a slot key shared across two different `ActionBar`s is
         // also caught here, not just within one bar's own slots — per-player action bars

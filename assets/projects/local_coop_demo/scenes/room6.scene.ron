@@ -95,6 +95,20 @@
       label: (text: "Room 5", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // room6 -> room7 (player_model_source_unification.md v1 playtest aid: 2-primitive-player
+    // vertical split). See prefabs.ron's "portal_to_room7" comment — the return trip reuses the
+    // existing "portal_to_room6" prefab, no new prefab needed for it.
+    (
+      id: "portal_to_room7",
+      prefab: "portal_to_room7",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 7 (primitive players)", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   // Scene title stays a single top label, same convention as every other room (room3/4/5's

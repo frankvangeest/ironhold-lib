@@ -476,8 +476,10 @@ scenes are unaffected** — the vars keep populating exactly as before.
 
 **Only the primary player's selection drives `rules.ron`/`state_machine.ron`/behavior `do_actions`
 through the shared pipeline.** The first player-tagged scene entity (matching `PlayerIndex(0)`, or
-a player with no `PlayerIndex` at all — e.g. the primitive/capsule player path) is "primary".
-`{target}` substitution in `rules.ron`/`state_machine.ron`/behaviors still resolves against the
+no `PlayerIndex` at all — a case only reachable via the terrain-deferred or character-select spawn
+paths, since neither currently spawns primitive-shaped players; every player spawned via the
+ordinary scene-load path, GLB or primitive, gets a `PlayerIndex`) is "primary". `{target}`
+substitution in `rules.ron`/`state_machine.ron`/behaviors still resolves against the
 primary player's target only — a second (or third, or fourth) player's selection drives their own
 visual feedback (ring, HUD readout) but has no effect on those global `do_actions`.
 
@@ -1802,6 +1804,14 @@ To display the camera's world position in the UI, add a label element with `id: 
 ### Special tag: `"player"` ✅
 
 A prefab with `components.tags: ["player"]` spawns a third-person character controller with an orbit camera. Works on both `kind: "actor"` (GLB model) and `kind: "primitive"` (capsule shape). Movement is tuned via `components.movement`; key bindings are tuned via `components.inputs`.
+
+**Which top-level `PrefabDef` fields take effect on a `tags: ["player"]` prefab** (same for `kind: "actor"` and `kind: "primitive"`, except where noted):
+
+- **Work:** `player_index` (split-screen "P{n}" HUD label, per-player targeting's primary-player check, `ActionBar.owner_player` matching), `material` (visual override, applies after the body is built regardless of model source), `stat_templates` (per-player `StatMap`, see "Per-player stat pools" below), `stat_label`/`world_stat_bar` (floating widgets bound to `{self}.<stat>`).
+- **Still silently no-op regardless of `kind`:** `behavior`, `interactable`, `dialogue`, `inventory`, `trigger_zone` — none of these are wired onto either player spawn path; this is a deliberate scope boundary (a player is input-driven, not state-machine-driven like an NPC), not a bug, and not blocked on anything above.
+- **`kind: "primitive"` only, not yet supported at all:** a primitive-shaped player prefab combined with `scene.terrain: Some(...)` (validate error + runtime warning, not silent), or referenced from a character-select `Action::Spawn` call (runtime warning, not silent) — only a scene placed directly in a scene's `entities:` list spawns a primitive player today.
+
+See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`prefabs/prefabs.ron`) and `scenes/room7.scene.ron` for a complete working example — two primitive-shaped players in one split-screen scene, each with its own tint, mana pool, and overhead bar. Mana there is decorative (nothing spends it, so both bars stay full) — see room3's per-player action bars for a primitive-free example of a live, spendable per-player pool.
 
 **`InputMap` fields** (`components.inputs` — omit the entire block to use WASD defaults):
 

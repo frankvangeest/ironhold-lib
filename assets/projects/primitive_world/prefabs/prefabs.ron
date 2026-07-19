@@ -34,13 +34,17 @@
       ),
       // world_icon_stat_bar.md playtest aid: a 5-heart pip display of the player's own health,
       // proving the Icon style works on a PRIMITIVE-bodied player, not just a GLB one — this
-      // prefab is the "player" (primitive/capsule) spawn path, a separate code path from
-      // 3rd_person_game_demo's GLB player_male/player_female (see player_model_source_unification.md
-      // for the known gap: primitive players never get a runtime StatMap even with stat_templates
-      // declared). Uses the GLOBAL "player_health" LoadedStats key (already tracked throughout
-      // this project's state_machine.ron/behaviors) rather than "{self}.health" — resolve_stat
-      // routes any non-dotted key straight to LoadedStats regardless of StatMap, so this bar works
-      // correctly despite the primitive-player StatMap gap.
+      // prefab is this project's sole player, kept as the definitive single-primitive-player
+      // regression baseline for player_model_source_unification.md (that plan's acceptance
+      // criteria require this prefab's visible behavior — movement/camera/collision — to stay
+      // unchanged across that feature). Uses the GLOBAL "player_health" LoadedStats key (already
+      // tracked throughout this project's state_machine.ron/behaviors) rather than "{self}.health"
+      // — resolve_stat routes any non-dotted key straight to LoadedStats regardless of StatMap,
+      // so this bar's own wiring didn't need to change. Note this prefab declares no
+      // `stat_templates`, so it doesn't exercise the per-player `StatMap` that
+      // player_model_source_unification.md v1 added for primitive players (see
+      // local_coop_demo's player_p1_primitive/player_p2_primitive prefabs, or
+      // docs/20_data_formats.md's `"player"` tag section, for a primitive player that does).
       world_stat_bar: (
         stat_key: "player_health",
         offset: (0.0, 2.3, 0.0),

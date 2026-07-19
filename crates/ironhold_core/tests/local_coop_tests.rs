@@ -4081,3 +4081,197 @@ fn test_parse_key_recognizes_new_punctuation_set() {
     assert_eq!(InputMap::parse_key("Minus"), Some(KeyCode::Minus));
     assert_eq!(InputMap::parse_key("Equal"), Some(KeyCode::Equal));
 }
+
+// ── player_model_source_unification.md: primitive players through the unified spawn path ───────
+
+fn load_single_entity_scene(app: &mut App, prefab_key: &str, terrain: Option<()>) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let terrain_block = if terrain.is_some() {
+        r#"Some((
+            heightmap: "projects/terrain_demo/terrain/heightmap.png",
+            splatmap: "shared/terrain/splatmap.png",
+            scale: (0.5, 30.0, 0.5),
+            material_paths: ["shared/terrain/grass.png"],
+        ))"#
+    } else {
+        "None"
+    };
+    let ron_str = format!(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "{prefab_key}", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+        terrain: {terrain_block},
+    )"#);
+    let scene: GameSceneV2 = ron::de::from_str(&ron_str).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+fn primitive_player_prefab(player_index: u32, mana_base: f32, material: Option<&str>) -> PrefabDef {
+    PrefabDef {
+        kind: PrefabKind::Primitive,
+        player_index,
+        material: material.map(|m| m.to_string()),
+        stat_templates: vec![ironhold_core::schema::stats::StatTemplateDef {
+            key: "mana".to_string(), base: mana_base, min: 0.0, max: 100.0,
+            regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+        }],
+        components: PrefabComponents { tags: vec!["player".to_string()], ..Default::default() },
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_primitive_player_gets_player_index_stat_map_and_material_like_glb_player() {
+    use ironhold_core::runtime::material_factory::PendingMaterialOverride;
+    use ironhold_core::schema::stats::StatMap;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("prim_player".to_string(), primitive_player_prefab(3, 42.0, Some("tint_blue"))),
+        ]),
+        ..Default::default()
+    }));
+
+    load_single_entity_scene(&mut app, "prim_player", None);
+
+    let results: Vec<(PlayerIndex, )> = {
+        let mut q = app.world_mut().query::<(&CharacterController, &PlayerIndex)>();
+        q.iter(app.world()).map(|(_, idx)| (*idx,)).collect()
+    };
+    assert_eq!(results.len(), 1, "one primitive player must spawn with a CharacterController");
+    assert_eq!(
+        results[0].0.0, 3,
+        "PlayerIndex must be forwarded from the prefab for a primitive player, matching GLB \
+         players — this is the exact gap player_model_source_unification.md v1 closes"
+    );
+
+    let stat_map_count = app.world_mut().query::<&StatMap>().iter(app.world()).count();
+    assert_eq!(
+        stat_map_count, 1,
+        "a primitive player with `stat_templates` set must get a StatMap, matching GLB players"
+    );
+    let sm = app.world_mut().query::<&StatMap>().iter(app.world()).next().unwrap();
+    assert!(
+        (sm.0.get("mana").unwrap().current - 42.0).abs() < 0.01,
+        "StatMap's initial value must come from the prefab's stat_templates base"
+    );
+
+    let mat_count = app.world_mut().query::<&PendingMaterialOverride>().iter(app.world()).count();
+    assert_eq!(
+        mat_count, 1,
+        "a primitive player with `material` set must get PendingMaterialOverride, matching GLB \
+         players — previously the primitive path never read PrefabDef.material at all"
+    );
+}
+
+#[test]
+fn test_two_primitive_players_get_distinct_player_index_and_independent_stat_maps() {
+    use ironhold_core::schema::stats::StatMap;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("prim_p1".to_string(), primitive_player_prefab(0, 100.0, None)),
+            ("prim_p2".to_string(), primitive_player_prefab(1, 60.0, None)),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "prim_p1", transform: (translation: (-2.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "prim_p2", transform: (translation: (2.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    // This is the direct proof the old single-primitive-player structural cap (a bare
+    // `Option<(...)>` collector, not a `Vec`) is actually gone, not just asserted in prose.
+    let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
+    assert_eq!(controller_count, 2, "both primitive players must spawn — the structural cap is gone");
+
+    let mut indices: Vec<u32> = {
+        let mut q = app.world_mut().query::<&PlayerIndex>();
+        q.iter(app.world()).map(|i| i.0).collect()
+    };
+    indices.sort();
+    assert_eq!(indices, vec![0, 1], "each primitive player must get its own prefab's player_index");
+
+    let mut mana_values: Vec<f32> = {
+        let mut q = app.world_mut().query::<&StatMap>();
+        q.iter(app.world()).map(|sm| sm.0.get("mana").unwrap().current).collect()
+    };
+    mana_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(
+        mana_values, vec![60.0, 100.0],
+        "each primitive player must get an independent StatMap matching its own prefab's base value"
+    );
+}
+
+#[test]
+fn test_terrain_scene_skips_primitive_player_with_no_crash() {
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("prim_player".to_string(), primitive_player_prefab(0, 100.0, None)),
+        ]),
+        ..Default::default()
+    }));
+
+    // Must not panic — a primitive player combined with `terrain: Some(...)` is v3-deferred
+    // (see player_model_source_unification.md); scene_loader.rs warns and skips it rather than
+    // spawning it immediately regardless of terrain (untested territory before this feature).
+    load_single_entity_scene(&mut app, "prim_player", Some(()));
+
+    let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
+    assert_eq!(
+        controller_count, 0,
+        "a primitive player in a terrain scene must not spawn in v1 — terrain-deferred primitive \
+         players are v3 scope, not silently spawned anyway"
+    );
+}

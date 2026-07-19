@@ -4,9 +4,30 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use crate::schema::catalog::MovementConfig;
 
-#[derive(Deserialize, Debug, Clone)]
+/// Where a player's visual body + physics collider come from. Dispatched on by
+/// `spawn_player_entity_core` for body construction only — every other player-construction
+/// concern (`PlayerIndex`, `StatMap`, material override, nameplate, stat widgets) is shared
+/// unconditionally by both variants. See `planning/features/done/player_model_source_unification.md`.
+#[derive(Debug, Clone)]
+pub enum PlayerModelSource {
+    /// A GLB model, resolved from the asset catalog. The `#`-fragment (if any) is the scene
+    /// name within the glTF file — stripped by the loader before use.
+    Glb(String),
+    /// A primitive (capsule/etc.) shape built at spawn time — same construction path a
+    /// `kind: Primitive` NPC/prop already uses, plus cosmetic `children`.
+    Primitive {
+        shape: crate::schema::catalog::PrimitiveShapeKind,
+        params: crate::schema::catalog::PrimitiveParams,
+        children: Vec<crate::schema::catalog::ChildPrimitiveDef>,
+    },
+}
+
+// `PlayerConfig` is assembled programmatically (`assemble_player_config`), never deserialized
+// directly from scene RON — so it doesn't need `Deserialize`, and `PlayerModelSource` (which
+// can't derive it meaningfully anyway, since RON never authors this type) doesn't need it either.
+#[derive(Debug, Clone)]
 pub struct PlayerConfig {
-    pub model_path: String,
+    pub model_source: PlayerModelSource,
     pub initial_position: (f32, f32, f32),
     pub camera: CameraConfig,
     pub inputs: InputMap,
@@ -14,36 +35,28 @@ pub struct PlayerConfig {
     /// Path to the animation policy file, relative to the project root.
     /// e.g. "prefabs/animation/player_policy.ron"
     /// When absent, no animation system is attached to the player.
-    #[serde(default)]
     pub animation_policy: Option<String>,
 
     /// Movement tuning read from `prefab.components.movement`.
-    #[serde(default)]
     pub movement: MovementConfig,
 
     /// Scene entity id (e.g. `"player_01"`) — set by the scene loader so the player gets a
     /// `SpawnId` + `SpawnRegistry` entry like every other entity (enables id-targeted actions
     /// such as `ShowDamagePopup(entity: "player_01")`). Defaults empty for any RON-loaded use.
-    #[serde(default)]
     pub spawn_id: String,
     /// Prefab catalog key (e.g. `"player_warrior"`) — set by the scene loader for `PrefabKey`.
-    #[serde(default)]
     pub prefab_key: String,
     /// Resolved display name for the player's nameplate widget. `None` = no nameplate.
-    #[serde(default)]
     pub nameplate_display_name: Option<String>,
     /// `PrefabDef.nameplate` override forwarded to `NameplateTag`.
-    #[serde(default)]
     pub nameplate_override: Option<bool>,
     /// Forwarded from `PrefabDef.player_index`. Distinguishes local co-op players (P1/P2/...)
     /// from a single-player scene, where it stays `0` and is unused.
-    #[serde(default)]
     pub player_index: u32,
     /// Forwarded from `PrefabDef.material`. Applied via `PendingMaterialOverride` in
     /// `spawn_player_entity_core`, same mechanism as the generic Actor/Prop spawn path
     /// (`spawn_prefab_instance`) — players have their own dedicated spawn path that does not
     /// otherwise read `PrefabDef.material` at all.
-    #[serde(default)]
     pub material: Option<String>,
     /// Forwarded from `PrefabDef.stat_templates`. When non-empty, `spawn_player_entity_core`
     /// inserts a `StatMap` component on the player entity (same mechanism NPCs/props already use
@@ -51,17 +64,14 @@ pub struct PlayerConfig {
     /// by default, so a player prefab with no `stat_templates` gets no `StatMap` and the action
     /// bar's `SlotCost` falls back to the global `LoadedStats` resource exactly as before this
     /// field existed. See `planning/features/per_player_stat_pools.md`.
-    #[serde(default)]
     pub stat_templates: Vec<crate::schema::stats::StatTemplateDef>,
     /// Forwarded from `PrefabDef.stat_label`. When set, `spawn_player_entity_core` queues a
     /// floating stat-label widget for this player via `DynamicStatUiQueue`, the same mechanism
     /// NPC/prop `Action::Spawn` entities use — giving players first-class stat widgets instead
     /// of the field silently parsing and doing nothing. See
     /// `planning/features/player_stat_widgets.md`.
-    #[serde(default)]
     pub stat_label: Option<crate::schema::catalog::StatLabelDef>,
     /// Forwarded from `PrefabDef.world_stat_bar`. Same mechanism as `stat_label` above.
-    #[serde(default)]
     pub world_stat_bar: Option<crate::schema::catalog::WorldStatBarDef>,
 }
 

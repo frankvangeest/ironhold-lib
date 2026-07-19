@@ -375,6 +375,65 @@ fn test_preload_prefab_unknown_key_does_not_panic() {
     assert_eq!(handles.0.len(), 0, "No handle should be stored for an unknown prefab key");
 }
 
+/// Regression for a debug-detective finding on `player_model_source_unification.md` v1: the
+/// `Action::Spawn` rejection of a primitive-shaped player prefab must fire regardless of whether
+/// `model` happens to resolve in the asset catalog — `model: ""` is only a convention for
+/// `kind: Primitive` prefabs (schema/catalog.rs), not schema-enforced. Before this fix, a
+/// primitive player prefab with a *resolvable* `model` key sailed past the (failure-only) model
+/// lookup, got assembled with `PlayerModelSource::Primitive`, and panicked at spawn time
+/// (`spawn_player_entity` always passes `None` for `PrimitivePlayerCtx` on this path). This test
+/// deliberately gives the primitive player prefab a resolvable `model` key to prove the rejection
+/// doesn't depend on the lookup failing.
+#[test]
+fn test_primitive_player_prefab_with_resolvable_model_key_rejected_not_panicked_on_dynamic_spawn() {
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabComponents, ModelCatalogEntry, PrefabKind};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("character_male".to_string(), ModelCatalogEntry { path: "shared/models/characters/male.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("primitive_player_wrong_model".to_string(), PrefabDef {
+                kind: PrefabKind::Primitive,
+                // Deliberately resolvable — this is the exact misconfiguration the finding
+                // describes (a designer copies a GLB player prefab and forgets to clear `model`
+                // after switching `kind` to `Primitive`).
+                model: "character_male".to_string(),
+                components: PrefabComponents { tags: vec!["player".to_string()], ..Default::default() },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn {
+            prefab: "primitive_player_wrong_model".to_string(),
+            id: Some("bad_primitive_player".to_string()),
+            position: None, spawn_point: None, yaw_deg: None,
+        }
+    );
+    // Must not panic.
+    app.update();
+    app.update();
+
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert!(
+        !ids.contains(&"bad_primitive_player".to_string()),
+        "primitive-shaped player prefab should be rejected, not spawned: {:?}", ids
+    );
+}
+
 #[test]
 fn test_spawn_queue_rate_limits_to_two_per_frame() {
     let mut app = setup_test_app();

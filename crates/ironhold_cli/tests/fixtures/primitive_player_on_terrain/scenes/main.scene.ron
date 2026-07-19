@@ -1,0 +1,17 @@
+(
+    schema_version: 2,
+    name: "main",
+    terrain: Some((
+        heightmap: "terrain/heightmap.png",
+        splatmap: "terrain/splatmap.png",
+        scale: (5.0, 30.0, 5.0),
+        material_paths: ["terrain/layer0.png"],
+    )),
+    entities: [
+        (
+            id: "player_01",
+            prefab: "primitive_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+)

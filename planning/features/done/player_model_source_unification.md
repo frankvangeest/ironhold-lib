@@ -1,6 +1,6 @@
 # Feature: Player Model Source Unification ("multiplayer with 1")
 
-_Status: Ready (v1 only — v2/v3 remain Queued design sketches, re-review before either starts)_
+_Status: Done (v1 shipped 2026-07-19 — v2/v3 remain Queued design sketches, re-review before either starts)_
 _Planned at: `6e38aa1` (2026-07-17)_
 
 **Plan-review note (2026-07-17):** Both reviewers returned Needs-more-design-work on the first
@@ -138,6 +138,13 @@ only:
   currently private `fn`s in `scene_loader.rs`; `primitive_material` is already `pub(crate)`. Both
   need to become at least `pub(super)` so `entity_spawner.rs` (a sibling module under
   `scene_manager`) can call them — a mechanical visibility change, not a logic change.
+  **Implementation note (system-architect finding, post-implementation):** the old inline block
+  hardcoded `Damping { linear_damping: 0.5, angular_damping: 0.5 }`; the unified arm reads
+  `mv.linear_damping`/`mv.angular_damping` instead (same as the GLB arm always did).
+  `MovementConfig` defaults both to 0.5 and `primitive_world`'s `player_capsule` regression
+  baseline doesn't override either, so this is behavior-identical for that specific prefab — but
+  it's a capability improvement, not a pure no-op: any *other* primitive player prefab that sets a
+  custom damping value now actually gets it, which it silently didn't before.
 
 Everything *after* body construction in `spawn_player_entity_core` (`tag_spawned_entity`,
 `Player`/`PlayerOwnership`/`PlayerIndex`/`PlayerTarget`, the `StatMap` build, nameplate, material
@@ -241,52 +248,62 @@ explicit and diagnosable rather than a silent gap.
 - Real networked multiplayer (determinism, `SimClock`) — unrelated workstream, see Why.
 
 ## Tasks
-- [ ] `PlayerModelSource` enum in `schema/player.rs`; `PlayerConfig.model_path` → `model_source`
+- [x] `PlayerModelSource` enum in `schema/player.rs`; `PlayerConfig.model_path` → `model_source`
       (note: `PlayerModelSource` needs its own `#[derive(Deserialize)]`, or `PlayerConfig`'s
       `Deserialize` derive — vestigial today, nothing actually deserializes it — is dropped instead)
-- [ ] `assemble_player_config`: branch on `prefab.kind == PrefabKind::Primitive` (not
+- [x] `assemble_player_config`: branch on `prefab.kind == PrefabKind::Primitive` (not
       `shape`/`children` — see the corrected discriminant in Approach) to build the correct
       `PlayerModelSource` variant
-- [ ] Bump `build_primitive_mesh`/`spawn_primitive_children` visibility to `pub(super)` (scene_loader.rs)
-- [ ] `spawn_player_entity_core`: dispatch body construction on `model_source`; move the primitive
+- [x] Bump `build_primitive_mesh`/`spawn_primitive_children` visibility to `pub(super)` (scene_loader.rs)
+- [x] `spawn_player_entity_core`: dispatch body construction on `model_source`; move the primitive
       body-construction logic from the inline `scene_loader.rs` block into the `Primitive` arm.
       Thread the needed `Assets<Mesh>`/`Assets<StandardMaterial>`/`Assets<CustomMaterial>`/
       built-materials-map/`primitive_default_color`/catalog params through this function and its
       **scene-load-path** callers only (`spawn_players_and_camera`, called from `spawn_scene_v2`
       where these are already in scope) — not through `spawn_delayed_players_system` or
       `drain_spawn_queue_system` (see the resource-threading blocker in Approach; those two are v3)
-- [ ] `scene_loader.rs`: delete the inline primitive-player block; fold the primitive-player
+- [x] `scene_loader.rs`: delete the inline primitive-player block; fold the primitive-player
       collector into the same `assemble_player_config` → `player_configs: Vec<PlayerConfig>` flow
       as the GLB collector when `scene.terrain.is_none()`, removing the single-primitive-player
       structural cap for the non-terrain case
-- [ ] Scene-load `warn!` + `ironhold_cli validate` error: a primitive player prefab combined with
+- [x] Scene-load `warn!` + `ironhold_cli validate` error: a primitive player prefab combined with
       `scene.terrain: Some(...)` (v3-deferred, not a v1 regression — see Approach)
-- [ ] **Corrected from an earlier draft** (system-architect caught this): `action_executor.rs`'s
+- [x] **Corrected from an earlier draft** (system-architect caught this): `action_executor.rs`'s
       `Action::Spawn` handler already rejects a primitive-shaped player prefab today (the
       `asset_catalog.models.get(&prefab_def.model)` lookup at `:111` fails on the empty `model`
       string before `assemble_player_config` is ever reached) — this is **not** a "verify it's a
       no-op" task, it's an existing, active rejection. v1 leaves this as-is (out of scope, deferred
       to v3); add a `warn!` at the rejection site clarifying *why* (primitive players aren't yet
-      supported via character-select) instead of the current generic "model key not found" message
-- [ ] Tests — regression coverage that `primitive_world`'s existing `player_capsule` prefab
+      supported via character-select) instead of the current generic "model key not found" message.
+      **Hardened further during review** (debug-detective finding): the rejection now fires
+      unconditionally on `kind == Primitive && tags: ["player"]`, *before* the model lookup, not
+      only when that lookup happens to fail — a primitive player prefab with a resolvable `model`
+      key would otherwise have sailed past the guard and panicked at spawn time. Regression test
+      added (`spawn_tests.rs`).
+- [x] Tests — regression coverage that `primitive_world`'s existing `player_capsule` prefab
       (`assets/projects/primitive_world/prefabs/prefabs.ron`, the definitive single-primitive-player
-      regression baseline) is pixel/behavior-identical after v1; new coverage that a primitive
-      player now gets `PlayerIndex`/`StatMap`/`material` like a GLB player; new coverage (see the
-      v1 2-primitive-player proof above) that two primitive players in one scene get distinct
-      `PlayerIndex` values and independent `StatMap`s; a test confirming the terrain+primitive-player
-      warning fires
-- [ ] `local_coop_demo`: add the minimal 2-primitive-player split-screen scene described above (v1,
-      not v2) as the playtest aid proving the structural cap is actually gone
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`'s "The four player-construction sites" section
+      regression baseline) is pixel/behavior-identical after v1 (verified by playtest plus
+      independent field-by-field code review from system-architect/debug-detective — damping,
+      friction, and collider sizing all confirmed unchanged for this specific prefab); new coverage
+      that a primitive player now gets `PlayerIndex`/`StatMap`/`material` like a GLB player; new
+      coverage (see the v1 2-primitive-player proof above) that two primitive players in one scene
+      get distinct `PlayerIndex` values and independent `StatMap`s; a test confirming the
+      terrain+primitive-player warning fires (both scene-load `warn!` and `ironhold_cli validate`
+      error, the latter via a new CLI fixture); a regression test for the hardened `Action::Spawn`
+      rejection above.
+- [x] `local_coop_demo`: add the minimal 2-primitive-player split-screen scene described above (v1,
+      not v2) as the playtest aid proving the structural cap is actually gone (`room7.scene.ron`,
+      reachable via room6's portal chain; playtest-confirmed 2026-07-19)
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`'s "The four player-construction sites" section
       (this collapses sites 2 and 4 into the shared pipeline for the non-terrain case; rewrite the
       section to reflect the new, smaller set of divergence-risk sites, and note the v3-deferred
       terrain/dynamic-spawn limitation)
-- [ ] Docs — `docs/20_data_formats.md`: fix the stale "primary player" example (~line 477-479),
+- [x] Docs — `docs/20_data_formats.md`: fix the stale "primary player" example (~line 477-479),
       which currently cites "the primitive/capsule player path" as the canonical example of a
       player with no `PlayerIndex` at all — after v1 this is no longer true (for the non-terrain
       case) and the example is actively misleading. Keep the "or no `PlayerIndex` at all" fallback
       clause (still meaningful for the v3-deferred terrain case) but drop the primitive-path example.
-- [ ] Docs — add a short designer-facing note (a RON comment on `primitive_world`'s `player_capsule`
+- [x] Docs — add a short designer-facing note (a RON comment on `primitive_world`'s `player_capsule`
       prefab and/or `local_coop_demo`'s new primitive player prefab, plus a line in `docs/20`'s
       player-prefab section, ~line 1804) enumerating which `PrefabDef` fields now take effect on a
       `tags: ["player"]` prefab (`player_index`, `material`, `stat_templates`, `stat_label`/

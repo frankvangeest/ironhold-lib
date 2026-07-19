@@ -129,12 +129,13 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 
 **Per-player targeting (Phase 1, `planning/features/per_player_split_screen_targeting.md`)** —
 each player entity carries its own `PlayerTarget(Option<String>)` component
-(`capabilities/player.rs`), inserted at both player-construction sites
-(`entity_spawner.rs::spawn_player_entity_core` for GLB players; the primitive/capsule inline
-spawn in `scene_loader.rs`). `CurrentTarget` (`capabilities/action_bar.rs`) was deliberately kept
-as a resource rather than deleted — it is now "the primary player's `PlayerTarget`, mirrored".
-The **primary player** is whichever player entity has `PlayerIndex(0)` or no `PlayerIndex` at all
-(the primitive/capsule path never gets one). `{target}` substitution above, and any `rules.ron`-
+(`capabilities/player.rs`), inserted in `entity_spawner.rs::spawn_player_entity_core`'s shared
+post-model-source-dispatch code — as of `player_model_source_unification.md` v1 this covers both
+GLB and primitive players spawned via the immediate scene-load path (see "Player-construction
+sites" below). `CurrentTarget` (`capabilities/action_bar.rs`) was deliberately kept as a resource
+rather than deleted — it is now "the primary player's `PlayerTarget`, mirrored". The **primary
+player** is whichever player entity has `PlayerIndex(0)` or no `PlayerIndex` at all (see
+"Player-construction sites" for when the latter is still reachable). `{target}` substitution above, and any `rules.ron`-
 overridden slot intent's `do_actions` (see Phase 2 below), keep reading `CurrentTarget` exactly as
 before this feature — those two paths only ever resolve against the primary player. A non-primary
 player's `PlayerTarget` drives their own visual feedback (ring, per-viewport HUD readout) *and*,
@@ -400,84 +401,93 @@ instead). Confirmed sibling instances (not yet fixed, same benign class) in
 `action_executor.rs`'s `StopMusic`/`PlayMusicLoop`, duplicate `Action::Despawn`, and
 `UnloadOverlay`/`ToggleOverlay` — see `planning/claude_suggestions.md`.
 
-### The four player-construction sites
+### Player-construction sites
 
 Any feature that changes player spawning (local co-op, character select, respawn, possession)
-must account for all four or players diverge silently:
+must account for all of these or players diverge silently. Before
+`player_model_source_unification.md` v1, this was **four** genuinely separate sites — one of
+them (the primitive/capsule path) bypassed `PlayerConfig` entirely and silently lacked
+`PlayerIndex`/material override/`StatMap`. v1 collapsed that gap for the common case; what
+remains is:
 
-1. **GLB collector** — `scene_loader.rs` builds `player_configs: Vec<PlayerConfig>` from every
-   scene entity whose prefab has `tags: ["player"]`.
-2. **Primitive collector + inline spawn** — a separate `primitive_player` path in
-   `scene_loader.rs` builds its own `CharacterController` + `OrbitCamera` directly and does
-   **not** go through `PlayerConfig` at all. Single-player only — local co-op (`player_index`,
-   the shared party camera) does not extend to primitive/capsule players. A capsule-based demo
-   would need a separate change to support 2+ players.
-3. **Dynamic spawn** — `action_executor.rs`'s `Action::Spawn` handler assembles a `PlayerConfig`
-   for a `tags: ["player"]` prefab (the character-select flow).
-4. **Shared GLB spawn functions** — `entity_spawner.rs`'s `spawn_player_entity` (single player,
-   own `OrbitCamera`) and `spawn_players_and_camera` (1+ players; 2+ share one camera). Both
-   call the private `spawn_player_entity_core` to avoid duplicating the model/physics/metadata
-   setup. The terrain-delayed path (`PendingPlayerConfig`, now `Vec<PlayerConfig>`) also routes
-   through `spawn_players_and_camera`.
+1. **Unified scene-load collector** — `scene_loader.rs` builds `player_configs: Vec<PlayerConfig>`
+   from every scene entity whose prefab has `tags: ["player"]`, **for both GLB (`kind: Actor`) and
+   primitive (`kind: Primitive`) prefabs**, via the shared `assemble_player_config()` helper
+   (`entity_spawner.rs`) — dispatched on `prefab.kind == PrefabKind::Primitive`, not on
+   `shape`/`children` presence. This is the only collector now; the old separate
+   primitive-collector-plus-inline-spawn path is gone for the non-terrain case.
+2. **Dynamic spawn** — `action_executor.rs`'s `Action::Spawn` handler assembles a `PlayerConfig`
+   for a `tags: ["player"]` prefab (the character-select flow). **GLB-only in practice**: a
+   primitive-shaped player prefab has no `model` key (empty string), so the
+   `asset_catalog.models.get(&prefab_def.model)` lookup fails and rejects it with a `warn!` before
+   `assemble_player_config` is ever reached — v3-deferred, not a v1 regression (primitive players
+   never worked here).
+3. **Terrain-deferred spawn** — `spawn_delayed_players_system` via `PendingPlayerConfig`
+   (`Vec<PlayerConfig>`). Also **GLB-only in practice**: a primitive player prefab combined with
+   `scene.terrain: Some(...)` gets a scene-load `warn!` and an `ironhold_cli validate` error
+   (`unsupported_primitive_player_on_terrain`) instead of spawning — v3-deferred, since the
+   built-materials map/mesh-asset access primitive body construction needs isn't yet threaded
+   through this resource-poor path (see `planning/features/player_model_source_unification.md`'s
+   v3 section).
+4. **Shared spawn functions** — `entity_spawner.rs`'s `spawn_player_entity` (single player, own
+   `OrbitCamera`), `spawn_players_and_camera` (1+ players; 2+ share one camera or split-screen),
+   and `spawn_player_when_terrain_ready`. All three call the private `spawn_player_entity_core`,
+   which dispatches body construction on `PlayerConfig.model_source: PlayerModelSource` (`Glb(key)`
+   or `Primitive { shape, params, children }`) — everything **after** that dispatch (physics
+   bundle, `tag_spawned_entity`, `PlayerIndex`/`PlayerOwnership`/`PlayerTarget`, `StatMap`, stat
+   widgets, nameplate) is now shared, unconditional code for both model sources, not a GLB-only
+   path. Only site 1 passes a real `PrimitivePlayerCtx` (mesh/material assets, prefab catalog,
+   built-materials map) so the `Primitive` arm can actually build a body; sites 2 and 3 pass `None`
+   and would panic if they ever reached the `Primitive` arm — which they can't, since both reject
+   primitive-shaped prefabs earlier (see above).
 
-Sites 1 and 3 both hand-assemble a `PlayerConfig` — routed through the shared
-`assemble_player_config()` helper (`entity_spawner.rs`) so a new `PlayerConfig` field (e.g.
-`player_index`) only needs adding in one place. `spawn_player_entity_core` inserts
-`player_config.player_index` as a queryable `PlayerIndex(u32)` component
-(`capabilities/player.rs`) on every GLB player entity — consumed by the split-screen "P{n}" corner
-HUD label and per-player targeting's "which player is primary" check (see "Per-player targeting"
-above). `spawn_player_entity_core` also inserts `PlayerTarget::default()` (also
-`capabilities/player.rs`) on every GLB player entity — **site 2 (the primitive/capsule inline
-spawn in `scene_loader.rs`) needs its own separate `PlayerTarget::default()` insertion**, since it
-does not route through `spawn_player_entity_core` at all (same class of divergence risk the
-four-site inventory above exists to flag — check any future "every player gets X" component
-against both spawn paths, not just the generic GLB one). Note `PlayerIndex` itself is still GLB-only
-— the primitive/capsule path never gets one, which is exactly why "primary player" is defined as
-"`PlayerIndex(0)` **or no `PlayerIndex` at all**," not just "`PlayerIndex(0)`".
+Because `PlayerIndex`, `PlayerTarget`, `StatMap` (when `stat_templates` is non-empty), stat
+widgets, and material override are now inserted in the shared post-dispatch code rather than
+per-model-source, **a new "every player gets X" component only needs adding in one place**
+(`spawn_player_entity_core`, after the model-source match) instead of being checked against
+multiple divergent spawn paths — this is the exact class of bug the old four-site inventory above
+existed to flag, and the risk surface for it is now much smaller. What still needs checking
+against multiple paths: whether a *new* `PlayerConfig`/`PrefabDef` field is forwarded correctly in
+`assemble_player_config`'s two call sites (1 and 2 above), and whether a fix belongs in the
+model-source-dispatch match (body-construction-specific) vs. the shared post-match code
+(everything else).
 
-`spawn_player_entity_core` also **conditionally** inserts a `StatMap` component
-(`planning/features/per_player_stat_pools.md`) — `PlayerConfig.stat_templates` (forwarded from
-`PrefabDef.stat_templates` in `assemble_player_config`, same one-place-to-edit function as
-`player_index`/`material`) is built into a `StatMap` via the shared
-`build_stat_map_from_templates` helper (factored out of `attach_prefab_features`, so NPCs/props
-and players share one conversion) and inserted only when non-empty. Unlike `PlayerTarget`, this
-one is **not** unconditional per player-construction site — most players get no `StatMap` at all
-(empty `stat_templates` is the default), which is exactly what keeps every existing single-player
-project byte-for-byte unaffected. Site 2 (the primitive/capsule path) is deliberately **not**
-touched, matching its existing single-player-only status (no `PlayerIndex`, no `owner_player`
-action bars either) — **so a primitive player prefab that declares `stat_templates` never actually
-gets a runtime `StatMap`**, even though the schema/`ironhold_cli validate` happily accept the
-field on any prefab kind. Collapsing this remaining gap is `player_model_source_unification.md`'s
-job, not a widget-display concern — see below.
+Note `PlayerIndex` can still be entirely absent from an entity in principle — "primary player" is
+defined as "`PlayerIndex(0)` **or no `PlayerIndex` at all**" (`capabilities/targeting.rs::
+is_primary_player`) — but as of v1 this is no longer reachable via any *spawning* primitive
+player; it's only meaningful for the v3-deferred terrain/character-select paths, which don't spawn
+primitive players at all yet (sites 2/3 above reject them outright, they don't spawn one without a
+`PlayerIndex`).
 
 **`stat_label`/`world_stat_bar` on players** (`planning/features/player_stat_widgets.md`) —
 players get the exact same floating-widget mechanism NPCs/props/`Action::Spawn` entities use,
 routed through the existing `DynamicStatUiQueue`/`drain_dynamic_stat_ui_system` rather than a
-player-specific spawn path: `spawn_player_entity_core` (site 1/3/4, GLB) and the primitive/capsule
-inline block (site 2) both push a `DynamicStatUiEntry` (with `{self}` already resolved against
-that player's own spawn ID) when `PlayerConfig.stat_label`/`.world_stat_bar` is set — the actual
-`Text2d`/`Mesh2d` entity-spawning logic itself was extracted from `scene_loader.rs`'s two Phase-B
-loops into `capabilities/stat_display.rs::spawn_stat_label_widget`/`spawn_world_stat_bar_widget`
-(the same duplication `drain_dynamic_stat_ui_system` already had a near-byte-for-byte copy of, now
-gone). Since `spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling,
-`DynamicStatUiQueue` is bundled into the existing `SceneV2Params` struct rather than added as a
-bare param. **Known gap, not fixed here:** because site 2 still gets no `StatMap` (see the
-paragraph above), a `{self}.<stat>` widget on a *primitive* player prefab always renders empty
-even when `stat_templates` correctly declares the key — the new `missing_stat_widget_template`
-warn/validate check (generic across every prefab kind, catching an unresolved `{self}.<stat>`
-key with no matching `stat_templates` entry) does not catch this specific case, since the
-prefab-level schema data is present; only the runtime `StatMap` is missing. GLB players are
-unaffected, since site 1/3/4 already build the `StatMap` from the same `stat_templates` field.
+player-specific spawn path: `spawn_player_entity_core` pushes a `DynamicStatUiEntry` (with
+`{self}` already resolved against that player's own spawn ID) when
+`PlayerConfig.stat_label`/`.world_stat_bar` is set — for both GLB and primitive players as of v1,
+since this push happens in the shared post-dispatch code, not per-model-source. The actual
+`Text2d`/`Mesh2d` entity-spawning logic lives in
+`capabilities/stat_display.rs::spawn_stat_label_widget`/`spawn_world_stat_bar_widget`. Since
+`spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling, `DynamicStatUiQueue`
+is bundled into the existing `SceneV2Params` struct rather than added as a bare param.
 
-**`PrefabDef.material` does NOT automatically apply to players — this bit Stage 6's local co-op
-4-way split during playtest.** `spawn_prefab_instance` (the generic Actor/Prop/NPC path) reads
-`prefab.material` and inserts `PendingMaterialOverride`; `spawn_player_entity_core` (the player
-path) is completely separate and did not, and `PlayerConfig` didn't even carry the field. Fixed by
-adding `PlayerConfig.material: Option<String>`, forwarding it in `assemble_player_config` (so all
-three sites above get it for free), and inserting `PendingMaterialOverride` in
-`spawn_player_entity_core` exactly like the generic path does. **Any future `PrefabDef` field
-meant to affect rendering/visuals must be checked against both spawn paths, not just the generic
-one** — this is the same class of bug the four-site inventory above exists to prevent.
+**`PrefabDef.material` does NOT automatically apply via the generic spawn path — it needs the
+player path's own insertion, and both model sources need it.** `spawn_prefab_instance` (the
+generic Actor/Prop/NPC path) reads `prefab.material` and inserts `PendingMaterialOverride`;
+`spawn_player_entity_core` is completely separate and needs its own insertion via
+`PlayerConfig.material: Option<String>`, forwarded by `assemble_player_config`. Before v1 this only
+worked for GLB players (the primitive/capsule path bypassed `PlayerConfig` and this insertion
+entirely — this bit Stage 6's local co-op 4-way split during playtest, for the GLB case). v1 fixed
+it for primitive players too, since the insertion is now in the shared post-dispatch code. **Any
+future `PrefabDef` field meant to affect rendering/visuals must be checked against the player path
+in addition to the generic one** — same class of bug the site inventory above exists to prevent.
+
+**Deliberately NOT unified in v1** (kept as pre-existing behavioral divergence, not a bug):
+collider sizing (GLB derives it from `movement`-config-driven capsule dimensions; primitive derives
+it from the prefab's own `shape`/`params`) and the zero-`Friction` component (primitive players get
+one, preventing catching on cube edges; GLB players don't) — see
+`planning/features/player_model_source_unification.md`'s v2 section for the open question on
+whether to reconcile the latter.
 
 ### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 

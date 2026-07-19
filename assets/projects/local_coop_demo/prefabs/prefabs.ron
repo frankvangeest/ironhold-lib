@@ -869,5 +869,177 @@
       ),
     ),
 
+    // Room 7's ground — emerald/green tone, the last unused color identity in this project's
+    // one-color-per-room convention (blue/amber/teal/rose/gold before it).
+    "ground_room7": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.14, 0.32, 0.18),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // room6 -> room7 (player_model_source_unification.md v1 playtest aid: minimal 2-primitive-
+    // player vertical split, falsifying that the single-primitive-player structural cap is gone).
+    // The return trip reuses the existing "portal_to_room6" prefab placed a second time in
+    // room7.scene.ron — same event name ("entity.entered:portal_to_room6"), same rules.ron entry,
+    // no new prefab needed for that direction (same trick every prior stage used).
+    "portal_to_room7": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.10, 0.24, 0.14), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.10, 0.24, 0.14), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.08, 0.18, 0.10), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.20, 0.95, 0.45), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // ── Primitive players (player_model_source_unification.md v1 playtest aid) ────────────────
+    // `kind: Primitive` player prefabs, mirroring player_p1_split/player_p2_split's split-screen
+    // wiring exactly but with a capsule body instead of a GLB model — the v1 unification's whole
+    // point is that everything below the model-source dispatch (PlayerIndex, material override,
+    // StatMap, stat widgets, nameplate) now applies identically to both, which was NOT true
+    // before this feature (a primitive player previously got none of those). Distinct
+    // `material`/`stat_templates` values from player_p1_split/p2_split are deliberate — proves
+    // these resolve per-instance, not just copied from the GLB path by coincidence.
+    //
+    // Which PrefabDef fields take effect on ANY `tags: ["player"]` prefab (primitive or GLB)
+    // after v1: `player_index`, `material`, `stat_templates`, `stat_label`/`world_stat_bar`. Which
+    // still silently no-op on a player prefab regardless of kind (explicitly out of scope, see
+    // player_model_source_unification.md): `behavior`, `interactable`, `dialogue`, `inventory`,
+    // `trigger_zone`. And which only work for a primitive player in this non-terrain, immediate
+    // scene-load case (v3-deferred otherwise): terrain-deferred spawn and character-select
+    // dynamic spawn (`Action::Spawn`) both still reject a primitive-shaped player prefab today —
+    // see the `warn!`s at scene_loader.rs and action_executor.rs.
+    "player_p1_primitive": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      display_name: "Player 1 (primitive)",
+      player_index: 0,
+      material: "tint_blue",
+      stat_templates: [
+        (
+          key: "mana",
+          base: 100.0,
+          min: 0.0,
+          max: 100.0,
+          regen_rate: 5.0,
+          regen_delay: 1.0,
+        ),
+      ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.3, 0.0),
+        fill_color: (0.35, 0.45, 0.95, 0.95),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
+      components: (
+        tags: ["player"],
+        movement: (
+          walk_speed: 5.5,
+          run_speed: 10.0,
+          jump: RelativeToHeight(percent: 100.0),
+        ),
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+          // Sole switch for split-screen — read only from this (the first) player.
+          split: (
+            orientation: Vertical,
+          ),
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          strafe_mouse_button: None,
+        ),
+      ),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        roughness: 0.3,
+        metallic: 0.15,
+      ),
+    ),
+
+    "player_p2_primitive": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      display_name: "Player 2 (primitive)",
+      player_index: 1,
+      material: "tint_red",
+      stat_templates: [
+        (
+          key: "mana",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          regen_rate: 3.0,
+          regen_delay: 1.0,
+        ),
+      ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.3, 0.0),
+        fill_color: (0.90, 0.25, 0.20, 0.95),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
+      components: (
+        tags: ["player"],
+        movement: (
+          walk_speed: 5.5,
+          run_speed: 10.0,
+          jump: RelativeToHeight(percent: 100.0),
+        ),
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+        ),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "Comma",
+          strafe_right: "Period",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+        ),
+      ),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        roughness: 0.3,
+        metallic: 0.15,
+      ),
+    ),
+
   }
 )
