@@ -5,6 +5,30 @@ metadata:
   type: project
 ---
 
+**KEYBOARD CAMERA-LOOK (reviewed 2026-07-19, ALIGNED w/ one doc warning):** closes the real gap
+where split-screen scenes set `orbit_button: "None"` per camera (one shared mouse can't drive 2+
+active OrbitCameras), leaving split players unable to rotate. New RON surface: `InputMap.look_left/
+look_right/look_up/look_down: Option<String>` (all `#[serde(default)]` None) + `CameraConfig.look_speed:
+f32` (default 2.0 rad/s, separate dial from orbit_speed which is a mouse-pixel multiplier). All backward-
+compat (look keys None → look_speed never used → existing scenes unchanged). Keys pre-resolved once at
+spawn via `InputMap::parse_key`, mirroring orbit_lmb/orbit_rmb. OrbitCamera gained look_*_key/look_speed;
+BOTH construction sites wired (entity_spawner `spawn_orbit_camera_for_player` @937 — used by single-player
+AND per-player split cameras; scene_loader GLB-collector inline @879). `camera_orbit_system` gained
+`Res<ButtonInput<KeyCode>>` + a keyboard-look block INDEPENDENT of the mouse orbit_active gate — mutates
+only OrbitCamera.yaw/pitch (pitch clamped to min/max_pitch), NO ActionQueue (correct). 9 punctuation keys
+added to parse_key (Comma/Period/Semicolon/Quote/Slash/BracketLeft/BracketRight/Minus/Equal) — additive
+whitelist; CLI validate.rs calls parse_key directly (validate.rs:289) so gets them free, no CLI change.
+- **SCOPE: keyboard-look reaches ONLY OrbitCamera, NOT PartyOrbitCamera** (camera.rs:143 has no look
+  fields). So in a `party` shared-camera scene, look_* keys are SILENTLY IGNORED (no warning). local_coop_demo
+  prefabs.ron comments (lines 317/351) explicitly tell authors not to add look keys in party mode. Consistent
+  with the party-first-player asymmetry; accepted-not-blocked.
+- **WARNING (doc overclaim, log-don't-block):** `CameraConfig.look_speed` doc comment in schema/player.rs
+  (~lines 112-119) claims look_speed also drives "at full analog deflection, gamepad-stick camera pitch — a
+  shared dial for both continuous-per-frame input sources." FALSE — no gamepad-stick camera look exists.
+  input.rs:103-104 reads RightStickX → character *turn* (InputAction::Turn), never look_speed; RightStickY
+  unread. docs/20_data_formats.md:1884 is CORRECT (no gamepad claim) — only the source doc comment is wrong,
+  overstating designer control. Fix: strike the gamepad clause from player.rs.
+
 **STAGE 7 — split-screen player HUD labels (reviewed 2026-07-08, ALIGNED w/ warnings):**
 - FIRST real consumer of `PlayerIndex` — the DEAD-FIELD footgun below is now PARTLY obsolete:
   `split_viewport_player_label_spawn_system` (camera.rs) reads `PlayerIndex` off `orbit.target`.
