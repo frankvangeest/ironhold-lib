@@ -2,6 +2,7 @@
 
 - [Core architectural decisions](arch_decisions.md) — three-crate split, Message→Action pipeline, ActionQueue FIFO, asset catalog pattern, schema as designer API
 - [Fragile modules](fragile_modules.md) — composite prefab spawning, EffectDef/LayerDef sync, WebGPU alignment, particle warmup, terrain async, spawn queue cap
+- [Deferred despawn double-queue](deferred_despawn_double_queue.md) — snapshot-iterated-twice + deferred despawn = double despawn class; Bevy 0.18 despawn() warns not panics; try_despawn silences; action_executor has latent instances
 - [Capability patterns](capability_patterns.md) — how to add capabilities/actions/events, rules.ron vs state_machine.ron, schema stability rules, physics/inspector constraints
 - [WASM pitfalls](wasm_pitfalls.md) — pipeline compilation latency, no threading, 16-byte alignment, binary size limit, asset preloading
 - [Scene/prefab boundary](scene_prefab_boundary.md) — how scene vs prefab responsibilities diverge from engine canon; no per-instance overrides; recommended direction
