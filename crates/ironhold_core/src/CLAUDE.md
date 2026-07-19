@@ -380,6 +380,26 @@ missing `PrefabKey`/`LevelEntity`). Adding a new "every entity gets X" field mea
 helper once, not every site. `PrefabKey` (catalog key, e.g. `"enemy_orc_melee"`) is distinct from
 `SpawnId` (instance id, e.g. `"orc_01"`).
 
+## Despawning: prefer `try_despawn()` when an entity may already be gone
+
+If a system's own logic — not just concurrent/external interference — can plausibly queue two
+`commands.entity(e).despawn()` calls for the same entity in one run (e.g. two independent code
+paths in the same system both deciding "this entity should go away" from the same query snapshot,
+since `Commands` are deferred and don't remove the entity from that snapshot until the system
+finishes), use **`try_despawn()`** instead of `despawn()` for at least the second/later call site.
+`despawn()` on an already-despawned entity logs a warning via Bevy's default `warn` error handler
+(harmless — the generation check prevents any actual corruption — but noisy); `try_despawn()`
+silently no-ops in that case. Found via a real bug: `target_indicator_system` iterated one query
+snapshot in two separate passes (dead-target cleanup, then owner-retarget replacement), and a ring
+hit by both in the same frame got queued for despawn twice. Fixed there with an explicit
+per-frame `HashSet<Entity>` dedup guard (chosen for clarity at that call site), but `try_despawn()`
+is the lower-ceremony default for new code hitting this same shape — reach for it first unless you
+specifically need to know whether a despawn actually happened (`try_despawn()`'s return type is
+`EntityCommands`, not a bool, so if the call site needs that signal, keep the explicit dedup guard
+instead). Confirmed sibling instances (not yet fixed, same benign class) in
+`action_executor.rs`'s `StopMusic`/`PlayMusicLoop`, duplicate `Action::Despawn`, and
+`UnloadOverlay`/`ToggleOverlay` — see `planning/claude_suggestions.md`.
+
 ### The four player-construction sites
 
 Any feature that changes player spawning (local co-op, character select, respawn, possession)

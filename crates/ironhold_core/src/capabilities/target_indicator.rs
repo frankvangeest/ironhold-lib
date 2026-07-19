@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use crate::runtime::scene_manager::{LevelEntity, LoadedPrefabCatalog, LoadedTargetIndicator, PrefabKey, ResolvedTargetIndicator, SpawnRegistry};
 use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
@@ -101,6 +101,15 @@ pub fn target_indicator_system(
         cached_mats.clear();
     }
 
+    // Both despawn passes below (dead-target cleanup here, and owner-retarget replacement
+    // further down) read the same `existing` query snapshot — since `Commands` are deferred,
+    // an entity queued for despawn here is still visible to the second pass this same frame.
+    // A ring whose target dies AND whose owner retargets in the same frame would otherwise be
+    // queued for despawn twice, which Bevy handles gracefully but logs as a warning
+    // ("Entity despawned: ... is invalid"). Track what's already been queued so each ring is
+    // despawned at most once per frame.
+    let mut despawn_queued: HashSet<Entity> = HashSet::new();
+
     // Move any existing ring to follow its tracked entity.
     for (indicator_entity, tracking) in &existing {
         match global_transforms.get(tracking.target) {
@@ -116,7 +125,9 @@ pub fn target_indicator_system(
                 }
             }
             Err(_) => {
-                commands.entity(indicator_entity).despawn();
+                if despawn_queued.insert(indicator_entity) {
+                    commands.entity(indicator_entity).despawn();
+                }
             }
         }
     }
@@ -127,9 +138,10 @@ pub fn target_indicator_system(
 
     for (player_entity, player_target, player_index) in &changed_players {
         // Despawn this player's existing ring (there's at most one) — every other player's
-        // ring is untouched.
+        // ring is untouched. Guarded by `despawn_queued` in case the dead-target cleanup pass
+        // above already queued this same ring for despawn this frame.
         for (indicator_entity, tracking) in &existing {
-            if tracking.owner == player_entity {
+            if tracking.owner == player_entity && despawn_queued.insert(indicator_entity) {
                 commands.entity(indicator_entity).despawn();
             }
         }

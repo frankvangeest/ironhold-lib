@@ -633,6 +633,132 @@ fn test_target_indicator_tints_rings_per_player_when_multiplayer() {
     }
 }
 
+/// Regression for a confirmed bug (found via playtest console log during
+/// `per_player_camera_look_controls.md`'s playtest, 2026-07-19; unrelated to that feature —
+/// `target_indicator_system` reads one `existing` query snapshot and iterates it twice (dead-
+/// target cleanup, then owner-retarget replacement); since `Commands` are deferred, a ring whose
+/// tracked target dies AND whose owner retargets in the same frame was queued for despawn twice,
+/// which Bevy handled gracefully but logged as a "Entity despawned: ... is invalid" warning.
+/// Fixed via a per-frame `despawn_queued: HashSet<Entity>` guard shared by both passes.
+///
+/// **Known limitation, investigated and left as-is** (system-architect + debug-detective review,
+/// 2026-07-19): a double-despawn of an already-despawned entity is silently absorbed by Bevy's
+/// generation check, so the only observable symptom is the log line itself — this test's
+/// end-state assertions (ring counts, surviving owner) pass identically whether the `HashSet`
+/// guard is present or not, and would stay green even if the fix were reverted. A genuinely
+/// discriminating test would need to assert on that log line; this was attempted (capturing
+/// `tracing` output via `bevy::log::{tracing, tracing_subscriber}`, which needs no new
+/// dependency) and empirically failed to catch it: Bevy's despawn error handler logs through the
+/// old `log` crate facade (`bevy_ecs::error::handler::warn` calls `log::warn!`, confirmed by
+/// reading `bevy_ecs-0.18.0/src/error/handler.rs`), not `tracing::warn!` directly — in a real
+/// running app `LogPlugin` bridges `log` into `tracing` via `tracing_log::LogTracer`, but
+/// `setup_test_app` registers no `LogPlugin`, so that bridge never installs and a
+/// `tracing`-only subscriber sees nothing. Properly capturing `log`-facade output would need a
+/// custom `log::Log` implementation installed process-wide via `log::set_boxed_logger` (a
+/// once-per-process global, requiring `std::sync::Once` + thread-local capture buffers to stay
+/// safe across this suite's parallel test threads) — real, reusable test infrastructure in its
+/// own right, not a one-line addition to this fix. Logged as a follow-up in
+/// `planning/claude_suggestions.md` rather than built here under this bug fix's scope. This test
+/// still has real value: it exercises the exact double-trigger scenario and confirms correct
+/// end-state behavior (no panic, no leftover/incorrect ring), which is what a reader can verify
+/// without needing to trust the log-observability gap explained above.
+#[test]
+fn test_target_indicator_ring_not_double_despawned_when_target_dies_and_owner_retargets_same_frame() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::player::{PlayerTarget, PlayerIndex};
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let enemy_a = app.world_mut().spawn((
+        SpawnId("enemy_a".to_string()),
+        GlobalTransform::from_translation(Vec3::new(1.0, 0.0, 0.0)),
+    )).id();
+    let enemy_b = app.world_mut().spawn((
+        SpawnId("enemy_b".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-1.0, 0.0, 0.0)),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_a".to_string(), enemy_a);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_b".to_string(), enemy_b);
+
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.2,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
+    })));
+
+    let player_a = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget(Some("enemy_a".to_string())),
+        PlayerIndex(0),
+    )).id();
+    let player_b = app.world_mut().spawn((
+        CharacterController {
+            walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+            inputs: InputMap {
+                forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+                left: "KeyA".to_string(), right: "KeyD".to_string(),
+                strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+                jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+                interact: "KeyF".to_string(), strafe_mouse_button: None,
+                target_next: "Tab".to_string(), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
+            },
+            is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+            double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+            collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        },
+        PlayerTarget(Some("enemy_b".to_string())),
+        PlayerIndex(1),
+    )).id();
+
+    // Both players get their own ring.
+    app.update();
+    let ring_count = app.world_mut().query::<&TrackingTarget>().iter(app.world()).count();
+    assert_eq!(ring_count, 2, "each player must get their own ring before the repro step");
+
+    // The double-trigger: in the SAME frame, player_a's target entity dies (dead-target cleanup
+    // pass would despawn player_a's ring) AND player_a's PlayerTarget changes (owner-retarget
+    // pass would ALSO try to despawn the same ring) — this is the exact race the bug report
+    // described. player_b is left completely untouched as the control.
+    app.world_mut().despawn(enemy_a);
+    app.world_mut().get_mut::<PlayerTarget>(player_a).unwrap().0 = None;
+
+    // Must not panic — see the doc comment above for why a log-level assertion isn't feasible
+    // here, and why this end-state check is still the meaningful part of this test.
+    app.update();
+
+    let remaining: Vec<Entity> = {
+        let mut q = app.world_mut().query::<(Entity, &TrackingTarget)>();
+        q.iter(app.world()).map(|(e, _)| e).collect()
+    };
+    assert_eq!(
+        remaining.len(), 1,
+        "player_a's ring must be gone (cleared target) and no new ring spawned for player_a; \
+         player_b's ring must be the only one left"
+    );
+    let owners: Vec<Entity> = {
+        let mut q = app.world_mut().query::<&TrackingTarget>();
+        q.iter(app.world()).map(|t| t.owner).collect()
+    };
+    assert_eq!(owners, vec![player_b], "the surviving ring must belong to player_b, untouched by player_a's repro step");
+}
+
 /// System-architect review finding (Phase 1, `per_player_split_screen_targeting.md`):
 /// `Action::SetTarget`/`ClearTarget` must mirror the primary player's `PlayerTarget`, not just
 /// write the global `CurrentTarget` resource — otherwise the ring (`target_indicator_system`)
