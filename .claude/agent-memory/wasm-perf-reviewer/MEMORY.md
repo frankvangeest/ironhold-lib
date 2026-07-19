@@ -1,3 +1,4 @@
+- [Player spawn unification](project_player_spawn_unification.md) — GLB+primitive players unified in spawn_player_entity_core via PlayerModelSource; spawn-time-only, zero new deps, no per-frame path; action_executor tag String-alloc nit on error path
 - [Targeting capability hot path](project_targeting_capability.md) — click_select/tab_targeting both input-gated; cheap on idle frames; allocations only on click/Tab
 - [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — update_dynamic_labels_system runs unconditionally every frame; builds String per label per frame; render-write guarded by text.0 != new_text
 - [rewrite_target string substitution](project_rewrite_target.md) — runs per action pushed; .replace allocations only when actions fire (not per-frame); canonical copy now in message_interpreter.rs

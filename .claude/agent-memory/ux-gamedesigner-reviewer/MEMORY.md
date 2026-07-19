@@ -26,4 +26,5 @@
 - [ActionSlotDef.label is future-use](project_actionslotdef_label_undocumented.md) — `label` renders NOWHERE (future tooltip); only key_hint/key shows on-screen; docs now list both but omit label's not-rendered caveat
 - [world_stat_bar style landscape](project_world_stat_bar_style_landscape.md) — only Ascii+Pixel exist (Icon is unbuilt); both now duplicate in split-screen; popups/nameplates stay single-instance
 - [Warn vs silent fallback principle](project_warn_vs_silent_fallback_principle.md) — engine warns when authored intent is contradictory (cross-bar dup, dup player_index, missing animation_policy), silent when fallback is a legit common choice; prefer load/validate-time over per-frame
+- [Primitive-player fields](project_primitive_player_fields.md) — which PrefabDef fields apply to tags:["player"] prefabs after v1; canonical example local_coop_demo room7/player_p1_primitive
 - [Schema bool-toggle house style](project_schema_bool_toggle_house_style.md) — binary opt-in fields are bools (default false), not two-variant enums; ~19 bool precedents vs enums-for-multistate-only; recommend bool for new on/off fields
