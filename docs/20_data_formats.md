@@ -1820,6 +1820,10 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
 | `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player reads movement/camera input from the connected gamepad at this index instead of the keyboard: left stick = move/strafe, right stick X = turn, South button (A / Cross) = jump, East button (B / Circle) = run. `None` (default) keeps keyboard-only behavior. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `look_left` | `Option<String>` | `None` | Keyboard-held camera yaw turn (left). Unbound by default. See the "Keyboard camera look" note below `CameraConfig`'s `look_speed` field. |
+| `look_right` | `Option<String>` | `None` | Keyboard-held camera yaw turn (right). |
+| `look_up` | `Option<String>` | `None` | Keyboard-held camera pitch (toward overhead). |
+| `look_down` | `Option<String>` | `None` | Keyboard-held camera pitch (toward horizontal). |
 
 > **Selection is proximity-based, not a pixel-perfect mesh hit.** Left-clicking selects the `click_selectable` entity whose on-screen position is nearest the cursor (within a fixed radius), resolved from the entity's transform — so thin or animated/skinned characters are easy to click and never "fall through" to the geometry behind them. Clicking with nothing nearby clears the current target. For combat-style play, set the player camera's `orbit_button: "Right"` so left-click is free for selection (see `3rd_person_game_demo`).
 
@@ -1834,6 +1838,7 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 | Modifiers | `"ShiftLeft"`, `"ShiftRight"`, `"ControlLeft"`, `"ControlRight"`, `"AltLeft"`, `"AltRight"` |
 | Common | `"Space"`, `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"` |
 | Arrows | `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"` |
+| Punctuation | `"Comma"`, `"Period"`, `"Semicolon"`, `"Quote"`, `"Slash"`, `"BracketLeft"`, `"BracketRight"`, `"Minus"`, `"Equal"` |
 
 Invalid key strings produce a `warn!` at load time and that binding has no effect. Case is significant for multi-character names — `"space"` and `"shiftleft"` are not valid. **Exception:** a single bare letter (e.g. `"q"`) is case-insensitive and resolves the same as `"Q"`; only letter keys get this leniency.
 
@@ -1876,12 +1881,38 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `initial_yaw` | `f32` | `0.0` | Camera yaw at scene start in radians |
 | `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. Mutually exclusive with `split` — see below. |
 | `split` | `Option<SplitScreenDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list. When the scene has 2+ players and this is set, the engine gives every player their own real camera, each locked to its own half of the window, instead of one shared camera. See [Split-screen camera](#split-screen-camera-splitscreendef-) below. Mutually exclusive with `party` — see below. |
+| `look_speed` | `f32` | `2.0` | Angular rate (radians/sec) for keyboard-held camera look (`InputMap.look_left`/`look_right`/`look_up`/`look_down`) — roughly a full turn every ~3s at the default. A **separate** dial from `orbit_speed`, which is tuned as a mouse-pixel-delta multiplier and would be far too slow if reused as a keyboard-hold rate. Authored per-player, same as every other `CameraConfig` field. |
 
 > **2+ players without a `party` or `split` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party`/`camera.split` are both unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to a shared or split camera explicitly.
 
 > **`party` and `split` are mutually exclusive.** Both are read only from the first player's `camera` block. If a designer sets both by mistake, the engine logs a warning and `split` wins (treated as the more specific/newer setting) — it does not silently pick one with no signal.
 
-> **`orbit_button: "None"`** — unlike an actually-unrecognized string (which warns and falls back to `"Either"`), `"None"` is a deliberate, silent opt-out: no left-click or right-click binding at all. This exists for local co-op split-screen player cameras, where a single shared mouse would otherwise rotate/zoom every player's camera identically. Split-screen scenes typically pair this with `zoom_speed: 0.0` (scroll × 0 has no effect) on every player's `camera` block, giving each player a fully fixed, auto-follow-only camera.
+> **`orbit_button: "None"`** — unlike an actually-unrecognized string (which warns and falls back to `"Either"`), `"None"` is a deliberate, silent opt-out: no left-click or right-click binding at all. This exists for local co-op split-screen player cameras, where a single shared mouse would otherwise rotate/zoom every player's camera identically. Split-screen scenes typically pair this with `zoom_speed: 0.0` (scroll × 0 has no effect) on every player's `camera` block, giving each player a fixed-angle camera with no **mouse** control. Each player can still independently turn their own camera via keyboard — see "Keyboard camera look" below.
+
+> **Keyboard camera look for split-screen.** Since split-screen disables *mouse* orbit per camera (immediately above), each player's own `InputMap.look_left`/`look_right`/`look_up`/`look_down` (see the `InputMap` table above) is the per-player alternative — bound to that player's own camera only, independent of every other player's. A worked example, matching `local_coop_demo`'s actual per-scheme bindings (each pair chosen to sit near that scheme's own movement cluster, and disjoint across every scheme so a 4-way grid scene has no key collisions):
+>
+> | Scheme | Movement keys | `look_left` / `look_right` |
+> |---|---|---|
+> | WASD | W/A/S/D, Q/E strafe | `"KeyZ"` / `"KeyX"` |
+> | Arrows | ↑/↓/←/→ | `"Comma"` / `"Period"` |
+> | IJKL | I/J/K/L | `"KeyH"` / `"KeyP"` |
+> | Numpad | 5/1/2/3 | `"Numpad7"` / `"Numpad9"` |
+>
+> ```ron
+> inputs: (
+>   forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+>   strafe_left: "KeyQ", strafe_right: "KeyE",
+>   jump: "Space", run: "ShiftLeft",
+>   strafe_mouse_button: None,
+>   look_left: "KeyZ", look_right: "KeyX",
+>   // Pitch is also supported (same mechanism) — bind if wanted:
+>   // look_up: "KeyC", look_down: "KeyV",
+> ),
+> ```
+>
+> Party mode (`camera.party`, one shared `PartyOrbitCamera` for every player) has no per-player
+> viewport to attribute a look binding to — `look_left`/etc. are simply not authored there. See
+> `local_coop_demo/prefabs/prefabs.ron`'s `player_p1`/`player_p2` for the reference example.
 
 **Jump sound** — the player system emits `GameEvent::Trigger("player.jumped")` on every jump. Wire a sound to it in `logic/state_machine.ron`:
 ```ron
@@ -1982,7 +2013,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 > **Every player's own `camera` block matters here — not just the first player's.** With `party`, only player 1's `camera` fields (besides `party` itself) are used, because there is only one shared camera. With `split`, each player gets their own real `OrbitCamera` built from their own config, so `offset`, `look_at_offset`, `zoom_speed`, `min_radius`/`max_radius`, `orbit_button`, etc. must be set on **every** player's `camera` block. Only `split` (and `party`) themselves stay first-player-only.
 
-> **Disabling manual camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above) and `zoom_speed: 0.0` on **every** player's `camera` block, giving each player a fixed-angle, auto-follow-only camera at their configured offset.
+> **Disabling manual mouse camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above) and `zoom_speed: 0.0` on **every** player's `camera` block, giving each player a fixed-angle camera at their configured offset with no mouse control — each player can still independently turn their own camera via keyboard (`InputMap.look_left`/etc.), see the "Keyboard camera look" note above.
 
 **Example** — two-player scene with a vertical split, both cameras fixed (no manual mouse control):
 
@@ -2067,7 +2098,7 @@ Dynamic mode is self-contained: it does **not** require also authoring a `party:
 
 > **All three cameras exist for the whole scene.** Dynamic mode does not spawn or despawn cameras as the view merges/splits — the shared camera and both per-player cameras are created once, up front, and the engine simply toggles which ones are active. This avoids any pop or snap when switching: the inactive cameras keep tracking their targets in the background the entire time.
 
-> **Every player's own `camera` block still matters**, same as fixed-orientation `split` — each player needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, since those drive the per-player cameras used once the view splits. Only `split.dynamic` itself is read exclusively from the first player.
+> **Every player's own `camera` block still matters**, same as fixed-orientation `split` — each player needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, since those drive the per-player cameras used once the view splits (`orbit_button: "None"` disables *mouse* orbit only — `InputMap.look_left`/etc. still works per player, see "Keyboard camera look" above). Only `split.dynamic` itself is read exclusively from the first player.
 
 **Example** — two-player scene that starts merged and splits once the players are more than 10 m apart, merging back under 6 m:
 
@@ -2145,7 +2176,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
 
 > **More than `MAX_SPLIT_PLAYERS` (4) players spawn cameraless.** Consistent with the existing (pre-`Grid`) behavior when a 3rd player exists in a `Vertical`/`Horizontal` scene — extra players beyond the cap simply don't get a `SplitViewportSlot` camera, they still spawn and can still move, just without their own rendered view.
 
-> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`) so one shared mouse doesn't move every camera at once. Only `split` itself is read exclusively from the first player.
+> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual *mouse* control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`) so one shared mouse doesn't move every camera at once — each player can still turn their own camera via keyboard (`InputMap.look_left`/etc., see "Keyboard camera look" above). Only `split` itself is read exclusively from the first player.
 
 **Example** — 4-player scene with a grid split, all 4 cameras fixed (no manual mouse control):
 

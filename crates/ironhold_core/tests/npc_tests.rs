@@ -18,7 +18,7 @@ fn npc_aggro_test_player_controller() -> CharacterController {
             jump: "Space".to_string(), run: "ShiftLeft".to_string(),
             interact: "KeyF".to_string(), strafe_mouse_button: None,
             target_next: "Tab".to_string(), target_range: 30.0,
-            gamepad_index: None,
+            gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         },
         is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
         double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -315,6 +315,11 @@ fn test_camera_shake_inserts_component_on_orbit_camera() {
             orbit_rmb: true,
             character_rotate_rmb: false,
             character_rotate_lmb: false,
+            look_left_key: None,
+            look_right_key: None,
+            look_up_key: None,
+            look_down_key: None,
+            look_speed: 2.0,
         },
     )).id();
 
@@ -381,6 +386,11 @@ fn test_camera_shake_component_removed_after_expiry() {
             orbit_rmb: true,
             character_rotate_rmb: false,
             character_rotate_lmb: false,
+            look_left_key: None,
+            look_right_key: None,
+            look_up_key: None,
+            look_down_key: None,
+            look_speed: 2.0,
         },
         // Insert an already-expired shake (remaining <= 0) to trigger removal.
         CameraShakeState {

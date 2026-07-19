@@ -314,6 +314,11 @@
           // that would conflict between two keyboard players, so it's disabled here.
           strafe_mouse_button: None,
           // gamepad_index: 0,  // uncomment (and remove keyboard split below) for controller co-op
+          // IMPORTANT: no look_left/look_right here (or on player_p2 below) — this is party mode,
+          // where PartyOrbitCamera is shared across all players. There's no single per-player
+          // owner to attribute a look binding to, so per-player keyboard camera look only applies
+          // to real split-screen scenes (see player_p1_split etc. below). See
+          // planning/features/done/per_player_camera_look_controls.md.
         ),
         movement: (
           walk_speed: 5.0,
@@ -343,6 +348,7 @@
           run:          "ShiftRight",
           strafe_mouse_button: None,
           // gamepad_index: 1,  // uncomment for controller co-op (see player_p1's inputs comment)
+          // No look_left/look_right here either — see player_p1's "IMPORTANT" comment above.
         ),
         movement: (
           walk_speed: 5.0,
@@ -428,6 +434,15 @@
           // silently fail to cycle this player's target in the exact browser playtest meant to
           // confirm this feature. Also deliberately distinct from player 2's key below.
           target_next: "KeyT",
+          // per_player_camera_look_controls.md playtest aid: since split-screen disables mouse
+          // orbit (`orbit_button: "None"` above), these are this player's only way to rotate
+          // their own camera. Z/X sit right under WASD.
+          look_left:  "KeyZ",
+          look_right: "KeyX",
+          // Pitch is also supported (same mechanism) but left unbound in this demo to keep the
+          // new-key count low. Uncomment to try it — clamped to `min_pitch`/`max_pitch` above:
+          // look_up:   "KeyC",
+          // look_down: "KeyV",
         ),
         movement: (
           walk_speed: 5.0,
@@ -488,6 +503,10 @@
           // from player 1's "Tab" above (both defaulting to "Tab" would make both players
           // Tab-cycle in lockstep on a single keyboard press, masking the per-player fix).
           target_next: "KeyM",
+          // per_player_camera_look_controls.md playtest aid: Comma/Period sit right beside the
+          // arrow cluster on a standard layout, next to this player's own RShift run key.
+          look_left:  "Comma",
+          look_right: "Period",
         ),
         movement: (
           walk_speed: 5.0,
@@ -531,6 +550,8 @@
           jump:         "Space",
           run:          "ShiftLeft",
           strafe_mouse_button: None,
+          look_left:  "KeyZ",
+          look_right: "KeyX",
         ),
         movement: (
           walk_speed: 5.0,
@@ -569,6 +590,8 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
+          look_left:  "Comma",
+          look_right: "Period",
         ),
         movement: (
           walk_speed: 5.0,
@@ -624,6 +647,8 @@
           jump:         "Space",
           run:          "ShiftLeft",
           strafe_mouse_button: None,
+          look_left:  "KeyZ",
+          look_right: "KeyX",
         ),
         movement: (
           walk_speed: 5.0,
@@ -662,6 +687,8 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
+          look_left:  "Comma",
+          look_right: "Period",
         ),
         movement: (
           walk_speed: 5.0,
@@ -710,6 +737,8 @@
           jump:         "Space",
           run:          "ShiftLeft",
           strafe_mouse_button: None,
+          look_left:  "KeyZ",
+          look_right: "KeyX",
         ),
         movement: (
           walk_speed: 5.0,
@@ -749,6 +778,8 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
+          look_left:  "Comma",
+          look_right: "Period",
         ),
         movement: (
           walk_speed: 5.0,
@@ -787,6 +818,8 @@
           jump:         "KeyU",
           run:          "KeyO",
           strafe_mouse_button: None,
+          look_left:  "KeyH",
+          look_right: "KeyP",
         ),
         movement: (
           walk_speed: 5.0,
@@ -826,6 +859,8 @@
           jump:         "Numpad0",
           run:          "Numpad4",
           strafe_mouse_button: None,
+          look_left:  "Numpad7",
+          look_right: "Numpad9",
         ),
         movement: (
           walk_speed: 5.0,

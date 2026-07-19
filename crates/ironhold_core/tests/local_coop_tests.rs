@@ -38,7 +38,7 @@ fn test_input_map() -> InputMap {
         jump: "Space".to_string(), run: "ShiftLeft".to_string(),
         interact: "KeyF".to_string(), strafe_mouse_button: None,
         target_next: "Tab".to_string(), target_range: 30.0,
-        gamepad_index: None,
+        gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
     }
 }
 
@@ -68,6 +68,7 @@ fn base_camera_config() -> CameraConfig {
         initial_yaw: 0.0,
         party: None,
         split: None,
+        look_speed: 2.0,
     }
 }
 
@@ -911,6 +912,11 @@ fn test_orbit_camera(target: Entity) -> OrbitCamera {
         orbit_rmb: false,
         character_rotate_lmb: false,
         character_rotate_rmb: false,
+        look_left_key: None,
+        look_right_key: None,
+        look_up_key: None,
+        look_down_key: None,
+        look_speed: 2.0,
     }
 }
 
@@ -3824,4 +3830,254 @@ fn test_player_stat_widget_duplicates_ranks_when_scene_is_split_screen() {
     let mut sorted: Vec<u8> = ranks.iter().map(|r| r.unwrap_or(0)).collect();
     sorted.sort();
     assert_eq!(sorted, vec![0, 1, 2, 3]);
+}
+
+// ── per_player_camera_look_controls.md: keyboard camera look (camera_orbit_system) ─────────────
+
+use ironhold_core::capabilities::camera::camera_orbit_system;
+
+#[test]
+fn test_keyboard_look_left_rotates_only_the_bound_camera_not_a_sibling() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+    let p1 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+
+    let cam_with_look = app.world_mut().spawn((
+        Transform::IDENTITY,
+        OrbitCamera { look_left_key: Some(KeyCode::KeyZ), ..test_orbit_camera(p0) },
+    )).id();
+    // Bound to a DIFFERENT key, not left unbound — this is the actual 4-way grid scenario
+    // (every scheme's look keys are distinct), a stronger proof than an unbound sibling would be.
+    let cam_without_look = app.world_mut().spawn((
+        Transform::IDENTITY,
+        OrbitCamera { look_left_key: Some(KeyCode::Comma), ..test_orbit_camera(p1) },
+    )).id();
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyZ);
+
+    // `run_system_once` bypasses the schedule, so `Time` never ticks on its own — advance it
+    // manually before each run, matching the pattern used elsewhere in this test suite
+    // (`action_tests.rs`'s `Time::advance_by`).
+    for _ in 0..5 {
+        app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(100));
+        app.world_mut().run_system_once(camera_orbit_system).unwrap();
+    }
+
+    let yaw_with_look = app.world().get::<OrbitCamera>(cam_with_look).unwrap().yaw;
+    let yaw_without_look = app.world().get::<OrbitCamera>(cam_without_look).unwrap().yaw;
+    assert!(
+        yaw_with_look > 0.0,
+        "look_left held should increase yaw over several ticks, got {yaw_with_look}"
+    );
+    assert_eq!(
+        yaw_without_look, 0.0,
+        "a camera bound to a DIFFERENT look_left key (Comma) must be completely unaffected by \
+         another player's KeyZ press — per-player independence is the whole point of this feature"
+    );
+}
+
+#[test]
+fn test_keyboard_look_right_decreases_yaw() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+    let cam = app.world_mut().spawn((
+        Transform::IDENTITY,
+        OrbitCamera { look_right_key: Some(KeyCode::KeyX), ..test_orbit_camera(p0) },
+    )).id();
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyX);
+    for _ in 0..5 {
+        app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(100));
+        app.world_mut().run_system_once(camera_orbit_system).unwrap();
+    }
+
+    let yaw = app.world().get::<OrbitCamera>(cam).unwrap().yaw;
+    assert!(yaw < 0.0, "look_right held should decrease yaw, got {yaw}");
+}
+
+#[test]
+fn test_keyboard_look_up_increases_pitch_toward_max_and_clamps() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+    let cam = app.world_mut().spawn((
+        Transform::IDENTITY,
+        OrbitCamera { look_up_key: Some(KeyCode::KeyC), pitch: 0.5, ..test_orbit_camera(p0) },
+    )).id();
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyC);
+    // A single large tick (well past what's needed to hit max_pitch at look_speed 2.0 rad/s)
+    // clamps in one system run.
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(5));
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    assert!(
+        orbit.pitch > 0.5,
+        "look_up held should increase pitch toward max_pitch (matching this codebase's mouse \
+         convention, not a literal 'up = sky' reading), got {}", orbit.pitch
+    );
+    assert!(
+        (orbit.pitch - orbit.max_pitch).abs() < 0.001,
+        "sustained look_up hold must clamp at max_pitch (0.9), got {}", orbit.pitch
+    );
+}
+
+#[test]
+fn test_keyboard_look_down_decreases_pitch_toward_min_and_clamps() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+    let cam = app.world_mut().spawn((
+        Transform::IDENTITY,
+        OrbitCamera { look_down_key: Some(KeyCode::KeyV), pitch: 0.5, ..test_orbit_camera(p0) },
+    )).id();
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyV);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(5));
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    assert!(orbit.pitch < 0.5, "look_down held should decrease pitch, got {}", orbit.pitch);
+    assert!(
+        (orbit.pitch - orbit.min_pitch).abs() < 0.001,
+        "sustained look_down hold must clamp at min_pitch (0.1), got {}", orbit.pitch
+    );
+}
+
+#[test]
+fn test_no_look_keys_bound_is_unaffected_by_keyboard_input_regression() {
+    // Regression: an OrbitCamera with every look_*_key at None (today's default for every
+    // existing scene) must not react to ANY keyboard input at all, matching pre-feature behavior
+    // exactly — this is the byte-for-byte backward-compatibility guarantee the plan requires.
+    let mut app = setup_test_app();
+    app.update();
+
+    let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
+    let cam = app.world_mut().spawn((Transform::IDENTITY, test_orbit_camera(p0))).id();
+
+    {
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.press(KeyCode::KeyW);
+        keys.press(KeyCode::KeyZ);
+        keys.press(KeyCode::KeyX);
+        keys.press(KeyCode::KeyC);
+        keys.press(KeyCode::KeyV);
+    }
+
+    for _ in 0..5 {
+        app.world_mut().run_system_once(camera_orbit_system).unwrap();
+    }
+
+    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    assert_eq!(orbit.yaw, 0.0, "no look keys bound -> yaw must stay exactly at its spawned value");
+    assert_eq!(orbit.pitch, 0.5, "no look keys bound -> pitch must stay exactly at its spawned value");
+}
+
+#[test]
+fn test_scene_load_resolves_look_keys_and_look_speed_onto_spawned_split_orbit_camera() {
+    // Debug-detective finding: every existing test constructs `OrbitCamera` directly with the
+    // look fields already populated, so the RON-string -> component-field resolution at the
+    // actual spawn site (`entity_spawner.rs::spawn_orbit_camera_for_player`, the split-screen
+    // path) was never exercised — a mis-wire there (e.g. `look_left` resolving into
+    // `look_right_key`) would compile and pass every other test. This drives a real scene load
+    // through that exact call site instead of spawning a bare component.
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+
+    let mut p1_camera = base_camera_config();
+    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None });
+    p1_camera.look_speed = 3.5;
+    let p1_inputs = InputMap { look_left: Some("KeyZ".to_string()), look_up: Some("KeyC".to_string()), ..test_input_map() };
+
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    camera: Some(p1_camera),
+                    inputs: Some(p1_inputs),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_player_2".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_b".to_string(),
+                player_index: 1,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    load_two_player_scene(&mut app);
+
+    // OrbitCamera doesn't derive Clone, so snapshot just the fields this test needs.
+    struct LookSnapshot {
+        look_left_key: Option<KeyCode>,
+        look_right_key: Option<KeyCode>,
+        look_up_key: Option<KeyCode>,
+        look_down_key: Option<KeyCode>,
+        look_speed: f32,
+    }
+    let mut q = app.world_mut().query::<&OrbitCamera>();
+    let cams: Vec<LookSnapshot> = q.iter(app.world()).map(|c| LookSnapshot {
+        look_left_key: c.look_left_key, look_right_key: c.look_right_key,
+        look_up_key: c.look_up_key, look_down_key: c.look_down_key, look_speed: c.look_speed,
+    }).collect();
+    assert_eq!(cams.len(), 2, "split-screen scene must spawn one OrbitCamera per player");
+
+    let p1_cam = cams.iter().find(|c| c.look_left_key == Some(KeyCode::KeyZ))
+        .expect("player 1's camera (the one with a custom look_left) must exist among the spawned cameras");
+    assert_eq!(p1_cam.look_left_key, Some(KeyCode::KeyZ), "look_left \"KeyZ\" must resolve onto look_left_key");
+    assert_eq!(p1_cam.look_up_key, Some(KeyCode::KeyC), "look_up \"KeyC\" must resolve onto look_up_key");
+    assert_eq!(p1_cam.look_right_key, None, "an unauthored look_right must resolve to None, not leak KeyZ");
+    assert_eq!(p1_cam.look_down_key, None, "an unauthored look_down must resolve to None");
+    assert!(
+        (p1_cam.look_speed - 3.5).abs() < 0.001,
+        "CameraConfig.look_speed (3.5) must resolve onto OrbitCamera.look_speed, got {}", p1_cam.look_speed
+    );
+
+    let p2_cam = cams.iter().find(|c| c.look_left_key.is_none() && (c.look_speed - 2.0).abs() < 0.001)
+        .expect("player 2's camera (no inputs authored, default look_speed) must exist");
+    assert_eq!(p2_cam.look_right_key, None);
+    assert_eq!(p2_cam.look_up_key, None);
+    assert_eq!(p2_cam.look_down_key, None);
+}
+
+#[test]
+fn test_parse_key_recognizes_new_punctuation_set() {
+    // Added specifically for the Arrows control scheme's camera-look bindings (Comma/Period sit
+    // beside the arrow cluster) — the rest of the row was added alongside for a complete set.
+    assert_eq!(InputMap::parse_key("Comma"), Some(KeyCode::Comma));
+    assert_eq!(InputMap::parse_key("Period"), Some(KeyCode::Period));
+    assert_eq!(InputMap::parse_key("Semicolon"), Some(KeyCode::Semicolon));
+    assert_eq!(InputMap::parse_key("Quote"), Some(KeyCode::Quote));
+    assert_eq!(InputMap::parse_key("Slash"), Some(KeyCode::Slash));
+    assert_eq!(InputMap::parse_key("BracketLeft"), Some(KeyCode::BracketLeft));
+    assert_eq!(InputMap::parse_key("BracketRight"), Some(KeyCode::BracketRight));
+    assert_eq!(InputMap::parse_key("Minus"), Some(KeyCode::Minus));
+    assert_eq!(InputMap::parse_key("Equal"), Some(KeyCode::Equal));
 }

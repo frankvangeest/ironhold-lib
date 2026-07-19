@@ -39,6 +39,16 @@ pub struct OrbitCamera {
     /// Whether RMB also rotates the character. Sourced from `CameraConfig.character_rotate_button`.
     pub character_rotate_rmb: bool,
     pub character_rotate_lmb: bool,
+    /// Keyboard camera-look bindings, pre-resolved once at spawn from `InputMap.look_left`/
+    /// `look_right`/`look_up`/`look_down` (mirrors how `orbit_lmb`/`orbit_rmb` are pre-resolved
+    /// from RON strings rather than re-parsed every frame). `None` = that axis unbound.
+    pub look_left_key: Option<KeyCode>,
+    pub look_right_key: Option<KeyCode>,
+    pub look_up_key: Option<KeyCode>,
+    pub look_down_key: Option<KeyCode>,
+    /// Angular rate (rad/sec) for keyboard-held camera look. Sourced from
+    /// `CameraConfig.look_speed`.
+    pub look_speed: f32,
 }
 
 pub fn camera_orbit_system(
@@ -46,6 +56,7 @@ pub fn camera_orbit_system(
     mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
     mut mouse_wheel_events: MessageReader<bevy::input::mouse::MouseWheel>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut camera_query: Query<(&mut Transform, &mut OrbitCamera), Without<CharacterController>>,
     mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCamera>)>,
     #[cfg(feature = "inspector")]
@@ -79,6 +90,26 @@ pub fn camera_orbit_system(
             orbit.yaw -= mouse_delta.x * orbit.orbit_speed * time.delta_secs();
             orbit.pitch -= mouse_delta.y * orbit.orbit_speed * time.delta_secs();
             orbit.pitch = orbit.pitch.clamp(orbit.min_pitch, orbit.max_pitch);
+        }
+
+        // Keyboard camera look — independent of the mouse-orbit gate above (split-screen scenes
+        // disable mouse-orbit per camera via `orbit_button: "None"`, since one shared mouse can't
+        // drive 2+ independently-active cameras; this is the per-player alternative). Pitch
+        // direction mirrors the mouse convention above (`look_up` increases `pitch` toward
+        // `max_pitch`, matching "mouse down" in this codebase's pitch convention, not a literal
+        // "up = sky" reading) — see `planning/features/done/per_player_camera_look_controls.md`.
+        let dt = time.delta_secs();
+        if orbit.look_left_key.is_some_and(|k| keyboard_input.pressed(k)) {
+            orbit.yaw += orbit.look_speed * dt;
+        }
+        if orbit.look_right_key.is_some_and(|k| keyboard_input.pressed(k)) {
+            orbit.yaw -= orbit.look_speed * dt;
+        }
+        if orbit.look_up_key.is_some_and(|k| keyboard_input.pressed(k)) {
+            orbit.pitch = (orbit.pitch + orbit.look_speed * dt).min(orbit.max_pitch);
+        }
+        if orbit.look_down_key.is_some_and(|k| keyboard_input.pressed(k)) {
+            orbit.pitch = (orbit.pitch - orbit.look_speed * dt).max(orbit.min_pitch);
         }
 
         let char_rotate = (orbit.character_rotate_rmb && rmb)

@@ -536,6 +536,21 @@ RON: `zoom_speed: 0.0` (scroll × 0 has no effect) and `orbit_button: "None"` (n
 `parse_orbit_button` arm returning `(false, false)`, no warning — distinct from an actually
 unrecognized string, which warns and defaults to `"Either"`).
 
+**Keyboard camera look (`per_player_camera_look_controls.md`, shipped)** closes the gap this leaves
+— `orbit_button: "None"` only disables *mouse* orbit; each player can still independently turn
+their own camera via `InputMap.look_left`/`look_right`/`look_up`/`look_down`, pre-resolved once at
+spawn onto `OrbitCamera.look_left_key`/etc. (mirroring how `orbit_lmb`/`orbit_rmb` are already
+pre-resolved rather than re-parsed every frame) and applied in `camera_orbit_system` independently
+of the mouse `orbit_active` gate. `CameraConfig.look_speed` (rad/sec, default 2.0) is the shared
+rate dial for this — deliberately not `orbit_speed`, which is tuned as a mouse-pixel-delta
+multiplier and would be far too slow reused as a keyboard-hold rate. Pitch direction is pinned to
+match the existing mouse convention (`look_up` increases `pitch` toward `max_pitch`, i.e. mirrors
+"mouse down" in this codebase's convention, not a literal "up = sky" reading) — see the regression
+test asserting direction, not just clamp bounds. `PartyOrbitCamera` deliberately has no equivalent
+— it's shared by every player at once, with no single owner to attribute a look binding to.
+Designer-facing docs (RON fields, the demo scheme table) live in `docs/20_data_formats.md`'s
+"Keyboard camera look" note — this paragraph is the implementation-side summary only.
+
 **Known limitation:** `Action::CameraShake` only queries `With<OrbitCamera>`
 (`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`), so it silently no-ops on a scene
 using `PartyOrbitCamera` — but **does** fire on both cameras in a `split` scene, since those are

@@ -7,6 +7,8 @@
 
 ## Correctness
 
+- **`InputMap` key bindings (including the new `look_left`/`look_right`/`look_up`/`look_down`) have no validation at all — unlike `ActionBar` slots** _(observed at `per_player_camera_look_controls.md` implementation, debug-detective, 2026-07-19)_ — `ironhold_cli validate`/`validate.rs:289` cross-checks `ActionBar` slot keys for unrecognized names and cross-bar collisions, but nothing does the equivalent for `InputMap` fields. A misspelled `look_left` silently resolves to `None` (unbound, no warning); more importantly, this feature's entire per-player-independence guarantee rests on distinct keys across co-existing players in a scene, and nothing validates that either — a 5th control scheme that accidentally reuses an existing scheme's `KeyZ` would rotate two players' cameras in lockstep with zero diagnostic, the same class of bug the `ActionBar` cross-bar check exists to catch. Worth a `cli validate` pass mirroring the existing `ActionBar` pattern (per-scene unrecognized-key warning + cross-player collision detection) if this class of authoring mistake shows up in a real project.
+
 - ~~**Panel Open/Close action arms share identical blocker logic — extract a helper**~~ _(observed at `ba01c5e` 2026-07-01; fixed `53643ca` 2026-07-01)_ — `LoadedInventoryUi::set_panel_open(bool)` now backs all 7 call sites.
 
 - ~~**Overlay Backdrop (z=100) lacks `FocusPolicy::Block` — may only block clicks incidentally**~~ _(observed at `ba01c5e` 2026-06-30; fixed 2026-07-02, architect-reviewed, logged as a Bug not a feature — self-contained one-node fix)_ — Added `FocusPolicy::Block` + `Interaction::default()` to the "Overlay Backdrop" node, matching the panel-root pattern from `ec84bcf`. Regression tests in `tests/ui_panel_blocker.rs`.
