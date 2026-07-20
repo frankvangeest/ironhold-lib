@@ -75,8 +75,12 @@ pub fn action_executor_system(
             }
             Action::UnloadOverlay => {
                 info!("Executing Action::UnloadOverlay");
+                // try_despawn: only overlay roots are OverlayEntity-tagged (descendants aren't,
+                // so recursion is fine) — but this shares its query snapshot with
+                // ToggleOverlay's close branch below and scene_loader.rs's own overlay sweep;
+                // two of those queued in the same frame would double-despawn the same root.
                 for entity in overlay_entities.iter() {
-                    commands.entity(entity).despawn();
+                    commands.entity(entity).try_despawn();
                 }
             }
             Action::ToggleOverlay(path) => {
@@ -92,7 +96,7 @@ pub fn action_executor_system(
                     // Overlay is active — dismiss it.
                     info!("Action::ToggleOverlay: closing overlay");
                     for entity in overlay_entities.iter() {
-                        commands.entity(entity).despawn();
+                        commands.entity(entity).try_despawn();
                     }
                 }
             }
@@ -207,7 +211,10 @@ pub fn action_executor_system(
                     .map(|(e, _)| e);
                 if let Some(entity) = found {
                     info!("Action::Despawn: removing '{}' (entity {:?})", target_id, entity);
-                    commands.entity(entity).despawn();
+                    // try_despawn: two Action::Despawn(same_id) in one executor run both read
+                    // the same `spawned` query snapshot, so the second still finds the entity
+                    // (its removal is deferred, not yet applied) and would double-despawn it.
+                    commands.entity(entity).try_despawn();
                     spawn_params.registry.entities.remove(&target_id);
                 } else {
                     warn!("Action::Despawn: no entity with spawn id {:?}", target_id);
@@ -238,14 +245,16 @@ pub fn action_executor_system(
             }
             Action::StopMusic => {
                 info!("Executing Action::StopMusic");
+                // try_despawn: StopMusic + PlayMusicLoop (or two StopMusic) in the same
+                // executor run both iterate this same bg_music_query snapshot.
                 for (entity, _, _) in bg_music_query.iter_mut() {
-                    commands.entity(entity).despawn();
+                    commands.entity(entity).try_despawn();
                 }
             }
             Action::PlayMusicLoop { key, volume: action_volume } => {
-                // Stop any currently playing background music.
+                // Stop any currently playing background music. try_despawn: see StopMusic above.
                 for (entity, _, _) in bg_music_query.iter_mut() {
-                    commands.entity(entity).despawn();
+                    commands.entity(entity).try_despawn();
                 }
                 if let Some(entry) = asset_catalog.0.audio.get(&key) {
                     const SUPPORTED: &[&str] = &["wav", "ogg", "mp3"];

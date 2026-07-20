@@ -101,8 +101,15 @@ pub fn spawn_scene_v2(
     warn_cross_bar_duplicate_keys(scene);
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
+    // `try_despawn` (not `despawn`): only the 3 overlay root entities are tagged
+    // `OverlayEntity` (their descendants are untagged, so recursive despawn does the right
+    // thing here) — but `UnloadOverlay`/`ToggleOverlay` iterate this same query snapshot, and
+    // `Commands` are deferred, so two of those actions (or one of them plus this sweep) queued
+    // in the same frame both still see the same not-yet-removed root and would double-despawn
+    // it. `try_despawn()` silently no-ops on an already-gone entity instead. See the LevelEntity
+    // sweep below for the *other* try_despawn reason (actual recursive-children hazard).
     for entity in overlay_entities.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).try_despawn();
     }
 
     if is_overlay {
@@ -133,8 +140,15 @@ pub fn spawn_scene_v2(
             *loaded_key_bindings = LoadedKeyBindings(effective);
         }
 
+        // `try_despawn` (not `despawn`): Bevy 0.18's `despawn()` is recursive, and several
+        // `LevelEntity` widgets (e.g. `Pixel`-style world_stat_bar anchors, nameplate anchors)
+        // attach their own children as separate `LevelEntity`-tagged siblings via `add_child`.
+        // Archetype-iteration order can visit a parent before its children, so a child this
+        // query later reaches may already be gone (recursively despawned with its parent) —
+        // `despawn()` on an already-despawned entity logs a "double despawn" error; `try_despawn()`
+        // silently no-ops instead. Debug-detective finding, local_coop_hot_join_leave.md playtest.
         for entity in level_entities.iter() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
 
         // Build material handles from the asset catalog for this scene.

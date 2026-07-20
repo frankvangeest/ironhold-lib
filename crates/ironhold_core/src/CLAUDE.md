@@ -397,9 +397,26 @@ per-frame `HashSet<Entity>` dedup guard (chosen for clarity at that call site), 
 is the lower-ceremony default for new code hitting this same shape — reach for it first unless you
 specifically need to know whether a despawn actually happened (`try_despawn()`'s return type is
 `EntityCommands`, not a bool, so if the call site needs that signal, keep the explicit dedup guard
-instead). Confirmed sibling instances (not yet fixed, same benign class) in
-`action_executor.rs`'s `StopMusic`/`PlayMusicLoop`, duplicate `Action::Despawn`, and
-`UnloadOverlay`/`ToggleOverlay` — see `planning/claude_suggestions.md`.
+instead). Sibling instances in `action_executor.rs`'s `StopMusic`/`PlayMusicLoop`, duplicate
+`Action::Despawn`, and `UnloadOverlay`/`ToggleOverlay` are now fixed with `try_despawn()` too —
+the `UnloadOverlay`/`ToggleOverlay` pair (plus `scene_loader.rs`'s `LevelEntity`/overlay teardown
+sweeps) turned out to be more than theoretical: recursive `despawn()` on a widget anchor (e.g. a
+`Pixel`-style `world_stat_bar` or nameplate, both of which attach their own children as separate
+`LevelEntity`-tagged siblings via `add_child`) kills those children too, so the sweep's later
+iteration over an already-recursively-despawned child hits the exact same warning — confirmed via
+a real console warning during `local_coop_hot_join_leave.md`'s playtest (unrelated to that feature
+itself; just the first playtest to chain enough scene loads through split-screen-widget-bearing
+rooms to surface it).
+
+**Tagging a widget's own children with `LevelEntity`/`OverlayEntity` (redundant with recursive
+despawn) is deliberate, not an oversight — don't "clean it up".** The teardown sweeps above are
+the only thing that removes these entities on a scene/overlay transition; if a future refactor
+ever changes them from a flat query-and-despawn-everything sweep to something that walks only
+root/anchor entities and relies on Bevy's recursion for the rest (a `Without<ChildOf>` filter, for
+instance), an untagged child would leak the moment its actual parent-despawn path changed for any
+reason. Keeping every level of the hierarchy self-tagged means the sweep is correct regardless of
+which entity in a tree gets despawned first or by what mechanism — `try_despawn()` (per this
+section) is what makes that safe to keep, not a workaround to eventually design away.
 
 ### Player-construction sites
 

@@ -531,6 +531,35 @@ fn test_level_entity_despawned_on_replace_load() {
 }
 
 #[test]
+fn test_level_entity_parent_with_level_entity_children_cleans_up_without_double_despawn_warning() {
+    // Regression for a real bug: several widgets (Pixel-style world_stat_bar anchors, nameplate
+    // anchors) attach their own children as separate LevelEntity-tagged siblings via add_child.
+    // Bevy's despawn() is recursive, so the teardown loop (which iterates a flat query over all
+    // LevelEntity entities, parents and children alike) can visit a parent before its children —
+    // despawning the parent recursively removes the children too, so the loop's later visit to
+    // an already-gone child entity would double-despawn it. try_despawn() (not despawn()) makes
+    // that silently safe. This test can't directly assert "no warning was logged" (no test
+    // infrastructure captures Bevy's own internal error-handler warnings — see
+    // planning/claude_suggestions.md), so the meaningful assertion is the functional one: every
+    // level of the hierarchy is cleanly gone after the sweep, with no panic, regardless of the
+    // parent/child iteration order this particular ECS storage happens to produce.
+    let mut app = setup_test_app();
+    app.update();
+
+    let parent = app.world_mut().spawn(LevelEntity).id();
+    let child_a = app.world_mut().spawn(LevelEntity).id();
+    let child_b = app.world_mut().spawn(LevelEntity).id();
+    app.world_mut().entity_mut(parent).add_child(child_a);
+    app.world_mut().entity_mut(parent).add_child(child_b);
+
+    drive_replace_load(&mut app);
+
+    assert!(app.world().get_entity(parent).is_err(), "parent LevelEntity must be despawned");
+    assert!(app.world().get_entity(child_a).is_err(), "child_a LevelEntity must be despawned");
+    assert!(app.world().get_entity(child_b).is_err(), "child_b LevelEntity must be despawned");
+}
+
+#[test]
 fn test_overlay_entities_despawned_on_replace_load() {
     let mut app = setup_test_app();
     app.update();

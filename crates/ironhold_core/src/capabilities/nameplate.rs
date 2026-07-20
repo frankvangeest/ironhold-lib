@@ -303,7 +303,11 @@ pub fn nameplate_cleanup_system(
     for (anchor_entity, world_label) in anchors.iter() {
         if let Some(tracked) = world_label.tracked_entity {
             if removed_set.contains(&tracked) {
-                commands.entity(anchor_entity).despawn();
+                // try_despawn: not a known bug today (each anchor maps to exactly one tracked
+                // entity, so this loop alone can't double-despawn), but matches the codebase's
+                // "prefer try_despawn() as the low-ceremony default" convention for any command
+                // that removes an entity a shared query might revisit — see CLAUDE.md.
+                commands.entity(anchor_entity).try_despawn();
             }
         }
     }
