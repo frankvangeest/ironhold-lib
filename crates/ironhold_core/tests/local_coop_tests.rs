@@ -5,7 +5,7 @@ use bevy::math::Mat4;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry, ActionQueue};
 use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
@@ -14,7 +14,7 @@ use ironhold_core::capabilities::stat_display::{
     WorldTexturedBarFillMarker,
     StatWidgetSpawnCtx, spawn_stat_label_widget, spawn_world_stat_bar_widget,
 };
-use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2};
+use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
 use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, player_view_box_clamp_system};
@@ -922,6 +922,399 @@ fn test_grid_split_with_five_players_caps_at_max_and_spawns_fifth_cameraless() {
     );
 
     assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
+}
+
+// ── local_coop_hot_join_leave.md v1: Action::JoinPlayer ─────────────────────────
+
+/// Builds a Grid-split scene RON starting with `initial` scene-authored players
+/// (`test_player_1..initial`, reusing `n_player_catalogs_with_split`'s catalog — call that first
+/// with `n = MAX_SPLIT_PLAYERS` so every slot's join prefab already exists), plus
+/// `spawn_points`/`join_prefab_keys` entries for every slot `0..MAX_SPLIT_PLAYERS` (slots below
+/// `initial` get `None` — already scene-authored — slots at/above it map to
+/// `test_player_{slot+1}`, mirroring room8's `[None, None, Some(...), Some(...)]` convention).
+/// `spawn_points` use **1-based** `player_N_start` keys (`N = slot + 1`), matching every real
+/// project scene (room6/room7/room8) and the `Action::JoinPlayer` executor's own `next_slot + 1`
+/// lookup — this is deliberate: an earlier version of this helper used 0-based keys, which
+/// matched a since-fixed off-by-one bug in the executor and masked it (alignment-reviewer
+/// finding, local_coop_hot_join_leave.md).
+fn load_grid_scene_with_join_slots(app: &mut App, initial: u32) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let mut entities_ron = String::new();
+    for i in 0..initial {
+        let x = -4.0 + (i as f32) * 3.0;
+        entities_ron.push_str(&format!(
+            r#"(id: "p{i}", prefab: "test_player_{idx}", transform: (translation: ({x:.1}, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),"#,
+            i = i, idx = i + 1, x = x
+        ));
+    }
+    let mut spawn_points_ron = String::new();
+    let mut join_keys_ron = String::new();
+    for slot in 0..MAX_SPLIT_PLAYERS {
+        let x = -4.0 + (slot as f32) * 3.0;
+        spawn_points_ron.push_str(&format!(
+            r#""player_{one_based}_start": ({x:.1}, 0.5, 0.0), "#,
+            one_based = slot + 1, x = x
+        ));
+        if slot < initial {
+            join_keys_ron.push_str("None, ");
+        } else {
+            join_keys_ron.push_str(&format!("Some(\"test_player_{}\"), ", slot + 1));
+        }
+    }
+    let ron_str = format!(
+        "(schema_version: 2, entities: [{entities_ron}], ui: [], \
+         spawn_points: {{{spawn_points_ron}}}, join_prefab_keys: [{join_keys_ron}])"
+    );
+    let scene: GameSceneV2 = ron::de::from_str(&ron_str).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_hot_join_grows_two_player_grid_scene_to_three_then_four() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    assert_eq!(app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2);
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(2));
+    let existing_indices: std::collections::BTreeSet<u32> = {
+        let mut q = app.world_mut().query::<&PlayerIndex>();
+        q.iter(app.world()).map(|p| p.0).collect()
+    };
+    assert_eq!(existing_indices, std::collections::BTreeSet::from([0, 1]));
+
+    // First join: 2 -> 3. One update is enough — action_executor_system and
+    // drain_spawn_queue_system are chained within the same frame (see spawn_tests.rs's
+    // Action::Spawn tests, which use the same one-update convention).
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 3,
+        "3rd player must spawn"
+    );
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(3));
+    let mut slots: Vec<u32> = {
+        let mut q = app.world_mut().query::<&SplitViewportSlot>();
+        q.iter(app.world()).map(|s| s.0).collect()
+    };
+    slots.sort();
+    assert_eq!(slots, vec![0, 1, 2], "existing 2 cameras must be untouched, 1 new camera added");
+    let indices_after_first: std::collections::BTreeSet<u32> = {
+        let mut q = app.world_mut().query::<&PlayerIndex>();
+        q.iter(app.world()).map(|p| p.0).collect()
+    };
+    assert_eq!(
+        indices_after_first, std::collections::BTreeSet::from([0, 1, 2]),
+        "existing players keep their PlayerIndex; joiner gets a unique new one (slot 2)"
+    );
+
+    // Second join: 3 -> 4 (the cap).
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let lobby_full = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "coop.lobby_full"));
+    assert!(lobby_full, "reaching the cap must emit coop.lobby_full");
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 4,
+        "4th player must spawn"
+    );
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
+    let mut slots2: Vec<u32> = {
+        let mut q = app.world_mut().query::<&SplitViewportSlot>();
+        q.iter(app.world()).map(|s| s.0).collect()
+    };
+    slots2.sort();
+    assert_eq!(slots2, vec![0, 1, 2, 3]);
+}
+
+#[test]
+fn test_hot_join_spawns_at_the_correct_1_based_spawn_point_not_on_top_of_an_existing_player() {
+    // Regression for the alignment-reviewer's off-by-one finding: the executor must resolve
+    // spawn_points["player_{next_slot + 1}_start"], not "player_{next_slot}_start" — the latter
+    // would place the 3rd joiner (next_slot = 2) at "player_2_start", which is exactly where
+    // the scene-authored 2nd player already stands.
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    let existing_x_positions: Vec<f32> = {
+        let mut q = app.world_mut().query::<(&CharacterController, &Transform)>();
+        q.iter(app.world()).map(|(_, t)| t.translation.x).collect()
+    };
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let joiner_x = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &Transform)>();
+        q.iter(app.world())
+            .find(|(idx, _)| idx.0 == 2)
+            .map(|(_, t)| t.translation.x)
+            .expect("joiner with PlayerIndex(2) must exist")
+    };
+    // "player_3_start" (1-based key for slot 2) was authored at x = -4.0 + 2.0 * 3.0 = 2.0 in
+    // load_grid_scene_with_join_slots — distinct from every existing player's x position.
+    assert_eq!(joiner_x, 2.0, "joiner must land on its own 1-based spawn_points entry");
+    for x in existing_x_positions {
+        assert_ne!(
+            joiner_x, x,
+            "joiner must not spawn on top of any pre-existing player's position"
+        );
+    }
+}
+
+#[test]
+fn test_hot_join_at_cap_warns_and_noops() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, MAX_SPLIT_PLAYERS);
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(),
+        MAX_SPLIT_PLAYERS as usize,
+        "join at the cap must no-op — no 5th player"
+    );
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
+}
+
+#[test]
+fn test_hot_join_in_vertical_split_scene_warns_and_noops() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app, None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+    );
+    load_two_player_scene(&mut app);
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, None);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2,
+        "Vertical split scenes don't support hot-join in v1 — no-op"
+    );
+}
+
+#[test]
+fn test_hot_join_in_party_scene_warns_and_noops() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        Some(PartyZoomDef { zoom_margin: 2.0, allow_manual_zoom: true }),
+        None,
+    );
+    load_two_player_scene(&mut app);
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, None);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2,
+        "party-mode scenes don't support hot-join in v1 — no-op"
+    );
+}
+
+#[test]
+fn test_hot_join_with_no_join_prefab_key_for_next_slot_warns_and_noops() {
+    let mut app = setup_test_app();
+    app.update();
+    // Only 2 catalog prefabs exist and the Grid scene starts at 2 — join_prefab_keys has no
+    // entry at all for slot 2 (the scene author simply never configured a 3rd join slot).
+    n_player_catalogs_with_split(
+        &mut app, 2,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_n_player_scene(&mut app, 2);
+    assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(2));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2,
+        "no join_prefab_keys entry for the next slot must no-op, not panic"
+    );
+}
+
+#[test]
+fn test_hot_join_rejects_non_player_tagged_join_prefab() {
+    // debug-detective finding: Action::JoinPlayer must mirror Action::Spawn's
+    // `tags: ["player"]` guard — without it, a join_prefab_keys typo pointing at a non-player
+    // prefab would be silently assembled and spawned as a player.
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    {
+        let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
+        let joiner = catalog.0.prefabs.get_mut("test_player_3").expect("test_player_3 must exist");
+        joiner.components.tags.clear();
+    }
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2,
+        "a join_prefab_keys entry with no player tag must no-op, not spawn a player"
+    );
+}
+
+#[test]
+fn test_hot_join_rejects_primitive_kind_join_prefab_instead_of_panicking() {
+    // debug-detective finding: a primitive-shaped join prefab would otherwise be assembled with
+    // PlayerModelSource::Primitive and panic in spawn_player_entity_core, since the hot-join
+    // drain branch always passes None for PrimitivePlayerCtx (GLB-only in v1).
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    {
+        let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
+        let joiner = catalog.0.prefabs.get_mut("test_player_3").expect("test_player_3 must exist");
+        joiner.kind = PrefabKind::Primitive;
+    }
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 2,
+        "a primitive-kind join prefab must no-op with a warning, not panic"
+    );
+}
+
+#[test]
+fn test_hot_join_same_frame_double_join_assigns_distinct_slots() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    // Two JoinPlayer actions queued before any update runs — both are processed by the same
+    // action_executor_system pass. Without the queued-is_hot_join-count fix, both would compute
+    // next_slot = 2 and collide.
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::JoinPlayer);
+        queue.push(Action::JoinPlayer);
+    }
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world_mut().query::<&CharacterController>().iter(app.world()).count(), 4,
+        "both same-frame joins must spawn distinct players"
+    );
+    let mut slots: Vec<u32> = {
+        let mut q = app.world_mut().query::<&SplitViewportSlot>();
+        q.iter(app.world()).map(|s| s.0).collect()
+    };
+    slots.sort();
+    assert_eq!(slots, vec![0, 1, 2, 3], "no slot collision — one joiner got 2, the other 3");
+    let indices: std::collections::BTreeSet<u32> = {
+        let mut q = app.world_mut().query::<&PlayerIndex>();
+        q.iter(app.world()).map(|p| p.0).collect()
+    };
+    assert_eq!(indices, std::collections::BTreeSet::from([0, 1, 2, 3]));
+}
+
+#[test]
+fn test_hot_joined_player_stat_bar_duplicates_ranks_like_scene_load_spawned_players() {
+    // Validates the scope-cut thesis: a hot-joined player's world_stat_bar goes through the same
+    // spawn_player_entity_core -> DynamicStatUiQueue -> drain_dynamic_stat_ui_system path as any
+    // other player, so it gets MAX_SPLIT_PLAYERS ranked siblings with zero widget-side changes.
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    {
+        let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
+        let joiner = catalog.0.prefabs.get_mut("test_player_3").expect("test_player_3 must exist");
+        joiner.stat_templates = vec![ironhold_core::schema::stats::StatTemplateDef {
+            key: "mana".to_string(),
+            base: 40.0,
+            min: 0.0,
+            max: 100.0,
+            regen_rate: 0.0,
+            regen_delay: 0.0,
+            thresholds: vec![],
+        }];
+        joiner.world_stat_bar = Some(ascii_world_stat_bar_def("{self}.mana"));
+    }
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+    app.update();
+    app.update();
+
+    let fill_rank_count = app.world_mut()
+        .query::<&WorldLabelRank>()
+        .iter(app.world())
+        .count();
+    assert!(
+        fill_rank_count > 0,
+        "hot-joined player's world_stat_bar must spawn ranked siblings via the existing \
+         DynamicStatUiQueue path — same as any Action::Spawn-created entity"
+    );
 }
 
 // ── Stage 5: dynamic_split_screen_system (unit-level) ───────────────────────────

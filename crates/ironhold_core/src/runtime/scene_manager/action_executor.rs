@@ -201,6 +201,7 @@ pub fn action_executor_system(
                     prefab_key: prefab.clone(),
                     project_root: project_root.0.clone(),
                     player_config,
+                    is_hot_join: false,
                 });
             }
             Action::Despawn(target_id) => {
@@ -1341,6 +1342,151 @@ pub fn action_executor_system(
                         .find_map(|(id, &e)| if e == container_entity { Some(id.clone()) } else { None })
                         .unwrap_or_default();
                     game_events.write(GameEvent::Trigger(format!("container.looted:{}", entity_id)));
+                }
+            }
+            Action::JoinPlayer => {
+                // Slot-assignment correctness here depends on three invariants that live in
+                // different files — noted together so a future change to any one of them doesn't
+                // silently corrupt slot assignment: (1) `action_executor_system` always runs
+                // before `drain_spawn_queue_system` within a frame (the `.chain()` in `lib.rs`),
+                // so `active_split_slot_count` reflects only *already-drained* joins, never one
+                // still sitting in `pending_spawns`; (2) `pending_spawns` is cleared synchronously
+                // (not deferred) on `Action::LoadScene` above, so a stale `is_hot_join` count can't
+                // survive a scene transition; (3) `queued_hot_joins` below counts *only*
+                // `is_hot_join` entries, so a concurrently-queued `Action::Spawn` (NPC, etc.)
+                // never perturbs the next-slot computation.
+                //
+                // `ActiveSplitSlotCount` is `Some` only while the scene is currently
+                // `Grid`-split (see its own doc comment) — every other split mode
+                // (party/dynamic/Vertical/Horizontal) and single-camera scenes read `None` here
+                // and are correctly rejected without needing their own separate checks.
+                let Some(slot_count) = spawn_params.active_split_slot_count.0 else {
+                    warn!(
+                        "Action::JoinPlayer: current scene is not Grid-split — party, dynamic, \
+                         Vertical/Horizontal split, and single-camera scenes don't support \
+                         hot-join in v1. Ignoring."
+                    );
+                    continue;
+                };
+                // Same-frame double-join safety: count already-queued-but-not-yet-drained
+                // is_hot_join entries too, not just the live (already-flushed) slot count —
+                // two JoinPlayer actions processed in this same executor pass must not both
+                // compute the same next slot.
+                let queued_hot_joins = spawn_params.pending_spawns.0.iter()
+                    .filter(|q| q.is_hot_join)
+                    .count() as u32;
+                let next_slot = slot_count + queued_hot_joins;
+                if next_slot >= MAX_SPLIT_PLAYERS {
+                    warn!(
+                        "Action::JoinPlayer: scene is already at MAX_SPLIT_PLAYERS ({}) — ignoring join.",
+                        MAX_SPLIT_PLAYERS
+                    );
+                    continue;
+                }
+                let scene = spawn_params.scene_handle.as_ref()
+                    .and_then(|h| spawn_params.scenes.get(&h.0));
+                let Some(prefab_key) = scene.and_then(|s| s.join_prefab_keys.get(next_slot as usize))
+                    .cloned()
+                    .flatten()
+                else {
+                    warn!(
+                        "Action::JoinPlayer: scene has no join_prefab_keys entry for slot {} — \
+                         ignoring join. Add a join_prefab_keys entry for this slot to enable \
+                         joining.",
+                        next_slot
+                    );
+                    continue;
+                };
+                let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab_key) else {
+                    warn!("Action::JoinPlayer: join prefab '{}' not found in catalog", prefab_key);
+                    continue;
+                };
+                // Same two guards as Action::Spawn above, for the same two reasons: (1) a
+                // join_prefab_keys entry pointing at a non-`tags: ["player"]` prefab would
+                // otherwise be silently assembled into a PlayerConfig and spawned as a player
+                // (camera, controller, split slot consumed) — clearly not what a designer meant.
+                // (2) a primitive-shaped player prefab with a resolvable `model` key would sail
+                // past the asset_catalog lookup below, get assembled with
+                // `PlayerModelSource::Primitive`, and panic in `spawn_player_entity_core` — the
+                // hot-join drain branch always passes `None` for `PrimitivePlayerCtx` (GLB-only
+                // in v1, debug-detective finding, see local_coop_hot_join_leave.md).
+                if !prefab_def.components.tags.iter().any(|t| t == "player") {
+                    warn!(
+                        "Action::JoinPlayer: join prefab '{}' has no `tags: [\"player\"]` — \
+                         refusing to hot-join a non-player prefab. Fix join_prefab_keys to \
+                         point at a player prefab.",
+                        prefab_key
+                    );
+                    continue;
+                }
+                if prefab_def.kind == crate::schema::catalog::PrefabKind::Primitive {
+                    warn!(
+                        "Action::JoinPlayer: join prefab '{}' is primitive-shaped (kind: \
+                         Primitive) — hot-join only supports GLB (Actor-kind) players in v1. \
+                         Use a GLB player prefab in join_prefab_keys instead.",
+                        prefab_key
+                    );
+                    continue;
+                }
+                let Some(model_entry) = asset_catalog.0.models.get(&prefab_def.model) else {
+                    warn!(
+                        "Action::JoinPlayer: model key {:?} not found in asset catalog",
+                        prefab_def.model
+                    );
+                    continue;
+                };
+                let model_path = model_entry.path.clone();
+                let prefab_def = prefab_def.clone();
+
+                spawn_params.registry.counter += 1;
+                let spawn_id = format!("{}_{}", prefab_key, spawn_params.registry.counter);
+
+                // `player_N_start` is 1-based everywhere else in the project (room6/room7/room8
+                // and every doc example) — `next_slot` is the 0-based absolute slot number, so
+                // it must be offset by 1 here or a joiner silently lands on an existing player's
+                // spawn point instead of their own (alignment-reviewer finding).
+                let spawn_point_key = format!("player_{}_start", next_slot + 1);
+                let (sx, sy, sz) = match spawn_params.spawn_points.0.get(spawn_point_key.as_str()) {
+                    Some(&pt) => pt,
+                    None => {
+                        let primary_pos = scene_state.player_targets.iter()
+                            .find(|(_, _, idx)| crate::capabilities::targeting::is_primary_player(*idx))
+                            .and_then(|(e, _, _)| scene_state.global_transforms.get(e).ok())
+                            .map(|gt| gt.translation())
+                            .unwrap_or(Vec3::ZERO);
+                        let nudged = primary_pos + Vec3::new(1.5 * next_slot as f32, 0.0, 0.0);
+                        (nudged.x, nudged.y, nudged.z)
+                    }
+                };
+
+                let mut player_config = assemble_player_config(
+                    &prefab_def,
+                    &prefab_key,
+                    &spawn_id,
+                    Some(model_path.clone()),
+                    (sx, sy, sz),
+                    spawn_params.nameplate_config.player_enabled,
+                );
+                player_config.player_index = next_slot;
+
+                info!(
+                    "Action::JoinPlayer: queued join for slot {} (prefab '{}') at ({:.1}, {:.1}, {:.1})",
+                    next_slot, prefab_key, sx, sy, sz
+                );
+
+                spawn_params.pending_spawns.0.push_back(super::QueuedSpawn {
+                    prefab_def,
+                    model_path,
+                    transform: Transform::from_xyz(sx, sy, sz),
+                    spawn_id,
+                    prefab_key: prefab_key.clone(),
+                    project_root: project_root.0.clone(),
+                    player_config: Some(player_config),
+                    is_hot_join: true,
+                });
+
+                if next_slot + 1 == MAX_SPLIT_PLAYERS {
+                    game_events.write(GameEvent::Trigger("coop.lobby_full".to_string()));
                 }
             }
         }

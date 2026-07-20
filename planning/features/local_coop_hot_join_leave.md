@@ -1,13 +1,13 @@
 # Feature: Local Co-op Hot Join/Leave
 
-_Status: Ready_
+_Status: Done (v1 shipped 2026-07-20)_
 _Planned at: `a59815c` (2026-07-19)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Hot **join** (keyboard only) into an already-`Grid`-split scene, up to `MAX_SPLIT_PLAYERS`, incremental single-camera-add | Queued | — |
+| v1 | Hot **join** (keyboard only) into an already-`Grid`-split scene, up to `MAX_SPLIT_PLAYERS`, incremental single-camera-add | Done | 2026-07-20 |
 | v2 | Hot **leave** (despawn + slot renumber + cleanup) and gamepad-join | Queued | — |
 
 **Plan-review note (2026-07-19):** Both reviewers returned Needs-more-design-work on the first
@@ -154,6 +154,23 @@ button/axis actually reporting a nonzero pressed/analog state on the current fra
 an unclaimed pad as "the" one to bind, not just presence in the connected-gamepads query. See
 `planning/claude_suggestions.md`'s matching entry for the underlying observation.
 
+**Amendment (2026-07-20, v1 implementation findings):** two review-pass findings resolved during
+implementation, both worth noting for anyone extending this feature: (1) **1-based spawn-point
+keys, not 0-based** — an early implementation looked up `spawn_points["player_{next_slot}_start"]`
+with `next_slot` 0-based (matching `PlayerIndex`/`SplitViewportSlot` numbering), but every existing
+scene (`room6`, `room8`) and the docs use 1-based `player_1_start`.."player_4_start" keys — the
+0-based lookup silently resolved to an *existing* player's own spawn point (alignment-reviewer
+finding), so the executor now looks up `player_{next_slot + 1}_start`. The test helper that builds
+synthetic Grid scenes for hot-join tests originally used 0-based keys too, which matched (and
+masked) the bug — fixed alongside the executor. (2) **One-frame empty-quadrant transient is
+expected, not a bug** (system-architect finding): `drain_spawn_queue_system` sets
+`ActiveSplitSlotCount` synchronously, but the new camera entity is created via deferred `Commands`
+and doesn't exist until the next sync point — `split_screen_viewport_system` has no explicit
+ordering against the drain system, so for one frame it can compute an N-cell grid while only N-1
+cameras exist, rendering one clear-color quadrant. Benign and self-correcting (strictly better than
+the despawn-rebuild full-window flash the original draft's design rejected), not worth ordering
+against.
+
 **Joiner spawn position and identity**: reuses the existing `spawn_points: Map<String,
 (f32,f32,f32)>` scene convention (already populated for `room6`'s `player_3_start`/`player_4_start`)
 rather than introducing a new, parallel position mechanism — the join path looks up
@@ -166,15 +183,15 @@ sources-of-truth interaction (scene-load uses the prefab's baked index, join alw
 with the slot) must be documented so a designer reordering `join_prefab_keys` isn't surprised.
 
 ## Tasks
-- [ ] Extract `spawn_split_camera_for_player(config: &PlayerConfig, player_entity: Entity, slot:
+- [x] Extract `spawn_split_camera_for_player(config: &PlayerConfig, player_entity: Entity, slot:
       u32) -> Entity` from the existing `Grid`-branch loop body (`entity_spawner.rs:706-721`) —
       the only factoring this feature needs; `spawn_players_and_camera` itself is otherwise
       untouched
-- [ ] New scene-level `join_prefab_keys: [Option<String>; MAX_SPLIT_PLAYERS as usize]` (or an
+- [x] New scene-level `join_prefab_keys: [Option<String>; MAX_SPLIT_PLAYERS as usize]` (or an
       equivalent fixed-size, slot-indexed structure — accessed via `.get(slot)`/pattern-matching
       with a `warn!` + no-op fallback, never a direct panicking index) — reuse `local_coop_demo`'s
       existing IJKL/Numpad-scheme prefabs as the 3rd/4th join-slot entries
-- [ ] New `Action::JoinPlayer` (no payload) — schema + executor arm: checks the `MAX_SPLIT_PLAYERS`
+- [x] New `Action::JoinPlayer` (no payload) — schema + executor arm: checks the `MAX_SPLIT_PLAYERS`
       cap and the "current split state is `Grid`" scope guard (both `warn!` + no-op on failure),
       computes the next slot from live player count *plus* already-queued `is_hot_join` entries
       (same-frame double-join safety), reads `join_prefab_keys[slot]` via `SceneHandleV2`/
@@ -185,24 +202,24 @@ with the slot) must be documented so a designer reordering `join_prefab_keys` is
       offset), and pushes a `QueuedSpawn` with a new `is_hot_join: bool` flag onto
       `PendingEntitySpawns`. When the join brings the count to `MAX_SPLIT_PLAYERS`, also emit a
       `coop.lobby_full` event
-- [ ] `drain_spawn_queue_system`: new branch for `is_hot_join` — calls `spawn_player_entity_core`
+- [x] `drain_spawn_queue_system`: new branch for `is_hot_join` — calls `spawn_player_entity_core`
       (camera-less — **not** `spawn_player_entity`, which spawns its own dedicated full-window
       camera), then `spawn_split_camera_for_player`, then increments `ActiveSplitSlotCount` by one
       (all using this system's existing `DynamicStatUiQueue`/`ActiveTonemapping` access — no
       executor param plumbing needed for spawn-time resources)
-- [ ] Keyboard join-press: reuse `global_input_system`'s existing `scene_key_bindings` → `UiEvent::
+- [x] Keyboard join-press: reuse `global_input_system`'s existing `scene_key_bindings` → `UiEvent::
       ButtonPressed` → rules → `Action::JoinPlayer` path (no new input-system code)
-- [ ] Demo — wire a `local_coop_demo` `Grid` scene that **starts at 2 players** (not `room6`, which
+- [x] Demo — wire a `local_coop_demo` `Grid` scene that **starts at 2 players** (not `room6`, which
       already starts at the 4-player cap and so can't demonstrate growth) with `join_prefab_keys`
       pointing at the existing `player_p3_grid`/`player_p4_grid` prefabs, `player_3_start`/
       `player_4_start` spawn points, a `"KeyJ": "join"` binding, and the matching `rules.ron` entry
       (`ui.button_pressed:join → Action::JoinPlayer`)
-- [ ] Demo — a static on-screen `Label` ("Press J to add a player"), hidden on `coop.lobby_full` via
+- [x] Demo — a static on-screen `Label` ("Press J to add a player"), hidden on `coop.lobby_full` via
       a `rules.ron` rule + `SetEntityVisible` — **verify during implementation that
       `SetEntityVisible` actually targets UI `Label` entities** (documented today against 3D
       entities); if it doesn't, fall back to an always-visible prompt for v1 rather than blocking on
       new UI-visibility plumbing
-- [ ] Tests — regression: both existing `spawn_players_and_camera` call sites are unaffected (this
+- [x] Tests — regression: both existing `spawn_players_and_camera` call sites are unaffected (this
       feature adds a new helper, it does not modify the existing function); new: joining a 2-player
       Grid scene up to 3 then 4 players produces the correct camera count/viewport layout each time,
       with existing players' cameras/`PlayerIndex`/`StatMap` completely untouched; new: joining at
@@ -214,10 +231,10 @@ with the slot) must be documented so a designer reordering `join_prefab_keys` is
       0`" warning; new: two `Action::JoinPlayer`s processed in the same executor run assign distinct
       slots, not a collision; new: `Action::JoinPlayer` in a `Vertical`/`Horizontal` scene warns and
       no-ops (not just `dynamic`/`party`)
-- [ ] Docs — `docs/20_data_formats.md`: `Action::JoinPlayer`, `join_prefab_keys`, the join-key-
+- [x] Docs — `docs/20_data_formats.md`: `Action::JoinPlayer`, `join_prefab_keys`, the join-key-
       binding pattern, the cap/`Grid`-only scope-guard behavior, the `spawn_points["player_{slot}_
       start"]` convention, and the `PlayerIndex`-override-beats-prefab-baked-index interaction
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`: update the "four player-construction sites"
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`: update the "four player-construction sites"
       section (adds a fifth: the `is_hot_join` branch in `drain_spawn_queue_system`) and resolve
       `ActiveSplitSlotCount`'s own forward-reference to this feature
 

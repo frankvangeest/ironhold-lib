@@ -119,6 +119,16 @@ pub struct GameSceneV2 {
     /// untouched. Omit to disable — most scenes have no view box.
     #[serde(default)]
     pub max_view_box: Option<(f32, f32, f32, f32)>,
+    /// Per-slot player prefab keys for `Action::JoinPlayer` hot-join, indexed by the same
+    /// absolute slot number as `PlayerIndex`/`SplitViewportSlot` (0-based). A scene's
+    /// `entities:`-declared players already occupy the low slots (typically `0`/`1`), so a
+    /// 2-player scene that wants a 3rd/4th hot-join slot writes
+    /// `[None, None, Some("player_p3_grid"), Some("player_p4_grid")]`. A join into a slot with
+    /// no entry here (missing index or explicit `None`) is a no-op with a `warn!`. Only read
+    /// when the scene is currently `Grid`-split (`ActiveSplitSlotCount` is `Some`) — ignored
+    /// entirely otherwise. See `planning/features/local_coop_hot_join_leave.md`.
+    #[serde(default)]
+    pub join_prefab_keys: Vec<Option<String>>,
 }
 
 impl GameSceneV2 {

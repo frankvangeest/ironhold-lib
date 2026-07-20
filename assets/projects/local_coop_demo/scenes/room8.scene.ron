@@ -1,0 +1,138 @@
+(
+  schema_version: 2,
+  name: "room8",
+
+  // local_coop_hot_join_leave.md v1 playtest aid: starts at 2 players (not room6, which already
+  // starts at the 4-player cap and so can't demonstrate growth) in a Grid split. Pressing the
+  // join key spawns a 3rd, then a 4th player live, growing the split-screen layout with no scene
+  // reload and the existing players' cameras/state completely untouched.
+  tonemapping: AcesFitted,
+
+  // Violet tone, matching the purple portal_to_room8 accent and ground_room8 — the last unused
+  // color identity in this project's one-color-per-room convention.
+  lighting: (
+    ambient: (0.20, 0.14, 0.26),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (0.92, 0.85, 1.0),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-2.5, 0.5, -2.5),
+    "player_2_start": (2.5, 0.5, -2.5),
+    "player_3_start": (-2.5, 0.5, 2.5),
+    "player_4_start": (2.5, 0.5, 2.5),
+  },
+
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  // Slots 0/1 (P1/P2) are already scene-authored below; slots 2/3 are hot-join-only — the same
+  // IJKL/Numpad prefabs room6 spawns statically at load, reused here as join-time prefabs.
+  join_prefab_keys: [None, None, "player_p3_grid", "player_p4_grid"],
+
+  // "G" (not "J" — KeyJ is already P3's own strafe_left/left key once they've joined; binding
+  // join to KeyJ would make P3's own movement repeatedly re-trigger the join action) fires
+  // Action::JoinPlayer via the ui.button_pressed:join rule below.
+  scene_key_bindings: {
+    "KeyG": "join",
+  },
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground_room8",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1_grid MUST be first — its `camera.split` block (orientation: Grid) is the sole
+    // switch for split-screen (same "first player wins" rule as room6/room7). Only 2 players are
+    // scene-authored; slots 2/3 are filled live by Action::JoinPlayer.
+    (
+      id: "player_01",
+      prefab: "player_p1_grid",
+      transform: (
+        translation: (-2.5, 0.5, -2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_02",
+      prefab: "player_p2_grid",
+      transform: (
+        translation: (2.5, 0.5, -2.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Return trip reuses the "portal_to_room7" prefab (see prefabs.ron comment) — same event
+    // name as room7's forward portal, same rules.ron entry, no new prefab needed.
+    (
+      id: "portal_to_room7",
+      prefab: "portal_to_room7",
+      transform: (
+        translation: (0.0, 0.0, -15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 7", offset: (0.0, 4.0, 0.0)),
+    ),
+
+  ],
+
+  ui: [
+    Label((
+      id: "room_hint",
+      text: "Hot join: starts at 2 players | Press G to add a player | Violet -> room 7",
+      position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+    // Always-visible: SetEntityVisible only targets SpawnRegistry-registered 3D entities, and
+    // scene-authored UI Label nodes are never registered there (verified during implementation —
+    // see local_coop_hot_join_leave.md's Acceptance criteria) — so hiding this on coop.lobby_full
+    // was not wired up. Documented always-visible fallback rather than misleadingly implying the
+    // prompt would ever disappear.
+    Label((
+      id: "join_prompt",
+      text: "Press G to join (up to 4 players)",
+      position: (20.0, 64.0),
+      size: (900.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p1",
+      text: "P1: WASD + Space + Shift",
+      position: (20.0, 316.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p2",
+      text: "P2: Arrows + Enter + R.Shift",
+      position: (660.0, 316.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p3",
+      text: "P3 (joins on 1st press): IJKL + U + O",
+      position: (20.0, 676.0),
+      size: (600.0, 32.0),
+    )),
+    Label((
+      id: "controls_hint_p4",
+      text: "P4 (joins on 2nd press): Numpad 5/2/1/3 + 0 + 4",
+      position: (660.0, 676.0),
+      size: (600.0, 32.0),
+    )),
+  ],
+)

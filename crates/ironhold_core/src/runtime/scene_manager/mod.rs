@@ -215,6 +215,11 @@ pub struct QueuedSpawn {
     /// When the prefab has `tags: ["player"]`, the executor assembles a `PlayerConfig` here.
     /// `drain_spawn_queue_system` calls `spawn_player_entity` instead of `spawn_prefab_instance`.
     pub player_config: Option<crate::schema::player::PlayerConfig>,
+    /// Set by `Action::JoinPlayer`'s executor arm. When `true`, `drain_spawn_queue_system` calls
+    /// `spawn_player_entity_core` (camera-less) + `spawn_split_camera_for_player` instead of
+    /// `spawn_player_entity` (which spawns its own dedicated full-window camera — wrong for a
+    /// hot-joined split-screen player). See `planning/features/local_coop_hot_join_leave.md`.
+    pub is_hot_join: bool,
 }
 
 /// Stores the tonemapping setting from the most recently loaded scene.
@@ -475,6 +480,17 @@ pub struct SpawnParams<'w, 's> {
     pub pending_decals: ResMut<'w, crate::capabilities::decal::PendingDecalSpawns>,
     pub particle_quality: ResMut<'w, crate::capabilities::particle_budget::ParticleQuality>,
     pub nameplate_config: Res<'w, crate::capabilities::nameplate::NameplateSceneConfig>,
+    /// Read by `Action::JoinPlayer` to look up the current scene's `join_prefab_keys` — bundled
+    /// here (rather than added as a bare `action_executor_system` param) since that system is
+    /// already at Bevy's 16-param ceiling. See `planning/features/local_coop_hot_join_leave.md`.
+    pub scene_handle: Option<Res<'w, SceneHandleV2>>,
+    pub scenes: Res<'w, Assets<GameSceneV2>>,
+    /// `Some(n)` only while the current scene is `Grid`-split (`n` = live camera-slot count);
+    /// `None` for every other split mode. `Action::JoinPlayer` uses this both as its
+    /// "is this scene hot-joinable" scope guard and as the base for computing the next slot.
+    /// Read-only here — `drain_spawn_queue_system` (a separate system) owns the `ResMut` that
+    /// actually increments it once a hot-join spawn completes.
+    pub active_split_slot_count: Res<'w, ActiveSplitSlotCount>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.

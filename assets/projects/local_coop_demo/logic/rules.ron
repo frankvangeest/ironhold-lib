@@ -29,6 +29,13 @@
         ( on: "scene.ready:room5", do_actions: [ Log("Local co-op demo room5 ready") ] ),
         ( on: "scene.ready:room6", do_actions: [ Log("Local co-op demo room6 ready") ] ),
         ( on: "scene.ready:room7", do_actions: [ Log("Local co-op demo room7 (primitive players) ready") ] ),
+        ( on: "scene.ready:room8", do_actions: [ Log("Local co-op demo room8 (hot join) ready") ] ),
+
+        // Hot-join (local_coop_hot_join_leave.md): "G" is bound to the "join" trigger via
+        // room8's scene_key_bindings. Action::JoinPlayer itself no-ops (with a warn!) outside a
+        // Grid-split scene or once MAX_SPLIT_PLAYERS is reached, so this rule is safe to leave
+        // active in every scene rather than needing a per-scene `when` guard.
+        ( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
 
         // Portal navigation — either player entering fires the LoadScene reload, which
         // respawns both players from the destination scene's entities: list. If both players
@@ -41,5 +48,6 @@
         ( on: "entity.entered:portal_to_room5", do_actions: [ LoadScene("scenes/room5.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room6", do_actions: [ LoadScene("scenes/room6.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room7", do_actions: [ LoadScene("scenes/room7.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room8", do_actions: [ LoadScene("scenes/room8.scene.ron") ] ),
     ],
 )

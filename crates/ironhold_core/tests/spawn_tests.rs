@@ -499,6 +499,7 @@ fn test_pending_spawns_cleared_on_load_scene() {
             prefab_key: "enemy_orc_melee".to_string(),
             project_root: String::new(),
             player_config: None,
+            is_hot_join: false,
         });
     }
 
