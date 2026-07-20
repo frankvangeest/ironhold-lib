@@ -27,9 +27,15 @@ double-despawn only logs `"...does not exist"` at WARN, never panics, in both ga
 idiomatic one-call-site fix for "this entity may already be gone" and would remedy this whole class
 (target_indicator AND action_executor) more simply than a HashSet.
 
+**Second, distinct sub-class — recursive despawn over a flat tag sweep (fixed `fix/level-entity-recursive-despawn`, 2026-07-20):** `scene_loader.rs::spawn_scene_v2`'s `level_entities: Query<Entity, With<LevelEntity>>` teardown sweep double-despawned because Bevy 0.18 `despawn()` is RECURSIVE and several widgets tag their cosmetic CHILDREN as separate `LevelEntity` entities attached via `add_child` — confirmed in `capabilities/nameplate.rs` (anchor + shadow + name + per-stat bar bg/fill, all `LevelEntity`) and `capabilities/stat_display.rs` Pixel bars (anchor + border + bg + fill, all `LevelEntity`). Flat query visits parent AND child as separate rows; despawning the parent recursively removes the child, then the loop's later row for that child double-despawns. Fixed with `try_despawn()` (right call — a `Without<ChildOf>` root-only filter is MORE fragile: it assumes every LevelEntity child's ancestor chain ends in a swept LevelEntity root, an unenforced invariant that leaks if violated). This is a DESIGN SMELL but a legitimate resting state: child tagging is redundant (recursion alone would clean them) but deliberate defense against orphaning; that redundancy is exactly what causes the double-visit, so the sweep MUST use try_despawn. Contrast `dialogue.rs::despawn_choice_buttons` — only the root marker is queried, children untagged, cleaned by recursion (the "de-tagged" alternative). All five `action_executor.rs` sites also converted here.
+
+**Overlay sweep caveat (corrects the in-code comments):** `OverlayEntity` is tagged ONLY on roots (backdrop + UI-Root, `scene_loader.rs:~1067/1086/1153`) — overlay descendants spawned via `with_children` are NOT `OverlayEntity`-tagged. So the overlay sweep has NO recursive-children hazard; the fix's comments claiming "overlay trees attach OverlayEntity-tagged descendants" are FACTUALLY WRONG. `try_despawn()` there is still justified, but by the FIRST sub-class (shared-snapshot reuse: `UnloadOverlay`+`ToggleOverlay` iterate one captured `overlay_entities` snapshot), not by recursion. `nameplate.rs:306` (`nameplate_cleanup_system`) still uses bare `.despawn()` — safe only because its `With<NameplateAnchorWidget>` query returns only live anchors; last un-converted sibling of this class.
+
 **How to apply:** when reviewing any system that despawns from a query iterated more than once per
-run (or a queue-draining executor), flag it. Because it's benign (warn, not panic), triage as
-log-to-backlog, not a blocker — but a "regression test" for it that only asserts end-state + no-panic
-will PASS on the buggy code (the warning is the only observable difference); a real regression test
-must capture WARN-level tracing events. Determinism is unaffected: these guards use `HashSet::insert`
-bool returns only, never iterate the set. See also [[fragile_modules]].
+run (or a queue-draining executor), OR any flat `With<Tag>` sweep where that tag is also applied to
+`add_child` children (recursive-despawn sub-class), flag it. Because it's benign (warn, not panic),
+triage as log-to-backlog, not a blocker — but a "regression test" for it that only asserts end-state
++ no-panic will PASS on the buggy code (the warning is the only observable difference); a real
+regression test must capture WARN-level tracing events, and this suite has NO infra for that (Bevy's
+internal error handler logs via the `log` crate facade, not `tracing`; `setup_test_app` adds no
+`LogPlugin` bridge). Determinism is unaffected. See also [[fragile_modules]].
