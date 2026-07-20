@@ -1,6 +1,6 @@
 ---
 name: interactable-vs-targeting-player-scope
-description: interactable_system is single-player-only (single()) while tab_targeting_system is fully per-player — a divergence that bites every local-coop parity feature
+description: interactable_system was single-player-only (single()) — now per-player (fixed 847695b, on integration); matches tab_targeting_system. Residual global-scope quirks remain (panels_open, attack_missed)
 metadata:
   type: project
 ---
@@ -29,7 +29,10 @@ per frame. Safe today because its only consumer is `primitive_world` (single-pla
 `state_machine.ron`). A future multiplayer scene that listens on `player.attack_missed` (or wants
 per-player interact feedback) will need player-scoping — same class as targeting's
 primary/non-primary split. Also note: `player.attack_missed` emitted from an *interact* system is
-a pre-existing naming smell.
+a pre-existing naming smell. Also: `interactable_system` early-returns globally on
+`inventory_ui.panels_open > 0` — one player opening an inventory panel disables interact for
+*every* player in a co-op scene. Pre-existing, affects keyboard interact equally; out of scope for
+gamepad work but the same global-vs-per-player class.
 
 **How to apply:** interactable now matches the per-player pattern; treat the two systems as
 consistent. When adding per-player interact *feedback* (not just the interact trigger), the
