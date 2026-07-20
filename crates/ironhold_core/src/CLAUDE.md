@@ -713,12 +713,27 @@ camera does not change this in practice, but a future refactor of that setup sho
 
 **Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
 specific gamepad instead of the keyboard. Bevy has no built-in numeric gamepad index (each
-connected pad is its own `Gamepad` entity); `input_translator_system` (`runtime/input.rs`) sorts
-connected gamepads by entity index, so `gamepad_index: 0` means "whichever gamepad connected
-first this session," not a hardware-guaranteed slot. Left stick moves/strafes, right stick X
-turns, South button jumps, East button toggles run — independent of the keyboard's
+connected pad is its own `Gamepad` entity); `resolve_gamepad` (`runtime/input.rs`, `pub(crate)`)
+takes an already-sorted-by-`Entity::index()` slice built once per system per frame and resolves
+`gamepad_index` against it — every gamepad-consuming system (`input_translator_system`,
+`tab_targeting_system`, `interactable_system`, `camera_orbit_system`) builds its own sorted slice
+once and calls this shared resolver, rather than re-sorting per player. `gamepad_index: 0` means
+"whichever gamepad connected first this session," not a hardware-guaranteed slot.
+
+Button/axis mapping is now fully RON-configurable via `InputMap` — `gamepad_jump`/`gamepad_run`/
+`gamepad_interact`/`gamepad_target_next: String` (parsed via `InputMap::parse_gamepad_button`,
+mirroring `parse_key`'s validation seam — an unrecognized name `warn!`s and no-ops rather than
+crashing) and `gamepad_deadzone: f32`, all defaulting to the same values every scene had hardcoded
+before this field existed (`South`/`East`/`West`/`North`/`0.15`). Left stick moves/strafes, right
+stick X turns, right stick Y drives camera pitch (via `OrbitCamera.gamepad_index`/
+`gamepad_deadzone`, pre-resolved at spawn from the player's own `InputMap` — same
+spawn-time-resolution pattern as `look_left_key`/etc.) — independent of the keyboard's
 `strafe_mouse_button` toggle (that only exists to disambiguate A/D on one keyboard; a gamepad
-already has separate sticks).
+already has separate sticks). `gamepad_interact`/`gamepad_target_next` fold into
+`interactable_system`'s/`tab_targeting_system`'s existing per-player `keyboard || gamepad`
+boolean, so both work in local co-op, not just single-player — no gamepad path exists for camera
+*yaw* (right-stick-X already drives character turning), a permanent, deliberate keyboard/gamepad
+parity gap, not an oversight (see `docs/20_data_formats.md`).
 
 **View-box clamp** — `GameSceneV2.max_view_box: Option<(f32, f32, f32, f32)>` (`min_x, min_z,
 max_x, max_z`) is read into the `ActiveViewBox` resource on scene load (cleared on `LoadScene`,

@@ -1829,11 +1829,69 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player reads movement/camera input from the connected gamepad at this index instead of the keyboard: left stick = move/strafe, right stick X = turn, South button (A / Cross) = jump, East button (B / Circle) = run. `None` (default) keeps keyboard-only behavior. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player reads movement/camera input from the connected gamepad at this index instead of the keyboard: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, and jump/run/interact/target-cycle use the buttons below (all overridable, not fixed). `None` (default) keeps keyboard-only behavior. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
+| `gamepad_run` | `String` | `"East"` | Gamepad button to hold-run — Xbox **B** / PlayStation **Circle**. |
+| `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
+| `gamepad_target_next` | `String` | `"North"` | Gamepad button to cycle Tab-targeting — Xbox **Y** / PlayStation **Triangle**, the genre-conventional "cycle/secondary" face button. To rebind to a shoulder button/stick-click instead (some games' convention), use `"RightThumb"` or `"RightTrigger"` — see the valid button names below. |
+| `gamepad_deadzone` | `f32` | `0.15` | Analog stick input below this magnitude (movement, turn, and camera pitch) is ignored, to avoid stick drift producing tiny unintended input. |
 | `look_left` | `Option<String>` | `None` | Keyboard-held camera yaw turn (left). Unbound by default. See the "Keyboard camera look" note below `CameraConfig`'s `look_speed` field. |
 | `look_right` | `Option<String>` | `None` | Keyboard-held camera yaw turn (right). |
 | `look_up` | `Option<String>` | `None` | Keyboard-held camera pitch (toward overhead). |
 | `look_down` | `Option<String>` | `None` | Keyboard-held camera pitch (toward horizontal). |
+
+> **Troubleshooting: `gamepad_index: 0` set but the controller does nothing.** On some Windows +
+> Chrome/Edge + controller combinations (confirmed with an Xbox 360 controller), one physical
+> controller can appear in the browser as **two separate gamepad entries** — one live, one an
+> inert duplicate that always reports zero for every axis/button. Since `gamepad_index` is just
+> "connection order," index `0` can land on the dead duplicate while the real controller sits at
+> index `1`. If a controller is visibly connected (check the browser console for a
+> `Gamepad ... connected` log line) but nothing responds, try `gamepad_index: 1` (or `2`) before
+> assuming the feature itself is broken. This is a real, reproducible platform quirk, not a
+> hypothetical.
+
+**Valid gamepad button names** (`gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next`), with Xbox / PlayStation physical mapping — an unrecognized name is `warn!`-logged and treated as unbound (no crash), mirroring keyboard key-name validation:
+
+| Name | Xbox | PlayStation |
+|------|------|--------------|
+| `"South"` | A | Cross |
+| `"East"` | B | Circle |
+| `"North"` | Y | Triangle |
+| `"West"` | X | Square |
+| `"LeftTrigger"` | LB | L1 |
+| `"LeftTrigger2"` | LT | L2 |
+| `"RightTrigger"` | RB | R1 |
+| `"RightTrigger2"` | RT | R2 |
+| `"Select"` | View/Back | Share |
+| `"Start"` | Menu/Start | Options |
+| `"LeftThumb"` | L3 (left stick click) | L3 |
+| `"RightThumb"` | R3 (right stick click) | R3 |
+| `"DPadUp"` / `"DPadDown"` / `"DPadLeft"` / `"DPadRight"` | D-pad | D-pad |
+
+> **`"LeftTrigger"`/`"RightTrigger"` are the shoulder *bumpers* (LB/RB, L1/R1) — the digital
+> click, not the analog trigger.** `"LeftTrigger2"`/`"RightTrigger2"` are the analog *triggers*
+> (LT/RT, L2/R2) themselves, read here as a digital press/release past a threshold. Easy to get
+> backwards from the name alone — the table above lists the correct physical button for each.
+
+Example `inputs:` block wiring every gamepad field (movement/turn are always active when `gamepad_index` is set; the fields below only change which button/deadzone is used):
+```ron
+inputs: (
+  forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+  strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+  gamepad_index: 1,
+  gamepad_jump: "South",
+  gamepad_run: "East",
+  gamepad_interact: "West",
+  gamepad_target_next: "North",
+  gamepad_deadzone: 0.15,
+),
+```
+
+> **Camera pitch via right-stick-Y reuses `CameraConfig.look_speed`** (the same dial governing keyboard-held `look_up`/`look_down` — see below), so a gamepad-only player's `camera:` block referencing `look_speed` isn't a keyboard-only leftover left in by mistake. A full stick deflection reproduces the keyboard-hold rate; partial deflection scales proportionally.
+
+> **Standing keyboard/gamepad parity gap: no gamepad camera yaw.** Right-stick-X already drives character turning; reusing it to *also* orbit the camera (full twin-stick free-look) is a deeper control-feel redesign, not attempted here. A keyboard split-screen player can freely yaw their camera (`look_left`/`look_right`); a gamepad player can only pitch. This is a permanent, deliberate limitation until a twin-stick vs. auto-face-on-move redesign is decided from real playtest feedback — not an oversight.
+
+> **Gamepad camera pitch (like keyboard camera look) only reaches a per-player `OrbitCamera`** — a scene using the shared `party` camera (`CameraConfig.party`) or a dynamic-split scene while still merged has no single per-player camera to attribute the pitch to, so right-stick-Y does nothing there, silently, exactly like `look_up`/`look_down` already do today. Not a gamepad-specific gap — switch to `split` (or wait for a dynamic scene to actually split) for either input method's camera control to take effect.
 
 > **Selection is proximity-based, not a pixel-perfect mesh hit.** Left-clicking selects the `click_selectable` entity whose on-screen position is nearest the cursor (within a fixed radius), resolved from the entity's transform — so thin or animated/skinned characters are easy to click and never "fall through" to the geometry behind them. Clicking with nothing nearby clears the current target. For combat-style play, set the player camera's `orbit_button: "Right"` so left-click is free for selection (see `3rd_person_game_demo`).
 

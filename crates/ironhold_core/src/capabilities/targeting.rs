@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 use bevy::math::Isometry3d;
 use bevy::window::PrimaryWindow;
+use bevy::input::gamepad::Gamepad;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
+use crate::runtime::input::resolve_gamepad;
 use crate::capabilities::action_bar::CurrentTarget;
 use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
 use crate::schema::player::InputMap;
@@ -255,6 +257,7 @@ fn click_select_system(
 pub fn tab_targeting_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut controllers: Query<(&CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>)>,
+    gamepad_query: Query<(Entity, &Gamepad)>,
     targetable: Query<(Entity, &SpawnId, &GlobalTransform), With<Targetable>>,
     prefab_keys: Query<&PrefabKey>,
     visibility_q: Query<&Visibility>,
@@ -266,10 +269,18 @@ pub fn tab_targeting_system(
     if inventory_ui.panels_open > 0 { return; }
     let is_multiplayer = controllers.iter().count() >= 2;
 
+    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
+    sorted_gamepads.sort_by_key(|(e, _)| e.index());
+
     for (controller, player_gt, mut player_target, player_index) in &mut controllers {
         let tab_key = InputMap::parse_key(&controller.inputs.target_next)
             .unwrap_or(KeyCode::Tab);
-        if !keys.just_pressed(tab_key) {
+        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+        let gamepad_target_next = controller.inputs.gamepad_button("target_next");
+        let gamepad_pressed = gamepad.zip(gamepad_target_next)
+            .map(|(gp, btn)| gp.just_pressed(btn))
+            .unwrap_or(false);
+        if !keys.just_pressed(tab_key) && !gamepad_pressed {
             continue;
         }
 

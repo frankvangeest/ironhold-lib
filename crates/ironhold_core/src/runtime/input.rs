@@ -1,14 +1,21 @@
 use bevy::prelude::*;
-use bevy::input::gamepad::{Gamepad, GamepadAxis, GamepadButton};
+use bevy::input::gamepad::{Gamepad, GamepadAxis};
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::LoadedKeyBindings;
 use crate::capabilities::player::CharacterController;
 use crate::schema::AppState;
 use crate::schema::player::InputMap;
 
-/// Analog gamepad stick input below this magnitude is ignored, to avoid stick drift
-/// producing tiny unintended movement/turn.
-const GAMEPAD_DEADZONE: f32 = 0.15;
+/// Resolves a player's `gamepad_index` against a slice of connected gamepads already sorted by
+/// `Entity::index()` (built once per system per frame — see callers). `None` if the player has
+/// no `gamepad_index` bound, or the index is out of range (fewer gamepads connected than
+/// expected).
+pub(crate) fn resolve_gamepad<'a>(
+    sorted: &'a [(Entity, &'a Gamepad)],
+    index: Option<usize>,
+) -> Option<&'a Gamepad> {
+    index.and_then(|i| sorted.get(i)).map(|(_, gp)| *gp)
+}
 
 /// Translates global key presses into UI messages using the project's `global_key_bindings`.
 /// Only fires in `InGame` state. Runs in `Update` (not `FixedUpdate`) so it
@@ -56,9 +63,8 @@ pub fn input_translator_system(
     sorted_gamepads.sort_by_key(|(e, _)| e.index());
 
     for (entity, controller) in &query {
-        let gamepad = controller.inputs.gamepad_index
-            .and_then(|i| sorted_gamepads.get(i))
-            .map(|(_, gp)| *gp);
+        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+        let deadzone = controller.inputs.gamepad_deadzone;
 
         let strafe_mode = controller.inputs.strafe_mouse_button
             .as_deref()
@@ -97,11 +103,11 @@ pub fn input_translator_system(
         if let Some(gp) = gamepad {
             let lx = gp.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
             let ly = gp.get(GamepadAxis::LeftStickY).unwrap_or(0.0);
-            if lx.abs() > GAMEPAD_DEADZONE { move_vec.x += lx; }
-            if ly.abs() > GAMEPAD_DEADZONE { move_vec.y += ly; }
+            if lx.abs() > deadzone { move_vec.x += lx; }
+            if ly.abs() > deadzone { move_vec.y += ly; }
 
             let rx = gp.get(GamepadAxis::RightStickX).unwrap_or(0.0);
-            if rx.abs() > GAMEPAD_DEADZONE { turn -= rx; }
+            if rx.abs() > deadzone { turn -= rx; }
         }
 
         // `clamp_length_max` (not `normalize`) so a fully-analog gamepad tilt keeps its
@@ -120,10 +126,11 @@ pub fn input_translator_system(
             });
         }
 
+        let gamepad_jump = controller.inputs.gamepad_button("jump");
         let jump_pressed = controller.inputs.key("jump")
             .map(|k| keyboard_input.just_pressed(k))
             .unwrap_or(false)
-            || gamepad.map(|gp| gp.just_pressed(GamepadButton::South)).unwrap_or(false);
+            || gamepad.zip(gamepad_jump).map(|(gp, btn)| gp.just_pressed(btn)).unwrap_or(false);
         if jump_pressed {
             input_events.write(InputActionMessage {
                 entity,
@@ -131,10 +138,11 @@ pub fn input_translator_system(
             });
         }
 
+        let gamepad_run = controller.inputs.gamepad_button("run");
         let run_pressed = controller.inputs.key("run")
             .map(|k| keyboard_input.just_pressed(k))
             .unwrap_or(false)
-            || gamepad.map(|gp| gp.just_pressed(GamepadButton::East)).unwrap_or(false);
+            || gamepad.zip(gamepad_run).map(|(gp, btn)| gp.just_pressed(btn)).unwrap_or(false);
         if run_pressed {
             input_events.write(InputActionMessage {
                 entity,

@@ -140,6 +140,20 @@ yet). A scene authors e.g. `"KeyJ": "join"`; a `rules.ron` rule handles it and e
 gamepad button to a global trigger — nothing like this exists today) plus a raw scan for an
 unclaimed pad; deferred to v2 rather than conflated with v1's keyboard path.
 
+**Amendment (2026-07-20, real-hardware finding from `gamepad_controller_input.md`'s playtest):**
+v2's "raw scan for an unclaimed pad" cannot be "any connected `Gamepad` entity with no player's
+`gamepad_index` pointing at it" — confirmed live with a real Xbox 360 controller (Windows 11 +
+Chromium-based browser) that a single physical controller can register as **two separate browser
+gamepad entries**, one live and one permanently dead (reports zero for every axis/button forever).
+An unclaimed-pad scan that doesn't check for *actual live input* (not just "connected, unclaimed")
+would non-deterministically bind the join to the dead duplicate, producing a joined player who
+never responds to anything — a much worse failure mode for hot-join than the existing static
+`gamepad_index` limitation, since a designer/player has no way to retry with a different index once
+the join has already happened. v2's scan must require some minimum real signal (e.g. a
+button/axis actually reporting a nonzero pressed/analog state on the current frame) before treating
+an unclaimed pad as "the" one to bind, not just presence in the connected-gamepads query. See
+`planning/claude_suggestions.md`'s matching entry for the underlying observation.
+
 **Joiner spawn position and identity**: reuses the existing `spawn_points: Map<String,
 (f32,f32,f32)>` scene convention (already populated for `room6`'s `player_3_start`/`player_4_start`)
 rather than introducing a new, parallel position mechanism — the join path looks up

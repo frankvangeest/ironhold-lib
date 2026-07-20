@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::input::mouse::MouseButton;
+use bevy::input::gamepad::GamepadButton;
 use serde::Deserialize;
 use std::collections::HashMap;
 use crate::schema::catalog::MovementConfig;
@@ -241,6 +242,28 @@ pub struct InputMap {
     /// keeps keyboard-only behavior identical to before this field existed.
     #[serde(default)]
     pub gamepad_index: Option<usize>,
+    /// Gamepad button for jump. Default `"South"` (Xbox A / PlayStation Cross) matches the
+    /// hardcoded behavior every scene had before this field existed.
+    #[serde(default = "default_gamepad_jump")]
+    pub gamepad_jump: String,
+    /// Gamepad button for run. Default `"East"` (Xbox B / PlayStation Circle) matches the
+    /// hardcoded behavior every scene had before this field existed.
+    #[serde(default = "default_gamepad_run")]
+    pub gamepad_run: String,
+    /// Gamepad button for interact. Default `"West"` — the genre-conventional "use/interact/
+    /// action" face button (Xbox X / PlayStation Square), not merely "whatever doesn't collide
+    /// with South/East".
+    #[serde(default = "default_gamepad_interact")]
+    pub gamepad_interact: String,
+    /// Gamepad button to cycle Tab-targeting. Default `"North"` — the genre-conventional
+    /// "cycle/secondary" face button (Xbox Y / PlayStation Triangle).
+    #[serde(default = "default_gamepad_target_next")]
+    pub gamepad_target_next: String,
+    /// Analog stick input below this magnitude is ignored, to avoid stick drift producing tiny
+    /// unintended movement/turn/camera-pitch. Default `0.15` matches the hardcoded constant every
+    /// scene had before this field existed.
+    #[serde(default = "default_gamepad_deadzone")]
+    pub gamepad_deadzone: f32,
     /// Keyboard-held camera yaw/pitch turning, independent of every other player's camera —
     /// needed because split-screen scenes disable mouse-orbit per camera (`orbit_button: "None"`,
     /// since one shared mouse can't drive 2+ independently-active `OrbitCamera`s). `None`
@@ -268,6 +291,11 @@ fn default_interact_key() -> String {
 fn default_strafe_mouse_button() -> Option<String> { Some("Left".to_string()) }
 fn default_target_next_key() -> String { "Tab".to_string() }
 fn default_target_range() -> f32 { 30.0 }
+fn default_gamepad_jump() -> String { "South".to_string() }
+fn default_gamepad_run() -> String { "East".to_string() }
+fn default_gamepad_interact() -> String { "West".to_string() }
+fn default_gamepad_target_next() -> String { "North".to_string() }
+fn default_gamepad_deadzone() -> f32 { 0.15 }
 
 impl InputMap {
     pub fn parse_mouse_button(s: &str) -> Option<MouseButton> {
@@ -293,6 +321,19 @@ impl InputMap {
             _ => return None,
         };
         Self::parse_key(s)
+    }
+
+    /// Looks up a gamepad button field by name (`"jump"`, `"run"`, `"interact"`,
+    /// `"target_next"`) and parses it, mirroring `key()`'s keyboard lookup.
+    pub fn gamepad_button(&self, name: &str) -> Option<GamepadButton> {
+        let s = match name {
+            "jump" => &self.gamepad_jump,
+            "run" => &self.gamepad_run,
+            "interact" => &self.gamepad_interact,
+            "target_next" => &self.gamepad_target_next,
+            _ => return None,
+        };
+        Self::parse_gamepad_button(s)
     }
 
     pub fn parse_key(s: &str) -> Option<KeyCode> {
@@ -400,6 +441,31 @@ impl InputMap {
             "BracketRight" => Some(KeyCode::BracketRight),
             "Minus"        => Some(KeyCode::Minus),
             "Equal"        => Some(KeyCode::Equal),
+            _ => None,
+        }
+    }
+
+    /// Parses a gamepad button name (e.g. `"South"`, `"West"`, `"DPadUp"`) into a Bevy
+    /// `GamepadButton`. An unrecognized name returns `None` — callers `warn!` and no-op at load
+    /// time, mirroring `parse_key`'s existing key-name validation seam.
+    pub fn parse_gamepad_button(s: &str) -> Option<GamepadButton> {
+        match s {
+            "South" => Some(GamepadButton::South),
+            "East" => Some(GamepadButton::East),
+            "North" => Some(GamepadButton::North),
+            "West" => Some(GamepadButton::West),
+            "LeftTrigger" => Some(GamepadButton::LeftTrigger),
+            "LeftTrigger2" => Some(GamepadButton::LeftTrigger2),
+            "RightTrigger" => Some(GamepadButton::RightTrigger),
+            "RightTrigger2" => Some(GamepadButton::RightTrigger2),
+            "Select" => Some(GamepadButton::Select),
+            "Start" => Some(GamepadButton::Start),
+            "LeftThumb" => Some(GamepadButton::LeftThumb),
+            "RightThumb" => Some(GamepadButton::RightThumb),
+            "DPadUp" => Some(GamepadButton::DPadUp),
+            "DPadDown" => Some(GamepadButton::DPadDown),
+            "DPadLeft" => Some(GamepadButton::DPadLeft),
+            "DPadRight" => Some(GamepadButton::DPadRight),
             _ => None,
         }
     }

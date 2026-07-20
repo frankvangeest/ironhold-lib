@@ -332,7 +332,13 @@
           // One shared mouse — mouse-driven strafe/rotate is a single-player convenience
           // that would conflict between two keyboard players, so it's disabled here.
           strafe_mouse_button: None,
-          // gamepad_index: 0,  // uncomment (and remove keyboard split below) for controller co-op
+          // gamepad_index: 0,  // uncomment to put Player 1 on a controller — the keyboard
+          // bindings above are simply ignored while gamepad_index is set, nothing to remove.
+          // jump/run/interact/target_next default to South/East/West/North (Xbox A/B/X/Y) —
+          // no other fields needed unless rebinding (see docs/20_data_formats.md's InputMap
+          // table). Interact (West/Square) fires entity.interacted:interact_test_prop in room2
+          // exactly like the keyboard "KeyF" default does, even with player_p2 present (interact
+          // now works per-player in local co-op — see docs/20's "player" tag section).
           // IMPORTANT: no look_left/look_right here (or on player_p2 below) — this is party mode,
           // where PartyOrbitCamera is shared across all players. There's no single per-player
           // owner to attribute a look binding to, so per-player keyboard camera look only applies

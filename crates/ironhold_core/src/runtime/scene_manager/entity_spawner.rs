@@ -1043,6 +1043,8 @@ fn spawn_orbit_camera_for_player(
             look_up_key,
             look_down_key,
             look_speed: cam.look_speed,
+            gamepad_index: inputs.gamepad_index,
+            gamepad_deadzone: inputs.gamepad_deadzone,
         },
     )).id()
 }
@@ -1086,6 +1088,11 @@ pub(crate) fn default_input_map() -> InputMap {
         look_right: None,
         look_up: None,
         look_down: None,
+        gamepad_jump: "South".to_string(),
+        gamepad_run: "East".to_string(),
+        gamepad_interact: "West".to_string(),
+        gamepad_target_next: "North".to_string(),
+        gamepad_deadzone: 0.15,
     }
 }
 
@@ -1125,11 +1132,26 @@ pub(crate) fn assemble_player_config(
         }
         PlayerModelSource::Glb(model_path.unwrap_or_default())
     };
+    let inputs = prefab.components.inputs.clone().unwrap_or_else(default_input_map);
+    for (field, name) in [
+        ("gamepad_jump", &inputs.gamepad_jump),
+        ("gamepad_run", &inputs.gamepad_run),
+        ("gamepad_interact", &inputs.gamepad_interact),
+        ("gamepad_target_next", &inputs.gamepad_target_next),
+    ] {
+        if crate::schema::player::InputMap::parse_gamepad_button(name).is_none() {
+            warn!(
+                "Player prefab '{}': inputs.{} has an unrecognised gamepad button name {:?} — \
+                 that action will never fire from a gamepad",
+                prefab_key, field, name
+            );
+        }
+    }
     PlayerConfig {
         model_source,
         initial_position,
         camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
-        inputs: prefab.components.inputs.clone().unwrap_or_else(default_input_map),
+        inputs,
         animation_policy: prefab.animation_policy.clone(),
         movement: prefab.components.movement.clone(),
         spawn_id: spawn_id.to_string(),

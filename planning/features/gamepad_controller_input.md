@@ -1,6 +1,6 @@
 # Feature: General Gamepad/Controller Input
 
-_Status: Ready_
+_Status: Done (shipped 2026-07-20)_
 _Planned at: `77a6dc9` (2026-07-19)_
 
 **Plan-review note (2026-07-19):** **system-architect** returned Needs-more-design-work, resolved
@@ -37,14 +37,24 @@ gamepad is not, yet); (d) two stale `docs/20_data_formats.md` passages identifie
 (e) `look_speed`'s cross-input reuse is now documented explicitly rather than left implicit (see
 the sibling plan's own amendment renaming it from `keyboard_look_speed`).
 
+**Amendment (2026-07-20):** the `interactable_system` `player_query.single()` bug from point (1)
+above is now fixed (`fix/interactable-multiplayer`, `847695b`) — rewritten as a per-player loop
+mirroring `tab_targeting_system`'s shape, same as this plan already anticipated as the eventual
+fix. Since gamepad-interact was always meant to fold into `interactable_system`'s existing keyboard
+boolean (not a separate mechanism), the single-player-only scoping below is now lifted: gamepad
+interact works in local co-op for free, with no additional engineering, the moment it folds into
+the now-per-player system. Every "single-player only" reference in this doc below reflects the
+2026-07-19 review's resolution and is superseded by this amendment; Tasks/Acceptance criteria have
+been updated accordingly.
+
 ## What
 Makes gamepad input designer-configurable and closes two real functional gaps: today a connected
 gamepad can move/turn/jump/run (all **hardcoded** Rust constants, not RON-authorable), but has *no*
 way to interact with the world or cycle targets, and no camera-pitch control at all. This feature:
 (1) moves the existing hardcoded button/axis mapping into RON-configurable `InputMap` fields with
-defaults that exactly match today's behavior, (2) adds a gamepad equivalent for `interact`
-(single-player scenes only — see Approach) and `target_next` (works in local co-op; `tab_targeting_
-system` is already per-player), and (3) adds right-stick-Y camera pitch, reusing the `OrbitCamera.
+defaults that exactly match today's behavior, (2) adds a gamepad equivalent for `interact` and
+`target_next` — both now work in local co-op, since `interactable_system` and `tab_targeting_system`
+are both per-player systems (see Approach) — and (3) adds right-stick-Y camera pitch, reusing the `OrbitCamera.
 pitch`/`min_pitch`/`max_pitch` fields and the `look_speed` dial from `per_player_camera_look_
 controls.md` (**hard dependency — must merge after that plan ships**, see Tasks).
 
@@ -54,12 +64,12 @@ convenience for local co-op pad *routing* (`InputMap.gamepad_index`), not genera
 left stick → move, right stick X → turn, South → jump, East → run are all hardcoded literals in
 `input_translator_system` (`runtime/input.rs:97-143`), with **no** RON field, **no**
 `parse_gamepad_button` helper, and **no** designer override path. Two consequences beyond "not
-designer-configurable": a controller-only player in a **single-player** scene cannot `interact`
-with anything at all (no gamepad path exists, and `interactable_system`'s existing `single()` call
-means this feature's fix is correctly scoped to single-player only — see Approach), and no gamepad
-player anywhere can Tab-cycle targets (`tab_targeting_system` is already per-player, so this half
-of the fix *does* work in local co-op). This also establishes the button-name-parsing
-infrastructure the dependent "gamepad-routed action-bar slots" backlog item will reuse.
+designer-configurable": a controller-only player cannot `interact` with anything at all (no gamepad
+path exists), and no gamepad player anywhere can Tab-cycle targets. Both `interactable_system` and
+`tab_targeting_system` are per-player systems (see the 2026-07-20 amendment above for
+`interactable_system`), so both halves of the fix work in local co-op, not just single-player. This
+also establishes the button-name-parsing infrastructure the dependent "gamepad-routed action-bar
+slots" backlog item will reuse.
 
 ## Approach
 
@@ -108,14 +118,14 @@ gamepad check into the same per-player boolean the keyboard check already produc
 `input_translator_system`'s existing `keyboard || gamepad` combining pattern for jump, not a
 second, separately-gated block) — this half of the fix works correctly in local co-op today.
 
-**`interactable.rs` (`interactable_system`) — scoped to single-player.** This system calls
-`player_query.single()` and early-returns for *all* players the moment a scene has 2+
-`CharacterController`s — a pre-existing limitation, confirmed independent of this feature (interact
-already doesn't work for anyone, keyboard or gamepad, in any local-coop scene today). This feature
-adds a gamepad check folded into the existing keyboard boolean (same combining shape as above), so
-gamepad-interact works in every scene interact already works in today — i.e. single-player only.
-Rewriting `interactable_system` into a per-player loop (mirroring `tab_targeting_system`'s shape) is
-a real, separate fix, logged as its own backlog Bug rather than bundled into this feature's scope.
+**`interactable.rs` (`interactable_system`) — now per-player, same as `tab_targeting_system`.**
+This system used to call `player_query.single()` and early-return for *all* players the moment a
+scene had 2+ `CharacterController`s — a pre-existing bug, fixed independently
+(`fix/interactable-multiplayer`, `847695b`, 2026-07-20) as a per-player loop, exactly mirroring
+`tab_targeting_system`'s shape. This feature folds a gamepad check into the existing per-player
+keyboard boolean (same combining shape as `tab_targeting_system`'s own gamepad-target-next fold
+below), so gamepad-interact works in every scene interact already works in today — including local
+co-op, with no additional engineering beyond the fold itself.
 
 **Camera pitch via right-stick-Y** — mirrors `per_player_camera_look_controls.md`'s `look_up`/
 `look_down` mechanism, reusing the *same* `OrbitCamera.pitch`/`min_pitch`/`max_pitch` fields and its
@@ -158,64 +168,67 @@ twin-stick vs. auto-face-on-move, not as a quiet follow-up.
 backlog item that reuses this feature's `parse_gamepad_button` helper and RON-field idiom.
 
 ## Tasks
-- [ ] **Hard dependency**: do not start implementation before `per_player_camera_look_controls.md`
-      merges to `integration` — this feature reuses its `OrbitCamera.look_speed`/`pitch`/
-      `min_pitch`/`max_pitch` fields, its pinned pitch-direction test pattern, and both features
-      touch the same `InputMap`/`CameraConfig` non-derived struct literals (whichever lands second
-      rebases onto the first's field additions)
-- [ ] `InputMap`: add `gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next: String`
+- [x] **Hard dependency**: `per_player_camera_look_controls.md` merged to `integration`
+      (`01c4da3`, 2026-07-19) — this feature reuses its `OrbitCamera.look_speed`/`pitch`/
+      `min_pitch`/`max_pitch` fields and its pinned pitch-direction test pattern; rebase onto it
+- [x] `InputMap`: add `gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next: String`
       (defaults matching today's hardcoded values) and `gamepad_deadzone: f32` (default `0.15`)
-- [ ] `InputMap::parse_gamepad_button` helper (schema/player.rs), mirroring `parse_key`; unrecognized
+- [x] `InputMap::parse_gamepad_button` helper (schema/player.rs), mirroring `parse_key`; unrecognized
       names `warn!` + no-op at load time (new task, mirrors the existing key-name validation seam)
-- [ ] Refactor `input_translator_system`'s gamepad sort-and-index logic into a shared
+- [x] Refactor `input_translator_system`'s gamepad sort-and-index logic into a shared
       `resolve_gamepad(sorted_slice, index)` helper — preserve "sort once per system per frame,
       resolve many" in both callers (see corrected signature in Approach)
-- [ ] `input_translator_system`: replace hardcoded gamepad button/deadzone literals with per-player
+- [x] `input_translator_system`: replace hardcoded gamepad button/deadzone literals with per-player
       RON-resolved values
-- [ ] `targeting.rs`: fold a gamepad-target-next check into `tab_targeting_system`'s existing
+- [x] `targeting.rs`: fold a gamepad-target-next check into `tab_targeting_system`'s existing
       per-player boolean (works in local co-op — this system is already per-player)
-- [ ] `interactable.rs`: fold a gamepad-interact check into `interactable_system`'s existing
-      keyboard boolean — **explicitly scoped to single-player scenes**, matching this system's
-      pre-existing `single()`-based limitation; do not expand this system's scope in this feature
-- [ ] File a new `planning/backlog.md` ▸ Bugs entry: `interactable_system` never fires for any
-      player once 2+ `CharacterController`s exist (`single()` early-return) — pre-existing,
-      independent of gamepad input, found during this plan's review
-- [ ] `OrbitCamera`: add `gamepad_index: Option<usize>` and `gamepad_deadzone: f32`, pre-resolved
+- [x] ~~File a new `planning/backlog.md` ▸ Bugs entry~~ — done and fixed independently
+      (`fix/interactable-multiplayer`, `847695b`, 2026-07-20), ahead of this feature's
+      implementation; `interactable_system` is now per-player.
+- [x] `interactable.rs`: fold a gamepad-interact check into `interactable_system`'s existing
+      per-player keyboard boolean (same combining shape as `tab_targeting_system`'s
+      gamepad-target-next fold) — works in local co-op for free, no additional scoping needed
+- [x] `OrbitCamera`: add `gamepad_index: Option<usize>` and `gamepad_deadzone: f32`, pre-resolved
       at spawn from the player's `InputMap` (both spawn sites, alongside the sibling plan's
       `look_left_key`/etc. resolution)
-- [ ] `camera_orbit_system`: add `Query<(Entity, &Gamepad)>`, resolve once per frame via the shared
+- [x] `camera_orbit_system`: add `Query<(Entity, &Gamepad)>`, resolve once per frame via the shared
       helper, apply right-stick-Y pitch — **verify the stick-Y sign empirically against the pinned
       pitch convention before committing to `stick_y_sign`'s value**; do not assume
-- [ ] Update every non-deserialized `InputMap`/`OrbitCamera` struct literal (test fixtures,
+- [x] Update every non-deserialized `InputMap`/`OrbitCamera` struct literal (test fixtures,
       `default_input_map()` in `entity_spawner.rs`) for the new fields — same construction-site
       churn class as the sibling plan
-- [ ] Demo wiring: add a commented-out worked `gamepad_*` binding block (mirroring the sibling
+- [x] Demo wiring: add a commented-out worked `gamepad_*` binding block (mirroring the sibling
       plan's commented-out pitch pair and the existing `// gamepad_index: 0,` convention) to a
-      **single-player** demo prefab with a nearby interactable (e.g. `entity_logic_demo` or
+      single-player demo prefab with a nearby interactable (e.g. `entity_logic_demo` or
       `quick_scene` — confirm which has an `interactable: true` prop in reach of player spawn before
-      picking one)
-- [ ] Tests — regression: existing gamepad-routed fixtures behave identically with the new fields
+      picking one). Since gamepad-interact now works in local co-op too, also add a minimal
+      `interactable:` playtest prop to `local_coop_demo` (reusing the `interact_test_prop` pattern
+      from `fix/interactable-multiplayer`'s room2 aid, or a new room) demonstrating a gamepad-routed
+      player interacting independently of a keyboard player.
+- [x] Tests — regression: existing gamepad-routed fixtures behave identically with the new fields
       at their defaults; new: a custom `gamepad_interact` button triggers `entity.interacted:{id}`
-      in a single-player scene; new: a custom `gamepad_target_next` button advances Tab-targeting in
-      a **2-player** scene (proving the per-player path actually works in co-op, unlike interact);
-      new: right-stick-Y moves camera pitch in the same direction as keyboard `look_up`/`look_down`
-      (direction-asserting, not just clamp-asserting, per the sibling plan's pattern); new:
-      `parse_gamepad_button` unit tests for the full supported set plus an unrecognized-name
-      `warn!`+no-op case
-- [ ] `cargo check -p ironhold_cli` — standard schema-change gate
-- [ ] Docs — `docs/20_data_formats.md`: `InputMap` table gets the 5 new fields; a "valid gamepad
+      in a single-player scene; new: a custom `gamepad_interact` button triggers
+      `entity.interacted:{id}` in a **2-player local-coop** scene (proving the per-player interact
+      path now works in co-op, matching `target_next` below — no longer a single-player-only
+      exception); new: a custom `gamepad_target_next` button advances Tab-targeting in a **2-player**
+      scene; new: right-stick-Y moves camera pitch in the same direction as keyboard
+      `look_up`/`look_down` (direction-asserting, not just clamp-asserting, per the sibling plan's
+      pattern); new: `parse_gamepad_button` unit tests for the full supported set plus an
+      unrecognized-name `warn!`+no-op case
+- [x] `cargo check -p ironhold_cli` — standard schema-change gate
+- [x] Docs — `docs/20_data_formats.md`: `InputMap` table gets the 5 new fields; a "valid gamepad
       button names" table with the **Xbox/PlayStation physical mapping** for every entry (not just
       the abstract Bevy name — matching the existing `gamepad_index` prose's own precedent); a full
       worked `inputs:` RON example showing all 5 gamepad fields; note that `look_speed` governs both
       keyboard-hold and gamepad-stick pitch rate
-- [ ] Docs — fix two stale passages in `docs/20_data_formats.md`: the `gamepad_index` entry's
+- [x] Docs — fix two stale passages in `docs/20_data_formats.md`: the `gamepad_index` entry's
       button-mapping description (currently stated as fact — must read as "defaults, overridable via
       the `gamepad_*` fields below") and the co-op targeting prose (~line 498-500) that already
       claims Tab-cycle "can use a gamepad button" — verify this becomes true rather than staying a
       coincidentally-accurate stray claim
-- [ ] Docs — explicitly document the permanent keyboard/gamepad camera-yaw parity gap (see Approach)
+- [x] Docs — explicitly document the permanent keyboard/gamepad camera-yaw parity gap (see Approach)
       so it reads as a known, deliberate limitation, not an oversight
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`'s "Local co-op ... gamepad routing" section:
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`'s "Local co-op ... gamepad routing" section:
       update from "hardcoded" to "RON-configurable, defaults shown," cross-referencing docs/20
 
 ## Open questions
@@ -231,14 +244,16 @@ backlog item that reuses this feature's `parse_gamepad_button` helper and RON-fi
 - Given a scene with a gamepad-routed player and no gamepad-related `InputMap` fields authored
   beyond `gamepad_index`, when this ships, then movement/turn/jump/run feel identical to before
   (regression, not just passing tests).
-- Given a **single-player** scene with a gamepad-routed player prefab with a custom
-  `gamepad_interact` button, when that button is pressed near an interactable entity, then
-  `entity.interacted:{id}` fires exactly as it would from the keyboard `interact` key
-  (**browser-observable**).
+- Given a single-player scene with a gamepad-routed player prefab with a custom `gamepad_interact`
+  button, when that button is pressed near an interactable entity, then `entity.interacted:{id}`
+  fires exactly as it would from the keyboard `interact` key (**browser-observable**).
 - Given a **2-player local-coop** scene where one player is gamepad-routed, when that player's
+  `gamepad_interact` button is pressed near an interactable entity, then `entity.interacted:{id}`
+  fires for that player independently of the other (keyboard) player's position/input
+  (**browser-observable** — proves gamepad-interact works in co-op, not just single-player).
+- Given the same **2-player local-coop** scene, when the gamepad-routed player's
   `gamepad_target_next` button is pressed, then Tab-cycle targeting advances for that player only,
-  exactly as the keyboard binding does for the other player (**browser-observable** — proves the
-  per-player targeting path works in co-op, in contrast to the single-player-only interact fix).
+  exactly as the keyboard binding does for the other player (**browser-observable**).
 - Given a gamepad-routed player holding right-stick-Y past the deadzone, then camera pitch moves
   smoothly within `min_pitch`/`max_pitch`, in the verified (not assumed) direction matching keyboard
   `look_up`/`look_down` (**browser-observable**).

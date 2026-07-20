@@ -28,7 +28,8 @@ use ironhold_core::capabilities::trigger_zone::{TriggerZone, TriggerZoneId, trig
 use ironhold_core::GameVariables;
 
 mod support;
-use support::setup_test_app;
+use support::{setup_test_app, connect_test_gamepad, press_gamepad_button, set_gamepad_axis};
+use bevy::input::gamepad::{GamepadButton, GamepadAxis};
 
 fn test_input_map() -> InputMap {
     InputMap {
@@ -39,6 +40,9 @@ fn test_input_map() -> InputMap {
         interact: "KeyF".to_string(), strafe_mouse_button: None,
         target_next: "Tab".to_string(), target_range: 30.0,
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
+        gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
+        gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
+        gamepad_deadzone: 0.15,
     }
 }
 
@@ -753,6 +757,34 @@ fn test_parse_key_multi_character_names_stay_case_sensitive() {
     assert_eq!(InputMap::parse_key("f2"), None, "\"F2\" is valid; \"f2\" is not");
 }
 
+#[test]
+fn test_parse_gamepad_button_recognizes_full_supported_set() {
+    use bevy::input::gamepad::GamepadButton;
+    assert_eq!(InputMap::parse_gamepad_button("South"), Some(GamepadButton::South));
+    assert_eq!(InputMap::parse_gamepad_button("East"), Some(GamepadButton::East));
+    assert_eq!(InputMap::parse_gamepad_button("North"), Some(GamepadButton::North));
+    assert_eq!(InputMap::parse_gamepad_button("West"), Some(GamepadButton::West));
+    assert_eq!(InputMap::parse_gamepad_button("LeftTrigger"), Some(GamepadButton::LeftTrigger));
+    assert_eq!(InputMap::parse_gamepad_button("LeftTrigger2"), Some(GamepadButton::LeftTrigger2));
+    assert_eq!(InputMap::parse_gamepad_button("RightTrigger"), Some(GamepadButton::RightTrigger));
+    assert_eq!(InputMap::parse_gamepad_button("RightTrigger2"), Some(GamepadButton::RightTrigger2));
+    assert_eq!(InputMap::parse_gamepad_button("Select"), Some(GamepadButton::Select));
+    assert_eq!(InputMap::parse_gamepad_button("Start"), Some(GamepadButton::Start));
+    assert_eq!(InputMap::parse_gamepad_button("LeftThumb"), Some(GamepadButton::LeftThumb));
+    assert_eq!(InputMap::parse_gamepad_button("RightThumb"), Some(GamepadButton::RightThumb));
+    assert_eq!(InputMap::parse_gamepad_button("DPadUp"), Some(GamepadButton::DPadUp));
+    assert_eq!(InputMap::parse_gamepad_button("DPadDown"), Some(GamepadButton::DPadDown));
+    assert_eq!(InputMap::parse_gamepad_button("DPadLeft"), Some(GamepadButton::DPadLeft));
+    assert_eq!(InputMap::parse_gamepad_button("DPadRight"), Some(GamepadButton::DPadRight));
+}
+
+#[test]
+fn test_parse_gamepad_button_unrecognized_name_is_none() {
+    assert_eq!(InputMap::parse_gamepad_button("south"), None, "case-sensitive, unlike single-letter keyboard keys");
+    assert_eq!(InputMap::parse_gamepad_button("A"), None, "\"South\" is the name, not the Xbox label \"A\"");
+    assert_eq!(InputMap::parse_gamepad_button("Triangle"), None, "\"North\" is the name, not the PlayStation label \"Triangle\"");
+}
+
 /// Builds `n` player prefabs (`test_player_1`..`test_player_n`), alternating the two shared
 /// character models. Only the first player's `camera.split` is set — mirrors
 /// `two_player_catalogs_with_split`'s pattern, generalized to N players for Stage 6's Grid tests.
@@ -917,6 +949,8 @@ fn test_orbit_camera(target: Entity) -> OrbitCamera {
         look_up_key: None,
         look_down_key: None,
         look_speed: 2.0,
+        gamepad_index: None,
+        gamepad_deadzone: 0.15,
     }
 }
 
@@ -2118,6 +2152,179 @@ fn test_interact_fires_for_pressing_player_with_two_players_present() {
         p2_missed,
         "player 2's own interact key must be evaluated independently and produce a miss \
          (nothing in range) — proves the loop services a non-first player, not just player 1"
+    );
+}
+
+/// `gamepad_controller_input.md`: a custom `gamepad_interact` button fires `entity.interacted:{id}`
+/// exactly as the keyboard `interact` key does.
+#[test]
+fn test_gamepad_interact_button_fires_entity_interacted() {
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    let mut inputs = test_input_map();
+    inputs.gamepad_index = Some(0);
+    inputs.gamepad_interact = "West".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("chest_01".to_string()),
+        Interactable { radius: 2.0, hint_text: None },
+    ));
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::West);
+    app.update();
+
+    let interacted = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.interacted:chest_01"));
+    assert!(interacted, "gamepad_interact button press must fire entity.interacted, same as the keyboard interact key");
+}
+
+/// `gamepad_controller_input.md`: gamepad-interact works in local co-op, not just single-player —
+/// the plan originally scoped this to single-player only (blocked by `interactable_system`'s
+/// `player_query.single()` bug), but that bug is now fixed (see the regression test above), so
+/// gamepad-interact folds into the same per-player loop for free. A gamepad-routed player and a
+/// keyboard-routed player must each interact independently.
+#[test]
+fn test_gamepad_interact_works_independently_in_two_player_local_coop() {
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    // Player 1 — gamepad-routed, near the interactable.
+    let mut p1_inputs = test_input_map();
+    p1_inputs.gamepad_index = Some(0);
+    p1_inputs.gamepad_interact = "West".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p1_inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+
+    // Player 2 — keyboard-routed, far away; presses nothing this frame.
+    let mut p2_inputs = test_input_map();
+    p2_inputs.interact = "KeyH".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p2_inputs, ..test_character_controller() },
+        Transform::from_xyz(100.0, 0.0, 0.0),
+    ));
+
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("chest_01".to_string()),
+        Interactable { radius: 2.0, hint_text: None },
+    ));
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::West);
+    app.update();
+
+    let interacted = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.interacted:chest_01"));
+    assert!(
+        interacted,
+        "the gamepad-routed player's interact button must fire entity.interacted with a \
+         keyboard-routed co-op partner present — proves gamepad-interact works in local co-op, \
+         not just single-player"
+    );
+}
+
+/// `gamepad_controller_input.md`: a custom `gamepad_target_next` button advances Tab-targeting
+/// for its own player only, in a 2-player local-coop scene, matching the keyboard binding's
+/// existing per-player behavior (`test_tab_targeting_each_player_cycles_independently`).
+#[test]
+fn test_gamepad_target_next_advances_targeting_independently_in_two_player_scene() {
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    let mut p1_inputs = test_input_map();
+    p1_inputs.gamepad_index = Some(0);
+    p1_inputs.gamepad_target_next = "North".to_string();
+    let player1 = app.world_mut().spawn((
+        CharacterController { inputs: p1_inputs, ..test_character_controller() },
+        PlayerTarget::default(),
+        PlayerIndex(0),
+        Transform::default(),
+        GlobalTransform::default(),
+    )).id();
+
+    let mut p2_inputs = test_input_map();
+    p2_inputs.target_next = "KeyT".to_string();
+    let player2 = app.world_mut().spawn((
+        CharacterController { inputs: p2_inputs, ..test_character_controller() },
+        PlayerTarget::default(),
+        PlayerIndex(1),
+        Transform::default(),
+        GlobalTransform::default(),
+    )).id();
+
+    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::North);
+    app.update();
+
+    assert!(
+        app.world().get::<PlayerTarget>(player1).unwrap().0.is_some(),
+        "player 1's gamepad_target_next button press must select a target for player 1"
+    );
+    assert_eq!(
+        app.world().get::<PlayerTarget>(player2).unwrap().0, None,
+        "player 1's gamepad button press must not affect player 2's target"
+    );
+}
+
+/// `gamepad_controller_input.md`: right-stick-Y camera pitch moves in the same direction as the
+/// keyboard `look_up` key — pushing the stick up (positive `RightStickY`, matching this
+/// codebase's existing `LeftStickY`-drives-forward-movement convention) increases pitch toward
+/// `max_pitch`, exactly like `look_up`. Direction-asserting, not just clamp-asserting, per
+/// `per_player_camera_look_controls.md`'s established test pattern.
+#[test]
+fn test_gamepad_right_stick_y_increases_pitch_same_direction_as_look_up() {
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    let player = app.world_mut().spawn((
+        test_character_controller(),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    )).id();
+
+    let camera = app.world_mut().spawn((
+        Transform::default(),
+        OrbitCamera { target: player, gamepad_index: Some(0), pitch: 0.5, ..test_orbit_camera(player) },
+    )).id();
+
+    let pitch_before = app.world().get::<OrbitCamera>(camera).unwrap().pitch;
+
+    set_gamepad_axis(&mut app, gamepad, GamepadAxis::RightStickY, 1.0);
+    // Large deterministic delta, same rationale as the keyboard look_up test above — a real
+    // wall-clock tick between two rapid successive app.update() calls could be near-zero.
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(1));
+    app.update();
+
+    let pitch_after = app.world().get::<OrbitCamera>(camera).unwrap().pitch;
+    assert!(
+        pitch_after > pitch_before,
+        "pushing right-stick-Y up (positive value) must increase pitch, same direction as the \
+         keyboard look_up key — got {} -> {}", pitch_before, pitch_after
     );
 }
 

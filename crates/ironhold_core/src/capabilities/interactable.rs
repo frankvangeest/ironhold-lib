@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use bevy::input::gamepad::Gamepad;
 use crate::capabilities::player::CharacterController;
 use crate::capabilities::inventory::LoadedInventoryUi;
+use crate::runtime::input::resolve_gamepad;
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::SpawnId;
 
@@ -22,28 +24,41 @@ pub struct Interactable {
 }
 
 /// Checks each frame whether each player is within range of any `Interactable` entity
-/// and that player's own interact key was just pressed. The interact key is read from
-/// each player's own `InputMap.interact` field (default: `"KeyF"`). Runs in `Update`.
+/// and that player's own interact key/button was just pressed. The interact key is read from
+/// each player's own `InputMap.interact` field (default: `"KeyF"`); the gamepad equivalent from
+/// `InputMap.gamepad_interact` (default: `"West"`). Runs in `Update`.
 ///
 /// Per-player loop (mirrors `tab_targeting_system`'s shape) — this system previously used
 /// `player_query.single()`, which fails and early-returns for *every* player the moment a scene
 /// has 2+ `CharacterController`s, so interact silently did nothing for anyone in any
 /// local-coop/split-screen scene. Found during `gamepad_controller_input.md`'s plan review
 /// (system-architect, 2026-07-19); fixed independently of that feature since the bug predates
-/// gamepad input entirely (this system has no gamepad path — keyboard-only, both before and
-/// after this fix).
+/// gamepad input entirely. The gamepad check below was added by that same feature once this fix
+/// landed — folds into the per-player loop exactly like `tab_targeting_system`'s own gamepad
+/// fold, so gamepad-interact works in local co-op too, not just single-player.
 pub fn interactable_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     player_query: Query<(&Transform, &CharacterController)>,
+    gamepad_query: Query<(Entity, &Gamepad)>,
     interactables: Query<(&Transform, &SpawnId, &Interactable)>,
     mut game_events: MessageWriter<GameEvent>,
     inventory_ui: Res<LoadedInventoryUi>,
 ) {
     if inventory_ui.panels_open > 0 { return; }
 
+    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
+    sorted_gamepads.sort_by_key(|(e, _)| e.index());
+
     for (player_transform, controller) in &player_query {
-        let Some(interact_key) = controller.inputs.key("interact") else { continue };
-        if !keyboard_input.just_pressed(interact_key) {
+        let keyboard_pressed = controller.inputs.key("interact")
+            .map(|k| keyboard_input.just_pressed(k))
+            .unwrap_or(false);
+        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+        let gamepad_interact = controller.inputs.gamepad_button("interact");
+        let gamepad_pressed = gamepad.zip(gamepad_interact)
+            .map(|(gp, btn)| gp.just_pressed(btn))
+            .unwrap_or(false);
+        if !keyboard_pressed && !gamepad_pressed {
             continue;
         }
 
