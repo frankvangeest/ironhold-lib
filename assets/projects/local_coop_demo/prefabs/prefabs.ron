@@ -31,6 +31,25 @@
       ),
     ),
 
+    // Local-coop interact-fix playtest aid: `interactable_system` used `player_query.single()`,
+    // which failed and early-returned for *every* player once 2+ CharacterControllers existed —
+    // interact silently did nothing for anyone in any local-coop scene (this project had zero
+    // `interactable:` props before this, so the bug was never player-visible here). Fixed as a
+    // per-player loop; either player_p1/player_p2 walking up and pressing their interact key
+    // (both default to "KeyF" in this project) fires entity.interacted:interact_test_prop.
+    "interact_test_prop": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (0.8, 0.8, 0.8),
+        color: (0.85, 0.65, 0.15),
+        roughness: 0.6,
+      ),
+      interactable: (radius: 2.0, hint_text: "Press F to interact"),
+    ),
+
     // Room 3's ground — warm/amber tone, matching the orange portal_to_room3 accent.
     "ground_room3": (
       kind: Primitive,

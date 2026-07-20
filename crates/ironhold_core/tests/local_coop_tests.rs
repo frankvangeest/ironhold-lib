@@ -2055,6 +2055,72 @@ fn test_tab_targeting_each_player_cycles_independently() {
     );
 }
 
+/// Regression: `interactable_system` previously used `player_query.single()`, which fails and
+/// early-returns for *every* player the moment a scene has 2+ `CharacterController`s — interact
+/// silently did nothing for anyone, keyboard or gamepad, in any local-coop/split-screen scene.
+/// Found during `gamepad_controller_input.md`'s plan review (system-architect, 2026-07-19), fixed
+/// as a per-player loop mirroring `tab_targeting_system`'s shape.
+#[test]
+fn test_interact_fires_for_pressing_player_with_two_players_present() {
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut p1_inputs = test_input_map();
+    p1_inputs.interact = "KeyF".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p1_inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+
+    let mut p2_inputs = test_input_map();
+    p2_inputs.interact = "KeyH".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs: p2_inputs, ..test_character_controller() },
+        Transform::from_xyz(100.0, 0.0, 0.0),
+    ));
+
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("chest_01".to_string()),
+        Interactable { radius: 2.0, hint_text: None },
+    ));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyF);
+    app.update();
+
+    let interacted = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "entity.interacted:chest_01"));
+    assert!(
+        interacted,
+        "player 1's interact key must still fire entity.interacted with a second player present \
+         (previously player_query.single() failed and no one could interact at all in local-coop)"
+    );
+
+    // Companion assertion (system-architect finding): confirm the loop actually evaluates player
+    // 2 independently, not just "player 1 still works despite a second CharacterController
+    // existing" — player 2 is far from the prop, so their own key press should produce a miss,
+    // not silence (silence would mean player 2's iteration never ran at all).
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().release(KeyCode::KeyF);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear_just_pressed(KeyCode::KeyF);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyH);
+    app.update();
+
+    let p2_missed = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(name) if name == "player.attack_missed"));
+    assert!(
+        p2_missed,
+        "player 2's own interact key must be evaluated independently and produce a miss \
+         (nothing in range) — proves the loop services a non-first player, not just player 1"
+    );
+}
+
 #[test]
 fn test_only_primary_player_target_mirrors_into_current_target_and_global_events() {
 

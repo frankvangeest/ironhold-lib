@@ -21,9 +21,17 @@ pub struct Interactable {
     pub hint_text: Option<String>,
 }
 
-/// Checks each frame whether the player is within range of any `Interactable` entity
-/// and the interact key was just pressed. The interact key is read from the player's
-/// `InputMap.interact` field (default: `"KeyF"`). Runs in `Update`.
+/// Checks each frame whether each player is within range of any `Interactable` entity
+/// and that player's own interact key was just pressed. The interact key is read from
+/// each player's own `InputMap.interact` field (default: `"KeyF"`). Runs in `Update`.
+///
+/// Per-player loop (mirrors `tab_targeting_system`'s shape) — this system previously used
+/// `player_query.single()`, which fails and early-returns for *every* player the moment a scene
+/// has 2+ `CharacterController`s, so interact silently did nothing for anyone in any
+/// local-coop/split-screen scene. Found during `gamepad_controller_input.md`'s plan review
+/// (system-architect, 2026-07-19); fixed independently of that feature since the bug predates
+/// gamepad input entirely (this system has no gamepad path — keyboard-only, both before and
+/// after this fix).
 pub fn interactable_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     player_query: Query<(&Transform, &CharacterController)>,
@@ -33,25 +41,26 @@ pub fn interactable_system(
 ) {
     if inventory_ui.panels_open > 0 { return; }
 
-    let Ok((player_transform, controller)) = player_query.single() else { return };
-    let Some(interact_key) = controller.inputs.key("interact") else { return };
-    if !keyboard_input.just_pressed(interact_key) {
-        return;
-    }
-
-    let mut hit_any = false;
-    for (transform, spawn_id, interactable) in &interactables {
-        let dist = player_transform.translation.distance(transform.translation);
-        if dist <= interactable.radius {
-            info!("Interacted with: {}", spawn_id.0);
-            game_events.write(GameEvent::Trigger(format!(
-                "entity.interacted:{}",
-                spawn_id.0
-            )));
-            hit_any = true;
+    for (player_transform, controller) in &player_query {
+        let Some(interact_key) = controller.inputs.key("interact") else { continue };
+        if !keyboard_input.just_pressed(interact_key) {
+            continue;
         }
-    }
-    if !hit_any {
-        game_events.write(GameEvent::Trigger("player.attack_missed".to_string()));
+
+        let mut hit_any = false;
+        for (transform, spawn_id, interactable) in &interactables {
+            let dist = player_transform.translation.distance(transform.translation);
+            if dist <= interactable.radius {
+                info!("Interacted with: {}", spawn_id.0);
+                game_events.write(GameEvent::Trigger(format!(
+                    "entity.interacted:{}",
+                    spawn_id.0
+                )));
+                hit_any = true;
+            }
+        }
+        if !hit_any {
+            game_events.write(GameEvent::Trigger("player.attack_missed".to_string()));
+        }
     }
 }

@@ -83,6 +83,19 @@
       label: (text: "Room 3", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // Local-coop interact-fix playtest aid (see prefabs.ron's "interact_test_prop" comment) —
+    // entity.interacted:interact_test_prop -> logic/rules.ron -> SetVariable, shown below.
+    (
+      id: "interact_test_prop",
+      prefab: "interact_test_prop",
+      transform: (
+        translation: (0.0, 0.5, -6.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Interact (F)", offset: (0.0, 1.2, 0.0)),
+    ),
+
   ],
 
   ui: [
@@ -98,6 +111,18 @@
       id: "room_hint",
       text: "Violet portal -> room 1 | Orange portal -> room 3",
       position: (20.0, 64.0),
+      size: (700.0, 32.0),
+    )),
+    // Local-coop interact-fix playtest aid: either player walks to the "Interact (F)" box and
+    // presses F (both players' interact key defaults to "KeyF" in this project) — this line
+    // updates from its initial blank state, proving interact fires with 2 players present.
+    // ux-gamedesigner-reviewer finding: don't call it "orange" — room_hint above already calls
+    // the room-3 portal "Orange", and the two would read as the same object to a playtester.
+    Label((
+      id: "interact_hint",
+      bind: "interact_status",
+      format: "Interact test: {}",
+      position: (20.0, 108.0),
       size: (700.0, 32.0),
     )),
   ],

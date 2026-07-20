@@ -2,7 +2,16 @@
     schema_version: 2,
     rules: [
         ( on: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
-        ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready") ] ),
+        // interact_status starts blank so interact_hint (room2.scene.ron) reads "Interact test: "
+        // before either player has pressed F near the interact_test_prop box.
+        ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready"), SetVariable("interact_status", "") ] ),
+        // Local-coop interact-fix playtest aid (planning/backlog.md ▸ Bugs): confirms
+        // interactable_system fires with 2 CharacterControllers present (it previously used
+        // player_query.single() and silently did nothing for anyone in this situation).
+        ( on: "entity.interacted:interact_test_prop", do_actions: [
+            Log("Interact test: fired with 2 players present"),
+            SetVariable("interact_status", "fired!"),
+        ] ),
         // Also spawns a stationary billboard_test_spark burst — playtest aid for the
         // split-screen particle billboard orientation fix (Phase 1 of
         // planning/features/split_screen_camera_followups.md). See assets.ron's comment.
