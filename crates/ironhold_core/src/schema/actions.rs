@@ -326,6 +326,22 @@ pub enum Action {
     /// Transfer all items from the currently open container to the player's inventory.
     /// No-op if no container is open. Emits `container.looted:{entity_id}` on success.
     TakeAllFromContainer,
+    /// Spawn a new player into an already-`Grid`-split local co-op scene at runtime, growing
+    /// the split-screen camera layout live (up to `MAX_SPLIT_PLAYERS`) — no scene reload,
+    /// existing players/cameras are completely untouched. The joiner's prefab is resolved from
+    /// the scene's `join_prefab_keys[next_slot]` (0-based, `next_slot` is the absolute slot
+    /// number — same numbering as `PlayerIndex`); its spawn position from
+    /// `spawn_points["player_{next_slot + 1}_start"]` (1-based, matching every other
+    /// `player_N_start` key in this project — falling back to the primary player's current
+    /// position plus a small offset if that key is absent). No-ops with a `warn!` if the scene
+    /// isn't currently `Grid`-split, is already at `MAX_SPLIT_PLAYERS`, or has no
+    /// `join_prefab_keys` entry for the next slot. Emits `coop.lobby_full` when the join brings
+    /// the count to the cap.
+    /// Typically bound via `scene_key_bindings: {"KeyG": "join"}` (avoid a key any join-target
+    /// prefab's own `inputs:` already binds — see the docs) and a rule
+    /// `ui.button_pressed:join -> Action::JoinPlayer`. See
+    /// `planning/features/local_coop_hot_join_leave.md`.
+    JoinPlayer,
 }
 
 fn default_action_volume() -> f32 { 1.0 }

@@ -332,6 +332,7 @@ pub fn drain_spawn_queue_system(
     mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
     active_tonemapping: Res<super::ActiveTonemapping>,
     nameplate_config: Res<crate::capabilities::nameplate::NameplateSceneConfig>,
+    mut active_split_slot_count: ResMut<super::ActiveSplitSlotCount>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -343,8 +344,34 @@ pub fn drain_spawn_queue_system(
             queued.transform.translation.z,
         );
 
-        // Player-tagged prefabs spawn a full character: capsule physics + orbit camera.
+        // Player-tagged prefabs spawn a full character. Hot-join (`Action::JoinPlayer`) players
+        // get a camera-less body plus one incremental split camera, growing the existing Grid
+        // layout live; every other player-tagged spawn keeps its own dedicated `OrbitCamera`
+        // via `spawn_player_entity`, unchanged.
         if let Some(player_config) = queued.player_config {
+            if queued.is_hot_join {
+                let player_entity = spawn_player_entity_core(
+                    &mut commands,
+                    &asset_server,
+                    &fixes.0,
+                    &model_spawner,
+                    &player_config,
+                    &queued.project_root,
+                    &mut registry,
+                    &mut stat_ui_queue,
+                    None,
+                );
+                let slot = player_config.player_index;
+                spawn_split_camera_for_player(
+                    &mut commands, active_tonemapping.0, &player_config, player_entity, slot,
+                );
+                active_split_slot_count.0 = Some(active_split_slot_count.0.unwrap_or(0) + 1);
+                info!(
+                    "Action::JoinPlayer: spawned player at slot {} (live split slots now {})",
+                    slot, active_split_slot_count.0.unwrap()
+                );
+                continue;
+            }
             spawn_player_entity(
                 &mut commands,
                 &asset_server,
@@ -719,18 +746,7 @@ pub(crate) fn spawn_players_and_camera(
         for (i, (config, entity)) in player_configs.iter().zip(entities.iter())
             .enumerate().take(slot_count as usize)
         {
-            let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
-            // All split cameras render to the same window at Camera's default order (0), which
-            // Bevy's ambiguity detection flags every frame even though non-overlapping viewports
-            // make the render order harmless. Giving each slot a distinct order silences it and
-            // makes the (harmless-but-real) N-passes-per-frame render order explicit/deterministic.
-            commands.entity(camera_entity).insert((
-                crate::capabilities::camera::SplitViewportSlot(i as u32),
-                Camera {
-                    order: i as isize,
-                    ..default()
-                },
-            ));
+            spawn_split_camera_for_player(commands, tonemapping, config, *entity, i as u32);
         }
     } else if let Some(party) = party {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
@@ -987,6 +1003,35 @@ fn spawn_player_entity_core(
     }
 
     player_entity
+}
+
+/// Spawns one `OrbitCamera` for `player_config`/`player_entity` tagged for split-screen grid
+/// slot `slot` (`SplitViewportSlot(slot)` + `Camera { order: slot, .. }`). Shared by the
+/// static-`Grid`-branch loop in `spawn_players_and_camera` (initial scene load) and by
+/// `drain_spawn_queue_system`'s `is_hot_join` branch (`Action::JoinPlayer`) — the only piece of
+/// the multi-player spawn logic this feature factors out; nothing else about
+/// `spawn_players_and_camera`'s collection/dispatch changes. See
+/// `planning/features/local_coop_hot_join_leave.md`.
+pub(crate) fn spawn_split_camera_for_player(
+    commands: &mut Commands,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    player_config: &PlayerConfig,
+    player_entity: Entity,
+    slot: u32,
+) -> Entity {
+    let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
+    // All split cameras render to the same window at Camera's default order (0), which Bevy's
+    // ambiguity detection flags every frame even though non-overlapping viewports make the
+    // render order harmless. Giving each slot a distinct order silences it and makes the
+    // (harmless-but-real) N-passes-per-frame render order explicit/deterministic.
+    commands.entity(camera_entity).insert((
+        crate::capabilities::camera::SplitViewportSlot(slot),
+        Camera {
+            order: slot as isize,
+            ..default()
+        },
+    ));
+    camera_entity
 }
 
 /// Spawns a single-target `OrbitCamera` following `player_entity`, per `player_config.camera`.

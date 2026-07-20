@@ -265,6 +265,52 @@ fn cross_file_checks(
         }
     }
 
+    // `join_prefab_keys` (local_coop_hot_join_leave.md) entries are read by Action::JoinPlayer
+    // only at the moment a player actually presses the join key — a typo'd or missing entry
+    // otherwise only surfaces as a runtime warn!+no-op, never at authoring time. Catch it here,
+    // and mirror the same two Action::JoinPlayer executor guards (player-tagged, GLB-only) so a
+    // scene author sees the mistake before ever running the project rather than discovering a
+    // silent no-op (or, for the primitive case, a spawn-time panic) during a playtest.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            for (slot, entry) in scene.join_prefab_keys.iter().enumerate() {
+                let Some(prefab_key) = entry else { continue };
+                let Some(prefab) = catalog.prefabs.get(prefab_key) else {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "join_prefab_keys[{}]: prefab {:?} not found in prefabs.ron",
+                            slot, prefab_key
+                        ),
+                        error_type: "missing_reference",
+                    });
+                    continue;
+                };
+                if !prefab.components.tags.iter().any(|t| t == "player") {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "join_prefab_keys[{}]: prefab {:?} has no `tags: [\"player\"]` — \
+                             Action::JoinPlayer will refuse to hot-join it at runtime",
+                            slot, prefab_key
+                        ),
+                        error_type: "unsupported_join_prefab",
+                    });
+                } else if prefab.kind == PrefabKind::Primitive {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "join_prefab_keys[{}]: prefab {:?} is primitive-shaped (kind: \
+                             Primitive) — hot-join only supports GLB (Actor-kind) players in v1",
+                            slot, prefab_key
+                        ),
+                        error_type: "unsupported_join_prefab",
+                    });
+                }
+            }
+        }
+    }
+
     // A primitive-shaped (`kind: Primitive`) player prefab combined with `scene.terrain:
     // Some(...)` isn't supported yet — v3 of `player_model_source_unification.md`. Mirrors the
     // scene-load-time `warn!` in `scene_loader.rs`; this is the design-time counterpart so a
@@ -479,6 +525,9 @@ fn strict_checks(
     for (_, scene) in scenes {
         for entity in &scene.entities {
             used_prefabs.insert(&entity.prefab);
+        }
+        for entry in scene.join_prefab_keys.iter().flatten() {
+            used_prefabs.insert(entry);
         }
     }
     for (_, action) in actions {

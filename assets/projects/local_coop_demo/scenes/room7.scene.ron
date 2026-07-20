@@ -78,6 +78,19 @@
       label: (text: "Room 6", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // room7 -> room8 (local_coop_hot_join_leave.md v1 playtest aid: 2-player Grid scene that
+    // grows to 4 via hot-join). See prefabs.ron's "portal_to_room8" comment.
+    (
+      id: "portal_to_room8",
+      prefab: "portal_to_room8",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 8 (hot join)", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   ui: [

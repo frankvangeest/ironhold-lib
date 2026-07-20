@@ -181,6 +181,7 @@ File extension must be `.scene.ron`.
 | `show_nameplates` | `bool` | Enable the nameplate system for NPCs/props in this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does **not** govern the player's own nameplate — see `show_player_nameplate` below. |
 | `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Cosmetic fields (offset, font, colors, bars) apply regardless of `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when `show_nameplates: true`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
 | `max_view_box` | `Option<(f32,f32,f32,f32)>` | Hard XZ movement boundary `(min_x, min_z, max_x, max_z)` in world units. Every player's position is clamped inside this box each physics tick (vertical movement/jumping is unaffected); velocity on the clamped axis is zeroed so the player doesn't jitter against the edge. Intended for local co-op scenes with a shared camera, so players can't wander out of frame — but works for any scene. Omit to disable (most scenes have no boundary). |
+| `join_prefab_keys` | `Vec<Option<String>>` | Per-slot player prefab keys for `Action::JoinPlayer` hot-join. See [Local co-op hot join](#local-co-op-hot-join) below. |
 
 **Example:**
 ```ron
@@ -2339,6 +2340,87 @@ This is **local, same-machine co-op** — same scope note as the sections above:
 
 A full working example (all 4 players, including `player_p2_grid`) lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` and `scenes/room6.scene.ron`.
 
+### Local co-op hot join ✅
+
+Lets a new player join an **already `Grid`-split** running scene at runtime — no scene reload,
+and the existing players' cameras/state are completely untouched. Growing *into* split-screen
+from a single-player scene, or hot-**leaving**, are not supported in v1 — see
+`planning/features/local_coop_hot_join_leave.md`.
+
+**Only `Grid`-split scenes support hot-join.** `party`, `dynamic` split, fixed `Vertical`/
+`Horizontal` split, and ordinary single-camera scenes all no-op (with a `warn!`) on
+`Action::JoinPlayer` — the same "first player's `camera.split`" convention that gates every other
+split-screen feature also gates this one.
+
+**`join_prefab_keys: Vec<Option<String>>`** (scene-level field, see the fields table above) maps
+each **absolute slot number** (0-based — the same numbering as `PlayerIndex`/`SplitViewportSlot`)
+to the prefab a joiner into that slot should use. A scene's `entities:`-declared players already
+occupy the low slots, so a 2-player scene that wants a 3rd/4th hot-join slot writes:
+
+```ron
+// scenes/my_scene.scene.ron
+join_prefab_keys: [None, None, "player_p3_grid", "player_p4_grid"],
+```
+
+Slots `0`/`1` are `None` because those players are already scene-authored — only the *empty*
+slots need an entry. A join into a slot with no entry (index past the end of the list, or an
+explicit `None`) is a no-op with a `warn!` — nothing crashes, but nothing joins either.
+
+**`Action::JoinPlayer`** (no payload) spawns the next joiner:
+
+1. Computes the next slot from the live split-slot count, **plus** any `Action::JoinPlayer`s
+   already queued (but not yet spawned) this same frame — two joins processed in one frame never
+   collide on the same slot.
+2. No-ops with a `warn!` if that slot would exceed `MAX_SPLIT_PLAYERS` (4) — emits
+   `coop.lobby_full` on the join that brings the count *to* the cap, so a scene can hide a
+   "press to join" prompt on that event (see the caveat below).
+3. Resolves the joiner's prefab from `join_prefab_keys[next_slot]`.
+4. Resolves the joiner's spawn position from `spawn_points["player_{next_slot + 1}_start"]` —
+   1-based, matching the `player_1_start"`.."player_4_start"` naming `room6.scene.ron` already
+   uses (`next_slot` itself, like `PlayerIndex`, is 0-based). `room6`'s own `spawn_points` are
+   never actually read by anything — its players are placed via `transform`, not spawn points —
+   so this is a fresh live consumer of that naming convention, not a pre-tested one; get the
+   `+ 1` offset wrong and a joiner silently lands on an existing player's position instead of
+   their own. Falls back to the primary player's current position + a small
+   `(1.5 * slot, 0, 0)` offset if that spawn point isn't defined.
+5. **Overrides `PlayerIndex` to `next_slot`**, regardless of whatever `player_index` the joined
+   prefab itself declares. A prefab reused as a join target for a different slot in a different
+   scene (e.g. `player_p3_grid`'s baked `player_index: 2`) always gets the slot's index at join
+   time, not its own baked value — don't rely on the prefab's own `player_index` for a hot-joined
+   player, only for one placed directly in `entities:`.
+
+Typically bound via a scene-scoped key and a rule:
+
+```ron
+// scenes/my_scene.scene.ron
+scene_key_bindings: {
+  "KeyG": "join",   // avoid "KeyJ" if any join-target prefab's own inputs use it (see below)
+},
+```
+```ron
+// logic/rules.ron
+( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
+```
+
+> **Pick a join key that no join-target prefab's own `inputs:` also binds.** `global_input_system`
+> reads the physical key unconditionally, independent of any player's `InputMap` — so if a scene's
+> join key collides with an already-joined player's own movement/action key (e.g. binding join to
+> `"KeyJ"` in a scene whose IJKL-scheme player uses `KeyJ` for `left`/`strafe_left`), that player's
+> ordinary movement input will *also* re-trigger `Action::JoinPlayer` every time they press it —
+> harmless once the lobby is full (a spurious `warn!` each press), but a real join can accidentally
+> fire early otherwise. `assets/projects/local_coop_demo/scenes/room8.scene.ron` uses `"KeyG"` for
+> exactly this reason.
+
+> **`SetEntityVisible` cannot target a scene-authored UI `Label`** (verified during
+> implementation) — `Action::SetEntityVisible` resolves its `entity` argument through the same
+> `SpawnRegistry` that 3D `entities:` use, and UI nodes are never registered there. A "press to
+> join" prompt therefore can't be hidden via `coop.lobby_full` + `SetEntityVisible` in v1 — author
+> it as an always-visible `Label` instead (see `room8.scene.ron`'s `join_prompt`), or react to
+> `coop.lobby_full` some other way (e.g. a bound `GameVariable` swapping the label's own text).
+
+A full working example (2-player start, grows to 4 via hot-join) lives in
+`assets/projects/local_coop_demo/scenes/room8.scene.ron`.
+
 ### Split-screen player HUD labels ✅
 
 **Fully engine-automatic — no RON field to author.** Whenever a scene has real split-screen
@@ -2950,6 +3032,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `rules.ron` or `state_machine.ron`. |
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
+| `JoinPlayer` | Hot-join a new player into an already `Grid`-split local co-op scene, growing the split-screen layout live (up to `MAX_SPLIT_PLAYERS`) with no scene reload. No-ops with a `warn!` outside a `Grid`-split scene, at the cap, or with no `join_prefab_keys` entry for the next slot. Emits `coop.lobby_full` on the join that reaches the cap. See [Local co-op hot join](#local-co-op-hot-join) above. |
 
 ---
 

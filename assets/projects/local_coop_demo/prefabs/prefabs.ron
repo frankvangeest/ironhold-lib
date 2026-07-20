@@ -1066,5 +1066,38 @@
       ),
     ),
 
+    // Room 8's ground — violet tone, the last unused color identity in this project's
+    // one-color-per-room convention (blue/amber/teal/rose/gold/green before it).
+    "ground_room8": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.26, 0.16, 0.34),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // room7 -> room8 (local_coop_hot_join_leave.md v1 playtest aid: starts at 2 players, join
+    // key grows the Grid split live up to 4). The return trip reuses the existing
+    // "portal_to_room7" prefab placed a second time in room8.scene.ron — same event name
+    // ("entity.entered:portal_to_room7"), same rules.ron entry, no new prefab needed (same
+    // trick every prior stage used).
+    "portal_to_room8": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.10, 0.28), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.20, 0.10, 0.28), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.14, 0.07, 0.20), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.62, 0.30, 0.95), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
   }
 )

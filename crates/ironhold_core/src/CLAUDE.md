@@ -440,6 +440,15 @@ remains is:
    built-materials map) so the `Primitive` arm can actually build a body; sites 2 and 3 pass `None`
    and would panic if they ever reached the `Primitive` arm — which they can't, since both reject
    primitive-shaped prefabs earlier (see above).
+5. **Hot-join spawn** (`local_coop_hot_join_leave.md`) — `action_executor.rs`'s `Action::JoinPlayer`
+   arm assembles a `PlayerConfig` via the same `assemble_player_config()` helper as site 2, then
+   overrides `PlayerIndex` to the target slot and pushes a `QueuedSpawn` with `is_hot_join: true`.
+   `drain_spawn_queue_system`'s `is_hot_join` branch calls `spawn_player_entity_core` directly
+   (camera-less, `PrimitivePlayerCtx: None` — **GLB-only**, same reasoning as site 2) followed by
+   `spawn_split_camera_for_player` (a thin wrapper factored out of `spawn_players_and_camera`'s
+   `Grid` loop, adding just `SplitViewportSlot`/`Camera.order`), then increments
+   `ActiveSplitSlotCount` by one. Scoped to `Grid`-split scenes only — see the doc comment on
+   `ActiveSplitSlotCount` below, which this site resolves.
 
 Because `PlayerIndex`, `PlayerTarget`, `StatMap` (when `stat_templates` is non-empty), stat
 widgets, and material override are now inserted in the shared post-dispatch code rather than
@@ -520,9 +529,13 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   **`ActiveSplitSlotCount(Option<u32>)`** (populated once by `spawn_players_and_camera` at scene
   load, cleared on `LoadScene` — mirrors `DynamicSplitConfig`'s exact write-once lifecycle), for
   its player count, rather than counting `SplitViewportSlot` cameras live in the query each frame.
-  This was a deliberate architecture-review fix during planning: since `Grid` is meant as the
-  foundation for a future hot-join/leave feature, deriving the count live would silently reflow
-  the grid on any mid-transition entity churn — a stored, explicitly-written count doesn't. Layout:
+  This was a deliberate architecture-review fix during planning: `Grid` was built as the
+  foundation for hot-join (`local_coop_hot_join_leave.md`, now implemented) — deriving the count
+  live would silently reflow the grid on any mid-transition entity churn, whereas a stored,
+  explicitly-written count doesn't. `drain_spawn_queue_system`'s `Action::JoinPlayer` branch is now
+  the second writer of this resource (alongside `spawn_players_and_camera` at scene load) —
+  incrementing it by one per successful hot-join rather than recomputing from a live query is what
+  makes that safe. Layout:
   `cols = ceil(sqrt(count))`, `rows = ceil(count / cols)`, cell assigned row-major by `slot.0`
   (`row = slot.0 / cols`, `col = slot.0 % cols`); the last row/column absorbs the remainder on an
   odd window dimension, same pattern as `Vertical`/`Horizontal`. `count == 3` leaves one grid cell
