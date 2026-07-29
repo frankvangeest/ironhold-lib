@@ -47,3 +47,5 @@ tools/__pycache__/
 # Cached ironhold_cli release binary (see CLAUDE.md "Caching the ironhold_cli binary") — built
 # locally from source, machine/OS-specific, never committed.
 tools/bin/
+
+*.env
