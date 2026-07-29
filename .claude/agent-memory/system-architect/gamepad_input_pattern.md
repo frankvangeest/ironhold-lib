@@ -18,4 +18,10 @@ Gamepad/controller input became fully RON-configurable in `feature/gamepad-contr
 
 **WASM:** safe — no plugin added, relies on DefaultPlugins' GamepadPlugin (browser Gamepad API works); no threading/native calls.
 
+**Positional-index fragility (load-bearing for any runtime pad binding):** `gamepad_index` is a *position* in the per-frame sorted slice, not an identity. A pad disconnecting shifts every higher index, silently re-routing live players to different pads. Tolerable while indices are RON-authored (designer can retry); becomes a correctness problem the moment an index is assigned at *runtime* (gamepad hot-join). If that lands, push for a resolved `Entity`-based runtime binding on `CharacterController`/`OrbitCamera` with `gamepad_index` demoted to an authored seed.
+
+**Where the phantom-duplicate-pad quirk is documented:** `docs/20_data_formats.md` (InputMap troubleshooting callout, ~line 1845) — NOT in any `CLAUDE.md`, despite plans citing it there. Key property: the dead duplicate reports **zero for every axis/button, always**. So "require live signal" filters it by construction; the mitigation that actually matters is `just_pressed` edge semantics, not a separate liveness gate.
+
+**Key-bindings merge has TWO insert sites**, not one: `project_loader.rs` inserts `ProjectKeyBindings` + `LoadedKeyBindings` in both the inline-config path (~line 116) and the external-files path (~line 250); `scene_loader.rs` rebuilds `LoadedKeyBindings` from the `ProjectKeyBindings` base each Replace load. Any new sibling binding map must replicate the base-layer resource *and* all three sites or bindings bleed across scenes on one load path only.
+
 **Bevy-upgrade risk (Minor):** test support (`tests/support/mod.rs`) registers Bevy-internal `gamepad_connection_system`/`gamepad_event_processing_system` (public fns) + ~8 raw gamepad message types manually, because the test app uses MinimalPlugins (no InputPlugin). This couples test infra to Bevy internals — flag on any Bevy upgrade. Harmless to existing ~100 tests: systems no-op without simulated events, no Gamepad entities spawned. See [[bevy_019_upgrade]].

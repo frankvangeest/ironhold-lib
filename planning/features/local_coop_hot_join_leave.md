@@ -8,7 +8,7 @@ _Planned at: `a59815c` (2026-07-19)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | Hot **join** (keyboard only) into an already-`Grid`-split scene, up to `MAX_SPLIT_PLAYERS`, incremental single-camera-add | Done | 2026-07-20 |
-| v2 | Hot **leave** (despawn + slot renumber + cleanup) and gamepad-join | Queued | — |
+| v2 | Hot **leave** (despawn + slot renumber + cleanup) | Queued | — |
 
 **Plan-review note (2026-07-19):** Both reviewers returned Needs-more-design-work on the first
 draft's "despawn every camera and rebuild the whole layout" strategy for join — resolved by a
@@ -138,7 +138,11 @@ player's `InputMap` — the correct property, since a not-yet-joined player has 
 yet). A scene authors e.g. `"KeyJ": "join"`; a `rules.ron` rule handles it and emits
 `Action::JoinPlayer`. Gamepad join-press detection needs its own new schema surface (binding a
 gamepad button to a global trigger — nothing like this exists today) plus a raw scan for an
-unclaimed pad; deferred to v2 rather than conflated with v1's keyboard path.
+unclaimed pad; **split out into its own feature doc, `planning/features/gamepad_hot_join.md`**
+(2026-07-29), rather than folded into this file's v2 — it's a self-contained piece of new input
+infrastructure with no dependency on hot-*leave*, matching this session's precedent of splitting
+`gamepad_action_bar_slots.md` out from `gamepad_controller_input.md`. This file's v2 now covers
+hot-leave only.
 
 **Amendment (2026-07-20, real-hardware finding from `gamepad_controller_input.md`'s playtest):**
 v2's "raw scan for an unclaimed pad" cannot be "any connected `Gamepad` entity with no player's

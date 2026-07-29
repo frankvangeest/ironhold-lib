@@ -46,6 +46,19 @@ this feature surfaced, worth re-checking on any spawn-point / hot-join review:
   `player_2_start` which is P2's own spot -> spawns on top of P2; `player_4_start` is never read.
   Fix = rename demo spawn_points to `player_0_start`..`player_3_start`. docs step 4's "same
   convention room6 uses" claim is misleading (room6 never consumes them).
+**v2 GAMEPAD JOIN plan (planning/features/gamepad_hot_join.md, reviewed 2026-07-29, plan-review only):**
+adds `global_gamepad_bindings`/`scene_gamepad_bindings: Map<String,String>` (button name -> trigger)
+mirroring the key-bindings pair, + a runtime override of the joiner's `InputMap.gamepad_index` to
+the pressing pad. Designer-visible consequences the plan under-covered:
+- The join-target prefab's authored keyboard `inputs:` (and `look_left`/`look_right`) go DEAD for a
+  gamepad joiner, so per-slot keyboard schemes and the room8 `controls_hint_p3/p4` labels are wrong
+  in that path. Same prefab, two input modes depending on *how* the player joined.
+- **The keyboard "pick a join key no player's inputs use" trap does NOT apply to gamepad** (claimed
+  pads are excluded from join detection, so `"South"` is safe even though it's `gamepad_jump`'s
+  default). Say so in docs, or designers over-apply the keyboard warning.
+- Live-signal/phantom-pad filter creates a "does the first press count?" question — a priming press
+  would be a real feel regression. Needs an explicit first-press-joins acceptance criterion.
+
 - **`join_prefab_keys` prefab refs are NOT validated by `ironhold validate`** (validate.rs cross-
   checks `entities[].prefab` at line ~254 but has no branch for join_prefab_keys) — a typo'd key
   there is runtime-warn-only, inconsistent with every other scene->prefab reference.
