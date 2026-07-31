@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Release `pkg/ironhold_web_bg.wasm` measured ~58 MB on 2026-07-06 (`ls -lh` of the current build). Warn at 95 MB, GitHub Pages hard-blocks at 100 MB. The older "~90.7 MB" figure was stale/wrong — trust the 58 MB clean-build measurement.
+Release `pkg/ironhold_web_bg.wasm` measured **58.1 MB, re-confirmed 2026-07-31** (first measured ~58 MB 2026-07-06 — stable across many features since). Warn at 95 MB, GitHub Pages hard-blocks at 100 MB. The "~90.7 MB" figure quoted in some agent prompts is stale/wrong — trust the 58 MB clean-build measurement.
 
 **Why:** GitHub Pages serves the web build; headroom is actually large (~37 MB below warn), not tight as previously believed.
 

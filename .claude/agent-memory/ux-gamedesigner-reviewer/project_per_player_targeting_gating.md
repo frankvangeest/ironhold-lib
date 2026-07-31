@@ -24,6 +24,16 @@ scene the Label blanks but `target_hud` produces no readout — a dead-end the d
 present" (count-based: tint + blank) from "real split viewport present" (target_hud). Flag any
 copy that ties the count-based behaviors to "split-screen" specifically.
 
+**Third, separate axis added 2026-07-29** — `SplitScreenDef.own_viewport_only: bool` (default
+`false`, on the first player's `camera.split`) gates *where* a ring renders (own viewport vs. every
+viewport). It is **independent of the tint**: tinting stays gated on player count, so a ring is
+still `PLAYER_LABEL_COLORS`-tinted (and per-target `indicator_color`/`indicator_category` still
+ignored) even when it's the only ring that player can see. Documented at docs/20_data_formats.md
+"Per-viewport target ring visibility (`own_viewport_only`)"; canonical example `local_coop_demo`
+`room9` (room3 keeps demonstrating the all-viewports default). Known doc gap: the `dynamic`-split
+**merged** state shows all rings again regardless of the field, which is neither in that section
+nor in the `DynamicSplitDef` section. See [[split-switch-prefab-duplication]].
+
 Related recurring trap: `target_next` default is `"Tab"`, which browsers intercept for focus nav in
 WASM builds (documented at the InputMap table, line ~1683). Any playtest-aid player prefab using
 `target_next: "Tab"` will appear to have broken targeting in the web build — prefer `"KeyT"` etc.

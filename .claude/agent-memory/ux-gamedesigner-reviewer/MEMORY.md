@@ -29,3 +29,5 @@
 - [Primitive-player fields](project_primitive_player_fields.md) — which PrefabDef fields apply to tags:["player"] prefabs after v1; canonical example local_coop_demo room7/player_p1_primitive
 - [Gamepad input system](project_gamepad_input_system.md) — gamepad is ADDITIVE to keyboard (old "instead of" claim was wrong, stale in 3 places); *_gamepad_bindings fire on unclaimed pads only; LeftTrigger=bumper gotcha
 - [Schema bool-toggle house style](project_schema_bool_toggle_house_style.md) — binary opt-in fields are bools (default false), not two-variant enums; ~19 bool precedents vs enums-for-multistate-only; recommend bool for new on/off fields
+- [Split-switch prefab duplication](project_split_switch_prefab_duplication.md) — split switches live on the first player's prefab & scene entities can't override components, so each variant demo clones the whole prefab pair (and drifts)
+- [local_coop_demo room conventions](project_local_coop_demo_room_conventions.md) — 9-room linear portal chain, no ?scene= deep-link, room_hint must list both exits, ~90-char Label ceiling at 900x32, one colour per room

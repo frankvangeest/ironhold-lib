@@ -21,4 +21,12 @@ Note the core CLAUDE.md rule "physics & camera-follow logic must run in FixedUpd
 
 **Pitch-direction trap:** `CameraConfig.min_pitch` (default 0.1) is documented "looking up", `max_pitch` (default 0.9) "looking down" — the whole authored range is downward-ish angles, there is no true look-at-sky. Higher pitch = camera positioned higher = more top-down (verified from the `Quat::from_axis_angle(X, -pitch)` math). The existing mouse convention: mouse-up (negative screen delta.y) → `pitch += ` → more top-down. Any new "look up"/"look down" binding must pick a convention deliberately: matching the mouse means look_up → pitch increase → overhead, but a player may intuit "look up" as raising the aim toward the horizon = pitch DECREASE. Pin the convention in the feature and assert direction (not just clamp bounds) in tests.
 
+**The camera spawn helpers are at their positional-parameter limit.** `spawn_split_camera_for_player`
+(entity_spawner.rs) and `spawn_party_orbit_camera` (camera.rs) are both at 6 positional params after
+`per_viewport_target_ring_visibility` added an `own_viewport_only: bool` to each. Both are still
+legible (the bool is last, no adjacent bool to transpose with) and this codebase has no
+options-struct precedent for spawn helpers — but the *next* per-camera toggle should introduce a
+small `SplitCameraOpts`/`PartyCameraOpts` struct rather than a 7th positional param. The
+`camera_modes` refactor re-homes both helpers anyway, so fold it in there.
+
 **`OrbitCamera` is constructed at exactly two sites** (both must be updated for any new field, non-`Option` fields also break `default_camera_config()` in entity_spawner.rs and the `base_camera_config()`/test literals since neither `CameraConfig` nor `InputMap` derive `Default`): `entity_spawner.rs::spawn_orbit_camera_for_player` (GLB path, incl. all split-screen per-player cameras) and the primitive/capsule inline block in `scene_loader.rs` (single-player only — local co-op split-screen never uses it). Both have the full `PlayerConfig`/`components` in scope, so both `.camera` and `.inputs` (InputMap) are reachable — splitting look config across the two structs (keybinds in InputMap, speed in CameraConfig) is wireable at both.
