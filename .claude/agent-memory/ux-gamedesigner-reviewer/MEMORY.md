@@ -1,6 +1,6 @@
 # Memory Index
 
-- [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — joiner input map comes from spawn prefab; single fixed join prefab collides keyboard seats; per-slot prefabs needed; room6 starts at cap
+- [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Docs lag the action schema](project_docs_lag_actions.md) — docs/20_data_formats.md, docs/30_runtime_events_and_logic.md, docs/STATUS.md consistently miss new Action variants when added
 - [pkg/ web build must be rebuilt](project_pkg_rebuild_required.md) — staged schema/action changes do not reach designers until wasm-pack build + commit of pkg/
 - [Color tuples vary RGB vs RGBA](project_color_tuple_inconsistency.md) — DamagePopupStyle uses 3-tuple RGB while StatLabelDef/WorldStatBarDef use 4-tuple RGBA in the same prefab block
@@ -27,5 +27,5 @@
 - [world_stat_bar style landscape](project_world_stat_bar_style_landscape.md) — only Ascii+Pixel exist (Icon is unbuilt); both now duplicate in split-screen; popups/nameplates stay single-instance
 - [Warn vs silent fallback principle](project_warn_vs_silent_fallback_principle.md) — engine warns when authored intent is contradictory (cross-bar dup, dup player_index, missing animation_policy), silent when fallback is a legit common choice; prefer load/validate-time over per-frame
 - [Primitive-player fields](project_primitive_player_fields.md) — which PrefabDef fields apply to tags:["player"] prefabs after v1; canonical example local_coop_demo room7/player_p1_primitive
-- [Gamepad input system](project_gamepad_input_system.md) — InputMap gamepad_* fields, compass-name→Xbox/PS mapping (LeftTrigger=bumper gotcha), co-op support, permanent no-yaw parity gap; canonical entity_logic_demo + local_coop_demo
+- [Gamepad input system](project_gamepad_input_system.md) — gamepad is ADDITIVE to keyboard (old "instead of" claim was wrong, stale in 3 places); *_gamepad_bindings fire on unclaimed pads only; LeftTrigger=bumper gotcha
 - [Schema bool-toggle house style](project_schema_bool_toggle_house_style.md) — binary opt-in fields are bools (default false), not two-variant enums; ~19 bool precedents vs enums-for-multistate-only; recommend bool for new on/off fields
