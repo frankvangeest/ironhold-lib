@@ -19,11 +19,12 @@ mirroring `global_key_bindings`/`scene_key_bindings`. Shipped in feature/gamepad
   right-stick pitch on top of keyboard look keys. A player with `gamepad_index` set can use their
   authored keyboard scheme AND the pad simultaneously. The earlier "gamepad instead of keyboard"
   belief in this memory was WRONG — do not repeat it.
-  Known stale artifacts still asserting exclusivity (flag them on any gamepad review until fixed):
-  `docs/20_data_formats.md`'s `gamepad_index` row ("instead of the keyboard"),
-  `assets/projects/local_coop_demo/prefabs/prefabs.ron` player_p1's commented
-  `gamepad_index` hint ("the keyboard bindings above are simply ignored"),
-  `crates/ironhold_core/src/CLAUDE.md` ("specific gamepad instead of the keyboard").
+  Status of the once-stale exclusivity claims, re-verified 2026-07-31: `docs/20_data_formats.md`'s
+  `gamepad_index` row is FIXED (now "**This is additive, not a replacement**"); every
+  `local_coop_demo/prefabs/prefabs.ron` commented `gamepad_index` hint is FIXED ("input is
+  additive, not a replacement"); `docs/20`'s `Action::JoinPlayer` note is FIXED. **Still stale:**
+  `crates/ironhold_core/src/CLAUDE.md`'s "Gamepad routing" paragraph (~L775) — "bind to a specific
+  gamepad instead of the keyboard".
 - **`*_gamepad_bindings` only fire on an UNCLAIMED pad** (no live player's `gamepad_index`, and no
   in-flight hot-join spawn holds it). Two consequences designers trip on: (a) `"South": "join"` is
   safe despite being `gamepad_jump`'s default — the keyboard "pick a key nobody uses" warning does
@@ -39,9 +40,17 @@ mirroring `global_key_bindings`/`scene_key_bindings`. Shipped in feature/gamepad
 - **Permanent parity gap:** no gamepad camera *yaw* (right-stick-X turns the character; only pitch
   is camera). Keyboard `look_left`/`look_right` remain the only yaw.
 - Right-stick-Y pitch reuses `CameraConfig.look_speed`.
-- **The "Valid gamepad button names" table heading enumerates its consumers** — it now correctly
-  lists `global_gamepad_bindings`/`scene_gamepad_bindings` alongside the four `InputMap` fields.
-  Any future consumer of `parse_gamepad_button` must add itself there; recurring staleness trap.
+- **The "Valid gamepad button names" table heading enumerates its consumers** — correctly lists
+  `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` (the maps WERE renamed with
+  the `unclaimed_` prefix, as recommended) and `ActionSlotDef.gamepad_key` alongside the four
+  `InputMap` fields. Any future consumer of `parse_gamepad_button` must add itself there; recurring
+  staleness trap.
+- **The four `InputMap` button fields all default to face buttons (South/East/West/North), which
+  makes them a silent collision surface for every new per-player gamepad binding.** Nothing
+  cross-checks a new binding against them. Concrete live case: `ActionSlotDef.gamepad_key: "South"`
+  on a player whose `gamepad_jump` is the default "South" both jumps and fires the ability. When
+  reviewing a new gamepad field, insist examples pick a NON-default button (`"RightTrigger"` = RB/R1
+  is the genre-conventional free one) and that the overlap is called out.
 - Canonical examples: `entity_logic_demo/prefabs/prefabs.ron` (single-player pad),
   `local_coop_demo/prefabs/prefabs.ron` (commented `gamepad_index: 0/1` on player_p1/p2 — note the
   `*_grid` variants have no such hint), `local_coop_demo/scenes/room8.scene.ron`

@@ -53,10 +53,10 @@ trigger (`InputMap` only exposes jump/run/interact/target_next).
 
 **Input is ADDITIVE, not exclusive** — verified against `input_translator_system` (keyboard read
 first, gamepad `+=`/`||` on top) and `camera_orbit_system`. So a gamepad-joined player keeps their
-join prefab's authored keyboard scheme. `local_coop_demo/prefabs/prefabs.ron` lines ~335-336 still
-claim the opposite ("the keyboard bindings above are simply ignored while gamepad_index is set") —
-that pre-existing comment is factually WRONG and now contradicts room8's own comment and
-`docs/20_data_formats.md`. Flag it on any gamepad-input touch until fixed.
+join prefab's authored keyboard scheme. (The old wrong comment in
+`local_coop_demo/prefabs/prefabs.ron` — "keyboard bindings above are simply ignored while
+gamepad_index is set" — was FIXED on `feature/gamepad-action-bar-slots` (2026-07-31); all three
+`// gamepad_index` seams now say input is additive. See [[gamepad_action_bar_slots_pattern]].)
 
 **Validation:** dual runtime-`warn!` (project_loader) / `load_errors` (scene_loader) plus strict
 `ironhold_cli validate` `error_type: "invalid_binding"` for both maps — matches the established

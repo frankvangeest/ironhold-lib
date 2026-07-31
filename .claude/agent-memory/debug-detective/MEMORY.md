@@ -1,6 +1,7 @@
 # Memory Index
 
-- [Gamepad index routing & shared-index double-fire](project_gamepad_index_routing.md) — resolve_gamepad(sorted,index): None/out-of-range safe; two players sharing Some(n) both fire from one press (no duplicate-index warn); InputMap has no Default derive so no empty-string risk
+- [Gamepad index routing & shared-index double-fire](project_gamepad_index_routing.md) — resolve_gamepad is positional not identity-stable (disconnect re-indexes everyone); shared Some(n) double-fires and the action-bar collision checks now *depend* on that unvalidated premise
+- [Test harness latches keyboard just_pressed](project_test_harness_just_pressed_latch.md) — setup_test_app omits InputPlugin so just_pressed never clears; release() alone doesn't help, need clear_just_pressed; silently makes multi-update keyboard tests vacuous (gamepads unaffected)
 
 - [WebGPU preprocessing warnings are red herrings](project_webgpu_preprocessing_warning.md) — Bevy 0.18 "preprocessing are limited" = PreprocessingOnly (still on GPU), "pipeline wasn't ready" is warn_once at startup; neither is per-frame CPU cost
 - [Per-frame Transform writes dirty nameplate subtrees](project_changedetection_transform_writes.md) — world_label_screen_pos_system writes Transform.translation unconditionally every frame, re-propagating to all Text2d/Mesh2d children; guard it like the font/visibility writes
