@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy::input::gamepad::{Gamepad, GamepadAxis};
 use crate::runtime::messages::*;
-use crate::runtime::scene_manager::LoadedKeyBindings;
+use crate::runtime::scene_manager::{
+    LoadedKeyBindings, LoadedGamepadBindings, PendingJoinGamepad, PendingEntitySpawns,
+};
 use crate::capabilities::player::CharacterController;
 use crate::schema::AppState;
 use crate::schema::player::InputMap;
@@ -36,6 +38,95 @@ pub fn global_input_system(
         } else {
             // Unknown key name — silently skip. A warning is logged at project load time
             // in check_project_loaded so the designer gets early feedback without spamming.
+        }
+    }
+}
+
+/// Detects a `join`-style press (or any other `global_unclaimed_gamepad_bindings`/
+/// `scene_unclaimed_gamepad_bindings` trigger) on an **unclaimed** gamepad and, for the specific
+/// purpose of `Action::JoinPlayer` binding the right physical pad to a freshly-joined player,
+/// records which pad triggered it in `PendingJoinGamepad`. Only fires in `InGame` state. Must run
+/// `.before(message_interpreter_system)` so `Action::JoinPlayer`'s executor sees this frame's
+/// value, not last frame's.
+///
+/// No separate "live signal" prefilter is needed: a phantom/dead duplicate gamepad entry (the
+/// documented Xbox 360 dual-registration quirk — see `docs/20_data_formats.md`) reports zero for
+/// every button forever, so it can never produce the `just_pressed` edge this system requires —
+/// requiring that edge on the specifically-bound button already excludes it.
+///
+/// `PendingJoinGamepad` is unconditionally reset to `None` at the top of every run, before any
+/// new match is considered, so it never carries a stale pad identity across frames (e.g. from a
+/// non-join gamepad trigger, like a pause button, that no `Action::JoinPlayer` consumes).
+///
+/// **At most one (pad, button) match is serviced per frame, full stop — capped at emission, not
+/// just at capture.** `PendingJoinGamepad` can only hold one `Entity`, and nothing downstream can
+/// tell which of several same-frame `UiEvent::ButtonPressed` messages a captured pad belongs to
+/// (`message_interpreter_system` has no concept of "this message paired with that resource
+/// value") — so emitting more than one qualifying event in a frame this system also captures a
+/// pad for would silently mispair, or worse, both events could resolve to `Action::JoinPlayer`
+/// and spawn two players from one pad's worth of same-frame pairing capacity (debug-detective /
+/// system-architect finding: an earlier version capped only the `PendingJoinGamepad` write, not
+/// the `ui_events.write` call, so a second unclaimed pad's simultaneous press still produced its
+/// own `Action::JoinPlayer` with no pad bound — a permanently half-controlled player, since v1 has
+/// no hot-leave to undo it). The loop stops (`break` out to the pad loop) the instant the first
+/// match is found this frame — deterministic: lowest `Entity::index()`-sorted pad first, and
+/// among that pad's own bindings, `HashMap` iteration order (irrelevant in practice: only matters
+/// if one pad has two different bound buttons pressed the same frame). A second pad's press, or a
+/// second *different* trigger on any pad, this same frame is simply not serviced — not queued, not
+/// delayed, just dropped for this frame; the player presses again next frame.
+pub fn unclaimed_gamepad_trigger_system(
+    state: Res<State<AppState>>,
+    gamepad_bindings: Res<LoadedGamepadBindings>,
+    gamepad_query: Query<(Entity, &Gamepad)>,
+    controllers: Query<&CharacterController>,
+    pending_spawns: Res<PendingEntitySpawns>,
+    mut pending_join_gamepad: ResMut<PendingJoinGamepad>,
+    mut ui_events: MessageWriter<UiEvent>,
+) {
+    pending_join_gamepad.0 = None;
+
+    if *state.get() != AppState::InGame { return; }
+    if gamepad_bindings.0.is_empty() { return; }
+
+    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
+    sorted_gamepads.sort_by_key(|(e, _)| e.index());
+
+    // A pad is "claimed" if it drives a live player, or is already mid-flight through the
+    // deferred spawn queue via an undrained `is_hot_join` entry (mirrors the `queued_hot_joins`
+    // same-frame double-join guard `Action::JoinPlayer`'s executor already has).
+    //
+    // Known accepted hazard (system-architect finding, not fixed here): this set holds
+    // *positional* sorted indices, recomputed fresh each frame — if a lower-sorted-index pad
+    // disconnects mid-session, every higher pad's position shifts down by one, and a still-live
+    // player's own claimed index can transiently collide with a now-different physical pad, or a
+    // claimed index can point past the end of the (now shorter) list and stop excluding anything.
+    // Either way a stale `gamepad_index` can make an actually-claimed pad look unclaimed for one
+    // frame, risking a spurious extra join on a pad someone is already using. Same root cause as
+    // the pre-existing RON-authored `gamepad_index` fragility (`resolve_gamepad`'s doc comment),
+    // just newly reachable via a live disconnect instead of only via authoring. Logged in
+    // `planning/backlog.md` rather than solved here — the real fix is an `Entity`-resolved binding,
+    // not a positional index.
+    let claimed: std::collections::HashSet<usize> = controllers.iter()
+        .filter_map(|c| c.inputs.gamepad_index)
+        .chain(
+            pending_spawns.0.iter()
+                .filter(|q| q.is_hot_join)
+                .filter_map(|q| q.player_config.as_ref().and_then(|pc| pc.inputs.gamepad_index))
+        )
+        .collect();
+
+    for (sorted_index, (entity, gamepad)) in sorted_gamepads.iter().enumerate() {
+        if claimed.contains(&sorted_index) { continue; }
+
+        let matched_trigger = gamepad_bindings.0.iter().find_map(|(button_name, trigger)| {
+            let button = InputMap::parse_gamepad_button(button_name)?;
+            gamepad.just_pressed(button).then(|| trigger.clone())
+        });
+
+        if let Some(trigger) = matched_trigger {
+            ui_events.write(UiEvent::ButtonPressed(trigger));
+            pending_join_gamepad.0 = Some(*entity);
+            break;
         }
     }
 }

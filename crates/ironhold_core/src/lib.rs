@@ -140,6 +140,9 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedStateMachine>()
             .init_resource::<crate::runtime::scene_manager::ProjectKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
+            .init_resource::<crate::runtime::scene_manager::ProjectGamepadBindings>()
+            .init_resource::<crate::runtime::scene_manager::LoadedGamepadBindings>()
+            .init_resource::<crate::runtime::scene_manager::PendingJoinGamepad>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedSpawnPoints>()
@@ -228,6 +231,10 @@ impl Plugin for GamePlugin {
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
             .add_systems(Update, global_input_system.before(message_interpreter_system))
+            // Unclaimed-gamepad join trigger (gamepad equivalent of global_input_system above) —
+            // must also run before the interpreter so Action::JoinPlayer sees this frame's
+            // PendingJoinGamepad value, not a stale one from last frame.
+            .add_systems(Update, unclaimed_gamepad_trigger_system.before(message_interpreter_system))
             // Stat pipeline: modifier ticks → regen → effective value recompute — all before
             // the interpreter chain so threshold crossings are visible in the same frame.
             .add_systems(Update, (

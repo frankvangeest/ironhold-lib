@@ -15,7 +15,7 @@ use super::{
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate, WorldLabel,
-    WorldLabelRank,
+    WorldLabelRank, LoadedGamepadBindings,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     DynamicStatUiQueue,
 };
@@ -138,6 +138,22 @@ pub fn spawn_scene_v2(
                 effective.insert(key_name.clone(), trigger.clone());
             }
             *loaded_key_bindings = LoadedKeyBindings(effective);
+        }
+
+        // Rebuild effective gamepad bindings: project base + scene-level overrides.
+        // Mirrors the key-bindings rebuild above exactly (per-key overlay, not whole-map replace).
+        {
+            let mut effective = params.project_gamepad_bindings.0.clone();
+            for (button_name, trigger) in &scene.scene_unclaimed_gamepad_bindings {
+                if InputMap::parse_gamepad_button(button_name).is_none() {
+                    load_errors.push(format!(
+                        "scene_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                        button_name
+                    ));
+                }
+                effective.insert(button_name.clone(), trigger.clone());
+            }
+            *params.loaded_gamepad_bindings = LoadedGamepadBindings(effective);
         }
 
         // `try_despawn` (not `despawn`): Bevy 0.18's `despawn()` is recursive, and several

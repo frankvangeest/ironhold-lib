@@ -73,6 +73,13 @@ pub struct GameSceneV2 {
     /// Same key-name format as `global_key_bindings` (e.g. `"Escape"`, `"Space"`, `"KeyP"`).
     #[serde(default)]
     pub scene_key_bindings: HashMap<String, String>,
+    /// Per-scene gamepad button bindings. Entries here override
+    /// `global_unclaimed_gamepad_bindings` from the project config for this scene (same per-key
+    /// overlay rule as `scene_key_bindings`). Same button-name format as `InputMap`'s `gamepad_*`
+    /// fields. **Unclaimed-pad-only, like the project-level field** — see
+    /// `global_unclaimed_gamepad_bindings`'s doc comment and the "Local co-op hot join" docs.
+    #[serde(default)]
+    pub scene_unclaimed_gamepad_bindings: HashMap<String, String>,
     /// World-space billboard text labels. Each label is placed at a 3D position and
     /// automatically rotates to face the active camera. Use for row headers, area names,
     /// or any annotation that should exist in the 3D world rather than the screen overlay.

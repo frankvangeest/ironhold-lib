@@ -11,6 +11,7 @@ use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
     MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings, ProjectKeyBindings,
+    LoadedGamepadBindings, ProjectGamepadBindings,
     LoadedAssetCatalog, LoadedPrefabCatalog, PendingProjectLoads, SceneHandleV2,
     LogicState, AudioState, resolve_project_path,
 };
@@ -124,6 +125,19 @@ pub fn check_project_loaded(
             }
             commands.insert_resource(ProjectKeyBindings(key_bindings.clone()));
             commands.insert_resource(LoadedKeyBindings(key_bindings));
+        }
+        {
+            let gamepad_bindings = config.global_unclaimed_gamepad_bindings.clone();
+            for button_name in gamepad_bindings.keys() {
+                if InputMap::parse_gamepad_button(button_name).is_none() {
+                    warn!(
+                        "global_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                        button_name
+                    );
+                }
+            }
+            commands.insert_resource(ProjectGamepadBindings(gamepad_bindings.clone()));
+            commands.insert_resource(LoadedGamepadBindings(gamepad_bindings));
         }
         commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
         commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
@@ -258,6 +272,18 @@ pub fn check_project_loaded(
         }
         commands.insert_resource(ProjectKeyBindings(key_bindings.clone()));
         commands.insert_resource(LoadedKeyBindings(key_bindings));
+
+        let gamepad_bindings = config.global_unclaimed_gamepad_bindings.clone();
+        for button_name in gamepad_bindings.keys() {
+            if InputMap::parse_gamepad_button(button_name).is_none() {
+                warn!(
+                    "global_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                    button_name
+                );
+            }
+        }
+        commands.insert_resource(ProjectGamepadBindings(gamepad_bindings.clone()));
+        commands.insert_resource(LoadedGamepadBindings(gamepad_bindings));
 
         let asset_catalog = if let Some(h) = &pending.asset_catalog {
             asset_catalog_assets.get(h).cloned().unwrap_or_default()

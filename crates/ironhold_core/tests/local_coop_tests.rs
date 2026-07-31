@@ -5,8 +5,11 @@ use bevy::math::Mat4;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry, ActionQueue};
-use ironhold_core::runtime::scene_manager::{WorldLabel, WorldLabelRank, SpawnId};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry, ActionQueue, UiEvent};
+use ironhold_core::runtime::scene_manager::{
+    WorldLabel, WorldLabelRank, SpawnId,
+    LoadedGamepadBindings, PendingJoinGamepad, PendingEntitySpawns, QueuedSpawn,
+};
 use ironhold_core::capabilities::targeting::ClickSelectable;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
 use ironhold_core::capabilities::stat_display::{
@@ -15,8 +18,8 @@ use ironhold_core::capabilities::stat_display::{
     StatWidgetSpawnCtx, spawn_stat_label_widget, spawn_world_stat_bar_widget,
 };
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle};
-use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, MovementConfig};
+use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap, PlayerModelSource, PlayerConfig};
 use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
@@ -1314,6 +1317,299 @@ fn test_hot_joined_player_stat_bar_duplicates_ranks_like_scene_load_spawned_play
         fill_rank_count > 0,
         "hot-joined player's world_stat_bar must spawn ranked siblings via the existing \
          DynamicStatUiQueue path — same as any Action::Spawn-created entity"
+    );
+}
+
+// ── gamepad_hot_join.md: unclaimed_gamepad_trigger_system + Action::JoinPlayer binding ─────────
+
+/// Builds a minimal but fully-valid `PlayerConfig` for hand-constructing a `QueuedSpawn` —
+/// only used to simulate an in-flight `is_hot_join` entry sitting in `PendingEntitySpawns`
+/// (production code always builds these via the private `assemble_player_config`, which isn't
+/// visible to this external test crate).
+fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32) -> PlayerConfig {
+    PlayerConfig {
+        model_source: PlayerModelSource::Glb("char_a".to_string()),
+        initial_position: (0.0, 0.5, 0.0),
+        camera: base_camera_config(),
+        inputs: InputMap { gamepad_index, ..test_input_map() },
+        animation_policy: None,
+        movement: MovementConfig::default(),
+        spawn_id: "in_flight_test".to_string(),
+        prefab_key: "test_player_3".to_string(),
+        nameplate_display_name: None,
+        nameplate_override: None,
+        player_index,
+        material: None,
+        stat_templates: vec![],
+        stat_label: None,
+        world_stat_bar: None,
+    }
+}
+
+#[test]
+fn test_unclaimed_gamepad_trigger_excludes_pad_claimed_by_live_player() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("South".to_string(), "join".to_string()),
+    ])));
+
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    // Only one connected gamepad exists, so it is sorted index 0 — claim it exactly like a live
+    // player would via InputMap.gamepad_index.
+    {
+        let mut q = app.world_mut().query::<&mut CharacterController>();
+        let mut controller = q.iter_mut(app.world_mut()).next().expect("a live player must exist");
+        controller.inputs.gamepad_index = Some(0);
+    }
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, None,
+        "a pad already claimed by a live player must never trigger a join"
+    );
+}
+
+#[test]
+fn test_unclaimed_gamepad_trigger_excludes_pad_mid_flight_via_pending_spawn() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("South".to_string(), "join".to_string()),
+    ])));
+
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    // Simulate an is_hot_join QueuedSpawn already claiming sorted index 0, still undrained —
+    // mirrors the `queued_hot_joins` same-frame double-join guard the executor already has.
+    app.world_mut().resource_mut::<PendingEntitySpawns>().0.push_back(QueuedSpawn {
+        prefab_def: PrefabDef::default(),
+        model_path: String::new(),
+        transform: Transform::IDENTITY,
+        spawn_id: "in_flight_test".to_string(),
+        prefab_key: "test_player_3".to_string(),
+        project_root: String::new(),
+        player_config: Some(minimal_player_config(Some(0), 2)),
+        is_hot_join: true,
+    });
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, None,
+        "a pad already claimed by an undrained is_hot_join PendingEntitySpawns entry must never \
+         trigger a second join"
+    );
+}
+
+#[test]
+fn test_unclaimed_gamepad_trigger_never_captures_a_pad_with_no_press() {
+    // "Phantom/dead duplicate pad" regression: the documented Xbox 360 dual-registration quirk
+    // produces a SECOND, permanently-dead gamepad entry alongside the real one — connected, but
+    // never reporting a press. Simulates that shape directly: two connected pads, only one ever
+    // pressed, to prove the never-pressed one is excluded specifically because it never produces
+    // a `just_pressed` edge — not merely because only one pad happens to exist in the test.
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("South".to_string(), "join".to_string()),
+    ])));
+
+    let phantom = connect_test_gamepad(&mut app);
+    let live = connect_test_gamepad(&mut app);
+    app.update();
+    app.update(); // no press ever sent to either — the phantom never gets one for real
+
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, None,
+        "merely being connected (never pressed) must never trigger a join, even with a second, \
+         live-but-idle pad also connected"
+    );
+
+    // Now the live pad presses — must be captured correctly, proving the phantom really was
+    // excluded by its lack of a press edge, not by some other accident (e.g. only one pad existing).
+    press_gamepad_button(&mut app, live, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, Some(live),
+        "the live pad's press must still be captured correctly once it actually presses"
+    );
+    let _ = phantom;
+}
+
+#[test]
+fn test_pending_join_gamepad_is_frame_scoped_not_sticky() {
+    // Regression for the system-architect's staleness finding: a gamepad-bound trigger with no
+    // Action::JoinPlayer consumer this frame (e.g. a pause button) must never leave a stale pad
+    // identity for a later, unrelated keyboard-triggered join to inherit.
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("Start".to_string(), "toggle_pause".to_string()),
+    ])));
+
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::Start);
+    app.update();
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, Some(gamepad),
+        "detection captures ANY LoadedGamepadBindings match this frame, not only a literal join"
+    );
+
+    // Next frame: no new press. The resource must reset, not carry the pad forward.
+    app.update();
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, None,
+        "PendingJoinGamepad must not survive into a frame with no new qualifying press"
+    );
+
+    // A keyboard-triggered join processed now must not inherit the stale pad identity.
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let joiner_gamepad_index = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &CharacterController)>();
+        q.iter(app.world())
+            .find(|(idx, _)| idx.0 == 2)
+            .map(|(_, c)| c.inputs.gamepad_index)
+            .expect("joiner with PlayerIndex(2) must exist")
+    };
+    assert_eq!(
+        joiner_gamepad_index, None,
+        "a keyboard-triggered join must never inherit a stale pad identity from an earlier, \
+         unrelated gamepad button press"
+    );
+}
+
+#[test]
+fn test_two_gamepads_pressed_same_frame_captures_only_lowest_sorted_index() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("South".to_string(), "join".to_string()),
+    ])));
+
+    let gp_a = connect_test_gamepad(&mut app);
+    let gp_b = connect_test_gamepad(&mut app);
+    app.update();
+
+    let lowest = if gp_a.index() < gp_b.index() { gp_a } else { gp_b };
+
+    press_gamepad_button(&mut app, gp_a, GamepadButton::South);
+    press_gamepad_button(&mut app, gp_b, GamepadButton::South);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<PendingJoinGamepad>().0, Some(lowest),
+        "exactly one pad's press is captured per frame, deterministically the lowest sorted index"
+    );
+
+    // Regression for the debug-detective/system-architect finding: an earlier version capped
+    // only the PendingJoinGamepad *capture*, not the UiEvent *emission* — so a second unclaimed
+    // pad's simultaneous press still fired its own "join" event, which the rules pipeline would
+    // turn into a second Action::JoinPlayer with no pad bound (a permanently half-controlled
+    // player, since v1 has no hot-leave to undo it). Assert directly on the emitted messages,
+    // not just the resource, so this can't silently regress the same way again.
+    let join_event_count = app.world()
+        .resource::<Messages<UiEvent>>()
+        .iter_current_update_messages()
+        .filter(|e| matches!(e, UiEvent::ButtonPressed(t) if t == "join"))
+        .count();
+    assert_eq!(
+        join_event_count, 1,
+        "only one pad's press may be serviced (emitted as a UiEvent) per frame, even though two \
+         unclaimed pads pressed the bound button in the same frame"
+    );
+}
+
+#[test]
+fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index() {
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+        ("South".to_string(), "join".to_string()),
+    ])));
+
+    let gp_a = connect_test_gamepad(&mut app);
+    let gp_b = connect_test_gamepad(&mut app);
+    app.update();
+
+    let mut sorted = [gp_a, gp_b];
+    sorted.sort_by_key(|e| e.index());
+
+    // Frame 1: gamepad A presses join and a JoinPlayer is queued in the same frame (mirrors how
+    // the real rules pipeline fires it same-frame via ui.button_pressed:join).
+    press_gamepad_button(&mut app, gp_a, GamepadButton::South);
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let first_joiner_gamepad_index = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &CharacterController)>();
+        q.iter(app.world())
+            .find(|(idx, _)| idx.0 == 2)
+            .map(|(_, c)| c.inputs.gamepad_index)
+            .expect("first joiner with PlayerIndex(2) must exist")
+    };
+    let expected_a_index = sorted.iter().position(|&e| e == gp_a).unwrap();
+    assert_eq!(
+        first_joiner_gamepad_index, Some(expected_a_index),
+        "first joiner must be bound to gamepad A's sorted index"
+    );
+
+    // Frame 2: gamepad B presses join.
+    press_gamepad_button(&mut app, gp_b, GamepadButton::South);
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let second_joiner_gamepad_index = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &CharacterController)>();
+        q.iter(app.world())
+            .find(|(idx, _)| idx.0 == 3)
+            .map(|(_, c)| c.inputs.gamepad_index)
+            .expect("second joiner with PlayerIndex(3) must exist")
+    };
+    let expected_b_index = sorted.iter().position(|&e| e == gp_b).unwrap();
+    assert_eq!(
+        second_joiner_gamepad_index, Some(expected_b_index),
+        "second joiner must be bound to gamepad B's sorted index, distinct from the first"
     );
 }
 

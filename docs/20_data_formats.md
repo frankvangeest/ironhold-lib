@@ -108,6 +108,7 @@ Entry point for a project. References all other files.
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
+| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently claimed by any live player, intended for join-style triggers. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
@@ -149,6 +150,7 @@ Entry point for a project. References all other files.
     global_key_bindings: {
         "Escape": "toggle_pause",
     },
+    // global_unclaimed_gamepad_bindings: { "South": "join" },  // see Gamepad-triggered hot join
 )
 ```
 
@@ -173,6 +175,7 @@ File extension must be `.scene.ron`.
 | `ui` | `Vec<UiNodeDef>` | UI elements (buttons, labels, rects) to show in this scene |
 | `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
+| `scene_unclaimed_gamepad_bindings` | `Map<String, String>` | Per-scene gamepad button overrides; same format and same unclaimed-pad-only behavior as `global_unclaimed_gamepad_bindings`. Overlays per-key on top of the project base — a key present here replaces just that entry, every other project-level binding still applies (same merge rule as `scene_key_bindings`). Cleared and rebuilt on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab) have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). `style: Pixel` world stat bars are the one exception — depth scaling is not yet implemented for that style, see below. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
@@ -1830,7 +1833,7 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player reads movement/camera input from the connected gamepad at this index instead of the keyboard: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, and jump/run/interact/target-cycle use the buttons below (all overridable, not fixed). `None` (default) keeps keyboard-only behavior. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from the connected gamepad at this index: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, and jump/run/interact/target-cycle use the buttons below (all overridable, not fixed). **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
 | `gamepad_run` | `String` | `"East"` | Gamepad button to hold-run — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
@@ -1851,7 +1854,12 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 > assuming the feature itself is broken. This is a real, reproducible platform quirk, not a
 > hypothetical.
 
-**Valid gamepad button names** (`gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next`), with Xbox / PlayStation physical mapping — an unrecognized name is `warn!`-logged and treated as unbound (no crash), mirroring keyboard key-name validation:
+**Valid gamepad button names** — governs `InputMap`'s `gamepad_jump`/`gamepad_run`/
+`gamepad_interact`/`gamepad_target_next` fields **and** `global_unclaimed_gamepad_bindings`/
+`scene_unclaimed_gamepad_bindings` (see [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below) —
+same Xbox / PlayStation physical mapping either way. An unrecognized name is `warn!`-logged (and,
+for the bindings maps, also flagged by `ironhold validate`) and treated as unbound (no crash),
+mirroring keyboard key-name validation:
 
 | Name | Xbox | PlayStation |
 |------|------|--------------|
@@ -2419,6 +2427,86 @@ scene_key_bindings: {
 > `coop.lobby_full` some other way (e.g. a bound `GameVariable` swapping the label's own text).
 
 A full working example (2-player start, grows to 4 via hot-join) lives in
+`assets/projects/local_coop_demo/scenes/room8.scene.ron`.
+
+#### Gamepad-triggered hot join ✅
+
+A new player can also join by pressing a button on an **unclaimed** physical gamepad — the
+gamepad equivalent of the keyboard trigger above. `global_unclaimed_gamepad_bindings`/
+`scene_unclaimed_gamepad_bindings` (see the fields tables above) map a gamepad button name to a
+trigger name, same format and same project-base/scene-override merge rule as `global_key_bindings`/
+`scene_key_bindings`:
+
+```ron
+// {name}.project.ron
+global_unclaimed_gamepad_bindings: {
+  "South": "join",   // Xbox A / PlayStation Cross
+},
+```
+```ron
+// scenes/my_scene.scene.ron — same shape as a scene_key_bindings override
+scene_unclaimed_gamepad_bindings: {
+  "South": "join",
+},
+```
+```ron
+// logic/rules.ron — same rule as the keyboard trigger, no gamepad-specific rule needed
+( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
+```
+
+> **These maps are for join-style triggers only — not a general gamepad analogue of
+> `global_key_bindings`.** A button press is only ever detected on a pad **not currently claimed**
+> by any live player's `InputMap.gamepad_index` — so binding something like
+> `"Start": "toggle_pause"` here will simply never fire for an actual playing player; it only
+> fires from a pad nobody is using yet. For an already-joined player's own in-game gamepad
+> actions, use that player's own `InputMap` fields (`gamepad_jump`/`gamepad_run`/
+> `gamepad_interact`/`gamepad_target_next`) instead — this pair of maps exists specifically so an
+> unclaimed pad can signal "a new player wants in," nothing more general.
+
+Binding `"South"` here is safe despite it being `gamepad_jump`'s own default — an already-joined
+player's own South-button jump is on a *claimed* pad and never reaches this trigger, so there's no
+collision the way there can be with the keyboard collision warning above. No separate "is this pad
+actually live" prefilter exists or is needed — a phantom/dead duplicate gamepad entry (see the
+phantom-pad troubleshooting note above) reports zero for every button forever, so it can never
+produce the button-press edge this trigger requires; requiring that edge already excludes it.
+
+**At most one (pad, button) match is serviced per frame, full stop.** If two unclaimed pads happen
+to press in the exact same frame, only the one sorted first (by connection order) joins that
+frame — the other's press is not serviced at all this frame (not queued, not delayed) and simply
+needs a second press. This is a hard cap, not just a "which pad gets bound" tiebreak: it exists
+because nothing downstream can tell which of two same-frame join presses a bound pad belongs to,
+so allowing both through could produce a second player with no pad bound at all, permanently (v1
+has no hot-leave to fix a bad join after the fact).
+
+**The join trigger must be produced synchronously, in the same frame's rule match** — i.e. a
+direct `( on: "ui.button_pressed:<trigger>", do_actions: [ JoinPlayer ] )` rule, not a chain that
+routes through `EmitEvent` into a second rule or a delayed event. The pad identity is only valid
+for the one frame it was captured; a `JoinPlayer` that fires a frame later still joins, just with
+no gamepad bound (falls back to the join prefab's own authored default), which can look like a
+confusing "sometimes gamepad join doesn't work" bug if a project's rules aren't wired directly.
+
+**The first press counts — no priming press or hold needed.** A pad's very first button press
+after connecting can be the join itself. One browser-specific caveat: Chrome/Edge don't expose a
+freshly-connected gamepad to the page at all until it sends some input, so on a brand-new
+controller the very first press may be consumed just making the pad visible to the browser rather
+than reaching this system. That's a browser platform rule, not an engine behavior — if the very
+first press seems to do nothing, press again.
+
+**A gamepad only ever binds to a player at the moment they join by pressing it.** There is no way
+to hand a controller to an already-joined player, or to a player placed directly in a scene's
+`entities:` list — give those their own `gamepad_index` in the player prefab's `inputs:` block
+instead (see the `InputMap` fields table above).
+
+**`Action::JoinPlayer` additionally binds the pressing pad's `InputMap.gamepad_index`** to the new
+player when triggered by a gamepad (a keyboard-triggered join never inherits a pad identity from
+an earlier frame — the identity is reset every frame it isn't freshly captured) — mirrors the
+`PlayerIndex`-override behavior above (step 5), but for `gamepad_index` instead. **This does not
+disable that player's keyboard scheme** — gamepad and keyboard input are checked additively
+(`||`), never exclusively, everywhere in this engine, so a gamepad-joined player can freely mix
+their join slot's authored keyboard scheme and the bound pad (confirmed against source during
+implementation, not assumed).
+
+A full working example (gamepad join alongside the keyboard one) lives in
 `assets/projects/local_coop_demo/scenes/room8.scene.ron`.
 
 ### Split-screen player HUD labels ✅

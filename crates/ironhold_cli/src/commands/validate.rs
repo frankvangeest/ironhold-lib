@@ -4,6 +4,7 @@ use std::path::Path;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
+use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 
@@ -154,6 +155,7 @@ fn fsm_actions(fsm: &StateMachineAsset) -> Vec<Action> {
 
 fn cross_file_checks(
     project_dir: &Path,
+    project_config: Option<&ProjectConfig>,
     asset_catalog: Option<&AssetCatalog>,
     prefab_catalog: Option<&PrefabCatalog>,
     stat_catalog: Option<&StatCatalog>,
@@ -307,6 +309,40 @@ fn cross_file_checks(
                         error_type: "unsupported_join_prefab",
                     });
                 }
+            }
+        }
+    }
+
+    // `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` (gamepad_hot_join.md)
+    // button names are only checked at runtime (a `warn!` in
+    // project_loader.rs/scene_loader.rs) — same design-time gap `join_prefab_keys` above closes
+    // for its own field. Catch it here too, so a typo'd button name surfaces at validate time
+    // instead of only as a silent no-op the first time someone presses it.
+    if let Some(config) = project_config {
+        for button_name in config.global_unclaimed_gamepad_bindings.keys() {
+            if InputMap::parse_gamepad_button(button_name).is_none() {
+                errors.push(CrossFileError {
+                    source_file: find_project_ron(project_dir).unwrap_or_default(),
+                    message: format!(
+                        "global_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                        button_name
+                    ),
+                    error_type: "invalid_binding",
+                });
+            }
+        }
+    }
+    for (scene_path, scene) in scenes {
+        for button_name in scene.scene_unclaimed_gamepad_bindings.keys() {
+            if InputMap::parse_gamepad_button(button_name).is_none() {
+                errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "scene_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                        button_name
+                    ),
+                    error_type: "invalid_binding",
+                });
             }
         }
     }
@@ -619,7 +655,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
 
     let mut file_results: Vec<FileResult> = Vec::new();
 
-    let _project_config: Option<ProjectConfig> = find_project_ron(project_dir)
+    let project_config: Option<ProjectConfig> = find_project_ron(project_dir)
         .and_then(|name| try_parse(project_dir, &name, &mut file_results));
 
     let asset_catalog: Option<AssetCatalog> =
@@ -664,6 +700,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
 
     let cross_errors = cross_file_checks(
         project_dir,
+        project_config.as_ref(),
         asset_catalog.as_ref(),
         prefab_catalog.as_ref(),
         stat_catalog.as_ref(),

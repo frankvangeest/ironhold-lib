@@ -1469,6 +1469,23 @@ pub fn action_executor_system(
                 );
                 player_config.player_index = next_slot;
 
+                // Gamepad-triggered join: bind the specific pad that pressed the join button to
+                // this player's `InputMap.gamepad_index`, overriding whatever the join prefab
+                // statically authored — translated to the same sorted-by-`Entity::index()`
+                // convention `resolve_gamepad` expects. A keyboard-triggered join (or any frame
+                // with no captured pad) leaves the prefab's own `gamepad_index` untouched. `take()`
+                // both reads and clears the value, so it can't be reused by a second JoinPlayer
+                // processed later in this same executor pass. See
+                // `planning/features/gamepad_hot_join.md`.
+                if let Some(gamepad_entity) = spawn_params.pending_join_gamepad.0.take() {
+                    let mut sorted_gamepads: Vec<Entity> =
+                        spawn_params.gamepads.iter().map(|(e, _)| e).collect();
+                    sorted_gamepads.sort_by_key(|e| e.index());
+                    if let Some(idx) = sorted_gamepads.iter().position(|&e| e == gamepad_entity) {
+                        player_config.inputs.gamepad_index = Some(idx);
+                    }
+                }
+
                 info!(
                     "Action::JoinPlayer: queued join for slot {} (prefab '{}') at ({:.1}, {:.1}, {:.1})",
                     next_slot, prefab_key, sx, sy, sz

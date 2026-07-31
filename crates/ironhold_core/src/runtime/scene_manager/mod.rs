@@ -62,6 +62,29 @@ pub struct ProjectKeyBindings(pub HashMap<String, String>);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedKeyBindings(pub HashMap<String, String>);
 
+/// Project-level gamepad bindings, set once at project load and never modified.
+/// Mirrors `ProjectKeyBindings` exactly — see that type's doc comment.
+#[derive(Resource, Default, Clone)]
+pub struct ProjectGamepadBindings(pub HashMap<String, String>);
+
+/// Active gamepad bindings used by the unclaimed-gamepad join-detection system
+/// (`runtime::input::unclaimed_gamepad_trigger_system`). Mirrors `LoadedKeyBindings` exactly:
+/// rebuilt on each Replace-mode scene load as project bindings + scene overrides.
+/// Maps gamepad button name strings (e.g. "South") to event trigger names (e.g. "join").
+#[derive(Resource, Default, Clone)]
+pub struct LoadedGamepadBindings(pub HashMap<String, String>);
+
+/// Carries which unclaimed gamepad (if any) triggered a `LoadedGamepadBindings` match this
+/// frame, so `Action::JoinPlayer`'s executor can bind that specific pad to the new player's
+/// `InputMap.gamepad_index` instead of leaving it at whatever the join prefab statically
+/// authored. **Frame-scoped, not sticky**: `unclaimed_gamepad_trigger_system` unconditionally
+/// resets this to `None` at the start of every run, only setting it when a qualifying press is
+/// found that same frame — so a gamepad-bound trigger with no `Action::JoinPlayer` consumer this
+/// frame (e.g. a pause button) can never leave a stale pad identity for a later, unrelated
+/// keyboard-triggered join to inherit. See `planning/features/gamepad_hot_join.md`.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct PendingJoinGamepad(pub Option<Entity>);
+
 /// Holds pre-loaded scene asset handles so they stay cached and are ready instantly when needed.
 /// Populated by `Action::PreloadScene`. Cleared on a full `LoadScene` so stale handles don't linger.
 #[derive(Resource, Default)]
@@ -491,6 +514,11 @@ pub struct SpawnParams<'w, 's> {
     /// Read-only here — `drain_spawn_queue_system` (a separate system) owns the `ResMut` that
     /// actually increments it once a hot-join spawn completes.
     pub active_split_slot_count: Res<'w, ActiveSplitSlotCount>,
+    /// Read (and cleared after consuming) by `Action::JoinPlayer` to bind the specific gamepad
+    /// that triggered a gamepad-driven join to the new player's `InputMap.gamepad_index`. `None`
+    /// for a keyboard-triggered join — see `planning/features/gamepad_hot_join.md`.
+    pub pending_join_gamepad: ResMut<'w, PendingJoinGamepad>,
+    pub gamepads: Query<'w, 's, (Entity, &'static bevy::input::gamepad::Gamepad)>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.
@@ -510,6 +538,12 @@ pub struct SceneV2Params<'w> {
     /// player's `stat_label`/`world_stat_bar` widget queue (`DynamicStatUiQueue`) is bundled
     /// here rather than added as a bare param. See `planning/features/player_stat_widgets.md`.
     pub dynamic_stat_ui_queue: ResMut<'w, DynamicStatUiQueue>,
+    /// Same 16-param ceiling reason as `dynamic_stat_ui_queue` above — the gamepad-bindings
+    /// rebuild mirrors `project_key_bindings`/`loaded_key_bindings` (bare params on
+    /// `spawn_scene_v2`) but can't join them as bare params without exceeding the limit.
+    /// See `planning/features/gamepad_hot_join.md`.
+    pub project_gamepad_bindings: Res<'w, ProjectGamepadBindings>,
+    pub loaded_gamepad_bindings: ResMut<'w, LoadedGamepadBindings>,
 }
 
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.

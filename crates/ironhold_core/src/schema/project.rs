@@ -197,6 +197,20 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub global_key_bindings: HashMap<String, String>,
 
+    /// Global gamepad button → event trigger mappings, applied regardless of which scene is
+    /// active. Button names use the same format as `InputMap`'s `gamepad_*` fields (e.g.
+    /// "South", "Start", "DPadUp" — see `InputMap::parse_gamepad_button`). The value is the
+    /// trigger name fired as `ui.button_pressed:<trigger>`. **Named `unclaimed` deliberately,
+    /// unlike `global_key_bindings` — this is NOT a general gamepad analogue of that field.** A
+    /// match only ever fires on a gamepad not currently bound to any live player's `InputMap.
+    /// gamepad_index` — an already-joined player's own button presses never reach this map, no
+    /// matter what trigger name is bound here. Intended for join-style triggers (a new player
+    /// pressing a button to enter the game) — see the "Local co-op hot join" docs. For an
+    /// already-joined player's own in-game gamepad actions, use that player's own `InputMap`
+    /// fields (`gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next`) instead.
+    #[serde(default)]
+    pub global_unclaimed_gamepad_bindings: HashMap<String, String>,
+
     /// Default base color applied to every `kind: "primitive"` prefab that does not
     /// specify its own `primitive.color`. Expressed as linear sRGB (r, g, b) in the
     /// 0.0–1.0 range. When absent, the engine falls back to a neutral grey (0.7, 0.7, 0.7).

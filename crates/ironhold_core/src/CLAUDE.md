@@ -465,7 +465,9 @@ remains is:
    `spawn_split_camera_for_player` (a thin wrapper factored out of `spawn_players_and_camera`'s
    `Grid` loop, adding just `SplitViewportSlot`/`Camera.order`), then increments
    `ActiveSplitSlotCount` by one. Scoped to `Grid`-split scenes only — see the doc comment on
-   `ActiveSplitSlotCount` below, which this site resolves.
+   `ActiveSplitSlotCount` below, which this site resolves. When triggered by a gamepad
+   (`gamepad_hot_join.md`), this site also overrides `player_config.inputs.gamepad_index` to the
+   pressing pad — see "Gamepad-triggered hot join" above.
 
 Because `PlayerIndex`, `PlayerTarget`, `StatMap` (when `stat_templates` is non-empty), stat
 widgets, and material override are now inserted in the shared post-dispatch code rather than
@@ -764,6 +766,30 @@ already has separate sticks). `gamepad_interact`/`gamepad_target_next` fold into
 boolean, so both work in local co-op, not just single-player — no gamepad path exists for camera
 *yaw* (right-stick-X already drives character turning), a permanent, deliberate keyboard/gamepad
 parity gap, not an oversight (see `docs/20_data_formats.md`).
+
+**Gamepad-triggered hot join** (`gamepad_hot_join.md`) adds a second, *global* gamepad-binding
+surface alongside the per-player `InputMap.gamepad_*` fields above — `ProjectGamepadBindings`/
+`LoadedGamepadBindings` (`runtime/scene_manager/mod.rs`), populated from
+`ProjectConfig.global_unclaimed_gamepad_bindings`/`GameSceneV2.scene_unclaimed_gamepad_bindings` at exactly the three
+sites `ProjectKeyBindings`/`LoadedKeyBindings` already use (two in `project_loader.rs`, one in
+`scene_loader.rs`), same per-key overlay semantics. `unclaimed_gamepad_trigger_system`
+(`runtime/input.rs`, `.before(message_interpreter_system)`) checks these bindings only against
+gamepads **not** already claimed by a live player's `InputMap.gamepad_index` or by an undrained
+`is_hot_join` entry in `PendingEntitySpawns` — on a `just_pressed` match (no separate "live
+signal" prefilter: a phantom/dead duplicate pad, see the troubleshooting note above, never
+produces that edge on anything) it emits the usual `UiEvent::ButtonPressed` **and** writes the
+matched gamepad's `Entity` into a new `PendingJoinGamepad(Option<Entity>)` resource — at most one
+pad captured per frame (deterministic: lowest `Entity::index()`-sorted), reset to `None`
+unconditionally at the top of every run so a non-join gamepad trigger (e.g. a pause button) can
+never leave a stale pad identity for a later frame's keyboard-triggered join to inherit.
+`Action::JoinPlayer`'s executor arm (site 5 in "Player-construction sites" below) `.take()`s this
+resource after resolving the joiner's `PlayerConfig` and, if set, overrides
+`player_config.inputs.gamepad_index` to that pad's sorted index — translated via the same
+sorted-by-`Entity::index()` convention `resolve_gamepad` uses — instead of whatever
+`join_prefab_keys` statically authored. A keyboard-triggered join sees the resource already `None`
+and is unaffected. This override does **not** disable the joiner's keyboard scheme — gamepad and
+keyboard inputs are read additively (`||`), never exclusively, everywhere in this file's gamepad
+routing above.
 
 **View-box clamp** — `GameSceneV2.max_view_box: Option<(f32, f32, f32, f32)>` (`min_x, min_z,
 max_x, max_z`) is read into the `ActiveViewBox` resource on scene load (cleared on `LoadScene`,
