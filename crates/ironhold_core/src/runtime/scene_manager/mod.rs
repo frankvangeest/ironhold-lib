@@ -192,6 +192,21 @@ pub struct DynamicSplitConfig(pub Option<crate::schema::player::DynamicSplitDef>
 #[derive(Resource, Default)]
 pub struct ActiveSplitSlotCount(pub Option<u32>);
 
+/// Whether target-indicator rings are visible in every split viewport (today's default) or only
+/// in their owning player's own viewport, resolved from the first player's
+/// `CameraConfig.split.own_viewport_only`. Populated by `spawn_players_and_camera` alongside
+/// `ActiveSplitScreen`, for every scene (including single-player/party-only, so
+/// `target_indicator_system` never hits a missing-resource panic); cleared to `AllViewports` on
+/// full `LoadScene`. Read by `target_indicator_system` to decide whether a newly-spawned ring
+/// gets a `RenderLayers` restriction, and by `spawn_players_and_camera`'s two split-camera spawn
+/// loops plus `spawn_party_orbit_camera` to decide the matching camera-side `RenderLayers`.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TargetRingVisibilityMode {
+    #[default]
+    AllViewports,
+    OwnViewportOnly,
+}
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,

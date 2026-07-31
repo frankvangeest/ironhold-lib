@@ -1,6 +1,6 @@
 # Feature: Per-Viewport-Only Target Ring Visibility
 
-_Status: Ready_
+_Status: Done (shipped 2026-07-31)_
 _Planned at: `af55a1b` (2026-07-19)_
 
 **Plan-review note (2026-07-19):** All three reviewers (system-architect, ux-gamedesigner-reviewer,
@@ -107,42 +107,42 @@ default (harmless, and still meaningful for a spectator/co-located view), but th
 most likely "why isn't my ring color working" question this feature will generate if undocumented.
 
 ## Tasks
-- [ ] `SplitScreenDef.own_viewport_only: bool` (schema/player.rs, `#[serde(default)]`)
-- [ ] `TargetRingVisibilityMode` resource; `init_resource`'d at app startup (default
+- [x] `SplitScreenDef.own_viewport_only: bool` (schema/player.rs, `#[serde(default)]`)
+- [x] `TargetRingVisibilityMode` resource; `init_resource`'d at app startup (default
       `AllViewports`), overwritten at both `spawn_players_and_camera` call sites alongside
       `ActiveSplitScreen`/`DynamicSplitConfig`
-- [ ] `entity_spawner.rs`: insert `RenderLayers::layer(0).with(1 + config.player_index %
+- [x] `entity_spawner.rs`: insert `RenderLayers::layer(0).with(1 + config.player_index %
       MAX_SPLIT_PLAYERS)` on each split `OrbitCamera` in **both** spawn loops (`:665-675` dynamic,
       `:706-721` static), keyed on `config.player_index` — only when `split.own_viewport_only` is
       true, read directly from the in-scope `split: &SplitScreenDef`, not the resource
-- [ ] `entity_spawner.rs`'s `spawn_party_orbit_camera` helper: insert `RenderLayers::from_layers(&[0,
+- [x] `entity_spawner.rs`'s `spawn_party_orbit_camera` helper: insert `RenderLayers::from_layers(&[0,
       1, 2, 3, 4])` on the party camera when `own_viewport_only` is true (the corrected union, not
       "no component")
-- [ ] `target_indicator_system`: insert `RenderLayers::layer(1 + owner_player_index %
+- [x] `target_indicator_system`: insert `RenderLayers::layer(1 + owner_player_index %
       MAX_SPLIT_PLAYERS)` on the ring entity only when `TargetRingVisibilityMode == OwnViewportOnly`
       — reuses the `player_index` lookup already present at this spawn site for color tinting
-- [ ] Explicit `use bevy::camera::visibility::RenderLayers` import at both call sites (not in
+- [x] Explicit `use bevy::camera::visibility::RenderLayers` import at both call sites (not in
       `bevy::prelude`, and both files currently glob-import the prelude)
-- [ ] Tests — regression: a scene with no `own_viewport_only` authored (every existing project)
+- [x] Tests — regression: a scene with no `own_viewport_only` authored (every existing project)
       spawns zero `RenderLayers` components anywhere, byte-for-byte unchanged; new: in
       `own_viewport_only: true` mode, player 0's ring carries only layer 1, player 0's camera
       carries `{0,1}`, player 1's camera carries `{0,2}` (no intersection with player 0's ring);
       new: the party/merged camera carries the full `{0,1,2,3,4}` union and therefore intersects
       every ring's layer — corrected from the original (wrong) "no component" expectation
-- [ ] Verify in a browser (`python test_web.py` and/or manual playtest on the WebGL2 build) that
+- [x] Verify in a browser (`python test_web.py` and/or manual playtest on the WebGL2 build) that
       per-viewport ring visibility actually renders as expected — `RenderLayers` behaves identically
       on WebGL2/WebGPU per this session's review, but this is the feature's first real-render check
-- [ ] Docs — `docs/20_data_formats.md`: `SplitScreenDef.own_viewport_only` field (observable
+- [x] Docs — `docs/20_data_formats.md`: `SplitScreenDef.own_viewport_only` field (observable
       behavior only — own-viewport vs. all-viewports — no layer-index internals); a cross-reference
       from the `target_indicator:` doc section to this field, since a designer tuning ring
       appearance in one block won't naturally discover a visibility toggle living in `camera.split`;
       the tint-does-not-revert-to-per-target-color note (see Approach) as its own explicit bullet
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`: the reserved-layer-index scheme (1-4 this
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`: the reserved-layer-index scheme (1-4 this
       feature, 31 inspector/feature-gated), the party-camera-union rationale, and a note that
       `pipeline_warmup_system`'s `NoFrustumCulling` pass does not override `RenderLayers` (benign
       here since rings reuse an already-warm material, but a future `RenderLayers` consumer should
       know this)
-- [ ] Demo — add a **new**, live-authored `local_coop_demo` scene (a sibling copy of `room3`, the
+- [x] Demo — add a **new**, live-authored `local_coop_demo` scene (a sibling copy of `room3`, the
       existing per-player-targeting playtest room, with `own_viewport_only: true` set on the first
       player's `camera.split` block) rather than mutating `room3` in place (which demonstrates the
       *default* all-viewports behavior and should keep doing so) or using a commented-out field
@@ -165,3 +165,59 @@ None outstanding.
   `own_viewport_only` — the restriction only applies while actually split into separate viewports.
 - Given `own_viewport_only: true`, when a ring renders, then it is still tinted by
   `PLAYER_LABEL_COLORS` (not per-target `indicator_color`) — documented, not a bug.
+
+## Amendment (2026-07-31, post-implementation review findings)
+
+All 5 post-implementation reviews (alignment, system-architect, debug-detective, ux-gamedesigner,
+wasm-perf) ran in parallel. wasm-perf came back clean, confirming the plan's "zero per-frame cost"
+claim against the actual implementation. The other 4 converged on the same root risk — the
+`1 + player_index % MAX_SPLIT_PLAYERS` layer arithmetic was hand-duplicated at 4 call sites with a
+hardcoded party-union literal — plus two independently-found reachable bugs and a real demo UX gap:
+
+- **Extracted `ring_layer_for_player()`/`all_ring_layers()` helpers** (`capabilities/camera.rs`),
+  the sole owners of the reserved-layer scheme; all 4 insertion sites now call one of the two
+  instead of re-deriving the arithmetic, so raising `MAX_SPLIT_PLAYERS` can never desync one site
+  from another (alignment-reviewer, system-architect, debug-detective, wasm-perf-reviewer all
+  independently flagged this).
+- **Fixed a silent correctness gap**: two players whose `player_index` collides under
+  `% MAX_SPLIT_PLAYERS` (a duplicate value, or any index ≥ `MAX_SPLIT_PLAYERS`) previously defeated
+  `own_viewport_only` for that pair with zero feedback — worse than `PLAYER_LABEL_COLORS`' own
+  harmless modulo-collision precedent, since this breaks a stated guarantee rather than just
+  duplicating a cosmetic tint. Now warned at scene load (alignment-reviewer + debug-detective).
+- **Fixed a second silent gap**: a non-hot-join `Action::Spawn` of a `tags: ["player"]` prefab into
+  an `own_viewport_only` scene got a camera with no ring-visibility layer at all — that player
+  would see zero rings, not even their own. Now warned (alignment-reviewer + debug-detective).
+- **Added the one untested path**: hot-join × `own_viewport_only` — the only combination that
+  resolves the flag from `Res<TargetRingVisibilityMode>` instead of an in-scope `SplitScreenDef` —
+  plus a `Grid`-orientation camera-layer test (previously only `Vertical` was covered, the only
+  orientation where more than 2 cameras get layers) (system-architect + debug-detective).
+- **Corrected 2 doc inaccuracies**: `CLAUDE.md`'s "keyed on player_index, not spawn order, e.g.
+  after hot-join" was backwards — hot-join can't diverge (`Action::JoinPlayer` sets both to the
+  same `next_slot`); the real divergence case is a scene authoring player entities out of
+  `player_index` order. `docs/20_data_formats.md`'s "party-only scene ... field is inert" was
+  unreachable as written (`own_viewport_only` lives under `split:`, which a party-only scene has
+  none of) — corrected to describe the actual reachable case (a `split:` block authored with fewer
+  than 2 players). Also added the `dynamic`-merged-state doc gap (rings reappear when the view
+  merges — an acceptance criterion that was untested-for in the doc itself) and a light/shadow
+  `RenderLayers` invariant note (debug-detective, system-architect).
+- **Fixed real demo UX gaps** (ux-gamedesigner-reviewer, 2 flagged as blockers): room8's on-screen
+  hint never mentioned the new room9 portal — unreachable by anyone not reading RON; room9's two
+  longest hint lines (97/108 chars) exceeded this project's known-good ~59-char budget, risking
+  clipping on exactly the tint-gotcha message; room9's action bar had silently dropped
+  `gamepad_key: "RightTrigger"` while the cloned player prefabs still set `gamepad_index` — a real
+  controller-parity regression vs. room3, now fixed.
+- **Logged, not fixed** (non-blocking): a field-rename suggestion (`own_viewport_only` →
+  `target_ring_own_viewport_only` — re-litigates an already plan-approved naming decision, skipped);
+  the demo's tint gotcha isn't independently demonstrable (`click_target_test` authors no
+  `indicator_color` to override); `SplitScreenDef`/`DynamicSplitDef`/`PartyZoomDef` still lack
+  `Default`; 3 branches of `spawn_players_and_camera` silently no-op `own_viewport_only` (matches
+  the plan's own "nice-to-have, not required for v1" framing); a 3+-player `Vertical`/`Horizontal`
+  degenerate edge case; deeper exact-layer-set test assertions. See `planning/claude_suggestions.md`
+  and `planning/backlog.md`'s "Camera/input configuration → scene layer" entry.
+- **Real-hardware playtest** (Frank) confirmed both acceptance criteria in the browser (room9
+  reachable, per-viewport ring isolation, room3 regression-free, gamepad ability firing). One
+  playtest observation (damage always appearing to land on "the same fixed" target) was
+  investigated and confirmed NOT a targeting bug — `action_bar_input_system` resolves `{target}`
+  per-player via `PlayerTarget`, unchanged by this feature — but a pre-existing demo gap
+  (`click_target_test` has no persistent health indicator, inherited unchanged from room3), logged
+  to `claude_suggestions.md`.

@@ -467,6 +467,14 @@ both players select the same entity, both rings render, coincident, each in its 
 colour — there is no deduplication. **Single-player scenes are completely unaffected** — the ring
 keeps the usual prefab/category/scene colour precedence exactly as documented above.
 
+> **Restricting a ring to its owner's viewport only.** By default the tinted ring above is still
+> visible in *every* split viewport, not just its owner's — a P2 ring shows up in P1's half of the
+> screen too. To instead make each player's ring visible only in their own viewport, set
+> `SplitScreenDef.own_viewport_only: true` on the first player's `camera.split` block — see
+> [Per-viewport target ring visibility](#per-viewport-target-ring-visibility-own_viewport_only)
+> under [Split-screen camera](#split-screen-camera-splitscreendef-) below. This only changes
+> *where* a ring renders — it does not change or replace the tinting described above.
+
 **The legacy `target_display`/`target_name`/`target_id` `GameVariables` (see "GameVariables
 auto-written by capabilities" below) go blank whenever 2+ players are present** — the same
 player-count check as the ring tinting above, **including party mode** — rather than showing only
@@ -1802,7 +1810,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `dialogue` | `Option<String>` | Project-relative path to a `.dialogue.ron` conversation file. When combined with `interactable`, pressing the interact key auto-fires `StartDialogue`. See [`dialogues/*.dialogue.ron`](#dialoguesnamedialogueron--dialoguedef-). |
 | `display_name` | `Option<String>` | `None` | Human-readable name shown in the nameplate widget above this entity. Falls back to the prefab catalog key (e.g. `"enemy_orc_melee"`) when absent. Only meaningful when the nameplate system is active. |
 | `nameplate` | `Option<bool>` | `None` | Per-prefab nameplate visibility override. `true` = always show (bypasses scene faction filter; still respects `max_distance`). `false` = never show, even when the scene has `show_nameplates`/`show_player_nameplate: true`. Absent = inherit from the scene default — `show_nameplates` + `faction_filter` for NPCs/props, or `show_player_nameplate` for the player prefab (whichever the entity is). |
-| `player_index` | `u32` | `0` | **Local co-op only.** Which player slot this prefab controls (P1 = `0`, P2 = `1`, ...) when a scene has 2+ entities tagged `"player"`. Meaningless for single-player scenes. Forwarded onto the spawned entity as a queryable `PlayerIndex` component, read by: the split-screen "P{n}" corner HUD label; per-player targeting (which player is "primary" — see the Targeting section); and `ActionBar((owner_player: n))`, which matches a bar's slots to whichever player entity carries this value (see `ActionBar`'s "Per-player action bars" subsection). Always assign a unique index per player — a duplicate `player_index: 0` (or omitting it on 2+ players) makes them fight over "primary" status; a runtime `warn!` fires if this happens. |
+| `player_index` | `u32` | `0` | **Local co-op only.** Which player slot this prefab controls (P1 = `0`, P2 = `1`, ...) when a scene has 2+ entities tagged `"player"`. Meaningless for single-player scenes. Forwarded onto the spawned entity as a queryable `PlayerIndex` component, read by: the split-screen "P{n}" corner HUD label; per-player targeting (which player is "primary" — see the Targeting section); `ActionBar((owner_player: n))`, which matches a bar's slots to whichever player entity carries this value (see `ActionBar`'s "Per-player action bars" subsection); and `SplitScreenDef.own_viewport_only`'s ring/camera layer assignment (keys on `player_index % 4` — see [Per-viewport target ring visibility](#per-viewport-target-ring-visibility-own_viewport_only)). Always assign a unique index in `0..4` per player — a duplicate `player_index: 0` (or omitting it on 2+ players) makes them fight over "primary" status, and a runtime `warn!` fires if this happens; a duplicate or out-of-range value under `own_viewport_only` is separately warned about too. |
 
 ### Special tag: `"flycam"` ✅
 
@@ -2149,6 +2157,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 |-------|------|---------|-------------|
 | `orientation` | `SplitOrientation` | `Vertical` | **Dual meaning, depending on `dynamic`.** When `dynamic` is **unset**, this is the fixed split axis used for the whole scene (`Vertical`/`Horizontal`/`Grid`). When `dynamic` **is** set (`Vertical`/`Horizontal` only — `dynamic` does not support `Grid`), the live split axis is instead chosen automatically every time the view splits, from the players' actual relative position — `orientation` becomes only a rare tie-break hint, used on the exact frame the two players are equally separated on both axes. Optional either way — omit it to get `Vertical`. |
 | `dynamic` | `Option<DynamicSplitDef>` | `None` | When set, the view starts **merged** into one shared camera (like `party`) and automatically switches to a two-camera split once the players separate far enough, merging back when they come close again. See [Dynamic split-screen](#dynamic-split-screen-dynamicsplitdef-) below. |
+| `own_viewport_only` | `bool` | `false` | When `true`, each player's target-indicator ring (see [Target indicator](#target-indicator-targetindicatordef) above) is visible only in **that player's own** split viewport, instead of every ring being visible in every viewport (today's default). See [Per-viewport target ring visibility](#per-viewport-target-ring-visibility-own_viewport_only) below. |
 
 **`SplitOrientation` variants:**
 - `Vertical` — the window is split down the middle into a left half and a right half, one player per half. Always exactly 2-way.
@@ -2225,6 +2234,86 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 ```
 
 A full working example lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron` (`player_p1_split`/`player_p2_split`) and `scenes/room3.scene.ron`.
+
+#### Per-viewport target ring visibility (`own_viewport_only`)
+
+By default (`own_viewport_only: false`, the implicit default when the field is omitted), every
+split-screen player's target-indicator ring is visible in **every** player's viewport — a P2 ring
+still shows up in P1's half of the screen and vice versa. Each ring is still tinted per-owner via
+`PLAYER_LABEL_COLORS` whenever 2+ players are present (see [Per-player split-screen
+targeting](#per-player-split-screen-targeting) above), so whose ring is whose is still visually
+distinguishable — `own_viewport_only` is a separate, additional restriction on top of that tinting,
+not a replacement for it.
+
+Setting `own_viewport_only: true` on the **first** player's `camera.split` block (same
+first-player-only convention as `orientation`/`dynamic` above) changes this: each player's ring
+becomes visible only in their own viewport. Applies to `Vertical`/`Horizontal`/`Grid`/`dynamic`
+split — anything with real per-player cameras. Since the field lives under `split:`, a genuinely
+`party`-only scene has no `split:` block to author it on at all. The reachable inert case is a
+scene that authors a `split:` block (with `own_viewport_only: true`) but ends up with fewer than 2
+`"player"`-tagged entities at load — the same copy-pasted-split-block trap as any other `split:`
+field: it's simply never read, no warning is logged, and this is a documented no-op, not a bug.
+
+> **With `dynamic` split, the restriction only applies while the view is actually split.** In the
+> merged state (one shared camera, players close together) every player's ring is visible in that
+> single shared view again — there are no separate viewports left to restrict them to. Expect rings
+> to appear and disappear as the view merges and splits; this is correct, not a bug.
+
+> **This does not change ring colour/tint.** `own_viewport_only` only restricts *where* a ring
+> renders. The `PLAYER_LABEL_COLORS` tinting described in [Per-player split-screen
+> targeting](#per-player-split-screen-targeting) above (whenever 2+ players are present) and the
+> single-player `indicator_color`/`indicator_category`/scene `color` precedence are completely
+> unaffected either way. If you want each player to *only* see their own ring, set this field; if
+> you want rings to stay visually distinguishable across viewports, that tinting already happens
+> automatically once 2+ players are present — no extra field needed for that part.
+
+> **Give every player a unique `player_index` (0 through 3).** Ring/camera visibility is keyed on
+> `player_index % 4` — two players whose index collides under that modulo (a duplicate value, or
+> any index of 4 or higher) end up sharing a reserved viewport, silently defeating this field for
+> that pair (a scene-load warning is logged if this happens). `own_viewport_only: true` combined
+> with a non-hot-join `Action::Spawn` of a new `"player"`-tagged prefab is also warned rather than
+> silently mishandled: that spawn path's camera never restricts its own viewport, so the new player
+> would otherwise see no rings at all, not even their own.
+
+**Example** — same two-player vertical split as above, with rings restricted to each player's own viewport:
+
+```ron
+// prefabs/prefabs.ron
+"player_p1_split_ring": (
+  kind: Actor,
+  model: "character_male",
+  display_name: "Player 1",
+  player_index: 0,
+  components: (
+    tags: ["player"],
+    camera: (
+      offset:         (0.0, 4.5, 9.0),
+      look_at_offset: (0.0, 1.2, 0.0),
+      zoom_speed:     0.0,
+      orbit_speed:    0.4,
+      min_radius:     4.5,
+      max_radius:     9.0,
+      orbit_button:   "None",
+      split: (
+        orientation: Vertical,
+        own_viewport_only: true,  // P1 no longer sees P2's ring, and vice versa
+      ),
+    ),
+    inputs: (
+      forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      strafe_mouse_button: None,
+    ),
+  ),
+),
+
+// player_p2_split_ring — no `split` here (only the first player's is read for the switch);
+// its ring visibility follows the first player's `own_viewport_only` automatically.
+"player_p2_split_ring": ( /* identical shape to player_p2_split above */ ),
+```
+
+A full working example lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron`
+(`player_p1_split_ring`/`player_p2_split_ring`) and `scenes/room9.scene.ron`.
 
 ### Dynamic split-screen (`DynamicSplitDef`) ✅
 

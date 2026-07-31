@@ -333,6 +333,7 @@ pub fn drain_spawn_queue_system(
     active_tonemapping: Res<super::ActiveTonemapping>,
     nameplate_config: Res<crate::capabilities::nameplate::NameplateSceneConfig>,
     mut active_split_slot_count: ResMut<super::ActiveSplitSlotCount>,
+    ring_visibility: Res<super::TargetRingVisibilityMode>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -364,6 +365,7 @@ pub fn drain_spawn_queue_system(
                 let slot = player_config.player_index;
                 spawn_split_camera_for_player(
                     &mut commands, active_tonemapping.0, &player_config, player_entity, slot,
+                    *ring_visibility == super::TargetRingVisibilityMode::OwnViewportOnly,
                 );
                 active_split_slot_count.0 = Some(active_split_slot_count.0.unwrap_or(0) + 1);
                 info!(
@@ -371,6 +373,24 @@ pub fn drain_spawn_queue_system(
                     slot, active_split_slot_count.0.unwrap()
                 );
                 continue;
+            }
+            // This path spawns its own dedicated full-window `OrbitCamera` (see
+            // `spawn_player_entity`/`spawn_orbit_camera_for_player`), never a split-tagged one, so
+            // it never carries a ring-visibility `RenderLayers`. In an `own_viewport_only` scene
+            // that camera's implicit layer 0 doesn't intersect ANY ring's reserved layer — this
+            // player would see zero rings, not even their own. Already an odd combination (a
+            // dynamically-spawned full-window camera alongside an existing split layout), so warn
+            // rather than silently plumbing a new per-player layer into a camera that doesn't
+            // participate in the split layout at all.
+            if *ring_visibility == super::TargetRingVisibilityMode::OwnViewportOnly {
+                warn!(
+                    "Action::Spawn spawned a `tags: [\"player\"]` prefab into a scene with \
+                     `split.own_viewport_only: true`, but this spawn path gets its own \
+                     full-window OrbitCamera with no ring-visibility layer — this player will see \
+                     NO target rings at all (not even their own) until the scene reloads. Use \
+                     hot-join (`Action::JoinPlayer`) to add players into an own_viewport_only \
+                     split scene instead."
+                );
             }
             spawn_player_entity(
                 &mut commands,
@@ -621,6 +641,7 @@ pub(crate) fn spawn_players_and_camera(
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
+        commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
         spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
         return;
     }
@@ -645,6 +666,35 @@ pub(crate) fn spawn_players_and_camera(
                  Grid` (dynamic picks its own axis) to silence this warning."
             );
         }
+
+        // `own_viewport_only` keys each player's reserved ring/camera layer on
+        // `player_index % MAX_SPLIT_PLAYERS` (see `capabilities::camera::ring_layer_for_player`).
+        // Two players whose `player_index` collides under that modulo (an out-of-range index like
+        // 4, or a plain duplicate like two players both authoring `player_index: 1`) silently
+        // defeats the whole feature — both players end up on the same reserved layer, so each
+        // sees the other's ring exactly as if `own_viewport_only` were `false`. Unlike
+        // `PLAYER_LABEL_COLORS`' own harmless modulo-collision precedent (a cosmetic duplicate
+        // tint), this collision breaks a stated visibility guarantee with no cosmetic cue at all.
+        if s.own_viewport_only {
+            let mut seen_layers: HashMap<usize, u32> = HashMap::new();
+            for pc in player_configs {
+                let layer = crate::capabilities::camera::ring_layer_for_player(pc.player_index);
+                if let Some(&other_index) = seen_layers.get(&layer) {
+                    warn!(
+                        "Scene has `split.own_viewport_only: true`, but players with player_index \
+                         {} and {} both resolve to reserved layer {} (player_index % {} \
+                         collides) — their rings/cameras will be indistinguishable from \
+                         `own_viewport_only: false` for this pair; each will still see the \
+                         other's ring. Give every player a unique player_index in \
+                         0..{} to fix.",
+                        other_index, pc.player_index, layer,
+                        crate::capabilities::camera::MAX_SPLIT_PLAYERS,
+                        crate::capabilities::camera::MAX_SPLIT_PLAYERS,
+                    );
+                }
+                seen_layers.insert(layer, pc.player_index);
+            }
+        }
     }
 
     if let Some(dynamic) = split.and_then(|s| s.dynamic.as_ref()) {
@@ -665,6 +715,7 @@ pub(crate) fn spawn_players_and_camera(
             );
             (dynamic.split_distance, dynamic.split_distance - 0.01)
         };
+        let own_viewport_only = split.is_some_and(|s| s.own_viewport_only);
         let party_cam = crate::capabilities::camera::spawn_party_orbit_camera(
             commands, tonemapping, &first.camera,
             &crate::schema::player::PartyZoomDef {
@@ -672,6 +723,7 @@ pub(crate) fn spawn_players_and_camera(
                 allow_manual_zoom: dynamic.merged_allow_manual_zoom,
             },
             &entities,
+            own_viewport_only,
         );
         let p0 = Vec3::from(player_configs[0].initial_position);
         let p1 = Vec3::from(player_configs[1].initial_position);
@@ -702,6 +754,11 @@ pub(crate) fn spawn_players_and_camera(
         // Dynamic split is always a 2-way merge/split (Grid's N-way layout is static-only —
         // see the feature plan's "not in scope" list), so the slot count is never Grid-driven.
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
+        commands.insert_resource(if own_viewport_only {
+            crate::runtime::scene_manager::TargetRingVisibilityMode::OwnViewportOnly
+        } else {
+            crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports
+        });
         for (i, (config, entity)) in player_configs.iter().zip(entities.iter()).enumerate().take(2) {
             let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, config, *entity);
             commands.entity(camera_entity).insert((
@@ -712,12 +769,23 @@ pub(crate) fn spawn_players_and_camera(
                     ..default()
                 },
             ));
+            if own_viewport_only {
+                let layer = crate::capabilities::camera::ring_layer_for_player(config.player_index);
+                commands.entity(camera_entity).insert(
+                    bevy::camera::visibility::RenderLayers::layer(0).with(layer),
+                );
+            }
         }
     } else if let Some(split) = split {
         commands.insert_resource(
             crate::runtime::scene_manager::ActiveSplitScreen(Some(split.orientation)),
         );
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
+        commands.insert_resource(if split.own_viewport_only {
+            crate::runtime::scene_manager::TargetRingVisibilityMode::OwnViewportOnly
+        } else {
+            crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports
+        });
         // `Vertical`/`Horizontal` stay strictly 2-way (Stages 3-5's original behavior, unchanged);
         // only `Grid` (Stage 6) unlocks N-way, capped at `MAX_SPLIT_PLAYERS` to bound render-pass
         // count and avoid degenerate slivers on a misconfigured scene.
@@ -746,19 +814,23 @@ pub(crate) fn spawn_players_and_camera(
         for (i, (config, entity)) in player_configs.iter().zip(entities.iter())
             .enumerate().take(slot_count as usize)
         {
-            spawn_split_camera_for_player(commands, tonemapping, config, *entity, i as u32);
+            spawn_split_camera_for_player(
+                commands, tonemapping, config, *entity, i as u32, split.own_viewport_only,
+            );
         }
     } else if let Some(party) = party {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
+        commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
         crate::capabilities::camera::spawn_party_orbit_camera(
-            commands, tonemapping, &first.camera, party, &entities,
+            commands, tonemapping, &first.camera, party, &entities, false,
         );
     } else {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
+        commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
         warn!(
             "Scene has {} players but no `party` or `split` camera block on the first player's \
              `camera` config — falling back to a single OrbitCamera targeting only the first \
@@ -1012,12 +1084,21 @@ fn spawn_player_entity_core(
 /// the multi-player spawn logic this feature factors out; nothing else about
 /// `spawn_players_and_camera`'s collection/dispatch changes. See
 /// `planning/features/local_coop_hot_join_leave.md`.
+///
+/// `own_viewport_only` (resolved by each caller from `TargetRingVisibilityMode` — the hot-join
+/// caller reads the resource instead of an in-scope `SplitScreenDef` since `drain_spawn_queue_system`
+/// has no scene config in scope at all, not because of any frame-ordering concern; the resource
+/// write and the hot-joined player's own spawn both land in the same command buffer regardless)
+/// inserts a `RenderLayers` restricting this camera to layer 0 (ordinary scene geometry) plus this
+/// player's own reserved ring layer, keyed on `player_config.player_index` (not `slot`, which can
+/// diverge) — see `planning/features/per_viewport_target_ring_visibility.md`.
 pub(crate) fn spawn_split_camera_for_player(
     commands: &mut Commands,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     player_config: &PlayerConfig,
     player_entity: Entity,
     slot: u32,
+    own_viewport_only: bool,
 ) -> Entity {
     let camera_entity = spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
     // All split cameras render to the same window at Camera's default order (0), which Bevy's
@@ -1031,6 +1112,12 @@ pub(crate) fn spawn_split_camera_for_player(
             ..default()
         },
     ));
+    if own_viewport_only {
+        let layer = crate::capabilities::camera::ring_layer_for_player(player_config.player_index);
+        commands.entity(camera_entity).insert(
+            bevy::camera::visibility::RenderLayers::layer(0).with(layer),
+        );
+    }
     camera_entity
 }
 

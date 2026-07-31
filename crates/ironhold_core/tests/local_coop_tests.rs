@@ -5,7 +5,8 @@ use bevy::math::Mat4;
 use bevy_rapier3d::prelude::{Velocity, CollisionEvent};
 use bevy_rapier3d::rapier::geometry::CollisionEventFlags;
 use bevy::window::PrimaryWindow;
-use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry, ActionQueue, UiEvent};
+use ironhold_core::runtime::{SceneHandleV2, LoadedAssetCatalog, LoadedPrefabCatalog, ActiveViewBox, ActiveSplitScreen, DynamicSplitConfig, ActiveSplitSlotCount, GameEvent, SpawnRegistry, ActionQueue, UiEvent, TargetRingVisibilityMode};
+use bevy::camera::visibility::RenderLayers;
 use ironhold_core::runtime::scene_manager::{
     WorldLabel, WorldLabelRank, SpawnId,
     LoadedGamepadBindings, PendingJoinGamepad, PendingEntitySpawns, QueuedSpawn,
@@ -602,7 +603,7 @@ fn test_split_and_party_both_set_split_wins() {
     two_player_catalogs_with_split(
         &mut app,
         Some(PartyZoomDef { zoom_margin: 4.0, allow_manual_zoom: false }),
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     load_two_player_scene(&mut app);
 
@@ -626,7 +627,7 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     two_player_catalogs_with_split(
         &mut app,
         None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     load_two_player_scene(&mut app);
 
@@ -637,6 +638,203 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     let mut sorted = slots.clone();
     sorted.sort();
     assert_eq!(sorted, vec![0, 1], "expected exactly one slot 0 and one slot 1, got {:?}", slots);
+}
+
+// ── per_viewport_target_ring_visibility.md: RenderLayers on split cameras ───────
+
+#[test]
+fn test_own_viewport_only_false_is_the_default_and_spawns_no_render_layers_anywhere() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
+    );
+    load_two_player_scene(&mut app);
+
+    assert_eq!(
+        *app.world().resource::<TargetRingVisibilityMode>(), TargetRingVisibilityMode::AllViewports,
+        "every existing project has no own_viewport_only authored — the resource must default to AllViewports"
+    );
+    let render_layers_count = app.world_mut().query::<&RenderLayers>().iter(app.world()).count();
+    assert_eq!(
+        render_layers_count, 0,
+        "regression: with own_viewport_only unset (today's behavior for every existing scene), \
+         zero RenderLayers components must exist anywhere — this feature must be a zero-footprint \
+         opt-in"
+    );
+}
+
+#[test]
+fn test_static_split_own_viewport_only_gives_each_camera_its_own_layer_plus_shared_layer_0() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: true }),
+    );
+    load_two_player_scene(&mut app);
+
+    assert_eq!(*app.world().resource::<TargetRingVisibilityMode>(), TargetRingVisibilityMode::OwnViewportOnly);
+
+    let layers_by_slot: std::collections::HashMap<u32, RenderLayers> = {
+        let mut query = app.world_mut().query::<(&SplitViewportSlot, &RenderLayers)>();
+        query.iter(app.world()).map(|(s, l)| (s.0, l.clone())).collect()
+    };
+    assert_eq!(layers_by_slot.len(), 2, "both split cameras must carry a RenderLayers component");
+
+    // test_player_1 (slot 0) has player_index: 0 -> reserved layer 1; test_player_2 (slot 1) has
+    // player_index: 1 -> reserved layer 2. Both also keep layer 0 (ordinary scene geometry).
+    let cam0 = &layers_by_slot[&0];
+    assert!(cam0.intersects(&RenderLayers::layer(0)), "player 0's camera must still see ordinary scene geometry (layer 0)");
+    assert!(cam0.intersects(&RenderLayers::layer(1)), "player 0's camera must see its own ring layer (1)");
+    assert!(!cam0.intersects(&RenderLayers::layer(2)), "player 0's camera must NOT see player 1's ring layer (2)");
+
+    let cam1 = &layers_by_slot[&1];
+    assert!(cam1.intersects(&RenderLayers::layer(0)), "player 1's camera must still see ordinary scene geometry (layer 0)");
+    assert!(cam1.intersects(&RenderLayers::layer(2)), "player 1's camera must see its own ring layer (2)");
+    assert!(!cam1.intersects(&RenderLayers::layer(1)), "player 1's camera must NOT see player 0's ring layer (1)");
+}
+
+#[test]
+fn test_static_split_own_viewport_only_keys_camera_layer_on_player_index_not_spawn_order() {
+    // Deliberately reversed: the scene's first entity (spawn-order index 0) uses the prefab with
+    // player_index: 1, and the second (spawn-order index 1) uses player_index: 0 — proving the
+    // reserved layer is keyed on `PlayerConfig.player_index`, not the spawn loop's `i`, which can
+    // diverge from it (see the feature plan's plan-review note).
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    let mut p1_camera = base_camera_config();
+    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: true });
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_reversed_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor, model: "char_a".to_string(), player_index: 1,
+                components: PrefabComponents { tags: vec!["player".to_string()], camera: Some(p1_camera), ..Default::default() },
+                ..Default::default()
+            }),
+            ("test_player_reversed_0".to_string(), PrefabDef {
+                kind: PrefabKind::Actor, model: "char_b".to_string(), player_index: 0,
+                components: PrefabComponents { tags: vec!["player".to_string()], ..Default::default() },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "first_spawned", prefab: "test_player_reversed_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "second_spawned", prefab: "test_player_reversed_0", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let layers_by_slot: std::collections::HashMap<u32, RenderLayers> = {
+        let mut query = app.world_mut().query::<(&SplitViewportSlot, &RenderLayers)>();
+        query.iter(app.world()).map(|(s, l)| (s.0, l.clone())).collect()
+    };
+    // Slot 0 is the first-spawned entity, whose prefab has player_index: 1 -> reserved layer 2,
+    // NOT layer 1 (which a spawn-order-keyed bug would have wrongly assigned).
+    assert!(layers_by_slot[&0].intersects(&RenderLayers::layer(2)), "slot 0's camera belongs to player_index 1 and must carry layer 2");
+    assert!(!layers_by_slot[&0].intersects(&RenderLayers::layer(1)), "slot 0's camera must NOT carry layer 1 just because it spawned first");
+    // Slot 1 is the second-spawned entity, whose prefab has player_index: 0 -> reserved layer 1.
+    assert!(layers_by_slot[&1].intersects(&RenderLayers::layer(1)), "slot 1's camera belongs to player_index 0 and must carry layer 1");
+    assert!(!layers_by_slot[&1].intersects(&RenderLayers::layer(2)), "slot 1's camera must NOT carry layer 2 just because it spawned second");
+}
+
+#[test]
+fn test_dynamic_split_own_viewport_only_gives_party_camera_the_full_layer_union() {
+    let mut app = setup_test_app();
+    app.update();
+    two_player_catalogs_with_split(
+        &mut app,
+        None,
+        Some(SplitScreenDef {
+            orientation: SplitOrientation::Vertical,
+            dynamic: Some(DynamicSplitDef { split_distance: 5.0, merge_distance: 3.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+            own_viewport_only: true,
+        }),
+    );
+    load_two_player_scene(&mut app); // players are 8.0 apart (-4,0,0)/(4,0,0) -> starts split
+
+    let split_layers: Vec<RenderLayers> = {
+        let mut q = app.world_mut().query_filtered::<&RenderLayers, With<SplitViewportSlot>>();
+        q.iter(app.world()).cloned().collect()
+    };
+    assert_eq!(split_layers.len(), 2, "both split cameras must carry a RenderLayers component");
+
+    let party_layers = {
+        let mut q = app.world_mut().query_filtered::<&RenderLayers, With<PartyOrbitCamera>>();
+        q.iter(app.world()).next().cloned()
+    };
+    let party_layers = party_layers.expect(
+        "the shared party/merged camera must ALSO carry a RenderLayers component — a componentless \
+         party camera (implicit layer 0 only) would render zero rings once any ring restricts \
+         itself to a non-zero layer, breaking the 'merged view shows all rings' guarantee"
+    );
+    for layer in 0..=4 {
+        assert!(
+            party_layers.intersects(&RenderLayers::layer(layer)),
+            "party camera must carry the full union {{0,1,2,3,4}} (layer 0 plus every reserved \
+             ring layer) so it still sees every player's ring while merged; missing layer {layer}"
+        );
+    }
+}
+
+#[test]
+fn test_grid_split_own_viewport_only_gives_each_of_four_cameras_its_own_reserved_layer() {
+    // Only the Vertical tests above cover own_viewport_only's camera-layer assignment — Grid is
+    // the only orientation where more than 2 cameras get layers, and the only place a
+    // `% MAX_SPLIT_PLAYERS` slip would actually show up (debug-detective/system-architect finding).
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: true }),
+    );
+    load_n_player_scene(&mut app, MAX_SPLIT_PLAYERS);
+
+    let layers_by_slot: std::collections::HashMap<u32, RenderLayers> = {
+        let mut query = app.world_mut().query::<(&SplitViewportSlot, &RenderLayers)>();
+        query.iter(app.world()).map(|(s, l)| (s.0, l.clone())).collect()
+    };
+    assert_eq!(layers_by_slot.len(), MAX_SPLIT_PLAYERS as usize, "all 4 Grid cameras must carry a RenderLayers component");
+
+    for slot in 0..MAX_SPLIT_PLAYERS {
+        let layers = &layers_by_slot[&slot];
+        let own_layer = 1 + slot % MAX_SPLIT_PLAYERS;
+        assert!(layers.intersects(&RenderLayers::layer(0)), "slot {slot}'s camera must still see ordinary scene geometry (layer 0)");
+        assert!(layers.intersects(&RenderLayers::layer(own_layer as usize)), "slot {slot}'s camera must see its own reserved layer {own_layer}");
+        for other_slot in 0..MAX_SPLIT_PLAYERS {
+            if other_slot == slot { continue; }
+            let other_layer = 1 + other_slot % MAX_SPLIT_PLAYERS;
+            assert!(
+                !layers.intersects(&RenderLayers::layer(other_layer as usize)),
+                "slot {slot}'s camera must NOT see slot {other_slot}'s reserved layer {other_layer}"
+            );
+        }
+    }
 }
 
 // ── Stage 6: Grid orientation (N-way split) ─────────────────────────────────────
@@ -865,7 +1063,7 @@ fn test_grid_split_spawns_four_viewport_slots_and_sets_slot_count() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, 4,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_n_player_scene(&mut app, 4);
 
@@ -894,7 +1092,7 @@ fn test_vertical_split_scene_leaves_slot_count_none() {
     two_player_catalogs_with_split(
         &mut app,
         None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     load_two_player_scene(&mut app);
 
@@ -911,7 +1109,7 @@ fn test_grid_split_with_five_players_caps_at_max_and_spawns_fifth_cameraless() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, 5,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_n_player_scene(&mut app, 5);
 
@@ -995,7 +1193,7 @@ fn test_hot_join_grows_two_player_grid_scene_to_three_then_four() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
 
@@ -1057,6 +1255,38 @@ fn test_hot_join_grows_two_player_grid_scene_to_three_then_four() {
 }
 
 #[test]
+fn test_hot_join_own_viewport_only_gives_the_joined_players_camera_its_own_reserved_layer() {
+    // The one path that resolves own_viewport_only from `Res<TargetRingVisibilityMode>` instead
+    // of an in-scope `SplitScreenDef` — proves that read is wired correctly end to end
+    // (system-architect/debug-detective finding: this combination was previously untested).
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: true }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+
+    assert_eq!(
+        *app.world().resource::<TargetRingVisibilityMode>(), TargetRingVisibilityMode::OwnViewportOnly,
+        "the resource must resolve to OwnViewportOnly at scene load, before any join happens"
+    );
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
+    app.update();
+
+    let layers_by_slot: std::collections::HashMap<u32, RenderLayers> = {
+        let mut query = app.world_mut().query::<(&SplitViewportSlot, &RenderLayers)>();
+        query.iter(app.world()).map(|(s, l)| (s.0, l.clone())).collect()
+    };
+    let joined_layers = layers_by_slot.get(&2).expect("the 3rd (hot-joined) player's camera must carry a RenderLayers component");
+    assert!(joined_layers.intersects(&RenderLayers::layer(0)), "hot-joined camera must still see ordinary scene geometry (layer 0)");
+    assert!(joined_layers.intersects(&RenderLayers::layer(3)), "hot-joined player (player_index 2) must see its own reserved layer 3 (1 + 2 % 4)");
+    assert!(!joined_layers.intersects(&RenderLayers::layer(1)), "hot-joined camera must NOT see player 0's reserved layer 1");
+    assert!(!joined_layers.intersects(&RenderLayers::layer(2)), "hot-joined camera must NOT see player 1's reserved layer 2");
+}
+
+#[test]
 fn test_hot_join_spawns_at_the_correct_1_based_spawn_point_not_on_top_of_an_existing_player() {
     // Regression for the alignment-reviewer's off-by-one finding: the executor must resolve
     // spawn_points["player_{next_slot + 1}_start"], not "player_{next_slot}_start" — the latter
@@ -1066,7 +1296,7 @@ fn test_hot_join_spawns_at_the_correct_1_based_spawn_point_not_on_top_of_an_exis
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
 
@@ -1102,7 +1332,7 @@ fn test_hot_join_at_cap_warns_and_noops() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, MAX_SPLIT_PLAYERS);
     assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(MAX_SPLIT_PLAYERS));
@@ -1125,7 +1355,7 @@ fn test_hot_join_in_vertical_split_scene_warns_and_noops() {
     app.update();
     two_player_catalogs_with_split(
         &mut app, None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     load_two_player_scene(&mut app);
     assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, None);
@@ -1170,7 +1400,7 @@ fn test_hot_join_with_no_join_prefab_key_for_next_slot_warns_and_noops() {
     // entry at all for slot 2 (the scene author simply never configured a 3rd join slot).
     n_player_catalogs_with_split(
         &mut app, 2,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_n_player_scene(&mut app, 2);
     assert_eq!(app.world().resource::<ActiveSplitSlotCount>().0, Some(2));
@@ -1194,7 +1424,7 @@ fn test_hot_join_rejects_non_player_tagged_join_prefab() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     {
         let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
@@ -1221,7 +1451,7 @@ fn test_hot_join_rejects_primitive_kind_join_prefab_instead_of_panicking() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     {
         let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
@@ -1245,7 +1475,7 @@ fn test_hot_join_same_frame_double_join_assigns_distinct_slots() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
 
@@ -1286,7 +1516,7 @@ fn test_hot_joined_player_stat_bar_duplicates_ranks_like_scene_load_spawned_play
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     {
         let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
@@ -1352,7 +1582,7 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_claimed_by_live_player() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -1385,7 +1615,7 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_mid_flight_via_pending_spawn() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -1429,7 +1659,7 @@ fn test_unclaimed_gamepad_trigger_never_captures_a_pad_with_no_press() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -1467,7 +1697,7 @@ fn test_pending_join_gamepad_is_frame_scoped_not_sticky() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -1515,7 +1745,7 @@ fn test_two_gamepads_pressed_same_frame_captures_only_lowest_sorted_index() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -1561,7 +1791,7 @@ fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index()
     app.update();
     n_player_catalogs_with_split(
         &mut app, MAX_SPLIT_PLAYERS,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
     app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
@@ -2199,6 +2429,7 @@ fn test_dynamic_split_initial_state_starts_split_when_distance_exceeds_threshold
         Some(SplitScreenDef {
             orientation: SplitOrientation::Vertical,
             dynamic: Some(DynamicSplitDef { split_distance: 5.0, merge_distance: 3.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+            own_viewport_only: false,
         }),
     );
     load_two_player_scene(&mut app);
@@ -2232,6 +2463,7 @@ fn test_dynamic_split_initial_state_starts_merged_when_within_threshold() {
         Some(SplitScreenDef {
             orientation: SplitOrientation::Vertical,
             dynamic: Some(DynamicSplitDef { split_distance: 12.0, merge_distance: 6.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+            own_viewport_only: false,
         }),
     );
     load_two_player_scene(&mut app);
@@ -2262,6 +2494,7 @@ fn test_dynamic_split_merge_distance_clamped_when_not_less_than_split_distance()
             orientation: SplitOrientation::Vertical,
             // Authored backwards on purpose — must warn and clamp, not panic or misbehave.
             dynamic: Some(DynamicSplitDef { split_distance: 5.0, merge_distance: 6.0, merged_zoom_margin: 3.0, merged_allow_manual_zoom: false }),
+            own_viewport_only: false,
         }),
     );
     load_two_player_scene(&mut app);
@@ -2279,7 +2512,7 @@ fn test_split_labels_spawn_once_per_grid_camera_with_player_index() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, 4,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_n_player_scene(&mut app, 4);
     app.update();
@@ -2307,7 +2540,7 @@ fn test_split_label_text_and_color_match_player_index_not_material() {
     app.update();
     n_player_catalogs_with_split(
         &mut app, 4,
-        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_n_player_scene(&mut app, 4);
     app.update();
@@ -3731,7 +3964,7 @@ fn test_stat_widgets_duplicate_ranks_when_scene_is_split_screen() {
     app.update();
     load_two_player_scene_with_stat_prop(
         &mut app,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
 
     let label_ranks: Vec<Option<u8>> = {
@@ -3827,7 +4060,7 @@ fn test_stat_widgets_stay_single_instance_with_one_player_carrying_split_config(
 
     two_player_catalogs_with_split(
         &mut app, None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     app.world_mut()
         .resource_mut::<LoadedPrefabCatalog>()
@@ -3937,7 +4170,7 @@ fn test_pixel_world_stat_bar_duplicates_ranks_when_scene_is_split_screen() {
     app.update();
     load_two_player_scene_with_pixel_stat_prop(
         &mut app,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
 
     // Fill children carry no WorldLabelRank of their own (only the anchor does — see
@@ -4043,7 +4276,7 @@ fn test_icon_world_stat_bar_duplicates_ranks_when_scene_is_split_screen() {
     app.update();
     load_two_player_scene_with_icon_stat_prop(
         &mut app,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
 
     let prop_entity = *app.world().resource::<ironhold_core::runtime::SpawnRegistry>()
@@ -4092,7 +4325,7 @@ fn test_icon_world_stat_bar_stays_single_instance_in_non_split_scene() {
 fn load_two_player_scene_with_target_hud(app: &mut App, author_target_hud: bool) {
     two_player_catalogs_with_split(
         app, None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     app.world_mut()
         .resource_mut::<LoadedPrefabCatalog>()
@@ -5111,7 +5344,7 @@ fn test_player_stat_widget_duplicates_ranks_when_scene_is_split_screen() {
     app.update();
     two_player_catalogs_with_split(
         &mut app, None,
-        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None }),
+        Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
     );
     {
         let mut catalog = app.world_mut().resource_mut::<LoadedPrefabCatalog>();
@@ -5314,7 +5547,7 @@ fn test_scene_load_resolves_look_keys_and_look_speed_onto_spawned_split_orbit_ca
     }));
 
     let mut p1_camera = base_camera_config();
-    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None });
+    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false });
     p1_camera.look_speed = 3.5;
     let p1_inputs = InputMap { look_left: Some("KeyZ".to_string()), look_up: Some("KeyC".to_string()), ..test_input_map() };
 

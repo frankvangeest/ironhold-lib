@@ -159,6 +159,13 @@ pub struct SplitScreenDef {
     /// See `DynamicSplitDef`.
     #[serde(default)]
     pub dynamic: Option<DynamicSplitDef>,
+    /// When `true`, a player's target-indicator ring is visible only in their own viewport,
+    /// instead of every ring being visible in every split viewport (the default). Applies to
+    /// `Vertical`/`Horizontal`/`Grid`/`dynamic` split; a party-only scene (no split cameras) has
+    /// no per-viewport concept to restrict to, so the field is simply inert there. Rings are
+    /// still tinted per-owner by `PLAYER_LABEL_COLORS` regardless of this setting.
+    #[serde(default)]
+    pub own_viewport_only: bool,
 }
 
 /// How the window is divided between local co-op players' individual cameras.

@@ -49,5 +49,6 @@
         ( on: "entity.entered:portal_to_room6", do_actions: [ LoadScene("scenes/room6.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room7", do_actions: [ LoadScene("scenes/room7.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room8", do_actions: [ LoadScene("scenes/room8.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room9", do_actions: [ LoadScene("scenes/room9.scene.ron") ] ),
     ],
 )

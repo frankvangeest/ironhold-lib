@@ -196,15 +196,24 @@ pub struct PartyOrbitCamera {
 /// (the first player's `CameraConfig`) for tuning fields and `party` for the co-op-specific
 /// zoom behavior. Called once per scene load from `spawn_players_and_camera` — never per
 /// player, since all players share this one camera.
+///
+/// `own_viewport_only` is only ever `true` from the `dynamic`-split merged-state caller (a
+/// pure `party:`-block scene has no split cameras/rings to restrict, so it's always `false`
+/// there). When `true`, this camera gets `all_ring_layers()` — layer 0 (ordinary scene geometry)
+/// *plus every reserved ring layer* — so the merged view still shows every player's ring even
+/// though each ring only carries its own single layer. Leaving this camera componentless
+/// (implicit layer 0 only) would make it render zero rings once any ring restricts itself to a
+/// non-zero layer — see the plan's plan-review note.
 pub fn spawn_party_orbit_camera(
     commands: &mut Commands,
     tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
     base_camera: &crate::schema::player::CameraConfig,
     party: &crate::schema::player::PartyZoomDef,
     targets: &[Entity],
+    own_viewport_only: bool,
 ) -> Entity {
     let (orbit_lmb, orbit_rmb) = parse_orbit_button(&base_camera.orbit_button);
-    commands.spawn((
+    let entity = commands.spawn((
         Name::new("Party Orbit Camera"),
         Camera3d::default(),
         tonemapping,
@@ -230,7 +239,11 @@ pub fn spawn_party_orbit_camera(
             orbit_lmb,
             orbit_rmb,
         },
-    )).id()
+    )).id();
+    if own_viewport_only {
+        commands.entity(entity).insert(all_ring_layers());
+    }
+    entity
 }
 
 /// Frames the midpoint of a `PartyOrbitCamera`'s `targets` each frame and derives the orbit
@@ -307,6 +320,26 @@ pub fn party_camera_follow_system(
 /// scene. Extra players beyond this cap spawn cameraless, matching the existing (pre-Stage-6)
 /// behavior when a 3rd player exists in a `Vertical`/`Horizontal` (always-2-way) scene.
 pub const MAX_SPLIT_PLAYERS: u32 = 4;
+
+/// The single reserved `RenderLayers` layer index for `player_index`'s target-indicator ring
+/// under `SplitScreenDef.own_viewport_only` — layers 1..=`MAX_SPLIT_PLAYERS`, indexed identically
+/// to `PLAYER_LABEL_COLORS`'s own scheme (same modulo-collision behavior that palette already
+/// has). The sole owner of this arithmetic — every insertion site (both split-camera spawn sites,
+/// `target_indicator_system`) calls this rather than re-deriving it, so raising
+/// `MAX_SPLIT_PLAYERS` can never desync one site from another.
+pub(crate) fn ring_layer_for_player(player_index: u32) -> usize {
+    (1 + player_index % MAX_SPLIT_PLAYERS) as usize
+}
+
+/// The full union of every reserved ring layer, plus layer 0 (ordinary scene geometry) —
+/// `spawn_party_orbit_camera`'s `RenderLayers` when `own_viewport_only` is true, so the merged/
+/// party view still sees every player's ring. Derived from `MAX_SPLIT_PLAYERS` rather than a
+/// hand-written literal, so raising that constant can never leave this union under-covering the
+/// higher reserved layers `ring_layer_for_player` would then produce.
+pub(crate) fn all_ring_layers() -> bevy::camera::visibility::RenderLayers {
+    (1..=MAX_SPLIT_PLAYERS)
+        .fold(bevy::camera::visibility::RenderLayers::layer(0), |layers, i| layers.with(i as usize))
+}
 
 /// Marks a local co-op split-screen camera and which share of the window it owns. Spawned
 /// alongside a normal `OrbitCamera` (not a replacement) by `spawn_players_and_camera` when

@@ -1109,5 +1109,162 @@
       ],
     ),
 
+    // Room 9's ground — crimson tone, a new color identity (every prior room's blue/amber/teal/
+    // rose/gold/green/violet is already spoken for).
+    "ground_room9": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.32, 0.10, 0.12),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // room8 -> room9 (per_viewport_target_ring_visibility.md playtest aid: vertical split, one
+    // player's ring visible only in their own viewport). The return trip reuses the existing
+    // "portal_to_room8" prefab placed a second time in room9.scene.ron — same event name
+    // ("entity.entered:portal_to_room8"), same rules.ron entry, no new prefab needed (same trick
+    // every prior stage used).
+    "portal_to_room9": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.22, 0.08, 0.10), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.22, 0.08, 0.10), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.16, 0.05, 0.06), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.90, 0.15, 0.20), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // per_viewport_target_ring_visibility.md playtest aid — verbatim copy of player_p1_split
+    // (see its comments above for every field's rationale: KeyT/KeyZ/KeyX choices, gamepad
+    // pairing, etc.) except the added `own_viewport_only: true` on the `split` block below (the
+    // sole switch this feature adds). Not authored on player_p1_split itself since room3 must
+    // keep demonstrating the default all-viewports behavior unchanged.
+    "player_p1_split_ring": (
+      kind: Actor,
+      model: "character_male",
+      display_name: "Player 1",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 0,
+      stat_templates: [
+        (
+          key: "mana",
+          base: 100.0,
+          min: 0.0,
+          max: 100.0,
+          regen_rate: 5.0,
+          regen_delay: 1.0,
+        ),
+      ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.35, 0.45, 0.95, 0.95),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
+      components: (
+        tags: ["player"],
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+          // Sole switch for split-screen — read only from this (the first) player.
+          split: (
+            orientation: Vertical,
+            own_viewport_only: true,
+          ),
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          strafe_mouse_button: None,
+          gamepad_index: 0,
+          target_next: "KeyT",
+          look_left:  "KeyZ",
+          look_right: "KeyX",
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    // Verbatim copy of player_p2_split (see its comments above for every field's rationale) —
+    // see player_p1_split_ring's comment above for why this duplication exists. Base/max (60
+    // vs. player 1's 100) deliberately differ for visual contrast, mirroring player_p2_split.
+    "player_p2_split_ring": (
+      kind: Actor,
+      model: "character_female",
+      display_name: "Player 2",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 1,
+      stat_templates: [
+        (
+          key: "mana",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          regen_rate: 3.0,
+          regen_delay: 1.0,
+        ),
+      ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.95, 0.35, 0.55, 0.95),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
+      components: (
+        tags: ["player"],
+        // No `split`/`party` here — only the first player's camera block is read for those.
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+        ),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+          gamepad_index: 1,
+          target_next: "KeyM",
+          look_left:  "Comma",
+          look_right: "Period",
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
   }
 )

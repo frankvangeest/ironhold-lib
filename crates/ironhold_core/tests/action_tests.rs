@@ -546,6 +546,141 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
     assert_eq!(indicator_count_after, 0, "TrackingTarget entity must be despawned after clearing the target");
 }
 
+/// Shared by the two `RenderLayers`/`TargetRingVisibilityMode` ring tests below — same field
+/// values as this file's existing inline `CharacterController` literals, just de-duplicated since
+/// both new tests need one.
+fn test_character_controller_for_ring_tests() -> CharacterController {
+    CharacterController {
+        walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+        inputs: InputMap {
+            forward: "KeyW".to_string(), backward: "KeyS".to_string(),
+            left: "KeyA".to_string(), right: "KeyD".to_string(),
+            strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
+            jump: "Space".to_string(), run: "ShiftLeft".to_string(),
+            interact: "KeyF".to_string(), strafe_mouse_button: None,
+            target_next: "Tab".to_string(), target_range: 30.0,
+            gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
+            gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
+            gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
+            gamepad_deadzone: 0.15,
+        },
+        is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+        double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+        collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+    }
+}
+
+/// `per_viewport_target_ring_visibility.md` regression: `TargetRingVisibilityMode` defaults to
+/// `AllViewports` (init_resource'd, never explicitly set here), so a spawned ring must carry no
+/// `RenderLayers` component at all — zero footprint for every existing scene.
+#[test]
+fn test_target_indicator_ring_has_no_render_layers_when_visibility_mode_is_default() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::player::PlayerTarget;
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator, TargetRingVisibilityMode};
+    use bevy::camera::visibility::RenderLayers;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    assert_eq!(*app.world().resource::<TargetRingVisibilityMode>(), TargetRingVisibilityMode::AllViewports);
+
+    let entity = app.world_mut().spawn((
+        SpawnId("target_01".to_string()),
+        Transform::from_translation(Vec3::new(3.0, 0.0, 5.0)),
+        GlobalTransform::from(Transform::from_translation(Vec3::new(3.0, 0.0, 5.0))),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("target_01".to_string(), entity);
+
+    let player = app.world_mut().spawn((
+        test_character_controller_for_ring_tests(),
+        PlayerTarget::default(),
+    )).id();
+
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.2,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
+    })));
+
+    app.world_mut().get_mut::<PlayerTarget>(player).unwrap().0 = Some("target_01".to_string());
+    app.update();
+
+    let ring_entity = {
+        let mut q = app.world_mut().query::<(Entity, &TrackingTarget)>();
+        q.iter(app.world()).map(|(e, _)| e).next().expect("ring must spawn")
+    };
+    assert!(
+        app.world().get::<RenderLayers>(ring_entity).is_none(),
+        "with own_viewport_only unset (today's behavior), the ring must carry NO RenderLayers \
+         component at all"
+    );
+}
+
+/// `per_viewport_target_ring_visibility.md`: when `TargetRingVisibilityMode::OwnViewportOnly` is
+/// set, each player's ring gets a `RenderLayers` restricted to that player's own reserved layer
+/// (`1 + player_index % MAX_SPLIT_PLAYERS`), matching the camera-side layer assigned in
+/// `local_coop_tests.rs`'s `test_static_split_own_viewport_only_gives_each_camera_its_own_layer_plus_shared_layer_0`.
+#[test]
+fn test_target_indicator_ring_own_viewport_only_gets_its_owning_players_reserved_layer() {
+    use ironhold_core::capabilities::target_indicator::TrackingTarget;
+    use ironhold_core::capabilities::player::{PlayerTarget, PlayerIndex};
+    use ironhold_core::runtime::scene_manager::{LoadedTargetIndicator, ResolvedTargetIndicator, TargetRingVisibilityMode};
+    use bevy::camera::visibility::RenderLayers;
+
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(TargetRingVisibilityMode::OwnViewportOnly);
+
+    let entity_a = app.world_mut().spawn((
+        SpawnId("enemy_a".to_string()),
+        GlobalTransform::from_translation(Vec3::new(1.0, 0.0, 0.0)),
+    )).id();
+    let entity_b = app.world_mut().spawn((
+        SpawnId("enemy_b".to_string()),
+        GlobalTransform::from_translation(Vec3::new(-1.0, 0.0, 0.0)),
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_a".to_string(), entity_a);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_b".to_string(), entity_b);
+
+    app.world_mut().insert_resource(LoadedTargetIndicator(Some(ResolvedTargetIndicator {
+        texture_path: "shared/textures/decals/ring_thick.png".to_string(),
+        radius: 1.2,
+        color: (0.3, 0.8, 1.0, 0.75),
+        offset_y: 0.05,
+        named_colors: std::collections::HashMap::new(),
+    })));
+
+    let player0 = app.world_mut().spawn((
+        test_character_controller_for_ring_tests(),
+        PlayerTarget(Some("enemy_a".to_string())),
+        PlayerIndex(0),
+    )).id();
+    let player1 = app.world_mut().spawn((
+        test_character_controller_for_ring_tests(),
+        PlayerTarget(Some("enemy_b".to_string())),
+        PlayerIndex(1),
+    )).id();
+
+    app.update();
+
+    let layers_by_owner: std::collections::HashMap<Entity, RenderLayers> = {
+        let mut q = app.world_mut().query::<(&TrackingTarget, &RenderLayers)>();
+        q.iter(app.world()).map(|(t, l)| (t.owner, l.clone())).collect()
+    };
+    assert_eq!(layers_by_owner.len(), 2, "both rings must carry a RenderLayers component in OwnViewportOnly mode");
+
+    let p0_layers = &layers_by_owner[&player0];
+    assert!(p0_layers.intersects(&RenderLayers::layer(1)), "player 0's ring must carry its reserved layer 1");
+    assert!(!p0_layers.intersects(&RenderLayers::layer(2)), "player 0's ring must NOT carry player 1's layer 2");
+
+    let p1_layers = &layers_by_owner[&player1];
+    assert!(p1_layers.intersects(&RenderLayers::layer(2)), "player 1's ring must carry its reserved layer 2");
+    assert!(!p1_layers.intersects(&RenderLayers::layer(1)), "player 1's ring must NOT carry player 0's layer 1");
+}
+
 /// Phase 1 (`per_player_split_screen_targeting.md`): when 2+ players are present, every target
 /// indicator ring is tinted by the fixed `PLAYER_LABEL_COLORS` palette (same one the split-screen
 /// "P{n}" corner HUD label uses) instead of the usual per-target prefab/category/scene colour

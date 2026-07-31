@@ -102,12 +102,25 @@
       label: (text: "Room 7", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // room8 -> room9 (per_viewport_target_ring_visibility.md playtest aid). See prefabs.ron's
+    // "portal_to_room9" comment.
+    (
+      id: "portal_to_room9",
+      prefab: "portal_to_room9",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 9 (own-viewport rings)", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   ui: [
     Label((
       id: "room_hint",
-      text: "Hot join: starts at 2 players | Press G or gamepad A/Cross to add a player | Violet -> room 7",
+      text: "Room 8: hot join (press G) | Violet -> room 7 | Red -> room 9 (own-viewport rings)",
       position: (20.0, 20.0),
       size: (900.0, 32.0),
     )),

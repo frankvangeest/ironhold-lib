@@ -1,0 +1,194 @@
+(
+  schema_version: 2,
+  name: "room9",
+
+  // per_viewport_target_ring_visibility.md playtest aid: same click-target/Tab-targeting setup as
+  // room3, except player_p1_split_ring's `camera.split.own_viewport_only: true` restricts each
+  // player's target ring to their own viewport only — room3 keeps demonstrating the default
+  // (every ring visible in every viewport, tinted by PLAYER_LABEL_COLORS) unchanged.
+  show_nameplates: true,
+  nameplate_options: (
+    faction_filter: All,
+  ),
+
+  target_indicator: (
+    texture: "target_ring",
+    radius: 0.8,
+  ),
+  target_hud: (
+    show: Full,
+  ),
+
+  tonemapping: AcesFitted,
+
+  // Crimson tone, matching the red portal_to_room9 accent and ground_room9.
+  lighting: (
+    ambient: (0.24, 0.14, 0.15),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (1.0, 0.80, 0.78),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-4.0, 0.5, 0.0),
+    "player_2_start": (4.0, 0.5, 0.0),
+  },
+
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground_room9",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1_split_ring MUST be first — its `camera.split` block (own_viewport_only: true) is
+    // the sole switch for both vertical split-screen AND the per-viewport ring restriction.
+    (
+      id: "player_01",
+      prefab: "player_p1_split_ring",
+      transform: (
+        translation: (-4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    (
+      id: "player_02",
+      prefab: "player_p2_split_ring",
+      transform: (
+        translation: (4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // One click target per viewport, same as room3, so each player can select a DIFFERENT target
+    // and confirm the other player's ring never appears in their own half of the screen.
+    (
+      id: "click_target_left",
+      prefab: "click_target_test",
+      transform: (
+        translation: (-4.0, 1.5, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "click_target_right",
+      prefab: "click_target_test",
+      transform: (
+        translation: (4.0, 1.5, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Return trip reuses the "portal_to_room8" prefab (see prefabs.ron comment) — same event
+    // name as room8's forward portal, same rules.ron entry, no new prefab needed.
+    (
+      id: "portal_to_room8",
+      prefab: "portal_to_room8",
+      transform: (
+        translation: (0.0, 0.0, -15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 8", offset: (0.0, 4.0, 0.0)),
+    ),
+
+  ],
+
+  ui: [
+    Label((
+      id: "controls_hint",
+      text: "P1: WASD+Space+Shift | P2: Arrows+Enter+RShift",
+      position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+    Label((
+      id: "room_hint",
+      text: "Room 9: own-viewport rings (vs. room3's default) | Red portal -> room 8",
+      position: (20.0, 64.0),
+      size: (900.0, 32.0),
+    )),
+    Label((
+      id: "targeting_hint",
+      text: "Target: P1=T P2=M | Click a sphere to select",
+      position: (20.0, 108.0),
+      size: (900.0, 32.0),
+    )),
+    // Kept as its own line (rather than folded into targeting_hint) to stay under this box's
+    // known-good ~59-char budget at this font size (see room3's room_hint comment for the
+    // budget's origin) — the combined sentence ran to 100+ chars and risked clipping the single
+    // most important line in this demo.
+    Label((
+      id: "ring_hint",
+      text: "Each ring shows ONLY in its own player's half (room3 shows both)",
+      position: (20.0, 152.0),
+      size: (900.0, 32.0),
+    )),
+    // Same tint note as room3 — own_viewport_only restricts WHERE a ring renders, not its color;
+    // both rings still tint by PLAYER_LABEL_COLORS (see docs/20_data_formats.md). Kept short for
+    // the same clipping-budget reason as ring_hint above.
+    Label((
+      id: "tint_hint",
+      text: "Rings still tint by colour (P1 blue, P2 pink) — only WHERE they show changed",
+      position: (20.0, 196.0),
+      size: (900.0, 32.0),
+    )),
+    ActionBar((
+      id: "action_bar_p1",
+      owner_player: 0,
+      position: (200.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyG",
+          key_hint: "P1",
+          gamepad_key: "RightTrigger",  // pairs with player_p1_split_ring's gamepad_index: 0
+          // (prefabs/prefabs.ron) — same pairing room3's action_bar_p1 uses. Not "South" — that's
+          // this player's gamepad_jump default (schema/player.rs).
+          cost: (stat: "mana", amount: 20.0),
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
+    ActionBar((
+      id: "action_bar_p2",
+      owner_player: 1,
+      position: (900.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyL",
+          key_hint: "P2",
+          gamepad_key: "RightTrigger",  // pairs with player_p2_split_ring's gamepad_index: 1
+          // (prefabs/prefabs.ron) — same pairing room3's action_bar_p2 uses.
+          cost: (stat: "mana", amount: 20.0),
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
+  ],
+)

@@ -281,6 +281,75 @@ and applies the precedence chain (single-player only). Material handles are memo
 alternating between two targets/players of the same resolved colour creates no new `StandardMaterial`. The mesh handle
 (radius-driven, colour-independent) is a single cached `Local`; both caches clear on scene change.
 
+**Per-viewport ring visibility** (`SplitScreenDef.own_viewport_only`, `docs/20_data_formats.md`) —
+opt-in restriction so a ring is only visible in its owner's own split viewport, instead of every
+ring rendering in every viewport (the tinting above is unaffected either way; this only changes
+*where* a ring renders). Built on Bevy `RenderLayers` — the first designer-facing feature to use
+them; the only prior usage was `inspector.rs`'s feature-gated debug camera on reserved layer 31
+(untouched by this feature). Layers 1–4 are reserved, one per split player, indexed identically to
+`PLAYER_LABEL_COLORS`'s own scheme. `capabilities::camera::ring_layer_for_player(player_index)` and
+`all_ring_layers()` are the sole owners of this arithmetic — every insertion site below calls one
+of the two rather than re-deriving `1 + player_index % MAX_SPLIT_PLAYERS` by hand, so raising
+`MAX_SPLIT_PLAYERS` can never desync one site from another. Components are only ever inserted when
+`own_viewport_only == true` — zero `RenderLayers` footprint on any entity when it's `false` (the
+default), verified by a regression test that default settings spawn zero `RenderLayers` components
+anywhere.
+- Each split `OrbitCamera` — both the static `Grid`/`Vertical`/`Horizontal` loop and the
+  `dynamic`-split loop (`entity_spawner.rs`'s `spawn_players_and_camera` and
+  `spawn_split_camera_for_player`) — gets `RenderLayers::layer(0).with(ring_layer_for_player(
+  player_index))`, keyed on `PlayerConfig.player_index`, not spawn/loop order — they can diverge
+  when a scene authors player entities out of `player_index` order (see the reversed-order test);
+  hot-join can NOT diverge here, since `Action::JoinPlayer` sets both `player_index` and the spawn
+  slot to the same `next_slot` value.
+- Each ring entity (`target_indicator_system`) gets `RenderLayers::layer(ring_layer_for_player(
+  owner_player_index))` only — no layer 0, since a ring never needs to be "ordinary scene
+  geometry."
+- The shared `PartyOrbitCamera` (`spawn_party_orbit_camera`, `capabilities/camera.rs` — party
+  mode's camera, also reused as `dynamic`-split's merged-state camera) gets `all_ring_layers()`
+  when `own_viewport_only` is true — layer 0 plus every reserved ring layer, so the merged/party
+  view still shows every player's ring. Leaving this camera componentless (implicit layer 0 only)
+  would make it render **zero** rings the moment any ring restricts itself to a non-zero layer —
+  this was caught during plan review, not by testing, and is the reason this camera needs its own
+  explicit `RenderLayers` at all; treat it as an invariant, not an incidental detail, if this
+  mechanism is ever extended.
+- `TargetRingVisibilityMode` (`AllViewports` default / `OwnViewportOnly`,
+  `runtime/scene_manager/mod.rs`) is the resolved runtime state `target_indicator_system` reads —
+  `init_resource`'d in `lib.rs` so it's never missing, resolved by `spawn_players_and_camera` for
+  every scene (including single-player/party-only), and reset to `AllViewports` on a full
+  `Action::LoadScene` (`action_executor.rs`). `RenderLayers` is applied at ring-spawn time only,
+  never re-applied to already-live rings — safe only because every write site to this resource is
+  paired with a full `LevelEntity` teardown (rings carry `LevelEntity`), so no live ring can ever
+  outlive the mode it was spawned under. A future mid-scene toggle (e.g. a settings menu) would
+  need to re-tag every live `TrackingTarget` entity on an `is_changed()` branch — this resource does
+  not do that today.
+- Two collision/gap classes are warned rather than silently mishandled: `spawn_players_and_camera`
+  warns when `own_viewport_only` is true and two players' `player_index` values collide under
+  `% MAX_SPLIT_PLAYERS` (an out-of-range index, or a plain duplicate) — this would otherwise
+  silently defeat the feature for that pair, unlike `PLAYER_LABEL_COLORS`' own harmless
+  modulo-collision precedent (a cosmetic duplicate tint, not a broken guarantee). `drain_spawn_queue_system`
+  warns when a non-hot-join `Action::Spawn` of a `tags: ["player"]` prefab lands in an
+  `own_viewport_only` scene, since that path's dedicated full-window `OrbitCamera` never gets a
+  ring-visibility layer and so would see zero rings, not even its own.
+
+> **`pipeline_warmup_system`'s `NoFrustumCulling` warmup pass does not touch `RenderLayers`** — it
+> only inserts/removes `NoFrustumCulling` on `Mesh3d` entities for 4 frames after scene load
+> (`lib.rs`). Benign today since rings reuse an already-warm ring material/mesh, but a future
+> `RenderLayers` consumer added to this codebase should not assume warmup covers layer-restricted
+> entities — it doesn't.
+
+> **Bevy's directional/point-light visibility check intersects the *light's* `RenderLayers`
+> (default layer 0) against each mesh's, not just camera-vs-mesh.** A mesh restricted to a non-zero
+> layer only is therefore dropped from every layer-0 light's shadow pass. Harmless for rings today
+> (`unlit: true`, and losing shadow-map membership is arguably desirable for a flat ground decal),
+> but this reserved-layer scheme only works cleanly for unlit cosmetics — a future `RenderLayers`
+> consumer restricting a *lit* prefab to a player layer would get an unexpectedly shadowless mesh.
+
+Reader-facing entry points to trace this feature: `target_indicator_system`
+(`capabilities/target_indicator.rs`) for the ring side, and `entity_spawner.rs`'s two split-camera
+spawn sites (`spawn_players_and_camera`'s `Grid`/`Vertical`/`Horizontal` loop and
+`spawn_split_camera_for_player`) plus `spawn_party_orbit_camera` (`capabilities/camera.rs`) for the
+camera side.
+
 **Per-viewport target HUD readout** (`capabilities/camera.rs`'s `target_hud_spawn_system`/
 `target_hud_update_system`) — opt-in via the new `GameSceneV2.target_hud: Option<TargetHudDef>`
 scene field (`docs/20_data_formats.md`). Mirrors the existing `split_viewport_player_label_spawn_

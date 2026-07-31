@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
-use crate::runtime::scene_manager::{LevelEntity, LoadedPrefabCatalog, LoadedTargetIndicator, PrefabKey, ResolvedTargetIndicator, SpawnRegistry};
+use crate::runtime::scene_manager::{LevelEntity, LoadedPrefabCatalog, LoadedTargetIndicator, PrefabKey, ResolvedTargetIndicator, SpawnRegistry, TargetRingVisibilityMode};
 use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
 use crate::capabilities::camera::PLAYER_LABEL_COLORS;
+use bevy::camera::visibility::RenderLayers;
 
 /// Marks an active target-indicator ring: which world entity it tracks, and which player entity
 /// it belongs to. Each player has at most one ring at a time — `owner` lets the system despawn
@@ -83,6 +84,7 @@ pub fn target_indicator_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    ring_visibility: Res<TargetRingVisibilityMode>,
     existing: Query<(Entity, &TrackingTarget)>,
     mut transforms: Query<&mut Transform, With<TrackingTarget>>,
     changed_players: Query<(Entity, &PlayerTarget, Option<&PlayerIndex>), (With<CharacterController>, Changed<PlayerTarget>)>,
@@ -179,7 +181,7 @@ pub fn target_indicator_system(
         }).clone();
 
         let p = gt.translation();
-        commands.spawn((
+        let mut ring = commands.spawn((
             Name::new(format!("TargetIndicator:{}", target_id)),
             Mesh3d(mesh_handle.clone()),
             MeshMaterial3d(mat_handle),
@@ -187,5 +189,13 @@ pub fn target_indicator_system(
             TrackingTarget { target: target_entity, owner: player_entity },
             LevelEntity,
         ));
+        // Restrict this ring to only its owning player's viewport when opted in — invisible to
+        // every camera except the one carrying this same reserved layer (see
+        // `spawn_players_and_camera`'s split-camera spawn sites and `spawn_party_orbit_camera`'s
+        // layer union). Layer index matches `PLAYER_LABEL_COLORS`' own player_index scheme.
+        if *ring_visibility == TargetRingVisibilityMode::OwnViewportOnly {
+            let idx = player_index.map_or(0, |i| i.0);
+            ring.insert(RenderLayers::layer(crate::capabilities::camera::ring_layer_for_player(idx)));
+        }
     }
 }
