@@ -967,13 +967,27 @@ pub struct ActionSlotDef {
     /// Key that activates this slot. Accepts any name `InputMap::parse_key()` recognises:
     /// digits (`"1"`-`"9"`), bare letters (`"q"`/`"Q"`) or `"KeyQ"`-style names, function keys
     /// (`"F1"`-`"F12"`), `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`,
-    /// arrow keys (`"ArrowUp"` etc). Not supported: mouse buttons, modifier chords (`"Shift+1"`),
-    /// gamepad buttons — an unrecognised key name logs a `warn!` at scene load and the slot never
-    /// fires. This string is also the slot's identity: `CooldownMap`/`PendingIntentActions` keys
-    /// and every emitted `action_bar.*:{key}` event use it verbatim, so rebinding a slot (changing
-    /// `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired
-    /// to the old key string.
+    /// arrow keys (`"ArrowUp"` etc). Not supported: mouse buttons, modifier chords (`"Shift+1"`) —
+    /// an unrecognised key name logs a `warn!` at scene load and the slot never fires from the
+    /// keyboard. This string is also the slot's identity: `CooldownMap`/`PendingIntentActions`
+    /// keys and every emitted `action_bar.*:{key}` event use it verbatim, so rebinding a slot
+    /// (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.
+    /// ron` wired to the old key string. Gamepad buttons are a separate opt-in field, `gamepad_
+    /// key` below — this field stays required and keyboard-only even for a gamepad-routed slot,
+    /// and must still be scene-globally unique (see the cross-bar duplicate-key check) even
+    /// though a gamepad-driven player may never actually press it.
     pub key: String,
+    /// Optional gamepad button that also activates this slot, in addition to `key`. Accepts any
+    /// name `InputMap::parse_gamepad_button()` recognises (`"South"`, `"East"`, `"North"`,
+    /// `"West"`, `"LeftTrigger"`, etc. — see `docs/20_data_formats.md`'s gamepad button names
+    /// table). Resolved against the slot's **owning player's own** gamepad (`ActionBarDef.
+    /// owner_player` -> that player's `InputMap.gamepad_index`), never any connected pad — a
+    /// gamepad is not shared hardware the way a keyboard is. An unparseable name logs a `warn!`
+    /// naming the bar and slot at scene load; the slot then simply never fires from gamepad (its
+    /// `key` binding, if any, is unaffected). Omit for a keyboard-only slot (default, preserves
+    /// all existing behavior).
+    #[serde(default)]
+    pub gamepad_key: Option<String>,
     /// Per-slot texture catalog key override. When non-empty, overrides the bar's `icon_sheet`
     /// for this slot. Leave empty to use the bar-level `icon_sheet`.
     #[serde(default)]

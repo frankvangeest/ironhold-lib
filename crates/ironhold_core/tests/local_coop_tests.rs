@@ -1613,6 +1613,350 @@ fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index()
     );
 }
 
+// ── gamepad_action_bar_slots.md: gamepad-routed ActionSlotUi ────────────────────
+
+/// Core correctness case: a `gamepad_key`-bound slot owned by player 1 must fire only from
+/// player 1's own configured gamepad — pressing the same button on a *different* connected pad
+/// must not fire it, even though both pads are live and pressed.
+#[test]
+fn test_gamepad_action_bar_slot_fires_only_from_owning_players_own_pad() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let gp_a = connect_test_gamepad(&mut app);
+    let gp_b = connect_test_gamepad(&mut app);
+    app.update();
+
+    let mut sorted = [gp_a, gp_b];
+    sorted.sort_by_key(|e| e.index());
+    let b_index = sorted.iter().position(|&e| e == gp_b).unwrap();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: None,
+        resolved_gamepad_button: Some(GamepadButton::South),
+        do_actions: vec![Action::SetVariable("p1_fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(1),
+    });
+
+    // Player 1 is bound to gamepad B's own sorted index — not A's.
+    let mut controller = test_character_controller();
+    controller.inputs.gamepad_index = Some(b_index);
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        controller,
+        PlayerTarget::default(),
+        PlayerIndex(1),
+    ));
+
+    // Press South on gamepad A (NOT player 1's own pad) — must not fire.
+    press_gamepad_button(&mut app, gp_a, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("p1_fired"), None,
+        "a press on a different player's/unclaimed pad must never fire this slot"
+    );
+
+    // Press South on gamepad B (player 1's own pad) — must fire.
+    press_gamepad_button(&mut app, gp_b, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("p1_fired").map(String::as_str), Some("yes"),
+        "a press on the owning player's own gamepad must fire the slot"
+    );
+}
+
+/// The plan's headline acceptance criterion, tested directly at runtime (not just proven
+/// indirectly via the unclaimed-pad case above): two *live* players, each with their own
+/// gamepad and their own bar, both defaulting `gamepad_key: "South"` — pressing one player's own
+/// pad must fire only that player's slot, never the other's, even though both are simultaneously
+/// live and bound to the identical button name.
+#[test]
+fn test_two_players_two_pads_same_gamepad_key_each_fires_only_their_own_slot() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let gp_a = connect_test_gamepad(&mut app);
+    let gp_b = connect_test_gamepad(&mut app);
+    app.update();
+
+    let mut sorted = [gp_a, gp_b];
+    sorted.sort_by_key(|e| e.index());
+    let a_index = sorted.iter().position(|&e| e == gp_a).unwrap();
+    let b_index = sorted.iter().position(|&e| e == gp_b).unwrap();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: None,
+        resolved_gamepad_button: Some(GamepadButton::South),
+        do_actions: vec![Action::SetVariable("p0_fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(0),
+    });
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "2".to_string(),
+        resolved_key: None,
+        resolved_gamepad_button: Some(GamepadButton::South),
+        do_actions: vec![Action::SetVariable("p1_fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: Some(1),
+    });
+
+    let mut controller0 = test_character_controller();
+    controller0.inputs.gamepad_index = Some(a_index);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        controller0,
+        PlayerTarget::default(),
+        PlayerIndex(0),
+    ));
+    let mut controller1 = test_character_controller();
+    controller1.inputs.gamepad_index = Some(b_index);
+    app.world_mut().spawn((
+        SpawnId("player_02".to_string()),
+        controller1,
+        PlayerTarget::default(),
+        PlayerIndex(1),
+    ));
+
+    // Player 0 presses their own pad — only player 0's slot fires.
+    press_gamepad_button(&mut app, gp_a, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("p0_fired").map(String::as_str), Some("yes"),
+        "player 0's own pad press must fire player 0's slot"
+    );
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("p1_fired"), None,
+        "player 0's press must never fire player 1's slot, even though both bind the same button name"
+    );
+
+    // Player 1 presses their own pad — only player 1's slot fires (player 0's stays as set above,
+    // unaffected — proving this press didn't re-trigger it).
+    press_gamepad_button(&mut app, gp_b, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("p1_fired").map(String::as_str), Some("yes"),
+        "player 1's own pad press must fire player 1's slot"
+    );
+}
+
+/// A slot with both `key` and `gamepad_key` bound must fire from either device independently.
+#[test]
+fn test_gamepad_action_bar_slot_with_both_key_and_gamepad_key_fires_from_either_device() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::schema::stats::{LoadedStats, LiveStat};
+
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    // "tally" accumulates +1 per actual fire (unlike the SetVariable below, which just writes a
+    // constant and can't distinguish one fire from two) — used at the end of this test to prove a
+    // slot with both devices pressed in the SAME frame still fires exactly once, not twice.
+    app.world_mut().resource_mut::<LoadedStats>().0.insert("tally".to_string(), LiveStat::new(stat_def(0.0, 999.0)));
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: Some(GamepadButton::South),
+        do_actions: vec![
+            Action::SetVariable("fire_count".to_string(), "1".to_string()),
+            Action::ModifyStat { key: "tally".to_string(), delta: 1.0 },
+        ],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: None,
+    });
+    let mut controller = test_character_controller();
+    controller.inputs.gamepad_index = Some(0);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        controller,
+        PlayerTarget::default(),
+    ));
+
+    // Keyboard press alone fires it.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fire_count").map(String::as_str), Some("1"),
+        "keyboard press must fire a slot with both key and gamepad_key bound"
+    );
+    app.world_mut().resource_mut::<GameVariables>().0.remove("fire_count");
+    // `release` alone only clears `pressed`/sets `just_released` — `just_pressed` would otherwise
+    // latch true forever with no InputPlugin registered to clear it each frame (this test harness
+    // deliberately runs on MinimalPlugins, see support/mod.rs), which would make the "gamepad
+    // alone" assertion below pass for the wrong reason (a stale keyboard just_pressed bit, not the
+    // actual gamepad press). Must clear both explicitly — see the identical pattern this test
+    // borrows from elsewhere in this file.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().release(KeyCode::Digit1);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear_just_pressed(KeyCode::Digit1);
+    app.update();
+
+    // Gamepad press alone (no keyboard) also fires it.
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fire_count").map(String::as_str), Some("1"),
+        "gamepad press must also fire the same slot, independent of the keyboard binding"
+    );
+    assert_eq!(
+        app.world().resource::<LoadedStats>().0["tally"].current, 2.0,
+        "sanity check: tally must be exactly 2 after the two independent single-device fires above"
+    );
+
+    // Both devices pressed in the SAME frame — the slot must still fire exactly once, not twice
+    // (it's a single `for slot in slots.iter()` iteration gated by `keyboard_fired ||
+    // gamepad_fired`, not two independent fire paths).
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<LoadedStats>().0["tally"].current, 3.0,
+        "pressing both keyboard and gamepad in the same frame must fire the slot exactly once (tally 2 -> 3), not twice"
+    );
+}
+
+/// An unparseable `gamepad_key` — represented here directly as `resolved_gamepad_button: None`,
+/// mirroring what the scene loader resolves it to (the loader's own `warn!` is a scene-load-time
+/// concern, tested via `ironhold_cli validate`, not this runtime system) — must never fire from
+/// gamepad, while any keyboard binding on the same slot keeps working unaffected.
+#[test]
+fn test_action_bar_slot_with_unresolved_gamepad_button_never_fires_from_gamepad_keyboard_still_works() {
+    use ironhold_core::capabilities::action_bar::ActionSlotUi;
+
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None, // unparseable gamepad_key resolves to None
+        do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
+        cooldown_secs: None,
+        cost: None,
+        owner_player: None,
+    });
+    let mut controller = test_character_controller();
+    controller.inputs.gamepad_index = Some(0);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        controller,
+        PlayerTarget::default(),
+    ));
+
+    // A gamepad press can't fire it — there's no resolved button to check `just_pressed` against.
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fired"), None,
+        "a slot with no resolved gamepad button must never fire from gamepad"
+    );
+
+    // The keyboard binding is unaffected.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fired").map(String::as_str), Some("yes"),
+        "the slot's keyboard binding must still work when gamepad_key is unresolved"
+    );
+}
+
+/// Regression: an ordinary keyboard-only slot (no `gamepad_key` authored at all) must behave
+/// exactly as before this feature — including the on-unmatched-owner cooldown-event path, which
+/// the restructured `action_bar_input_system` must still emit without ever needing to resolve a
+/// player when the slot has no gamepad binding.
+#[test]
+fn test_keyboard_only_action_bar_slot_on_cooldown_emits_event_without_gamepad_binding() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownMap};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
+        do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
+        cooldown_secs: Some(5.0),
+        cost: None,
+        owner_player: None,
+    });
+    app.world_mut().resource_mut::<CooldownMap>().0.insert("1".to_string(), (3.0, 5.0));
+
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    let on_cooldown = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(t) if t == "action_bar.on_cooldown:1"));
+    assert!(on_cooldown, "keyboard-only slot on cooldown must still emit action_bar.on_cooldown, unchanged by this feature");
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fired"), None,
+        "a slot on cooldown must not fire, regardless of gamepad_key"
+    );
+}
+
+/// The gamepad-only-fire cooldown gate is genuinely new code (the keyboard cooldown check above
+/// runs before player resolution and can't cover this case — a gamepad press needs the owning
+/// player's own `gamepad_index`, resolved only after `players.iter().find(...)` succeeds). Without
+/// this second, symmetric check, a gamepad press on a cooling-down slot would bypass the cooldown
+/// gate entirely: fire `do_actions` off-cooldown and emit no `action_bar.on_cooldown` event.
+#[test]
+fn test_gamepad_only_action_bar_slot_on_cooldown_emits_event_and_does_not_fire() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownMap};
+
+    let mut app = setup_test_app();
+    app.update();
+    let gamepad = connect_test_gamepad(&mut app);
+    app.update();
+
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: None,
+        resolved_gamepad_button: Some(GamepadButton::South),
+        do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
+        cooldown_secs: Some(5.0),
+        cost: None,
+        owner_player: None,
+    });
+    app.world_mut().resource_mut::<CooldownMap>().0.insert("1".to_string(), (3.0, 5.0));
+
+    let mut controller = test_character_controller();
+    controller.inputs.gamepad_index = Some(0);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        controller,
+        PlayerTarget::default(),
+    ));
+
+    press_gamepad_button(&mut app, gamepad, GamepadButton::South);
+    app.update();
+
+    let on_cooldown = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(t) if t == "action_bar.on_cooldown:1"));
+    assert!(on_cooldown, "gamepad-only press on a cooling-down slot must emit action_bar.on_cooldown");
+    assert_eq!(
+        app.world().resource::<GameVariables>().0.get("fired"), None,
+        "a slot on cooldown must not fire from a gamepad press either"
+    );
+}
+
 // ── Stage 5: dynamic_split_screen_system (unit-level) ───────────────────────────
 
 fn test_orbit_camera(target: Entity) -> OrbitCamera {
@@ -3883,6 +4227,7 @@ fn test_action_bar_cost_deducts_from_owning_players_own_stat_map_independently()
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p1_fired".to_string(), "yes".to_string())],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -3891,6 +4236,7 @@ fn test_action_bar_cost_deducts_from_owning_players_own_stat_map_independently()
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "2".to_string(),
         resolved_key: Some(KeyCode::Digit2),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p2_fired".to_string(), "yes".to_string())],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -3946,6 +4292,7 @@ fn test_action_bar_cost_falls_back_to_global_pool_when_player_has_no_stat_map() 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 15.0 }),
@@ -3988,6 +4335,7 @@ fn test_action_bar_cost_check_uses_own_pool_even_when_global_pool_would_cover_it
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("fired".to_string(), "yes".to_string())],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -4043,6 +4391,7 @@ fn test_action_bar_visual_dim_reflects_owning_players_own_pool_independently() {
     let slot1 = app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -4057,6 +4406,7 @@ fn test_action_bar_visual_dim_reflects_owning_players_own_pool_independently() {
     let slot2 = app.world_mut().spawn(ActionSlotUi {
         slot_key: "2".to_string(),
         resolved_key: Some(KeyCode::Digit2),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -4111,6 +4461,7 @@ fn test_action_bar_cost_regen_on_one_players_pool_does_not_affect_the_others_dim
     let slot1 = app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),
@@ -4125,6 +4476,7 @@ fn test_action_bar_cost_regen_on_one_players_pool_does_not_affect_the_others_dim
     let slot2 = app.world_mut().spawn(ActionSlotUi {
         slot_key: "2".to_string(),
         resolved_key: Some(KeyCode::Digit2),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: Some(SlotCost { stat: "mana".to_string(), amount: 20.0 }),

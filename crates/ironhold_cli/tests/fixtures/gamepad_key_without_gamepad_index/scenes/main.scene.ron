@@ -1,0 +1,23 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "test_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        ActionBar((
+            id: "skill_bar",
+            slots: [
+                (
+                    key: "KeyG",
+                    gamepad_key: "South",
+                    do_actions: [Log("test")],
+                ),
+            ],
+        )),
+    ],
+)

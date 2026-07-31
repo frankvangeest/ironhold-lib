@@ -225,6 +225,7 @@ fn test_intent_slot_no_rule_fires_slot_do_actions() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -275,6 +276,7 @@ fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("intent_test".to_string(), "slot_fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -318,6 +320,7 @@ fn test_intent_slot_rule_match_does_not_start_cooldown() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: Some(5.0),
         cost: None,
@@ -374,6 +377,7 @@ fn test_activated_fires_only_on_commit() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
@@ -414,6 +418,7 @@ fn test_activated_fires_only_on_commit() {
     app2.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![],
         cooldown_secs: None,
         cost: None,
@@ -448,6 +453,7 @@ fn test_letter_key_slot_fires_on_its_own_key() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "KeyQ".to_string(),
         resolved_key: Some(KeyCode::KeyQ),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -480,6 +486,7 @@ fn test_function_key_slot_fires_on_its_own_key() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "F2".to_string(),
         resolved_key: Some(KeyCode::F2),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -522,6 +529,7 @@ fn test_lowercase_letter_key_slot_resolves_case_insensitively() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "i".to_string(),
         resolved_key: InputMap::parse_key("i"),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("hotkey_test".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -559,6 +567,7 @@ fn test_owner_player_slot_resolves_against_its_own_players_target() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p1_hit".to_string(), "{target}".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -567,6 +576,7 @@ fn test_owner_player_slot_resolves_against_its_own_players_target() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "2".to_string(),
         resolved_key: Some(KeyCode::Digit2),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p2_hit".to_string(), "{target}".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -609,6 +619,7 @@ fn test_both_players_bars_firing_same_frame_neither_press_dropped() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p1_hit".to_string(), "{target}".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -617,6 +628,7 @@ fn test_both_players_bars_firing_same_frame_neither_press_dropped() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "2".to_string(),
         resolved_key: Some(KeyCode::Digit2),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("p2_hit".to_string(), "{target}".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -671,6 +683,7 @@ fn test_single_player_slot_with_no_owner_still_resolves_via_player_target() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::ModifyStat { key: "{target}.health".to_string(), delta: -25.0 }],
         cooldown_secs: None,
         cost: None,
@@ -703,6 +716,7 @@ fn test_slot_with_unmatched_owner_player_never_fires() {
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("orphan_hit".to_string(), "fired".to_string())],
         cooldown_secs: None,
         cost: None,
@@ -754,6 +768,7 @@ fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
         resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
         do_actions: vec![Action::SetVariable("slot_target_seen".to_string(), "{target}".to_string())],
         cooldown_secs: None,
         cost: None,

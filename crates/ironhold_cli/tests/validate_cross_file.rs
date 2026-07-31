@@ -145,6 +145,77 @@ fn cross_bar_duplicate_action_bar_key_exits_1() {
     );
 }
 
+/// `gamepad_action_bar_slots.md`: an unrecognised `gamepad_key` name is a distinct check from the
+/// keyboard `key` check above — same shape, different field.
+#[test]
+fn unparseable_action_bar_gamepad_key_exits_1() {
+    let (code, stdout) = validate("bad_action_bar_gamepad_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("NotAButton"),
+        "expected the unrecognised gamepad_key name in output:\n{stdout}"
+    );
+}
+
+/// `gamepad_action_bar_slots.md`: the same player binding 2+ slots to the same gamepad button is
+/// a same-player double-fire risk — a different failure mode than the keyboard cross-bar check
+/// (the intent/cooldown pipeline is never keyed by `gamepad_key`), so it gets its own check.
+#[test]
+fn same_player_gamepad_duplicate_key_exits_1() {
+    let (code, stdout) = validate("same_player_gamepad_duplicate_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bar_p0_a") && stdout.contains("bar_p0_b"),
+        "expected both colliding bar ids in output:\n{stdout}"
+    );
+}
+
+/// Two *different* players' bars both binding `gamepad_key: "South"` must NOT be flagged — each
+/// player has their own physical pad, so this isn't a real collision (unlike the keyboard case,
+/// which is genuinely shared hardware).
+#[test]
+fn gamepad_action_bar_different_players_share_button_exits_0() {
+    let (code, stdout) = validate("gamepad_action_bar_different_players_share_button");
+    assert_eq!(code, 0, "expected exit 0 (no false collision), got {code}:\n{stdout}");
+}
+
+/// An omitted `owner_player` and an explicit `owner_player: 0` both mean "the primary player" —
+/// the same `unwrap_or(0)` normalization the runtime's `owns_slot` uses. Two bars sharing a
+/// `gamepad_key` this way must collide exactly like two bars both writing `owner_player: 0`
+/// would.
+#[test]
+fn gamepad_action_bar_omitted_owner_matches_explicit_zero_exits_1() {
+    let (code, stdout) = validate("gamepad_action_bar_omitted_owner_matches_explicit_zero");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bar_omitted") && stdout.contains("bar_explicit_zero"),
+        "expected both colliding bar ids in output:\n{stdout}"
+    );
+}
+
+/// A `gamepad_key`-bound slot for a player whose prefab sets no `inputs.gamepad_index` at all is
+/// silently inert at runtime (no crash, no console message) — this cross-file check is the only
+/// diagnostic for it, mirroring `missing_player_stat_template`'s owner_player -> prefab
+/// cross-check shape exactly.
+#[test]
+fn gamepad_key_without_gamepad_index_exits_1() {
+    let (code, stdout) = validate("gamepad_key_without_gamepad_index");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("skill_bar") && stdout.contains("gamepad_index"),
+        "expected the bar id and a mention of gamepad_index in output:\n{stdout}"
+    );
+}
+
+/// Same shape as above but the player prefab DOES set `inputs.gamepad_index` — must not be
+/// flagged, proving the check is genuinely about the pairing being present, not about
+/// `gamepad_key` itself.
+#[test]
+fn gamepad_key_with_gamepad_index_exits_0() {
+    let (code, stdout) = validate("gamepad_key_with_gamepad_index");
+    assert_eq!(code, 0, "expected exit 0 (pairing present, no error), got {code}:\n{stdout}");
+}
+
 /// `player_stat_widgets.md` Part C: a `stat_label`/`world_stat_bar` keyed `"{self}.<stat>"` with
 /// no matching `stat_templates` entry on that SAME prefab used to render empty forever with no
 /// diagnostic — this cross-file check (and its scene-load `warn!` counterpart) catches it.

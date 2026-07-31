@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::input::gamepad::GamepadButton;
 use std::collections::{HashMap, HashSet};
 use bevy_rapier3d::prelude::{
     Collider, RigidBody, LockedAxes, Damping, Velocity,
@@ -99,6 +100,7 @@ pub fn spawn_scene_v2(
     );
 
     warn_cross_bar_duplicate_keys(scene);
+    warn_same_player_gamepad_duplicate_slots(scene);
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
     // `try_despawn` (not `despawn`): only the 3 overlay root entities are tagged
@@ -753,6 +755,7 @@ pub fn spawn_scene_v2(
             && player_configs.first().is_some_and(|p| p.camera.split.is_some());
 
         warn_missing_player_stat_templates(scene, &player_configs);
+        warn_gamepad_key_without_gamepad_index(scene, &player_configs);
         warn_missing_stat_widget_templates(scene, prefab_catalog);
 
         // Spawn player(s) (delayed if terrain present), flycam, or fallback camera. GLB and
@@ -1245,6 +1248,44 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
     }
 }
 
+/// Warns when the **same player** has 2+ `gamepad_key`-bound slots resolving to the same
+/// `GamepadButton`, across their own bar(s). A different failure mode than the keyboard check
+/// above: the intent/cooldown pipeline is never keyed by `gamepad_key`, so there's no cross-bar
+/// pipeline entanglement to warn about — the risk here is a same-player **double-fire** (one
+/// physical button press activating two different slots for the same player). Keyed by
+/// `(owner_player.unwrap_or(0), GamepadButton)` — matching `owns_slot`'s and
+/// `warn_missing_player_stat_templates`'s existing "`None`/`Some(0)` both mean the primary player"
+/// normalization — so two *different* players' bars sharing a button name (expected: each has
+/// their own physical pad) is correctly not flagged. See
+/// `planning/features/gamepad_action_bar_slots.md`.
+fn warn_same_player_gamepad_duplicate_slots(scene: &GameSceneV2) {
+    use crate::schema::scene_v2::UiNodeDef;
+    let mut seen: HashMap<(u32, GamepadButton), (String, String)> = HashMap::new(); // (player, button) -> (bar id, slot key)
+    for el in &scene.ui {
+        let UiNodeDef::ActionBar(bar) = el else { continue };
+        let owner_player = bar.owner_player.unwrap_or(0);
+        for slot in &bar.slots {
+            let Some(gk) = slot.gamepad_key.as_ref() else { continue };
+            let Some(btn) = InputMap::parse_gamepad_button(gk) else { continue }; // unparseable gamepad_key is already warned per-slot
+            match seen.get(&(owner_player, btn)) {
+                Some((prev_bar_id, prev_slot_key)) => {
+                    warn!(
+                        "Player {} has 2+ ActionBar slots bound to gamepad button {:?}: bar '{}' \
+                         slot '{}' and bar '{}' slot '{}'. One press of this button would activate \
+                         both slots for this player. Use disjoint gamepad_key bindings across this \
+                         player's own bar(s) (a different player sharing this button name is fine \
+                         — that's a different physical pad).",
+                        owner_player, btn, prev_bar_id, prev_slot_key, bar.id, slot.key
+                    );
+                }
+                None => {
+                    seen.insert((owner_player, btn), (bar.id.clone(), slot.key.clone()));
+                }
+            }
+        }
+    }
+}
+
 /// `stat_label`/`world_stat_bar` authored with an entity-local (`"{self}.<stat>"`) key require a
 /// matching entry in that SAME prefab's `stat_templates`, or the widget silently renders empty
 /// forever with no runtime feedback. Generic across every entity kind (players included, since a
@@ -1317,6 +1358,34 @@ fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[Pla
                     bar.id, slot.key, cost.stat, owner_player, cost.stat
                 );
             }
+        }
+    }
+}
+
+/// A slot's `gamepad_key` resolves against its owning player's own `InputMap.gamepad_index`
+/// (`resolve_gamepad` never falls back to "any connected pad") — so a slot that declares
+/// `gamepad_key` for a player whose prefab sets no `gamepad_index` at all is silently inert: no
+/// crash, no warning, the slot simply never fires from gamepad (its `key` binding, if any, still
+/// works). Mirrors `warn_missing_player_stat_templates`'s owner_player -> player_config
+/// cross-check exactly, including the `unwrap_or(0)` "None/Some(0) both mean the primary player"
+/// normalization. See `planning/features/gamepad_action_bar_slots.md`.
+fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
+    use crate::schema::scene_v2::UiNodeDef;
+    for el in &scene.ui {
+        let UiNodeDef::ActionBar(bar) = el else { continue };
+        let owner_player = bar.owner_player.unwrap_or(0);
+        let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)
+        else { continue };
+        if player_config.inputs.gamepad_index.is_some() { continue; }
+        for slot in &bar.slots {
+            let Some(gamepad_key) = &slot.gamepad_key else { continue };
+            warn!(
+                "ActionBar '{}' slot '{}' declares gamepad_key '{}', but player_index {}'s prefab \
+                 sets no inputs.gamepad_index — this binding will never fire from gamepad (the \
+                 slot's keyboard key, if any, still works). Add gamepad_index to this player's \
+                 prefab, or remove gamepad_key if a gamepad binding isn't intended.",
+                bar.id, slot.key, gamepad_key, owner_player
+            );
         }
     }
 }
@@ -1777,6 +1846,16 @@ fn spawn_ui_element_node(
                                 }
                             }
                         }
+                        let resolved_gamepad_button = slot.gamepad_key.as_ref().and_then(|gk| {
+                            let parsed = InputMap::parse_gamepad_button(gk);
+                            if parsed.is_none() {
+                                warn!(
+                                    "ActionBar '{}': slot '{}' has an unrecognised gamepad_key {:?} — it will never fire from gamepad",
+                                    bar.id, key, gk
+                                );
+                            }
+                            parsed
+                        });
                         let hint_text = slot.key_hint.clone().unwrap_or_else(|| {
                             key.strip_prefix("Key").map(str::to_string).unwrap_or_else(|| key.clone())
                         });
@@ -1799,6 +1878,7 @@ fn spawn_ui_element_node(
                                 ActionSlotUi {
                                     slot_key: key.clone(),
                                     resolved_key,
+                                    resolved_gamepad_button,
                                     do_actions: slot.do_actions.clone(),
                                     cooldown_secs: slot.cooldown_secs,
                                     cost: slot.cost.clone(),

@@ -1,0 +1,34 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "box_01",
+            prefab: "box",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        ActionBar((
+            id: "bar_omitted",
+            slots: [
+                (
+                    key: "KeyQ",
+                    gamepad_key: "South",
+                    do_actions: [Log("first")],
+                ),
+            ],
+        )),
+        ActionBar((
+            id: "bar_explicit_zero",
+            owner_player: 0,
+            slots: [
+                (
+                    key: "KeyR",
+                    gamepad_key: "South",
+                    do_actions: [Log("second")],
+                ),
+            ],
+        )),
+    ],
+)

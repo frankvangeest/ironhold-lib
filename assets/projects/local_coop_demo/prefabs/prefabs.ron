@@ -453,6 +453,10 @@
           jump:         "Space",
           run:          "ShiftLeft",
           strafe_mouse_button: None,
+          gamepad_index: 0,  // pad 0, alongside a P2 on pad 1 — see player_p2_split's inputs
+          // comment. The keyboard bindings above keep working alongside it (input is additive,
+          // not a replacement). Pairs with action_bar_p1's gamepad_key in room3.scene.ron to make
+          // that action bar fire from this pad too (see gamepad_action_bar_slots.md).
           // Phase 1 (per_player_split_screen_targeting.md) playtest aid: explicit override of
           // InputMap's "Tab" default — Tab is intercepted by browsers for focus navigation in
           // WASM builds (see the InputMap field table in docs/20_data_formats.md), so it would
@@ -524,6 +528,10 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
+          gamepad_index: 1,  // pad 1, alongside a P1 on pad 0 — see player_p1_split's inputs
+          // comment. The keyboard bindings above keep working alongside it (input is additive,
+          // not a replacement). Pairs with action_bar_p2's gamepad_key in room3.scene.ron to make
+          // that action bar fire from this pad too (see gamepad_action_bar_slots.md).
           // Phase 1 (per_player_split_screen_targeting.md) playtest aid: deliberately distinct
           // from player 1's "Tab" above (both defaulting to "Tab" would make both players
           // Tab-cycle in lockstep on a single keyboard press, masking the per-player fix).

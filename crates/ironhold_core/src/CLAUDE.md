@@ -193,6 +193,34 @@ phase). Every player-construction site already inserts `PlayerTarget` (see the f
 above), so this holds today — but check it again against both spawn paths if a future change ever
 touches player-entity construction.
 
+**Gamepad-routed action-bar slots (`planning/features/done/gamepad_action_bar_slots.md`)** —
+`ActionSlotDef.gamepad_key: Option<String>` (parsed via `InputMap::parse_gamepad_button` at scene
+load into `ActionSlotUi.resolved_gamepad_button`, same call site as `resolved_key`) lets a slot
+also fire from gamepad, alongside its existing keyboard `key`. The two devices resolve
+**differently** — keyboard is shared hardware (`key` fires from the one global
+`ButtonInput<KeyCode>` regardless of `owner_player`, unchanged pre-existing behavior); a gamepad is
+not shared the same way, so `gamepad_key` only fires from the **owning player's own**
+`InputMap.gamepad_index`, resolved via the same `resolve_gamepad(sorted_gamepads, index)` helper
+every other gamepad-consuming system uses (`runtime::input::resolve_gamepad`). `action_bar_input_
+system`'s query widened again to include `&CharacterController` (for `gamepad_index`) and a new
+`Query<(Entity, &Gamepad)>`, sorted once per system call. The fast-path skip (`!keyboard_fired &&
+resolved_gamepad_button.is_none()`) preserves the exact perf profile and cooldown-event behavior of
+every keyboard-only slot — the gamepad check, and the owning-player lookup it requires, only ever
+run for slots that actually declare `gamepad_key`. The keyboard cooldown-gate-before-player-lookup
+ordering is preserved byte-for-byte; a second, symmetric cooldown check runs after player
+resolution to cover a gamepad-only fire (which couldn't be checked earlier, since it needs the
+owning player's own `gamepad_index`) — the two checks are mutually exclusive on `keyboard_fired`, so
+neither double-emits. `action_bar_visual_system` is untouched (cost/cooldown-driven only, no input
+reads, `owns_slot`'s signature unchanged). Collision detection needs a **second, separately-scoped**
+pass distinct from the existing scene-wide keyboard check: `gamepad_key` isn't part of the
+intent/cooldown pipeline's key space at all, so the risk isn't cross-bar pipeline entanglement —
+it's a same-player double-fire (one physical press activating 2 slots for the same player). Both
+`scene_loader.rs::warn_same_player_gamepad_duplicate_slots` and `ironhold_cli validate`'s matching
+check key by `(owner_player.unwrap_or(0), GamepadButton)` — the same "`None`/`Some(0)` both mean the
+primary player" normalization `owns_slot`/`warn_missing_player_stat_templates` already use — so two
+*different* players sharing a button name (each has their own physical pad) is correctly not
+flagged.
+
 **`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
 `click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
 proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the
@@ -744,13 +772,15 @@ project"/UI conventions elsewhere in this file) — `IsDefaultUiCamera` being co
 camera does not change this in practice, but a future refactor of that setup should re-verify it.
 
 **Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
-specific gamepad instead of the keyboard. Bevy has no built-in numeric gamepad index (each
+specific gamepad *in addition to* the keyboard (additive, not a replacement — see the doc comment
+on the field itself). Bevy has no built-in numeric gamepad index (each
 connected pad is its own `Gamepad` entity); `resolve_gamepad` (`runtime/input.rs`, `pub(crate)`)
 takes an already-sorted-by-`Entity::index()` slice built once per system per frame and resolves
 `gamepad_index` against it — every gamepad-consuming system (`input_translator_system`,
-`tab_targeting_system`, `interactable_system`, `camera_orbit_system`) builds its own sorted slice
-once and calls this shared resolver, rather than re-sorting per player. `gamepad_index: 0` means
-"whichever gamepad connected first this session," not a hardware-guaranteed slot.
+`tab_targeting_system`, `interactable_system`, `camera_orbit_system`, and — as of
+`gamepad_action_bar_slots.md` — `action_bar_input_system`) builds its own sorted slice once and
+calls this shared resolver, rather than re-sorting per player. `gamepad_index: 0` means "whichever
+gamepad connected first this session," not a hardware-guaranteed slot.
 
 Button/axis mapping is now fully RON-configurable via `InputMap` — `gamepad_jump`/`gamepad_run`/
 `gamepad_interact`/`gamepad_target_next: String` (parsed via `InputMap::parse_gamepad_button`,
