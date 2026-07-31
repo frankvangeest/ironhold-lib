@@ -149,7 +149,7 @@
   ui: [
     Label((
       id: "controls_hint",
-      text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift",
+      text: "P1: WASD+Space+Shift | P2: Arrows+Enter+RShift | +controller (pad 0/1)",
       position: (20.0, 20.0),
       size: (900.0, 32.0),
     )),
@@ -188,7 +188,7 @@
     // ~59-char budget at this font size (see the room_hint comment for that budget's origin).
     Label((
       id: "ability_hint",
-      text: "Ability: P1=G  P2=L (own target only, costs own mana pool)",
+      text: "Ability: P1=G/RT  P2=L/RT (RT = controller right trigger, own mana pool)",
       position: (20.0, 196.0),
       size: (900.0, 32.0),
     )),
@@ -224,6 +224,12 @@
         (
           key: "KeyG",
           key_hint: "P1",
+          gamepad_key: "RightTrigger",  // pairs with player_p1_split's gamepad_index: 0 (in
+          // prefabs/prefabs.ron) — without that pairing this binding would be silently inert
+          // (validated: ironhold_cli flags a mismatched pairing). Not "South" — that's this
+          // player's gamepad_jump default (schema/player.rs), and a slot sharing it would fire
+          // the ability *and* jump on one press. See docs/20_data_formats.md's gamepad button
+          // names table (gamepad_action_bar_slots.md).
           cost: (stat: "mana", amount: 20.0),
           do_actions: [
             ModifyStat(key: "{target}.health", delta: -10.0),
@@ -242,6 +248,12 @@
         (
           key: "KeyL",
           key_hint: "P2",
+          gamepad_key: "RightTrigger",  // pairs with player_p2_split's gamepad_index: 1 (in
+          // prefabs/prefabs.ron) — without that pairing this binding would be silently inert
+          // (validated: ironhold_cli flags a mismatched pairing). Not "South" — that's this
+          // player's gamepad_jump default (schema/player.rs), and a slot sharing it would fire
+          // the ability *and* jump on one press. See docs/20_data_formats.md's gamepad button
+          // names table (gamepad_action_bar_slots.md).
           cost: (stat: "mana", amount: 20.0),
           do_actions: [
             ModifyStat(key: "{target}.health", delta: -10.0),

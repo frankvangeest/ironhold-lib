@@ -435,6 +435,48 @@ fn cross_file_checks(
                 }
             }
         }
+
+        // Same-player gamepad-slot collision — a different failure mode than the keyboard check
+        // above, so a separate pass: the intent/cooldown pipeline is never keyed by `gamepad_key`,
+        // so there's no cross-bar pipeline entanglement risk here. The risk is a same-player
+        // double-fire (one physical button press activating 2 slots for the same player). Keyed
+        // by `(owner_player.unwrap_or(0), GamepadButton)` — matching the runtime's
+        // `owns_slot`/`warn_missing_player_stat_templates` "None/Some(0) both mean the primary
+        // player" normalization — so two *different* players' bars sharing a button name (each has
+        // their own physical pad) is correctly not flagged. See
+        // `planning/features/gamepad_action_bar_slots.md`.
+        let mut seen_gamepad: std::collections::HashMap<(u32, _), (&str, &str)> = std::collections::HashMap::new();
+        for node in &scene.ui {
+            let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+            let owner_player = bar.owner_player.unwrap_or(0);
+            for slot in &bar.slots {
+                let Some(gk) = &slot.gamepad_key else { continue };
+                match ironhold_core::schema::player::InputMap::parse_gamepad_button(gk) {
+                    None => errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "ActionBar {:?}: slot {:?} has an unrecognised gamepad_key {:?} — it will never fire from gamepad",
+                            bar.id, slot.key, gk
+                        ),
+                        error_type: "invalid_gamepad_key",
+                    }),
+                    Some(btn) => {
+                        if let Some((prev_bar, prev_key)) = seen_gamepad.insert((owner_player, btn), (&bar.id, &slot.key)) {
+                            errors.push(CrossFileError {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "Player {} has 2+ ActionBar slots bound to gamepad button {:?}: ActionBar {:?} \
+                                     slot {:?} and ActionBar {:?} slot {:?} — one press of this button would \
+                                     activate both slots for this player",
+                                    owner_player, btn, prev_bar, prev_key, bar.id, slot.key
+                                ),
+                                error_type: "same_player_gamepad_duplicate_key",
+                            });
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Per-player action-bar cost slots whose stat isn't declared on the owning player's own
@@ -471,6 +513,41 @@ fn cross_file_checks(
                             error_type: "missing_player_stat_template",
                         });
                     }
+                }
+            }
+        }
+    }
+
+    // A slot's `gamepad_key` resolves against its owning player's own `InputMap.gamepad_index`
+    // (never any connected pad — see `runtime::input::resolve_gamepad`), so a slot that declares
+    // `gamepad_key` for a player whose prefab sets no `gamepad_index` at all is silently inert: no
+    // crash, no runtime signal, the slot simply never fires from gamepad. Mirrors the
+    // `missing_player_stat_template` check above exactly, including the `unwrap_or(0)`
+    // normalization. See `planning/features/gamepad_action_bar_slots.md`.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            for node in &scene.ui {
+                let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+                let owner_player = bar.owner_player.unwrap_or(0);
+                let player_prefab = scene.entities.iter()
+                    .filter_map(|e| catalog.prefabs.get(&e.prefab))
+                    .find(|p| p.player_index == owner_player && p.components.tags.iter().any(|t| t == "player"));
+                let Some(prefab) = player_prefab else { continue };
+                let has_gamepad_index = prefab.components.inputs.as_ref()
+                    .is_some_and(|i| i.gamepad_index.is_some());
+                if has_gamepad_index { continue; }
+                for slot in &bar.slots {
+                    let Some(gamepad_key) = &slot.gamepad_key else { continue };
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "ActionBar {:?} slot {:?} declares gamepad_key {:?}, but player_index \
+                             {}'s prefab sets no inputs.gamepad_index — this binding will never \
+                             fire from gamepad (the slot's keyboard key, if any, still works)",
+                            bar.id, slot.key, gamepad_key, owner_player
+                        ),
+                        error_type: "gamepad_key_without_gamepad_index",
+                    });
                 }
             }
         }

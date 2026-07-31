@@ -870,7 +870,7 @@ StatSpread((
 
 #### `ActionBar((...))` ✅
 
-A row of skill slots, each bound to any keyboard key. Pressing a slot's key fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **Keyboard only** — there is no gamepad-button or mouse-click binding for slots (a designer-clicked slot button does nothing; only the bound key fires it). This remains true per-player (see `owner_player` below): in a split-screen scene with one keyboard player and one gamepad player, the gamepad player's bar renders fully but can never fire — the only fully-usable multi-player configuration today is two players sharing one keyboard with disjoint slot keys.
+A row of skill slots, each bound to a keyboard key and, optionally, a gamepad button (see `gamepad_key` below). Pressing a slot's bound key or button fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **No mouse-click binding** — a designer-clicked slot button does nothing; only the bound key/button fires it. `owner_player` (below) controls the *acting* player (target/cost resolution) for a slot, not *which device* may press it: `key` is genuinely shared keyboard hardware, so any player's keyboard can press it regardless of `owner_player` — this has always been true and isn't new. `gamepad_key` is different: it only fires from the *owning* player's own gamepad (`owner_player` → `InputMap.gamepad_index`), since a gamepad is not shared hardware the same way. This makes the realistic "one keyboard player + one gamepad player" split-screen pairing fully usable — see the worked example under `gamepad_key` below.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -890,7 +890,8 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string |
+| `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string. Stays keyboard-only and required even for a gamepad-routed slot — see `gamepad_key` below |
+| `gamepad_key` | `Option<String>` | `None` | Gamepad button that **also** activates this slot, in addition to `key` — see "Valid gamepad button names" in the `InputMap` section below. Resolved against the slot's **owning player's own** gamepad (`owner_player` → that player's `InputMap.gamepad_index`), never any connected pad — a gamepad is not shared hardware the way a keyboard is. An unrecognised name warns at scene load (bar + slot named) and an `ironhold_cli validate` error; the slot's `key` binding, if any, still works. Omit for a keyboard-only slot (default) |
 | `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. White pixels show the exact specified color; dark pixels stay dark. Omit to render the icon untinted (see note below) |
@@ -900,7 +901,7 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 | `label` | `Option<String>` | `None` | Ability/tooltip name (e.g. `"Heavy Strike"`) — **reserved for a future hover tooltip, not yet rendered anywhere.** Does **not** affect the on-screen corner glyph — see `key_hint` |
 | `key_hint` | `Option<String>` | `None` | Overrides the on-screen corner key glyph. Omit to pretty-print `key` (strips the `"Key"` prefix, so `"KeyQ"` → `"Q"`; digits and `"F2"`-style names render as-is — but modifier/arrow keys render their full raw name, e.g. `"ShiftLeft"`/`"ArrowUp"`, since only the `"Key"` prefix is stripped; set `key_hint` to a short glyph for those). Distinct from `label` — set both when you want a named ability with a custom glyph |
 
-**Accepted key names** (`key` / any `parse_key`-recognised string): digits `"0"`-`"9"`; numpad digits `"Numpad0"`-`"Numpad9"`; bare letters (`"q"`, `"Q"`, case-insensitive) or `"KeyQ"`-style names; function keys `"F1"`-`"F12"`; `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`; arrow keys `"ArrowUp"`/`"ArrowDown"`/`"ArrowLeft"`/`"ArrowRight"`; modifier keys `"ShiftLeft"`/`"ShiftRight"`/`"ControlLeft"`/`"ControlRight"`/`"AltLeft"`/`"AltRight"`. **Not supported** (the slot renders but never fires — a `warn!` at scene load and an `ironhold_cli validate` error both flag this): mouse buttons, modifier chords (e.g. `"Shift+1"`), gamepad buttons. Two slots in the same bar resolving to the same key is also flagged (both the runtime `warn!` and `validate`) — the first-listed slot fires, the other never does. **Only within one bar** — two *different* action bars using the same key are not currently cross-checked (see `planning/claude_suggestions.md`).
+**Accepted key names** (`key` / any `parse_key`-recognised string): digits `"0"`-`"9"`; numpad digits `"Numpad0"`-`"Numpad9"`; bare letters (`"q"`, `"Q"`, case-insensitive) or `"KeyQ"`-style names; function keys `"F1"`-`"F12"`; `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`; arrow keys `"ArrowUp"`/`"ArrowDown"`/`"ArrowLeft"`/`"ArrowRight"`; modifier keys `"ShiftLeft"`/`"ShiftRight"`/`"ControlLeft"`/`"ControlRight"`/`"AltLeft"`/`"AltRight"`. **Not supported** (the slot renders but never fires from keyboard — a `warn!` at scene load and an `ironhold_cli validate` error both flag this): mouse buttons, modifier chords (e.g. `"Shift+1"`). Gamepad buttons are a separate field — see `gamepad_key` above, not `key`. Two slots in the same bar resolving to the same key is also flagged (both the runtime `warn!` and `validate`) — the first-listed slot fires, the other never does. This check is **scene-wide, not just within one bar** — two *different* action bars sharing a key are also flagged, since the intent/cooldown pipeline is keyed by `key` alone across the whole scene (see `error_type: "cross_bar_duplicate_key"`). `gamepad_key` collisions are checked separately, scoped per-player (see the worked example below) — a shared `gamepad_key` across two *different* players' bars is not a collision, since each player has their own physical pad.
 
 > **Icon colors are sRGB** — author values the same way you would in an image editor or CSS.
 > `(0.85, 0.15, 0.15, 1.0)` renders as the red you expect; no gamma conversion needed.
@@ -951,6 +952,74 @@ A row of skill slots, each bound to any keyboard key. Pressing a slot's key fire
 > authoring mistake, not an intentional shared-pool choice) — but declaring **no** `stat_templates`
 > at all is the ordinary, silent fallback and is never flagged, since that's simply "this player
 > doesn't have their own economy," not a mistake.
+
+> **Gamepad-routed action bar slots.** A slot fires on **either** device, but the two resolve
+> differently. Keyboard is genuinely shared hardware: `key` fires from the one global keyboard
+> input regardless of which player is "supposed" to press it — unchanged, pre-existing behavior.
+> A gamepad is not shared the same way, so `gamepad_key` only fires from the slot's **owning
+> player's own** gamepad (`owner_player` → that player's `InputMap.gamepad_index`), never any
+> connected pad. Bind both on the same slot to let a mixed keyboard+gamepad local-coop pairing use
+> either device. `local_coop_demo`'s `scenes/room3.scene.ron` has both lines pre-authored but
+> commented out (so the project validates without a controller attached) — uncomment the scene's
+> `gamepad_key` and the matching prefab's `gamepad_index` together (both are required; see below)
+> to try it:
+> ```ron
+> // prefabs.ron — the P2 player (player_index: 1) reads from gamepad slot 1 (pad numbering is
+> // independent of player_index — with a single controller attached, use gamepad_index: 0 instead)
+> "player_p2": (
+>   kind: Actor,
+>   model: "character_female",
+>   player_index: 1,
+>   components: ( tags: ["player"], inputs: ( /* ...movement keys... */ gamepad_index: 1 ), /* ... */ ),
+> ),
+> ```
+> ```ron
+> // scene.ron
+> ActionBar((
+>   id: "action_bar_p2",
+>   owner_player: 1,
+>   slots: [
+>     ( key: "KeyL", gamepad_key: "RightTrigger", do_actions: [ /* ... */ ] ),
+>   ],
+> )),
+> ```
+> Pressing `L` on the keyboard **or** the right trigger (Xbox RB / PlayStation R1) on player 1's
+> own gamepad fires this slot; player 0 pressing the same button on a *different* pad never does.
+> Pick a button the owning player's own `InputMap` isn't already using — `gamepad_jump`/
+> `gamepad_run`/`gamepad_interact`/`gamepad_target_next` default to South/East/West/North, and a
+> slot sharing one of those fires the ability **and** the movement action on a single press; this
+> overlap is not currently flagged by either the scene-load warning or `ironhold validate`.
+>
+> **Both halves of the pairing are required.** A `gamepad_key` on a player whose prefab sets no
+> `gamepad_index` at all is silently inert — no crash, no console message, the slot simply never
+> fires from gamepad (its `key` binding, if any, still works). This one **is** flagged: a scene-load
+> warning in the browser console, and an `ironhold_cli validate` error
+> (`gamepad_key_without_gamepad_index`).
+>
+> `gamepad_key` has no auto-derived on-screen glyph — `key_hint` has no gamepad-button mode, so a
+> gamepad-routed slot's corner glyph is still whatever `key`/`key_hint` resolves to (or author
+> `key_hint` manually with a short label like `"RT"` if you want to hint the gamepad binding
+> instead — avoid circled-letter glyphs like `"Ⓐ"`; the engine's default UI font likely doesn't
+> cover that Unicode range and the glyph would render blank). This is a known limitation, not an
+> oversight.
+>
+> Gamepad activations emit the identical events as keyboard ones — every `action_bar.*`/
+> `intent.slot.*` event name always uses the slot's keyboard `key`, never `gamepad_key`, regardless
+> of which device fired it (see the events table below).
+>
+> **Collision checking example** — two different players' bars sharing a `gamepad_key` is fine
+> (each has their own pad); the *same* player binding it twice is a real double-fire risk. Both are
+> flagged in the browser console at scene load and by `ironhold_cli validate`:
+> ```ron
+> // Fine — different players, different physical pads. No warning, no validate error.
+> ActionBar((id: "bar_p1", owner_player: 0, slots: [(key: "KeyG", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
+> ActionBar((id: "bar_p2", owner_player: 1, slots: [(key: "KeyL", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
+> ```
+> ```ron
+> // Error — same player (owner_player: 0 twice), same button: one press fires both slots.
+> ActionBar((id: "bar_a", owner_player: 0, slots: [(key: "KeyG", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
+> ActionBar((id: "bar_b", owner_player: 0, slots: [(key: "KeyH", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
+> ```
 
 **Pipeline events emitted by the action bar:**
 
@@ -1056,7 +1125,9 @@ player. Give each bar's slots disjoint `key`s — two bars sharing a key are fla
 runtime `warn!` at scene load and an `ironhold_cli validate` error, since the intent/cooldown
 pipeline (`CooldownMap`/`PendingIntentActions`/`HandledIntentSlots`) is keyed by the slot key
 string alone, scene-wide — a collision silently suppresses the *other* bar's pending slot, not
-just picks the wrong target.
+just picks the wrong target. To let a gamepad player fire their own bar (the realistic "one
+keyboard player + one gamepad player" pairing), add `gamepad_key` to their slots — see "Gamepad-
+routed action bar slots" above.
 
 ```ron
 ActionBar((
@@ -1833,7 +1904,7 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from the connected gamepad at this index: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, and jump/run/interact/target-cycle use the buttons below (all overridable, not fixed). **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from the connected gamepad at this index: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
 | `gamepad_run` | `String` | `"East"` | Gamepad button to hold-run — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
@@ -1855,11 +1926,12 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 > hypothetical.
 
 **Valid gamepad button names** — governs `InputMap`'s `gamepad_jump`/`gamepad_run`/
-`gamepad_interact`/`gamepad_target_next` fields **and** `global_unclaimed_gamepad_bindings`/
-`scene_unclaimed_gamepad_bindings` (see [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below) —
-same Xbox / PlayStation physical mapping either way. An unrecognized name is `warn!`-logged (and,
-for the bindings maps, also flagged by `ironhold validate`) and treated as unbound (no crash),
-mirroring keyboard key-name validation:
+`gamepad_interact`/`gamepad_target_next` fields, `global_unclaimed_gamepad_bindings`/
+`scene_unclaimed_gamepad_bindings` (see [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below),
+and `ActionSlotDef.gamepad_key` (see `ActionBar` above) — same Xbox / PlayStation physical mapping
+in every case. An unrecognized name is `warn!`-logged (and, for the bindings maps and
+`gamepad_key`, also flagged by `ironhold validate`) and treated as unbound (no crash), mirroring
+keyboard key-name validation:
 
 | Name | Xbox | PlayStation |
 |------|------|--------------|

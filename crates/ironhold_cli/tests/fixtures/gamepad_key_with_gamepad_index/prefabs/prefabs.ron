@@ -1,0 +1,22 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "KeyW",
+                    backward: "KeyS",
+                    left: "KeyA",
+                    right: "KeyD",
+                    strafe_left: "KeyQ",
+                    strafe_right: "KeyE",
+                    jump: "Space",
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+    },
+)

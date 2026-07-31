@@ -1,6 +1,6 @@
 # Feature: Gamepad-Routed Action-Bar Slots
 
-_Status: Ready_
+_Status: Done (shipped 2026-07-31)_
 _Planned at: `6c1a726` (2026-07-19)_
 
 **Hard dependency: `gamepad_controller_input.md` must merge first.** This plan reuses that
@@ -122,27 +122,27 @@ normalization precedent already used elsewhere in the same file
 is correctly not a collision (different physical pads).
 
 ## Tasks
-- [ ] `ActionSlotDef`: add `#[serde(default)] pub gamepad_key: Option<String>` (schema/scene_v2.rs);
+- [x] `ActionSlotDef`: add `#[serde(default)] pub gamepad_key: Option<String>` (schema/scene_v2.rs);
       fix the stale "gamepad buttons not supported" doc comment on `key`
-- [ ] `ActionSlotUi`: add `resolved_gamepad_button: Option<GamepadButton>`; parse at scene load via
+- [x] `ActionSlotUi`: add `resolved_gamepad_button: Option<GamepadButton>`; parse at scene load via
       `InputMap::parse_gamepad_button`, with its own per-slot `warn!` (bar + slot name) on an
       unparseable name, mirroring the existing keyboard warn's diagnostic shape
-- [ ] `action_bar_input_system`: widen the existing `players` query tuple to include
+- [x] `action_bar_input_system`: widen the existing `players` query tuple to include
       `&CharacterController`; add `Query<(Entity, &Gamepad)>`; restructure per the ordered
       fast-path/fire-check shown in Approach — preserve the existing behavior for keyboard-only
       slots exactly
-- [ ] Extend both `warn_cross_bar_duplicate_keys` (`scene_loader.rs`) and `ironhold_cli validate`'s
+- [x] Extend both `warn_cross_bar_duplicate_keys` (`scene_loader.rs`) and `ironhold_cli validate`'s
       action-bar collision check (`validate.rs`) with a second pass keyed by
       `(bar.owner_player.unwrap_or(0), GamepadButton)` — a same-player double-fire check, distinct
       from (not replacing) the existing scene-wide keyboard pipeline-collision check
-- [ ] Demo wiring — `local_coop_demo/scenes/room3.scene.ron` already has two `owner_player`-scoped
+- [x] Demo wiring — `local_coop_demo/scenes/room3.scene.ron` already has two `owner_player`-scoped
       bars (`action_bar_p1`/`action_bar_p2`) and `prefabs.ron` already has commented-out
       `// gamepad_index: 0,`/`// gamepad_index: 1,` seams on the matching player prefabs. Add a
       commented-out `gamepad_key: "South",` (or similar) to one of `action_bar_p2`'s slots, with a
       one-line comment cross-referencing the sibling plan's button-names table and noting that
       uncommenting it also requires uncommenting `player_p2_split`'s `gamepad_index` — kept
       commented so `ron_lint`/`validate` pass without requiring a connected pad by default
-- [ ] Tests — new: a gamepad-routed `owner_player: Some(1)` slot fires from player 1's own gamepad
+- [x] Tests — new: a gamepad-routed `owner_player: Some(1)` slot fires from player 1's own gamepad
       button and does *not* fire from player 0's press of the same button name on a *different*
       pad (the core correctness case); new: a slot with both `key` and `gamepad_key` bound fires
       from either device; new: the per-player gamepad collision check fires only when the same
@@ -153,8 +153,8 @@ is correctly not a collision (different physical pads).
       rs`'s cost-pool section) are unaffected. **Reuses whatever headless gamepad-test harness
       pattern the dependency (`gamepad_controller_input.md`) establishes** — no `Gamepad`-spawning
       test pattern exists in this repo yet; do not re-derive it here, inherit it
-- [ ] `cargo check -p ironhold_cli` — schema change gate
-- [ ] Docs — `docs/20_data_formats.md`: `ActionSlotDef` table gets `gamepad_key`; fix the stale
+- [x] `cargo check -p ironhold_cli` — schema change gate
+- [x] Docs — `docs/20_data_formats.md`: `ActionSlotDef` table gets `gamepad_key`; fix the stale
       "not supported: … gamepad buttons" line *and* the adjacent already-false "not currently
       cross-checked" cross-bar claim in the same sentence (both checks already exist today,
       independent of this feature); one worked RON example showing a slot with both `key` and
@@ -165,7 +165,7 @@ is correctly not a collision (different physical pads).
       must be manually authored (e.g. `"Ⓐ"`/`"South"`), a known limitation, not an oversight; a
       clarification that `owner_player` has always routed target/cost only, never gated *which
       physical device* may press a slot's keyboard `key` — pre-existing behavior, not new
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`'s Phase 2 action-bar / gamepad-routing sections:
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`'s Phase 2 action-bar / gamepad-routing sections:
       update to describe the widened query shape and the new per-player gamepad collision pass
 
 ## Open questions
@@ -183,3 +183,59 @@ None outstanding.
   reports a collision, matching the existing keyboard duplicate-key error shape.
 - Given any pre-existing keyboard-only action bar (no `gamepad_key` authored anywhere), when this
   ships, then behavior — including the on-unmatched-owner cooldown-event path — is unchanged.
+
+## Amendment (2026-07-31, post-implementation review findings)
+
+All 4 post-implementation reviews (alignment, system-architect, debug-detective, ux-gamedesigner)
+found real, fixed issues:
+
+- **Vacuous test (debug-detective, HIGH)**: `test_gamepad_action_bar_slot_with_both_key_and_
+  gamepad_key_fires_from_either_device` released the keyboard key but never called `clear_just_
+  pressed` — with no `InputPlugin` in this test harness (`MinimalPlugins` only), `just_pressed`
+  latches forever, so the "gamepad alone fires it" assertion passed for the wrong reason (a stale
+  keyboard bit, not the actual gamepad press). Fixed; also strengthened with a same-frame
+  both-devices-pressed check (a stat tally proving exactly one fire, not two) to directly verify
+  the "cannot double-fire" property debug-detective proved by code reading but that wasn't tested.
+- **Untested branch (debug-detective, HIGH)**: the new gamepad-only-fire cooldown gate (the one
+  piece of genuinely new control flow — a slot on cooldown pressed only via gamepad) had zero
+  coverage; deleting that whole `if` block would have left every existing test passing while a
+  gamepad press silently bypassed the cooldown gate. Added `test_gamepad_only_action_bar_slot_on_
+  cooldown_emits_event_and_does_not_fire`.
+- **Real button collision in the shipped demo/docs (alignment + ux-gamedesigner)**: the demo's and
+  docs' worked examples all used `gamepad_key: "South"` — which collides with `InputMap.gamepad_
+  jump`'s own default (`"South"`), so a designer following the instructions verbatim would jump
+  *and* cast on one press, with nothing flagging it. Changed every example to `"RightTrigger"` and
+  added a callout sentence warning against reusing the owning player's own `gamepad_jump`/
+  `gamepad_run`/`gamepad_interact`/`gamepad_target_next` buttons (that overlap still isn't
+  detected — logged as a documented limitation, not silently left unmentioned).
+- **Silent no-op gap (alignment + ux-gamedesigner, both ranked this their #1/#2 fix)**: a
+  `gamepad_key` on a player whose prefab sets no `gamepad_index` at all was completely silent —
+  no crash, no warning, the binding just never fires. Added `warn_gamepad_key_without_gamepad_
+  index` (scene_loader.rs, mirrors `warn_missing_player_stat_templates`'s exact shape) plus a
+  matching `ironhold_cli validate` error (`gamepad_key_without_gamepad_index`), each with their own
+  fixture/test.
+- **Headline acceptance criterion strengthened (system-architect)**: the original test proved
+  "unclaimed pad doesn't fire" but not the plan's actual headline claim (two *live* players, two
+  pads, identical `gamepad_key`, only the pressing player's slot fires). Added `test_two_players_
+  two_pads_same_gamepad_key_each_fires_only_their_own_slot` to prove this directly at runtime.
+- **Minor cleanups**: hoisted `warn_same_player_gamepad_duplicate_slots` to a sibling call instead
+  of a tail-call inside the keyboard check (was invisible to a future reader of the keyboard
+  function); dropped a redundant `With<CharacterController>` query filter now that the tuple
+  already fetches `&CharacterController`; softened a doc-comment perf claim that overstated the
+  fast path's coverage (it only covers slots with no `gamepad_key` at all, not every frame for a
+  gamepad-bound slot); added a doc note that `key` must stay scene-globally unique even for a
+  gamepad-routed slot. Added a fixture/test closing the `None`/`Some(0)` owner_player-normalization
+  gap for the new gamepad collision check (mirrors a pre-existing untested gap in the keyboard
+  check, not introduced by this feature).
+
+Two systemic, pre-existing gaps were surfaced but **not** fixed in this feature (all reviewers
+agreed these are not merge blockers — logged to `planning/backlog.md` instead): (1) two players
+sharing the same `gamepad_index` is undetected and would defeat the new same-player collision
+check's premise; (2) a mid-session gamepad disconnect re-indexes the positional `resolve_gamepad`
+slice, which the action bar's new consumption of it makes gameplay-visible (a wrong-player ability
+activation) rather than just a camera/movement oddity. Both trace back to the same root cause
+already tracked under "Positional `gamepad_index` → resolved-`Entity` binding."
+
+Full test suite (129 `ironhold_core` + 24 `ironhold_cli` cross-file tests) green after all fixes;
+`cargo check -p ironhold_cli` clean; `ironhold_cli validate` on `local_coop_demo` clean (no false
+positives from either new check against the shipped, still-commented-out demo wiring).
