@@ -278,7 +278,7 @@ Applies actions to the world. Key design points:
 ## Appendix: Implemented subset (today)
 
 ### Messages ✅
-- `UiEvent::ButtonPressed(String)` — emitted by UI buttons and key bindings; flows into the pipeline as `"ui.button_pressed:{trigger}"`
+- `UiEvent::ButtonPressed(String)` — emitted by UI buttons, key bindings, and unclaimed-gamepad bindings (see `docs/20_data_formats.md`'s "Gamepad-triggered hot join"); flows into the pipeline as `"ui.button_pressed:{trigger}"`
 - `GameEvent::Trigger(String)` — emitted by gameplay capabilities (physics sensors, etc.); name is used as-is in the pipeline (e.g. `"entity.collected:coin_01"`)
 - `SceneEvent::{Requested(String), Loaded(String), Ready(String), Unloading(String)}` — scene lifecycle
 - `InputAction::{Move(Vec2), Turn(f32), Look(Vec2), Jump(bool), Run(bool)}` — abstract input (point-to-point, not pipeline)

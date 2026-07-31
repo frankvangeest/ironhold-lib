@@ -42,6 +42,18 @@
     "KeyG": "join",
   },
 
+  // Gamepad equivalent (gamepad_hot_join.md) — "South" (Xbox A / PlayStation Cross) is safe to
+  // bind here despite being `gamepad_jump`'s default: a join only fires on a pad not currently
+  // claimed by any live player, so an already-joined player's own South-button jump is unaffected.
+  // Verified during implementation: joining via gamepad only sets that player's InputMap.
+  // gamepad_index — it does NOT disable their join-slot prefab's keyboard scheme (gamepad input
+  // is added on top of the keyboard, never a replacement) — so a gamepad-joined P3/P4 can freely
+  // mix IJKL/Numpad and the pad. The pad only binds to whichever slot that same press joins —
+  // pressing G still joins via keyboard-only, with no pad attached.
+  scene_unclaimed_gamepad_bindings: {
+    "South": "join",
+  },
+
   entities: [
 
     (
@@ -95,7 +107,7 @@
   ui: [
     Label((
       id: "room_hint",
-      text: "Hot join: starts at 2 players | Press G to add a player | Violet -> room 7",
+      text: "Hot join: starts at 2 players | Press G or gamepad A/Cross to add a player | Violet -> room 7",
       position: (20.0, 20.0),
       size: (900.0, 32.0),
     )),
@@ -106,7 +118,7 @@
     // prompt would ever disappear.
     Label((
       id: "join_prompt",
-      text: "Press G to join (up to 4 players)",
+      text: "Press G, or A / Cross on an unclaimed controller, to join (up to 4 players)",
       position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),
@@ -124,13 +136,13 @@
     )),
     Label((
       id: "controls_hint_p3",
-      text: "P3 (joins on 1st press): IJKL + U + O",
+      text: "P3 (1st to join): IJKL + U + O — plus a controller, if joined with one",
       position: (20.0, 676.0),
       size: (600.0, 32.0),
     )),
     Label((
       id: "controls_hint_p4",
-      text: "P4 (joins on 2nd press): Numpad 5/2/1/3 + 0 + 4",
+      text: "P4 (2nd to join): Numpad 5/2/1/3 + 0 + 4 — plus a controller, if joined with one",
       position: (660.0, 676.0),
       size: (600.0, 32.0),
     )),

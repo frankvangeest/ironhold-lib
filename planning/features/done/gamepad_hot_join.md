@@ -1,6 +1,6 @@
 # Feature: Gamepad-Triggered Hot Join
 
-_Status: Ready_
+_Status: Done (shipped 2026-07-31)_
 _Planned at: `f60bd33` (2026-07-29)_
 
 **Plan-review note (2026-07-29):** both reviewers returned Needs-more-design-work on the first
@@ -40,6 +40,36 @@ known WASM/Chrome quirk where a brand-new pad's first interaction can double as 
 activation gesture (a documented browser limitation, not an engine bug). Both reviewers'
 docs-scope findings are folded into the Tasks/Docs item below.
 
+**Amendment (2026-07-29, post-implementation review findings):** four post-implementation reviews
+(alignment, architecture, debug-detective, ux-gamedesigner) surfaced real gaps beyond the plan.
+**Blocking, fixed:** the first implementation capped `PendingJoinGamepad` *capture* to one pad per
+frame but not `UiEvent` *emission* — so two unclaimed pads pressing the same frame still each
+produced their own `Action::JoinPlayer` (debug-detective and system-architect independently found
+this), directly contradicting this plan's own "only the lower one joins that frame" text. Fixed by
+capping emission too (`break` out of the pad loop on the first match, not just skip re-capturing) —
+now truly at most one (pad, button) match serviced per frame, matching the original intent. The
+weak test this bug slipped through (`test_two_gamepads_pressed_same_frame_captures_only_lowest_
+sorted_index`, which asserted only the resource, never the emitted event count) was strengthened to
+assert on `Messages<UiEvent>` directly, and the near-tautological phantom-pad test was rewritten to
+connect two pads (one pressed, one not) rather than one. **Corrected finding, not a bug**: the
+original assumption that a gamepad-triggered join "replaces that player's keyboard scheme entirely"
+(stated in this plan's original Tasks/Acceptance criteria) was verified against
+`input_translator_system`/`camera_orbit_system` during implementation and found **wrong** —
+keyboard and gamepad input are checked additively (`||`), never exclusively, so a gamepad-joined
+player can freely use both. The demo hints/docs were written to reflect this corrected
+understanding, not the original assumption. **Renamed** (ux-gamedesigner-reviewer, before this ever
+shipped to `main`): `global_gamepad_bindings`/`scene_gamepad_bindings` → `global_unclaimed_gamepad_
+bindings`/`scene_unclaimed_gamepad_bindings` — the original names read as a general gamepad
+analogue of `global_key_bindings`/`scene_key_bindings`, but the field only ever fires on an
+unclaimed pad (an already-joined player's own button presses never reach it), which is a silent,
+easy-to-hit designer trap under the old name. **Logged, not fixed** (non-blocking,
+`planning/claude_suggestions.md`/`planning/backlog.md`): a mid-session gamepad disconnect can make
+an already-claimed pad's positional index transiently look unclaimed, risking a spurious extra
+join; a same-frame race between a non-join gamepad trigger and a keyboard-triggered join can still
+misattribute pad identity (lower severity than the fixed bug, since input stays additive either
+way); the `*_gamepad_bindings` maps have no path for "an already-joined player's own gamepad fires
+an arbitrary trigger," only join-style unclaimed-pad triggers.
+
 ## What
 Adds a gamepad equivalent of the existing keyboard hot-join trigger: a new player can join an
 already-`Grid`-split local co-op scene by pressing a button on an **unclaimed** physical gamepad,
@@ -56,7 +86,7 @@ the last piece blocking that.
 
 ## Approach
 **Reuse the existing global/scene key-bindings pattern, don't invent a new merge mechanism.** Add
-`global_gamepad_bindings: HashMap<String, String>` (`ProjectConfig`) + `scene_gamepad_bindings:
+`global_unclaimed_gamepad_bindings: HashMap<String, String>` (`ProjectConfig`) + `scene_unclaimed_gamepad_bindings:
 HashMap<String, String>` (`GameSceneV2`, override) — a new `ProjectGamepadBindings` (mirrors
 `ProjectKeyBindings`) + `LoadedGamepadBindings` resource pair, merged into the loaded resource
 exactly the way `project_loader.rs`/`scene_loader.rs` already merge `global_key_bindings`/
@@ -119,33 +149,32 @@ unrelated to this), and any settings-UI style gamepad rebinding (that's the sepa
 "Input remapping" backlog item).
 
 ## Tasks
-- [ ] `global_gamepad_bindings` (`ProjectConfig`) + `scene_gamepad_bindings` (`GameSceneV2`) schema
+- [x] `global_unclaimed_gamepad_bindings` (`ProjectConfig`) + `scene_unclaimed_gamepad_bindings` (`GameSceneV2`) schema
       fields, `#[serde(default)]`
-- [ ] `ProjectGamepadBindings` + `LoadedGamepadBindings` resources + merge logic at all three
+- [x] `ProjectGamepadBindings` + `LoadedGamepadBindings` resources + merge logic at all three
       existing key-bindings merge sites (`project_loader.rs`'s inline-config insert, its
       external-files insert, and `scene_loader.rs`'s per-scene-load rebuild) — mirrors
       `ProjectKeyBindings`/`LoadedKeyBindings` exactly, per-key overlay semantics, not whole-map
       replace
-- [ ] New detection system (`runtime/input.rs`, `AppState::InGame` gate, `.before(
+- [x] New detection system (`runtime/input.rs`, `AppState::InGame` gate, `.before(
       message_interpreter_system)`): claimed-pad exclusion (live players' `gamepad_index` **and**
       undrained `is_hot_join` `PendingEntitySpawns` entries), at-most-one-match-per-frame,
       `just_pressed`-only edge detection (no separate live-signal prefilter), frame-scoped
       unconditional `PendingJoinGamepad` reset, `UiEvent::ButtonPressed` emission on match
-- [ ] `Action::JoinPlayer` executor: consume `PendingJoinGamepad` when present, override the
+- [x] `Action::JoinPlayer` executor: consume `PendingJoinGamepad` when present, override the
       joiner's `InputMap.gamepad_index` (index translated via the same sorted slice convention
       `resolve_gamepad` uses)
-- [ ] `ironhold_cli validate`: warn on an unrecognized button name in `scene_gamepad_bindings`/
-      `global_gamepad_bindings` (mirrors the existing `scene_key_bindings` unrecognized-key
+- [x] `ironhold_cli validate`: warn on an unrecognized button name in `scene_unclaimed_gamepad_bindings`/
+      `global_unclaimed_gamepad_bindings` (mirrors the existing `scene_key_bindings` unrecognized-key
       warning — check-only, since `parse_gamepad_button` already no-ops safely at load)
-- [ ] Demo: `local_coop_demo/room8` gets `"South": "join"` in `scene_gamepad_bindings` alongside its
+- [x] Demo: `local_coop_demo/room8` gets `"South": "join"` in `scene_unclaimed_gamepad_bindings` alongside its
       existing `"KeyG": "join"` keyboard binding; **reword the on-screen join prompt** to name real
       controller buttons (e.g. "Press G, or A / Cross on a controller, to join") — never the
-      engine's internal `"South"` string; **reword the P3/P4 control-hint labels** to note that a
-      gamepad-driven join replaces that player's keyboard scheme entirely (including camera-look,
-      which currently has no gamepad equivalent for a non-primary control scheme — verify exact
-      behavior against `input_translator_system`/`camera_orbit_system` during implementation and
-      word the hint accordingly)
-- [ ] Tests: unclaimed-pad detection excludes a pad already claimed by a live player; excludes a pad
+      engine's internal `"South"` string; **reword the P3/P4 control-hint labels** — verify the
+      exact keyboard/gamepad interaction against `input_translator_system`/`camera_orbit_system`
+      during implementation rather than assuming either way (see Amendment below: it turned out to
+      be additive, not exclusive)
+- [x] Tests: unclaimed-pad detection excludes a pad already claimed by a live player; excludes a pad
       already mid-flight via an undrained `is_hot_join` `PendingEntitySpawns` entry; a phantom/dead
       duplicate pad (all-zero every button) never triggers a join even when "present"; a
       gamepad-triggered join binds the correct `gamepad_index` to the new player; a
@@ -154,7 +183,7 @@ unrelated to this), and any settings-UI style gamepad rebinding (that's the sepa
       two gamepads pressing join on **consecutive** frames each join distinct slots with distinct
       pads bound correctly; two gamepads pressing join in the exact **same** frame result in only
       one join that frame, deterministically the lowest-sorted-index pad
-- [ ] Docs — `docs/20_data_formats.md`: `global_gamepad_bindings`/`scene_gamepad_bindings` rows
+- [x] Docs — `docs/20_data_formats.md`: `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` rows
       (ProjectConfig and GameSceneV2 tables), a "gamepad hot-join" subsection alongside the existing
       keyboard one (including the `gamepad_index`-override interaction, mirroring the existing
       `PlayerIndex`-override bullet, and noting that a keyboard-triggered join never touches it),
@@ -162,7 +191,7 @@ unrelated to this), and any settings-UI style gamepad rebinding (that's the sepa
       bindings (claimed-pad exclusion already makes e.g. `"South"` safe to bind despite being
       `gamepad_jump`'s default), and a note on the existing "valid gamepad button names" table that
       it now also governs `*_gamepad_bindings`, not just `InputMap` fields
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`: extend the existing "Gamepad routing" section
+- [x] Docs — `crates/ironhold_core/src/CLAUDE.md`: extend the existing "Gamepad routing" section
       with the new bindings resource pair and the `PendingJoinGamepad` mechanism
 
 ## Open questions
@@ -179,7 +208,7 @@ unrelated to this), and any settings-UI style gamepad rebinding (that's the sepa
   fix.
 
 ## Acceptance criteria
-- Given a `Grid`-split scene with `scene_gamepad_bindings: {"South": "join"}`, when an unclaimed,
+- Given a `Grid`-split scene with `scene_unclaimed_gamepad_bindings: {"South": "join"}`, when an unclaimed,
   connected gamepad's South button is pressed for the first time (no prior priming press, no hold),
   then a new player joins via `join_prefab_keys[slot]` and that specific gamepad immediately
   controls them (browser-observable with real hardware).
@@ -192,6 +221,10 @@ unrelated to this), and any settings-UI style gamepad rebinding (that's the sepa
   the pressing pad; a keyboard join never inherits a stale pad identity from an earlier,
   unrelated gamepad button press (e.g. pause) on a prior frame.
 - Given the `local_coop_demo/room8` on-screen join prompt and P3/P4 control hints, a player reading
-  them sees real controller button names and an accurate description of what changes (keyboard
-  scheme fully replaced) when a gamepad joins that slot — never the engine's internal button-name
-  string.
+  them sees real controller button names and an accurate description of what changes (a gamepad is
+  added on top of that slot's keyboard scheme, not a replacement) when a gamepad joins that slot —
+  never the engine's internal button-name string.
+- Given two unclaimed gamepads pressing their bound button in the exact same frame, exactly one
+  join is serviced that frame (the lower-sorted-index pad) — not two, even though nothing
+  downstream could otherwise tell which of two same-frame `Action::JoinPlayer`s a captured pad
+  identity belongs to.
