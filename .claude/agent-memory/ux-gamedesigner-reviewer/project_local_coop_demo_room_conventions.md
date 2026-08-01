@@ -16,8 +16,12 @@ conventions that are enforced only by copy-paste, never written down anywhere a 
   split | Blue portal -> room 2 | Cyan portal -> room 4"). When a new room is appended, the
   *previous* room's `room_hint` must be edited too — this was missed for room8 -> room9
   (2026-07-29), leaving the new portal discoverable only from its 3D world label.
-- **One colour identity per room** (blue/amber/teal/rose/gold/green/violet/crimson taken) —
-  ground prefab + portal accent share the tone.
+- **One colour identity per room** (blue/amber/teal/rose/gold/green/violet/crimson taken through
+  room9) — ground prefab + portal accent share the tone. **The palette is now exhausted**; a 10th
+  room needs a new tone chosen deliberately (steel/silver, lime, and white are still free).
+- **Every room gets its own `scene.ready:roomN` Log rule in `logic/rules.ron`** — main..room8 all
+  have one; **room9 does not** (missed 2026-07-29, same oversight shape as the room_hint gap). Add
+  the missing one whenever the next room is appended.
 - **Label width budget:** `size: (900.0, 32.0)` at the default `font_size: 16.0`. room3's own
   comment cites a "known-good 59-char line"; the longest shipped line is room8's `room_hint` at
   93 chars. Anything past ~90 chars is unverified and risks clipping the one line carrying the

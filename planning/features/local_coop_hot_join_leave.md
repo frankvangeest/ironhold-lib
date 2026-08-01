@@ -1,14 +1,21 @@
 # Feature: Local Co-op Hot Join/Leave
 
-_Status: Done (v1 shipped 2026-07-20)_
+_Status: In Progress (v1 Done, v2 Revised after plan-review — recommend a confirmation pass before
+implementation)_
 _Planned at: `a59815c` (2026-07-19)_
+_v2 drafted at: `1fcef14` (2026-07-31); revised after plan-review at `2026-08-01` (see the
+"Revision" note in Approach — both system-architect and ux-gamedesigner-reviewer independently
+found the seat/slot conflation bug; system-architect additionally resolved the trigger-mechanism
+open question and found the executor param-budget/queued-join-renumbering gaps; ux-gamedesigner-
+reviewer additionally specified the demo leave keys, the event-reachability gap, and the
+accidental-press/hold-to-confirm requirement)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | Hot **join** (keyboard only) into an already-`Grid`-split scene, up to `MAX_SPLIT_PLAYERS`, incremental single-camera-add | Done | 2026-07-20 |
-| v2 | Hot **leave** (despawn + slot renumber + cleanup) | Queued | — |
+| v2 | Hot **leave** (despawn + slot renumber + cleanup) | Revised — recommend confirmation pass | — |
 
 **Plan-review note (2026-07-19):** Both reviewers returned Needs-more-design-work on the first
 draft's "despawn every camera and rebuild the whole layout" strategy for join — resolved by a
@@ -186,6 +193,250 @@ warning) — **overriding** whatever `player_index` the joined prefab itself dec
 sources-of-truth interaction (scene-load uses the prefab's baked index, join always overrides it
 with the slot) must be documented so a designer reordering `join_prefab_keys` isn't surprised.
 
+### v2 — Hot Leave
+
+**Investigation ahead of drafting this section** (2026-07-31, grounding every claim below against
+current source rather than the open questions' original guesses):
+
+- **`SplitViewportSlot`/`Grid` math does not require contiguous slot values to render correctly on
+  any single frame** — `split_screen_viewport_system`'s `Grid` branch (`capabilities/camera.rs`)
+  computes `cols`/`rows` purely from `ActiveSplitSlotCount` and `row`/`col` purely from each
+  camera's own `slot.0`; a sparse set (e.g. `{0, 1, 3}` with `count == 4`) renders every present
+  slot correctly, with the missing cell simply blank (matches the existing "count == 3 leaves one
+  cell empty" documented behavior — a genuinely new gap, not a special case). **But this masks a
+  real freeze bug across a *second* departure**: when `cols*rows` shrinks below a surviving
+  camera's `slot.0` on a later leave, that camera's `continue` (line ~453) skips writing
+  `Camera.viewport` *for that frame only* — the field isn't cleared, so the camera keeps
+  rendering a stale, now-wrong-shaped rect from the previous layout, indefinitely (nothing ever
+  revisits it once its slot no longer fits `cols*rows`). **Conclusion: renumbering surviving
+  players' `SplitViewportSlot` into a contiguous `0..new_count` range on every leave is required
+  for correctness**, not just tidiness — this resolves the v1 plan's deferred "verify
+  `Added<SplitViewportSlot>`-on-reinsert" open question by making clear renumbering is mandatory,
+  not optional.
+- **`PlayerIndex` and `SplitViewportSlot` are independent values that only hot-join happens to set
+  equal** — every other consumer of `PlayerIndex` (the "P{n}" HUD label text, `PLAYER_LABEL_COLORS`
+  tinting for both the HUD label and the target ring, `ring_layer_for_player` for
+  `own_viewport_only`'s reserved `RenderLayers`, `ActionBar.owner_player` matching, "primary
+  player" resolution) reads `PlayerIndex`, never `SplitViewportSlot` — confirmed by reading every
+  call site. **This means hot-leave's renumbering only ever needs to touch `SplitViewportSlot` +
+  `Camera.order` (pure viewport-layout geometry) — a surviving player's `PlayerIndex`, ring
+  tint/layer, HUD label text/color, and action-bar ownership all stay exactly as they were before
+  the leave.** No player's identity/color visibly changes because someone else left — a real UX
+  risk this investigation ruled out rather than merely hoped away.
+- **The renumbering write must be an in-place mutation of the existing `SplitViewportSlot(u32)`'s
+  inner value (`slot.0 = new_value`), never a remove-then-reinsert.** Bevy's `Added<T>` filter only
+  fires when a component is newly inserted onto an entity that didn't have it before — mutating an
+  existing component's field never re-triggers it. `split_viewport_player_label_spawn_system` and
+  `target_hud_spawn_system` both gate their one-time spawn on `Added<SplitViewportSlot>`; an
+  in-place mutation is what keeps them from wrongly re-spawning a duplicate HUD label/target-HUD
+  for a surviving player whose slot number just changed.
+- **Nothing auto-cleans up a leaving player's split-screen-specific side entities.** Traced each:
+  the split camera is a sibling entity (`OrbitCamera.target: Entity`, never `ChildOf` the player),
+  so despawning the player does not cascade to it; the camera's `LinkedPlayerLabel`/
+  `LinkedTargetHud` UI `Text` entities are likewise unparented siblings linked only by a stored
+  `Entity`, not despawned by anything if their camera goes away; a `TrackingTarget` ring only
+  despawns when its *tracked* entity dies or its *owner* retargets — neither condition fires just
+  because the owner itself leaves, so a leaving player's ring becomes a permanently orphaned
+  world-space decal until the next full scene reload. All of these need explicit despawn in the
+  leave action; there is no shortcut.
+- **`WorldLabelRank`-based widget duplication (`stat_label`/`world_stat_bar`/`world_labels`/
+  damage-popup ranks) self-adjusts with zero cleanup needed** — it re-derives the live active-camera
+  list from scratch every frame (`world_label_screen_pos_system`), never from a stored count, so a
+  despawned camera simply drops out of next frame's selection.
+- **`Action::Despawn(spawn_id)` is necessary but not sufficient for the player entity itself.**
+  Confirmed `spawn_player_entity_core` already tags every player with `SpawnId`/registry entry via
+  the shared `tag_spawned_entity` helper (so a despawn-by-id lookup is possible), and Bevy's
+  recursive despawn correctly cascades to the player's own real ECS children (body meshes, cosmetic
+  children) — but it cannot reach the camera/label/HUD/ring siblings above (no parent-child
+  relation exists), and the camera entity has no `SpawnId` at all to target it by. A dedicated
+  `Action::LeavePlayer` needs its own lookup logic for each of those, `Action::Despawn` alone
+  cannot be reused as-is.
+- **Nothing in this codebase reacts to a gamepad disconnecting** (confirmed: no
+  `GamepadConnectionEvent`/`Disconnected` reader anywhere in `ironhold_core`). Auto-triggering a
+  leave when a player's bound pad unplugs would need new event-reader plumbing with no existing
+  precedent to build on — **out of scope for v2**, same "don't conflate two pieces of new input
+  infrastructure" reasoning v1 used to split gamepad-join into its own feature. v2 is a deliberate
+  keypress only, exactly like v1's join.
+
+**Scope, mirroring v1's own narrowing precedent:**
+- **`Grid`-split scenes only** — same reasoning as v1 (`Vertical`/`Horizontal` hardcode exactly 2
+  halves with no reflow logic; `dynamic` hardcodes exactly 2 targets; `party`'s target `Vec<Entity>`
+  is never mutated by any system today). Leaving in any other mode: `warn!` + no-op.
+  **`local_coop_hot_join_leave.md`'s own hot-*joined* players are Grid-only already, so this is not
+  a new restriction, just a continuation of v1's.**
+- **GLB players only** — primitive/capsule local co-op is unsupported per
+  `player_model_source_unification.md`; not attempted here.
+- **No player-state persistence** — leaving is a full, permanent despawn. If a player later
+  rejoins that (or any) slot via hot-join, they start fresh with no continuity to their previous
+  session — no save/restore mechanism exists anywhere in this engine for an individual player's
+  `StatMap`/inventory/progress across a leave, and building one is a separate, much larger feature.
+  This directly resolves v1's own deferred open question ("does a leaving player's state vanish or
+  persist for rejoin?") — **vanish**, matching the "keep scope narrow" precedent every other
+  local-coop feature in this batch has followed.
+- **Minimum 1 remaining player** — leaving is refused (warn + no-op) if it would drop the scene to
+  0 live players; an otherwise-empty split-screen scene is an unexplored engine state (no camera
+  at all, `ActiveSplitSlotCount` at `0`) with no clear designer-facing meaning. Flagged as an open
+  question for ux-gamedesigner-reviewer: should this cap be exactly 1, or should leaving down to 0
+  be allowed (falling back to... nothing? a title-screen-style pause?) — v1's own docs never
+  addressed a 0-player scene either, so this isn't a regression, just an explicit decision v2 needs
+  to make rather than inherit silently.
+
+**Revision (2026-08-01, after plan-review — system-architect + ux-gamedesigner-reviewer):** both
+reviewers independently found the same critical gap (the seat/slot conflation below), and
+system-architect's investigation resolved the trigger-mechanism open question definitively — the
+two options this draft originally offered are **both non-viable**: a direct `Action::LeavePlayer`
+push from an input-detection system would violate `crates/ironhold_core/src/CLAUDE.md`'s explicit
+"never push to `ActionQueue` from a capability system" rule (confirmed: the one prior violator,
+the action bar, was already refactored *away* from direct pushes into the intent layer — this
+would be a new, reintroduced violation, not a defensible mirror of `interact`), and a
+`rules.ron`-authored `Action::LeavePlayer("{self}")` is **structurally unimplementable** today:
+`rules.ron`/`state_machine.ron` matching is exact-string equality with no wildcard/capture
+(`message_interpreter.rs`), `{self}` substitution only exists in `entity_fsm_interpreter_system`/
+`dialogue.rs` and resolves against a *behavior file's owning entity* — but no player entity can
+carry a behavior file (`PlayerConfig` has no `behavior` field; `attach_prefab_features` is never
+called from the player spawn path) — and even if it could, a hot-joined player's spawn id is
+runtime-generated (`format!("{}_{}", prefab_key, registry.counter)`), so a designer could never
+author a rule matching it. The resolution below is a **third shape**, mirroring
+`gamepad_hot_join.md`'s own `PendingJoinGamepad` pattern exactly, which sidesteps all of the above.
+
+**Trigger — per-player `InputMap` field feeding an id-free event + a frame-scoped resource, not a
+direct action push.** New `InputMap.leave: Option<String>` (keyboard) and `InputMap.gamepad_leave:
+Option<String>` (gamepad, parsed via the existing `parse_gamepad_button`) — each already-joined
+player binds their own leave key/button, per-player exactly like `interact`/`target_next` already
+are (not a shared scene-level key like join's, since leave's identity is known instantly, unlike
+join's). A new system in `runtime/input.rs` (alongside `unclaimed_gamepad_trigger_system`, not in
+`capabilities/` — this is input translation, not gameplay logic), `.before(message_interpreter_
+system)`:
+1. Resets a new `PendingLeaveRequest(Option<String>)` resource to `None` unconditionally at the
+   top of every run (same discipline as `PendingJoinGamepad`, so a stale spawn id can never survive
+   into a frame that didn't actually request a leave).
+2. Loops live `CharacterController`s; on the **first** (lowest-`PlayerIndex`) `just_pressed` match
+   on that player's own bound `leave`/`gamepad_leave`, writes their spawn id into
+   `PendingLeaveRequest` and emits `GameEvent::Trigger("coop.leave_requested")` — deliberately
+   **id-free**, so it's actually authorable in `rules.ron` (unlike a per-spawn-id event string).
+   **Capped at one request per frame** — a second presser's request is simply not serviced this
+   frame (mirrors `unclaimed_gamepad_trigger_system`'s own one-match-per-frame cap and its stated
+   reasoning: nothing downstream can safely disambiguate which of several same-frame events a
+   shared resource's value belongs to); they can press again next frame.
+3. A `rules.ron` rule handles it: `( on: "coop.leave_requested", do_actions: [
+   LeavePlayer("{requester}") ] )` — `{requester}` is a new interpreter substitution token,
+   resolved in the **executor** (not the interpreter) against `PendingLeaveRequest.take()`, so
+   `rewrite_target`/`substitute_self`/`substitute_self_in_action` need **no new match arms** (each
+   is an exhaustive per-variant match with `other => other`, so an unhandled token would otherwise
+   silently pass through un-substituted). This gives a designer the same interception ability
+   join's rules.ron indirection provides (e.g. gate the rule with `when: "not_boss_fight"`) with no
+   new interpreter primitive and no pipeline-rule violation. `LeavePlayer("player_02")` (a literal
+   spawn id, not the sentinel) still works too, for a scripted/scene-authored removal.
+   **Documented limitation**: the `rules.ron` rule itself cannot distinguish *which* player
+   requested the leave (it only sees the id-free trigger) — accepted for v2.
+
+**`Action::LeavePlayer(String)` executor arm** (new action; either the literal `"{requester}"`
+sentinel, resolved via `PendingLeaveRequest.take()`, or a literal spawn id):
+
+1. Resolve the leaving player's `Entity` via `SpawnRegistry` (same lookup `Action::Despawn` uses);
+   `warn!` + no-op if not found or not a live player.
+2. **Refuse if this is the last live player** — read `ActiveSplitSlotCount` (not a live entity
+   count: despawns are deferred via `Commands`, so a live query would still see 2 players if the
+   last two both requested leave the same frame, defeating the floor for the second one;
+   `ActiveSplitSlotCount` is decremented **synchronously** in step 7, so it's correct for a
+   same-frame second leave) — `warn!` + no-op if `Some(1)`.
+3. Find that player's own split camera: `Query<(Entity, &OrbitCamera, &SplitViewportSlot)>`
+   filtered by `orbit.target == leaving_entity` — capture its `SplitViewportSlot.0` as
+   `leaving_slot` before despawning anything.
+4. **Despawn**, in order: the camera entity; its `LinkedPlayerLabel` UI `Text` entity (if present);
+   its `LinkedTargetHud` UI entity (if the scene authors `target_hud:`); any `TrackingTarget` ring
+   whose `owner == leaving_entity`; **every rank of any `stat_label`/`world_stat_bar` widget
+   tracking the leaving player** (these are plain `WorldLabel`-tracked entities that
+   `world_label_screen_pos_system` only ever hides, never despawns, once their tracked entity is
+   gone — confirmed no despawn path exists for them today, and in a split-screen scene they're
+   rank-duplicated ×`MAX_SPLIT_PLAYERS` each); then the player entity itself
+   (`commands.entity(leaving_entity).try_despawn()` — recursive, cascades to real ECS children;
+   `try_despawn()` not `despawn()`, per this codebase's despawn-discipline convention).
+5. **Clear stale references to the leaver**: remove the entry from `SpawnRegistry` (mirroring
+   `Action::Despawn`'s own `registry.entities.remove(&target_id)` — without this,
+   `target_auto_clear_system` keeps silently resolving a dangling `Entity` every frame); if the
+   leaver was the primary player, clear `CurrentTarget` (nothing else clears it on despawn, so
+   `{target}` substitution in every rule would otherwise keep resolving to the departed player's
+   last target indefinitely).
+6. **Renumber**: for every *other* live split camera whose `SplitViewportSlot.0 > leaving_slot`,
+   mutate `slot.0 -= 1` **in place** (never remove-and-reinsert — see the investigation note above)
+   and set `Camera.order` to match. **Also renumber any already-queued `is_hot_join` entry in
+   `PendingEntitySpawns` whose frozen seat index is above `leaving_slot`** — otherwise a join
+   queued the same frame (or, since `SPAWNS_PER_FRAME` caps drains at 2/frame, a later frame) can
+   spawn at a slot the shrunk grid no longer has room for, hitting the exact stale-viewport freeze
+   this whole renumbering step exists to prevent, just reached via the queue instead of a live
+   camera.
+7. Decrement `ActiveSplitSlotCount` by one.
+8. Emit the triple `GameEvent::Trigger("player.left")` (bare, always matchable — the workhorse for
+   a generic "someone left" reaction), `GameEvent::Trigger(format!("player.left:{}", spawn_id))`
+   (works only for scene-authored players with a designer-chosen id), and
+   `GameEvent::Trigger(format!("player.left.index:{}", player_index))` (the seat number, matchable
+   regardless of how the player was spawned — **document that index `2` is the player whose HUD
+   label reads "P3"**, since `camera.rs` renders `P{player_index + 1}`, a guaranteed 0-based/
+   1-based authoring trap otherwise). Add the symmetric `player.joined`/`player.joined.index:{n}`
+   to `Action::JoinPlayer` in the same pass — v1 shipped with no join-side event at all, an
+   asymmetry a designer reacting to leaves would immediately notice missing on the join side.
+
+**Seat index vs. viewport slot — the critical fix both reviews independently found.** v1's
+`Action::JoinPlayer` derives `player_index` from `next_slot = ActiveSplitSlotCount + queued_hot_
+joins` — i.e. from the live **count**. Once a leave can shrink that count without renumbering
+survivors' `PlayerIndex` (the whole point of the "identity never shifts" design above), the count
+and the *set of already-used indices* can diverge: 4 players (indices 0-3), the player at index 1
+leaves → survivors keep {0,2,3}, count becomes 3 → a subsequent join computes `next_slot = 3`,
+**colliding with the still-live index-3 player** (duplicate "P4" label, duplicate ring tint/layer,
+two players sharing one `join_prefab_keys` control scheme and moving in lockstep). **Fix, now in
+v2's scope**: `Action::JoinPlayer`'s slot computation splits into two independent numbers —
+**seat index** (`PlayerIndex`, `join_prefab_keys[..]`, `player_{n+1}_start`, `ActionBar.owner_
+player` — stable per player, join claims the **lowest free seat** among currently-live
+`PlayerIndex` values, not the count) and **viewport slot** (`SplitViewportSlot`/`Camera.order` —
+contiguous `0..count`, renumbered by leave exactly as steps 3/6 above already specify). This
+directly resolves the v2 acceptance criterion that join-after-leave must never collide, which the
+original single-`next_slot` design could not satisfy. `crates/ironhold_core/src/CLAUDE.md`'s
+"hot-join can NOT diverge here, since `Action::JoinPlayer` sets both `player_index` and the spawn
+slot to the same `next_slot` value" becomes false under this fix and must be corrected in the docs
+task.
+
+**Losing the primary player (`PlayerIndex(0)`).** If the seat-0 player leaves, the seat-index fix
+above means nothing is auto-promoted to primary (`is_primary_player` checks `PlayerIndex(0)`, and
+every live player already carries an explicit `PlayerIndex`). **Decision: allow it and document the
+degradation, don't refuse it** — refusing would make the primary player uniquely unable to leave
+for reasons invisible to them, breaking the "any player can choose to leave, it's their own
+controller" symmetry the rest of this feature establishes. Consequence, documented rather than
+silently accepted: `CurrentTarget` mirroring, primary-player `{target}` substitution, and any
+`owner_player: None`/`Some(0)` action bar all go dormant (gracefully — each already degrades to a
+no-op on a missing match, confirmed) until a future join happens to land on seat 0 again (which,
+under the seat-reuse fix, it naturally will — the next join claims the lowest free seat).
+
+**Executor param budget.** `SpawnParams`/`SceneStateParams`-style bundles are already at Bevy's
+16-`SystemParam` ceiling (the same wall v1's own plan already accounts for). The `LeavePlayer` arm
+needs several new queries (camera+slot+label+HUD lookup, the ring query, the widget-rank query) and
+critically needs `ActiveSplitSlotCount` promoted from `Res` (its current, v1-established contract)
+to `ResMut` — a new bundled `SystemParam` (e.g. `LeaveParams`) is required, not a bare-param
+addition. Two existing doc comments become stale and need updating in the same change:
+`ActiveSplitSlotCount`'s own doc comment in `runtime/scene_manager/mod.rs` (currently states
+`drain_spawn_queue_system` is the sole `ResMut` owner), and the `JoinPlayer` arm's invariant
+comment block in `action_executor.rs` (currently assumes the executor never writes this resource).
+
+**Demo**: extend `local_coop_demo/room8` (the existing hot-join demo) with per-player leave
+bindings on all four seats — **`"KeyC"` (P1), `"Delete"` (P2), `"Semicolon"` (P3), `"Numpad6"`
+(P4)** (verified free of collision against every key room8's four prefabs already bind, adjacent to
+each player's own cluster so it's reachable without looking away from their half of the screen) —
+plus a `leave_hold_secs: f32` hold-to-confirm (see below) and an on-screen banner reacting to
+`player.left`. Also author all four `join_prefab_keys` slots in `room8.scene.ron` (today only
+slots 2/3 are set; under the seat-reuse fix, a P1/P2 departure must be re-joinable too, or that
+seat is permanently dead for the rest of the demo).
+
+**Accidental-press protection.** Leaving is an irreversible, state-destroying action with all four
+`local_coop_demo` seats sharing one physical keyboard — an unconfirmed instant-leave on a stray
+keypress is a real risk the original draft didn't address. New `InputMap.leave_hold_secs: f32`
+(`#[serde(default)]` = `1.0`) requires the bound key/button to be **held**, not just pressed, before
+the leave-request system (above) fires — this is new timer-accumulator infrastructure (no
+hold-duration primitive exists elsewhere in this codebase today; a per-player `Local`/component
+accumulator is the natural shape). While holding, emit `GameEvent::Trigger("player.leaving.index:
+{n}")` so a designer can render "P3 leaving…" feedback; emit `"player.leave_cancelled.index:{n}"`
+if released early. Without *some* feedback, a 1-second hold reads as a broken key, not a
+confirmation gesture.
+
 ## Tasks
 - [x] Extract `spawn_split_camera_for_player(config: &PlayerConfig, player_entity: Entity, slot:
       u32) -> Entity` from the existing `Grid`-branch loop body (`entity_spawner.rs:706-721`) —
@@ -242,18 +493,108 @@ with the slot) must be documented so a designer reordering `join_prefab_keys` is
       section (adds a fifth: the `is_hot_join` branch in `drain_spawn_queue_system`) and resolve
       `ActiveSplitSlotCount`'s own forward-reference to this feature
 
+### v2 tasks
+- [ ] New `InputMap.leave: Option<String>` + `InputMap.gamepad_leave: Option<String>` +
+      `InputMap.leave_hold_secs: f32` (`#[serde(default)]` = `1.0`) fields (`schema/player.rs`);
+      `gamepad_leave` parsed via the existing `parse_gamepad_button`. `InputMap::key()`/
+      `gamepad_button()` need an `Option`-aware match arm for `"leave"`, not the bare-`String` arm
+      every other field uses — call this out explicitly so it isn't discovered mid-implementation.
+- [ ] New per-player hold-timer accumulator (new infrastructure — no hold-duration primitive
+      exists elsewhere in this codebase) + leave-request system in `runtime/input.rs` (beside
+      `unclaimed_gamepad_trigger_system`): resets a new `PendingLeaveRequest(Option<String>)` to
+      `None` unconditionally every run; on a live player's `leave`/`gamepad_leave` binding held for
+      `leave_hold_secs`, writes their spawn id into it and emits `GameEvent::Trigger("coop.leave_
+      requested")` (id-free, capped at one request/frame); emits `player.leaving.index:{n}` while
+      holding and `player.leave_cancelled.index:{n}` on early release
+- [ ] New `{requester}` executor-side substitution token (resolved against
+      `PendingLeaveRequest.take()` — deliberately NOT added to `rewrite_target`/`substitute_self`/
+      `substitute_self_in_action`, which stay untouched)
+- [ ] New `Action::LeavePlayer(String)` — schema + executor arm implementing the 8-step sequence in
+      Approach: last-player refusal (via `ActiveSplitSlotCount`, not a live query), camera/label/
+      HUD/ring/stat-widget lookup and despawn, `SpawnRegistry`/`CurrentTarget` clearing, in-place
+      `SplitViewportSlot`/`Camera.order` renumbering (including any queued `is_hot_join` entry's
+      frozen seat), `ActiveSplitSlotCount` decrement, the triple `player.left*` event emission
+- [ ] New bundled `SystemParam` (e.g. `LeaveParams`) for the executor arm's new queries; promote
+      `ActiveSplitSlotCount` from `Res` to `ResMut` and update its stale doc comment in
+      `runtime/scene_manager/mod.rs` plus the `JoinPlayer` invariant comment block in
+      `action_executor.rs` (both currently assume only `drain_spawn_queue_system` writes it)
+- [ ] **Split `Action::JoinPlayer`'s slot computation into seat index vs. viewport slot** — join
+      now claims the lowest free `PlayerIndex` among currently-live players (seat index; also used
+      for `join_prefab_keys`/`player_{n+1}_start`/`ActionBar.owner_player`), independent of
+      `ActiveSplitSlotCount` (viewport slot, contiguous, unaffected by which specific seats are
+      occupied). This is a v1-code-touching fix, now in v2's scope — see Approach's "critical fix"
+      note for why the original single-`next_slot` design collides after any leave.
+- [ ] Symmetric `player.joined`/`player.joined.index:{n}` events on `Action::JoinPlayer` (v1 shipped
+      with no join-side event; adding it now avoids a designer-visible asymmetry)
+- [ ] Scope guards mirroring v1's join guards: `warn!` + no-op when the current split state isn't
+      `Grid`, and when leaving would drop the scene below the minimum-1-player floor
+- [ ] Demo — `local_coop_demo/room8`: per-player leave bindings on **all four** seats (`"KeyC"` P1,
+      `"Delete"` P2, `"Semicolon"` P3, `"Numpad6"` P4 — verified collision-free against every key
+      the room's four prefabs already bind), all four `join_prefab_keys` slots authored (today only
+      2/3 are — under the seat-reuse fix, any seat must be re-joinable after a leave), an on-screen
+      banner reacting to `player.left`/`player.leaving.index:{n}`, and updated per-player hint
+      labels (`controls_hint_p3`/`p4` currently go stale if that player leaves — make them bound
+      labels, blanked from a `player.left.index:{n}` rule)
+- [ ] Tests — regression: v1's hot-join tests are unaffected by the leave action itself (though the
+      seat/slot split above *does* touch `Action::JoinPlayer` — re-verify v1's existing join tests
+      still pass against the split computation, not just "unmodified"); new: leaving a **middle**
+      slot (not just the last) renumbers every higher surviving slot's `SplitViewportSlot`/
+      `Camera.order` down by one, contiguous `0..new_count`; new: a surviving player's `PlayerIndex`,
+      ring tint/layer (if `own_viewport_only`), HUD label text/color, and `ActionBar.owner_player`
+      matching are all completely unchanged by a leave; new: **a join immediately after a middle-slot
+      leave assigns the freed seat index, not a colliding one** (the critical-fix regression test);
+      new: the leaving player's camera, `LinkedPlayerLabel`/`LinkedTargetHud` entities, any
+      `TrackingTarget` ring, and any `stat_label`/`world_stat_bar` widget ranks they owned are all
+      despawned with no orphans; new: `SpawnRegistry`/`CurrentTarget` no longer reference the
+      leaver; new: `ActiveSplitSlotCount` decrements correctly; new: leaving the sole remaining
+      player warns and no-ops (verified via a same-frame two-leave race, not just a single call);
+      new: leaving in a non-`Grid` scene warns and no-ops; new: `Added<SplitViewportSlot>` does NOT
+      re-fire for a renumbered survivor's camera; new: a queued `is_hot_join` entry's frozen seat
+      is correctly renumbered when a leave lands before it drains
+- [ ] Docs — `docs/20_data_formats.md`: `Action::LeavePlayer`, the new `InputMap` fields (including
+      `leave_hold_secs`), the `coop.leave_requested`/`{requester}` mechanism, the `player.left*`/
+      `player.joined*` event names, the minimum-1-player floor, the `Grid`-only scope guard, the
+      seat-index-vs-viewport-slot distinction, and "leave keys must be distinct per player because
+      the keyboard is shared" (mirroring the existing per-scheme key-collision guidance)
+- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`: add a sixth player-construction-adjacent site
+      (leave is a *de*-construction site with its own multi-entity cleanup contract); correct the
+      now-false "hot-join can NOT diverge here... sets both `player_index` and the spawn slot to the
+      same `next_slot` value" sentence in the `per_viewport_target_ring_visibility` bullet
+
 ## Open questions
-- **(resolved)** Join prefab: per-slot `join_prefab_keys: Vec<String>`, not one shared key — a
+- **(resolved, v1)** Join prefab: per-slot `join_prefab_keys: Vec<String>`, not one shared key — a
   single shared prefab would give every joiner an identical (colliding) control scheme.
-- **(resolved)** Join trigger scope: scene-wide (any press of the bound key claims the next open
+- **(resolved, v1)** Join trigger scope: scene-wide (any press of the bound key claims the next open
   slot), auto-assigning the lowest free `PlayerIndex` — backed by the per-slot prefab list above so
   the correct scheme is always used for whichever slot opens next.
-- v2 (leave) needs its own decision on player-state disposal (does a leaving player's `StatMap`/
-  future inventory/quest progress vanish or persist for rejoin?) — explicitly deferred to v2's own
-  plan-review, not decided here.
-- v2 must also empirically verify the `Added<SplitViewportSlot>`-on-reinsert behavior before relying
-  on any in-place slot-renumbering strategy for leave (the mutate-vs-reinsert distinction the
-  architect flagged) — v1 doesn't need this since it never renumbers.
+- **(resolved, v2)** Player-state disposal on leave: **vanish, no persistence** — no save/restore
+  mechanism exists anywhere in this engine for per-player state across a leave, and building one is
+  out of scope; a later rejoin of that (or any) seat starts fresh, matching hot-join's own "joiners
+  always start fresh" behavior.
+- **(resolved, v2)** The `Added<SplitViewportSlot>`-on-reinsert question v1 deferred: renumbering
+  must be an **in-place mutation** of the component's inner `u32` (`slot.0 -= 1`), never a
+  remove-then-reinsert — confirmed against Bevy's `Added<T>` semantics.
+- **(resolved, v2, post-review)** Trigger mechanism: neither of the two options this draft
+  originally posed is viable (a direct action push violates the pipeline rule; a `rules.ron`-
+  authored `Action::LeavePlayer("{self}")` is structurally unimplementable — no wildcard rule
+  matching, no behavior file on players, runtime-generated hot-join spawn ids). Resolved to a third
+  shape mirroring `PendingJoinGamepad`: an id-free `coop.leave_requested` event + a frame-scoped
+  `PendingLeaveRequest` resource + a `{requester}` token resolved in the executor. See Approach.
+- **(resolved, v2, post-review)** Seat index vs. viewport slot: `Action::JoinPlayer` must derive
+  `PlayerIndex` from the lowest **free seat**, not the live camera **count** — see Approach's
+  "critical fix" note. Without this, join-after-leave can collide two players onto one `PlayerIndex`.
+- **(resolved, v2, post-review)** Losing the primary player (seat 0 leaves): allow it, document the
+  degradation (primary-player-scoped content goes dormant until a future join lands on seat 0
+  again), don't refuse it — refusing would single out the primary player as uniquely unable to
+  leave for no reason visible to them.
+- **(resolved, v2, post-review)** Minimum-1-player floor: keep it (not "allow leaving to 0") — a
+  0-player scene has no defined engine state (no camera at all under the Grid math), while 1 player
+  is a clean, already-correct state (`cols=1,rows=1` renders a full-window single view). "Drop out
+  of co-op" and "quit to a menu" are different, and this engine has no menu/lobby scene for the
+  latter yet.
+- **(resolved, v2, post-review)** Demo leave keys: `"KeyC"` (P1), `"Delete"` (P2), `"Semicolon"`
+  (P3), `"Numpad6"` (P4) — verified collision-free against room8's four prefabs' existing bindings,
+  each adjacent to that player's own key cluster.
 
 ## Acceptance criteria
 - Given a `local_coop_demo` Grid scene starting with 2 players, when the join key is pressed, then
@@ -270,3 +611,35 @@ with the slot) must be documented so a designer reordering `join_prefab_keys` is
 - Given the on-screen join prompt, when 4 players are present, then the prompt hides (via
   `coop.lobby_full`) or, if `SetEntityVisible` can't target it, remains a documented always-visible
   fallback rather than misleadingly implying a 5th join is possible.
+
+### v2 acceptance criteria
+- Given a 4-player `Grid` scene, when the player at a **middle** slot (not the highest) holds
+  their own leave key for `leave_hold_secs`, then that player, their camera, HUD label, target HUD
+  (if authored), target ring, and stat widgets all disappear, and the layout recomputes to a 3-cell
+  grid live with no scene reload (**browser-observable**).
+- Given the same leave, when observing the two surviving players who were at higher slots than the
+  one who left, then their HUD label text/color and target-ring tint are completely unchanged —
+  no visible identity shift, even though their `SplitViewportSlot`/viewport position moved
+  (**browser-observable**).
+- Given a player releases their leave key/button before `leave_hold_secs` elapses, then no leave
+  occurs and a `player.leave_cancelled.index:{n}` event fires — accidental taps don't remove a
+  player (**browser-observable**).
+- **Given a 4-player scene where the player at seat index 1 leaves, when a new player then joins,
+  then the joiner is assigned `PlayerIndex(1)`** (the freed seat), not a value colliding with any
+  still-live player's — the concrete regression test for the seat-index-vs-viewport-slot fix
+  (**browser-observable**: the joiner appears with the same colour/HUD-label identity the departed
+  P2 had, not a duplicate of an existing player's).
+- Given the seat-0 (primary) player leaves a 2+-player scene, when the scene continues, then no
+  crash occurs and primary-player-scoped content (the legacy `target_display` var, any `owner_
+  player: None` action bar) goes dormant until a later join lands on seat 0 again — documented
+  degradation, not a silent break.
+- Given a 1-player-remaining scene, when that player holds their leave key, then nothing happens
+  beyond a clear `warn!` — leaving the last player is refused, including when two players attempt
+  to leave in the same frame (only one can succeed, per the `ActiveSplitSlotCount`-based check).
+- Given a `Vertical`/`Horizontal`/`dynamic`-split or `party`-mode scene, when a leave key is
+  pressed, then nothing happens beyond a clear `warn!` — only `Grid` scenes support hot-leave,
+  matching v1's join scope.
+- Given a scene combining hot-join and hot-leave in the same session, when a player leaves and a
+  different player later joins, then the joiner's assigned seat index never collides with any
+  still-live player's `PlayerIndex` — this is now a structural guarantee (seat index is derived
+  from the live `PlayerIndex` set, not the camera count), not merely an emergent property.

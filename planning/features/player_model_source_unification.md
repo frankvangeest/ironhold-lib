@@ -1,7 +1,16 @@
 # Feature: Player Model Source Unification ("multiplayer with 1")
 
-_Status: Done (v1 shipped 2026-07-19 — v2/v3 remain Queued design sketches, re-review before either starts)_
+_Status: In Progress (v1 Done 2026-07-19, v2 Revised after plan-review — recommend a confirmation
+pass, v3 Queued)_
 _Planned at: `6e38aa1` (2026-07-17)_
+_v2 fleshed out at: `1fcef14` (2026-07-31) — moved back from `features/done/` per the multi-phase
+convention in `planning/CLAUDE.md` (only the final phase's completion moves a multi-phase file to
+`done/`; v1 alone shipping was not that). v2 revised after plan-review at `2026-08-01`: system-
+architect found the prefab-strategy gap (retrofitting either room7 or an under-specified existing
+prefab would either violate the no-retrofit rule or hard-fail CLI validation) and, more
+importantly, that the Friction fix is a terrain-regression risk, not a low-risk one-liner;
+ux-gamedesigner-reviewer converged on the same prefab-strategy gap independently and added the
+demo's docs/animation-gap/room-chain requirements._
 
 **Plan-review note (2026-07-17):** Both reviewers returned Needs-more-design-work on the first
 pass; both sets of findings are now folded into the plan above. **system-architect**: caught that
@@ -25,8 +34,8 @@ contents) while incorporating both reviews, ahead of cutting the `feature/{slug}
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | `PlayerModelSource` enum — collapse the primitive/capsule player path into `spawn_player_entity_core`, scoped to the immediate scene-load path | Queued | — |
-| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Queued | — |
+| v1 | `PlayerModelSource` enum — collapse the primitive/capsule player path into `spawn_player_entity_core`, scoped to the immediate scene-load path | Done | 2026-07-19 |
+| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Revised — recommend confirmation pass | — |
 | v3 | Resource promotion so primitive players also work via terrain-deferred spawn and character-select dynamic spawn | Queued | — |
 
 ## What
@@ -214,15 +223,102 @@ players get distinct `PlayerIndex` values and independent `StatMap`s. This is a 
 
 ### v2 — primitive-player local co-op polish + cleanup (follow-on, after v1 is playtested stable)
 
-With v1's minimal 2-primitive-player proof already merged, v2 is polish and the one deliberately-
-deferred design decision: a fuller `local_coop_demo` demonstration (e.g. a mixed primitive + GLB
-pairing, not just two identical capsules) exercising per-player targeting/stat pools end-to-end,
-plus reconciling the one known behavioral inconsistency between the two paths found while reading
-them for v1: the primitive path includes a zero-`Friction` component (`Friction { coefficient:
-0.0, .. }`, prevents catching on cube edges) that the GLB path's collider does not — the NPC path
-already has this same zero-friction component too (`entity_spawner.rs:304`), a partial precedent
-worth weighing when deciding whether GLB players should get it too, or whether it stays
-primitive/NPC-only by design (needs a quick playtest comparison, not a guess).
+**Fleshed out 2026-07-31, ahead of formal plan-review**, since the original draft above was too
+thin to review against (a one-sentence "fuller demo" with no concrete room/prefab plan, and a
+Friction question with no proposed resolution).
+
+**Demo scope — a *new* room, not a retrofit of v1's `room7`.** `room7` (v1's 2-primitive-player
+proof) should stay exactly as it is — a minimal, focused regression baseline proving the
+structural single-primitive-player cap is gone, nothing more. Mutating it to also carry
+per-player-targeting/stat-pool wiring would conflate "does the cap-removal still work" with "does
+the fuller feature set work," the same anti-pattern this whole local-coop batch has consistently
+avoided (see `room9`'s own precedent: a sibling copy, not a retrofit, when demonstrating a new
+combination of existing mechanics). Proposed: a new `local_coop_demo` room (**room10**, next in the
+portal chain after room9) pairing **one primitive-bodied player and one GLB player** (not two more
+primitives — the "mixed" pairing is the actual point, since v1's proof already covers
+two-primitives-together) — reusing the `target_indicator:`/`target_hud:`/per-player `ActionBar`
+wiring pattern `room3`/`room9` already established. This validates the actual headline claim — a
+primitive player participates in every per-player mechanic exactly like a GLB player does, side by
+side in the same scene — rather than re-asserting it in prose.
+
+**Revision (2026-08-01, after plan-review — system-architect + ux-gamedesigner-reviewer):** both
+reviews independently confirmed mixing GLB+primitive players in one split scene is architecturally
+free (nothing in the split-screen/camera/`RenderLayers` system assumes a uniform model source), but
+both also found the original draft's "reuse the exact wiring pattern" claim glossed over three real
+gaps. Incorporated below.
+
+**Prefab strategy — new sibling prefabs, not a mutation of `room7`'s existing ones (both reviews,
+independently).** `room7`'s `player_p1_primitive`/`player_p2_primitive` author no `target_next`,
+`look_left`/`look_right`, or `gamepad_index` at all — none of the per-player targeting/look/gamepad
+wiring room3's pattern needs. Adding those fields to the existing prefabs would mutate room7's own
+regression baseline (forbidden, per the "don't retrofit room7" decision above); a **new** pair —
+`player_p1_split_target`/`player_p2_primitive_target` (naming TBD during implementation, following
+the `_ring`-suffix precedent room9 already set for the same reason) — is the correct, precedented
+shape. Concretely:
+- **GLB half**: reuse `player_p1_split` verbatim (system-architect) — it already owns the split
+  switch, `target_next: "KeyT"`, `look_left`/`look_right`, `gamepad_index: 0`, a 100-mana pool, and
+  the `action_bar_p1`/`gamepad_key: "RightTrigger"` pairing. Zero new prefab needed for this half.
+- **Primitive half**: a new prefab extending `player_p2_primitive`'s body/collider shape with
+  `target_next: "KeyM"`, `look_left`/`look_right`, and **`gamepad_index: 1`** — the last one is not
+  optional decoration: reusing room3's `ActionBar` verbatim (which authors `gamepad_key:
+  "RightTrigger"` on both bars) against a primitive prefab with no `gamepad_index` is a **hard
+  `ironhold_cli validate` failure** (`gamepad_key_without_gamepad_index`), confirmed against
+  `validate.rs` — this is a blocking correctness requirement, not a nice-to-have. `orbit_button:
+  "None"` is mandatory for any split-screen player (mouse can't drive 2+ cameras), so omitting
+  `look_left`/`look_right` would also leave the primitive player structurally unable to turn their
+  own camera — undercutting the "participates exactly like a GLB player" claim in the most visible
+  possible way.
+- **Player ordering**: GLB player first (owns the split switch, matching room3's known pattern);
+  primitive player as P2 — the genuinely uncovered configuration (`room7`'s primitive player is
+  already P1/primary; a primitive body as a *non-primary* player, with its own ring tint, its own
+  `target_hud` viewport, and an `owner_player: 1` action bar resolving against a primitive body's
+  `StatMap`, is what's actually unproven).
+- **Visual identity (ux-gamedesigner-reviewer)**: give the primitive player a composed multi-part
+  body via `children:` (e.g. a cuboid head + cylinder limbs, steel/silver tone) rather than a bare
+  capsule. Two independent reasons, not just polish: a plain capsule beside a rigged GLB humanoid
+  reads as "programmer placeholder next to the real character," undermining the room's own message;
+  and **no shipped player prefab anywhere in this repo uses `children:`** today, even though v1's
+  `Primitive` arm already calls `spawn_primitive_children` — this room is a genuine first real-world
+  proof of composed primitive player bodies, not just cosmetic. Add a RON comment noting the
+  children are cosmetic only (the physics capsule still comes from `primitive.radius`/`height`).
+- **Animation gap, must be pre-empted on screen, not silently discovered (ux-gamedesigner-reviewer)**:
+  no primitive player has an `animation_policy`, so the primitive half will slide rather than walk.
+  In a room whose message is "everything works the same for both," an unexplained sliding character
+  argues against the thesis unless it's named up front — add an on-screen hint (see UI text below).
+- **Obstacle (system-architect)**: the room as scoped contains no shared obstacle for the Friction
+  comparison task to actually use — author a couple of `Cuboid` blocks both players can walk past.
+
+**Friction reconciliation — corrected scope and risk assessment (system-architect; this
+supersedes the original draft's "one-line, low-risk" framing).** The mechanism itself is smaller
+than described: post-v1 there is no separate "GLB collider construction site" — `Collider::compound`
+is inserted once, unconditionally, in the shared post-dispatch block, and primitive-only friction
+sits immediately below it behind a single `if let PlayerModelSource::Primitive { .. }` guard. The
+change is **deleting that guard**, not adding a line.
+
+**But the actual risk is not the cube-edge case the original draft compared against — it's
+terrain**, and this was missed entirely in the first pass. `Friction { coefficient: 0.0,
+combine_rule: CoefficientCombineRule::Min }` outranks Rapier's default `Average` against *every*
+surface a player touches, including terrain (`capabilities/terrain.rs`'s collider carries no
+`Friction` component at all, i.e. Rapier's default 0.5/`Average`). Friction was never doing much
+*while moving* (movement writes `velocity.linvel` directly each tick) — the only two things it ever
+did were resist edge-snagging and **hold an idle player in place on an incline**. Removing it
+therefore risks an idle GLB player **creeping downhill** on any sloped terrain. `quick_scene` is a
+live, shipped case: a GLB player (`player_warrior`) stands on real fbm terrain with real elevation.
+No human-controlled body has ever run zero-friction on terrain in this engine — every existing
+zero-friction body (NPCs, primitive players) is either AI-driven or confined to flat-ground demo
+projects. The original draft's tie-break ("if the playtest shows no difference, default to add it")
+is unsafe as written, because a flat `local_coop_demo` room *will* show no difference and would
+wrongly greenlight a `quick_scene` regression.
+
+**Corrected plan: a two-scene playtest, not one.** (1) The mixed room10's cube-edge comparison
+(the original upside case), and (2) `quick_scene`'s hillside — stand an idle GLB player on a
+visible slope, before and after, and confirm no creep. If (2) fails, the fallback is **not**
+"revert to primitive-only" but a **low, non-zero coefficient** (e.g. `0.15`, still `combine_rule:
+Min`) — enough static friction to hold a shallow slope while still eliminating edge-snag, a third
+option the original draft didn't enumerate. Whichever way it lands, add a note to the
+`MovementConfig` docs table (`docs/20_data_formats.md`) — currently the only friction-adjacent
+knobs documented are `idle_drag`/`linear_damping`/`angular_damping`, and a designer has no way to
+discover that collider friction isn't a per-prefab-authorable field at all.
 
 ### v3 — resource promotion for terrain-deferred and dynamic-spawn primitive players
 
@@ -312,9 +408,36 @@ explicit and diagnosable rather than a silent gap.
       scope gap), and noting the terrain/dynamic-spawn limitation deferred to v3. Without this, v1
       replaces one silent footgun (primitive players are limited) with a subtler one (some fields/
       contexts work now, others still don't, with no visible boundary)
-- [ ] v2: fuller `local_coop_demo` demonstration (e.g. mixed primitive + GLB pairing) exercising
-      per-player targeting/stat pools end-to-end
-- [ ] v2: decide and document the `Friction` component inconsistency (GLB vs. primitive collider)
+- [ ] v2: new `local_coop_demo` **room10** pairing a new primitive-player-target prefab (P2) +
+      reused `player_p1_split` (P1), with a composed multi-part (`children:`) steel/silver body for
+      the primitive half, `gamepad_index: 1` set (required — see Approach's blocking
+      `gamepad_key_without_gamepad_index` finding), and a couple of `Cuboid` obstacles for the
+      Friction comparison task below
+- [ ] v2: five UI Labels on room10 — room hint (mixed-bodies framing), controls, a parity statement
+      ("same targeting, same action bar, same per-player mana — only the body differs"), targeting/
+      ability hint, and an explicit animation-gap hint ("P2 has no rig, so it slides instead of
+      walking — the only real difference") — see Approach for the animation-gap reasoning
+- [ ] v2: room9's `room_hint` needs a new sibling Label for the room10 exit (its own line, not an
+      extension of the existing ~71-char line); a `portal_to_room10` prefab + `rules.ron` entry;
+      `scene.ready:room9` **and** `scene.ready:room10` Log rules (room9's own is currently missing
+      from a prior room's addition — fix both while touching this file)
+- [ ] v2: **two-scene** Friction playtest (see Approach) — room10's cube-edge comparison AND
+      `quick_scene`'s hillside idle-creep check; implement whichever the comparison actually
+      supports (zero-friction / low-non-zero-friction fallback / no change), then document the
+      decision (not just the mechanism) in `crates/ironhold_core/src/CLAUDE.md`'s "Deliberately NOT
+      unified in v1" note (rewritten, not deleted — the collider-*sizing* divergence there is
+      unrelated and stays) and add a `MovementConfig` docs note that friction isn't a per-prefab
+      field
+- [ ] v2: update `docs/20_data_formats.md`'s "Special tag: player" section, which currently names
+      `room7` as *the* canonical primitive-player example and explicitly calls out room3 as "a
+      primitive-free example of a live, spendable pool" — both claims go stale the moment room10
+      ships; also verify and document whether a primitive player prefab used as a
+      `join_prefab_keys` hot-join entry works, warns, or silently fails (a third dynamic-spawn
+      context the existing terrain/character-select documentation doesn't cover, and room10 sits
+      one portal past the hot-join demo room)
+- [ ] v2: integration test — a mixed `Glb` + `Primitive` `PlayerConfig` pair in one scene produces
+      distinct `PlayerIndex`es, independent `StatMap`s, and two split cameras; add a one-line
+      assertion that a GLB player carries `Friction` if the comparison task adds it
 - [ ] v3: promote the built-materials map / primitive construction resources so
       `spawn_delayed_players_system` and `drain_spawn_queue_system` can also spawn primitive
       players (terrain-deferred and character-select respectively) — a distinct resource-
@@ -325,8 +448,12 @@ explicit and diagnosable rather than a silent gap.
   discriminant, and whether character-select needed a "verify" step) were resolved as concrete
   corrections above per system-architect's review; v3's resource-promotion approach is intentionally
   left undesigned until a real project needs it.
-- v2's `Friction` decision (see Approach) needs a playtest comparison, not a design-time guess —
-  left as an open decision for v2, not v1.
+- **(resolved, post-review)** v2's `Friction` decision needs a **two-scene** playtest comparison
+  (room10's cube-edge case AND `quick_scene`'s terrain-slope case), not the one-scene comparison
+  originally proposed — see Approach for why terrain is the actual risk, not cube edges.
+- **(resolved, post-review)** Demo prefab strategy: new sibling prefabs (not a `room7` retrofit,
+  not a bare mutation of `player_p2_primitive`), GLB-first/primitive-as-P2 ordering, composed
+  multi-part primitive body — see Approach.
 
 ## Acceptance criteria
 - Given `primitive_world`'s existing `player_capsule` prefab (the single-primitive-player
@@ -350,6 +477,18 @@ explicit and diagnosable rather than a silent gap.
 - Given a scene with `terrain: Some(...)` and a primitive-shaped player prefab, when v1 ships, then
   a clear `warn!`/`validate` error explains the player won't spawn (v3-deferred), rather than a
   silent failure or a confusing crash.
-- Given v2's fuller `local_coop_demo` demonstration (mixed primitive + GLB), when both players play
-  split-screen, then per-player targeting and per-player stat pools work exactly as they do for two
-  GLB players today.
+- Given room10, when both players spawn, then the GLB player shows "P1" and the primitive player
+  shows "P2" in their own viewport corners (**browser-observable**).
+- Given room10's primitive P2, when they press their target key (or click a sphere), then a ring
+  appears on *their* target only, tinted with P2's colour, and P2's own `target_hud` readout
+  updates while P1's does not (**browser-observable**).
+- Given room10's primitive P2, when they fire their action-bar slot with a target selected, then
+  P2's own mana bar drops and P1's is unaffected, and vice versa for P1's slot (**browser-observable**
+  — proves per-player stat pools work identically regardless of body type).
+- Given both players in room10, when each walks past the same cube obstacles, then neither body
+  type catches or sticks differently from the other (**browser-observable** — the cube-edge half of
+  the Friction comparison).
+- Given a GLB player standing idle on `quick_scene`'s sloped terrain, when the Friction change
+  ships (in whichever direction the two-scene playtest supports), then they do not creep downhill
+  (**browser-observable regression check** — the terrain half of the Friction comparison, and the
+  one the original v2 draft didn't test for).

@@ -1,7 +1,15 @@
 # Feature: Camera Modes
 
-_Status: Draft_
+_Status: Revised after plan-review — recommend a confirmation pass before implementation_
 _Planned at: `ece80c1` (2026-05-05)_
+_Updated for local-coop/split-screen compatibility: `1fcef14` (2026-07-31); revised again after
+plan-review at `2026-08-01` — 4 blocking questions resolved (see "Local co-op / split-screen
+compatibility"): `ActiveCameraMode` as a per-camera component vs. a resource (the plan's own
+internal contradiction), the authored-vs-runtime type split, a new `CameraTargets` component for
+camera-ownership, and where `split:` is authored under the new schema. Also resolved: the
+backward-compat mechanism (serde aliasing is impossible for this reshape; loader-side detection is
+the only option), `SetCameraMode`'s multi-camera targeting (`owner_player: Option<u32>`), the
+`Party` RON example, and `Party`+`split`/dynamic-split-vs-SetCameraMode precedence rules._
 
 ## Phases
 
@@ -112,7 +120,24 @@ camera_mode: Flycam(
 ),
 ```
 
-The existing `CameraConfig` and `FlyCamDef` structs become the inner payloads of `Orbit` and `Flycam` variants respectively — this is a backwards-compatible rename at the RON level if we add serde aliases.
+```ron
+// Shared camera framing every "player"-tagged entity in the scene — authored on the FIRST
+// player only (same convention as split: below). zoom_margin/min_radius/max_radius now live
+// together in one struct (today they're split across CameraConfig and PartyZoomDef).
+camera_mode: Party(
+    look_at_offset: (0.0, 1.2, 0.0),
+    // radius = clamp(max pairwise player separation + zoom_margin, min_radius, max_radius)
+    zoom_margin:  6.0,
+    min_radius:   8.0,
+    max_radius:  28.0,
+    orbit_speed:  0.4,
+    zoom_speed:   8.0,
+    orbit_button: "Right",
+    allow_manual_zoom: false,  // true = scroll wheel nudges the auto-derived distance
+),
+```
+
+The existing `CameraConfig` and `FlyCamDef` structs become the inner payloads of `Orbit` and `Flycam` variants respectively — this is a backwards-compatible rename at the RON level if we add serde aliases. **Correction (2026-08-01, ux-gamedesigner-reviewer): the serde-alias approach is not viable** — `camera: (offset: ..., ...)` is a named-field struct; `camera_mode: Orbit(...)` is an enum newtype variant. A serde `alias` renames a *key*, it cannot reshape a struct into an enum variant. **The only viable backward-compat approach is scene-loader-side detection** (option (b) in the Open Questions below) — commit to it now rather than presenting a false choice between two options later. The `Orbit` fence above is also missing 3 fields that shipped after this plan's original 2026-05-05 draft: `look_speed` (keyboard camera-look rate — load-bearing in every split-screen room, since mouse orbit is disabled there), `party`, and `split` — the last two are addressed by Blocker 4 above (they move to a sibling field, not inside this fence, so the `Orbit` fence itself only needs `look_speed` added).
 
 #### `TransitionConfig` (new, shared sub-struct)
 
@@ -125,60 +150,300 @@ pub struct CameraTransition {
 
 Every mode variant carries an optional `transition` field. When `SetCameraMode` fires, the system lerps `Transform` (position + rotation via `Quat::slerp`) over `duration_secs` from the old position to the new one. If `transition` is absent, the cut is instant.
 
-#### `Action::SetCameraMode` (new action variant)
+#### `Action::SetCameraMode` (new action variant, v2-scope)
+
+**Multi-camera targeting shape, decided 2026-08-01 (both reviews converged on the same answer from
+different angles — record it now even though `SetCameraMode` itself is v2, so the shape doesn't
+need to change later):**
 
 ```rust
-SetCameraMode(String),   // Named mode key (matches a CameraModeDef defined in prefabs/scene)
+SetCameraMode { mode: String, owner_player: Option<u32> },   // struct variant, named fields
 ```
+
+```ron
+// Every active camera (single-player: the only one; split-screen: every viewport)
+SetCameraMode(mode: "cutscene_fixed")
+
+// Player 2's viewport only — player 1 keeps playing uninterrupted
+SetCameraMode(mode: "cutscene_fixed", owner_player: 1)
+```
+
+`owner_player` reuses `ActionBarDef.owner_player`'s exact existing convention (already
+authored by hand on every co-op prefab as `PrefabDef.player_index`) — **not** a raw
+`SplitViewportSlot`/camera-slot index, which is engine-assigned and reassigned live on hot-join/
+leave, and appears nowhere in RON a designer writes. Semantics:
+
+| `owner_player` | Behavior |
+|---|---|
+| omitted | Applies to **every** active camera |
+| `Some(n)`, split scene, player `n` exists | That player's camera only |
+| `Some(n)`, party scene (one shared camera) | `warn!` + no-op — no per-player camera to retarget |
+| `Some(n)`, seat not yet hot-joined | `warn!` + no-op |
+| `Some(n)` ≥ live player count | `warn!` + no-op |
+
+**Omitted must default to "all cameras," not "the primary camera"** — "the primary camera" is an
+engine-internal `camera_priority_key` concept invisible in a designer's RON, so a rule authored in
+a single-player project would silently change meaning the moment it's reused in a co-op scene. This
+also matches the `CameraShake` acceptance bar above (which already requires "every active camera,"
+not one) — the two camera actions having different implicit defaults would be an arbitrary
+inconsistency to memorize. **Extend the same `owner_player: Option<u32>` field to
+`Action::CameraShake` in the same pass** (e.g. "shake only the player who got hit," a natural co-op
+want) rather than doing a second round of doc/schema churn on the same action later.
 
 Designers fire this from logic rules:
 
 ```ron
 // In state_machine.ron or rules.ron
 on: "ui.button_pressed:enter_cutscene",
-do_actions: [SetCameraMode("cutscene_fixed")],
+do_actions: [SetCameraMode(mode: "cutscene_fixed")],
 ```
 
 Named modes are registered via the prefab catalog or a new `camera_modes` block at scene level (design decision: see Open Questions).
 
 ---
 
+## Local co-op / split-screen compatibility (added 2026-07-31, ahead of plan-review)
+
+This plan was drafted 2026-05-05, **before any of local co-op existed**. Since then, an entire
+split-screen system has shipped and is now heavily used by `local_coop_demo` (9 rooms) and this
+plan's own "Multiple cameras... out of scope for phase 1" open question (below) is simply no
+longer true — split-screen is real, shipped, load-bearing functionality, not a hypothetical future
+concern. This section reconciles the two before implementation starts, so plan-review isn't
+re-discovering a gap `planning/backlog.md`'s own entry for this feature already flags ("Local
+co-op (2026-07-04) added a third sibling, `PartyOrbitCamera`, with its own duplicated tuning
+fields/mouse-orbit block; Stage 3 (2026-07-05) uses real `OrbitCamera`s for split-screen but adds
+`SplitViewportSlot`/`ActiveSplitScreen` as separate, camera-mode-agnostic state... this
+unification should still account for split-screen's viewport-assignment concern as a fourth
+mode-adjacent thing, not just Orbit/Fly/Party").
+
+**Revision (2026-08-01, after plan-review — system-architect + ux-gamedesigner-reviewer): 4
+blocking questions resolved.** Both reviews independently found the fold-in/keep-separate boundary
+above sound in spirit, but found the plan under it contained a direct internal contradiction and
+three unresolved schema decisions that make it un-buildable as written. Resolved below.
+
+### Blocker 1 (both reviews) — `ActiveCameraMode` must be a component, not a resource
+
+The Phases table says "`ActiveCameraMode` resource"; Key Rust change #2 says "a single component."
+With split-screen shipped this is decisive, not a wording nit: `dynamic_split_screen_system` keeps
+**three simultaneously-alive cameras** (2 per-player + 1 merged) of **two different kinds** alive
+for a scene's entire lifetime, toggling only `Camera.is_active`. A single scene-global resource
+cannot represent that. **Resolved: `ActiveCameraMode` is a per-camera-entity component**, holding
+resolved *runtime* state (see Blocker 2). The Phases table row is corrected.
+
+### Blocker 2 (system-architect) — two named types, not one
+
+A deserialized `CameraModeDef` (the authored schema) cannot hold `Entity` references, pre-resolved
+`KeyCode`s, or mutable per-frame state (yaw/pitch/radius, `manual_zoom_offset`). **Resolved: two
+distinct types.** `CameraModeDef` (in `schema/camera.rs`, `Deserialize`) is the authored RON shape,
+unchanged from the Approach section's fences. A separate, non-`Deserialize` `ActiveCameraMode`
+(runtime component, `capabilities/camera.rs`) holds the resolved-at-spawn-time working state — this
+is the direct analog of how `OrbitCamera` today is a runtime component built *from* a `CameraConfig`
+at spawn time, not the `CameraConfig` itself. Every mode variant needs its own resolved payload
+shape (mirroring today's `OrbitCamera` vs. `PartyOrbitCamera` field lists, which already differ
+structurally — `target: Entity` vs `targets: Vec<Entity>`, presence/absence of `look_*_key`/
+`gamepad_index`/`radius`-as-stored-vs-derived).
+
+### Blocker 3 (system-architect) — camera-to-player ownership needs its own component
+
+Five consumers currently read `OrbitCamera.target: Entity` for "which player does this camera
+belong to": `click_select_system` (owning-player attribution — **the plan's original draft
+incorrectly claimed this system doesn't query `OrbitCamera`; it does, and its documented fallback
+behavior for a *targetless* camera, e.g. `PartyOrbitCamera`, changes once Party folds into the same
+component**), `split_viewport_player_label_spawn_system`, `target_hud_update_system`,
+`dynamic_split_screen_system` (separation distance), and `SceneStateParams::orbit_cameras`
+(`CameraShake`'s query). Burying `target`/`targets` inside each `ActiveCameraMode` variant's payload
+would force all five into an exhaustive per-variant match just to ask "who owns this camera."
+**Resolved: a single `CameraTargets(Vec<Entity>)` component, present on every camera regardless of
+mode** — length 0 for `Fixed`/`Flycam` (no owner), length 1 for `Orbit`/`Follow`/`FirstPerson`
+(today's single `target`), length N for `Party` (today's `targets: Vec<Entity>`). This unifies
+`OrbitCamera.target` and `PartyOrbitCamera.targets` into one shape and lets all five consumers
+query `Query<&CameraTargets>` uniformly (`.first()` for "the/a owning player," with the existing
+fallback-to-primary-player convention when empty) instead of matching on `ActiveCameraMode`'s
+variant.
+
+### Blocker 4 (both reviews) — where does `split:` live? (the authoring-home question)
+
+`SplitScreenDef` (`party`/`split`/`own_viewport_only`) is authored today **inside** the exact
+`CameraConfig` struct this plan turns into `Orbit`'s payload — but the fold-in/keep-separate
+boundary above says split-screen state must stay orthogonal to camera mode. Both statements can't
+be true of the same authoring location at once; three options were on the table (sibling field
+under `components:`, folded into `Orbit`'s payload, promoted to scene level) and none was chosen.
+**Resolved for v1: `split:` (and `own_viewport_only`) become a sibling field of `camera_mode:`
+under `components:`** — i.e. `components: (camera_mode: Orbit(...), split: (orientation: Vertical),
+...)` — the lowest-migration-cost option that still honestly reflects the orthogonality claim (a
+sibling field, not nested inside the mode payload). This still requires a mechanical migration of
+every existing `camera: (split: (...))` block, but is a smaller conceptual jump than promoting
+split-screen's designer-facing switch to scene level. **Promoting `split:` to `GameSceneV2` (a
+scene-level field, not a per-player one) is a genuinely stronger long-term answer** — it would
+finally retire the "only the first player-tagged entity's config is read" footgun this plan's own
+docs task list doesn't currently address — but is deliberately deferred past v1 to keep this
+already-large unification's scope from also becoming a split-screen-authoring redesign; log it to
+`planning/claude_suggestions.md` as a concrete v2+ candidate rather than dropping it.
+
+**Party + `split` interaction, now defined** (ux-gamedesigner-reviewer): the pre-existing
+mutual-exclusivity rule (`party`/`split` are exclusive; if both are set, `split` wins with a
+warning) is **preserved, not implicitly loosened** — a designer directly authoring `camera_mode:
+Party(...)` alongside a sibling `split: (...)` still gets the same warn-and-`split`-wins behavior
+as today. The *internally-managed* merged-state camera `dynamic_split_screen_system` spawns for a
+`split.dynamic` scene uses `ActiveCameraMode`'s `Party` variant under the hood (an engine
+implementation detail, not something the designer authors directly) — this is not a contradiction
+of the exclusivity rule, since the designer never writes `camera_mode: Party(...)` in that case.
+
+**`split.dynamic` vs. `SetCameraMode` precedence, now defined** (ux-gamedesigner-reviewer): a
+dynamic-split scene has two potential writers of a camera's active mode — the engine's
+merge/split distance thresholds, and a designer's `SetCameraMode`. **Resolved: while a
+`SetCameraMode`-originated mode is active on a camera, `dynamic_split_screen_system`'s automatic
+merge/split transitions are suspended for that camera**, resuming only on an explicit
+`SetCameraMode` back to the scene-authored default (or a full scene reload). This is a v2-scope
+detail (since `SetCameraMode` itself is v2), recorded now so it isn't rediscovered as an ambiguity
+once v2 starts.
+
+**What must stay a *separate*, camera-mode-agnostic layer — unaffected by any of the above:**
+- `SplitViewportSlot(u32)`, `ActiveSplitScreen(Option<SplitOrientation>)`, `DynamicSplitConfig`,
+  `ActiveSplitSlotCount` — "how many cameras and how is the window tiled" stays orthogonal to "what
+  does one camera's transform-following logic do," exactly as originally argued. Nothing about
+  Blockers 1-4 changes this.
+- `camera_priority_key(entity, slot: Option<&SplitViewportSlot>)` — verified (not just claimed)
+  transparent for 3 of its 4 consumers (`rebuild_pool_meshes_system`, `world_label_screen_pos_
+  system`, `nameplate.rs`'s distance stash); `click_select_system` is the 4th and needed Blocker 3's
+  `CameraTargets` fix specifically because it *does* read ownership (see above) — with that fix
+  applied, all four are transparent to the `OrbitCamera` → `ActiveCameraMode` rename.
+- `own_viewport_only`'s per-camera `RenderLayers` (keyed on `PlayerIndex`) and
+  `TargetRingVisibilityMode` — existing test coverage for the *insertion* sites is strong
+  (system-architect verified 6 tests keying on exact layer membership, one of which queries
+  `With<PartyOrbitCamera>` directly and so will fail to **compile** the moment that component is
+  deleted — the ideal failure mode). **The actual uncovered risk is the *non*-insertion fallback
+  path** (`spawn_player_entity`/`Action::Spawn`'s dedicated full-window camera, which today
+  correctly gets neither a layer nor a warn-worthy gap) — collapsing three spawn paths into one
+  unified path (Key Rust change #5) is exactly where a uniform insertion or a dropped warn could
+  slip through silently. Add a **named** test for this fallback case specifically, not "the
+  existing suite happens to cover it."
+
+**What must be *fixed*, not just preserved: `Action::CameraShake`.** Already has a documented gap —
+fires correctly on both simultaneously-active split cameras (real `OrbitCamera`s) but silently
+no-ops in a `party:` scene (`PartyOrbitCamera` unqueried). Verified (system-architect): the
+existing ordering chain already runs `camera_shake_system` after both `camera_orbit`/`party_camera_
+follow`, so no reorder is needed once the query moves to the new component; and the executor's
+shake loop is already a `for camera_entity in ... .iter()`, not a `.single()`, so "shake every
+active split camera" is already correct, not new work. **What genuinely is new work, and a named
+regression risk**: the query must stay **variant-filtered** (`Orbit` + `Party`, excluding `Fixed`/
+`FirstPerson`/`Flycam`) — a naive `With<ActiveCameraMode>` would insert `CameraShakeState` onto a
+flycam camera too, and since `fly_camera_system` runs *after* `camera_shake_system`, it would
+silently overwrite the shake offset instead of preserving today's explicit `warn!("no orbit camera
+in scene — shake ignored")`. Silently doing nothing where today's diagnostic explicitly warns is a
+real, easy-to-miss regression — add it as a named acceptance criterion, not just "shake still
+works."
+
 ## Key Rust changes
 
+**(v1 scope unless marked v2)**
+
 1. **`schema/camera.rs`** (new file)
-   - `CameraModeDef` enum with all mode variants
-   - `CameraTransition` struct
-   - Per-mode config structs (reuse existing `CameraConfig`/`FlyCamDef` as inner payloads)
+   - `CameraModeDef` enum with all mode variants (the authored/`Deserialize` schema — see Blocker 2)
+   - `CameraTransition` struct (**v2** — only meaningful once `SetCameraMode` exists)
+   - Per-mode config structs (reuse existing `CameraConfig`/`FlyCamDef` as inner payloads); `split:`/
+     `own_viewport_only` move to a sibling field, not inside `Orbit`'s payload (Blocker 4)
 
 2. **`capabilities/camera.rs`** (refactor)
-   - Replace `OrbitCamera` + `FlyCamera` components with a single `ActiveCameraMode` component holding the current `CameraModeDef`
+   - Replace `OrbitCamera` + `FlyCamera` + `PartyOrbitCamera` with a per-camera **component**
+     `ActiveCameraMode` (runtime-resolved state — Blockers 1 & 2, NOT the same type as
+     `CameraModeDef`) plus a separate `CameraTargets(Vec<Entity>)` component present on every
+     camera (Blocker 3)
    - One unified `camera_system` that dispatches on the active mode
-   - `CameraBlendState` component for in-progress transitions (start transform, target transform, elapsed, duration, ease fn)
+   - `CameraBlendState` component for in-progress transitions (**v2**)
 
-3. **`schema/actions.rs`**
-   - Add `SetCameraMode(String)` variant
+3. **`schema/actions.rs`** (**v2**)
+   - Add `SetCameraMode { mode: String, owner_player: Option<u32> }` (struct variant — see the
+     multi-camera targeting decision above); extend `Action::CameraShake` with the same
+     `owner_player: Option<u32>` field in the same pass
 
-4. **`runtime/action_executor.rs`**
-   - Handle `SetCameraMode`: look up named mode, set `ActiveCameraMode`, insert `CameraBlendState`
+4. **`runtime/action_executor.rs`** (**v2**)
+   - Handle `SetCameraMode`: resolve `owner_player` to the target camera(s) per the table above,
+     look up the named mode, set `ActiveCameraMode`, insert `CameraBlendState`
 
 5. **`runtime/scene_manager/scene_loader.rs`**
-   - Replace the three-path camera spawn (orbit / flycam / fallback) with a single spawn of `ActiveCameraMode` from the resolved `CameraModeDef`
-   - Keep backwards compat: if prefab has old `camera:` or `flycam:` fields, map them to `Orbit`/`Flycam` variants
+   - Replace the three-path camera spawn (orbit / flycam / fallback) with a single spawn of
+     `ActiveCameraMode` + `CameraTargets` from the resolved `CameraModeDef`
+   - Backward compat via **loader-side detection only** (see the corrected Open Questions entry —
+     serde aliasing cannot reshape a struct into an enum variant): if a prefab has the old
+     `camera:`/`flycam:` fields and no `camera_mode:`, synthesize the equivalent `Orbit`/`Flycam`
+     variant at load time
+
+6. **`ironhold_cli`** — `query actions`/`validate` need to recognize the new `Action` variant and
+   the new schema type; currently absent from the task list below despite every other
+   schema-changing feature in this codebase needing this step (see the mandatory `cargo check -p
+   ironhold_cli` gate in the root `CLAUDE.md`).
 
 ---
 
 ## Tasks
 
-- [ ] Write `CameraModeDef` enum and sub-structs in `schema/camera.rs`
-- [ ] Add `SetCameraMode(String)` to `Action` enum and document it
-- [ ] Implement `camera_system` in `capabilities/camera.rs` (Orbit, Follow, Fixed, FirstPerson, Flycam)
-- [ ] Implement `CameraBlendState` transition lerp (position + slerp rotation)
-- [ ] Update `scene_loader.rs` to resolve `CameraModeDef` from prefab/scene and spawn `ActiveCameraMode`
-- [ ] Handle `SetCameraMode` in `action_executor.rs`
-- [ ] Backwards compat: map existing `camera:` / `flycam:` RON fields to new variants
-- [ ] Update `entity_logic_demo` or `quick_scene` with a camera-switch example
-- [ ] Integration tests: mode switch fires correctly, transition completes, fallback camera spawns
-- [ ] Docs: add camera modes section to `docs/20_data_formats.md` and `docs/30_runtime_events_and_logic.md`
+**v1 (unification, no runtime mode-switching yet):**
+- [ ] Write `CameraModeDef` enum and sub-structs in `schema/camera.rs`, including the `Party`
+      variant (fence added above) and the `split:`/`own_viewport_only` sibling-field placement
+      (Blocker 4)
+- [ ] Implement `ActiveCameraMode` (runtime component, distinct type from `CameraModeDef`) +
+      `CameraTargets(Vec<Entity>)` in `capabilities/camera.rs`; implement `camera_system` dispatch
+      for Orbit/Party (Follow/Fixed/FirstPerson/Flycam's *systems* can land in v1 too since they
+      don't depend on `SetCameraMode` — only the *switching* action is v2)
+- [ ] Update `scene_loader.rs` to resolve `CameraModeDef` from prefab (+ the new sibling `split:`
+      field) and spawn `ActiveCameraMode`/`CameraTargets`; commit to loader-side backward-compat
+      detection (not serde aliasing — see the corrected note above)
+- [ ] Fold `PartyOrbitCamera` into `ActiveCameraMode`'s `Party` case, removing the ~10 duplicated
+      tuning fields (`planning/claude_suggestions.md` ▸ Camera) in favor of the shared struct
+- [ ] Migrate `click_select_system`, `split_viewport_player_label_spawn_system`, `target_hud_
+      update_system`, `dynamic_split_screen_system`, and `SceneStateParams::orbit_cameras` to read
+      `CameraTargets` instead of `OrbitCamera.target`/`PartyOrbitCamera.targets` (Blocker 3's five
+      named consumers)
+- [ ] Regression tests — confirm `SplitViewportSlot`/`ActiveSplitScreen`/`DynamicSplitConfig`/
+      `ActiveSplitSlotCount` and `camera_priority_key`-based selection (`rebuild_pool_meshes_
+      system`/`click_select_system`/`world_label_screen_pos_system`/`nameplate.rs`) continue to
+      function unchanged — run the full `local_coop_tests.rs` suite (133+ tests) against the
+      refactored code. **Additionally, a *named* test** (not just "the suite happens to cover it")
+      asserting the non-hot-join `Action::Spawn`/`spawn_player_entity` fallback camera still gets
+      no `RenderLayers` (and the existing warn still fires) in an `own_viewport_only` scene — the
+      specific gap the three-spawn-path collapse risks silently losing.
+- [ ] Fix `Action::CameraShake` to also fire on the `Party` case (closing the documented gap) via a
+      **variant-filtered** query (`Orbit` + `Party` only — excluding `Fixed`/`FirstPerson`/
+      `Flycam`, so a flycam scene still gets its explicit `warn!` instead of a silent overwrite by
+      `fly_camera_system`); confirm (already true today, per the ordering chain — not new work)
+      every active split camera shakes, not just one
+- [ ] A Migration section in this plan (see Open Questions) with an old→new RON table for the three
+      real shapes (plain `camera:`, `camera:` + `party:`, `camera:` + `split:`); migrate **one**
+      low-risk project fully (`3rd_person_game_demo` — 3 plain `camera:` blocks, no co-op) as living
+      proof, while `local_coop_demo` deliberately stays on legacy syntax with a RON comment saying
+      so (its ~14 `camera:` blocks are the compat-path's own regression test)
+- [ ] `ironhold_cli`: `cargo check -p ironhold_cli` gate (new schema type); spot-check `query
+      actions`/`query prefabs` output on a migrated project
+- [ ] Docs: rewrite `docs/20_data_formats.md`'s CameraConfig-through-DynamicSplitDef block
+      (~lines 2023-2350 as of 2026-07-31 — the largest camera-doc surface in the repo) for the new
+      shape, keeping a short "Legacy `camera:`/`flycam:` fields" compat subsection; update the
+      `CameraShake` actions-table row (currently says "the active orbit camera," doesn't mention
+      split/party behavior at all)
+- [ ] Docs: update `crates/ironhold_core/src/CLAUDE.md`'s local-coop camera section and its "Known
+      limitation" `CameraShake` note to reflect the new unified reality
+- [ ] Demo: `local_coop_demo` room demonstrating `SetCameraMode` retargeting one player's viewport
+      to `Fixed` while the other keeps `Orbit` (**v2**, but name the room/scene now so it isn't
+      forgotten — the single-player-only demo task below doesn't showcase the co-op-specific
+      capability the split-screen reconciliation spent the most words on)
+
+**v2 (runtime mode-switching):**
+- [ ] Add `SetCameraMode { mode: String, owner_player: Option<u32> }` to `Action` enum and document
+      it; extend `Action::CameraShake` with the same `owner_player` field in the same pass
+- [ ] Implement `CameraBlendState` transition lerp (position + slerp rotation + FOV lerp)
+- [ ] Handle `SetCameraMode` in `action_executor.rs`, resolving `owner_player` per the targeting
+      table above (including the `warn!`+no-op cases: party scene, unjoined seat, out-of-range
+      index)
+- [ ] Hot-join interaction: a player joining after `SetCameraMode` has retargeted another camera
+      spawns in the scene-authored default mode, not the currently-active override — the two are
+      independent per-camera states
+- [ ] `dynamic_split_screen_system` interaction: suspend automatic merge/split transitions on any
+      camera currently under a `SetCameraMode` override, resuming only on an explicit
+      `SetCameraMode` back or a scene reload (see the precedence decision above)
+- [ ] Update `entity_logic_demo`/`quick_scene` with a single-player camera-switch example, and
+      complete the `local_coop_demo` per-viewport retargeting demo named in v1's task list
+- [ ] Integration tests: mode switch fires correctly (including `owner_player` targeting each
+      `warn!` case), transition completes, fallback camera spawns
 
 ---
 
@@ -205,9 +470,24 @@ When a player character is spawned at runtime via `Action::Spawn` (e.g. from a c
 
 - **Named mode registry**: should named modes live in the prefab catalog, in a new `camera_modes:` block at scene level, or as inline RON in the action argument? Inline is simplest but prevents reuse across scenes. A scene-level `camera_modes:` map (key → `CameraModeDef`) feels right — small and local to the scene.
 
-- **Multiple cameras**: some games render picture-in-picture or split-screen. Out of scope for phase 1 — `SetCameraMode` only affects the primary camera. Worth noting so the design doesn't close the door.
+- **Multiple cameras / split-screen**: **(resolved 2026-08-01, post plan-review — no longer
+  hypothetical or open)**. Local co-op split-screen shipped and is load-bearing, heavily-used
+  functionality (`local_coop_demo`, 9 rooms). See the "Local co-op / split-screen compatibility"
+  section above for the 4 blocking questions this raised and their resolutions: `ActiveCameraMode`
+  is a per-camera component, not a resource (Blocker 1); it's a distinct runtime type from the
+  authored `CameraModeDef` (Blocker 2); camera-to-player ownership is a separate `CameraTargets`
+  component, not buried per-variant (Blocker 3); `split:`/`own_viewport_only` move to a sibling
+  field of `camera_mode:` under `components:`, not inside `Orbit`'s payload, with scene-level
+  promotion logged as a v2+ candidate rather than attempted now (Blocker 4). `SetCameraMode`'s
+  multi-camera targeting is resolved to `owner_player: Option<u32>` (reusing `ActionBarDef`'s
+  existing convention), defaulting to "all active cameras" when omitted — see the Approach section.
 
-- **Backwards compatibility**: the old `camera:` and `flycam:` prefab fields should continue to work without migration. Two options: (a) serde `#[serde(alias = "camera")]` on the new `camera_mode` field and auto-wrap at deserialise time; (b) detect the old fields in the scene loader and synthesise the new component. Option (b) is more explicit but adds loader noise; option (a) requires the old and new shapes to be compatible.
+- **Backwards compatibility**: **(resolved 2026-08-01)** — serde aliasing is **not viable**
+  (confirmed: `camera: (...)` is a named-field struct, `camera_mode: Orbit(...)` is an enum newtype
+  variant; an alias renames a key, it cannot reshape a struct into a variant). The only viable
+  approach is **option (b): detect the old `camera:`/`flycam:` fields in the scene loader and
+  synthesize the equivalent `CameraModeDef` variant at load time.** See the new Migration task in
+  the Tasks list for the accompanying old→new RON table and the one-project migration proof.
 
 - **Target entity for `Orbit` / `Follow` / `FirstPerson`**: **resolved** — these modes accept an optional `target_entity: String` (prefab instance name). If omitted, the engine defaults to the player entity. This allows a designer to track any named entity (NPC, prop) without code changes.
 
@@ -231,6 +511,30 @@ When a player character is spawned at runtime via `Action::Spawn` (e.g. from a c
 - Given a mode with `fov: 90.0`, the spawned camera uses that field-of-view; during a transition to a mode with a different FOV, the FOV interpolates linearly alongside the transform blend.
 - Given a prefab with the old `camera:` field (no `camera_mode:`), the engine still spawns an orbit camera with the old parameters — no migration required for existing projects.
 - Given a prefab with the old `flycam:` field, the engine still spawns a flycam — no migration required.
+- Given any existing `local_coop_demo` room (`Vertical`/`Horizontal`/`Grid`/`dynamic`/`party`),
+  when this ships, then split-screen viewport layout, per-viewport HUD labels, target rings
+  (including `own_viewport_only` mode), and camera-priority-based selection (click-to-select,
+  particle billboarding, nameplate culling) all behave identically to before this refactor —
+  regression, verified by the full existing `local_coop_tests.rs` suite passing unchanged, not
+  just this feature's own new tests (**browser-observable**: replay this session's local-coop
+  playtest checklist across a representative sample of rooms).
+- Given a `party:` scene, when `Action::CameraShake` fires, then the shared `PartyOrbitCamera`
+  (now `CameraModeDef::Party`) actually shakes — closing the documented pre-existing gap, not just
+  preserving it.
+- Given a `split:` scene with 2+ simultaneously active cameras, when `Action::CameraShake` fires,
+  then every active split camera shakes, not just one.
+- Given a `flycam:` scene, when `Action::CameraShake` fires, then it still `warn!`s ("no orbit
+  camera in scene — shake ignored") exactly as it does today — **not** a silent no-op, which is
+  what a naive variant-unfiltered query would produce once `fly_camera_system` runs after the
+  shake write and overwrites it.
+- Given the non-hot-join `Action::Spawn`/`spawn_player_entity` fallback camera path in an
+  `own_viewport_only` scene, when this ships, then that camera still gets **no** `RenderLayers`
+  component and the existing warn still fires — the specific non-insertion case the three-spawn-
+  path collapse risks losing, verified by a named test, not inferred from the insertion-site tests.
+- Given `local_coop_demo`, when the migrated project (`3rd_person_game_demo`) and the deliberately-
+  unmigrated project (`local_coop_demo`, with its own RON comment explaining why) are both played,
+  then both work identically — the compat path is proven by a real unmigrated project still
+  loading correctly, not just by unit tests.
 
 ---
 

@@ -33,4 +33,15 @@ Also: `PendingJoinGamepad` is frame-scoped (reset unconditionally at the top of 
 
 **`*_gamepad_bindings` are NOT the gamepad twin of `*_key_bindings`** despite the mirrored names/merge logic: a match only fires on an **unclaimed** pad, so there is no way to author a global gamepad trigger (e.g. pause) from an already-joined player's pad. Naming implies symmetry that does not exist.
 
+**Bevy gamepad Entity lifecycle — verified from source 2026-08-01 (load-bearing for any Entity-based binding):**
+- `bevy_input-0.18.0/src/gamepad.rs::gamepad_connection_system` (~line 1537): on disconnect it does `gamepad.remove::<Gamepad>()`, **never despawns**; on reconnect it re-`insert`s `Gamepad` onto the entity named by the event. So `Query<&Gamepad>::get(bound_entity)` degrades to `Err` on disconnect (graceful no-input) and silently resumes on reconnect. Claim confirmed.
+- **But entity identity is decided one layer down, in `bevy_gilrs`, and is only as stable as the platform's id reuse.** `bevy_gilrs-0.18.0/src/gilrs_system.rs` keeps a permanent `GilrsGamepads { id_to_entity, entity_to_id }` (never pruned on disconnect) and only spawns a new entity when `get_entity(gilrs_id)` misses. So "same Entity" really means "same `gilrs::GamepadId`":
+  - Linux (`gilrs-core/platform/linux`): matched by device **UUID** — true device identity. Best case.
+  - Windows XInput: 4 fixed slots, id == XInput user index. Web (`platform/wasm`): matched by `web_sys` `Gamepad.index()` **only** — never id/vendor/product.
+  - Consequence on Windows/web: a *different* controller taking a freed slot inherits the previous device's Entity; and a device returning at a *different* slot becomes a *new* Entity. Bind-once-lock-forever therefore has no recovery path in the latter case.
+- `bevy_gilrs` is compiled for wasm32 too (explicit `#[cfg(target_arch = "wasm32")]` arms in its `lib.rs`) — the browser Gamepad API path, not a stub.
+- Test harness already supports this end-to-end: `tests/support/mod.rs` runs the real `gamepad_connection_system`, so `connect_test_gamepad` + a hand-written `GamepadConnection::Disconnected` message gives real disconnect/reconnect coverage with no new infrastructure.
+
+**`OrbitCamera.gamepad_index` is a second copy of the binding, on the camera, not the player.** `camera_orbit_system`'s queries only reach the player via `character_query.get(orbit.target)` (Transform only) — any player-entity-based binding component needs either a separate read-only `Query<&BoundGamepad>` keyed by `orbit.target`, or the field deleted. Easy to miss when counting "the 5 gamepad-consuming systems": 4 read the player's `CharacterController`, camera does not.
+
 **Bevy-upgrade risk (Minor):** test support (`tests/support/mod.rs`) registers Bevy-internal `gamepad_connection_system`/`gamepad_event_processing_system` (public fns) + ~8 raw gamepad message types manually, because the test app uses MinimalPlugins (no InputPlugin). This couples test infra to Bevy internals — flag on any Bevy upgrade. Harmless to existing ~100 tests: systems no-op without simulated events, no Gamepad entities spawned. See [[bevy_019_upgrade]].

@@ -17,7 +17,14 @@ through the same spawn pipeline as a `kind: Actor` (GLB) player, so both honor t
 **Primitive-player-only limits (not yet supported at all, "v3-deferred"):** a primitive player
 combined with `scene.terrain: Some(...)` (validate error + runtime warn) or referenced from a
 character-select `Action::Spawn` (runtime warn). Only the immediate, non-terrain scene-load path
-spawns primitive players.
+spawns primitive players. **Third dynamic-spawn context nobody has answered yet (as of 2026-08-01):**
+a primitive prefab named in a scene's `join_prefab_keys` (hot-join). docs/20's unsupported-context
+bullet lists only terrain + `Action::Spawn` — hot-join is absent. Verify before telling a designer
+it works.
+
+**No shipped player prefab anywhere uses `children:`** (checked 2026-08-01 across all projects) —
+so composed multi-part primitive players (`spawn_primitive_children` on the unified player path) are
+supported-in-code but completely undemonstrated. Every primitive player shipped is a bare capsule.
 
 **Canonical examples:**
 - `local_coop_demo` room7 scene + `player_p1_primitive`/`player_p2_primitive` prefabs — 2 primitive

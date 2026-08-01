@@ -56,3 +56,15 @@ mirroring `global_key_bindings`/`scene_key_bindings`. Shipped in feature/gamepad
   `*_grid` variants have no such hint), `local_coop_demo/scenes/room8.scene.ron`
   (`scene_gamepad_bindings`).
 - `ironhold validate` warns on unrecognised button names in both bindings maps (implemented).
+- **Any new "duplicate/conflicting `gamepad_index`" check must be scoped to a scene's instantiated
+  players, never the prefab catalog.** `local_coop_demo/prefabs/prefabs.ron` legitimately has
+  `player_p1_split` and `player_p1_split_ring` BOTH on `gamepad_index: 0` (and the p2 pair both on
+  `1`) because they're scene-specific variants used in room3 vs room9 — a catalog-wide check would
+  false-positive and break `validate_projects.rs`'s "every shipped project exits 0" rule. Same trap
+  applies to `join_prefab_keys` prefabs, which only exist once a hot join happens.
+- **Escalation precedent for gamepad authoring mistakes:** `gamepad_key` without a matching
+  `gamepad_index` is BOTH a scene-load `warn!` and a hard `ironhold_cli validate` error
+  (`gamepad_key_without_gamepad_index`). Use this as the reference shape when asked "warn or hard
+  error?" for a gamepad mis-pairing — hard error is justified when the mistake is invisible without
+  a physical controller attached (keyboard stays additive, so the designer's own testing can't
+  surface it).

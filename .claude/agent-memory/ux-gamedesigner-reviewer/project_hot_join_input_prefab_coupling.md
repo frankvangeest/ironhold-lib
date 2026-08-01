@@ -15,7 +15,8 @@ grows to 4; correctly NOT room6, which already starts at the 4-player cap).
 **Shipped surface:**
 - keyboard: `scene_key_bindings: {"KeyG": "join"}` + rule `ui.button_pressed:join -> JoinPlayer`
   (KeyG not KeyJ — KeyJ is P3's own strafe key, and `global_input_system` reads keys unconditionally).
-- gamepad (v2, feature/gamepad-hot-join): `scene_gamepad_bindings: {"South": "join"}`, same rule.
+- gamepad (v2, feature/gamepad-hot-join): `scene_unclaimed_gamepad_bindings: {"South": "join"}`
+  (verified field name 2026-08-01 — NOT `scene_gamepad_bindings`), same rule.
   `Action::JoinPlayer` overrides the joiner's `InputMap.gamepad_index` to the pressing pad (and the
   spawn-time `OrbitCamera` picks that override up, so right-stick pitch works for the joiner).
   See [[gamepad-input-system]] for the unclaimed-pad-only semantics.
