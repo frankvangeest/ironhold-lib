@@ -1,23 +1,35 @@
 use bevy::prelude::*;
 use bevy::input::gamepad::{Gamepad, GamepadAxis};
+use std::collections::{HashMap, HashSet};
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::{
     LoadedKeyBindings, LoadedGamepadBindings, PendingJoinGamepad, PendingEntitySpawns,
 };
-use crate::capabilities::player::CharacterController;
+use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex};
 use crate::schema::AppState;
 use crate::schema::player::InputMap;
 
-/// Resolves a player's `gamepad_index` against a slice of connected gamepads already sorted by
-/// `Entity::index()` (built once per system per frame — see callers). `None` if the player has
-/// no `gamepad_index` bound, or the index is out of range (fewer gamepads connected than
-/// expected).
-pub(crate) fn resolve_gamepad<'a>(
-    sorted: &'a [(Entity, &'a Gamepad)],
-    index: Option<usize>,
-) -> Option<&'a Gamepad> {
-    index.and_then(|i| sorted.get(i)).map(|(_, gp)| *gp)
-}
+/// How long a stuck gamepad-binding situation (a bound player's pad has disappeared, or a pending
+/// player's seed keeps resolving to a pad another player already holds) must persist before
+/// `gamepad_bind_system` logs its one-shot diagnostic `warn!`. Not a design-critical value —
+/// see `planning/features/gamepad_player_binding_hardening.md`'s "Open questions".
+const GAMEPAD_DIAGNOSTIC_WARN_SECS: f32 = 3.0;
+
+/// A candidate gamepad must have been continuously present (matching `Query<(Entity, &Gamepad)>`
+/// without interruption) for at least this long before a pending player's seed is allowed to bind
+/// to it. Exists because of a real, hardware-confirmed failure mode found during this feature's
+/// own playtest: a single physical Xbox controller can report as **two** separate browser gamepad
+/// entries for a brief moment (a `bevy_gilrs`/browser-level artifact — the second, spurious entry
+/// disconnects on its own shortly after) — without this debounce, a pending player's seed could
+/// permanently lock onto that spurious entry in the brief window before it disappears, since
+/// binding is otherwise immediate and (by design) never re-derived once committed. Real hardware
+/// showed this isn't a rare unlucky case: the spurious entry reliably wins the lower sorted
+/// position (it's discovered first) and reliably outlives at least one `gamepad_bind_system` tick,
+/// so without a debounce this reproduced on every single connection attempt with the affected
+/// controller, not just occasionally. Not a design-critical exact value; picked to comfortably
+/// exceed the observed spurious-entry lifetime without being perceptible as input lag on an
+/// ordinary single, stable connection.
+const GAMEPAD_STABLE_CONNECT_SECS: f32 = 0.5;
 
 /// Translates global key presses into UI messages using the project's `global_key_bindings`.
 /// Only fires in `InGame` state. Runs in `Update` (not `FixedUpdate`) so it
@@ -78,7 +90,7 @@ pub fn unclaimed_gamepad_trigger_system(
     state: Res<State<AppState>>,
     gamepad_bindings: Res<LoadedGamepadBindings>,
     gamepad_query: Query<(Entity, &Gamepad)>,
-    controllers: Query<&CharacterController>,
+    players: Query<(&BoundGamepad, &CharacterController)>,
     pending_spawns: Res<PendingEntitySpawns>,
     mut pending_join_gamepad: ResMut<PendingJoinGamepad>,
     mut ui_events: MessageWriter<UiEvent>,
@@ -91,32 +103,44 @@ pub fn unclaimed_gamepad_trigger_system(
     let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
     sorted_gamepads.sort_by_key(|(e, _)| e.index());
 
-    // A pad is "claimed" if it drives a live player, or is already mid-flight through the
-    // deferred spawn queue via an undrained `is_hot_join` entry (mirrors the `queued_hot_joins`
-    // same-frame double-join guard `Action::JoinPlayer`'s executor already has).
-    //
-    // Known accepted hazard (system-architect finding, not fixed here): this set holds
-    // *positional* sorted indices, recomputed fresh each frame — if a lower-sorted-index pad
-    // disconnects mid-session, every higher pad's position shifts down by one, and a still-live
-    // player's own claimed index can transiently collide with a now-different physical pad, or a
-    // claimed index can point past the end of the (now shorter) list and stop excluding anything.
-    // Either way a stale `gamepad_index` can make an actually-claimed pad look unclaimed for one
-    // frame, risking a spurious extra join on a pad someone is already using. Same root cause as
-    // the pre-existing RON-authored `gamepad_index` fragility (`resolve_gamepad`'s doc comment),
-    // just newly reachable via a live disconnect instead of only via authoring. Logged in
-    // `planning/backlog.md` rather than solved here — the real fix is an `Entity`-resolved binding,
-    // not a positional index.
-    let claimed: std::collections::HashSet<usize> = controllers.iter()
-        .filter_map(|c| c.inputs.gamepad_index)
+    // A pad is "claimed" if it drives a live player (via that player's resolved `BoundGamepad`),
+    // or is already mid-flight through the deferred spawn queue via an undrained `is_hot_join`
+    // entry's own captured `bound_gamepad` (mirrors the `queued_hot_joins` same-frame double-join
+    // guard `Action::JoinPlayer`'s executor already has). `Entity`-based, not the old positional
+    // `HashSet<usize>` derived from live `gamepad_index` values — that set went stale the instant
+    // any pad connected/disconnected mid-session (e.g. a hot-leave shifting every remaining pad's
+    // sorted position), risking a spurious extra join on an already-claimed pad. See
+    // `planning/features/gamepad_player_binding_hardening.md`.
+    let mut claimed: HashSet<Entity> = players.iter()
+        .filter_map(|(bound, _)| bound.0)
         .chain(
             pending_spawns.0.iter()
                 .filter(|q| q.is_hot_join)
-                .filter_map(|q| q.player_config.as_ref().and_then(|pc| pc.inputs.gamepad_index))
+                .filter_map(|q| q.player_config.as_ref().and_then(|pc| pc.bound_gamepad))
         )
         .collect();
 
-    for (sorted_index, (entity, gamepad)) in sorted_gamepads.iter().enumerate() {
-        if claimed.contains(&sorted_index) { continue; }
+    // Also reserve the pad a still-pending authored player's seed is *about* to resolve to.
+    // `gamepad_bind_system` (`FixedUpdate`) is what actually writes `BoundGamepad`, but the fixed
+    // timestep accumulator can tick zero times in a given frame — so on the very frame a pad first
+    // becomes visible (its first press, which on the web is also this system's join-trigger
+    // frame), a pending player whose seed resolves to that pad would otherwise look unclaimed for
+    // one frame here and lose it to a spurious join before `gamepad_bind_system` ever gets to bind
+    // them (debug-detective finding, post-implementation review). Positional on purpose — this is
+    // exactly the one-frame gap `gamepad_bind_system` hasn't closed yet, not a live re-derivation
+    // of an already-bound player's position.
+    let sorted_entities: Vec<Entity> = sorted_gamepads.iter().map(|(e, _)| *e).collect();
+    for (bound, controller) in &players {
+        if bound.0.is_some() { continue; }
+        if let Some(seed) = controller.inputs.gamepad_index {
+            if let Some(&e) = sorted_entities.get(seed) {
+                claimed.insert(e);
+            }
+        }
+    }
+
+    for (entity, gamepad) in sorted_gamepads.iter() {
+        if claimed.contains(entity) { continue; }
 
         let matched_trigger = gamepad_bindings.0.iter().find_map(|(button_name, trigger)| {
             let button = InputMap::parse_gamepad_button(button_name)?;
@@ -131,11 +155,139 @@ pub fn unclaimed_gamepad_trigger_system(
     }
 }
 
+/// Resolves each pending player's `BoundGamepad` once, using `InputMap.gamepad_index` purely as a
+/// one-time seed against the current frame's sorted-by-`Entity::index()` gamepad slice. Once a
+/// player binds, their `BoundGamepad` is never touched again (barring a future hot-leave/rejoin) —
+/// see `BoundGamepad`'s doc comment in `capabilities/player.rs`. Ordered `.before(
+/// input_translator_system)` so a player who binds this tick already has gamepad input applied
+/// the same tick.
+///
+/// Visits every player in one pass — not a per-player branch folded into another system — because
+/// of a hard invariant: it must never bind a player to a gamepad `Entity` any other player's
+/// `BoundGamepad` already holds. Without this, a cross-*time* race is possible: pad B connects
+/// first and binds to P1 (seed 0); P2 (seed 1) is out of range, stays pending; pad A connects
+/// later with a *lower* `Entity::index()` than B; the sorted slice becomes `[A, B]`; P2's seed 1
+/// now resolves to B — already bound to P1. `claimed` starts from every already-bound player, plus
+/// every undrained hot-join spawn's own captured `bound_gamepad` (mirrors
+/// `unclaimed_gamepad_trigger_system`'s equivalent chain — a hot-joined player can sit in
+/// `PendingEntitySpawns` for one or more frames since `drain_spawn_queue_system` is rate-limited,
+/// and without this a pending scene player could bind to the *same* pad in that window, producing
+/// two live players on one controller; system-architect/debug-detective finding, post-
+/// implementation review) — and grows as this same pass binds new ones, so two players sharing a
+/// duplicated `gamepad_index` in one scene can also never both claim the same pad within a single
+/// frame (see `planning/features/gamepad_player_binding_hardening.md`'s cross-time-race fix and
+/// duplicate-detection sections). Pending candidates are visited in ascending `PlayerIndex` order
+/// (not raw query/archetype order) so which player wins a duplicated seed is deterministic and
+/// reproducible, not an accident of component layout.
+///
+/// A displaced pending player is never auto-rebound to a different, already-free pad this session
+/// (see the feature plan's "Explicitly out of scope") — it just stays pending, diagnosed by the
+/// one-shot `warn!` below once the stuck state persists past `GAMEPAD_DIAGNOSTIC_WARN_SECS`. A
+/// seed that simply doesn't resolve to any connected pad (the ordinary "no gamepad plugged in yet"
+/// case) is never warned about at all — that's expected, silent, keyboard-only play. Same
+/// treatment for a candidate pad that exists but hasn't been continuously present for
+/// `GAMEPAD_STABLE_CONNECT_SECS` yet (see that constant's doc comment) — ordinary, silent, no
+/// diagnostic; expected to resolve within a fraction of a second in the common case.
+pub fn gamepad_bind_system(
+    mut query: Query<(Entity, Option<&PlayerIndex>, &CharacterController, &mut BoundGamepad)>,
+    gamepad_query: Query<(Entity, &Gamepad)>,
+    pending_spawns: Res<PendingEntitySpawns>,
+    time: Res<Time>,
+    mut stuck_secs: Local<HashMap<Entity, f32>>,
+    mut warned: Local<HashSet<Entity>>,
+    mut stable_secs: Local<HashMap<Entity, f32>>,
+) {
+    let mut sorted_gamepads: Vec<Entity> = gamepad_query.iter().map(|(e, _)| e).collect();
+    sorted_gamepads.sort_by_key(|e| e.index());
+    let connected: HashSet<Entity> = sorted_gamepads.iter().copied().collect();
+
+    // How long each currently-connected gamepad has been continuously present, without
+    // interruption — reset to zero (via the `retain` below dropping its entry) the instant it
+    // disappears from `gamepad_query`, so a pad that disconnects and reconnects starts its
+    // stability clock over rather than picking up where it left off.
+    for &e in &sorted_gamepads {
+        *stable_secs.entry(e).or_insert(0.0) += time.delta_secs();
+    }
+    stable_secs.retain(|e, _| connected.contains(e));
+
+    let mut claimed: HashSet<Entity> = query.iter().filter_map(|(_, _, _, bound)| bound.0)
+        .chain(
+            pending_spawns.0.iter()
+                .filter(|q| q.is_hot_join)
+                .filter_map(|q| q.player_config.as_ref().and_then(|pc| pc.bound_gamepad))
+        )
+        .collect();
+
+    // Stale `Local` entries for despawned players (scene unload, a future hot-leave) would
+    // otherwise persist for the rest of the session — harmless (Bevy's entity generation prevents
+    // a recycled index from false-matching), just an unbounded leak. Pruned once per call, cheap:
+    // both `retain` calls are no-ops in the common case where nothing is currently stuck.
+    if !stuck_secs.is_empty() {
+        stuck_secs.retain(|&e, _| query.contains(e));
+    }
+    if !warned.is_empty() {
+        warned.retain(|&e| query.contains(e));
+    }
+
+    let mut pending_order: Vec<(u32, Entity)> = query.iter()
+        .filter(|(_, _, _, bound)| bound.0.is_none())
+        .map(|(e, idx, _, _)| (idx.map(|i| i.0).unwrap_or(0), e))
+        .collect();
+    pending_order.sort_by_key(|(idx, _)| *idx);
+
+    for (player_entity, player_index, _controller, bound) in &query {
+        let Some(gp_entity) = bound.0 else { continue };
+        if connected.contains(&gp_entity) {
+            stuck_secs.remove(&player_entity);
+            warned.remove(&player_entity);
+        } else {
+            let elapsed = stuck_secs.entry(player_entity).or_insert(0.0);
+            *elapsed += time.delta_secs();
+            if *elapsed >= GAMEPAD_DIAGNOSTIC_WARN_SECS && warned.insert(player_entity) {
+                warn!(
+                    "Player P{}: gamepad disconnected — reconnect it to the same port/slot to \
+                     resume gamepad input (keyboard bindings, if any, are unaffected).",
+                    player_index.map(|i| i.0).unwrap_or(0) + 1
+                );
+            }
+        }
+    }
+
+    for (_, player_entity) in pending_order {
+        let Ok((_, player_index, controller, mut bound)) = query.get_mut(player_entity) else { continue };
+        let Some(seed) = controller.inputs.gamepad_index else { continue };
+        let Some(&gp_entity) = sorted_gamepads.get(seed) else { continue };
+
+        if claimed.contains(&gp_entity) {
+            let elapsed = stuck_secs.entry(player_entity).or_insert(0.0);
+            *elapsed += time.delta_secs();
+            if *elapsed >= GAMEPAD_DIAGNOSTIC_WARN_SECS && warned.insert(player_entity) {
+                warn!(
+                    "Player P{}: gamepad_index {} resolves to a controller already bound to \
+                     another player — staying on keyboard. Give this player a different \
+                     gamepad_index.",
+                    player_index.map(|i| i.0).unwrap_or(0) + 1, seed
+                );
+            }
+            continue;
+        }
+
+        if stable_secs.get(&gp_entity).copied().unwrap_or(0.0) < GAMEPAD_STABLE_CONNECT_SECS {
+            continue;
+        }
+
+        bound.0 = Some(gp_entity);
+        claimed.insert(gp_entity);
+        stuck_secs.remove(&player_entity);
+        warned.remove(&player_entity);
+    }
+}
+
 pub fn input_translator_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
-    query: Query<(Entity, &CharacterController)>,
-    gamepad_query: Query<(Entity, &Gamepad)>,
+    query: Query<(Entity, &CharacterController, Option<&BoundGamepad>)>,
+    gamepad_query: Query<&Gamepad>,
     mut input_events: MessageWriter<InputActionMessage>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
@@ -147,14 +299,13 @@ pub fn input_translator_system(
         }
     }
 
-    // Bevy has no built-in numeric gamepad index — each connected pad is its own entity.
-    // Sort by entity index so `InputMap.gamepad_index: 0` consistently means "whichever
-    // gamepad connected first this session" (good enough for local co-op; no rebinding UI).
-    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
-    sorted_gamepads.sort_by_key(|(e, _)| e.index());
-
-    for (entity, controller) in &query {
-        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+    for (entity, controller, bound) in &query {
+        // A player's `BoundGamepad` is resolved once by `gamepad_bind_system` and never
+        // re-derived from a live sorted position here — immune to any other pad's
+        // connect/disconnect churn. `None` (still pending, no gamepad_index authored, or the
+        // component simply isn't present on this entity — e.g. a minimal test-constructed player)
+        // simply means no gamepad input this tick; keyboard bindings are unaffected either way.
+        let gamepad = bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok());
         let deadzone = controller.inputs.gamepad_deadzone;
 
         let strafe_mode = controller.inputs.strafe_mouse_button

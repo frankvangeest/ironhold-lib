@@ -202,8 +202,9 @@ pub struct ProjectConfig {
     /// "South", "Start", "DPadUp" — see `InputMap::parse_gamepad_button`). The value is the
     /// trigger name fired as `ui.button_pressed:<trigger>`. **Named `unclaimed` deliberately,
     /// unlike `global_key_bindings` — this is NOT a general gamepad analogue of that field.** A
-    /// match only ever fires on a gamepad not currently bound to any live player's `InputMap.
-    /// gamepad_index` — an already-joined player's own button presses never reach this map, no
+    /// match only ever fires on a gamepad not currently assigned to any live player (including a
+    /// player whose seed is about to resolve to it, even before their binding is written this
+    /// exact frame) — an already-joined player's own button presses never reach this map, no
     /// matter what trigger name is bound here. Intended for join-style triggers (a new player
     /// pressing a button to enter the game) — see the "Local co-op hot join" docs. For an
     /// already-joined player's own in-game gamepad actions, use that player's own `InputMap`

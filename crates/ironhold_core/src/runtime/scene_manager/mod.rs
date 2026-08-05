@@ -530,10 +530,10 @@ pub struct SpawnParams<'w, 's> {
     /// actually increments it once a hot-join spawn completes.
     pub active_split_slot_count: Res<'w, ActiveSplitSlotCount>,
     /// Read (and cleared after consuming) by `Action::JoinPlayer` to bind the specific gamepad
-    /// that triggered a gamepad-driven join to the new player's `InputMap.gamepad_index`. `None`
-    /// for a keyboard-triggered join — see `planning/features/gamepad_hot_join.md`.
+    /// that triggered a gamepad-driven join directly onto the new player's
+    /// `PlayerConfig.bound_gamepad`. `None` for a keyboard-triggered join — see
+    /// `planning/features/gamepad_player_binding_hardening.md`.
     pub pending_join_gamepad: ResMut<'w, PendingJoinGamepad>,
-    pub gamepads: Query<'w, 's, (Entity, &'static bevy::input::gamepad::Gamepad)>,
 }
 
 /// A bundled SystemParam grouping the catalog resources to stay within Bevy's 16-param limit.

@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use bevy::camera::Viewport;
 use bevy::input::gamepad::{Gamepad, GamepadAxis};
-use crate::capabilities::player::CharacterController;
+use crate::capabilities::player::{BoundGamepad, CharacterController};
 use crate::schema::player::InputMap;
-use crate::runtime::input::resolve_gamepad;
 use crate::runtime::scene_manager::LevelEntity;
 
 /// Inserted by `Action::CameraShake` on the active orbit camera entity.
@@ -51,11 +50,6 @@ pub struct OrbitCamera {
     /// Angular rate (rad/sec) for keyboard-held camera look. Sourced from
     /// `CameraConfig.look_speed`.
     pub look_speed: f32,
-    /// Gamepad index for right-stick-Y camera pitch, pre-resolved at spawn from the player's
-    /// own `InputMap.gamepad_index` (mirrors `look_left_key`/etc.'s spawn-time resolution — only
-    /// the live per-frame stick *value* needs a live query, not this index). `None` = no
-    /// gamepad-driven pitch for this camera.
-    pub gamepad_index: Option<usize>,
     /// Analog stick deadzone for camera pitch, pre-resolved at spawn from the player's own
     /// `InputMap.gamepad_deadzone`.
     pub gamepad_deadzone: f32,
@@ -67,7 +61,8 @@ pub fn camera_orbit_system(
     mut mouse_wheel_events: MessageReader<bevy::input::mouse::MouseWheel>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    gamepad_query: Query<(Entity, &Gamepad)>,
+    gamepad_query: Query<&Gamepad>,
+    bound_q: Query<&BoundGamepad>,
     mut camera_query: Query<(&mut Transform, &mut OrbitCamera), Without<CharacterController>>,
     mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCamera>)>,
     #[cfg(feature = "inspector")]
@@ -86,9 +81,6 @@ pub fn camera_orbit_system(
     }
 
     let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
-
-    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
-    sorted_gamepads.sort_by_key(|(e, _)| e.index());
 
     for (mut cam_transform, mut orbit) in &mut camera_query {
         if zoom_delta != 0.0 {
@@ -135,7 +127,15 @@ pub fn camera_orbit_system(
         // matching the keyboard "forward" key) increases pitch toward max_pitch, exactly like
         // the keyboard look_up key above — direction pinned by a regression test, not asserted
         // from hardware feel.
-        if let Some(gp) = resolve_gamepad(&sorted_gamepads, orbit.gamepad_index) {
+        // Resolved live via the owning player's `BoundGamepad` (through `orbit.target`) instead of
+        // a value pre-resolved onto this component at spawn time — a spawn-frozen copy would
+        // otherwise silently diverge from `BoundGamepad` the moment the player's binding resolves
+        // or their pad reconnects to a different slot. See `planning/features/
+        // gamepad_player_binding_hardening.md`.
+        let gamepad = bound_q.get(orbit.target).ok()
+            .and_then(|bound| bound.0)
+            .and_then(|e| gamepad_query.get(e).ok());
+        if let Some(gp) = gamepad {
             let stick_y = gp.get(GamepadAxis::RightStickY).unwrap_or(0.0);
             if stick_y.abs() > orbit.gamepad_deadzone {
                 orbit.pitch = (orbit.pitch + stick_y * orbit.look_speed * dt)

@@ -756,6 +756,7 @@ pub fn spawn_scene_v2(
 
         warn_missing_player_stat_templates(scene, &player_configs);
         warn_gamepad_key_without_gamepad_index(scene, &player_configs);
+        warn_duplicate_gamepad_index(scene, &player_configs);
         warn_missing_stat_widget_templates(scene, prefab_catalog);
 
         // Spawn player(s) (delayed if terrain present), flycam, or fallback camera. GLB and
@@ -1362,8 +1363,9 @@ fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[Pla
     }
 }
 
-/// A slot's `gamepad_key` resolves against its owning player's own `InputMap.gamepad_index`
-/// (`resolve_gamepad` never falls back to "any connected pad") — so a slot that declares
+/// A slot's `gamepad_key` resolves against its owning player's own `BoundGamepad` (seeded once
+/// from `InputMap.gamepad_index`; `gamepad_bind_system` never falls back to "any connected pad")
+/// — so a slot that declares
 /// `gamepad_key` for a player whose prefab sets no `gamepad_index` at all is silently inert: no
 /// crash, no warning, the slot simply never fires from gamepad (its `key` binding, if any, still
 /// works). Mirrors `warn_missing_player_stat_templates`'s owner_player -> player_config
@@ -1385,6 +1387,32 @@ fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &
                  slot's keyboard key, if any, still works). Add gamepad_index to this player's \
                  prefab, or remove gamepad_key if a gamepad binding isn't intended.",
                 bar.id, slot.key, gamepad_key, owner_player
+            );
+        }
+    }
+}
+
+/// Warns at scene load when two or more player-tagged prefabs **instantiated in this scene's
+/// `entities:` list** author the same non-`None` `InputMap.gamepad_index` — one physical
+/// controller would drive both characters at once (only the first-iterated player's seed
+/// actually resolves via `gamepad_bind_system`'s cross-player invariant; the rest stay pending),
+/// which reads as "the game is broken" rather than "I made an authoring mistake." Deliberately
+/// scoped to this scene's **instantiated** players, not the raw prefab catalog —
+/// `local_coop_demo`'s catalog already contains legitimate catalog-level duplicates (different
+/// rooms' player variants, never co-instantiated) that a catalog-wide check would false-positive
+/// on. Mirrored by a matching hard error in `ironhold_cli`'s `validate` command. See
+/// `planning/features/gamepad_player_binding_hardening.md`.
+fn warn_duplicate_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
+    let mut seen: HashMap<usize, &str> = HashMap::new();
+    for player_config in player_configs {
+        let Some(seed) = player_config.inputs.gamepad_index else { continue };
+        if let Some(other_spawn_id) = seen.insert(seed, player_config.spawn_id.as_str()) {
+            warn!(
+                "Scene '{}': players '{}' and '{}' both use gamepad_index: {} — one physical \
+                 controller would drive both characters at once. Give each player a different \
+                 gamepad_index. Deliberately sharing one controller between two characters is \
+                 not supported.",
+                scene.name, other_spawn_id, player_config.spawn_id, seed
             );
         }
     }

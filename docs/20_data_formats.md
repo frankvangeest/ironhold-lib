@@ -108,7 +108,7 @@ Entry point for a project. References all other files.
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
-| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently claimed by any live player, intended for join-style triggers. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
+| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
@@ -878,7 +878,7 @@ StatSpread((
 
 #### `ActionBar((...))` ✅
 
-A row of skill slots, each bound to a keyboard key and, optionally, a gamepad button (see `gamepad_key` below). Pressing a slot's bound key or button fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **No mouse-click binding** — a designer-clicked slot button does nothing; only the bound key/button fires it. `owner_player` (below) controls the *acting* player (target/cost resolution) for a slot, not *which device* may press it: `key` is genuinely shared keyboard hardware, so any player's keyboard can press it regardless of `owner_player` — this has always been true and isn't new. `gamepad_key` is different: it only fires from the *owning* player's own gamepad (`owner_player` → `InputMap.gamepad_index`), since a gamepad is not shared hardware the same way. This makes the realistic "one keyboard player + one gamepad player" split-screen pairing fully usable — see the worked example under `gamepad_key` below.
+A row of skill slots, each bound to a keyboard key and, optionally, a gamepad button (see `gamepad_key` below). Pressing a slot's bound key or button fires its `do_actions` through the existing `Action` pipeline. Slots show a cooldown fill overlay while on cooldown and dim when the cost stat is insufficient. Always positioned absolutely. **No mouse-click binding** — a designer-clicked slot button does nothing; only the bound key/button fires it. `owner_player` (below) controls the *acting* player (target/cost resolution) for a slot, not *which device* may press it: `key` is genuinely shared keyboard hardware, so any player's keyboard can press it regardless of `owner_player` — this has always been true and isn't new. `gamepad_key` is different: it only fires from the *owning* player's own controller (`owner_player` → that player's own controller), since a gamepad is not shared hardware the same way. This makes the realistic "one keyboard player + one gamepad player" split-screen pairing fully usable — see the worked example under `gamepad_key` below.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -899,7 +899,7 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string. Stays keyboard-only and required even for a gamepad-routed slot — see `gamepad_key` below |
-| `gamepad_key` | `Option<String>` | `None` | Gamepad button that **also** activates this slot, in addition to `key` — see "Valid gamepad button names" in the `InputMap` section below. Resolved against the slot's **owning player's own** gamepad (`owner_player` → that player's `InputMap.gamepad_index`), never any connected pad — a gamepad is not shared hardware the way a keyboard is. An unrecognised name warns at scene load (bar + slot named) and an `ironhold_cli validate` error; the slot's `key` binding, if any, still works. Omit for a keyboard-only slot (default) |
+| `gamepad_key` | `Option<String>` | `None` | Gamepad button that **also** activates this slot, in addition to `key` — see "Valid gamepad button names" in the `InputMap` section below. Resolved against the slot's **owning player's own** controller (`owner_player` → that player's own controller), never any connected pad — a gamepad is not shared hardware the way a keyboard is. An unrecognised name warns at scene load (bar + slot named) and an `ironhold_cli validate` error; the slot's `key` binding, if any, still works. Omit for a keyboard-only slot (default) |
 | `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. White pixels show the exact specified color; dark pixels stay dark. Omit to render the icon untinted (see note below) |
@@ -965,12 +965,11 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 > differently. Keyboard is genuinely shared hardware: `key` fires from the one global keyboard
 > input regardless of which player is "supposed" to press it — unchanged, pre-existing behavior.
 > A gamepad is not shared the same way, so `gamepad_key` only fires from the slot's **owning
-> player's own** gamepad (`owner_player` → that player's `InputMap.gamepad_index`), never any
+> player's own** controller (`owner_player` → that player's own controller), never any other
 > connected pad. Bind both on the same slot to let a mixed keyboard+gamepad local-coop pairing use
-> either device. `local_coop_demo`'s `scenes/room3.scene.ron` has both lines pre-authored but
-> commented out (so the project validates without a controller attached) — uncomment the scene's
-> `gamepad_key` and the matching prefab's `gamepad_index` together (both are required; see below)
-> to try it:
+> either device. `local_coop_demo`'s `scenes/room3.scene.ron` has both halves live and working —
+> copy the pairing from `action_bar_p1`/`action_bar_p2` there and `player_p1_split`/
+> `player_p2_split` in `prefabs/prefabs.ron`:
 > ```ron
 > // prefabs.ron — the P2 player (player_index: 1) reads from gamepad slot 1 (pad numbering is
 > // independent of player_index — with a single controller attached, use gamepad_index: 0 instead)
@@ -1912,7 +1911,7 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from the connected gamepad at this index: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** there is no hardware-guaranteed numeric slot — the engine assigns index `0`, `1`, etc. in the order gamepads connect during the session, so `gamepad_index: 0` means "whichever gamepad connected first," not a specific USB port or player-labeled controller. |
+| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
 | `gamepad_run` | `String` | `"East"` | Gamepad button to hold-run — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
@@ -1923,6 +1922,46 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `look_up` | `Option<String>` | `None` | Keyboard-held camera pitch (toward overhead). |
 | `look_down` | `Option<String>` | `None` | Keyboard-held camera pitch (toward horizontal). |
 
+#### How a controller gets assigned to a player ✅
+
+> `gamepad_index` is read only **once**, at the moment a matching gamepad has been continuously
+> connected for about half a second — not re-checked every frame, and not the very instant a
+> controller appears. That brief delay is deliberate: some controllers (a confirmed real-hardware
+> case) can briefly register as two separate entries before the browser/OS settles on one, and
+> without the delay a player could permanently lock onto the wrong, short-lived one. Until a
+> controller has been stably connected long enough, the player simply plays on keyboard — this is
+> the ordinary, ongoing "no gamepad plugged in for this seed yet" case and is completely silent, no
+> matter how long it lasts. Once a controller is assigned, it stays assigned to that same player
+> for the rest of the session, no matter what happens to any *other* controller — unplugging and
+> replugging a different pad, or even a whole session's worth of other players joining and leaving,
+> never reassigns an already-assigned player's controller out from under them. If a player's own
+> controller is unplugged, their gamepad input simply pauses (their keyboard bindings, if any,
+> keep working) — plugging the **same** controller back into the **same** USB port/slot resumes
+> their gamepad input automatically, no reload or rejoin needed. Plugging it into a *different*
+> port is not guaranteed to be recognized as the same device (platform-dependent), so prefer
+> reconnecting to the same port. This is a one-way assignment: there is no way to move an
+> already-assigned controller to a different player without restarting the scene — in
+> `local_coop_demo`, walking through a portal and back is enough; a full page reload also works.
+>
+> **Connect every controller before loading the scene, or press player 1's controller first.**
+> `gamepad_index` counts controllers in the order the game sees them connect — and in the browser,
+> a controller isn't visible at all until its first button press (see below), so on the web
+> "connection order" really means **press order**. If a second player plugs in and presses a
+> button *after* the first player has already been assigned, the two can end up swapped for the
+> session, or — if two players share `gamepad_index` values 0 and 1 and only one pad is present so
+> far — the second player can end up simply unable to claim a real controller once one is already
+> taken by someone else's seed. In that case they are **not** automatically moved onto whatever pad
+> is left free: they stay on keyboard for the rest of the session, and after a few seconds the
+> browser console logs a one-time reminder naming them (e.g. `Player P2: gamepad_index 1 resolves
+> to a controller already bound to another player`) — this is informational, not an error, and it
+> doesn't repeat. If this happens, restart the scene (see above) with every controller already
+> connected and pressed once, in player order.
+>
+> **Two players in the same scene must not author the same `gamepad_index`.** One physical
+> controller would then drive both characters — flagged both as a scene-load warning and an
+> `ironhold_cli validate` error (`duplicate_gamepad_index`), so this is caught long before a
+> playtest. Give each player their own value.
+>
 > **Troubleshooting: `gamepad_index: 0` set but the controller does nothing.** On some Windows +
 > Chrome/Edge + controller combinations (confirmed with an Xbox 360 controller), one physical
 > controller can appear in the browser as **two separate gamepad entries** — one live, one an
@@ -1931,7 +1970,10 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 > index `1`. If a controller is visibly connected (check the browser console for a
 > `Gamepad ... connected` log line) but nothing responds, try `gamepad_index: 1` (or `2`) before
 > assuming the feature itself is broken. This is a real, reproducible platform quirk, not a
-> hypothetical.
+> hypothetical. **Note:** since a controller is now assigned once and locked in, if the dead
+> duplicate happens to get assigned first, don't expect it to later "fix itself" if the duplicate
+> disappears — the affected player stays on keyboard for the rest of the session; restart the
+> scene to re-attempt assignment.
 
 **Valid gamepad button names** — governs `InputMap`'s `gamepad_jump`/`gamepad_run`/
 `gamepad_interact`/`gamepad_target_next` fields, `global_unclaimed_gamepad_bindings`/
@@ -2616,8 +2658,8 @@ scene_unclaimed_gamepad_bindings: {
 ```
 
 > **These maps are for join-style triggers only — not a general gamepad analogue of
-> `global_key_bindings`.** A button press is only ever detected on a pad **not currently claimed**
-> by any live player's `InputMap.gamepad_index` — so binding something like
+> `global_key_bindings`.** A button press is only ever detected on a pad **not currently assigned
+> to** any live player — so binding something like
 > `"Start": "toggle_pause"` here will simply never fire for an actual playing player; it only
 > fires from a pad nobody is using yet. For an already-joined player's own in-game gamepad
 > actions, use that player's own `InputMap` fields (`gamepad_jump`/`gamepad_run`/
@@ -2658,14 +2700,17 @@ to hand a controller to an already-joined player, or to a player placed directly
 `entities:` list — give those their own `gamepad_index` in the player prefab's `inputs:` block
 instead (see the `InputMap` fields table above).
 
-**`Action::JoinPlayer` additionally binds the pressing pad's `InputMap.gamepad_index`** to the new
-player when triggered by a gamepad (a keyboard-triggered join never inherits a pad identity from
-an earlier frame — the identity is reset every frame it isn't freshly captured) — mirrors the
-`PlayerIndex`-override behavior above (step 5), but for `gamepad_index` instead. **This does not
-disable that player's keyboard scheme** — gamepad and keyboard input are checked additively
-(`||`), never exclusively, everywhere in this engine, so a gamepad-joined player can freely mix
-their join slot's authored keyboard scheme and the bound pad (confirmed against source during
-implementation, not assumed).
+**`Action::JoinPlayer` additionally binds the pressing pad directly to the new player** when
+triggered by a gamepad (a keyboard-triggered join never inherits a pad identity from an earlier
+frame — the identity is reset every frame it isn't freshly captured) — mirrors the
+`PlayerIndex`-override behavior above (step 5), but for the controller instead. This is the exact
+same controller that pressed the join button, assigned immediately with no extra frame of delay —
+not merely a `gamepad_index` seed that gets re-resolved later. **This does not disable that
+player's keyboard scheme** — gamepad and keyboard input are checked additively (`||`), never
+exclusively, everywhere in this engine, so a gamepad-joined player can freely mix their join
+slot's authored keyboard scheme and the bound pad (confirmed against source during implementation,
+not assumed). Unplugging and replugging this controller into the **same** port later resumes this
+player's gamepad input automatically — see [How a controller gets assigned to a player](#how-a-controller-gets-assigned-to-a-player) above.
 
 A full working example (gamepad join alongside the keyboard one) lives in
 `assets/projects/local_coop_demo/scenes/room8.scene.ron`.

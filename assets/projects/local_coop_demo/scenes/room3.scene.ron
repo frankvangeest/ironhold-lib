@@ -192,6 +192,17 @@
       position: (20.0, 196.0),
       size: (900.0, 32.0),
     )),
+    // gamepad_player_binding_hardening.md playtest aid: invites the controller-unplug/replug
+    // regression check this feature exists for — same canonical two-pad room as controls_hint
+    // above (pad 0/1). See docs/20_data_formats.md's "How a controller gets assigned to a
+    // player" note for the exact behavior this is demonstrating (replugging into a DIFFERENT
+    // port is not guaranteed to be recognized as the same device, hence "SAME port" below).
+    Label((
+      id: "controller_hint",
+      text: "Controller test: unplug and replug a pad in the SAME port - it keeps its player",
+      position: (20.0, 240.0),
+      size: (900.0, 32.0),
+    )),
     // Phase 2 (per_player_split_screen_targeting.md) playtest aid: one ActionBar per player,
     // owner_player-tagged, positioned in that player's own split half, disjoint keys (G/L — not
     // used by either player's movement/jump/run/target_next bindings above, and not the shared

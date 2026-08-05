@@ -1004,6 +1004,10 @@ fn spawn_player_entity_core(
         crate::capabilities::player::PlayerOwnership::Local,
         crate::capabilities::player::PlayerIndex(player_config.player_index),
         crate::capabilities::player::PlayerTarget::default(),
+        // `None` for every scene-load-time player (resolved by `gamepad_bind_system`'s pending
+        // retry from `InputMap.gamepad_index`); `Some(entity)` only for a hot-joined player whose
+        // triggering gamepad was already captured — see `PlayerConfig.bound_gamepad`'s doc comment.
+        crate::capabilities::player::BoundGamepad(player_config.bound_gamepad),
     ));
 
     // Gives this player their own stat pool (e.g. a per-player action-bar mana cost) when their
@@ -1175,7 +1179,6 @@ fn spawn_orbit_camera_for_player(
             look_up_key,
             look_down_key,
             look_speed: cam.look_speed,
-            gamepad_index: inputs.gamepad_index,
             gamepad_deadzone: inputs.gamepad_deadzone,
         },
     )).id()
@@ -1289,6 +1292,7 @@ pub(crate) fn assemble_player_config(
         spawn_id: spawn_id.to_string(),
         prefab_key: prefab_key.to_string(),
         player_index: prefab.player_index,
+        bound_gamepad: None,
         nameplate_display_name: if should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
             Some(prefab.display_name.clone().unwrap_or_else(|| prefab_key.to_string()))
         } else {

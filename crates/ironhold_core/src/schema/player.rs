@@ -54,6 +54,14 @@ pub struct PlayerConfig {
     /// Forwarded from `PrefabDef.player_index`. Distinguishes local co-op players (P1/P2/...)
     /// from a single-player scene, where it stays `0` and is unused.
     pub player_index: u32,
+    /// Pre-resolved gamepad `Entity` for a hot-joined player only (`Action::JoinPlayer`'s
+    /// executor arm sets this from the `PendingJoinGamepad` it captured at join-input time).
+    /// Scene-load-time player construction always leaves this `None` — those players resolve
+    /// their `InputMap.gamepad_index` seed through the normal pending `BoundGamepad` retry in
+    /// `gamepad_bind_system` instead, same as before this field existed. Not deserialized: this
+    /// is a pure runtime field with no RON representation (`PlayerConfig` is not `Deserialize`).
+    /// See `planning/features/gamepad_player_binding_hardening.md`.
+    pub bound_gamepad: Option<Entity>,
     /// Forwarded from `PrefabDef.material`. Applied via `PendingMaterialOverride` in
     /// `spawn_player_entity_core`, same mechanism as the generic Actor/Prop spawn path
     /// (`spawn_prefab_instance`) — players have their own dedicated spawn path that does not
@@ -244,9 +252,14 @@ pub struct InputMap {
     /// Maximum world-space distance (in units) to consider for Tab targeting (default: 30.0).
     #[serde(default = "default_target_range")]
     pub target_range: f32,
-    /// When set, this player reads input from the connected gamepad at this index instead of
-    /// the keyboard — lets local co-op scenes bind player 2 to a controller. `None` (default)
-    /// keeps keyboard-only behavior identical to before this field existed.
+    /// When set, this player **additionally** reads input from a gamepad — lets local co-op
+    /// scenes bind player 2 to a controller. Additive, not a replacement: the player's keyboard
+    /// bindings stay fully active regardless. Read only **once**, as a one-time seed the moment a
+    /// matching gamepad first becomes available — not a live per-frame index — and then locked to
+    /// that exact controller for the rest of the session (`BoundGamepad`, `capabilities/
+    /// player.rs`; `gamepad_bind_system`, `runtime/input.rs`). `None` (default) keeps
+    /// keyboard-only behavior identical to before this field existed. See "How a controller gets
+    /// assigned to a player" in `docs/20_data_formats.md`.
     #[serde(default)]
     pub gamepad_index: Option<usize>,
     /// Gamepad button for jump. Default `"South"` (Xbox A / PlayStation Cross) matches the

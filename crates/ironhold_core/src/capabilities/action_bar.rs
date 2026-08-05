@@ -6,11 +6,10 @@ use crate::schema::actions::Action;
 use crate::schema::scene_v2::SlotCost;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::runtime::actions::ActionQueue;
-use crate::runtime::input::resolve_gamepad;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::message_interpreter::rewrite_target;
 use crate::runtime::scene_manager::SpawnId;
-use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
+use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::capabilities::targeting::is_primary_player;
 
 // ─── Resources ────────────────────────────────────────────────────────────────
@@ -132,8 +131,8 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// (`planning/features/gamepad_action_bar_slots.md`). Keyboard is genuinely shared hardware: any
 /// slot's `key` fires from the one global `ButtonInput<KeyCode>` regardless of who's "supposed" to
 /// press it — pre-existing, unchanged behavior. A gamepad is not shared the same way, so a slot's
-/// `gamepad_key` only fires from its **owning player's own** gamepad (`owner_player` ->
-/// `CharacterController.inputs.gamepad_index`) — never any connected pad. The fast-path skip below
+/// `gamepad_key` only fires from its **owning player's own** controller (`owner_player` ->
+/// that player's `BoundGamepad`) — never any connected pad. The fast-path skip below
 /// (no keyboard press AND no `gamepad_key` bound) preserves today's exact perf profile and
 /// on-unmatched-owner cooldown-event behavior for every **keyboard-only** slot (no gamepad_key at
 /// all — the common case today); a slot that does declare `gamepad_key` resolves its owning
@@ -156,12 +155,9 @@ pub fn action_bar_input_system(
     cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
     mut pending: ResMut<PendingIntentActions>,
-    players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>, &CharacterController)>,
-    gamepad_query: Query<(Entity, &Gamepad)>,
+    players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>, &CharacterController, Option<&BoundGamepad>)>,
+    gamepad_query: Query<&Gamepad>,
 ) {
-    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
-    sorted_gamepads.sort_by_key(|(e, _)| e.index());
-
     for slot in slots.iter() {
         let keyboard_fired = slot.resolved_key.is_some_and(|kc| keys.just_pressed(kc));
         // Fast path: unchanged perf profile for the common case (no gamepad binding, not pressed).
@@ -182,12 +178,12 @@ pub fn action_bar_input_system(
         }
 
         // ── Resolve the acting player for this slot ─────────────────────────────
-        let Some((spawn_id, player_target, _, player_stats, controller)) = players.iter()
-            .find(|(_, _, idx, _, _)| owns_slot(slot.owner_player, *idx))
+        let Some((spawn_id, player_target, _, player_stats, _controller, bound)) = players.iter()
+            .find(|(_, _, idx, _, _, _)| owns_slot(slot.owner_player, *idx))
         else { continue };
 
         let gamepad_fired = slot.resolved_gamepad_button.is_some_and(|btn| {
-            resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index)
+            bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok())
                 .is_some_and(|gp| gp.just_pressed(btn))
         });
         if !keyboard_fired && !gamepad_fired { continue; }

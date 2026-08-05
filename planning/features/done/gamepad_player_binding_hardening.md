@@ -1,6 +1,6 @@
 # Feature: Gamepad Player-Binding Hardening
 
-_Status: Revised after plan-review — recommend a confirmation pass before implementation_
+_Status: Done — shipped `2026-08-05`, real-hardware playtest confirmed by Frank_
 _Planned at: `1fcef14` (2026-07-31)_
 _Revised at: `2026-08-01` (system-architect verified the Bevy claim against `bevy_gilrs` too, not
 just `bevy_input`, and found the platform-dependent identity caveat, the cross-time double-bind
@@ -8,6 +8,18 @@ race, the `camera_orbit_system`/`OrbitCamera.gamepad_index` second-source-of-tru
 `unclaimed_gamepad_trigger_system`/hot-join `claimed`-set gap; ux-gamedesigner-reviewer resolved
 the duplicate-detection open question to both warn+hard-error and found the per-catalog
 false-positive risk plus the missing docs/demo scope)_
+_Post-implementation-review fixes (2026-08-05): system-architect and debug-detective independently
+found `gamepad_bind_system`'s `claimed` set didn't account for undrained hot-join spawns (mirroring
+`unclaimed_gamepad_trigger_system`'s own chain), and that `unclaimed_gamepad_trigger_system` itself
+needed a matching pending-seed reservation, since `FixedUpdate`'s accumulator can tick zero times
+in a frame — both fixed._
+_Real-hardware playtest finding (2026-08-05): a single physical Xbox controller reliably registered
+as two separate browser gamepad entries, with the spurious one winning the lower sorted position
+and disconnecting on its own shortly after — reproducing on every connection attempt, not as a rare
+race. Added `GAMEPAD_STABLE_CONNECT_SECS` (0.5s): a candidate pad must be continuously present for
+this long before a binding commits, closing the window the spurious entry needs to vanish first.
+See `capabilities/player.rs`'s `BoundGamepad` doc comment and `runtime/input.rs`'s
+`GAMEPAD_STABLE_CONNECT_SECS` constant for the full rationale._
 
 ## What
 Fixes two related gamepad-robustness gaps in local co-op surfaced during this session's gamepad

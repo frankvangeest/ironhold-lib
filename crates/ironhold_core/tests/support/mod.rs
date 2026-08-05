@@ -63,11 +63,15 @@ pub fn setup_test_app() -> App {
     app
 }
 
-/// Simulates a freshly-connected gamepad, returning its `Entity` (the value to use for a
-/// player's `InputMap.gamepad_index` — index into connection order, sorted by
-/// `Entity::index()`, same as production `resolve_gamepad`). Call `app.update()` once after
-/// this (and before pressing any button/setting any axis) so `gamepad_connection_system` has
-/// spawned the real `Gamepad` component before the input systems under test read it.
+/// Simulates a freshly-connected gamepad, returning its `Entity` (the value to use as a
+/// player's `InputMap.gamepad_index` *seed* — index into connection order, sorted by
+/// `Entity::index()`, same sort `gamepad_bind_system` uses to resolve a pending player's seed
+/// into a `BoundGamepad`; see `gamepad_player_binding_hardening.md`. The old crate-shared
+/// `resolve_gamepad` helper this comment used to reference was deleted along with that refactor
+/// — every consumer now either reads `BoundGamepad` directly or re-sorts inline). Call
+/// `app.update()` once after this (and before pressing any button/setting any axis) so
+/// `gamepad_connection_system` has spawned the real `Gamepad` component before the input systems
+/// under test read it.
 pub fn connect_test_gamepad(app: &mut App) -> Entity {
     let gamepad = app.world_mut().spawn_empty().id();
     app.world_mut()

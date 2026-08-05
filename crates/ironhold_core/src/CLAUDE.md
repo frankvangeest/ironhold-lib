@@ -199,11 +199,11 @@ load into `ActionSlotUi.resolved_gamepad_button`, same call site as `resolved_ke
 also fire from gamepad, alongside its existing keyboard `key`. The two devices resolve
 **differently** — keyboard is shared hardware (`key` fires from the one global
 `ButtonInput<KeyCode>` regardless of `owner_player`, unchanged pre-existing behavior); a gamepad is
-not shared the same way, so `gamepad_key` only fires from the **owning player's own**
-`InputMap.gamepad_index`, resolved via the same `resolve_gamepad(sorted_gamepads, index)` helper
-every other gamepad-consuming system uses (`runtime::input::resolve_gamepad`). `action_bar_input_
-system`'s query widened again to include `&CharacterController` (for `gamepad_index`) and a new
-`Query<(Entity, &Gamepad)>`, sorted once per system call. The fast-path skip (`!keyboard_fired &&
+not shared the same way, so `gamepad_key` only fires from the **owning player's own** resolved
+`BoundGamepad` (`bound.0.and_then(|e| gamepad_query.get(e).ok())` — see "Gamepad routing" below;
+post-`gamepad_player_binding_hardening.md`, this is no longer a live positional `resolve_gamepad`
+lookup). `action_bar_input_system`'s query widened again to include `&BoundGamepad` and a new
+`Query<&Gamepad>`. The fast-path skip (`!keyboard_fired &&
 resolved_gamepad_button.is_none()`) preserves the exact perf profile and cooldown-event behavior of
 every keyboard-only slot — the gamepad check, and the owning-player lookup it requires, only ever
 run for slots that actually declare `gamepad_key`. The keyboard cooldown-gate-before-player-lookup
@@ -548,27 +548,30 @@ remains is:
    and `spawn_player_when_terrain_ready`. All three call the private `spawn_player_entity_core`,
    which dispatches body construction on `PlayerConfig.model_source: PlayerModelSource` (`Glb(key)`
    or `Primitive { shape, params, children }`) — everything **after** that dispatch (physics
-   bundle, `tag_spawned_entity`, `PlayerIndex`/`PlayerOwnership`/`PlayerTarget`, `StatMap`, stat
-   widgets, nameplate) is now shared, unconditional code for both model sources, not a GLB-only
-   path. Only site 1 passes a real `PrimitivePlayerCtx` (mesh/material assets, prefab catalog,
-   built-materials map) so the `Primitive` arm can actually build a body; sites 2 and 3 pass `None`
-   and would panic if they ever reached the `Primitive` arm — which they can't, since both reject
-   primitive-shaped prefabs earlier (see above).
+   bundle, `tag_spawned_entity`, `PlayerIndex`/`PlayerOwnership`/`PlayerTarget`/`BoundGamepad`,
+   `StatMap`, stat widgets, nameplate) is now shared, unconditional code for both model sources, not
+   a GLB-only path. `BoundGamepad(player_config.bound_gamepad)` is the one field here that isn't
+   always `None` — see site 5 below. Only site 1 passes a real `PrimitivePlayerCtx` (mesh/material
+   assets, prefab catalog, built-materials map) so the `Primitive` arm can actually build a body;
+   sites 2 and 3 pass `None` and would panic if they ever reached the `Primitive` arm — which they
+   can't, since both reject primitive-shaped prefabs earlier (see above).
 5. **Hot-join spawn** (`local_coop_hot_join_leave.md`) — `action_executor.rs`'s `Action::JoinPlayer`
    arm assembles a `PlayerConfig` via the same `assemble_player_config()` helper as site 2, then
-   overrides `PlayerIndex` to the target slot and pushes a `QueuedSpawn` with `is_hot_join: true`.
+   overrides `PlayerIndex` to the target slot, sets `PlayerConfig.bound_gamepad` directly from any
+   captured `PendingJoinGamepad` (see "Gamepad-triggered hot join" below), and pushes a
+   `QueuedSpawn` with `is_hot_join: true`.
    `drain_spawn_queue_system`'s `is_hot_join` branch calls `spawn_player_entity_core` directly
    (camera-less, `PrimitivePlayerCtx: None` — **GLB-only**, same reasoning as site 2) followed by
    `spawn_split_camera_for_player` (a thin wrapper factored out of `spawn_players_and_camera`'s
    `Grid` loop, adding just `SplitViewportSlot`/`Camera.order`), then increments
    `ActiveSplitSlotCount` by one. Scoped to `Grid`-split scenes only — see the doc comment on
-   `ActiveSplitSlotCount` below, which this site resolves. When triggered by a gamepad
-   (`gamepad_hot_join.md`), this site also overrides `player_config.inputs.gamepad_index` to the
-   pressing pad — see "Gamepad-triggered hot join" above.
+   `ActiveSplitSlotCount` below, which this site resolves. See "Gamepad-triggered hot join" above
+   for the `bound_gamepad` hand-off `PlayerConfig.bound_gamepad` (set at line 560) feeds into.
 
-Because `PlayerIndex`, `PlayerTarget`, `StatMap` (when `stat_templates` is non-empty), stat
-widgets, and material override are now inserted in the shared post-dispatch code rather than
-per-model-source, **a new "every player gets X" component only needs adding in one place**
+Because `PlayerIndex`, `PlayerTarget`, `BoundGamepad`, `StatMap` (when `stat_templates` is
+non-empty), stat widgets, and material override are now inserted in the shared post-dispatch code
+rather than per-model-source, **a new "every player gets X" component only needs adding in one
+place**
 (`spawn_player_entity_core`, after the model-source match) instead of being checked against
 multiple divergent spawn paths — this is the exact class of bug the old four-site inventory above
 existed to flag, and the risk surface for it is now much smaller. What still needs checking
@@ -840,31 +843,73 @@ same full-window `Camera2d` every RON UI label already uses (see the "Adding a n
 project"/UI conventions elsewhere in this file) — `IsDefaultUiCamera` being commented out on that
 camera does not change this in practice, but a future refactor of that setup should re-verify it.
 
-**Gamepad routing** — `InputMap.gamepad_index: Option<usize>` lets a player prefab bind to a
-specific gamepad *in addition to* the keyboard (additive, not a replacement — see the doc comment
-on the field itself). Bevy has no built-in numeric gamepad index (each
-connected pad is its own `Gamepad` entity); `resolve_gamepad` (`runtime/input.rs`, `pub(crate)`)
-takes an already-sorted-by-`Entity::index()` slice built once per system per frame and resolves
-`gamepad_index` against it — every gamepad-consuming system (`input_translator_system`,
-`tab_targeting_system`, `interactable_system`, `camera_orbit_system`, and — as of
-`gamepad_action_bar_slots.md` — `action_bar_input_system`) builds its own sorted slice once and
-calls this shared resolver, rather than re-sorting per player. `gamepad_index: 0` means "whichever
-gamepad connected first this session," not a hardware-guaranteed slot.
+**Gamepad routing (post-`gamepad_player_binding_hardening.md`)** — `InputMap.gamepad_index:
+Option<usize>` lets a player prefab bind to a specific gamepad *in addition to* the keyboard
+(additive, not a replacement — see the doc comment on the field itself), but it is only ever read
+as a **one-time seed**, never a live positional lookup. `BoundGamepad(pub Option<Entity>)`
+(`capabilities/player.rs`) is the actual source of truth every gamepad-consuming system reads:
+`None` = "pending" (no seed authored, or the seed hasn't resolved to a live pad yet); `Some(entity)`
+= "bound" — locked to that specific gamepad `Entity` for the player's whole lifetime (barring a
+future hot-leave/rejoin). `gamepad_bind_system` (`runtime/input.rs`, `FixedUpdate`,
+`.before(input_translator_system)`) is the system that *enforces* the invariant below — the only
+other writer is the hot-join spawn site, which seeds `BoundGamepad` directly from an
+already-known-good `Entity` at construction time (see "Gamepad-triggered hot join" below), not by
+resolving a seed. `gamepad_bind_system` visits every player in one pass each tick (in ascending
+`PlayerIndex` order for the pending ones, so which player wins a duplicated seed is deterministic,
+not an accident of archetype/query order) and, for each still-pending player, attempts
+`sorted_gamepads.get(seed)` (sorted by `Entity::index()`, built fresh each call) against a
+`claimed: HashSet<Entity>` seeded from every already-bound player **and every undrained
+`is_hot_join` spawn's own captured `bound_gamepad`** (a hot-joined player can sit in
+`PendingEntitySpawns` for a frame or more before `drain_spawn_queue_system`'s rate limit lets it
+through — without this half, a pending scene player could bind to the same pad in that window;
+system-architect/debug-detective finding, post-implementation review) and grown as the same pass
+binds new ones — a **hard invariant**: it will never bind a player to an `Entity` any other player
+already holds, even across frames (the cross-time race this exists to close: pad B connects first
+and binds to P1's seed 0; P2's seed 1 is out of range, stays pending; pad A connects later with a
+*lower* `Entity::index()` than B, so the sorted slice becomes `[A, B]` — without the `claimed` check
+P2's seed 1 would now resolve to B, already bound to P1). A displaced pending player just stays
+pending — no auto-rebind to a different, now-free pad this session — and gets a one-shot `warn!`
+(`GAMEPAD_DIAGNOSTIC_WARN_SECS = 3.0`) if the stuck state persists, same mechanism used to diagnose
+a *bound* player whose `Gamepad` component has disappeared (disconnected); both timer `Local`s are
+pruned each call against the live player set, so a player who despawns while stuck doesn't leak an
+entry forever. `unclaimed_gamepad_trigger_system` (`Update`) additionally reserves the pad a
+still-pending *live* player's seed is about to resolve to — needed because `FixedUpdate`'s
+accumulator can tick zero times in a frame, so on the exact frame a pad first becomes visible (its
+first press, also this system's join-trigger frame on the web) `gamepad_bind_system` may not have
+run yet and the pad would otherwise look unclaimed for one frame (debug-detective finding). Once
+bound, the four simple consumers (`input_translator_system`, `tab_targeting_system`,
+`interactable_system`, `action_bar_input_system`) take `Option<&BoundGamepad>` (not required —
+a required `&BoundGamepad` would silently drop any test-constructed player entity missing it out
+of the *entire* query tuple, not just gamepad logic) and do a direct
+`bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok())` — no sorting, no re-deriving
+position, immune to any other pad's connect/disconnect churn. `camera_orbit_system` has no player
+`Entity` in its own query, so it resolves via a disjoint `bound_q: Query<&BoundGamepad>` looked up
+through `orbit.target`; `OrbitCamera.gamepad_index` (a spawn-frozen positional copy) was deleted
+entirely rather than left to silently diverge from `BoundGamepad`. The old crate-shared
+`resolve_gamepad` helper was removed — nothing needs a live
+positional lookup anymore.
 
-Button/axis mapping is now fully RON-configurable via `InputMap` — `gamepad_jump`/`gamepad_run`/
+Button/axis mapping is fully RON-configurable via `InputMap` — `gamepad_jump`/`gamepad_run`/
 `gamepad_interact`/`gamepad_target_next: String` (parsed via `InputMap::parse_gamepad_button`,
 mirroring `parse_key`'s validation seam — an unrecognized name `warn!`s and no-ops rather than
 crashing) and `gamepad_deadzone: f32`, all defaulting to the same values every scene had hardcoded
 before this field existed (`South`/`East`/`West`/`North`/`0.15`). Left stick moves/strafes, right
-stick X turns, right stick Y drives camera pitch (via `OrbitCamera.gamepad_index`/
-`gamepad_deadzone`, pre-resolved at spawn from the player's own `InputMap` — same
-spawn-time-resolution pattern as `look_left_key`/etc.) — independent of the keyboard's
+stick X turns, right stick Y drives camera pitch — independent of the keyboard's
 `strafe_mouse_button` toggle (that only exists to disambiguate A/D on one keyboard; a gamepad
 already has separate sticks). `gamepad_interact`/`gamepad_target_next` fold into
 `interactable_system`'s/`tab_targeting_system`'s existing per-player `keyboard || gamepad`
 boolean, so both work in local co-op, not just single-player — no gamepad path exists for camera
 *yaw* (right-stick-X already drives character turning), a permanent, deliberate keyboard/gamepad
 parity gap, not an oversight (see `docs/20_data_formats.md`).
+
+Two players authoring the same non-`None` `gamepad_index` **in the same scene's instantiated
+`entities:` list** is caught by `scene_loader.rs::warn_duplicate_gamepad_index` (scene-load `warn!`)
+plus a matching `ironhold_cli validate` hard error — deliberately scoped to instantiated players,
+not the raw prefab catalog, since `local_coop_demo`'s catalog legitimately reuses `gamepad_index`
+across different rooms' player variants that are never co-instantiated. Largely subsumed at
+runtime by `gamepad_bind_system`'s `claimed` invariant above (the second player just stays
+pending, never silently dual-controls), so this check is now purely explanatory/early-warning
+rather than the only thing standing between a designer and broken dual-control.
 
 **Gamepad-triggered hot join** (`gamepad_hot_join.md`) adds a second, *global* gamepad-binding
 surface alongside the per-player `InputMap.gamepad_*` fields above — `ProjectGamepadBindings`/
@@ -873,22 +918,30 @@ surface alongside the per-player `InputMap.gamepad_*` fields above — `ProjectG
 sites `ProjectKeyBindings`/`LoadedKeyBindings` already use (two in `project_loader.rs`, one in
 `scene_loader.rs`), same per-key overlay semantics. `unclaimed_gamepad_trigger_system`
 (`runtime/input.rs`, `.before(message_interpreter_system)`) checks these bindings only against
-gamepads **not** already claimed by a live player's `InputMap.gamepad_index` or by an undrained
-`is_hot_join` entry in `PendingEntitySpawns` — on a `just_pressed` match (no separate "live
-signal" prefilter: a phantom/dead duplicate pad, see the troubleshooting note above, never
+gamepads **not** already claimed by a live player's `BoundGamepad`, by an undrained `is_hot_join`
+entry's own captured `PlayerConfig.bound_gamepad` in `PendingEntitySpawns`, or by a still-pending
+live player's own seed resolving to that pad this same frame (the last case exists because
+`gamepad_bind_system` — the only system that actually writes a *resolved* `BoundGamepad` — runs in
+`FixedUpdate`, which may not tick this frame at all; without it a pad could look unclaimed for one
+frame right as an authored player's seed is about to claim it, debug-detective finding). All three
+are `Entity`-based, not the pre-hardening positional `HashSet<usize>` derived from live
+`gamepad_index` — that set went stale the instant any pad connected/disconnected mid-session — on
+a `just_pressed` match (no separate
+"live signal" prefilter: a phantom/dead duplicate pad, see the troubleshooting note above, never
 produces that edge on anything) it emits the usual `UiEvent::ButtonPressed` **and** writes the
 matched gamepad's `Entity` into a new `PendingJoinGamepad(Option<Entity>)` resource — at most one
 pad captured per frame (deterministic: lowest `Entity::index()`-sorted), reset to `None`
 unconditionally at the top of every run so a non-join gamepad trigger (e.g. a pause button) can
 never leave a stale pad identity for a later frame's keyboard-triggered join to inherit.
 `Action::JoinPlayer`'s executor arm (site 5 in "Player-construction sites" below) `.take()`s this
-resource after resolving the joiner's `PlayerConfig` and, if set, overrides
-`player_config.inputs.gamepad_index` to that pad's sorted index — translated via the same
-sorted-by-`Entity::index()` convention `resolve_gamepad` uses — instead of whatever
-`join_prefab_keys` statically authored. A keyboard-triggered join sees the resource already `None`
-and is unaffected. This override does **not** disable the joiner's keyboard scheme — gamepad and
-keyboard inputs are read additively (`||`), never exclusively, everywhere in this file's gamepad
-routing above.
+resource after resolving the joiner's `PlayerConfig` and, if set, writes it directly into
+`PlayerConfig.bound_gamepad` — no round-trip through `inputs.gamepad_index`/`resolve_gamepad` (the
+pre-hardening design re-resolved a converted sorted index back to an `Entity` ≥1 frame later, a
+window any pad churn could exploit to bind the wrong device). `spawn_player_entity_core` inserts
+`BoundGamepad(player_config.bound_gamepad)` instead of always `None` for this one call path. A
+keyboard-triggered join sees the resource already `None` and is unaffected. This override does
+**not** disable the joiner's keyboard scheme — gamepad and keyboard inputs are read additively
+(`||`), never exclusively, everywhere in this file's gamepad routing above.
 
 **View-box clamp** — `GameSceneV2.max_view_box: Option<(f32, f32, f32, f32)>` (`min_x, min_z,
 max_x, max_z`) is read into the `ActiveViewBox` resource on scene load (cleared on `LoadScene`,

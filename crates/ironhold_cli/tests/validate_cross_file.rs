@@ -216,6 +216,22 @@ fn gamepad_key_with_gamepad_index_exits_0() {
     assert_eq!(code, 0, "expected exit 0 (pairing present, no error), got {code}:\n{stdout}");
 }
 
+/// `gamepad_player_binding_hardening.md`: two player-tagged prefabs **instantiated in the same
+/// scene** authoring the same non-`None` `gamepad_index` — one physical controller would drive
+/// both characters at once. Must be flagged with a hard error, not just a runtime `warn!` (see
+/// the matching `scene_loader.rs::warn_duplicate_gamepad_index`, which is scene-load-only and not
+/// directly unit-testable from `ironhold_core`'s test harness — this CLI check is the one
+/// automated place this scenario is verified).
+#[test]
+fn duplicate_gamepad_index_same_scene_exits_1() {
+    let (code, stdout) = validate("duplicate_gamepad_index_same_scene");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("player_01") && stdout.contains("player_02") && stdout.contains("gamepad_index"),
+        "expected both colliding entity ids and a mention of gamepad_index in output:\n{stdout}"
+    );
+}
+
 /// `player_stat_widgets.md` Part C: a `stat_label`/`world_stat_bar` keyed `"{self}.<stat>"` with
 /// no matching `stat_templates` entry on that SAME prefab used to render empty forever with no
 /// diagnostic — this cross-file check (and its scene-load `warn!` counterpart) catches it.

@@ -240,6 +240,7 @@ references without starting the engine.
 - Prefab keys in scene entity defs and `Spawn` / `PreloadPrefab` actions exist in `prefabs.ron`
 - Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
 - Behavior file paths on `PrefabDef` exist on disk
+- Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 
 ```bash
 ironhold validate assets/projects/particles_demo/

@@ -277,6 +277,7 @@ impl Plugin for GamePlugin {
             // Physics-driven input + movement must run in FixedUpdate for stable simulation.
             // npc_behavior_system reads NpcHitQueue drained at the start of each FixedUpdate tick.
             .add_systems(FixedUpdate, (
+                gamepad_bind_system,
                 input_translator_system,
                 player_movement_system,
                 player_view_box_clamp_system,

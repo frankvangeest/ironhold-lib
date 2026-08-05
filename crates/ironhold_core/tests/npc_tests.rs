@@ -323,7 +323,6 @@ fn test_camera_shake_inserts_component_on_orbit_camera() {
             look_up_key: None,
             look_down_key: None,
             look_speed: 2.0,
-            gamepad_index: None,
             gamepad_deadzone: 0.15,
         },
     )).id();
@@ -396,7 +395,6 @@ fn test_camera_shake_component_removed_after_expiry() {
             look_up_key: None,
             look_down_key: None,
             look_speed: 2.0,
-            gamepad_index: None,
             gamepad_deadzone: 0.15,
         },
         // Insert an already-expired shake (remaining <= 0) to trigger removal.

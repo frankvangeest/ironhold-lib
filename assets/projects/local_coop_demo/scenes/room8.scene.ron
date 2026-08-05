@@ -45,11 +45,12 @@
   // Gamepad equivalent (gamepad_hot_join.md) — "South" (Xbox A / PlayStation Cross) is safe to
   // bind here despite being `gamepad_jump`'s default: a join only fires on a pad not currently
   // claimed by any live player, so an already-joined player's own South-button jump is unaffected.
-  // Verified during implementation: joining via gamepad only sets that player's InputMap.
-  // gamepad_index — it does NOT disable their join-slot prefab's keyboard scheme (gamepad input
-  // is added on top of the keyboard, never a replacement) — so a gamepad-joined P3/P4 can freely
-  // mix IJKL/Numpad and the pad. The pad only binds to whichever slot that same press joins —
-  // pressing G still joins via keyboard-only, with no pad attached.
+  // Verified during implementation: joining via gamepad binds that exact pad directly to the new
+  // player's slot (gamepad_player_binding_hardening.md) — it does NOT disable their join-slot
+  // prefab's keyboard scheme (gamepad input is added on top of the keyboard, never a replacement)
+  // — so a gamepad-joined P3/P4 can freely mix IJKL/Numpad and the pad. The pad only binds to
+  // whichever slot that same press joins — pressing G still joins via keyboard-only, with no pad
+  // attached.
   scene_unclaimed_gamepad_bindings: {
     "South": "join",
   },

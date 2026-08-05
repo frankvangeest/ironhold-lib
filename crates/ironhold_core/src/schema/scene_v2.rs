@@ -980,8 +980,8 @@ pub struct ActionSlotDef {
     /// Optional gamepad button that also activates this slot, in addition to `key`. Accepts any
     /// name `InputMap::parse_gamepad_button()` recognises (`"South"`, `"East"`, `"North"`,
     /// `"West"`, `"LeftTrigger"`, etc. — see `docs/20_data_formats.md`'s gamepad button names
-    /// table). Resolved against the slot's **owning player's own** gamepad (`ActionBarDef.
-    /// owner_player` -> that player's `InputMap.gamepad_index`), never any connected pad — a
+    /// table). Resolved against the slot's **owning player's own** controller (`ActionBarDef.
+    /// owner_player` -> that player's own bound gamepad), never any connected pad — a
     /// gamepad is not shared hardware the way a keyboard is. An unparseable name logs a `warn!`
     /// naming the bar and slot at scene load; the slot then simply never fires from gamepad (its
     /// `key` binding, if any, is unaffected). Omit for a keyboard-only slot (default, preserves

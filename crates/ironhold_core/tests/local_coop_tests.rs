@@ -21,7 +21,7 @@ use ironhold_core::capabilities::stat_display::{
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, MovementConfig};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap, PlayerModelSource, PlayerConfig};
-use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, player_view_box_clamp_system};
+use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, BoundGamepad, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
     OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
@@ -1556,7 +1556,7 @@ fn test_hot_joined_player_stat_bar_duplicates_ranks_like_scene_load_spawned_play
 /// only used to simulate an in-flight `is_hot_join` entry sitting in `PendingEntitySpawns`
 /// (production code always builds these via the private `assemble_player_config`, which isn't
 /// visible to this external test crate).
-fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32) -> PlayerConfig {
+fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_gamepad: Option<Entity>) -> PlayerConfig {
     PlayerConfig {
         model_source: PlayerModelSource::Glb("char_a".to_string()),
         initial_position: (0.0, 0.5, 0.0),
@@ -1569,6 +1569,7 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32) -> Pla
         nameplate_display_name: None,
         nameplate_override: None,
         player_index,
+        bound_gamepad,
         material: None,
         stat_templates: vec![],
         stat_label: None,
@@ -1592,12 +1593,13 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_claimed_by_live_player() {
     let gamepad = connect_test_gamepad(&mut app);
     app.update();
 
-    // Only one connected gamepad exists, so it is sorted index 0 — claim it exactly like a live
-    // player would via InputMap.gamepad_index.
+    // Claim the pad exactly like a live player's `gamepad_bind_system` resolution would —
+    // `unclaimed_gamepad_trigger_system`'s `claimed` set is sourced from `BoundGamepad` directly,
+    // not from the live positional `InputMap.gamepad_index` (gamepad_player_binding_hardening.md).
     {
-        let mut q = app.world_mut().query::<&mut CharacterController>();
-        let mut controller = q.iter_mut(app.world_mut()).next().expect("a live player must exist");
-        controller.inputs.gamepad_index = Some(0);
+        let mut q = app.world_mut().query::<&mut BoundGamepad>();
+        let mut bound = q.iter_mut(app.world_mut()).next().expect("a live player must exist");
+        bound.0 = Some(gamepad);
     }
 
     press_gamepad_button(&mut app, gamepad, GamepadButton::South);
@@ -1625,8 +1627,12 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_mid_flight_via_pending_spawn() {
     let gamepad = connect_test_gamepad(&mut app);
     app.update();
 
-    // Simulate an is_hot_join QueuedSpawn already claiming sorted index 0, still undrained —
-    // mirrors the `queued_hot_joins` same-frame double-join guard the executor already has.
+    // Simulate an is_hot_join QueuedSpawn already claiming this pad, still undrained — mirrors
+    // the `queued_hot_joins` same-frame double-join guard the executor already has.
+    // `bound_gamepad: Some(gamepad)` mirrors the real `Action::JoinPlayer` hand-off (the captured
+    // pad is written directly to `PlayerConfig.bound_gamepad`, no positional round-trip) — this is
+    // exactly what `unclaimed_gamepad_trigger_system`'s `claimed` set now reads for an undrained
+    // hot-join entry (`gamepad_player_binding_hardening.md`).
     app.world_mut().resource_mut::<PendingEntitySpawns>().0.push_back(QueuedSpawn {
         prefab_def: PrefabDef::default(),
         model_path: String::new(),
@@ -1634,7 +1640,7 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_mid_flight_via_pending_spawn() {
         spawn_id: "in_flight_test".to_string(),
         prefab_key: "test_player_3".to_string(),
         project_root: String::new(),
-        player_config: Some(minimal_player_config(Some(0), 2)),
+        player_config: Some(minimal_player_config(Some(0), 2, Some(gamepad))),
         is_hot_join: true,
     });
 
@@ -1785,8 +1791,15 @@ fn test_two_gamepads_pressed_same_frame_captures_only_lowest_sorted_index() {
     );
 }
 
+/// `gamepad_player_binding_hardening.md`: a hot-joined player's `BoundGamepad` is set directly
+/// from the pad that pressed the join button (`PlayerConfig.bound_gamepad`, drained from
+/// `PendingJoinGamepad`) — no round-trip through `InputMap.gamepad_index`'s sorted *position* and
+/// no re-resolution window through `gamepad_bind_system`'s pending-bind retry a frame later.
+/// Regression-relevant: the join prefab (`test_player_3`, `n_player_catalogs_with_split`) sets no
+/// `gamepad_index` at all, so a positional round-trip would leave the joiner permanently unbound
+/// — the exact bug this direct hand-off exists to close.
 #[test]
-fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index() {
+fn test_two_gamepads_join_on_consecutive_frames_each_bind_via_bound_gamepad_directly() {
     let mut app = setup_test_app();
     app.update();
     n_player_catalogs_with_split(
@@ -1802,26 +1815,23 @@ fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index()
     let gp_b = connect_test_gamepad(&mut app);
     app.update();
 
-    let mut sorted = [gp_a, gp_b];
-    sorted.sort_by_key(|e| e.index());
-
     // Frame 1: gamepad A presses join and a JoinPlayer is queued in the same frame (mirrors how
     // the real rules pipeline fires it same-frame via ui.button_pressed:join).
     press_gamepad_button(&mut app, gp_a, GamepadButton::South);
     app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
     app.update();
 
-    let first_joiner_gamepad_index = {
-        let mut q = app.world_mut().query::<(&PlayerIndex, &CharacterController)>();
+    let first_joiner_bound_gamepad = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &BoundGamepad)>();
         q.iter(app.world())
             .find(|(idx, _)| idx.0 == 2)
-            .map(|(_, c)| c.inputs.gamepad_index)
+            .map(|(_, b)| b.0)
             .expect("first joiner with PlayerIndex(2) must exist")
     };
-    let expected_a_index = sorted.iter().position(|&e| e == gp_a).unwrap();
     assert_eq!(
-        first_joiner_gamepad_index, Some(expected_a_index),
-        "first joiner must be bound to gamepad A's sorted index"
+        first_joiner_bound_gamepad, Some(gp_a),
+        "first joiner must be bound directly to the exact gamepad Entity that pressed join, \
+         even though that pad's own prefab authors no gamepad_index seed at all"
     );
 
     // Frame 2: gamepad B presses join.
@@ -1829,17 +1839,28 @@ fn test_two_gamepads_join_on_consecutive_frames_each_get_correct_gamepad_index()
     app.world_mut().resource_mut::<ActionQueue>().push(Action::JoinPlayer);
     app.update();
 
-    let second_joiner_gamepad_index = {
-        let mut q = app.world_mut().query::<(&PlayerIndex, &CharacterController)>();
+    let second_joiner_bound_gamepad = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &BoundGamepad)>();
         q.iter(app.world())
             .find(|(idx, _)| idx.0 == 3)
-            .map(|(_, c)| c.inputs.gamepad_index)
+            .map(|(_, b)| b.0)
             .expect("second joiner with PlayerIndex(3) must exist")
     };
-    let expected_b_index = sorted.iter().position(|&e| e == gp_b).unwrap();
     assert_eq!(
-        second_joiner_gamepad_index, Some(expected_b_index),
-        "second joiner must be bound to gamepad B's sorted index, distinct from the first"
+        second_joiner_bound_gamepad, Some(gp_b),
+        "second joiner must be bound directly to gamepad B, distinct from the first joiner's binding"
+    );
+    // The first joiner's own binding must be completely unaffected by the second join.
+    let first_joiner_bound_gamepad_after = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &BoundGamepad)>();
+        q.iter(app.world())
+            .find(|(idx, _)| idx.0 == 2)
+            .map(|(_, b)| b.0)
+            .expect("first joiner must still exist")
+    };
+    assert_eq!(
+        first_joiner_bound_gamepad_after, Some(gp_a),
+        "the first joiner's binding must not change when a second player joins later"
     );
 }
 
@@ -1873,7 +1894,8 @@ fn test_gamepad_action_bar_slot_fires_only_from_owning_players_own_pad() {
         owner_player: Some(1),
     });
 
-    // Player 1 is bound to gamepad B's own sorted index — not A's.
+    // Player 1 is bound to gamepad B directly — not A's. `BoundGamepad` (not the seed-only
+    // `inputs.gamepad_index`) is what `action_bar_input_system` actually reads post-refactor.
     let mut controller = test_character_controller();
     controller.inputs.gamepad_index = Some(b_index);
     app.world_mut().spawn((
@@ -1881,6 +1903,7 @@ fn test_gamepad_action_bar_slot_fires_only_from_owning_players_own_pad() {
         controller,
         PlayerTarget::default(),
         PlayerIndex(1),
+        BoundGamepad(Some(gp_b)),
     ));
 
     // Press South on gamepad A (NOT player 1's own pad) — must not fire.
@@ -1947,6 +1970,7 @@ fn test_two_players_two_pads_same_gamepad_key_each_fires_only_their_own_slot() {
         controller0,
         PlayerTarget::default(),
         PlayerIndex(0),
+        BoundGamepad(Some(gp_a)),
     ));
     let mut controller1 = test_character_controller();
     controller1.inputs.gamepad_index = Some(b_index);
@@ -1955,6 +1979,7 @@ fn test_two_players_two_pads_same_gamepad_key_each_fires_only_their_own_slot() {
         controller1,
         PlayerTarget::default(),
         PlayerIndex(1),
+        BoundGamepad(Some(gp_b)),
     ));
 
     // Player 0 presses their own pad — only player 0's slot fires.
@@ -2013,6 +2038,7 @@ fn test_gamepad_action_bar_slot_with_both_key_and_gamepad_key_fires_from_either_
         SpawnId("player_01".to_string()),
         controller,
         PlayerTarget::default(),
+        BoundGamepad(Some(gamepad)),
     ));
 
     // Keyboard press alone fires it.
@@ -2085,6 +2111,7 @@ fn test_action_bar_slot_with_unresolved_gamepad_button_never_fires_from_gamepad_
         SpawnId("player_01".to_string()),
         controller,
         PlayerTarget::default(),
+        BoundGamepad(Some(gamepad)),
     ));
 
     // A gamepad press can't fire it — there's no resolved button to check `just_pressed` against.
@@ -2171,6 +2198,7 @@ fn test_gamepad_only_action_bar_slot_on_cooldown_emits_event_and_does_not_fire()
         SpawnId("player_01".to_string()),
         controller,
         PlayerTarget::default(),
+        BoundGamepad(Some(gamepad)),
     ));
 
     press_gamepad_button(&mut app, gamepad, GamepadButton::South);
@@ -2212,7 +2240,6 @@ fn test_orbit_camera(target: Entity) -> OrbitCamera {
         look_up_key: None,
         look_down_key: None,
         look_speed: 2.0,
-        gamepad_index: None,
         gamepad_deadzone: 0.15,
     }
 }
@@ -3439,6 +3466,7 @@ fn test_gamepad_interact_button_fires_entity_interacted() {
     app.world_mut().spawn((
         CharacterController { inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
+        BoundGamepad(Some(gamepad)),
     ));
     app.world_mut().spawn((
         Transform::from_xyz(1.0, 0.0, 0.0),
@@ -3478,14 +3506,18 @@ fn test_gamepad_interact_works_independently_in_two_player_local_coop() {
     app.world_mut().spawn((
         CharacterController { inputs: p1_inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
+        BoundGamepad(Some(gamepad)),
     ));
 
-    // Player 2 — keyboard-routed, far away; presses nothing this frame.
+    // Player 2 — keyboard-routed, far away; presses nothing this frame. Every player entity
+    // always carries `BoundGamepad` in production (inserted unconditionally by
+    // `spawn_player_entity_core`) — `None` here since player 2 has no gamepad_index authored.
     let mut p2_inputs = test_input_map();
     p2_inputs.interact = "KeyH".to_string();
     app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         Transform::from_xyz(100.0, 0.0, 0.0),
+        BoundGamepad::default(),
     ));
 
     app.world_mut().spawn((
@@ -3528,6 +3560,7 @@ fn test_gamepad_target_next_advances_targeting_independently_in_two_player_scene
         PlayerIndex(0),
         Transform::default(),
         GlobalTransform::default(),
+        BoundGamepad(Some(gamepad)),
     )).id();
 
     let mut p2_inputs = test_input_map();
@@ -3538,6 +3571,7 @@ fn test_gamepad_target_next_advances_targeting_independently_in_two_player_scene
         PlayerIndex(1),
         Transform::default(),
         GlobalTransform::default(),
+        BoundGamepad::default(),
     )).id();
 
     app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
@@ -3571,11 +3605,15 @@ fn test_gamepad_right_stick_y_increases_pitch_same_direction_as_look_up() {
         test_character_controller(),
         Transform::from_xyz(0.0, 0.0, 0.0),
         GlobalTransform::default(),
+        // `camera_orbit_system` resolves gamepad input via `BoundGamepad` through `orbit.target`
+        // (`OrbitCamera.gamepad_index` was a spawn-frozen positional copy and has been removed —
+        // see `gamepad_player_binding_hardening.md`).
+        BoundGamepad(Some(gamepad)),
     )).id();
 
     let camera = app.world_mut().spawn((
         Transform::default(),
-        OrbitCamera { target: player, gamepad_index: Some(0), pitch: 0.5, ..test_orbit_camera(player) },
+        OrbitCamera { target: player, pitch: 0.5, ..test_orbit_camera(player) },
     )).id();
 
     let pitch_before = app.world().get::<OrbitCamera>(camera).unwrap().pitch;

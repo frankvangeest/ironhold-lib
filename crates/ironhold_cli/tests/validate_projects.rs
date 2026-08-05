@@ -33,3 +33,10 @@ fn validate(name: &str) {
 #[test] fn validate_entity_logic_demo()    { validate("entity_logic_demo"); }
 #[test] fn validate_particles_demo()       { validate("particles_demo"); }
 #[test] fn validate_effect_mayhem_demo()   { validate("effect_mayhem_demo"); }
+/// `gamepad_player_binding_hardening.md`: `local_coop_demo`'s catalog legitimately reuses
+/// `gamepad_index` values across different rooms' player-prefab variants (e.g.
+/// `player_p1_split`/`player_p1_split_ring` both author `gamepad_index: 0` — never
+/// co-instantiated in the same scene) — the explicit negative case proving the duplicate-
+/// `gamepad_index` check is scoped per-scene (each scene's own `entities:` list), not
+/// per-catalog. Must still validate clean.
+#[test] fn validate_local_coop_demo()      { validate("local_coop_demo"); }

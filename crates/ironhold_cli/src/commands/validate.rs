@@ -518,12 +518,12 @@ fn cross_file_checks(
         }
     }
 
-    // A slot's `gamepad_key` resolves against its owning player's own `InputMap.gamepad_index`
-    // (never any connected pad — see `runtime::input::resolve_gamepad`), so a slot that declares
-    // `gamepad_key` for a player whose prefab sets no `gamepad_index` at all is silently inert: no
-    // crash, no runtime signal, the slot simply never fires from gamepad. Mirrors the
-    // `missing_player_stat_template` check above exactly, including the `unwrap_or(0)`
-    // normalization. See `planning/features/gamepad_action_bar_slots.md`.
+    // A slot's `gamepad_key` resolves against its owning player's own `BoundGamepad` (seeded once
+    // from `InputMap.gamepad_index`; `gamepad_bind_system` never falls back to any connected
+    // pad), so a slot that declares `gamepad_key` for a player whose prefab sets no
+    // `gamepad_index` at all is silently inert: no crash, no runtime signal, the slot simply
+    // never fires from gamepad. Mirrors the `missing_player_stat_template` check above exactly,
+    // including the `unwrap_or(0)` normalization. See `planning/features/gamepad_action_bar_slots.md`.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
             for node in &scene.ui {
@@ -547,6 +547,38 @@ fn cross_file_checks(
                             bar.id, slot.key, gamepad_key, owner_player
                         ),
                         error_type: "gamepad_key_without_gamepad_index",
+                    });
+                }
+            }
+        }
+    }
+
+    // Two or more player-tagged prefabs **instantiated in the same scene's `entities:` list**
+    // authoring the same non-`None` `gamepad_index` — one physical controller would drive both
+    // characters at once. Deliberately scoped to each scene's instantiated players, not the raw
+    // prefab catalog: `local_coop_demo`'s catalog legitimately reuses `gamepad_index` values
+    // across different rooms' player variants (never co-instantiated), which a catalog-wide check
+    // would false-positive on. Mirrors the runtime `warn!` in `scene_loader.rs`'s
+    // `warn_duplicate_gamepad_index`. See `planning/features/gamepad_player_binding_hardening.md`.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut seen: std::collections::HashMap<usize, &str> = std::collections::HashMap::new();
+            for entity_def in &scene.entities {
+                let Some(prefab) = catalog.prefabs.get(&entity_def.prefab) else { continue };
+                if !prefab.components.tags.iter().any(|t| t == "player") { continue }
+                let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
+                else { continue };
+                if let Some(other_id) = seen.insert(seed, &entity_def.id) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "entities {:?} and {:?} both use gamepad_index: {} — one physical \
+                             controller would drive both characters at once. Give each player a \
+                             different gamepad_index. Deliberately sharing one controller between \
+                             two characters is not supported",
+                            other_id, entity_def.id, seed
+                        ),
+                        error_type: "duplicate_gamepad_index",
                     });
                 }
             }

@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 use bevy::input::gamepad::Gamepad;
-use crate::capabilities::player::CharacterController;
+use crate::capabilities::player::{BoundGamepad, CharacterController};
 use crate::capabilities::inventory::LoadedInventoryUi;
-use crate::runtime::input::resolve_gamepad;
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::SpawnId;
 
@@ -38,22 +37,19 @@ pub struct Interactable {
 /// fold, so gamepad-interact works in local co-op too, not just single-player.
 pub fn interactable_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    player_query: Query<(&Transform, &CharacterController)>,
-    gamepad_query: Query<(Entity, &Gamepad)>,
+    player_query: Query<(&Transform, &CharacterController, Option<&BoundGamepad>)>,
+    gamepad_query: Query<&Gamepad>,
     interactables: Query<(&Transform, &SpawnId, &Interactable)>,
     mut game_events: MessageWriter<GameEvent>,
     inventory_ui: Res<LoadedInventoryUi>,
 ) {
     if inventory_ui.panels_open > 0 { return; }
 
-    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
-    sorted_gamepads.sort_by_key(|(e, _)| e.index());
-
-    for (player_transform, controller) in &player_query {
+    for (player_transform, controller, bound) in &player_query {
         let keyboard_pressed = controller.inputs.key("interact")
             .map(|k| keyboard_input.just_pressed(k))
             .unwrap_or(false);
-        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+        let gamepad = bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok());
         let gamepad_interact = controller.inputs.gamepad_button("interact");
         let gamepad_pressed = gamepad.zip(gamepad_interact)
             .map(|(gp, btn)| gp.just_pressed(btn))

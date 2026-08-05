@@ -4,9 +4,8 @@ use bevy::window::PrimaryWindow;
 use bevy::input::gamepad::Gamepad;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
-use crate::runtime::input::resolve_gamepad;
 use crate::capabilities::action_bar::CurrentTarget;
-use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
+use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::schema::player::InputMap;
 use crate::GameVariables;
 use crate::capabilities::inventory::LoadedInventoryUi;
@@ -256,8 +255,8 @@ fn click_select_system(
 /// engine (movement, jump, etc.) already behaves when two players share a keyboard.
 pub fn tab_targeting_system(
     keys: Res<ButtonInput<KeyCode>>,
-    mut controllers: Query<(&CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>)>,
-    gamepad_query: Query<(Entity, &Gamepad)>,
+    mut controllers: Query<(&CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>, Option<&BoundGamepad>)>,
+    gamepad_query: Query<&Gamepad>,
     targetable: Query<(Entity, &SpawnId, &GlobalTransform), With<Targetable>>,
     prefab_keys: Query<&PrefabKey>,
     visibility_q: Query<&Visibility>,
@@ -269,13 +268,10 @@ pub fn tab_targeting_system(
     if inventory_ui.panels_open > 0 { return; }
     let is_multiplayer = controllers.iter().count() >= 2;
 
-    let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
-    sorted_gamepads.sort_by_key(|(e, _)| e.index());
-
-    for (controller, player_gt, mut player_target, player_index) in &mut controllers {
+    for (controller, player_gt, mut player_target, player_index, bound) in &mut controllers {
         let tab_key = InputMap::parse_key(&controller.inputs.target_next)
             .unwrap_or(KeyCode::Tab);
-        let gamepad = resolve_gamepad(&sorted_gamepads, controller.inputs.gamepad_index);
+        let gamepad = bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok());
         let gamepad_target_next = controller.inputs.gamepad_button("target_next");
         let gamepad_pressed = gamepad.zip(gamepad_target_next)
             .map(|(gp, btn)| gp.just_pressed(btn))

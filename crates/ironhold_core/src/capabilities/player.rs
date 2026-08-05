@@ -56,6 +56,30 @@ pub struct PlayerIndex(pub u32);
 #[derive(Component, Default)]
 pub struct PlayerTarget(pub Option<String>);
 
+/// This player's resolved physical gamepad, if any. Inserted alongside `PlayerIndex`/
+/// `PlayerTarget` at every player-construction site (`gamepad_player_binding_hardening.md`).
+///
+/// `None` ("pending") means either no `InputMap.gamepad_index` was authored, or the authored
+/// index hasn't resolved to a live connected gamepad **that has been stable for
+/// `GAMEPAD_STABLE_CONNECT_SECS`** yet — `gamepad_bind_system` (`runtime/input.rs`) retries the
+/// resolution every tick while pending, using `gamepad_index` purely as a **one-time seed**, not a
+/// live positional lookup. The stability requirement exists because of a real hardware finding: a
+/// single physical controller can register as two separate gamepad entries for a brief moment,
+/// and without a debounce a player could permanently lock onto the spurious one in the window
+/// before it disappears.
+///
+/// `Some(entity)` ("bound") locks this player to that specific gamepad `Entity` for the rest of
+/// their lifetime (until a future hot-leave/rejoin) — every gamepad-consuming system reads this
+/// directly instead of re-deriving a sorted position every frame, so a disconnect/reconnect of
+/// any *other* pad can never silently re-route this player's input. A disconnected bound pad
+/// simply stops matching `Query<&Gamepad>` (Bevy never despawns the entity, only removes the
+/// `Gamepad` component) — this player's gamepad input silently pauses; their keyboard bindings,
+/// if any, are unaffected, since gamepad input is always additive in this engine. On reconnect of
+/// the *same* device, Bevy re-inserts `Gamepad` onto the *same* `Entity`, so this player's input
+/// resumes automatically with no extra code.
+#[derive(Component, Default)]
+pub struct BoundGamepad(pub Option<Entity>);
+
 #[derive(Component)]
 pub struct CharacterController {
     pub walk_speed: f32,

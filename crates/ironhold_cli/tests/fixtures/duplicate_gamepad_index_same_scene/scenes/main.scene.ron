@@ -1,0 +1,17 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "test_player_1",
+            transform: (translation: (-2.0, 0.0, 0.0)),
+        ),
+        (
+            id: "player_02",
+            prefab: "test_player_2",
+            transform: (translation: (2.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [],
+)
