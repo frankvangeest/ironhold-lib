@@ -1,7 +1,7 @@
 # Feature: Player Model Source Unification ("multiplayer with 1")
 
-_Status: In Progress (v1 Done 2026-07-19, v2 Revised after plan-review — recommend a confirmation
-pass, v3 Queued)_
+_Status: In Progress (v1 Done 2026-07-19, v2 Ready — confirmation pass complete 2026-08-06, v3
+Queued)_
 _Planned at: `6e38aa1` (2026-07-17)_
 _v2 fleshed out at: `1fcef14` (2026-07-31) — moved back from `features/done/` per the multi-phase
 convention in `planning/CLAUDE.md` (only the final phase's completion moves a multi-phase file to
@@ -11,6 +11,21 @@ prefab would either violate the no-retrofit rule or hard-fail CLI validation) an
 importantly, that the Friction fix is a terrain-regression risk, not a low-risk one-liner;
 ux-gamedesigner-reviewer converged on the same prefab-strategy gap independently and added the
 demo's docs/animation-gap/room-chain requirements._
+
+**Confirmation pass (2026-08-06, system-architect + ux-gamedesigner-reviewer, ahead of cutting the
+`feature/{slug}` branch).** Both reviewers confirmed the 2026-08-01 findings were correctly folded
+in, but independently caught the same new drift: `per_viewport_target_ring_visibility.md` shipped
+*after* the 2026-08-01 pass (`95d68a9`, 2026-07-31) and introduced `SplitScreenDef.own_viewport_only`
+— which `player_p1_split` (this plan's original GLB-half prefab choice) deliberately does **not**
+set (`prefabs.ron:1149-1153` says so explicitly), while v2's own acceptance criteria ("a ring
+appears on *their* target only... P2's own `target_hud` updates while P1's does not") describe
+exactly the `own_viewport_only: true` behavior. As drafted, the plan would have shipped a demo that
+contradicts its own acceptance criteria. **Fix applied below: room10 is now based on room9 (the
+`_ring` prefab family), not room3.** Three smaller findings also folded in: a color-identity task
+for room10 (ground/portal accent), an explicit statement that the return portal reuses
+`portal_to_room9` verbatim (room9's own precedent — no new prefab), and a corrected "two portals
+past the hot-join room" distance (was mis-stated as one). See the revised Approach/Tasks/Acceptance
+criteria below for the exact changes.
 
 **Plan-review note (2026-07-17):** Both reviewers returned Needs-more-design-work on the first
 pass; both sets of findings are now folded into the plan above. **system-architect**: caught that
@@ -233,13 +248,29 @@ structural single-primitive-player cap is gone, nothing more. Mutating it to als
 per-player-targeting/stat-pool wiring would conflate "does the cap-removal still work" with "does
 the fuller feature set work," the same anti-pattern this whole local-coop batch has consistently
 avoided (see `room9`'s own precedent: a sibling copy, not a retrofit, when demonstrating a new
-combination of existing mechanics). Proposed: a new `local_coop_demo` room (**room10**, next in the
-portal chain after room9) pairing **one primitive-bodied player and one GLB player** (not two more
+combination of existing mechanics). Proposed: a new `local_coop_demo` room (**room10**, two portals
+past the hot-join demo room — room8 → room9 → room10, corrected from an earlier draft's "one
+portal past") pairing **one primitive-bodied player and one GLB player** (not two more
 primitives — the "mixed" pairing is the actual point, since v1's proof already covers
 two-primitives-together) — reusing the `target_indicator:`/`target_hud:`/per-player `ActionBar`
 wiring pattern `room3`/`room9` already established. This validates the actual headline claim — a
 primitive player participates in every per-player mechanic exactly like a GLB player does, side by
 side in the same scene — rather than re-asserting it in prose.
+
+**Corrected base prefab pair (2026-08-06 confirmation pass) — room10 is based on room9's
+`own_viewport_only` prefab family, not room3's default-visibility one.** The GLB half must reuse
+`player_p1_split_ring` (not `player_p1_split`, the original draft's choice) — only
+`player_p1_split_ring` sets `camera.split.own_viewport_only: true`
+(`prefabs.ron:1186-1190`), and v2's own acceptance criteria describe exactly that behavior ("a ring
+appears on *their* target only... P2's own `target_hud` updates while P1's does not"). Reusing
+`player_p1_split` verbatim, as originally drafted, would have shipped a demo whose actual on-screen
+behavior (every ring visible in both viewports, room3's default) directly contradicted its own
+acceptance criteria. The primitive half's new prefab must mirror `player_p2_split_ring`'s input
+wiring (`gamepad_index: 1`, `target_next: "KeyM"`, `look_left: "Comma"`/`look_right: "Period"`,
+`ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight`/`Enter`/`ShiftRight`) applied to a primitive body
+(extending `player_p2_primitive`'s shape/collider, per the composed-`children:` note below) — same
+naming precedent room9 set for its own siblings, e.g.
+`player_p2_primitive_split_ring`/`player_p2_primitive_target` (naming TBD during implementation).
 
 **Revision (2026-08-01, after plan-review — system-architect + ux-gamedesigner-reviewer):** both
 reviews independently confirmed mixing GLB+primitive players in one split scene is architecturally
@@ -255,19 +286,30 @@ regression baseline (forbidden, per the "don't retrofit room7" decision above); 
 `player_p1_split_target`/`player_p2_primitive_target` (naming TBD during implementation, following
 the `_ring`-suffix precedent room9 already set for the same reason) — is the correct, precedented
 shape. Concretely:
-- **GLB half**: reuse `player_p1_split` verbatim (system-architect) — it already owns the split
-  switch, `target_next: "KeyT"`, `look_left`/`look_right`, `gamepad_index: 0`, a 100-mana pool, and
-  the `action_bar_p1`/`gamepad_key: "RightTrigger"` pairing. Zero new prefab needed for this half.
-- **Primitive half**: a new prefab extending `player_p2_primitive`'s body/collider shape with
-  `target_next: "KeyM"`, `look_left`/`look_right`, and **`gamepad_index: 1`** — the last one is not
-  optional decoration: reusing room3's `ActionBar` verbatim (which authors `gamepad_key:
+- **GLB half (corrected 2026-08-06)**: reuse `player_p1_split_ring` — **not** `player_p1_split`,
+  the original draft's choice. Only `player_p1_split_ring` sets `camera.split.own_viewport_only:
+  true` (`prefabs.ron:1186-1190`), which is required for room10's own acceptance criteria (own-
+  viewport-only ring visibility) to actually hold — `player_p1_split` demonstrates room3's default
+  (every ring in every viewport) and reusing it here would contradict this room's own claims. It
+  already owns the split switch, `target_next: "KeyT"`, `look_left`/`look_right`, `gamepad_index:
+  0`, a 100-mana pool, and the `action_bar_p1`/`gamepad_key: "RightTrigger"` pairing. Zero new
+  prefab needed for this half.
+- **Primitive half (corrected 2026-08-06)**: a new prefab extending `player_p2_primitive`'s
+  body/collider shape with the same input wiring `player_p2_split_ring` uses — `target_next:
+  "KeyM"`, `look_left: "Comma"`/`look_right: "Period"`, and **`gamepad_index: 1`** — the last one
+  is not optional decoration: reusing room9's `ActionBar` pattern (which authors `gamepad_key:
   "RightTrigger"` on both bars) against a primitive prefab with no `gamepad_index` is a **hard
-  `ironhold_cli validate` failure** (`gamepad_key_without_gamepad_index`), confirmed against
-  `validate.rs` — this is a blocking correctness requirement, not a nice-to-have. `orbit_button:
-  "None"` is mandatory for any split-screen player (mouse can't drive 2+ cameras), so omitting
-  `look_left`/`look_right` would also leave the primitive player structurally unable to turn their
-  own camera — undercutting the "participates exactly like a GLB player" claim in the most visible
-  possible way.
+  `ironhold_cli validate` failure** (`gamepad_key_without_gamepad_index`), confirmed still live in
+  `validate.rs:549` as of this confirmation pass — this is a blocking correctness requirement, not
+  a nice-to-have. `orbit_button: "None"` is mandatory for any split-screen player (mouse can't drive
+  2+ cameras), so omitting `look_left`/`look_right` would also leave the primitive player
+  structurally unable to turn their own camera — undercutting the "participates exactly like a GLB
+  player" claim in the most visible possible way. Note (system-architect, 2026-08-06): pad binding
+  is now session-locked to whichever gamepad connects first for each seed index (`BoundGamepad`/
+  `gamepad_bind_system`, shipped in `gamepad_player_binding_hardening.md` after this plan was first
+  drafted) — add a one-line controls-hint note that on a real dual-controller WASM playtest, P1's
+  pad should connect before P2's, or vice versa, matching whichever `gamepad_index` each is seeded
+  with; this doesn't change the RON, just the on-screen hint text.
 - **Player ordering**: GLB player first (owns the split switch, matching room3's known pattern);
   primitive player as P2 — the genuinely uncovered configuration (`room7`'s primitive player is
   already P1/primary; a primitive body as a *non-primary* player, with its own ring tint, its own
@@ -319,6 +361,19 @@ option the original draft didn't enumerate. Whichever way it lands, add a note t
 `MovementConfig` docs table (`docs/20_data_formats.md`) — currently the only friction-adjacent
 knobs documented are `idle_drag`/`linear_damping`/`angular_damping`, and a designer has no way to
 discover that collider friction isn't a per-prefab-authorable field at all.
+
+**Additional fallback surfaced during the 2026-08-06 confirmation pass (system-architect):**
+`idle_drag` (`MovementConfig`, default `0.8`, applied at `capabilities/player.rs:240-241`) is a
+*second*, independent idle-hold mechanism this plan hadn't enumerated — steady-state downhill creep
+approximates `gravity_component * dt / (1 - idle_drag)`, so `idle_drag` alone is a real fourth
+option alongside "leave Friction at 0", "low non-zero Friction coefficient", and (not viable per the
+above) "revert to primitive-only". If the two-scene playtest shows creep, try tuning `idle_drag`
+on `quick_scene`'s player prefab before reaching for a hardcoded non-zero Friction constant — it's
+already a per-prefab-authorable RON field, whereas a Friction coefficient today is not. If a
+non-zero Friction constant does turn out to be necessary, consider promoting it to a real
+`MovementConfig.friction: Option<f32>` field (default `None` = today's zero-friction-for-primitives/
+default-friction-for-GLB behavior) rather than a bare hardcoded Rust constant, so it's consistent
+with every other per-prefab movement knob and doesn't reintroduce a designer-unreachable value.
 
 ### v3 — resource promotion for terrain-deferred and dynamic-spawn primitive players
 
@@ -409,16 +464,28 @@ explicit and diagnosable rather than a silent gap.
       replaces one silent footgun (primitive players are limited) with a subtler one (some fields/
       contexts work now, others still don't, with no visible boundary)
 - [ ] v2: new `local_coop_demo` **room10** pairing a new primitive-player-target prefab (P2) +
-      reused `player_p1_split` (P1), with a composed multi-part (`children:`) steel/silver body for
-      the primitive half, `gamepad_index: 1` set (required — see Approach's blocking
-      `gamepad_key_without_gamepad_index` finding), and a couple of `Cuboid` obstacles for the
-      Friction comparison task below
-- [ ] v2: five UI Labels on room10 — room hint (mixed-bodies framing), controls, a parity statement
-      ("same targeting, same action bar, same per-player mana — only the body differs"), targeting/
-      ability hint, and an explicit animation-gap hint ("P2 has no rig, so it slides instead of
-      walking — the only real difference") — see Approach for the animation-gap reasoning
+      reused **`player_p1_split_ring`** (P1) — **corrected 2026-08-06: not `player_p1_split`**, see
+      Approach's confirmation-pass note (only `_ring` sets `camera.split.own_viewport_only: true`,
+      which room10's own acceptance criteria require) — with a composed multi-part (`children:`)
+      steel/silver body for the primitive half, `gamepad_index: 1` and `player_p2_split_ring`'s
+      input wiring set (required — see Approach's blocking `gamepad_key_without_gamepad_index`
+      finding), and a couple of `Cuboid` obstacles for the Friction comparison task below. Also add
+      a new `ground_room10` prefab and a `portal_to_room10` accent color — pick a steel/silver-blue
+      tone consistent with the primitive body's composed identity (existing rooms have already
+      claimed amber/orange (room3), cyan/teal (room4), rose/magenta (room5), gold/amber-yellow
+      (room6), emerald/green (room7), violet (room8), crimson (room9) — steel/silver-blue is
+      unused).
+- [ ] v2: five UI Labels on room10 — room hint (mixed-bodies framing), controls (including a
+      one-line WASM dual-controller connect-order hint — see Approach's `BoundGamepad` note), a
+      parity statement ("same targeting, same action bar, same per-player mana — only the body
+      differs"), targeting/ability hint, and an explicit animation-gap hint ("P2 has no rig, so it
+      slides instead of walking — the only real difference") — see Approach for the animation-gap
+      reasoning
 - [ ] v2: room9's `room_hint` needs a new sibling Label for the room10 exit (its own line, not an
-      extension of the existing ~71-char line); a `portal_to_room10` prefab + `rules.ron` entry;
+      extension of the existing ~71-char line); a `portal_to_room10` prefab + `rules.ron` entry.
+      The **return** trip needs no new prefab — reuse `portal_to_room9` verbatim, same as room9
+      reused `portal_to_room8` (`room9.scene.ron:99-101`'s "same event name... no new prefab
+      needed" precedent, confirmed still the pattern as of this confirmation pass).
       `scene.ready:room9` **and** `scene.ready:room10` Log rules (room9's own is currently missing
       from a prior room's addition — fix both while touching this file)
 - [ ] v2: **two-scene** Friction playtest (see Approach) — room10's cube-edge comparison AND
@@ -480,8 +547,12 @@ explicit and diagnosable rather than a silent gap.
 - Given room10, when both players spawn, then the GLB player shows "P1" and the primitive player
   shows "P2" in their own viewport corners (**browser-observable**).
 - Given room10's primitive P2, when they press their target key (or click a sphere), then a ring
-  appears on *their* target only, tinted with P2's colour, and P2's own `target_hud` readout
-  updates while P1's does not (**browser-observable**).
+  appears on *their* target only, restricted to *their own viewport* (room10 deliberately reuses
+  the `_ring` prefab pair — `player_p1_split_ring`'s `own_viewport_only: true` — per the
+  **2026-08-06 confirmation-pass fix**: an earlier draft of this room instead reused plain
+  `player_p1_split`, which does *not* set `own_viewport_only`, and would have contradicted this
+  exact criterion), tinted with P2's colour, and P2's own `target_hud` readout updates while P1's
+  does not (**browser-observable**).
 - Given room10's primitive P2, when they fire their action-bar slot with a target selected, then
   P2's own mana bar drops and P1's is unaffected, and vice versa for P1's slot (**browser-observable**
   — proves per-player stat pools work identically regardless of body type).
