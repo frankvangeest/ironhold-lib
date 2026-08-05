@@ -26,6 +26,15 @@ conventions that are enforced only by copy-paste, never written down anywhere a 
   comment cites a "known-good 59-char line"; the longest shipped line is room8's `room_hint` at
   93 chars. Anything past ~90 chars is unverified and risks clipping the one line carrying the
   feature's explanation.
+- **Top-left hint ladder is `y = 20 + 44n`, `x = 20`, `900x32`** — confirmed across every room.
+  room3 is the most crowded at 6 rungs (y=20..240, block ends at y=272 ≈ 38% of a 720px window);
+  room9 has 5, most rooms 2-3. room6/room8 show two additional tiers exist for per-player captions:
+  `y=316` and `y=676`, `600x32`, paired at `x=20` / `x=660`. Each new feature appends a rung to
+  room3 rather than replacing one — flag the cumulative footprint, not just the individual label,
+  once a room passes ~5 rungs.
+- **Label `id`s follow player-facing vocabulary, not the feature slug** (`controls_hint`,
+  `room_hint`, `targeting_hint`, `ability_hint`, `join_prompt`). `gamepad_hardening_hint` (room3,
+  2026-08-01) is the one that leaked a plan filename into an asset id — don't set that precedent.
 - **Screenshot baselines are incomplete** — `screenshot_baselines/scenes/` has main, room2-5,
   room7 only (no room6/room8/room9). Only `local_coop_demo_main.png` is referenced by
   `index.html`, so this is cosmetic, but don't assume a new room gets a baseline.

@@ -7,6 +7,10 @@ metadata:
 
 General gamepad/controller input feature (branch `feature/gamepad-controller-input`, reviewed 2026-07-20). Touches `runtime/input.rs`, `capabilities/targeting.rs`, `capabilities/interactable.rs`, `capabilities/camera.rs`, `schema/player.rs`. Extends [[project_local_coop_input_camera]].
 
+> **SUPERSEDED (2026-08-01) on the per-frame Vec + `resolve_gamepad` points below** — see
+> [[project-gamepad-binding-hardening]]. `resolve_gamepad` no longer exists; the 5 consumers no
+> longer sort per frame. The WASM/gilrs compat and binary-size notes here are still accurate.
+
 **Per-frame Vec pattern (accepted).** `input_translator_system` already built `Vec<(Entity, &Gamepad)>` collect+sort per frame; this feature adds the *same* pattern to 3 more Update systems (`tab_targeting_system`, `interactable_system`, `camera_orbit_system`) via new `pub(crate) resolve_gamepad(&sorted, index)` helper in input.rs. Player/gamepad count is 2-4, so collect+sort is ≤4 elements = tens of ns. Empty-gamepad case (common on desktop keyboard + WASM-before-pad-gesture) is alloc-free (empty query size_hint lower bound 0 → no heap alloc). Non-empty = one tiny short-lived Vec per system per frame; not worth SmallVec (would add a dep). Verdict: negligible.
 
 **RON button parsing per frame (accepted, mirrors keyboard).** `InputMap::gamepad_button(name)` → `parse_gamepad_button(&str)` runs each frame per player — but this is exactly the existing accepted pattern: `key()`→`parse_key` and `tab_targeting_system`'s `InputMap::parse_key(&target_next)` already string-match every frame. No new regression; if ever optimized, do keyboard + gamepad together (pre-resolve at spawn like `look_*_key`).

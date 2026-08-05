@@ -1,6 +1,6 @@
 ---
 name: gamepad-input-system
-description: Gamepad/controller InputMap + *_gamepad_bindings fields, keyboard-additive truth, unclaimed-pad-only footgun, camera-yaw parity gap, canonical demo examples
+description: Gamepad/controller InputMap + *_gamepad_bindings fields, keyboard-additive truth, bind-once-then-lock seed model, unclaimed-pad-only footgun, camera-yaw parity gap, canonical demo examples
 metadata:
   type: project
 ---
@@ -56,12 +56,36 @@ mirroring `global_key_bindings`/`scene_key_bindings`. Shipped in feature/gamepad
   `*_grid` variants have no such hint), `local_coop_demo/scenes/room8.scene.ron`
   (`scene_gamepad_bindings`).
 - `ironhold validate` warns on unrecognised button names in both bindings maps (implemented).
+- **The duplicate-`gamepad_index` check now SHIPPED** (scene-load `warn!` +
+  `ironhold_cli validate` hard error, `error_type: "duplicate_gamepad_index"`). Same message both
+  places: "entities X and Y both use gamepad_index: N — one physical controller would drive both
+  characters at once. Give each player a different gamepad_index. Deliberately sharing one
+  controller between two characters is not supported." Correctly scoped per-scene, per the note
+  below. **Not documented in `docs/` anywhere** as of 2026-08-01 — `docs/60_contributing.md`'s
+  "Checks performed" list and `docs/20_data_formats.md`'s `InputMap` section both omit it.
 - **Any new "duplicate/conflicting `gamepad_index`" check must be scoped to a scene's instantiated
   players, never the prefab catalog.** `local_coop_demo/prefabs/prefabs.ron` legitimately has
   `player_p1_split` and `player_p1_split_ring` BOTH on `gamepad_index: 0` (and the p2 pair both on
   `1`) because they're scene-specific variants used in room3 vs room9 — a catalog-wide check would
   false-positive and break `validate_projects.rs`'s "every shipped project exits 0" rule. Same trap
   applies to `join_prefab_keys` prefabs, which only exist once a hot join happens.
+- **`gamepad_index` is a one-time SEED, not a live slot (feature/gamepad-binding-hardening,
+  2026-08-01).** It used to be re-resolved every frame against the sorted connected-pad list; now a
+  player locks onto the resolved pad (internal `BoundGamepad`, not RON-exposed) and keeps it for the
+  entity's lifetime. Designer-visible consequences to keep checking against docs: (a) unplug/replug
+  the **same** pad in the **same** port resumes automatically; a *different* port may not (gilrs
+  matches by slot/index on Windows XInput + Web, not device UUID); (b) a pending player whose seed
+  resolves to a pad another player already holds **stays pending forever** even if a free pad
+  exists — no auto-rebind this session, fix is to reload/restart the scene; (c) two new one-shot
+  (3s-delayed) runtime `warn!`s exist — "Player {n}: gamepad disconnected — reconnect it to the
+  same port/slot" and "Player {n}: gamepad_index {i} resolves to a controller already bound to
+  another player — staying on keyboard". Both name the player **0-based** ("Player 0") while the
+  on-screen split HUD label says "P1"; recurring off-by-one readability trap.
+- **"Unclaimed" now means "not actually bound", not "no player authors this index".**
+  `unclaimed_gamepad_trigger_system`'s claimed set moved from index-derived to `BoundGamepad`-derived.
+  A scene-authored player whose seed hasn't resolved yet (pad not connected / pad taken) leaves
+  their intended pad joinable. No shipped project hits this (the `*_grid` room8 prefabs author no
+  `gamepad_index`), but flag it any time a hot-join scene gains a scene-authored player with a seed.
 - **Escalation precedent for gamepad authoring mistakes:** `gamepad_key` without a matching
   `gamepad_index` is BOTH a scene-load `warn!` and a hard `ironhold_cli validate` error
   (`gamepad_key_without_gamepad_index`). Use this as the reference shape when asked "warn or hard
