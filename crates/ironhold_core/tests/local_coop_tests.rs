@@ -5835,6 +5835,104 @@ fn test_two_primitive_players_get_distinct_player_index_and_independent_stat_map
     );
 }
 
+// ── player_model_source_unification.md v2: mixed GLB + primitive pair (room10) ─────────────────
+
+#[test]
+fn test_mixed_glb_and_primitive_players_get_distinct_index_independent_stat_maps_and_split_cameras() {
+    use bevy_rapier3d::prelude::{Friction, CoefficientCombineRule};
+    use ironhold_core::schema::stats::StatMap;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+
+    let mut p1_camera = base_camera_config();
+    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: true });
+
+    let mut prim_p2 = primitive_player_prefab(1, 60.0, None);
+    prim_p2.display_name = Some("Player 2 (primitive)".to_string());
+
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                stat_templates: vec![ironhold_core::schema::stats::StatTemplateDef {
+                    key: "mana".to_string(), base: 100.0, min: 0.0, max: 100.0,
+                    regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+                }],
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    camera: Some(p1_camera),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_player_2".to_string(), prim_p2),
+        ]),
+        ..Default::default()
+    }));
+
+    load_two_player_scene(&mut app);
+
+    // Mirrors room10's shape (a GLB player + a primitive player sharing one split scene), not a
+    // load of room10.scene.ron itself — a room10 edit won't be caught here. This only asserts the
+    // split-camera count; it does NOT assert own_viewport_only's per-camera RenderLayers, which
+    // `test_static_split_own_viewport_only_gives_each_camera_its_own_layer_plus_shared_layer_0`
+    // already covers independently of model source (RenderLayers assignment doesn't branch on
+    // `PlayerModelSource` at all — see `capabilities/camera.rs`).
+    let split_slot_count = app.world_mut().query::<&SplitViewportSlot>().iter(app.world()).count();
+    assert_eq!(split_slot_count, 2, "a mixed GLB+primitive pair must still get one split camera per player");
+
+    let mut indices: Vec<u32> = {
+        let mut q = app.world_mut().query::<&PlayerIndex>();
+        q.iter(app.world()).map(|i| i.0).collect()
+    };
+    indices.sort();
+    assert_eq!(indices, vec![0, 1], "GLB and primitive players must each get their own prefab's player_index");
+
+    let mut mana_values: Vec<f32> = {
+        let mut q = app.world_mut().query::<&StatMap>();
+        q.iter(app.world()).map(|sm| sm.0.get("mana").unwrap().current).collect()
+    };
+    mana_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(
+        mana_values, vec![60.0, 100.0],
+        "GLB and primitive players must each get an independent StatMap, regardless of model source"
+    );
+
+    // player_model_source_unification.md v2's Friction reconciliation: both players must now
+    // carry the same low-friction collider (previously primitive-only, and previously 0.0 —
+    // raised to 0.15 after a real hillside playtest on quick_scene showed visible downhill creep
+    // at 0.0). Asserted per PlayerIndex, not just a world-wide count — a count alone would pass
+    // identically for two primitive players and wouldn't actually pin that the *GLB* player
+    // (index 0) gained it.
+    let mut friction_by_index: Vec<(u32, f32)> = {
+        let mut q = app.world_mut().query::<(&PlayerIndex, &Friction)>();
+        q.iter(app.world()).map(|(idx, f)| (idx.0, f.coefficient)).collect()
+    };
+    friction_by_index.sort_by_key(|(idx, _)| *idx);
+    assert_eq!(
+        friction_by_index,
+        vec![(0, 0.15), (1, 0.15)],
+        "both the GLB player (index 0) and the primitive player (index 1) must carry the same \
+         0.15-coefficient Friction component after v2 — previously only the primitive player had \
+         any Friction at all, at 0.0"
+    );
+    let combine_rules_ok = {
+        let mut q = app.world_mut().query::<&Friction>();
+        q.iter(app.world()).all(|f| matches!(f.combine_rule, CoefficientCombineRule::Min))
+    };
+    assert!(combine_rules_ok, "every player's Friction must use CoefficientCombineRule::Min");
+}
+
 #[test]
 fn test_terrain_scene_skips_primitive_player_with_no_crash() {
     let mut app = setup_test_app();

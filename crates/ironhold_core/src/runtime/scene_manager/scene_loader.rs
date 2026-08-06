@@ -198,7 +198,7 @@ pub fn spawn_scene_v2(
         // One entry per `tags: ["player"]` prefab in the scene (GLB or primitive, for the
         // non-terrain case) — supports local co-op (2+ players) with no structural cap on
         // either model source. See
-        // `planning/features/done/player_model_source_unification.md`.
+        // `planning/features/player_model_source_unification.md`.
         let mut player_configs: Vec<PlayerConfig> = Vec::new();
         let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
         for entity_def in &scene.entities {
@@ -277,7 +277,7 @@ pub fn spawn_scene_v2(
                 // ── Primitive player: fold into the same `player_configs` flow the GLB
                 // collector uses, via `assemble_player_config` — removes the old single-
                 // primitive-player structural cap (see
-                // `planning/features/done/player_model_source_unification.md`). Only for the
+                // `planning/features/player_model_source_unification.md`). Only for the
                 // non-terrain case in v1; terrain-deferred primitive-player spawn is a distinct,
                 // deferred resource-architecture problem (v3), not a v1 regression — a primitive
                 // player in a terrain scene simply doesn't spawn yet, with a clear warning
@@ -729,15 +729,6 @@ pub fn spawn_scene_v2(
             }
         }
 
-        if !load_errors.is_empty() {
-            error!(
-                "Scene '{}' — {} problem(s) found during load:\n  - {}",
-                scene.name,
-                load_errors.len(),
-                load_errors.join("\n  - ")
-            );
-        }
-
         let tonemapping = scene.tonemapping.to_bevy();
         commands.insert_resource(crate::runtime::scene_manager::ActiveTonemapping(tonemapping));
         commands.insert_resource(crate::runtime::scene_manager::LoadedLabelDepthScale(scene.label_depth_scale.clone()));
@@ -762,7 +753,7 @@ pub fn spawn_scene_v2(
         // Spawn player(s) (delayed if terrain present), flycam, or fallback camera. GLB and
         // primitive players share this one path — `spawn_players_and_camera` dispatches body
         // construction per player via `PlayerConfig.model_source`. See
-        // `planning/features/done/player_model_source_unification.md`.
+        // `planning/features/player_model_source_unification.md`.
         if !player_configs.is_empty() {
             if scene.terrain.is_some() {
                 info!("Terrain detected. Delaying player spawn...");
@@ -853,6 +844,19 @@ pub fn spawn_scene_v2(
                 Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
                 LevelEntity,
             ));
+        }
+
+        // Moved below the player-spawn block above (was previously logged before
+        // `spawn_players_and_camera` ran, so any errors that call added via `primitive_ctx`'s
+        // `load_errors` — e.g. an unresolvable nested prefab in a primitive player's `children:`
+        // — were silently dropped; found during `player_model_source_unification.md` v2 review).
+        if !load_errors.is_empty() {
+            error!(
+                "Scene '{}' — {} problem(s) found during load:\n  - {}",
+                scene.name,
+                load_errors.len(),
+                load_errors.join("\n  - ")
+            );
         }
 
         // Spawn Terrain

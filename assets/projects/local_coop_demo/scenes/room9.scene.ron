@@ -109,6 +109,19 @@
       label: (text: "Room 8", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // room9 -> room10 (player_model_source_unification.md v2 playtest aid: mixed GLB + primitive
+    // player pairing). See prefabs.ron's "portal_to_room10" comment.
+    (
+      id: "portal_to_room10",
+      prefab: "portal_to_room10",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 10 (mixed player models)", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   ui: [
@@ -124,10 +137,21 @@
       position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),
+    // Moved up to sit right below room_hint (ux-gamedesigner-reviewer review: a player scanning
+    // for "where do I go next" should see both of this room's exits together, not have the
+    // second one buried after 3 unrelated lines) — its own sibling line rather than an extension
+    // of room_hint above, for the same ~59-char clipping-budget reason ring_hint/tint_hint below
+    // already are.
+    Label((
+      id: "room10_exit_hint",
+      text: "Steel portal -> room 10 (mixed primitive + GLB player pairing)",
+      position: (20.0, 108.0),
+      size: (900.0, 32.0),
+    )),
     Label((
       id: "targeting_hint",
       text: "Target: P1=T P2=M | Click a sphere to select",
-      position: (20.0, 108.0),
+      position: (20.0, 152.0),
       size: (900.0, 32.0),
     )),
     // Kept as its own line (rather than folded into targeting_hint) to stay under this box's
@@ -137,7 +161,7 @@
     Label((
       id: "ring_hint",
       text: "Each ring shows ONLY in its own player's half (room3 shows both)",
-      position: (20.0, 152.0),
+      position: (20.0, 196.0),
       size: (900.0, 32.0),
     )),
     // Same tint note as room3 — own_viewport_only restricts WHERE a ring renders, not its color;
@@ -146,7 +170,7 @@
     Label((
       id: "tint_hint",
       text: "Rings still tint by colour (P1 blue, P2 pink) — only WHERE they show changed",
-      position: (20.0, 196.0),
+      position: (20.0, 240.0),
       size: (900.0, 32.0),
     )),
     ActionBar((

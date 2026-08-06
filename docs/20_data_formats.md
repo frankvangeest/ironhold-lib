@@ -1889,11 +1889,13 @@ A prefab with `components.tags: ["player"]` spawns a third-person character cont
 
 **Which top-level `PrefabDef` fields take effect on a `tags: ["player"]` prefab** (same for `kind: "actor"` and `kind: "primitive"`, except where noted):
 
-- **Work:** `player_index` (split-screen "P{n}" HUD label, per-player targeting's primary-player check, `ActionBar.owner_player` matching), `material` (visual override, applies after the body is built regardless of model source), `stat_templates` (per-player `StatMap`, see "Per-player stat pools" below), `stat_label`/`world_stat_bar` (floating widgets bound to `{self}.<stat>`).
+- **Work:** `player_index` (split-screen "P{n}" HUD label, per-player targeting's primary-player check, `ActionBar.owner_player` matching), `material` (visual override, applies after the body is built regardless of model source — **note:** it replaces the material on *every* mesh under the player, including any `children:` parts, so combining `material:` with `children:` flattens all of them to one uniform tone; give the composed parts their own distinct look via each child's own `primitive.color`/`roughness`/`metallic` instead, and put the body's own tone on the top-level `primitive.color` rather than a `material:` key), `stat_templates` (per-player `StatMap`, see "Per-player stat pools" below), `stat_label`/`world_stat_bar` (floating widgets bound to `{self}.<stat>`), `children` (cosmetic composed-body parts on a `kind: "primitive"` player — the physics capsule still comes entirely from `primitive.radius`/`primitive.height`, unaffected by `children`; a child with `physics: true` or `sensor: true` is rejected with a load-time error and skipped rather than spawned, since it would conflict with the player's own `RigidBody`).
 - **Still silently no-op regardless of `kind`:** `behavior`, `interactable`, `dialogue`, `inventory`, `trigger_zone` — none of these are wired onto either player spawn path; this is a deliberate scope boundary (a player is input-driven, not state-machine-driven like an NPC), not a bug, and not blocked on anything above.
-- **`kind: "primitive"` only, not yet supported at all:** a primitive-shaped player prefab combined with `scene.terrain: Some(...)` (validate error + runtime warning, not silent), or referenced from a character-select `Action::Spawn` call (runtime warning, not silent) — only a scene placed directly in a scene's `entities:` list spawns a primitive player today.
+- **`kind: "primitive"` only, not yet supported at all:** a primitive-shaped player prefab combined with `scene.terrain: Some(...)` (validate error + runtime warning, not silent), referenced from a character-select `Action::Spawn` call (runtime warning, not silent), or listed in a scene's `join_prefab_keys` for gamepad/keyboard hot-join (runtime warning, not silent — hot-join only supports GLB/`Actor`-kind players as of this writing) — only a scene placed directly in a scene's `entities:` list spawns a primitive player today.
 
-See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`prefabs/prefabs.ron`) and `scenes/room7.scene.ron` for a complete working example — two primitive-shaped players in one split-screen scene, each with its own tint, mana pool, and overhead bar. Mana there is decorative (nothing spends it, so both bars stay full) — see room3's per-player action bars for a primitive-free example of a live, spendable per-player pool.
+Both player model sources now get the same collider `Friction` (`combine_rule: Min` to still avoid catching hard on cube/step edges) — previously primitive-only, a GLB player's capsule sat at Rapier's default 0.5/`Average` friction. The coefficient is `0.15`, not `0.0` — a real hillside playtest (`quick_scene`) with `0.0` showed a visible, permanent downhill creep for an idle player on sloped terrain; `0.15` holds a slope while still avoiding noticeable edge-catching. No separate friction field exists on `MovementConfig` — this is a fixed engine value, not per-prefab-authorable (see the backlog for a possible future physics-material field).
+
+See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`prefabs/prefabs.ron`) and `scenes/room7.scene.ron` for a minimal working example — two bare-capsule primitive-shaped players in one split-screen scene, each with its own tint, mana pool, and overhead bar (mana there is decorative; nothing spends it, so both bars stay full). For a **mixed** pairing — one GLB player and one composed-multi-part-body primitive player side by side, sharing per-player targeting, a live spendable action-bar mana pool, and own-viewport-only target rings — see `scenes/room10.scene.ron` and its `player_p2_primitive_split_ring` prefab.
 
 **`InputMap` fields** (`components.inputs` — omit the entire block to use WASD defaults):
 
@@ -2053,7 +2055,7 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `double_jump_height` | `Option<JumpConfig>` | same as `jump` | Second-jump height |
 | `collider_radius` | `Option<f32>` | `0.4` | Capsule collider radius (**GLB players only** — primitive players use `primitive.radius`) |
 | `collider_height` | `Option<f32>` | `1.8` | Capsule total height (**GLB players only** — primitive players use `primitive.height`) |
-| `idle_drag` | `f32` | `0.8` | Velocity decay multiplier on the XZ plane per physics tick when no input is given (0 = instant stop, 1 = no friction) |
+| `idle_drag` | `f32` | `0.8` | Velocity decay multiplier on the XZ plane per physics tick when no input is given (0 = instant stop, 1 = no friction). The player collider's own `Friction` (fixed at `0.15` for every player regardless of model source, not per-prefab-authorable) is the primary defense against downhill creep on sloped terrain; lowering `idle_drag` further bounds any residual creep but cannot zero it on its own. Applies in the air as well as on the ground (no grounded check) — a very low value also cancels horizontal momentum immediately after releasing input mid-jump |
 | `linear_damping` | `f32` | `0.5` | Rapier `linear_damping` on the player capsule rigid body |
 | `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the player capsule rigid body |
 | `ground_cast_length` | `f32` | `0.3` | Distance (metres) the ground-detection sphere is swept downward each frame — increase for uneven terrain or fast vertical movement |
@@ -2355,7 +2357,9 @@ field: it's simply never read, no warning is logged, and this is a documented no
 ```
 
 A full working example lives in `assets/projects/local_coop_demo/` — see `prefabs/prefabs.ron`
-(`player_p1_split_ring`/`player_p2_split_ring`) and `scenes/room9.scene.ron`.
+(`player_p1_split_ring`/`player_p2_split_ring`) and `scenes/room9.scene.ron`. For the same
+`own_viewport_only` setup with a primitive-bodied P2 instead, see `scenes/room10.scene.ron` and
+its `player_p2_primitive_split_ring` prefab.
 
 ### Dynamic split-screen (`DynamicSplitDef`) ✅
 

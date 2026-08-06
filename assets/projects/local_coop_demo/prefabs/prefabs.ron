@@ -1272,5 +1272,164 @@
       ),
     ),
 
+    // player_model_source_unification.md v2 — room10's ground. Steel/silver-blue tone: every
+    // prior room's blue/amber/teal/rose/gold/green/violet/crimson is already claimed, and it
+    // matches the composed primitive P2's own steel identity below.
+    "ground_room10": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.20, 0.22, 0.28),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // room9 -> room10 (player_model_source_unification.md v2 playtest aid: mixed GLB + primitive
+    // player pairing). The return trip reuses the existing "portal_to_room9" prefab (see its
+    // comment above) — same event name ("entity.entered:portal_to_room9"), same rules.ron entry,
+    // no new prefab needed, same trick every prior stage used.
+    "portal_to_room10": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.14, 0.16, 0.20), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.14, 0.16, 0.20), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.10, 0.11, 0.14), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.60, 0.70), roughness: 0.05, metallic: 0.40), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // Friction-comparison playtest aid (player_model_source_unification.md v2) — a physics-solid
+    // cube both players can walk past/graze the edge of, after the primitive-only zero-Friction
+    // guard was removed so GLB and primitive players now get identical collider friction. Placed
+    // twice in room10.scene.ron (once per player's approach path) via distinct entity ids sharing
+    // this one prefab.
+    "cube_obstacle_room10": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (1.2, 1.2, 1.2),
+        color: (0.42, 0.45, 0.52),
+        roughness: 0.55,
+        metallic: 0.2,
+        physics: true,
+      ),
+    ),
+
+    // player_model_source_unification.md v2's primitive-bodied P2 for room10 — mirrors
+    // player_p2_split_ring's input wiring exactly (gamepad_index: 1, KeyM/Comma/Period,
+    // Arrows+Enter+RShift, own_viewport_only inherited from P1's camera.split block since only
+    // the first player's block is read) so the two prefabs differ ONLY in body construction,
+    // proving room10's "same targeting, same action bar, same per-player mana — only the body
+    // differs" claim rather than asserting it. walk_speed/run_speed match player_p2_split_ring's
+    // values (not player_p2_primitive's faster 5.5/10.0) for the same reason — a deliberate
+    // parity choice, not an oversight.
+    //
+    // Composed multi-part body (ux-gamedesigner-reviewer, 2026-08-01 plan-review): a bare capsule
+    // beside a rigged GLB humanoid would read as "programmer placeholder next to the real
+    // character." The `children:` below are cosmetic only — the physics capsule still comes
+    // entirely from `primitive.radius`/`primitive.height` below; this is also the first shipped
+    // player prefab anywhere in this repo to use `children:` at all.
+    //
+    // No top-level `material:` here (fixed post-review — alignment-reviewer and wasm-perf-reviewer
+    // independently caught the same bug): `apply_material_overrides` walks every `Mesh3d`
+    // descendant of the player root, so a `material:` override would have flattened the torso
+    // AND all 3 composed children to one uniform tone, silently defeating the "lighter chrome
+    // head, darker steel shoulders" contrast authored below. The torso's own steel tone lives in
+    // `primitive.color` instead, alongside the children's own distinct colors.
+    "player_p2_primitive_split_ring": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      display_name: "Player 2 (primitive)",
+      player_index: 1,
+      stat_templates: [
+        (
+          key: "mana",
+          base: 60.0,
+          min: 0.0,
+          max: 60.0,
+          regen_rate: 3.0,
+          regen_delay: 1.0,
+        ),
+      ],
+      world_stat_bar: (
+        stat_key: "{self}.mana",
+        // 2.8, not player_p2_primitive's 2.3 — this body is taller with the composed head on
+        // top (debug-detective review: 2.3 was copied from the bare-capsule prefab and sat too
+        // close to this body's head). Matches player_p2_split_ring's own 2.8 for visual parity.
+        offset: (0.0, 2.8, 0.0),
+        fill_color: (0.95, 0.35, 0.55, 0.95),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
+      components: (
+        tags: ["player"],
+        // No `split`/`party` here — only the first player's (player_p1_split_ring's) camera
+        // block is read for those, same as player_p2_split_ring.
+        camera: (
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+        ),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+          gamepad_index: 1,  // one-time seed, locks to a controller once resolved — see
+          // player_p1_split's inputs comment.
+          target_next: "KeyM",
+          look_left:  "Comma",
+          look_right: "Period",
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+      primitive: (
+        radius: 0.4,
+        height: 1.8,
+        color: (0.58, 0.61, 0.66),
+        roughness: 0.35,
+        metallic: 0.6,
+      ),
+      // Offsets below are absolute, tuned against THIS prefab's own `radius: 0.4`/`height: 1.8`
+      // above (capsule top sits at y=1.8) — they are not derived from those values. Copying this
+      // prefab and changing `radius`/`height` requires re-tuning every offset by hand (debug-
+      // detective review, 2026-08-06 confirmation pass).
+      children: [
+        // Head — lighter chrome tone than the torso for visual separation. y: 1.90 (not the
+        // capsule top's 1.8 + half-height 0.17 = 1.97) so the head's underside sits inside the
+        // capsule's rounded top rather than floating above it with a visible gap.
+        ( shape: Cuboid, primitive: (size: (0.34, 0.34, 0.34), color: (0.75, 0.77, 0.80), roughness: 0.25, metallic: 0.7), offset: (0.0, 1.90, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Visor — the only asymmetric part of this body, so it's the sole visual cue for which
+        // way P2 is facing (the camera sits at +Z per this prefab's own `camera.offset`, so -Z is
+        // forward). Without this, an idle composed body of only symmetric shapes has no facing
+        // tell at all, unlike the rigged GLB player (ux-gamedesigner-reviewer finding).
+        ( shape: Cuboid, primitive: (size: (0.26, 0.08, 0.06), color: (0.15, 0.55, 0.75), roughness: 0.2, metallic: 0.8), offset: (0.0, 1.90, -0.19), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        // Shoulder plates — darker steel, laid horizontal via a 90-degree Z rotation.
+        ( shape: Cylinder, primitive: (radius: 0.14, height: 0.36, color: (0.35, 0.37, 0.42), roughness: 0.4, metallic: 0.55), offset: (-0.42, 1.55, 0.0), rotation_euler_deg: (0.0, 0.0, 90.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.14, height: 0.36, color: (0.35, 0.37, 0.42), roughness: 0.4, metallic: 0.55), offset: ( 0.42, 1.55, 0.0), rotation_euler_deg: (0.0, 0.0, 90.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
   }
 )

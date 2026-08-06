@@ -1,0 +1,241 @@
+(
+  schema_version: 2,
+  name: "room10",
+
+  // player_model_source_unification.md v2 playtest aid: room9's own-viewport-only ring setup
+  // (player_p1_split_ring / player_p2_split_ring), except P2's body is now
+  // player_p2_primitive_split_ring — a composed steel/silver primitive body with the exact same
+  // input wiring as player_p2_split_ring. Proves a primitive-bodied player participates in every
+  // per-player mechanic (targeting, own-viewport ring, action bar, mana pool) exactly like a GLB
+  // player does — only the body construction differs.
+  show_nameplates: true,
+  nameplate_options: (
+    faction_filter: All,
+    // Explicitly on (defaults to false, independent of show_nameplates/faction_filter, which
+    // govern NPCs/props only) — this room's whole point is telling the two bodies apart, so each
+    // player's own display_name ("Player 1" / "Player 2 (primitive)") should actually render
+    // (ux-gamedesigner-reviewer finding).
+    show_player_nameplate: true,
+  ),
+
+  target_indicator: (
+    texture: "target_ring",
+    radius: 0.8,
+  ),
+  target_hud: (
+    show: Full,
+  ),
+
+  tonemapping: AcesFitted,
+
+  // Steel/silver-blue tone, matching the steel portal_to_room10 accent and ground_room10 — see
+  // prefabs.ron's ground_room10 comment for why this color identity was picked.
+  lighting: (
+    ambient: (0.18, 0.19, 0.24),
+    ambient_brightness: 220.0,
+    directional: (
+      color: (0.88, 0.90, 0.96),
+      intensity: 28000.0,
+      rotation_euler_deg: (-42.0, 30.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_1_start": (-4.0, 0.5, 0.0),
+    "player_2_start": (4.0, 0.5, 0.0),
+  },
+
+  // Same shape as the other rooms' clamp. Tuple order is (min_x, min_z, max_x, max_z).
+  max_view_box: (-20.0, -20.0, 20.0, 20.0),
+
+  entities: [
+
+    (
+      id: "ground",
+      prefab: "ground_room10",
+      transform: (
+        translation: (0.0, -0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // player_p1_split_ring MUST be first — its `camera.split` block (own_viewport_only: true) is
+    // the sole switch for both vertical split-screen AND the per-viewport ring restriction. GLB
+    // half: reused verbatim from room9, zero changes.
+    (
+      id: "player_01",
+      prefab: "player_p1_split_ring",
+      transform: (
+        translation: (-4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Primitive half — same targeting/gamepad/look wiring as player_p2_split_ring, different
+    // body construction only. See prefabs.ron's comment for the parity reasoning.
+    (
+      id: "player_02",
+      prefab: "player_p2_primitive_split_ring",
+      transform: (
+        translation: (4.0, 0.5, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // One click target per viewport, same as room9, so each player can select a DIFFERENT target
+    // and confirm their own action bar / mana pool / ring behave identically regardless of body.
+    (
+      id: "click_target_left",
+      prefab: "click_target_test",
+      transform: (
+        translation: (-4.0, 1.5, -6.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "click_target_right",
+      prefab: "click_target_test",
+      transform: (
+        translation: (4.0, 1.5, -6.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Friction comparison (player_model_source_unification.md v2) — one cube per player's path
+    // to the click target. Offset 0.7 units toward center from each player's straight walking
+    // lane (not centered on it, which would just block the path head-on) so a 0.4-radius capsule
+    // grazes the cube's edge in passing — debug-detective review found the original dead-center
+    // placement caused a detour instead of an edge graze. Since the primitive-only Friction guard
+    // was removed (both bodies now share the same 0.15 coefficient — see entity_spawner.rs; raised
+    // from an initial 0.0 after a real quick_scene hillside playtest showed downhill creep), both
+    // bodies should behave identically here (neither catches nor sticks differently from the other).
+    (
+      id: "cube_obstacle_left",
+      prefab: "cube_obstacle_room10",
+      transform: (
+        translation: (-3.3, 0.6, -1.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "cube_obstacle_right",
+      prefab: "cube_obstacle_room10",
+      transform: (
+        translation: (3.3, 0.6, -1.5),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // Return trip reuses the "portal_to_room9" prefab (see prefabs.ron comment) — same event
+    // name as room9's forward portal, same rules.ron entry, no new prefab needed.
+    (
+      id: "portal_to_room9",
+      prefab: "portal_to_room9",
+      transform: (
+        translation: (0.0, 0.0, -15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 9", offset: (0.0, 4.0, 0.0)),
+    ),
+
+  ],
+
+  ui: [
+    Label((
+      id: "room_hint",
+      text: "Room 10: mixed player bodies (P1 = GLB, P2 = primitive) | Red portal -> room 9",
+      position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+    // Trimmed to 71 chars (ux-gamedesigner-reviewer review: room8's 82-char room_hint is the
+    // longest verified-safe line in this project; the original 88-char draft risked clipping).
+    // Includes a short gamepad connect-order note: BoundGamepad (gamepad_player_binding_
+    // hardening.md) locks each player's pad the first time it's seen matching that player's
+    // gamepad_index seed, so on a real dual-controller playtest, connect P1's pad before P2's
+    // to match which seed (0 vs 1) each player was authored with.
+    Label((
+      id: "controls_hint",
+      text: "P1: WASD+Space+Shift | P2: Arrows+Enter+RShift | Pads: connect P1 first",
+      position: (20.0, 64.0),
+      size: (900.0, 32.0),
+    )),
+    // Reworded (ux-gamedesigner-reviewer review) — "same mana" read as "equal mana", but P1 has
+    // 100 and P2 has 60 (deliberate, matching player_p1_split_ring/player_p2_split_ring). "own
+    // private mana pool" is the actual claim: independent pools that work the same way, not
+    // equal-sized ones.
+    Label((
+      id: "parity_hint",
+      text: "Targeting, action bar, and own private mana pool - only the body differs",
+      position: (20.0, 108.0),
+      size: (900.0, 32.0),
+    )),
+    // Trimmed to 73 chars, same clipping-budget reason as controls_hint above.
+    Label((
+      id: "targeting_hint",
+      text: "Target: P1=T P2=M | Click a sphere | Each ring shows only in its own half",
+      position: (20.0, 152.0),
+      size: (900.0, 32.0),
+    )),
+    // Animation-gap hint (ux-gamedesigner-reviewer, 2026-08-01 plan-review): no primitive player
+    // has an animation_policy, so P2 slides instead of walking. Named up front so it reads as an
+    // acknowledged limitation, not evidence against this room's "everything works the same" claim.
+    Label((
+      id: "animation_gap_hint",
+      text: "P2 has no rig, so it slides instead of walking - the only real difference",
+      position: (20.0, 196.0),
+      size: (900.0, 32.0),
+    )),
+    ActionBar((
+      id: "action_bar_p1",
+      owner_player: 0,
+      position: (200.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyG",
+          key_hint: "P1",
+          gamepad_key: "RightTrigger",  // pairs with player_p1_split_ring's gamepad_index: 0
+          // (prefabs/prefabs.ron) — same pairing room3/room9's action_bar_p1 uses. Not "South" —
+          // that's this player's gamepad_jump default (schema/player.rs).
+          cost: (stat: "mana", amount: 20.0),
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
+    ActionBar((
+      id: "action_bar_p2",
+      owner_player: 1,
+      position: (900.0, 560.0),
+      slot_size: 56.0,
+      background_color: (0.05, 0.05, 0.08, 0.85),
+      slots: [
+        (
+          key: "KeyL",
+          key_hint: "P2",
+          gamepad_key: "RightTrigger",  // pairs with player_p2_primitive_split_ring's
+          // gamepad_index: 1 (prefabs/prefabs.ron) — same pairing room3/room9's action_bar_p2
+          // uses. Proves gamepad_key_without_gamepad_index validation is satisfied for a
+          // primitive player prefab, not just a GLB one.
+          cost: (stat: "mana", amount: 20.0),
+          do_actions: [
+            ModifyStat(key: "{target}.health", delta: -10.0),
+            ShowDamagePopup(entity: "{target}", amount: -10.0),
+          ],
+        ),
+      ],
+    )),
+  ],
+)

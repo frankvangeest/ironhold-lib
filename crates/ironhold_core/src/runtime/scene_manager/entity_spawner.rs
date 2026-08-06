@@ -846,7 +846,7 @@ pub(crate) fn spawn_players_and_camera(
 /// mesh/material asset access, the built-materials memo, cosmetic-children resolution, and
 /// error collection. `None` at every caller except the immediate (non-terrain) scene-load path,
 /// which is the only one with these resources in scope — see the resource-threading note in
-/// `planning/features/done/player_model_source_unification.md`. If `spawn_player_entity_core`
+/// `planning/features/player_model_source_unification.md`. If `spawn_player_entity_core`
 /// ever receives a `Primitive` `model_source` with no ctx, that's a v1-scope violation (only the
 /// scene-load path builds `Primitive` configs at all) and it panics rather than silently
 /// constructing a broken player.
@@ -919,8 +919,33 @@ fn spawn_player_entity_core(
 
             // Cosmetic children (cap, eyes, nose, etc.) defined in the prefab. Offsets are
             // relative to the entity origin (feet), matching every other primitive prefab.
+            //
+            // `physics`/`sensor` children are rejected here, not passed through: on a non-player
+            // composite prefab those flags attach a *second* Rapier collider to the shared parent
+            // and (for `physics`) push `RigidBody::Fixed` onto it — fine for a static prop, but on
+            // a player that Fixed insert would race the shared section's `RigidBody::Dynamic`
+            // insert below and can silently freeze the player solid depending on command order.
+            // Found during `player_model_source_unification.md` v2 review — `children:` on a
+            // player prefab is new as of this feature, so nothing has copied a physics child onto
+            // one yet, but room10's prefab is the reference example designers will copy from.
+            let safe_children: Vec<crate::schema::catalog::ChildPrimitiveDef> = children.iter()
+                .filter(|c| {
+                    if c.primitive.physics || c.primitive.sensor {
+                        ctx.load_errors.push(format!(
+                            "player '{}': a `children:` entry has `physics`/`sensor: true` — not \
+                             supported on a player prefab (it would conflict with the player's own \
+                             RigidBody). Skipping this child; remove `physics`/`sensor` from it.",
+                            player_config.spawn_id
+                        ));
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .cloned()
+                .collect();
             spawn_primitive_children(
-                commands, player_entity, children, ctx.prefab_catalog, &mut ctx.child_ctx,
+                commands, player_entity, &safe_children, ctx.prefab_catalog, &mut ctx.child_ctx,
                 ctx.load_errors, &player_config.spawn_id, 0, &mut HashSet::new(),
                 Transform::IDENTITY,
             );
@@ -976,16 +1001,20 @@ fn spawn_player_entity_core(
         Damping { linear_damping: mv.linear_damping, angular_damping: mv.angular_damping },
         Velocity::default(),
         ExternalImpulse::default(),
+        // Low, non-zero friction (not the primitive-only path's old 0.0) — `Min` still keeps a
+        // capsule from catching hard on cube/step edges, but 0.0 let a real hillside playtest
+        // (`player_model_source_unification.md` v2, `quick_scene`) show a visible, permanent
+        // downhill creep for an idle player: movement writes `velocity.linvel` directly each
+        // tick, so friction was never doing much *while moving*, but an idle body on a slope has
+        // nothing but `idle_drag` (`MovementConfig`) opposing gravity's tangential component, and
+        // `idle_drag` only bounds that creep asymptotically — it can't zero it, and pushing it low
+        // enough to matter also cancels horizontal air momentum right after releasing input
+        // mid-jump (same multiply runs in `capabilities/player.rs` with no grounded gate). `0.15`
+        // is a real, if modest, static-friction coefficient the physics solver applies against
+        // gravity directly, confirmed via playtest to hold a slope without noticeably reintroducing
+        // edge-catching (`Min` still discounts to whichever surface's coefficient is lower).
+        Friction { coefficient: 0.15, combine_rule: CoefficientCombineRule::Min },
     ));
-    // Zero friction prevents the primitive capsule from catching on cube edges — the same
-    // component NPC primitives already get (`entity_spawner.rs`'s NPC spawn path). GLB players
-    // don't get this; the inconsistency is a known, deliberately-deferred v2 item (see the
-    // feature plan's "Friction reconciliation" task), not touched here.
-    if matches!(player_config.model_source, PlayerModelSource::Primitive { .. }) {
-        commands.entity(player_entity).insert(
-            Friction { coefficient: 0.0, combine_rule: CoefficientCombineRule::Min },
-        );
-    }
 
     // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper, so
     // the GLB player is addressable by id like every other entity. Players are never
@@ -1234,7 +1263,7 @@ pub(crate) fn default_input_map() -> InputMap {
 /// Builds a `PlayerConfig` from a `tags: ["player"]` prefab. Single source of truth for the
 /// sites that assemble one by hand: the scene-load GLB/primitive collector (`scene_loader.rs`)
 /// and the dynamic `Action::Spawn` character-select path (`action_executor.rs`, GLB only — see
-/// `planning/features/done/player_model_source_unification.md`'s v1 scope). Adding a new
+/// `planning/features/player_model_source_unification.md`'s v1 scope). Adding a new
 /// `PlayerConfig` field means editing this function once instead of every call site.
 ///
 /// `model_path` is only meaningful for a GLB (`PrefabKind::Actor`/etc.) prefab — callers resolve

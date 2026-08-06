@@ -611,11 +611,24 @@ future `PrefabDef` field meant to affect rendering/visuals must be checked again
 in addition to the generic one** — same class of bug the site inventory above exists to prevent.
 
 **Deliberately NOT unified in v1** (kept as pre-existing behavioral divergence, not a bug):
-collider sizing (GLB derives it from `movement`-config-driven capsule dimensions; primitive derives
-it from the prefab's own `shape`/`params`) and the zero-`Friction` component (primitive players get
-one, preventing catching on cube edges; GLB players don't) — see
-`planning/features/player_model_source_unification.md`'s v2 section for the open question on
-whether to reconcile the latter.
+collider sizing — GLB derives it from `movement`-config-driven capsule dimensions; primitive
+derives it from the prefab's own `shape`/`params`. This divergence is unrelated to Friction (below)
+and stays.
+
+**Unified in v2:** the `Friction` component (`entity_spawner.rs`'s `spawn_player_entity_core`) is
+now inserted unconditionally for every player regardless of `model_source` — previously
+primitive-only, leaving a GLB player's capsule at Rapier's default 0.5/`Average` friction while an
+otherwise-identical primitive player got its own coefficient/`Min`. The coefficient is **`0.15`, not
+`0.0`** — the two-scene playtest (room10 cube-edge + `quick_scene` hillside) that verified this
+found `0.0` eliminated edge-catching but let an idle player creep downhill on sloped terrain
+indefinitely (movement writes `velocity.linvel` directly each tick, so friction was never doing much
+*while moving*; the risk was always specifically the idle case). `0.15` (still `combine_rule: Min`)
+holds a slope while remaining low enough to avoid noticeably reintroducing edge-catching. `idle_drag`
+(`MovementConfig`, `capabilities/player.rs`) bounds any residual creep further but cannot zero it on
+its own (no grounded gate — pushing it very low also cancels air momentum after a jump), so it is a
+secondary tuning knob, not the primary defense. No separate friction field was added to
+`MovementConfig` — `0.15` is a fixed engine constant, not per-prefab-authorable (logged to
+`planning/backlog.md`'s Icebox as a possible future physics-material field).
 
 ### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 

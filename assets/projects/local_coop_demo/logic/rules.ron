@@ -30,6 +30,10 @@
         ( on: "scene.ready:room6", do_actions: [ Log("Local co-op demo room6 ready") ] ),
         ( on: "scene.ready:room7", do_actions: [ Log("Local co-op demo room7 (primitive players) ready") ] ),
         ( on: "scene.ready:room8", do_actions: [ Log("Local co-op demo room8 (hot join) ready") ] ),
+        // These two were missing (room9 predates this fix; room10 is new) — every other room in
+        // this project has its own scene.ready Log rule, so both are added together here.
+        ( on: "scene.ready:room9", do_actions: [ Log("Local co-op demo room9 (own-viewport rings) ready") ] ),
+        ( on: "scene.ready:room10", do_actions: [ Log("Local co-op demo room10 (mixed player models) ready") ] ),
 
         // Hot-join (local_coop_hot_join_leave.md): "G" is bound to the "join" trigger via
         // room8's scene_key_bindings. Action::JoinPlayer itself no-ops (with a warn!) outside a
@@ -50,5 +54,6 @@
         ( on: "entity.entered:portal_to_room7", do_actions: [ LoadScene("scenes/room7.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room8", do_actions: [ LoadScene("scenes/room8.scene.ron") ] ),
         ( on: "entity.entered:portal_to_room9", do_actions: [ LoadScene("scenes/room9.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room10", do_actions: [ LoadScene("scenes/room10.scene.ron") ] ),
     ],
 )

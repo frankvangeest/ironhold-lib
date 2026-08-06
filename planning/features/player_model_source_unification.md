@@ -375,6 +375,17 @@ non-zero Friction constant does turn out to be necessary, consider promoting it 
 default-friction-for-GLB behavior) rather than a bare hardcoded Rust constant, so it's consistent
 with every other per-prefab movement knob and doesn't reintroduce a designer-unreachable value.
 
+**Resolved by real playtest (2026-08-06, Frank).** Both scenes were tested with `Friction {
+coefficient: 0.0 }`: room10's cube-edge comparison was clean (no catching), but `quick_scene`'s
+hillside showed real, confirmed downhill creep — the risk this section's risk assessment predicted,
+not a hypothetical. Fixed via the **low, non-zero coefficient** option (`0.15`, `combine_rule:
+Min`), applied uniformly to every player regardless of `model_source` — **not** by tuning
+`idle_drag`, since `idle_drag` only asymptotically bounds creep rather than eliminating it, and
+lowering it far enough to matter also cancels horizontal air momentum right after releasing input
+mid-jump (no grounded gate). No `MovementConfig.friction` field was added — `0.15` is a fixed engine
+constant for now (logged to `planning/backlog.md`'s Icebox as a possible future physics-material
+field, since nothing has asked for per-prefab friction tuning yet).
+
 ### v3 — resource promotion for terrain-deferred and dynamic-spawn primitive players
 
 The harder, structurally distinct follow-on flagged by system-architect: promote whatever
@@ -560,6 +571,7 @@ explicit and diagnosable rather than a silent gap.
   type catches or sticks differently from the other (**browser-observable** — the cube-edge half of
   the Friction comparison).
 - Given a GLB player standing idle on `quick_scene`'s sloped terrain, when the Friction change
-  ships (in whichever direction the two-scene playtest supports), then they do not creep downhill
-  (**browser-observable regression check** — the terrain half of the Friction comparison, and the
-  one the original v2 draft didn't test for).
+  ships at its resolved coefficient (`0.15`, not the initially-tried `0.0`), then they do not creep
+  downhill (**browser-observable regression check, confirmed 2026-08-06** — the terrain half of the
+  Friction comparison, and the one the original v2 draft didn't test for. `0.0` failed this exact
+  check on first playtest; `0.15` was the fix).

@@ -8,7 +8,7 @@ use crate::schema::catalog::MovementConfig;
 /// Where a player's visual body + physics collider come from. Dispatched on by
 /// `spawn_player_entity_core` for body construction only — every other player-construction
 /// concern (`PlayerIndex`, `StatMap`, material override, nameplate, stat widgets) is shared
-/// unconditionally by both variants. See `planning/features/done/player_model_source_unification.md`.
+/// unconditionally by both variants. See `planning/features/player_model_source_unification.md`.
 #[derive(Debug, Clone)]
 pub enum PlayerModelSource {
     /// A GLB model, resolved from the asset catalog. The `#`-fragment (if any) is the scene
