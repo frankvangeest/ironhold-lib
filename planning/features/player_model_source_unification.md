@@ -1,7 +1,6 @@
 # Feature: Player Model Source Unification ("multiplayer with 1")
 
-_Status: In Progress (v1 Done 2026-07-19, v2 Ready — confirmation pass complete 2026-08-06, v3
-Queued)_
+_Status: In Progress (v1 Done 2026-07-19, v2 Done 2026-08-07, v3 Queued)_
 _Planned at: `6e38aa1` (2026-07-17)_
 _v2 fleshed out at: `1fcef14` (2026-07-31) — moved back from `features/done/` per the multi-phase
 convention in `planning/CLAUDE.md` (only the final phase's completion moves a multi-phase file to
@@ -50,7 +49,7 @@ contents) while incorporating both reviews, ahead of cutting the `feature/{slug}
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | `PlayerModelSource` enum — collapse the primitive/capsule player path into `spawn_player_entity_core`, scoped to the immediate scene-load path | Done | 2026-07-19 |
-| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Revised — recommend confirmation pass | — |
+| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Done | `7340eaf` (2026-08-07) |
 | v3 | Resource promotion so primitive players also work via terrain-deferred spawn and character-select dynamic spawn | Queued | — |
 
 ## What
