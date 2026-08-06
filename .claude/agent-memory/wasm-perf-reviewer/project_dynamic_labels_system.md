@@ -5,7 +5,9 @@ metadata:
   type: project
 ---
 
-`update_dynamic_labels_system` in `crates/ironhold_core/src/lib.rs` (~line 235) runs every Update with no gate.
+`update_dynamic_labels_system` in `crates/ironhold_core/src/lib.rs` (~line 337) runs every Update with no gate.
+
+**Scope correction (verified 2026-08-06):** the query is `Query<(&mut Text, &DynamicLabel)>`, and `DynamicLabel` is only inserted when a scene `Label(...)` declares `bind:` (scene_loader.rs ~1461). Static-text scene labels are therefore NOT touched by this system and cost nothing per frame — adding plain hint labels to a scene is free, do not flag it.
 
 **Why:** Drives data-bound HUD labels (incl. new `target_display`/`target_name`/`target_id`). For each `(Text, DynamicLabel)` it computes `new_text` via `fmt.replace("{}", value)` or `value.to_string()`, then writes `*text = Text::new(...)` only if `text.0 != new_text`.
 

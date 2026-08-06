@@ -1,6 +1,6 @@
-- [Player spawn unification](project_player_spawn_unification.md) — GLB+primitive players unified in spawn_player_entity_core via PlayerModelSource; spawn-time-only, zero new deps, no per-frame path; action_executor tag String-alloc nit on error path
+- [Player spawn unification](project_player_spawn_unification.md) — spawn-time-only; v2 universal zero-Friction (net win); `material:` overrides ALL children meshes; spawn_primitive_children never dedups; Rapier TimestepMode::Variable
 - [Targeting capability hot path](project_targeting_capability.md) — click_select/tab_targeting both input-gated; cheap on idle frames; allocations only on click/Tab
-- [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — update_dynamic_labels_system runs unconditionally every frame; builds String per label per frame; render-write guarded by text.0 != new_text
+- [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — String/frame per `bind:`-labels only (DynamicLabel-gated, static scene labels are FREE); render-write guarded by text.0 != new_text
 - [rewrite_target string substitution](project_rewrite_target.md) — runs per action pushed; .replace allocations only when actions fire (not per-frame); canonical copy now in message_interpreter.rs
 - [WASM binary size](project_wasm_size.md) — release ~58 MB (measured 2026-07-06; prior 90.7 MB was stale), warn 95, hard block 100; dev builds ~190 MB (ignore); feature work adds zero deps
 - [Dynamic split-screen system](project_dynamic_split_screen.md) — Stage 5: dynamic_split_screen_system per-frame render-chain; None-config early-return free; per-frame 2-elem Vec alloc when active (nit); 3 cams/scene, max 2 active
