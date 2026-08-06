@@ -1,6 +1,6 @@
 # Feature: Camera Modes
 
-_Status: Ready — confirmation pass complete 2026-08-07_
+_Status: v1 Active — branch `feature/camera-modes-v1` created 2026-08-07_
 _Planned at: `ece80c1` (2026-05-05)_
 _Updated for local-coop/split-screen compatibility: `1fcef14` (2026-07-31); revised again after
 plan-review at `2026-08-01` — 4 blocking questions resolved (see "Local co-op / split-screen
@@ -31,7 +31,7 @@ no camera code._
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Camera mode unification — `ActiveCameraMode` resource, backward-compat mapping | Queued | — |
+| v1 | Camera mode unification — `ActiveCameraMode` component, backward-compat mapping | Active | — |
 | v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Queued | — |
 
 ## What
