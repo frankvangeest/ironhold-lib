@@ -9,7 +9,9 @@
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
-        camera: (
+        // Migrated to `camera_mode:` (planning/features/camera_modes.md v1) — this project is
+        // the v1 migration proof: 3 plain Orbit blocks, no party/split/flycam.
+        camera_mode: Orbit((
           offset:         (0.0, 2.5, 8.0),
           look_at_offset: (0.0, 1.0, 0.0),
           zoom_speed:     8.0,
@@ -18,7 +20,7 @@
           max_radius:     18.0,
           // RMB-only orbit frees LMB for click-to-select targeting.
           orbit_button: "Right",
-        ),
+        )),
         inputs: (
           forward:      "KeyW",
           backward:     "KeyS",
@@ -75,7 +77,7 @@
       ),
       components: (
         tags: ["player"],
-        camera: (
+        camera_mode: Orbit((
           offset:         (0.0, 2.5, 8.0),
           look_at_offset: (0.0, 1.0, 0.0),
           zoom_speed:     8.0,
@@ -83,7 +85,7 @@
           min_radius:     3.0,
           max_radius:     18.0,
           orbit_button: "Right",
-        ),
+        )),
         inputs: (
           forward:      "KeyW",
           backward:     "KeyS",
@@ -123,7 +125,7 @@
       ),
       components: (
         tags: ["player"],
-        camera: (
+        camera_mode: Orbit((
           offset:         (0.0, 2.5, 8.0),
           look_at_offset: (0.0, 1.0, 0.0),
           zoom_speed:     8.0,
@@ -131,7 +133,7 @@
           min_radius:     3.0,
           max_radius:     18.0,
           orbit_button: "Right",
-        ),
+        )),
         inputs: (
           forward:      "KeyW",
           backward:     "KeyS",

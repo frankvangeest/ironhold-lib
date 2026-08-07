@@ -82,7 +82,7 @@
     // this — playtest in a real browser).
     Label((
       id: "controls_hint",
-      text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift",
+      text: "P1: WASD + Space + Shift | P2: Arrows + Enter + Right Shift | C: shake camera",
       position: (20.0, 20.0),
       size: (900.0, 32.0),
     )),

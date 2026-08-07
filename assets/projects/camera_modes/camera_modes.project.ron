@@ -1,0 +1,21 @@
+(
+    schema_version: 2,
+    project_id: "camera_modes",
+    display_name: "Camera Modes",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    rules_path: "logic/rules.ron",
+
+    global_environment: (
+        intensity: 380.0,
+        fallback: (
+            top_color: (0.30, 0.45, 0.70),
+            bottom_color: (0.03, 0.05, 0.03),
+        ),
+    ),
+
+    primitive_default_color: (0.70, 0.68, 0.65),
+)

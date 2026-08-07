@@ -10,7 +10,7 @@
 The `ironhold_core` crate is organized into modular sub-modules to maintain separation of concerns:
 - **`schema/`**: Data types and RON deserialization logic (e.g., `ProjectConfig`, `GameSceneV2`, `AssetCatalog`).
 - **`runtime/`**: Core engine logic, including the Message/Action interpreter and the `SceneManager`.
-- **`capabilities/`**: Reusable gameplay systems: `player`, `camera` (orbit), `flycam`, `animation`, `animation_resolver`, `npc`, `collectible`, `motion`, `custom_material`, `terrain`, `terrain_material`, `physics`, `spin`.
+- **`capabilities/`**: Reusable gameplay systems: `player`, `camera` (unified `ActiveCameraMode` — `Orbit`/`Follow`/`FirstPerson`/`Fixed`/`Flycam`/`Party`, `flycam.rs` owns the `Flycam` mode's movement system specifically), `animation`, `animation_resolver`, `npc`, `collectible`, `motion`, `custom_material`, `terrain`, `terrain_material`, `physics`, `spin`.
 - **`utils.rs`**: Shared utility functions, including asset folder discovery.
 
 ### Assets folder discovery

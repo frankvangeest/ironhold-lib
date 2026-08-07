@@ -167,7 +167,7 @@ pub struct ActiveViewBox(pub Option<(f32, f32, f32, f32)>);
 /// early-exits silently. Populated by `spawn_players_and_camera` (the same function that decides
 /// party vs. split vs. single-camera fallback, so that decision lives in exactly one place);
 /// cleared on full `LoadScene` as a safety net for scenes with 0-1 players that never call it.
-/// Deliberately a resource rather than a field on `SplitViewportSlot`/`OrbitCamera` — keeps
+/// Deliberately a resource rather than a field on `SplitViewportSlot`/`ActiveCameraMode` — keeps
 /// split-screen state out of the camera components so the planned `camera_modes` unification
 /// doesn't have to untangle it later.
 #[derive(Resource, Default)]
@@ -600,8 +600,13 @@ pub struct SceneStateParams<'w, 's> {
     pub transforms: Query<'w, 's, &'static mut Transform>,
     /// Used by `Action::ResetToSpawn` to zero residual velocity after teleport.
     pub npc_velocities: Query<'w, 's, &'static mut bevy_rapier3d::prelude::Velocity>,
-    /// Used by `Action::CameraShake` to insert `CameraShakeState` on the active orbit camera.
-    pub orbit_cameras: Query<'w, 's, Entity, With<crate::capabilities::camera::OrbitCamera>>,
+    /// Used by `Action::CameraShake` to insert `CameraShakeState` on every active orbit/party
+    /// camera. Covers both marker components (not just `OrbitCameraMode`) so a `party:` scene's
+    /// shared camera shakes too — see `capabilities::camera::camera_shake_system`'s own filter.
+    pub orbit_cameras: Query<'w, 's, Entity, Or<(
+        With<crate::capabilities::camera::OrbitCameraMode>,
+        With<crate::capabilities::camera::PartyCameraMode>,
+    )>>,
     /// Cleared on `LoadScene` so stale dialogue state doesn't bleed across scene transitions.
     pub active_dialogue: ResMut<'w, crate::capabilities::dialogue::ActiveDialogue>,
     /// Player inventory — persists across scene loads.

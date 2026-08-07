@@ -2,6 +2,11 @@
     schema_version: 2,
     rules: [
         ( on: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
+        // Temporary camera_modes.md v1 playtest aid (main.scene.ron's scene_key_bindings) —
+        // fires on the shared party camera, verifying CameraShake now covers Party mode too.
+        ( on: "ui.button_pressed:shake_camera", do_actions: [
+            CameraShake(duration_secs: 0.4, intensity: 0.2),
+        ] ),
         // interact_status starts blank so interact_hint (room2.scene.ron) reads "Interact test: "
         // before either player has pressed F near the interact_test_prop box.
         ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready"), SetVariable("interact_status", "") ] ),

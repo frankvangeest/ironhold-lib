@@ -285,11 +285,11 @@ fn test_npc_investigating_hit_refresh_resets_timer() {
 
 #[test]
 fn test_camera_shake_inserts_component_on_orbit_camera() {
-    use ironhold_core::capabilities::camera::{OrbitCamera, CameraShakeState};
+    use ironhold_core::capabilities::camera::{ActiveCameraMode, OrbitState, OrbitCameraMode, CameraTargets, CameraShakeState};
 
     let mut app = setup_test_app();
 
-    // Spawn a stub player so OrbitCamera's target exists.
+    // Spawn a stub player so the camera's CameraTargets can point at it.
     let player = app.world_mut().spawn((
         Transform::default(),
         GlobalTransform::default(),
@@ -297,12 +297,11 @@ fn test_camera_shake_inserts_component_on_orbit_camera() {
         SpeedMultiplier(1.0),
     )).id();
 
-    // Spawn an orbit camera targeting the player.
+    // Spawn an orbit-mode camera targeting the player.
     let camera_entity = app.world_mut().spawn((
         Transform::default(),
         GlobalTransform::default(),
-        OrbitCamera {
-            target: player,
+        ActiveCameraMode::Orbit(OrbitState {
             radius: 5.0,
             offset: bevy::math::Vec3::ZERO,
             zoom_speed: 1.0,
@@ -324,7 +323,9 @@ fn test_camera_shake_inserts_component_on_orbit_camera() {
             look_down_key: None,
             look_speed: 2.0,
             gamepad_deadzone: 0.15,
-        },
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
     )).id();
 
     app.update();
@@ -359,7 +360,7 @@ fn test_camera_shake_no_orbit_camera_is_noop() {
 
 #[test]
 fn test_camera_shake_component_removed_after_expiry() {
-    use ironhold_core::capabilities::camera::{OrbitCamera, CameraShakeState, camera_shake_system};
+    use ironhold_core::capabilities::camera::{ActiveCameraMode, OrbitState, OrbitCameraMode, CameraTargets, CameraShakeState, camera_shake_system};
 
     let mut app = setup_test_app();
 
@@ -373,8 +374,7 @@ fn test_camera_shake_component_removed_after_expiry() {
     let camera_entity = app.world_mut().spawn((
         Transform::default(),
         GlobalTransform::default(),
-        OrbitCamera {
-            target: player,
+        ActiveCameraMode::Orbit(OrbitState {
             radius: 5.0,
             offset: bevy::math::Vec3::ZERO,
             zoom_speed: 1.0,
@@ -396,7 +396,9 @@ fn test_camera_shake_component_removed_after_expiry() {
             look_down_key: None,
             look_speed: 2.0,
             gamepad_deadzone: 0.15,
-        },
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
         // Insert an already-expired shake (remaining <= 0) to trigger removal.
         CameraShakeState {
             remaining: -0.01,

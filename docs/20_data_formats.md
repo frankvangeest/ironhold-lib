@@ -1813,7 +1813,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 
 ### Special tag: `"flycam"` ✅
 
-A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying camera instead of a model. The `model` field is ignored. The engine creates a `Camera3d` + `FlyCamera` component at the entity's transform.
+A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying camera instead of a model. The `model` field is ignored. The engine creates a `Camera3d` + `ActiveCameraMode::Flycam` component (plus a `FlycamCameraMode` marker) at the entity's transform.
 
 **Controls:**
 - **W/S** — forward / back
@@ -2083,12 +2083,15 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. Mutually exclusive with `split` — see below. |
 | `split` | `Option<SplitScreenDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list. When the scene has 2+ players and this is set, the engine gives every player their own real camera, each locked to its own half of the window, instead of one shared camera. See [Split-screen camera](#split-screen-camera-splitscreendef-) below. Mutually exclusive with `party` — see below. |
 | `look_speed` | `f32` | `2.0` | Angular rate (radians/sec) for keyboard-held camera look (`InputMap.look_left`/`look_right`/`look_up`/`look_down`) — roughly a full turn every ~3s at the default. A **separate** dial from `orbit_speed`, which is tuned as a mouse-pixel-delta multiplier and would be far too slow if reused as a keyboard-hold rate. Authored per-player, same as every other `CameraConfig` field. |
+| `fov` | `f32` | `60.0` | Field of view in degrees. Static — applied once at spawn (see [Unified camera modes](#unified-camera-modes-camera_mode-) above); interpolating it during a runtime mode switch is v2 scope. |
 
 > **2+ players without a `party` or `split` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party`/`camera.split` are both unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to a shared or split camera explicitly.
 
 > **`party` and `split` are mutually exclusive.** Both are read only from the first player's `camera` block. If a designer sets both by mistake, the engine logs a warning and `split` wins (treated as the more specific/newer setting) — it does not silently pick one with no signal.
 
-> **`orbit_button: "None"`** — unlike an actually-unrecognized string (which warns and falls back to `"Either"`), `"None"` is a deliberate, silent opt-out: no left-click or right-click binding at all. This exists for local co-op split-screen player cameras, where a single shared mouse would otherwise rotate/zoom every player's camera identically. Split-screen scenes typically pair this with `zoom_speed: 0.0` (scroll × 0 has no effect) on every player's `camera` block, giving each player a fixed-angle camera with no **mouse** control. Each player can still independently turn their own camera via keyboard — see "Keyboard camera look" below.
+> **`orbit_button: "None"`** — unlike an actually-unrecognized string (which warns and falls back to `"Either"`), `"None"` is a deliberate, silent opt-out: no left-click or right-click binding at all. This exists for local co-op split-screen player cameras, where a single shared mouse would otherwise rotate/zoom every player's camera identically — `camera_orbit_system` has no per-viewport cursor check; it reads the mouse/keyboard state once per frame and applies it identically to every active `Orbit`-mode camera in its query, regardless of which viewport the cursor is actually over (confirmed via a live playtest diagnostic during `camera_modes.md` v1). Split-screen scenes must pair this with **both** `zoom_speed: 0.0` (scroll × 0 has no effect) **and** `character_rotate_button: None` (see below — easy to forget, since it's a separate switch from `orbit_button`) on every player's `camera` block, giving each player a fixed-angle camera with no **mouse** control at all. Each player can still independently turn their own camera via keyboard — see "Keyboard camera look" below.
+>
+> **`character_rotate_button` must also be set to `None` for split-screen — it is a separate switch from `orbit_button`.** `orbit_button: "None"` only disables the camera's own mouse-orbit; `character_rotate_button` (default `Some("Right")`) independently rotates the **character model** on RMB-drag, gated only on the global right-mouse-button state, with the same no-per-viewport-check limitation as `orbit_button`. Missing this on a split-screen prefab means holding RMB and moving the mouse spins **every** split player's character at once, from either viewport — a real bug found live during `camera_modes.md` v1 (all `local_coop_demo` split prefabs were missing this and have been fixed as part of that feature; any *new* split-screen project must set it explicitly).
 
 > **Keyboard camera look for split-screen.** Since split-screen disables *mouse* orbit per camera (immediately above), each player's own `InputMap.look_left`/`look_right`/`look_up`/`look_down` (see the `InputMap` table above) is the per-player alternative — bound to that player's own camera only, independent of every other player's. A worked example, matching `local_coop_demo`'s actual per-scheme bindings (each pair chosen to sit near that scheme's own movement cluster, and disjoint across every scheme so a 4-way grid scene has no key collisions):
 >
@@ -2111,7 +2114,7 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 > ),
 > ```
 >
-> Party mode (`camera.party`, one shared `PartyOrbitCamera` for every player) has no per-player
+> Party mode (`camera.party`, one shared party camera for every player) has no per-player
 > viewport to attribute a look binding to — `look_left`/etc. are simply not authored there. See
 > `local_coop_demo/prefabs/prefabs.ron`'s `player_p1`/`player_p2` for the reference example.
 
@@ -2121,6 +2124,100 @@ on: [
   (event: "player.jumped", do_actions: [PlaySound(key: "sfx_jump")]),
 ]
 ```
+
+### Unified camera modes (`camera_mode:`) ✅
+
+Added in `planning/features/camera_modes.md` v1. `components.camera_mode` is a named preset that
+replaces the implicit "orbit if `tags: ["player"]`, flycam if `tags: ["flycam"]`" dispatch with an
+explicit, designer-chosen mode — and is the modern way to author any of the camera behavior
+documented on this page and below. **The legacy `camera:`/`flycam:` fields below still work
+unchanged and are not deprecated** — every existing project keeps working with zero migration
+required (see "Backward compatibility" below). New authoring should prefer `camera_mode:`.
+
+**`CameraModeDef` variants** (`components.camera_mode`, one prefab authors exactly one):
+
+| Variant | What it does | Payload |
+|---|---|---|
+| `Orbit` | Mouse/keyboard/gamepad-orbitable camera following a target at a variable radius — the same behavior `camera:` below describes | Reuses `CameraConfig` (the same struct `camera:` uses) |
+| `Follow` | Fixed-offset follow camera, no free orbit — good for top-down/side-scrollers | `offset`, `look_at_offset`, `smoothing`, `rotation_smoothing`, `fov` |
+| `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov` |
+| `Fixed` | Static camera at a world position, looking at a fixed point or a named tracked entity (re-resolved every frame) | `position`, `look_at` or `look_at_entity`, `fov` |
+| `Flycam` | Free-flying, keyboard + mouse look, no target — the same behavior `flycam:` above describes | Reuses `FlyCamDef` (the same struct `flycam:` uses) |
+| `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` |
+
+**RON syntax gotcha (verified, not just written from the schema):** a `CameraModeDef` variant
+wrapping a named-field struct (`Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam`) needs a
+**double** layer of parens — `Orbit((field: value, ...))`, not `Orbit(field: value, ...)`. The
+single-paren form fails `ironhold_cli validate` with `Expected struct CameraConfig but found
+"offset"`. This is a real RON rule (a newtype enum variant deserializes its single value as one
+complete RON value, and a struct's own RON form is itself `(field: value, ...)`), not a project
+typo — every example below already has it right.
+
+```ron
+// Single-player orbit camera, camera_mode: form (equivalent to the legacy camera: block below)
+components: (
+  tags: ["player"],
+  camera_mode: Orbit((
+    offset:         (0.0, 2.5, 8.0),
+    look_at_offset: (0.0, 1.0, 0.0),
+    zoom_speed:     8.0,
+    orbit_speed:    0.4,
+    min_radius:     3.0,
+    max_radius:     18.0,
+    orbit_button:   "Right",
+  )),
+),
+```
+
+**Where `split:`/`party:` live under the new syntax:** local-coop viewport assignment is a
+**sibling** of `camera_mode:`, not nested inside its payload — orthogonal to which camera-following
+mode a player uses, same as it always conceptually was. `split:`/`party:` reuse the exact same
+`SplitScreenDef`/`PartyZoomDef` types the legacy `camera.split`/`camera.party` fields already use
+(see [Split-screen camera](#split-screen-camera-splitscreendef-) / [Shared party
+camera](#shared-party-camera-partyzoomdef-) below for their full field tables — those are unchanged
+by this section, only their authoring location moves).
+
+```ron
+// Local-coop split-screen player, camera_mode: form (equivalent to the legacy nested
+// camera.split: form — see local_coop_demo/prefabs/prefabs.ron's player_p1_split_h for the
+// live shipped example)
+components: (
+  tags: ["player"],
+  camera_mode: Orbit((
+    offset: (0.0, 4.5, 9.0), look_at_offset: (0.0, 1.2, 0.0),
+    zoom_speed: 0.0, orbit_speed: 0.4, min_radius: 4.5, max_radius: 9.0,
+    orbit_button: "None",
+  )),
+  split: ( orientation: Horizontal, own_viewport_only: true ),  // sibling, not nested
+),
+```
+
+Applies identically to `kind: "primitive"` players (`local_coop_demo/room10`'s
+`player_p2_primitive_split_ring` already authors a full camera block this way) — the migration
+isn't limited to `kind: "actor"` players.
+
+**`Party` is not normally authored directly.** In practice, a designer switches on the shared
+party camera via the `party:` sibling field (or `split.dynamic`'s merged state) on the *first*
+player only, exactly as `camera.party`/`camera.split.dynamic` already work today — the engine
+builds the internal `Party`-mode camera from that dispatch. Authoring `camera_mode: Party(...)`
+directly has no wired spawn path for a single player (it will warn and fall back to `Orbit`); it
+exists in the schema for completeness and for a future scene-level `Cinematic`-style direct framing
+use, not as the everyday co-op switch.
+
+**Backward compatibility:** a prefab with no `camera_mode:` field falls back to the legacy fields —
+keyed on the prefab's **tag**, not on whether `camera:`/`flycam:` are present (both are optional
+tuning blocks that were *already* fully defaulted when omitted, before this feature existed):
+`tags: ["player"]` synthesizes `Orbit` from `camera:` (or engine defaults if omitted); `tags:
+["flycam"]` synthesizes `Flycam` from `flycam:` (or engine defaults if omitted). An explicit
+`camera_mode:` always overrides both. `3rd_person_game_demo` (all three player prefabs) and
+`local_coop_demo`'s room4 pair (`player_p1_split_h`/`player_p2_split_h`) are migrated to the new
+syntax as living proof; every other project and room deliberately keeps the legacy form as the
+compat path's own regression test.
+
+**`fov:` is static in v1** — applied once at spawn/mode-resolve time on every variant that has the
+field (`Orbit` via `CameraConfig.fov`, `Follow`, `FirstPerson`, `Fixed`; `Party`/`Flycam` have no
+`fov:` field). Only *interpolating* `fov` smoothly during a runtime mode switch is v2 scope
+(`SetCameraMode`, not yet implemented).
 
 ### Shared party camera (`PartyZoomDef`) ✅
 
@@ -3326,7 +3423,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |
 | `ClearTarget` | Clear `CurrentTarget`. Emits `target.cleared`. Also cleared automatically on `LoadScene`. |
 | `ResetToSpawn("{self}")` | Teleport an NPC entity to its scene-placed origin and zero its velocity. Call before `SetEntityVisible(visible: true)` in respawn entry_actions so the entity appears at its spawn point instead of where it died. Warns and no-ops for non-NPC entities. `{self}` is substituted in behavior files. |
-| `CameraShake(duration_secs: f32, intensity: f32)` | Apply a procedural position shake to the active orbit camera. `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead of an orbit camera — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
+| `CameraShake(duration_secs: f32, intensity: f32)` | Apply a procedural position shake to every active `Orbit`- or `Party`-mode camera (both split-screen's per-player cameras and a shared party camera shake correctly). `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
 | `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `rules.ron` or `state_machine.ron`. |
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |

@@ -30,7 +30,23 @@ pub enum PlayerModelSource {
 pub struct PlayerConfig {
     pub model_source: PlayerModelSource,
     pub initial_position: (f32, f32, f32),
+    /// Legacy orbit-camera tuning — always resolved (defaulted if the prefab omits `camera:`).
+    /// Used directly as the fallback `CameraModeDef::Orbit` payload when `camera_mode` is absent,
+    /// and as the base tuning for the local-coop party/split camera dispatch (which reads this
+    /// player's `camera` regardless of `camera_mode`, since that dispatch predates and is
+    /// orthogonal to camera-mode selection — see `planning/features/camera_modes.md`).
     pub camera: CameraConfig,
+    /// Named camera preset, from `PrefabComponents.camera_mode`. `None` means "use the legacy
+    /// `camera` field as an `Orbit` mode" — resolved by `resolve_camera_mode`, not by re-checking
+    /// field presence (both `camera` and `camera_mode` are independently already-defaulted/
+    /// optional, so there's no tag-vs-field ambiguity by the time a `PlayerConfig` exists).
+    pub camera_mode: Option<crate::schema::camera::CameraModeDef>,
+    /// Local co-op split-screen viewport assignment, resolved from the new sibling
+    /// `PrefabComponents.split` field if set, else the legacy nested `camera.split` — only
+    /// meaningful on the *first* player in a scene, same convention as `camera.split` had.
+    pub split: Option<SplitScreenDef>,
+    /// Local co-op shared-camera framing, resolved the same way as `split` above.
+    pub party: Option<PartyZoomDef>,
     pub inputs: InputMap,
 
     /// Path to the animation policy file, relative to the project root.
@@ -113,8 +129,8 @@ pub struct CameraConfig {
     pub initial_yaw: f32,
     /// Local co-op only: when the scene has 2+ `tags: ["player"]` entities, this player's
     /// `party` block (read from the *first* player only — later players' `party` fields are
-    /// ignored) is the sole switch that spawns a single shared `PartyOrbitCamera` framing all
-    /// players instead of each getting their own `OrbitCamera`. Absent on a 2+ player scene
+    /// ignored) is the sole switch that spawns a single shared Party-mode camera framing all
+    /// players instead of each getting their own Orbit-mode camera. Absent on a 2+ player scene
     /// logs a warning and falls back to a single-player camera on the first player only —
     /// never silently spawns competing per-player cameras. Meaningless for single-player scenes.
     /// Mutually exclusive with `split` — if both are set on the first player, `split` wins and a
@@ -122,9 +138,9 @@ pub struct CameraConfig {
     #[serde(default)]
     pub party: Option<PartyZoomDef>,
     /// Local co-op only: like `party`, read from the *first* player only. When set (and 2+
-    /// players are present), spawns one real `OrbitCamera` per player, each rendering to its own
+    /// players are present), spawns one real Orbit-mode camera per player, each rendering to its own
     /// share of the window (`SplitScreenDef.orientation`) instead of a single shared
-    /// `PartyOrbitCamera`. Mutually exclusive with `party` — if both are set, `split` wins and a
+    /// Party-mode camera. Mutually exclusive with `party` — if both are set, `split` wins and a
     /// warning is logged.
     #[serde(default)]
     pub split: Option<SplitScreenDef>,
@@ -135,7 +151,20 @@ pub struct CameraConfig {
     /// Default: 2.0 (~3.1s per full yaw revolution held).
     #[serde(default = "default_look_speed")]
     pub look_speed: f32,
+    /// Field of view in degrees. Static in v1 (applied once at spawn); interpolating it during
+    /// a `SetCameraMode` transition is v2 scope. Default: 60.0.
+    #[serde(default = "default_fov")]
+    pub fov: f32,
 }
+
+// 45.0, not a rounder "60.0", deliberately: Bevy's `PerspectiveProjection::default()` is exactly
+// `(PI / 4.0).to_degrees()` = 45°, and every camera in every existing project rendered at that
+// FOV before this field existed (nothing inserted a `Projection` component at all). Defaulting to
+// anything else silently widens every existing scene's framing the moment `fov` starts being
+// applied — caught by 3 independent post-implementation reviews, since it would also invalidate
+// every `screenshot_baselines/scenes/` entry. Omitting `fov:` must reproduce the exact pre-v1
+// framing; a designer who wants a wider/narrower view now has an explicit dial to reach for it.
+pub(crate) fn default_fov() -> f32 { 45.0 }
 
 /// Local co-op shared-camera zoom behavior, authored on the first player's `camera.party`.
 #[derive(Deserialize, Debug, Clone)]
@@ -198,7 +227,7 @@ pub enum SplitOrientation {
 /// Self-contained rather than reusing `party:` — `party` and `split` are mutually exclusive
 /// elsewhere in this schema, and requiring both together just for dynamic mode would complicate
 /// that rule. `merged_zoom_margin`/`merged_allow_manual_zoom` mirror `PartyZoomDef`'s fields
-/// exactly; dynamic mode spawns its own internal `PartyOrbitCamera` for the merged state using
+/// exactly; dynamic mode spawns its own internal Party-mode camera for the merged state using
 /// them, with no `party:` block required.
 #[derive(Deserialize, Debug, Clone)]
 pub struct DynamicSplitDef {
@@ -286,7 +315,7 @@ pub struct InputMap {
     pub gamepad_deadzone: f32,
     /// Keyboard-held camera yaw/pitch turning, independent of every other player's camera —
     /// needed because split-screen scenes disable mouse-orbit per camera (`orbit_button: "None"`,
-    /// since one shared mouse can't drive 2+ independently-active `OrbitCamera`s). `None`
+    /// since one shared mouse can't drive 2+ independently-active Orbit-mode cameras). `None`
     /// (default) leaves that axis unbound; all four are optional and independent of each other.
     /// See `docs/20_data_formats.md`'s `InputMap` table for the "valid key name strings" this
     /// accepts (parsed the same way as `forward`/`jump`/etc., via `InputMap::parse_key`).

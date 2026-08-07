@@ -1,5 +1,6 @@
 pub mod project;
 pub mod player;
+pub mod camera;
 pub mod ui;
 pub mod actions;
 pub mod scene_v2;

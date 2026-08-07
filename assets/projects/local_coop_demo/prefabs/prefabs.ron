@@ -438,6 +438,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
           // Sole switch for split-screen — read only from this (the first) player.
           split: (
             orientation: Vertical,
@@ -521,6 +526,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",
@@ -564,7 +574,11 @@
       player_index: 0,
       components: (
         tags: ["player"],
-        camera: (
+        // Migrated to `camera_mode:`/sibling `split:` (planning/features/camera_modes.md v1) —
+        // the one local_coop_demo room pair proving the new co-op authoring shape has a real
+        // shipped example, not just a docs table. Every other room stays on the legacy `camera:`
+        // (split:)` nested form deliberately, as that form's own compat-path regression test.
+        camera_mode: Orbit((
           offset:         (0.0, 4.5, 9.0),
           look_at_offset: (0.0, 1.2, 0.0),
           zoom_speed:     0.0,
@@ -572,10 +586,15 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
-          // Sole switch for split-screen — read only from this (the first) player.
-          split: (
-            orientation: Horizontal,
-          ),
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
+        )),
+        // Sole switch for split-screen — read only from this (the first) player.
+        split: (
+          orientation: Horizontal,
         ),
         inputs: (
           forward:      "KeyW",
@@ -605,10 +624,11 @@
       player_index: 1,
       components: (
         tags: ["player"],
-        // No `split`/`party` here — only the first player's camera block is read for those.
-        // The rest of this camera block (fixed distance, no manual control) DOES still apply,
-        // since split-screen spawns one real camera per player from their OWN config.
-        camera: (
+        // No `split`/`party` here — only the first player's sibling split:/party: is read for
+        // those. The rest of this camera_mode block (fixed distance, no manual control) DOES
+        // still apply, since split-screen spawns one real camera per player from their OWN
+        // config. Migrated alongside player_p1_split_h (camera_modes.md v1).
+        camera_mode: Orbit((
           offset:         (0.0, 4.5, 9.0),
           look_at_offset: (0.0, 1.2, 0.0),
           zoom_speed:     0.0,
@@ -616,7 +636,12 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
-        ),
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
+        )),
         inputs: (
           forward:      "ArrowUp",
           backward:     "ArrowDown",
@@ -660,6 +685,11 @@
           min_radius:     4.5,
           max_radius:     15.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
           // Sole switch for split-screen — read only from this (the first) player.
           // `orientation` here is only a tie-break hint for the rare frame where the players end
           // up exactly equally separated on both axes — the live axis is otherwise chosen
@@ -713,6 +743,11 @@
           min_radius:     4.5,
           max_radius:     15.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",
@@ -758,6 +793,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
           // Sole switch for split-screen — read only from this (the first) player. Grid's
           // player count is read from the scene's entity count at load, not authored here.
           split: (
@@ -806,6 +846,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",
@@ -846,6 +891,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "KeyI",
@@ -887,6 +937,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "Numpad5",
@@ -996,6 +1051,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
           // Sole switch for split-screen — read only from this (the first) player.
           split: (
             orientation: Vertical,
@@ -1059,6 +1119,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",
@@ -1183,6 +1248,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
           // Sole switch for split-screen — read only from this (the first) player.
           split: (
             orientation: Vertical,
@@ -1248,6 +1318,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",
@@ -1382,6 +1457,11 @@
           min_radius:     4.5,
           max_radius:     9.0,
           orbit_button:   "None",
+          // Also disable RMB character-rotate — camera_orbit_system has no per-viewport cursor
+          // check (confirmed via live playtest diagnostic), so a shared mouse would otherwise
+          // spin every split player's character at once, same reason orbit_button/zoom_speed
+          // are disabled above.
+          character_rotate_button: None,
         ),
         inputs: (
           forward:      "ArrowUp",

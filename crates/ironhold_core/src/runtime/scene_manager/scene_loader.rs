@@ -200,7 +200,7 @@ pub fn spawn_scene_v2(
         // either model source. See
         // `planning/features/player_model_source_unification.md`.
         let mut player_configs: Vec<PlayerConfig> = Vec::new();
-        let mut flycam_start: Option<(Transform, crate::schema::catalog::FlyCamDef)> = None;
+        let mut flycam_start: Option<(Transform, crate::schema::camera::CameraModeDef)> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
                 load_errors.push(format!(
@@ -226,9 +226,16 @@ pub fn spawn_scene_v2(
             let transform = Transform { translation, rotation, scale };
 
             if is_flycam {
-                // No model needed — just record the spawn transform and any tuning.
+                // No model needed — just record the spawn transform and the resolved mode.
+                // Backward compat is tag-driven, not field-presence-driven (2026-08-07
+                // confirmation pass): `flycam` is already unconditionally defaulted below, so an
+                // explicit `camera_mode:` override (if any) simply takes priority over it — no
+                // separate "is the field present" check needed. See
+                // `planning/features/camera_modes.md`.
                 let fc_def = prefab.components.flycam.clone().unwrap_or_default();
-                flycam_start = Some((transform, fc_def));
+                let mode = prefab.components.camera_mode.clone()
+                    .unwrap_or_else(|| crate::schema::camera::CameraModeDef::Flycam(fc_def));
+                flycam_start = Some((transform, mode));
                 continue;
             }
 
@@ -743,7 +750,7 @@ pub fn spawn_scene_v2(
         // prefab) must not trigger 4-way rank duplication when the engine only ever renders
         // one full-window camera for it.
         let is_split_screen = player_configs.len() >= 2
-            && player_configs.first().is_some_and(|p| p.camera.split.is_some());
+            && player_configs.first().is_some_and(|p| p.split.is_some());
 
         warn_missing_player_stat_templates(scene, &player_configs);
         warn_gamepad_key_without_gamepad_index(scene, &player_configs);
@@ -794,18 +801,31 @@ pub fn spawn_scene_v2(
                     Some(&mut primitive_ctx),
                 );
             }
-        } else if let Some((fc_transform, fc_def)) = flycam_start {
+        } else if let Some((fc_transform, mode)) = flycam_start {
             // Extract initial yaw/pitch from the spawn transform so the camera
             // starts oriented correctly and the first mouse move causes no jump.
             let (yaw, pitch, _) = fc_transform.rotation.to_euler(EulerRot::YXZ);
+            let fc_def = match mode {
+                crate::schema::camera::CameraModeDef::Flycam(fc) => fc,
+                other => {
+                    warn!(
+                        "flycam-tagged entity: camera_mode {:?} has no defined behavior for a \
+                         standalone flycam-tagged prefab (it has no player target) — falling \
+                         back to Flycam defaults. Only `camera_mode: Flycam(...)` (or the legacy \
+                         `flycam:` field) is supported here.",
+                        other
+                    );
+                    crate::schema::catalog::FlyCamDef::default()
+                }
+            };
             info!(
-                "Spawning FlyCamera at ({:.1}, {:.1}, {:.1})",
+                "Spawning Flycam at ({:.1}, {:.1}, {:.1})",
                 fc_transform.translation.x,
                 fc_transform.translation.y,
                 fc_transform.translation.z,
             );
             commands.spawn((
-                Name::new("FlyCamera"),
+                Name::new("Flycam"),
                 Camera3d::default(),
                 tonemapping,
                 fc_transform,
@@ -814,7 +834,7 @@ pub fn spawn_scene_v2(
                     use crate::schema::player::InputMap;
                     use crate::capabilities::flycam::parse_flycam_look_button;
                     let (look_lmb, look_rmb) = parse_flycam_look_button(&fc_def.look_button);
-                    crate::capabilities::flycam::FlyCamera {
+                    crate::capabilities::camera::ActiveCameraMode::Flycam(crate::capabilities::camera::FlycamState {
                         speed: fc_def.speed,
                         fast_speed: fc_def.fast_speed,
                         sensitivity: fc_def.sensitivity,
@@ -828,8 +848,10 @@ pub fn spawn_scene_v2(
                         key_down:     InputMap::parse_key(&fc_def.down).unwrap_or(KeyCode::KeyQ),
                         look_lmb,
                         look_rmb,
-                    }
+                    })
                 },
+                crate::capabilities::camera::FlycamCameraMode,
+                crate::capabilities::camera::CameraTargets::default(),
             ));
         } else if !scene.spawn_points.is_empty() {
             // Spawn points exist → the FSM will spawn the player (and orbit camera).

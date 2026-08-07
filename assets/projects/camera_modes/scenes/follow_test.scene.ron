@@ -1,0 +1,50 @@
+(
+  schema_version: 2,
+  name: "follow_test",
+
+  tonemapping: AcesFitted,
+
+  lighting: (
+    ambient: (0.22, 0.28, 0.38),
+    ambient_brightness: 100.0,
+    directional: (
+      color: (1.0, 0.95, 0.80),
+      intensity: 32000.0,
+      rotation_euler_deg: (-45.0, 25.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  spawn_points: {
+    "player_start": (0.0, 0.5, 0.0),
+  },
+
+  entities: [
+    (
+      id: "ground",
+      prefab: "ground",
+      transform: ( translation: (0.0, -0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "player_01",
+      prefab: "player_follow_demo",
+      transform: ( translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "portal_to_main_01",
+      prefab: "portal_to_main",
+      transform: ( translation: (0.0, 0.0, 3.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "Back to Main", offset: (0.0, 1.2, 0.0) ),
+    ),
+  ],
+
+  ui: [
+    Label((
+      id: "hint",
+      text: "camera_mode: Follow — fixed offset, no free orbit, smoothed lerp. Move and turn to see it trail.",
+      position: (16.0, 16.0),
+      size: (760.0, 28.0),
+      align: Left,
+    )),
+  ],
+)

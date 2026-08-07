@@ -5,7 +5,7 @@ use crate::capabilities::player::{BoundGamepad, CharacterController};
 use crate::schema::player::InputMap;
 use crate::runtime::scene_manager::LevelEntity;
 
-/// Inserted by `Action::CameraShake` on the active orbit camera entity.
+/// Inserted by `Action::CameraShake` on the active orbit/party camera entity.
 /// Removed automatically when `remaining` reaches zero.
 #[derive(Component)]
 pub struct CameraShakeState {
@@ -17,9 +17,66 @@ pub struct CameraShakeState {
     pub intensity: f32,
 }
 
+// ─── Unified camera mode (planning/features/camera_modes.md v1) ───────────────────────────────
+//
+// Replaces the old `OrbitCamera`/`PartyOrbitCamera`/`FlyCamera` trio with one data-carrying
+// component (`ActiveCameraMode`, the runtime-resolved analog of the authored `CameraModeDef` in
+// `schema/camera.rs` — NOT the same type, since this one holds `Entity`-independent mutable
+// per-frame state like yaw/pitch/radius) plus:
+//   - `CameraTargets(Vec<Entity>)` — camera-to-player ownership, present on every camera
+//     regardless of mode (length 0 for Fixed/Flycam, 1 for Orbit/Follow/FirstPerson, N for Party).
+//   - a zero-sized per-mode marker component (`OrbitCameraMode`, `PartyCameraMode`, etc.) —
+//     `ActiveCameraMode` is a single enum component, so Bevy queries can't filter on *which
+//     variant* it holds; `dynamic_split_screen_system` and `camera_shake_system` need exactly that
+//     (real Bevy query filter, not a runtime branch), so the marker exists purely for that.
+// Whichever system spawns/updates `ActiveCameraMode` is responsible for keeping the matching
+// marker in sync — there is no v1 code path that changes a camera's mode after spawn (that's
+// `SetCameraMode`, v2), so today the marker is simply inserted once alongside the enum and never
+// touched again.
+
+/// Camera-to-player ownership, present on every camera entity regardless of mode. Unifies the old
+/// `OrbitCamera.target: Entity` / `PartyOrbitCamera.targets: Vec<Entity>` into one shape so every
+/// consumer that needs "who owns this camera" queries `&CameraTargets` uniformly instead of
+/// matching on `ActiveCameraMode`'s variant. `.first()` is "the/a owning player" for the common
+/// single-owner case; empty means no owner (`Fixed`/`Flycam`).
+#[derive(Component, Clone, Default)]
+pub struct CameraTargets(pub Vec<Entity>);
+
+/// Marks a camera entity as currently running `ActiveCameraMode::Orbit`.
 #[derive(Component)]
-pub struct OrbitCamera {
-    pub target: Entity,
+pub struct OrbitCameraMode;
+/// Marks a camera entity as currently running `ActiveCameraMode::Party`.
+#[derive(Component)]
+pub struct PartyCameraMode;
+/// Marks a camera entity as currently running `ActiveCameraMode::Fixed`.
+#[derive(Component)]
+pub struct FixedCameraMode;
+/// Marks a camera entity as currently running `ActiveCameraMode::Follow`.
+#[derive(Component)]
+pub struct FollowCameraMode;
+/// Marks a camera entity as currently running `ActiveCameraMode::FirstPerson`.
+#[derive(Component)]
+pub struct FirstPersonCameraMode;
+/// Marks a camera entity as currently running `ActiveCameraMode::Flycam`.
+#[derive(Component)]
+pub struct FlycamCameraMode;
+
+/// Runtime-resolved camera state, one variant per `CameraModeDef` case. The single source of
+/// truth for a camera's per-frame mutable state (yaw/pitch/radius/etc.); the marker components
+/// above exist alongside it purely so other systems can query by kind (see module doc above).
+#[derive(Component)]
+pub enum ActiveCameraMode {
+    Orbit(OrbitState),
+    Party(PartyState),
+    Fixed(FixedState),
+    Follow(FollowState),
+    FirstPerson(FirstPersonState),
+    Flycam(FlycamState),
+}
+
+/// Runtime state for `ActiveCameraMode::Orbit` — identical fields to the old `OrbitCamera`
+/// component, minus `target` (now `CameraTargets`, shared across every mode — Blocker 3).
+pub struct OrbitState {
     pub radius: f32,
     pub offset: Vec3,
     pub zoom_speed: f32,
@@ -63,8 +120,8 @@ pub fn camera_orbit_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     gamepad_query: Query<&Gamepad>,
     bound_q: Query<&BoundGamepad>,
-    mut camera_query: Query<(&mut Transform, &mut OrbitCamera), Without<CharacterController>>,
-    mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCamera>)>,
+    mut camera_query: Query<(&mut Transform, &mut ActiveCameraMode, &CameraTargets), (With<OrbitCameraMode>, Without<CharacterController>)>,
+    mut character_query: Query<&mut Transform, (With<CharacterController>, Without<OrbitCameraMode>)>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -82,15 +139,18 @@ pub fn camera_orbit_system(
 
     let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
 
-    for (mut cam_transform, mut orbit) in &mut camera_query {
-        if zoom_delta != 0.0 {
-            orbit.radius -= zoom_delta * orbit.zoom_speed * time.delta_secs();
-            orbit.radius = orbit.radius.clamp(orbit.min_radius, orbit.max_radius);
-        }
+    for (mut cam_transform, mut mode, targets) in &mut camera_query {
+        let Some(target) = targets.0.first().copied() else { continue };
+        let ActiveCameraMode::Orbit(orbit) = &mut *mode else { continue };
 
         let lmb = mouse_button_input.pressed(MouseButton::Left);
         let rmb = mouse_button_input.pressed(MouseButton::Right);
         let orbit_active = (orbit.orbit_lmb && lmb) || (orbit.orbit_rmb && rmb);
+
+        if zoom_delta != 0.0 {
+            orbit.radius -= zoom_delta * orbit.zoom_speed * time.delta_secs();
+            orbit.radius = orbit.radius.clamp(orbit.min_radius, orbit.max_radius);
+        }
 
         if orbit_active {
             orbit.yaw -= mouse_delta.x * orbit.orbit_speed * time.delta_secs();
@@ -127,12 +187,12 @@ pub fn camera_orbit_system(
         // matching the keyboard "forward" key) increases pitch toward max_pitch, exactly like
         // the keyboard look_up key above — direction pinned by a regression test, not asserted
         // from hardware feel.
-        // Resolved live via the owning player's `BoundGamepad` (through `orbit.target`) instead of
-        // a value pre-resolved onto this component at spawn time — a spawn-frozen copy would
+        // Resolved live via the owning player's `BoundGamepad` (through `CameraTargets`) instead
+        // of a value pre-resolved onto this component at spawn time — a spawn-frozen copy would
         // otherwise silently diverge from `BoundGamepad` the moment the player's binding resolves
         // or their pad reconnects to a different slot. See `planning/features/
         // gamepad_player_binding_hardening.md`.
-        let gamepad = bound_q.get(orbit.target).ok()
+        let gamepad = bound_q.get(target).ok()
             .and_then(|bound| bound.0)
             .and_then(|e| gamepad_query.get(e).ok());
         if let Some(gp) = gamepad {
@@ -146,12 +206,12 @@ pub fn camera_orbit_system(
         let char_rotate = (orbit.character_rotate_rmb && rmb)
             || (orbit.character_rotate_lmb && lmb);
         if char_rotate {
-            if let Ok(mut char_transform) = character_query.get_mut(orbit.target) {
+            if let Ok(mut char_transform) = character_query.get_mut(target) {
                 char_transform.rotate_y(-mouse_delta.x * orbit.orbit_speed * time.delta_secs());
             }
         }
 
-        if let Ok(char_transform) = character_query.get(orbit.target) {
+        if let Ok(char_transform) = character_query.get(target) {
             let target_pos = char_transform.translation + orbit.look_at_offset;
             let rot = Quat::from_axis_angle(Vec3::Y, orbit.yaw)
                 * Quat::from_axis_angle(Vec3::X, -orbit.pitch);
@@ -162,17 +222,9 @@ pub fn camera_orbit_system(
     }
 }
 
-/// Local co-op shared camera: frames the midpoint of `targets` and derives its distance from
-/// how far apart they are, instead of orbiting one fixed target like `OrbitCamera`. Spawned by
-/// `spawn_party_orbit_camera` when 2+ players exist in a scene and the first player's
-/// `CameraConfig.party` block is set — see `entity_spawner::spawn_players_and_camera`.
-///
-/// Known limitation: `Action::CameraShake` only queries `With<OrbitCamera>`
-/// (`scene_manager/mod.rs`'s `SceneStateParams::orbit_cameras`), so it silently no-ops on a
-/// scene using `PartyOrbitCamera` instead. Not needed for Stage 1's acceptance criteria.
-#[derive(Component)]
-pub struct PartyOrbitCamera {
-    pub targets: Vec<Entity>,
+/// Runtime state for `ActiveCameraMode::Party` — identical fields to the old `PartyOrbitCamera`
+/// component, minus `targets` (now `CameraTargets`).
+pub struct PartyState {
     /// Extra distance added beyond the raw max pairwise distance between targets.
     pub zoom_margin: f32,
     /// Whether manual scroll-zoom still nudges the derived radius. See `PartyZoomDef`.
@@ -222,8 +274,7 @@ pub fn spawn_party_orbit_camera(
         Transform::from_translation(Vec3::from(base_camera.offset))
             .looking_at(Vec3::ZERO, Vec3::Y),
         LevelEntity,
-        PartyOrbitCamera {
-            targets: targets.to_vec(),
+        ActiveCameraMode::Party(PartyState {
             zoom_margin: party.zoom_margin,
             allow_manual_zoom: party.allow_manual_zoom,
             manual_zoom_offset: 0.0,
@@ -238,7 +289,17 @@ pub fn spawn_party_orbit_camera(
             max_pitch: base_camera.max_pitch,
             orbit_lmb,
             orbit_rmb,
-        },
+        }),
+        PartyCameraMode,
+        CameraTargets(targets.to_vec()),
+        // Matches the FOV every split/orbit camera gets (`entity_spawner.rs`'s `insert_fov`) —
+        // without this, a `split.dynamic` scene's merge/split transition visibly pops the field of
+        // view, since the party camera would otherwise sit at Bevy's `Projection::default()` (45°)
+        // while its sibling split cameras use `base_camera.fov`.
+        Projection::Perspective(PerspectiveProjection {
+            fov: base_camera.fov.to_radians(),
+            ..default()
+        }),
     )).id();
     if own_viewport_only {
         commands.entity(entity).insert(all_ring_layers());
@@ -246,16 +307,16 @@ pub fn spawn_party_orbit_camera(
     entity
 }
 
-/// Frames the midpoint of a `PartyOrbitCamera`'s `targets` each frame and derives the orbit
-/// radius from their maximum pairwise separation, clamped to `[min_radius, max_radius]`.
+/// Frames the midpoint of a `Party`-mode camera's `CameraTargets` each frame and derives the
+/// orbit radius from their maximum pairwise separation, clamped to `[min_radius, max_radius]`.
 /// Mirrors `camera_orbit_system`'s mouse-orbit handling but has no single character to rotate.
 pub fn party_camera_follow_system(
     time: Res<Time>,
     mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
     mut mouse_wheel_events: MessageReader<bevy::input::mouse::MouseWheel>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
-    mut camera_query: Query<(&mut Transform, &mut PartyOrbitCamera)>,
-    target_query: Query<&Transform, (With<CharacterController>, Without<PartyOrbitCamera>)>,
+    mut camera_query: Query<(&mut Transform, &mut ActiveCameraMode, &CameraTargets), With<PartyCameraMode>>,
+    target_query: Query<&Transform, (With<CharacterController>, Without<PartyCameraMode>)>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -272,8 +333,10 @@ pub fn party_camera_follow_system(
     }
     let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
 
-    for (mut cam_transform, mut party) in &mut camera_query {
-        let positions: Vec<Vec3> = party.targets.iter()
+    for (mut cam_transform, mut mode, targets) in &mut camera_query {
+        let ActiveCameraMode::Party(party) = &mut *mode else { continue };
+
+        let positions: Vec<Vec3> = targets.0.iter()
             .filter_map(|e| target_query.get(*e).ok())
             .map(|t| t.translation)
             .collect();
@@ -315,6 +378,151 @@ pub fn party_camera_follow_system(
     }
 }
 
+/// Runtime state for `ActiveCameraMode::Fixed` — new in v1, no pre-existing behavior to match.
+pub struct FixedState {
+    pub look_at: Option<Vec3>,
+    /// Prefab instance id, re-resolved via `SpawnRegistry` every frame so the camera keeps
+    /// pointing at the target as it moves. Takes priority over `look_at` when both resolve.
+    pub look_at_entity: Option<String>,
+}
+
+/// Keeps a `Fixed`-mode camera pointed at its configured `look_at`/`look_at_entity`. Position
+/// never changes after spawn (that's the point of `Fixed`) — only rotation is touched, and only
+/// when a look target actually resolves this frame.
+pub fn fixed_camera_system(
+    mut camera_query: Query<(&mut Transform, &ActiveCameraMode), With<FixedCameraMode>>,
+    registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
+    transforms: Query<&GlobalTransform>,
+) {
+    for (mut transform, mode) in &mut camera_query {
+        let ActiveCameraMode::Fixed(fixed) = mode else { continue };
+        let look_at = fixed.look_at_entity.as_ref()
+            .and_then(|id| registry.entities.get(id))
+            .and_then(|&e| transforms.get(e).ok())
+            .map(|gt| gt.translation())
+            .or(fixed.look_at);
+        if let Some(target) = look_at {
+            transform.look_at(target, Vec3::Y);
+        }
+    }
+}
+
+/// Runtime state for `ActiveCameraMode::Follow` — new in v1, no pre-existing behavior to match.
+pub struct FollowState {
+    pub offset: Vec3,
+    pub look_at_offset: Vec3,
+    /// Position lerp rate (higher = snappier, 0 = instant).
+    pub smoothing: f32,
+    /// Separate lerp rate for look-at rotation.
+    pub rotation_smoothing: f32,
+}
+
+/// Tracks a `Follow`-mode camera's single `CameraTargets` entity at a fixed offset, with
+/// framerate-independent exponential smoothing (`1 - exp(-rate * dt)`) on both position and
+/// look-at rotation — no free orbit input, unlike `Orbit`.
+pub fn follow_camera_system(
+    time: Res<Time>,
+    mut camera_query: Query<(&mut Transform, &ActiveCameraMode, &CameraTargets), With<FollowCameraMode>>,
+    target_query: Query<&Transform, (With<CharacterController>, Without<FollowCameraMode>)>,
+) {
+    let dt = time.delta_secs();
+    for (mut transform, mode, targets) in &mut camera_query {
+        let ActiveCameraMode::Follow(follow) = mode else { continue };
+        let Some(target_entity) = targets.0.first().copied() else { continue };
+        let Ok(target_transform) = target_query.get(target_entity) else { continue };
+
+        let desired_pos = target_transform.translation + follow.offset;
+        transform.translation = if follow.smoothing <= 0.0 {
+            desired_pos
+        } else {
+            let t = 1.0 - (-follow.smoothing * dt).exp();
+            transform.translation.lerp(desired_pos, t)
+        };
+
+        let look_target = target_transform.translation + follow.look_at_offset;
+        let desired_rot = Transform::from_translation(transform.translation)
+            .looking_at(look_target, Vec3::Y)
+            .rotation;
+        transform.rotation = if follow.rotation_smoothing <= 0.0 {
+            desired_rot
+        } else {
+            let t = 1.0 - (-follow.rotation_smoothing * dt).exp();
+            transform.rotation.slerp(desired_rot, t)
+        };
+    }
+}
+
+/// Runtime state for `ActiveCameraMode::FirstPerson` — new in v1, no pre-existing behavior to
+/// match.
+pub struct FirstPersonState {
+    pub eye_offset: Vec3,
+    pub sensitivity: f32,
+    pub pitch: f32,
+    pub min_pitch: f32,
+    pub max_pitch: f32,
+}
+
+/// Locks a `FirstPerson`-mode camera to its `CameraTargets` entity's head position. Mouse look
+/// yaw rotates the character directly (so the body faces where the camera looks, standard FPS
+/// convention); pitch is camera-only.
+pub fn first_person_camera_system(
+    mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
+    mut camera_query: Query<(&mut Transform, &mut ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
+    mut target_query: Query<&mut Transform, (With<CharacterController>, Without<FirstPersonCameraMode>)>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
+) {
+    #[cfg(feature = "inspector")]
+    if let Some(enabled) = inspector_enabled {
+        if enabled.0 {
+            return;
+        }
+    }
+
+    let mut mouse_delta = Vec2::ZERO;
+    for event in mouse_motion_events.read() {
+        mouse_delta += event.delta;
+    }
+
+    for (mut transform, mut mode, targets) in &mut camera_query {
+        let Some(target_entity) = targets.0.first().copied() else { continue };
+        let ActiveCameraMode::FirstPerson(fp) = &mut *mode else { continue };
+        let Ok(mut target_transform) = target_query.get_mut(target_entity) else { continue };
+
+        let yaw_delta = -mouse_delta.x * fp.sensitivity;
+        if yaw_delta != 0.0 {
+            target_transform.rotate_y(yaw_delta);
+        }
+        // `.min()`/`.max()`, not a bare `.clamp(min_pitch, max_pitch)`: `f32::clamp` panics if
+        // min > max, and unlike Orbit's positive 0.1/0.9 defaults, FirstPerson's negative-min
+        // default (-1.4/1.4) makes an authored-backwards pair an easy mistake to make, not just a
+        // theoretical one (found by post-implementation review).
+        fp.pitch = (fp.pitch - mouse_delta.y * fp.sensitivity)
+            .clamp(fp.min_pitch.min(fp.max_pitch), fp.min_pitch.max(fp.max_pitch));
+
+        transform.translation = target_transform.translation + fp.eye_offset;
+        transform.rotation = target_transform.rotation * Quat::from_axis_angle(Vec3::X, fp.pitch);
+    }
+}
+
+/// Runtime state for `ActiveCameraMode::Flycam` — identical fields to the old `FlyCamera`
+/// component. See `capabilities::flycam::fly_camera_system`, which owns the movement logic.
+pub struct FlycamState {
+    pub speed: f32,
+    pub fast_speed: f32,
+    pub sensitivity: f32,
+    pub pitch: f32,
+    pub yaw: f32,
+    pub key_forward: KeyCode,
+    pub key_backward: KeyCode,
+    pub key_left: KeyCode,
+    pub key_right: KeyCode,
+    pub key_up: KeyCode,
+    pub key_down: KeyCode,
+    pub look_lmb: bool,
+    pub look_rmb: bool,
+}
+
 /// Hard ceiling on `SplitOrientation::Grid`'s player count — bounds render-pass count (4 cameras
 /// is the worst case this engine has validated) and avoids degenerate slivers on a misconfigured
 /// scene. Extra players beyond this cap spawn cameraless, matching the existing (pre-Stage-6)
@@ -342,21 +550,21 @@ pub(crate) fn all_ring_layers() -> bevy::camera::visibility::RenderLayers {
 }
 
 /// Marks a local co-op split-screen camera and which share of the window it owns. Spawned
-/// alongside a normal `OrbitCamera` (not a replacement) by `spawn_players_and_camera` when
+/// alongside a normal `Orbit`-mode camera (not a replacement) by `spawn_players_and_camera` when
 /// `CameraConfig.split` is set — each split-screen camera independently tracks its own player,
-/// exactly like a single-player `OrbitCamera` would, and only needs its `Camera.viewport`
+/// exactly like a single-player orbit camera would, and only needs its `Camera.viewport`
 /// constrained to its share of the window. Orientation is deliberately NOT stored here — see
 /// `ActiveSplitScreen`.
 #[derive(Component)]
 pub struct SplitViewportSlot(pub u32);
 
 /// Deterministic split-screen camera priority order: cameras with a `SplitViewportSlot` sort
-/// before ones without (single-camera scenes and `PartyOrbitCamera` sort last), `Entity` breaks
+/// before ones without (single-camera scenes and party cameras sort last), `Entity` breaks
 /// ties. Ensures a selection among 2+ simultaneously active `Camera3d` entities is stable across
 /// frames instead of depending on query iteration order. Shared by every system that must pick
 /// one active camera among possibly several: `world_label_screen_pos_system`,
 /// `rebuild_pool_meshes_system`'s billboard basis, `click_select_system`'s viewport-aware
-/// click-to-select, and (once fixed) `nameplate_visibility_system`.
+/// click-to-select, and `nameplate_visibility_system`.
 pub fn camera_priority_key(entity: Entity, slot: Option<&SplitViewportSlot>) -> (u32, Entity) {
     (slot.map_or(u32::MAX, |s| s.0), entity)
 }
@@ -473,10 +681,11 @@ pub fn split_screen_viewport_system(
 }
 
 /// Spawns a colored "P{n}" corner HUD label for every newly-added split-screen camera whose
-/// `OrbitCamera.target` carries a `PlayerIndex` — the first real consumer of that component
-/// (see `capabilities/player.rs`). `Added<SplitViewportSlot>` fires exactly once per camera (the
-/// frame it's spawned by `spawn_players_and_camera`), mirroring `nameplate_setup_system`'s
-/// `Added<NameplateTag>` idiom, so no per-frame "does a label already exist" scan is needed.
+/// `CameraTargets` points at an entity carrying a `PlayerIndex` — the first real consumer of that
+/// component (see `capabilities/player.rs`). `Added<SplitViewportSlot>` fires exactly once per
+/// camera (the frame it's spawned by `spawn_players_and_camera`), mirroring
+/// `nameplate_setup_system`'s `Added<NameplateTag>` idiom, so no per-frame "does a label already
+/// exist" scan is needed.
 ///
 /// The label is a standalone (unparented) UI `Text` root — this resolves against the same
 /// full-window `Camera2d` every existing RON UI label uses (confirmed by architecture review:
@@ -491,11 +700,12 @@ pub fn split_screen_viewport_system(
 /// label legible against every room's differently-toned ground.
 pub fn split_viewport_player_label_spawn_system(
     mut commands: Commands,
-    new_cameras: Query<(Entity, &OrbitCamera), Added<SplitViewportSlot>>,
+    new_cameras: Query<(Entity, &CameraTargets), Added<SplitViewportSlot>>,
     player_index_q: Query<&crate::capabilities::player::PlayerIndex>,
 ) {
-    for (camera_entity, orbit) in &new_cameras {
-        let Ok(player_index) = player_index_q.get(orbit.target) else { continue };
+    for (camera_entity, targets) in &new_cameras {
+        let Some(target) = targets.0.first().copied() else { continue };
+        let Ok(player_index) = player_index_q.get(target) else { continue };
         let color = PLAYER_LABEL_COLORS[player_index.0 as usize % PLAYER_LABEL_COLORS.len()];
 
         let label = commands.spawn((
@@ -619,7 +829,7 @@ pub fn target_hud_spawn_system(
 /// camera itself is inactive.
 pub fn target_hud_update_system(
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    cameras: Query<(&Camera, &OrbitCamera, &LinkedTargetHud), With<SplitScreenTargetHud>>,
+    cameras: Query<(&Camera, &CameraTargets, &LinkedTargetHud), With<SplitScreenTargetHud>>,
     player_targets: Query<&crate::capabilities::player::PlayerTarget>,
     prefab_keys: Query<&crate::runtime::scene_manager::PrefabKey>,
     registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
@@ -635,7 +845,7 @@ pub fn target_hud_update_system(
     const MARGIN_PX: f32 = 8.0;
     const READOUT_HEIGHT_PX: f32 = 24.0;
 
-    for (camera, orbit, linked) in &cameras {
+    for (camera, targets, linked) in &cameras {
         let Ok((mut text, mut node, mut visibility)) = huds.get_mut(linked.0) else { continue };
 
         if !camera.is_active {
@@ -643,7 +853,8 @@ pub fn target_hud_update_system(
             continue;
         }
 
-        let Ok(player_target) = player_targets.get(orbit.target) else { continue };
+        let Some(target_entity) = targets.0.first().copied() else { continue };
+        let Ok(player_target) = player_targets.get(target_entity) else { continue };
         let Some(target_id) = &player_target.0 else {
             if *visibility != Visibility::Hidden { *visibility = Visibility::Hidden; }
             continue;
@@ -674,7 +885,7 @@ pub fn target_hud_update_system(
 }
 
 /// Local co-op dynamic split (Stage 5): decides every frame whether the scene should be merged
-/// (one shared `PartyOrbitCamera`) or split (two per-player `OrbitCamera`s), and flips
+/// (one shared `Party`-mode camera) or split (two per-player `Orbit`-mode cameras), and flips
 /// `Camera.is_active` accordingly. Runs after `party_camera_follow_system` (so the distance read
 /// below uses that frame's fresh transforms) and before `split_screen_viewport_system` (so an
 /// `is_active` flip takes effect the same frame, with no one-frame-stale viewport) — see the
@@ -694,16 +905,21 @@ pub fn target_hud_update_system(
 /// exact projection) only at the merged→split transition instant and then held fixed for the
 /// rest of that split period, so it can't visibly flip if the players' relative dx/dz ordering
 /// changes sign while they remain apart.
+///
+/// Filters on the `OrbitCameraMode`/`PartyCameraMode` marker components (Blocker 5 — a bare
+/// `With<ActiveCameraMode>` can't distinguish variants, since it's a single enum component, not
+/// one type per mode) rather than `Without<PartyOrbitCamera>`'s old defensive-but-redundant
+/// cross-filter.
 pub fn dynamic_split_screen_system(
     dynamic_config: Res<crate::runtime::scene_manager::DynamicSplitConfig>,
     mut active_split: ResMut<crate::runtime::scene_manager::ActiveSplitScreen>,
-    mut split_cameras: Query<(&mut Camera, &OrbitCamera), (With<SplitViewportSlot>, Without<PartyOrbitCamera>)>,
-    mut party_camera: Query<&mut Camera, (With<PartyOrbitCamera>, Without<SplitViewportSlot>)>,
+    mut split_cameras: Query<(&mut Camera, &CameraTargets), (With<OrbitCameraMode>, With<SplitViewportSlot>)>,
+    mut party_camera: Query<&mut Camera, (With<PartyCameraMode>, Without<SplitViewportSlot>)>,
     transforms: Query<&Transform>,
 ) {
     let Some(dynamic) = dynamic_config.0.as_ref() else { return };
 
-    let mut targets = split_cameras.iter().map(|(_, orbit)| orbit.target);
+    let mut targets = split_cameras.iter().filter_map(|(_, t)| t.0.first().copied());
     let Some(t0) = targets.next() else { return };
     let Some(t1) = targets.next() else { return };
     let Ok(p0) = transforms.get(t0) else { return };
@@ -765,22 +981,23 @@ pub fn parse_strafe_button(s: &str) -> Option<MouseButton> {
     InputMap::parse_mouse_button(s)
 }
 
-/// Applies and decays a procedural camera shake after `camera_orbit_system` has set the
-/// orbital position. The shake is a deterministic sine-wave offset (no RNG — WASM safe).
-/// Removes `CameraShakeState` when the remaining time reaches zero.
+/// Applies and decays a procedural camera shake after `camera_orbit_system`/
+/// `party_camera_follow_system` has set the orbital position. The shake is a deterministic
+/// sine-wave offset (no RNG — WASM safe). Removes `CameraShakeState` when the remaining time
+/// reaches zero.
 ///
-/// Queries `With<OrbitCamera>`, so in a `split` scene this fires on both per-player
-/// `OrbitCamera`s (unlike `PartyOrbitCamera`, which it silently skips — see the limitation
-/// noted above `PartyOrbitCamera`). In a `dynamic` split scene it fires on both split cameras
-/// even when one is currently inactive (`Camera.is_active: false`) — harmless, since nothing
-/// renders for the inactive one, but the shake state keeps accumulating so it's already correct
-/// if that camera reactivates mid-shake. Intentional: each split-screen camera is a real independent
-/// `OrbitCamera`, so a shake action shakes whichever camera(s) match its target, exactly like
-/// single-player. See `SplitViewportSlot`.
+/// Filters on `Or<(With<OrbitCameraMode>, With<PartyCameraMode>)>` — closes the old documented
+/// gap where `Action::CameraShake` silently no-op'd on a `party:` scene (see
+/// `SceneStateParams::orbit_cameras`, which now inserts `CameraShakeState` on both kinds).
+/// Deliberately excludes `Fixed`/`FirstPerson`/`Flycam`'s markers: `fly_camera_system` runs after
+/// this system in `lib.rs`'s `.chain()` and unconditionally overwrites `Transform::rotation`
+/// every frame, so a flycam scene must keep getting `Action::CameraShake`'s explicit
+/// `warn!("no orbit camera in scene — shake ignored")` instead of silently having its shake
+/// applied then instantly overwritten.
 pub fn camera_shake_system(
     time: Res<Time>,
     mut commands: Commands,
-    mut camera_query: Query<(Entity, &mut Transform, &mut CameraShakeState), With<OrbitCamera>>,
+    mut camera_query: Query<(Entity, &mut Transform, &mut CameraShakeState), Or<(With<OrbitCameraMode>, With<PartyCameraMode>)>>,
 ) {
     for (entity, mut cam_transform, mut shake) in &mut camera_query {
         shake.remaining -= time.delta_secs();

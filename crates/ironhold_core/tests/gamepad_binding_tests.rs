@@ -61,6 +61,7 @@ fn test_camera_config() -> CameraConfig {
         party: None,
         split: None,
         look_speed: 2.0,
+        fov: 60.0,
     }
 }
 
@@ -74,6 +75,9 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_
         model_source: PlayerModelSource::Glb("char_a".to_string()),
         initial_position: (0.0, 0.5, 0.0),
         camera: test_camera_config(),
+        camera_mode: None,
+        split: None,
+        party: None,
         inputs: InputMap { gamepad_index, ..test_input_map() },
         animation_policy: None,
         movement: MovementConfig::default(),

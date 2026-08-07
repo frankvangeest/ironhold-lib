@@ -9,7 +9,8 @@ use crate::runtime::model_spawner::ModelSpawner;
 use crate::runtime::material_factory::PendingMaterialOverride;
 use crate::capabilities::player::CharacterController;
 use crate::capabilities::animation::AnimationController;
-use crate::capabilities::camera::OrbitCamera;
+use crate::capabilities::camera::{ActiveCameraMode, OrbitCameraMode, OrbitState, CameraTargets};
+use crate::schema::camera::CameraModeDef;
 use crate::capabilities::animation_resolver::{
     ActiveOverride, AnimationPolicyComponent, AnimationRequests, LocomotionState,
 };
@@ -347,7 +348,7 @@ pub fn drain_spawn_queue_system(
 
         // Player-tagged prefabs spawn a full character. Hot-join (`Action::JoinPlayer`) players
         // get a camera-less body plus one incremental split camera, growing the existing Grid
-        // layout live; every other player-tagged spawn keeps its own dedicated `OrbitCamera`
+        // layout live; every other player-tagged spawn keeps its own dedicated Orbit-mode camera
         // via `spawn_player_entity`, unchanged.
         if let Some(player_config) = queued.player_config {
             if queued.is_hot_join {
@@ -374,7 +375,7 @@ pub fn drain_spawn_queue_system(
                 );
                 continue;
             }
-            // This path spawns its own dedicated full-window `OrbitCamera` (see
+            // This path spawns its own dedicated full-window Orbit-mode camera (see
             // `spawn_player_entity`/`spawn_orbit_camera_for_player`), never a split-tagged one, so
             // it never carries a ring-visibility `RenderLayers`. In an `own_viewport_only` scene
             // that camera's implicit layer 0 doesn't intersect ANY ring's reserved layer — this
@@ -386,7 +387,7 @@ pub fn drain_spawn_queue_system(
                 warn!(
                     "Action::Spawn spawned a `tags: [\"player\"]` prefab into a scene with \
                      `split.own_viewport_only: true`, but this spawn path gets its own \
-                     full-window OrbitCamera with no ring-visibility layer — this player will see \
+                     full-window Orbit-mode camera with no ring-visibility layer — this player will see \
                      NO target rings at all (not even their own) until the scene reloads. Use \
                      hot-join (`Action::JoinPlayer`) to add players into an own_viewport_only \
                      split scene instead."
@@ -558,12 +559,14 @@ pub fn spawn_player_when_terrain_ready(
     }
 }
 
-/// Spawns a player's character (model, physics, controller, metadata) plus its own
-/// dedicated `OrbitCamera`. This is the single-player path: dynamic `Action::Spawn`
-/// (character-select), the terrain-delayed spawn, and single-player scene loads all use it
-/// unchanged. Local co-op (2+ players sharing one camera) uses `spawn_players_and_camera`
-/// instead, which calls `spawn_player_entity_core` directly and spawns one shared
-/// `PartyOrbitCamera` rather than one `OrbitCamera` per player.
+/// Spawns a player's character (model, physics, controller, metadata) plus its own dedicated
+/// camera, dispatched on the player's resolved `CameraModeDef` (`resolve_camera_mode`) — this is
+/// the single-player path: dynamic `Action::Spawn`/`Action::JoinPlayer` (character-select, hot
+/// join's non-split fallback) use it unchanged. The terrain-delayed spawn and normal scene loads
+/// go through `spawn_players_and_camera` instead, which reaches the same mode-generic dispatch
+/// via its own single-player branch (`entities.len() < 2`) and calls `spawn_player_entity_core`
+/// directly for the 2+-player case, spawning one shared `Party`-mode camera rather than one
+/// per-player camera.
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -583,17 +586,17 @@ pub(crate) fn spawn_player_entity(
         commands, asset_server, fixes, model_spawner, player_config, project_root, registry,
         stat_ui_queue, None,
     );
-    spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
+    spawn_active_camera_for_player(commands, tonemapping, player_config, player_entity);
 }
 
 /// Spawns one or more players from the same scene, sharing a single camera when there are
-/// 2+ of them (local co-op). A single player gets its own `OrbitCamera`, matching
+/// 2+ of them (local co-op). A single player gets its own Orbit-mode camera, matching
 /// `spawn_player_entity`'s single-player behavior exactly.
 ///
 /// When 2+ players are present, the first player's `CameraConfig.party` block is the sole,
-/// explicit switch for the shared `PartyOrbitCamera` — an absent `party` block is treated as
+/// explicit switch for the shared Party-mode camera — an absent `party` block is treated as
 /// a designer oversight, not "use single-player mode": rather than silently spawning
-/// competing per-player cameras, this logs a warning and falls back to a single `OrbitCamera`
+/// competing per-player cameras, this logs a warning and falls back to a single Orbit-mode camera
 /// targeting only the first player.
 pub(crate) fn spawn_players_and_camera(
     commands: &mut Commands,
@@ -642,12 +645,12 @@ pub(crate) fn spawn_players_and_camera(
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
-        spawn_orbit_camera_for_player(commands, tonemapping, first, entities[0]);
+        spawn_active_camera_for_player(commands, tonemapping, first, entities[0]);
         return;
     }
 
-    let split = first.camera.split.as_ref();
-    let party = first.camera.party.as_ref();
+    let split = first.split.as_ref();
+    let party = first.party.as_ref();
     if split.is_some() && party.is_some() {
         warn!(
             "Scene has both `split` and `party` set on the first player's `camera` config — \
@@ -716,8 +719,9 @@ pub(crate) fn spawn_players_and_camera(
             (dynamic.split_distance, dynamic.split_distance - 0.01)
         };
         let own_viewport_only = split.is_some_and(|s| s.own_viewport_only);
+        let first_cam = resolve_orbit_config_for_multiplayer(first);
         let party_cam = crate::capabilities::camera::spawn_party_orbit_camera(
-            commands, tonemapping, &first.camera,
+            commands, tonemapping, &first_cam,
             &crate::schema::player::PartyZoomDef {
                 zoom_margin: dynamic.merged_zoom_margin,
                 allow_manual_zoom: dynamic.merged_allow_manual_zoom,
@@ -823,8 +827,9 @@ pub(crate) fn spawn_players_and_camera(
         commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
         commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
+        let first_cam = resolve_orbit_config_for_multiplayer(first);
         crate::capabilities::camera::spawn_party_orbit_camera(
-            commands, tonemapping, &first.camera, party, &entities, false,
+            commands, tonemapping, &first_cam, party, &entities, false,
         );
     } else {
         commands.insert_resource(crate::runtime::scene_manager::ActiveSplitScreen(None));
@@ -833,7 +838,7 @@ pub(crate) fn spawn_players_and_camera(
         commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
         warn!(
             "Scene has {} players but no `party` or `split` camera block on the first player's \
-             `camera` config — falling back to a single OrbitCamera targeting only the first \
+             `camera` config — falling back to a single Orbit-mode camera targeting only the first \
              player. Add a `party: (zoom_margin: ...)` or `split: (orientation: Vertical)` block \
              to the first player's camera config to get a shared or split local co-op camera.",
             entities.len()
@@ -1110,7 +1115,7 @@ fn spawn_player_entity_core(
     player_entity
 }
 
-/// Spawns one `OrbitCamera` for `player_config`/`player_entity` tagged for split-screen grid
+/// Spawns one Orbit-mode camera for `player_config`/`player_entity` tagged for split-screen grid
 /// slot `slot` (`SplitViewportSlot(slot)` + `Camera { order: slot, .. }`). Shared by the
 /// static-`Grid`-branch loop in `spawn_players_and_camera` (initial scene load) and by
 /// `drain_spawn_queue_system`'s `is_hot_join` branch (`Action::JoinPlayer`) — the only piece of
@@ -1154,9 +1159,12 @@ pub(crate) fn spawn_split_camera_for_player(
     camera_entity
 }
 
-/// Spawns a single-target `OrbitCamera` following `player_entity`, per `player_config.camera`.
-/// Factored out of `spawn_player_entity` so `spawn_players_and_camera`'s single-player
-/// fallback path can reuse it without duplicating the field mapping.
+/// Spawns a single-target `Orbit`-mode camera following `player_entity`, per
+/// `player_config.camera`. Factored out of `spawn_player_entity` so the local-coop split/party
+/// dispatch in `spawn_players_and_camera` can reuse it without duplicating the field mapping —
+/// unconditionally Orbit, since split-screen per-player cameras and the fallback-to-Orbit warning
+/// path are not (in v1) mode-generic; only the single-player fallback branch is (see
+/// `spawn_active_camera_for_player`).
 /// Returns the spawned camera entity so callers needing to attach extra components (e.g.
 /// `SplitViewportSlot` for local co-op split-screen) can do so without this function needing to
 /// know about them.
@@ -1166,51 +1174,235 @@ fn spawn_orbit_camera_for_player(
     player_config: &PlayerConfig,
     player_entity: Entity,
 ) -> Entity {
-    let cam = &player_config.camera;
+    let cam = resolve_orbit_config_for_multiplayer(player_config);
+    spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity)
+}
+
+/// Resolves the effective `CameraConfig` for the local-coop split/party/dynamic dispatch, which
+/// (unlike the single-player fallback's `spawn_active_camera_for_player`) is not mode-generic in
+/// v1 — only `Orbit` is supported there. Bug fix (found by 4 independent post-implementation
+/// reviews): the split/party paths originally read `player_config.camera` directly, silently
+/// ignoring an authored `camera_mode: Orbit(...)` and falling back to `default_camera_config()`
+/// whenever a migrated prefab dropped its legacy `camera:` block — exactly what
+/// `local_coop_demo`'s `player_p1_split_h`/`player_p2_split_h` (room4) did, regressing their
+/// `orbit_button: "None"`/`zoom_speed: 0.0` split-screen mouse-decoupling.
+fn resolve_orbit_config_for_multiplayer(pc: &PlayerConfig) -> CameraConfig {
+    match &pc.camera_mode {
+        Some(CameraModeDef::Orbit(cfg)) => cfg.clone(),
+        Some(other) => {
+            warn!(
+                "player '{}': camera_mode {:?} is not supported for a local-coop split/party \
+                 player in v1 — falling back to the legacy `camera:` tuning (or engine defaults if \
+                 that's also absent). Only `camera_mode: Orbit(...)` is supported for split-screen/ \
+                 party players; per-player mode diversity in co-op is v2 scope.",
+                pc.spawn_id, other
+            );
+            pc.camera.clone()
+        }
+        None => pc.camera.clone(),
+    }
+}
+
+fn orbit_state_from_config(cam: &CameraConfig, inputs: &InputMap) -> OrbitState {
     let (orbit_lmb, orbit_rmb) = crate::capabilities::camera::parse_orbit_button(&cam.orbit_button);
     let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
         .as_deref()
         .map(crate::capabilities::camera::parse_orbit_button)
         .unwrap_or((false, false));
-    let inputs = &player_config.inputs;
-    let look_left_key = inputs.look_left.as_deref().and_then(InputMap::parse_key);
-    let look_right_key = inputs.look_right.as_deref().and_then(InputMap::parse_key);
-    let look_up_key = inputs.look_up.as_deref().and_then(InputMap::parse_key);
-    let look_down_key = inputs.look_down.as_deref().and_then(InputMap::parse_key);
-    let start_pos =
-        Vec3::from(player_config.initial_position) + Vec3::from(cam.offset);
-    commands.spawn((
+    OrbitState {
+        radius: Vec3::from(cam.offset).length(),
+        offset: Vec3::from(cam.offset),
+        zoom_speed: cam.zoom_speed,
+        orbit_speed: cam.orbit_speed,
+        min_radius: cam.min_radius,
+        max_radius: cam.max_radius,
+        pitch: cam.initial_pitch,
+        yaw: cam.initial_yaw,
+        look_at_offset: Vec3::from(cam.look_at_offset),
+        min_pitch: cam.min_pitch,
+        max_pitch: cam.max_pitch,
+        orbit_lmb,
+        orbit_rmb,
+        character_rotate_lmb: char_rot_lmb,
+        character_rotate_rmb: char_rot_rmb,
+        look_left_key: inputs.look_left.as_deref().and_then(InputMap::parse_key),
+        look_right_key: inputs.look_right.as_deref().and_then(InputMap::parse_key),
+        look_up_key: inputs.look_up.as_deref().and_then(InputMap::parse_key),
+        look_down_key: inputs.look_down.as_deref().and_then(InputMap::parse_key),
+        look_speed: cam.look_speed,
+        gamepad_deadzone: inputs.gamepad_deadzone,
+    }
+}
+
+fn spawn_orbit_camera_from_config(
+    commands: &mut Commands,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    cam: &CameraConfig,
+    inputs: &InputMap,
+    target_initial_position: (f32, f32, f32),
+    player_entity: Entity,
+) -> Entity {
+    let start_pos = Vec3::from(target_initial_position) + Vec3::from(cam.offset);
+    let entity = commands.spawn((
         Name::new("Orbit Camera"),
         Camera3d::default(),
         tonemapping,
         Transform::from_translation(start_pos)
-            .looking_at(Vec3::from(player_config.initial_position), Vec3::Y),
+            .looking_at(Vec3::from(target_initial_position), Vec3::Y),
         LevelEntity,
-        OrbitCamera {
-            target: player_entity,
-            radius: Vec3::from(cam.offset).length(),
-            offset: Vec3::from(cam.offset),
-            zoom_speed: cam.zoom_speed,
-            orbit_speed: cam.orbit_speed,
-            min_radius: cam.min_radius,
-            max_radius: cam.max_radius,
-            pitch: cam.initial_pitch,
-            yaw: cam.initial_yaw,
-            look_at_offset: Vec3::from(cam.look_at_offset),
-            min_pitch: cam.min_pitch,
-            max_pitch: cam.max_pitch,
-            orbit_lmb,
-            orbit_rmb,
-            character_rotate_lmb: char_rot_lmb,
-            character_rotate_rmb: char_rot_rmb,
-            look_left_key,
-            look_right_key,
-            look_up_key,
-            look_down_key,
-            look_speed: cam.look_speed,
-            gamepad_deadzone: inputs.gamepad_deadzone,
-        },
-    )).id()
+        ActiveCameraMode::Orbit(orbit_state_from_config(cam, inputs)),
+        OrbitCameraMode,
+        CameraTargets(vec![player_entity]),
+    )).id();
+    insert_fov(commands, entity, cam.fov);
+    entity
+}
+
+/// Inserts a `Projection::Perspective` with the given field-of-view (degrees), overriding Bevy's
+/// default FOV. Static in v1 — see `planning/features/camera_modes.md`'s `fov:` scope note.
+fn insert_fov(commands: &mut Commands, entity: Entity, fov_degrees: f32) {
+    commands.entity(entity).insert(Projection::Perspective(PerspectiveProjection {
+        fov: fov_degrees.to_radians(),
+        ..default()
+    }));
+}
+
+/// Resolves a player's effective `CameraModeDef` — the explicit `camera_mode` override if set,
+/// else `Orbit` built from the always-defaulted legacy `camera` field. No field-presence
+/// detection needed here: both `PlayerConfig.camera` and `PlayerConfig.camera_mode` are already
+/// fully resolved (defaulted where absent) by `assemble_player_config`, so this is a pure
+/// override-or-fallback, not a tag re-check.
+pub(crate) fn resolve_camera_mode(pc: &PlayerConfig) -> CameraModeDef {
+    pc.camera_mode.clone().unwrap_or_else(|| CameraModeDef::Orbit(pc.camera.clone()))
+}
+
+/// Mode-generic single-player camera spawn — dispatches on `resolve_camera_mode`, covering
+/// `Orbit`/`Follow`/`FirstPerson`/`Fixed`/`Flycam` (`Party` has no single-target meaning; it warns
+/// and falls back to `Orbit`). Used only by `spawn_players_and_camera`'s single-player fallback
+/// branch — the local-coop split/party dispatch stays Orbit-only via `spawn_orbit_camera_for_player`
+/// (not a v1 requirement to generalize; see `planning/features/camera_modes.md`).
+fn spawn_active_camera_for_player(
+    commands: &mut Commands,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+    player_config: &PlayerConfig,
+    player_entity: Entity,
+) -> Entity {
+    let initial_pos = Vec3::from(player_config.initial_position);
+    match resolve_camera_mode(player_config) {
+        CameraModeDef::Orbit(cam) => {
+            spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity)
+        }
+        CameraModeDef::Flycam(fc) => {
+            use crate::capabilities::flycam::parse_flycam_look_button;
+            let (look_lmb, look_rmb) = parse_flycam_look_button(&fc.look_button);
+            commands.spawn((
+                Name::new("Flycam"),
+                Camera3d::default(),
+                tonemapping,
+                Transform::from_translation(initial_pos),
+                LevelEntity,
+                ActiveCameraMode::Flycam(crate::capabilities::camera::FlycamState {
+                    speed: fc.speed,
+                    fast_speed: fc.fast_speed,
+                    sensitivity: fc.sensitivity,
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    key_forward:  InputMap::parse_key(&fc.forward).unwrap_or(KeyCode::KeyW),
+                    key_backward: InputMap::parse_key(&fc.backward).unwrap_or(KeyCode::KeyS),
+                    key_left:     InputMap::parse_key(&fc.left).unwrap_or(KeyCode::KeyA),
+                    key_right:    InputMap::parse_key(&fc.right).unwrap_or(KeyCode::KeyD),
+                    key_up:       InputMap::parse_key(&fc.up).unwrap_or(KeyCode::Space),
+                    key_down:     InputMap::parse_key(&fc.down).unwrap_or(KeyCode::KeyQ),
+                    look_lmb,
+                    look_rmb,
+                }),
+                crate::capabilities::camera::FlycamCameraMode,
+                CameraTargets::default(),
+            )).id()
+        }
+        CameraModeDef::Follow(f) => {
+            let start_pos = initial_pos + Vec3::from(f.offset);
+            let entity = commands.spawn((
+                Name::new("Follow Camera"),
+                Camera3d::default(),
+                tonemapping,
+                Transform::from_translation(start_pos)
+                    .looking_at(initial_pos + Vec3::from(f.look_at_offset), Vec3::Y),
+                LevelEntity,
+                ActiveCameraMode::Follow(crate::capabilities::camera::FollowState {
+                    offset: Vec3::from(f.offset),
+                    look_at_offset: Vec3::from(f.look_at_offset),
+                    smoothing: f.smoothing,
+                    rotation_smoothing: f.rotation_smoothing,
+                }),
+                crate::capabilities::camera::FollowCameraMode,
+                CameraTargets(vec![player_entity]),
+            )).id();
+            insert_fov(commands, entity, f.fov);
+            entity
+        }
+        CameraModeDef::FirstPerson(fp) => {
+            let entity = commands.spawn((
+                Name::new("First Person Camera"),
+                Camera3d::default(),
+                tonemapping,
+                Transform::from_translation(initial_pos + Vec3::from(fp.eye_offset)),
+                LevelEntity,
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
+                    eye_offset: Vec3::from(fp.eye_offset),
+                    sensitivity: fp.sensitivity,
+                    pitch: 0.0,
+                    min_pitch: fp.min_pitch,
+                    max_pitch: fp.max_pitch,
+                }),
+                crate::capabilities::camera::FirstPersonCameraMode,
+                CameraTargets(vec![player_entity]),
+            )).id();
+            insert_fov(commands, entity, fp.fov);
+            entity
+        }
+        CameraModeDef::Fixed(fx) => {
+            if fx.look_at.is_some() && fx.look_at_entity.is_some() {
+                warn!(
+                    "player '{}': `camera_mode: Fixed(...)` has both `look_at` and \
+                     `look_at_entity` set — `look_at_entity` wins (re-resolved every frame); \
+                     remove one to silence this warning.",
+                    player_config.spawn_id
+                );
+            } else if fx.look_at.is_none() && fx.look_at_entity.is_none() {
+                warn!(
+                    "player '{}': `camera_mode: Fixed(...)` has neither `look_at` nor \
+                     `look_at_entity` set — the camera will sit at `position` with no rotation \
+                     applied (facing -Z) and never turn to look at anything.",
+                    player_config.spawn_id
+                );
+            }
+            let entity = commands.spawn((
+                Name::new("Fixed Camera"),
+                Camera3d::default(),
+                tonemapping,
+                Transform::from_translation(Vec3::from(fx.position)),
+                LevelEntity,
+                ActiveCameraMode::Fixed(crate::capabilities::camera::FixedState {
+                    look_at: fx.look_at.map(Vec3::from),
+                    look_at_entity: fx.look_at_entity.clone(),
+                }),
+                crate::capabilities::camera::FixedCameraMode,
+                CameraTargets::default(),
+            )).id();
+            insert_fov(commands, entity, fx.fov);
+            entity
+        }
+        CameraModeDef::Party(_) => {
+            warn!(
+                "player '{}': `camera_mode: Party(...)` has no meaning for a single player — \
+                 falling back to Orbit. Party mode is derived automatically from the local-coop \
+                 `party:`/`split:` sibling fields instead of being authored directly.",
+                player_config.spawn_id
+            );
+            spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity)
+        }
+    }
 }
 
 pub(crate) fn default_camera_config() -> CameraConfig {
@@ -1230,6 +1422,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         party: None,
         split: None,
         look_speed: 2.0,
+        fov: crate::schema::player::default_fov(),
     }
 }
 
@@ -1311,10 +1504,35 @@ pub(crate) fn assemble_player_config(
             );
         }
     }
+    // `split`/`party` nested INSIDE a `camera_mode: Orbit(...)` payload parse fine (CameraConfig
+    // still has those fields, no deny_unknown_fields) but are never read — split:/party: must be
+    // siblings of camera_mode, not nested in its payload (Blocker 4). Warn rather than silently
+    // dropping a designer's likely-intended config (found by post-implementation review).
+    if let Some(crate::schema::camera::CameraModeDef::Orbit(cfg)) = &prefab.components.camera_mode {
+        if cfg.split.is_some() || cfg.party.is_some() {
+            warn!(
+                "player prefab '{}': `split`/`party` authored INSIDE `camera_mode: Orbit(...)` are \
+                 never read and have no effect — they must be siblings of `camera_mode`, e.g. \
+                 `components: (camera_mode: Orbit(...), split: (...))`. See \
+                 planning/features/camera_modes.md's \"Unified camera modes\" section.",
+                prefab_key
+            );
+        }
+    }
+    // `split`/`party` resolve the new sibling `components:` field first, falling back to the
+    // legacy nested `camera.split`/`camera.party` — both already-optional either way, so there's
+    // no field-presence-vs-tag ambiguity to get wrong here (see `PlayerConfig::split`'s doc).
+    let split = prefab.components.split.clone()
+        .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.split.clone()));
+    let party = prefab.components.party.clone()
+        .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.party.clone()));
     PlayerConfig {
         model_source,
         initial_position,
         camera: prefab.components.camera.clone().unwrap_or_else(default_camera_config),
+        camera_mode: prefab.components.camera_mode.clone(),
+        split,
+        party,
         inputs,
         animation_policy: prefab.animation_policy.clone(),
         movement: prefab.components.movement.clone(),

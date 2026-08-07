@@ -1,0 +1,49 @@
+(
+  schema_version: 2,
+  name: "flycam_test",
+
+  tonemapping: AcesFitted,
+
+  lighting: (
+    ambient: (0.22, 0.28, 0.38),
+    ambient_brightness: 100.0,
+    directional: (
+      color: (1.0, 0.95, 0.80),
+      intensity: 32000.0,
+      rotation_euler_deg: (-45.0, 25.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  entities: [
+    (
+      id: "ground",
+      prefab: "ground",
+      transform: ( translation: (0.0, -0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+    (
+      id: "camera_01",
+      prefab: "flycam_demo",
+      transform: ( translation: (0.0, 6.0, 12.0), rotation_euler_deg: (-15.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
+  ],
+
+  // A flycam has no CharacterController/collider, so it can never trigger a walkable portal —
+  // "Back to Main" is a UI button here instead of a pad, unlike every other room in this demo.
+  ui: [
+    Label((
+      id: "hint",
+      text: "camera_mode: Flycam — free-flying, keyboard + mouse look, no target. WASD move, Space/Q up/down, hold mouse button to look.",
+      position: (16.0, 16.0),
+      size: (900.0, 28.0),
+      align: Left,
+    )),
+    Button((
+      id: "back_to_main_button",
+      text: "Back to Main",
+      action: "ui.back_to_main",
+      position: (16.0, 52.0),
+      size: (200.0, 40.0),
+    )),
+  ],
+)

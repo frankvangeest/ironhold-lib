@@ -302,6 +302,13 @@ impl Plugin for GamePlugin {
                 animation_resolver_system,
                 camera_orbit_system,
                 party_camera_follow_system,
+                // Net-new v1 modes (planning/features/camera_modes.md) — no pre-existing behavior
+                // to preserve ordering against beyond the player movement systems above (already
+                // run earlier in a separate `.chain()` group), so they slot in alongside the other
+                // per-mode camera systems here.
+                follow_camera_system,
+                first_person_camera_system,
+                fixed_camera_system,
                 dynamic_split_screen_system,
                 split_screen_viewport_system,
                 split_viewport_player_label_update_system,
@@ -553,7 +560,7 @@ fn world_label_screen_pos_system(
 
     // Deterministic order so a point visible in 2+ active viewports always
     // resolves the same way across frames: by `SplitViewportSlot` index first
-    // (cameras with no slot — single-camera or `PartyOrbitCamera` scenes —
+    // (cameras with no slot — single-camera or Party-mode camera scenes —
     // sort last), then by `Entity` to break ties.
     let mut active_cameras: Vec<_> = camera_q
         .iter()

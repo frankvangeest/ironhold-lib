@@ -49,9 +49,8 @@ _Last updated: 2026‑05‑18_
 | Area                        | Status | Notes |
 |-----------------------------|:------:|-------|
 | Player movement             |   ✅   | `MovementConfig` on prefab `components.movement`; works for both primitive and GLB players. Fields: `walk_speed`, `run_speed`, `rot_speed`, `jump`, `double_jump`, `collider_radius` (GLB), `collider_height` (GLB). Emits `player.jumped` trigger on every jump — bind sounds/effects in `state_machine.ron`. |
-| Orbit camera                |   ✅   | Data‑configured via `player.camera`. |
+| Camera modes                |   ✅   | Unified `ActiveCameraMode` (`camera_modes.md` v1) — `Orbit`/`Follow`/`FirstPerson`/`Fixed`/`Flycam`/`Party`, authored via `components.camera_mode` (or the legacy `camera:`/`flycam:` fields, still supported unchanged). Orbit is data-configured via `player.camera`; Flycam is spawned via the `"flycam"` tag on a prefab (LMB/RMB hold to look, WASD move, Shift fast mode, optional `flycam_position` UI label). Runtime mode-switching (`SetCameraMode`) is v2, not yet implemented. |
 | Animation playback          |   ✅   | Data‑configured via `player.animations`. |
-| Fly camera                  |   ✅   | Free-flying camera; spawned via `"flycam"` tag on prefab. LMB/RMB hold to look, WASD move, Shift fast mode. Optional `flycam_position` UI label. |
 | NPC AI                      |   ✅   | `NpcAgent` component; states: Idle → Patrol → Alerted → Chase/Flee/Interact → Return. FOV + optional Rapier line-of-sight check. Emits `"npc.player_spotted:{id}"`, `"npc.player_reached:{id}"`, `"npc.player_lost:{id}"` triggers. |
 | Collectible triggers        |   ✅   | `Collectable` component on Rapier sensor; on player overlap emits `GameEvent::Trigger("entity.collected:{spawn_id}")`. Response (Despawn, IncrementVariable, etc.) is configured in RON. |
 | Trigger zones               |   ✅   | `TriggerZone` component + Rapier sensor; emits `entity.entered:{id}` / `entity.exited:{id}` on player enter/exit. Add via `trigger_zone` field on `PrefabDef`. |

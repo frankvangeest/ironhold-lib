@@ -1,0 +1,158 @@
+(
+  schema_version: 2,
+  prefabs: {
+
+    // ── Ground ───────────────────────────────────────────────────────────────
+    "ground": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      primitive: (
+        size: (40.0, 1.0, 40.0),
+        color: (0.30, 0.45, 0.25),
+        roughness: 0.9,
+        physics: true,
+      ),
+    ),
+
+    // ── Hub player: camera_mode: Orbit ──────────────────────────────────────
+    // The main hub scene's player, authored via the new camera_mode: syntax (not the legacy
+    // camera: field) — this whole project is a living planning/features/camera_modes.md demo.
+    "player_orbit_demo": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      components: (
+        tags: ["player"],
+        movement: ( walk_speed: 5.5, run_speed: 10.0 ),
+        camera_mode: Orbit((
+          offset: (0.0, 5.0, 10.0),
+          look_at_offset: (0.0, 1.5, 0.0),
+          zoom_speed: 10.0,
+          orbit_speed: 0.5,
+          min_radius: 3.0,
+          max_radius: 20.0,
+          orbit_button: "Either",
+        )),
+        inputs: (
+          forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+          strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space",
+        ),
+      ),
+      primitive: ( radius: 0.4, height: 1.8, color: (0.75, 0.75, 0.75), roughness: 0.3 ),
+    ),
+
+    // ── Follow ───────────────────────────────────────────────────────────────
+    "player_follow_demo": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      components: (
+        tags: ["player"],
+        movement: ( walk_speed: 5.5, run_speed: 10.0 ),
+        camera_mode: Follow((
+          offset: (0.0, 3.0, 6.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          smoothing: 4.0,
+          rotation_smoothing: 4.0,
+        )),
+        inputs: (
+          forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+          strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space",
+        ),
+      ),
+      primitive: ( radius: 0.4, height: 1.8, color: (0.85, 0.55, 0.15), roughness: 0.3 ),
+    ),
+
+    // ── FirstPerson ──────────────────────────────────────────────────────────
+    "player_first_person_demo": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      components: (
+        tags: ["player"],
+        movement: ( walk_speed: 5.5, run_speed: 10.0 ),
+        camera_mode: FirstPerson((
+          eye_offset: (0.0, 1.65, 0.0),
+          sensitivity: 0.002,
+          min_pitch: -1.3,
+          max_pitch: 1.3,
+        )),
+        inputs: (
+          forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+          strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space",
+        ),
+      ),
+      primitive: ( radius: 0.4, height: 1.8, color: (0.35, 0.65, 0.85), roughness: 0.3 ),
+    ),
+
+    // ── Fixed ────────────────────────────────────────────────────────────────
+    "player_fixed_demo": (
+      kind: Primitive,
+      model: "",
+      shape: Capsule3d,
+      components: (
+        tags: ["player"],
+        movement: ( walk_speed: 5.5, run_speed: 10.0 ),
+        // A camera_mode: Fixed player still walks normally — the camera just never follows.
+        // look_at points roughly at this room's spawn point so the player starts in view.
+        camera_mode: Fixed((
+          position: (0.0, 4.0, 9.0),
+          look_at: (0.0, 1.0, 0.0),
+        )),
+        inputs: (
+          forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
+          strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space",
+        ),
+      ),
+      primitive: ( radius: 0.4, height: 1.8, color: (0.65, 0.35, 0.85), roughness: 0.3 ),
+    ),
+
+    // ── Flycam ───────────────────────────────────────────────────────────────
+    // camera_mode: Flycam(...) is the modern equivalent of the legacy `flycam:` field — same
+    // FlyCamDef payload, authored via the unified syntax instead.
+    "flycam_demo": (
+      kind: Prop,
+      model: "",
+      components: (
+        tags: ["flycam"],
+        camera_mode: Flycam((
+          speed: 20.0,
+          fast_speed: 60.0,
+          sensitivity: 0.002,
+          look_button: "Either",
+        )),
+      ),
+    ),
+
+    // ── Portal pads ──────────────────────────────────────────────────────────
+    // A flat glowing disc + sensor, same minimal shape reused for every portal in this project.
+    // Cosmetic color is the only difference; each fires its own entity.entered:{id} event.
+    "portal_to_follow": (
+      kind: Primitive, model: "", shape: Cylinder,
+      trigger_zone: ( radius: 1.5 ),
+      primitive: ( radius: 1.0, height: 0.05, color: (0.85, 0.55, 0.15), roughness: 0.1, metallic: 0.4 ),
+    ),
+    "portal_to_first_person": (
+      kind: Primitive, model: "", shape: Cylinder,
+      trigger_zone: ( radius: 1.5 ),
+      primitive: ( radius: 1.0, height: 0.05, color: (0.35, 0.65, 0.85), roughness: 0.1, metallic: 0.4 ),
+    ),
+    "portal_to_fixed": (
+      kind: Primitive, model: "", shape: Cylinder,
+      trigger_zone: ( radius: 1.5 ),
+      primitive: ( radius: 1.0, height: 0.05, color: (0.65, 0.35, 0.85), roughness: 0.1, metallic: 0.4 ),
+    ),
+    "portal_to_flycam": (
+      kind: Primitive, model: "", shape: Cylinder,
+      trigger_zone: ( radius: 1.5 ),
+      primitive: ( radius: 1.0, height: 0.05, color: (0.90, 0.85, 0.20), roughness: 0.1, metallic: 0.4 ),
+    ),
+    "portal_to_main": (
+      kind: Primitive, model: "", shape: Cylinder,
+      trigger_zone: ( radius: 1.5 ),
+      primitive: ( radius: 1.0, height: 0.05, color: (0.80, 0.80, 0.80), roughness: 0.1, metallic: 0.4 ),
+    ),
+
+  },
+)

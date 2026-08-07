@@ -9,7 +9,7 @@ use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex
 use crate::schema::player::InputMap;
 use crate::GameVariables;
 use crate::capabilities::inventory::LoadedInventoryUi;
-use crate::capabilities::camera::{camera_priority_key, OrbitCamera, SplitViewportSlot};
+use crate::capabilities::camera::{camera_priority_key, CameraTargets, SplitViewportSlot};
 
 /// Pixel radius around the cursor within which a left-click selects an entity.
 const SELECT_PIXEL_RADIUS: f32 = 70.0;
@@ -164,16 +164,20 @@ pub(crate) fn clear_player_target(
 /// the same ordering `world_label_screen_pos_system` and `rebuild_pool_meshes_system` use.
 ///
 /// The click is then attributed to *the player who owns that camera* — a split-screen camera's
-/// `OrbitCamera.target` points directly at its player entity. Cameras with no `OrbitCamera` at
-/// all (a shared `PartyOrbitCamera`, or the default fallback camera in a scene with no player)
-/// have no single "owning" player, so the click falls back to the primary player instead — one
+/// `CameraTargets` points directly at its player entity. Cameras with no single "owning" player
+/// (an empty `CameraTargets` — the default fallback camera in a scene with no player — **or** a
+/// multi-target one, i.e. a shared party camera) fall back to the primary player instead — one
 /// physical mouse can only ever act for one player per click regardless (an accepted, unavoidable
 /// limitation, not something this system can fix — see
-/// `planning/features/per_player_split_screen_targeting.md`).
+/// `planning/features/per_player_split_screen_targeting.md`). **Only a single-target
+/// `CameraTargets` is used directly** — bug fix: a party camera's `CameraTargets` holds every
+/// player, not zero, so naively taking `.first()` would attribute every click to whichever player
+/// happened to spawn first, silently diverging from the primary-player convention whenever scene
+/// entity order and `player_index` disagree (found by post-implementation review).
 fn click_select_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>, Option<&OrbitCamera>), With<Camera3d>>,
+    cameras: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>, Option<&CameraTargets>), With<Camera3d>>,
     selectables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>, Option<&SelectAimHeight>), With<ClickSelectable>>,
     visibility_q: Query<&Visibility>,
     mut player_targets: Query<(Entity, &mut PlayerTarget, Option<&PlayerIndex>)>,
@@ -194,7 +198,7 @@ fn click_select_system(
     }
     let Ok(window) = windows.single() else { return };
     let Some(cursor) = window.cursor_position() else { return };
-    let Some((_, camera, cam_tf, _, orbit)) = cameras
+    let Some((_, camera, cam_tf, _, targets)) = cameras
         .iter()
         .filter(|(_, camera, ..)| camera.is_active)
         .filter(|(_, camera, ..)| camera.logical_viewport_rect().is_some_and(|r| r.contains(cursor)))
@@ -203,7 +207,8 @@ fn click_select_system(
 
     // Resolve which player this click acts for.
     let player_count = player_targets.iter().count();
-    let acting_player = orbit.map(|o| o.target).or_else(|| {
+    let single_owner = targets.filter(|t| t.0.len() == 1).and_then(|t| t.0.first().copied());
+    let acting_player = single_owner.or_else(|| {
         player_targets.iter().find(|(_, _, idx)| is_primary_player(*idx)).map(|(e, _, _)| e)
     });
     let Some(acting_player) = acting_player else { return };

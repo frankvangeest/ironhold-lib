@@ -229,8 +229,8 @@ animated/skinned GLB characters. Tab-cycle is nearest-first by world distance, a
 **every player independently each frame** — each `CharacterController`'s own `InputMap.target_next`
 key press only ever changes that player's own `PlayerTarget`. `click_select_system`'s
 viewport-aware camera resolution (see the split-screen section below) additionally maps the
-resolved camera to its **owning player** via `OrbitCamera.target`, falling back to the primary
-player for camera modes with no single owner (`PartyOrbitCamera`, the no-player default camera) —
+resolved camera to its **owning player** via `CameraTargets`, falling back to the primary
+player for camera modes with no single owner (`Party` mode, the no-player default camera) —
 one physical mouse can still only act for one player per click, an accepted, unavoidable
 limitation.
 `select_aim_height: f32` (default `1.0`) on `PrefabDef` controls how many metres above the entity
@@ -294,7 +294,7 @@ of the two rather than re-deriving `1 + player_index % MAX_SPLIT_PLAYERS` by han
 `own_viewport_only == true` — zero `RenderLayers` footprint on any entity when it's `false` (the
 default), verified by a regression test that default settings spawn zero `RenderLayers` components
 anywhere.
-- Each split `OrbitCamera` — both the static `Grid`/`Vertical`/`Horizontal` loop and the
+- Each split `ActiveCameraMode::Orbit` — both the static `Grid`/`Vertical`/`Horizontal` loop and the
   `dynamic`-split loop (`entity_spawner.rs`'s `spawn_players_and_camera` and
   `spawn_split_camera_for_player`) — gets `RenderLayers::layer(0).with(ring_layer_for_player(
   player_index))`, keyed on `PlayerConfig.player_index`, not spawn/loop order — they can diverge
@@ -304,7 +304,7 @@ anywhere.
 - Each ring entity (`target_indicator_system`) gets `RenderLayers::layer(ring_layer_for_player(
   owner_player_index))` only — no layer 0, since a ring never needs to be "ordinary scene
   geometry."
-- The shared `PartyOrbitCamera` (`spawn_party_orbit_camera`, `capabilities/camera.rs` — party
+- The shared `ActiveCameraMode::Party` (`spawn_party_orbit_camera`, `capabilities/camera.rs` — party
   mode's camera, also reused as `dynamic`-split's merged-state camera) gets `all_ring_layers()`
   when `own_viewport_only` is true — layer 0 plus every reserved ring layer, so the merged/party
   view still shows every player's ring. Leaving this camera componentless (implicit layer 0 only)
@@ -328,7 +328,7 @@ anywhere.
   silently defeat the feature for that pair, unlike `PLAYER_LABEL_COLORS`' own harmless
   modulo-collision precedent (a cosmetic duplicate tint, not a broken guarantee). `drain_spawn_queue_system`
   warns when a non-hot-join `Action::Spawn` of a `tags: ["player"]` prefab lands in an
-  `own_viewport_only` scene, since that path's dedicated full-window `OrbitCamera` never gets a
+  `own_viewport_only` scene, since that path's dedicated full-window `ActiveCameraMode::Orbit` never gets a
   ring-visibility layer and so would see zero rings, not even its own.
 
 > **`pipeline_warmup_system`'s `NoFrustumCulling` warmup pass does not touch `RenderLayers`** — it
@@ -356,7 +356,7 @@ scene field (`docs/20_data_formats.md`). Mirrors the existing `split_viewport_pl
 system`/`_update_system` pattern exactly: one `Text` entity per `SplitViewportSlot` camera
 (`Added<SplitViewportSlot>`-triggered spawn, only when the scene authors a `target_hud:` block),
 kept in sync every frame with that camera's owning player's `PlayerTarget` (via
-`OrbitCamera.target`) and the camera's live `Camera.viewport`/`is_active`. Anchored bottom-left
+`CameraTargets`) and the camera's live `Camera.viewport`/`is_active`. Anchored bottom-left
 (the corner label is top-right) so the two never collide. `target_hud_update_system` is chained
 `.after(split_screen_viewport_system)` in `lib.rs`, same ordering guarantee as the corner-label
 update system, so there's no stale-frame risk across a `dynamic` split's merge/split transition.
@@ -544,7 +544,7 @@ remains is:
    through this resource-poor path (see `planning/features/player_model_source_unification.md`'s
    v3 section).
 4. **Shared spawn functions** — `entity_spawner.rs`'s `spawn_player_entity` (single player, own
-   `OrbitCamera`), `spawn_players_and_camera` (1+ players; 2+ share one camera or split-screen),
+   `ActiveCameraMode::Orbit`), `spawn_players_and_camera` (1+ players; 2+ share one camera or split-screen),
    and `spawn_player_when_terrain_ready`. All three call the private `spawn_player_entity_core`,
    which dispatches body construction on `PlayerConfig.model_source: PlayerModelSource` (`Glb(key)`
    or `Primitive { shape, params, children }`) — everything **after** that dispatch (physics
@@ -632,16 +632,16 @@ secondary tuning knob, not the primary defense. No separate friction field was a
 
 ### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 
-**`PartyOrbitCamera`** (`capabilities/camera.rs`) is a sibling to `OrbitCamera`, not a
+**`ActiveCameraMode::Party`** (`capabilities/camera.rs`) is a sibling to `ActiveCameraMode::Orbit`, not a
 replacement — single-player scenes are untouched. When a scene has 2+ `tags: ["player"]`
 entities, `spawn_players_and_camera` reads the **first** player's `CameraConfig.party:
 Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the explicit switches
 (mutually exclusive — if both are set, `split` wins and a warning is logged):
-- `party` set → spawns one `PartyOrbitCamera` framing the midpoint of all players; radius is
+- `party` set → spawns one `ActiveCameraMode::Party` framing the midpoint of all players; radius is
   `clamp(max_pairwise_separation + zoom_margin, min_radius, max_radius)`, recomputed every frame
   by `party_camera_follow_system`. `PartyZoomDef.allow_manual_zoom` (default `false`) controls
   whether scroll-wheel still nudges the derived radius via an accumulated offset.
-- `split` set → spawns one **real `OrbitCamera` per player** (not `PartyOrbitCamera`), each
+- `split` set → spawns one **real `ActiveCameraMode::Orbit` per player** (not `ActiveCameraMode::Party`), each
   tagged `SplitViewportSlot(u32)` (which cell it owns — slot index = spawn order, i.e. entity
   order in the scene's `entities:` list). `split_screen_viewport_system` recomputes every
   `SplitViewportSlot` camera's `Camera.viewport` every frame from `Window::physical_size()`
@@ -650,8 +650,9 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   splits left/right, `Horizontal` splits top/bottom, `Grid` computes an N-cell grid — see below).
   Split-screen orientation lives in the `ActiveSplitScreen` resource (mirrors `ActiveViewBox`/
   `LoadedTargetIndicator` — populated by `spawn_players_and_camera`, cleared on `LoadScene`),
-  **not** on `OrbitCamera` or `SplitViewportSlot` — this keeps split-screen state out of the
-  camera components so the planned `camera_modes` unification doesn't have to untangle it later.
+  **not** on `ActiveCameraMode` or `SplitViewportSlot` — this kept split-screen state out of the
+  camera components, which is exactly why the `camera_modes.md` v1 unification didn't have to
+  untangle it.
   `Vertical`/`Horizontal` are always exactly 2-way (`.take(2)` in `spawn_players_and_camera`'s
   `split` branch); only `Grid` (Stage 6) unlocks N-way, `.take(slot_count)` where
   `slot_count = entities.len().min(MAX_SPLIT_PLAYERS)` (`MAX_SPLIT_PLAYERS = 4`, `camera.rs`) —
@@ -675,10 +676,10 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   layout. `Grid` does **not** support `split.dynamic` — dynamic merge/split stays `Vertical`/
   `Horizontal`-only.
 - `split.dynamic: Option<DynamicSplitDef>` set (Stage 5) → the view starts **merged** (its own
-  internal `PartyOrbitCamera`, tuned by `DynamicSplitDef.merged_zoom_margin`/
+  internal `ActiveCameraMode::Party`, tuned by `DynamicSplitDef.merged_zoom_margin`/
   `merged_allow_manual_zoom` — mirrors `PartyZoomDef`'s two fields, self-contained specifically so
   dynamic split doesn't also require authoring a `party:` block alongside `split:`) and
-  auto-splits into the two per-player `OrbitCamera`s once `split_distance` is exceeded, merging
+  auto-splits into the two per-player Orbit-mode cameras once `split_distance` is exceeded, merging
   back below `merge_distance` (hysteresis — the gap prevents flicker right at one boundary).
   `dynamic_split_screen_system` (`capabilities/camera.rs`) runs every frame, `.after(
   party_camera_follow_system)` and `.before(split_screen_viewport_system)` (see the `.chain()` in
@@ -694,43 +695,62 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
   active** — every merge/split transition updates it — rather than being write-once at scene load;
   `DynamicSplitConfig` (the static per-scene tuning resource, populated once at scene load like
   `ActiveSplitScreen` itself) is what stays write-once.
-- Neither set → logs a warning and falls back to a single `OrbitCamera` targeting only the
-  first player. Never silently spawns one `OrbitCamera` per player without split-screen viewports
+- Neither set → logs a warning and falls back to a single `ActiveCameraMode::Orbit` targeting only the
+  first player. Never silently spawns one `ActiveCameraMode::Orbit` per player without split-screen viewports
   — that would mean two cameras fighting for the same full-window viewport with no RON-visible
   symptom.
 
 Later players' `camera.party`/`camera.split` fields are ignored entirely — only the first
 player-tagged scene entity's config is read for those two switches. Scene entity order in
 `entities:` therefore matters for local co-op. **Split-screen is the one case where every
-player's OTHER camera fields still matter** — each split-screen player gets a real `OrbitCamera`
+player's OTHER camera fields still matter** — each split-screen player gets a real `ActiveCameraMode::Orbit`
 built from their own `camera` block (offset, `zoom_speed`, `orbit_button`, etc.), not just the
 first player's. A shared mouse would otherwise rotate/zoom every split-screen camera identically
 (`camera_orbit_system` reads mouse input once per system call, applying the same delta to every
-`OrbitCamera` in its query) — split-screen scenes disable manual control per-camera instead via
+`ActiveCameraMode::Orbit` in its query) — split-screen scenes disable manual control per-camera instead via
 RON: `zoom_speed: 0.0` (scroll × 0 has no effect) and `orbit_button: "None"` (new
 `parse_orbit_button` arm returning `(false, false)`, no warning — distinct from an actually
 unrecognized string, which warns and defaults to `"Either"`).
 
+**`character_rotate_button` needs the same treatment, and was missed on every `local_coop_demo`
+split prefab until `camera_modes.md` v1's playtest caught it live (added `character_rotate_button:
+None` to all 15 split-screen camera blocks).** It's a *separate* switch from `orbit_button` —
+`camera_orbit_system`'s `char_rotate` gate (`orbit.character_rotate_rmb && rmb`) fires independently
+of `orbit_active`, defaults to `Some("Right")` (i.e. `character_rotate_rmb: true`) when omitted, and
+rotates the **character**, not the camera's own yaw/pitch. Since it's gated only on the global RMB
+state with no per-viewport cursor check (same limitation as `orbit_button`), an unset
+`character_rotate_button` on a split-screen prefab spins *every* split player's character at once
+from either viewport — confirmed via a live runtime diagnostic added temporarily to
+`camera_orbit_system` during that playtest (compare `orbit_lmb`/`orbit_rmb`/`zoom_speed` logged at
+spawn time vs. read live in the system — both matched and were correctly `false`/`false`/`0.0`,
+which is what pointed at `character_rotate_button` as the actual unaccounted-for input). Any new
+split-screen prefab must set `character_rotate_button: None` alongside `orbit_button: "None"` and
+`zoom_speed: 0.0` — the docs (`docs/20_data_formats.md`) now state this as a three-field
+requirement, not two.
+
 **Keyboard camera look (`per_player_camera_look_controls.md`, shipped)** closes the gap this leaves
 — `orbit_button: "None"` only disables *mouse* orbit; each player can still independently turn
 their own camera via `InputMap.look_left`/`look_right`/`look_up`/`look_down`, pre-resolved once at
-spawn onto `OrbitCamera.look_left_key`/etc. (mirroring how `orbit_lmb`/`orbit_rmb` are already
+spawn onto `OrbitState.look_left_key`/etc. (mirroring how `orbit_lmb`/`orbit_rmb` are already
 pre-resolved rather than re-parsed every frame) and applied in `camera_orbit_system` independently
 of the mouse `orbit_active` gate. `CameraConfig.look_speed` (rad/sec, default 2.0) is the shared
 rate dial for this — deliberately not `orbit_speed`, which is tuned as a mouse-pixel-delta
 multiplier and would be far too slow reused as a keyboard-hold rate. Pitch direction is pinned to
 match the existing mouse convention (`look_up` increases `pitch` toward `max_pitch`, i.e. mirrors
 "mouse down" in this codebase's convention, not a literal "up = sky" reading) — see the regression
-test asserting direction, not just clamp bounds. `PartyOrbitCamera` deliberately has no equivalent
+test asserting direction, not just clamp bounds. `ActiveCameraMode::Party` deliberately has no equivalent
 — it's shared by every player at once, with no single owner to attribute a look binding to.
 Designer-facing docs (RON fields, the demo scheme table) live in `docs/20_data_formats.md`'s
 "Keyboard camera look" note — this paragraph is the implementation-side summary only.
 
-**Known limitation:** `Action::CameraShake` only queries `With<OrbitCamera>`
-(`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`), so it silently no-ops on a scene
-using `PartyOrbitCamera` — but **does** fire on both cameras in a `split` scene, since those are
-real `OrbitCamera`s. This is an intentional consequence of split-screen using real per-player
-cameras, not an oversight to fix.
+**Fixed (`camera_modes.md` v1, was a known limitation before):** `Action::CameraShake`
+(`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`) now queries `Or<(With<OrbitCameraMode>,
+With<PartyCameraMode>)>`, so it fires correctly on a `party:` scene's shared camera too, not just
+on both cameras in a `split` scene (which already worked, since those are real independent
+`Orbit`-mode cameras). Deliberately still excludes `Fixed`/`FirstPerson`/`Flycam`'s markers — a
+flycam scene must keep getting the explicit `warn!("no orbit camera in scene — shake ignored")`
+instead of a silent overwrite, since `fly_camera_system` runs after the shake system and
+unconditionally rewrites `Transform::rotation` every frame.
 
 **`world_label_screen_pos_system` (`lib.rs`) is viewport-aware** (fixed — this was the root cause
 of "Portal room-name labels render static and mis-positioned in every split-screen room"; see
@@ -738,7 +758,7 @@ of "Portal room-name labels render static and mis-positioned in every split-scre
 (`camera.is_active`, not `.single()`) and, per `WorldLabel`, picks the `WorldLabelRank`-th
 (default 0 when the component is absent) active camera whose own `logical_viewport_rect()`
 actually contains the point's `world_to_viewport()` projection — deterministic order:
-`SplitViewportSlot` index first (cameras with no slot, e.g. `PartyOrbitCamera`, sort last),
+`SplitViewportSlot` index first (cameras with no slot, e.g. `ActiveCameraMode::Party`, sort last),
 tie-broken by `Entity`. This fixes positioning for every `WorldLabel` consumer at once (room
 labels, entity labels, stat labels, damage popups, nameplate anchors), since they all share this
 one system.
@@ -841,7 +861,7 @@ simultaneously-visible split viewport, never duplicated across two.
 `PlayerIndex` (see above). `split_viewport_player_label_spawn_system` reacts to
 `Added<SplitViewportSlot>` (mirroring `nameplate_setup_system`'s `Added<NameplateTag>` idiom, so
 no per-frame "does a label already exist" scan is needed) and spawns a standalone (unparented) UI
-`Text` node — a corner "P{n}" label — for any split camera whose `OrbitCamera.target` carries a
+`Text` node — a corner "P{n}" label — for any split camera whose `CameraTargets` carries a
 `PlayerIndex`. The camera entity gets tagged `SplitScreenPlayerLabel` + `LinkedPlayerLabel(Entity)`
 pointing at the UI entity. `split_viewport_player_label_update_system` (`.after(
 split_screen_viewport_system)` in `lib.rs`'s `.chain()`) keeps the label's `Node.left`/`top`
@@ -897,8 +917,8 @@ of the *entire* query tuple, not just gamepad logic) and do a direct
 `bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok())` — no sorting, no re-deriving
 position, immune to any other pad's connect/disconnect churn. `camera_orbit_system` has no player
 `Entity` in its own query, so it resolves via a disjoint `bound_q: Query<&BoundGamepad>` looked up
-through `orbit.target`; `OrbitCamera.gamepad_index` (a spawn-frozen positional copy) was deleted
-entirely rather than left to silently diverge from `BoundGamepad`. The old crate-shared
+through `CameraTargets`; a spawn-frozen positional `gamepad_index` copy on the camera itself was
+never introduced, precisely to avoid it silently diverging from `BoundGamepad`. The old crate-shared
 `resolve_gamepad` helper was removed — nothing needs a live
 positional lookup anymore.
 

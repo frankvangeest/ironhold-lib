@@ -17,4 +17,12 @@
             bottom_color: (0.01, 0.01, 0.01),
         ),
     ),
+
+    // Temporary camera_modes.md v1 playtest aid — press C anywhere in this project to fire
+    // Action::CameraShake, verifying it fires on both the shared party camera (main/room2) and
+    // every active split-screen camera at once (room3+). Project-level (not per-scene) so it
+    // reaches every room without a per-scene binding. Remove once confirmed.
+    global_key_bindings: {
+        "KeyC": "shake_camera",
+    },
 )

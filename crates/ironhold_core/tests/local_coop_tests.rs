@@ -21,9 +21,10 @@ use ironhold_core::capabilities::stat_display::{
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, MovementConfig};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap, PlayerModelSource, PlayerConfig};
+use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, BoundGamepad, player_view_box_clamp_system};
 use ironhold_core::capabilities::camera::{
-    OrbitCamera, PartyOrbitCamera, party_camera_follow_system,
+    ActiveCameraMode, CameraTargets, OrbitCameraMode, PartyCameraMode, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
     MAX_SPLIT_PLAYERS, SplitScreenPlayerLabel, LinkedPlayerLabel, PLAYER_LABEL_COLORS,
     split_viewport_player_label_spawn_system, split_viewport_player_label_update_system,
@@ -77,6 +78,7 @@ fn base_camera_config() -> CameraConfig {
         party: None,
         split: None,
         look_speed: 2.0,
+        fov: 60.0,
     }
 }
 
@@ -98,8 +100,7 @@ fn test_party_camera_frames_midpoint_and_scales_radius_with_separation() {
     // Separation = 10.0; zoom_margin = 4.0 -> radius = 14.0, within [4, 20].
     let camera = app.world_mut().spawn((
         Transform::IDENTITY,
-        PartyOrbitCamera {
-            targets: vec![p1, p2],
+        ActiveCameraMode::Party(ironhold_core::capabilities::camera::PartyState {
             zoom_margin: 4.0,
             allow_manual_zoom: false,
             manual_zoom_offset: 0.0,
@@ -114,7 +115,9 @@ fn test_party_camera_frames_midpoint_and_scales_radius_with_separation() {
             max_pitch: 0.9,
             orbit_lmb: true,
             orbit_rmb: true,
-        },
+        }),
+        PartyCameraMode,
+        CameraTargets(vec![p1, p2]),
     )).id();
 
     app.world_mut().run_system_once(party_camera_follow_system).unwrap();
@@ -137,8 +140,7 @@ fn test_party_camera_radius_clamps_to_max_when_players_far_apart() {
     let p2 = app.world_mut().spawn((test_character_controller(), Transform::from_xyz(100.0, 0.0, 0.0))).id();
     let camera = app.world_mut().spawn((
         Transform::IDENTITY,
-        PartyOrbitCamera {
-            targets: vec![p1, p2],
+        ActiveCameraMode::Party(ironhold_core::capabilities::camera::PartyState {
             zoom_margin: 4.0,
             allow_manual_zoom: false,
             manual_zoom_offset: 0.0,
@@ -153,7 +155,9 @@ fn test_party_camera_radius_clamps_to_max_when_players_far_apart() {
             max_pitch: 0.9,
             orbit_lmb: true,
             orbit_rmb: true,
-        },
+        }),
+        PartyCameraMode,
+        CameraTargets(vec![p1, p2]),
     )).id();
 
     app.world_mut().run_system_once(party_camera_follow_system).unwrap();
@@ -314,6 +318,123 @@ fn load_two_player_scene(app: &mut App) {
 }
 
 #[test]
+fn test_single_player_with_no_camera_block_and_no_camera_mode_still_gets_default_orbit_camera() {
+    // Acceptance criterion added during camera_modes.md v1's confirmation pass: the corrected
+    // backward-compat rule is tag-driven (`tags: ["player"]`), not field-presence-driven — the
+    // majority shape across this codebase's own example projects is a player prefab with NO
+    // `camera:` block and NO `camera_mode:` at all, relying entirely on engine defaults. Every
+    // other test in this file uses `test_player_2` (also camera-less) only inside a 2-player
+    // split/party dispatch; this is the single-player `spawn_active_camera_for_player` fallback
+    // path specifically.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_solo".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    // Deliberately no `camera`, no `camera_mode` — the majority-shape case.
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+        schema_version: 1,
+        initial_scene: "scenes/solo.ron".to_string(),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_solo", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let orbit_count = app.world_mut().query::<&OrbitCameraMode>().iter(app.world()).count();
+    assert_eq!(orbit_count, 1, "a camera-less player prefab must still spawn exactly one default Orbit-mode camera");
+
+    let mut q = app.world_mut().query::<&ActiveCameraMode>();
+    let orbit = q.iter(app.world()).find_map(|m| match m {
+        ActiveCameraMode::Orbit(o) => Some(o),
+        _ => None,
+    }).expect("the spawned camera must be in Orbit mode");
+    assert!(
+        (orbit.min_radius - 2.0).abs() < 0.001 && (orbit.max_radius - 20.0).abs() < 0.001,
+        "default_camera_config()'s min_radius=2.0/max_radius=20.0 must resolve onto the spawned \
+         camera when no `camera:` block was authored, got min={} max={}", orbit.min_radius, orbit.max_radius
+    );
+}
+
+#[test]
+fn test_flycam_tagged_prefab_with_no_flycam_block_and_no_camera_mode_still_gets_default_flycam() {
+    // Sibling to the Orbit test above, for the other half of the corrected backward-compat rule:
+    // `tags: ["flycam"]` with no `flycam:` block and no `camera_mode:` (matches `terrain_demo`/
+    // `custom_materials` in this repo's own asset projects) must still spawn a default Flycam.
+    use ironhold_core::capabilities::camera::FlycamCameraMode;
+
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_flycam_solo".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                components: PrefabComponents {
+                    tags: vec!["flycam".to_string()],
+                    // Deliberately no `flycam`, no `camera_mode`.
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+        schema_version: 1,
+        initial_scene: "scenes/flycam_solo.ron".to_string(),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "fc1", prefab: "test_flycam_solo", transform: (translation: (0.0, 5.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let flycam_count = app.world_mut().query::<&FlycamCameraMode>().iter(app.world()).count();
+    assert_eq!(flycam_count, 1, "a flycam-tagged prefab with no flycam: block must still spawn exactly one default Flycam");
+}
+
+#[test]
 fn test_two_players_spawn_with_shared_party_camera() {
     let mut app = setup_test_app();
     app.update();
@@ -323,10 +444,10 @@ fn test_two_players_spawn_with_shared_party_camera() {
     let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
     assert_eq!(controller_count, 2, "both player-tagged entities must spawn a CharacterController");
 
-    let party_cam_count = app.world_mut().query::<&PartyOrbitCamera>().iter(app.world()).count();
+    let party_cam_count = app.world_mut().query::<&PartyCameraMode>().iter(app.world()).count();
     assert_eq!(party_cam_count, 1, "exactly one shared PartyOrbitCamera must spawn when `party` is configured");
 
-    let solo_cam_count = app.world_mut().query::<&OrbitCamera>().iter(app.world()).count();
+    let solo_cam_count = app.world_mut().query::<&OrbitCameraMode>().iter(app.world()).count();
     assert_eq!(solo_cam_count, 0, "no per-player OrbitCamera should spawn alongside the shared party camera");
 }
 
@@ -340,14 +461,14 @@ fn test_two_players_without_party_block_falls_back_to_single_camera() {
     let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
     assert_eq!(controller_count, 2, "both players still spawn even without a `party` block");
 
-    let solo_cam_count = app.world_mut().query::<&OrbitCamera>().iter(app.world()).count();
+    let solo_cam_count = app.world_mut().query::<&OrbitCameraMode>().iter(app.world()).count();
     assert_eq!(
         solo_cam_count, 1,
         "missing `party` on a 2-player scene must fall back to exactly one OrbitCamera, \
          never two silently-competing per-player cameras"
     );
 
-    let party_cam_count = app.world_mut().query::<&PartyOrbitCamera>().iter(app.world()).count();
+    let party_cam_count = app.world_mut().query::<&PartyCameraMode>().iter(app.world()).count();
     assert_eq!(party_cam_count, 0);
 }
 
@@ -610,13 +731,13 @@ fn test_split_and_party_both_set_split_wins() {
     let controller_count = app.world_mut().query::<&CharacterController>().iter(app.world()).count();
     assert_eq!(controller_count, 2, "both players still spawn regardless of the conflicting config");
 
-    let party_cam_count = app.world_mut().query::<&PartyOrbitCamera>().iter(app.world()).count();
+    let party_cam_count = app.world_mut().query::<&PartyCameraMode>().iter(app.world()).count();
     assert_eq!(party_cam_count, 0, "party must NOT spawn when split is also set");
 
     let split_slot_count = app.world_mut().query::<&SplitViewportSlot>().iter(app.world()).count();
     assert_eq!(split_slot_count, 2, "split wins: one SplitViewportSlot camera per player");
 
-    let orbit_cam_count = app.world_mut().query::<&OrbitCamera>().iter(app.world()).count();
+    let orbit_cam_count = app.world_mut().query::<&OrbitCameraMode>().iter(app.world()).count();
     assert_eq!(orbit_cam_count, 2, "split spawns two real OrbitCameras, not a fallback single one");
 }
 
@@ -638,6 +759,128 @@ fn test_split_only_spawns_two_orbit_cameras_with_viewport_slots() {
     let mut sorted = slots.clone();
     sorted.sort();
     assert_eq!(sorted, vec![0, 1], "expected exactly one slot 0 and one slot 1, got {:?}", slots);
+}
+
+#[test]
+fn test_split_screen_honors_camera_mode_orbit_not_just_legacy_camera_field() {
+    // Regression test for a real bug 3 independent post-implementation reviews caught: the
+    // split/party spawn dispatch originally read `player_config.camera` directly, silently
+    // ignoring an authored `camera_mode: Orbit(...)` and falling back to `default_camera_config()`
+    // whenever a migrated prefab dropped its legacy `camera:` block — exactly what shipped
+    // `local_coop_demo`'s player_p1_split_h/player_p2_split_h (room4) did, regressing their
+    // `orbit_button: "None"`/`zoom_speed: 0.0` split-screen mouse-decoupling. This pins the fix
+    // by authoring the FIRST player via `camera_mode:` only (no `camera:` block at all) and
+    // asserting its distinctive tuning survives into BOTH spawned split cameras.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    // No `camera:` block at all — camera_mode is the ONLY source of tuning.
+                    camera_mode: Some(CameraModeDef::Orbit(CameraConfig {
+                        zoom_speed: 0.0,
+                        orbit_button: "None".to_string(),
+                        ..base_camera_config()
+                    })),
+                    split: Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false }),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_player_2".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_b".to_string(),
+                player_index: 1,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    // Also camera_mode-only, no `split:` (only the first player's is read) — same
+                    // pattern room4's real player_p2_split_h uses.
+                    camera_mode: Some(CameraModeDef::Orbit(CameraConfig {
+                        zoom_speed: 0.0,
+                        orbit_button: "None".to_string(),
+                        ..base_camera_config()
+                    })),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+    load_two_player_scene(&mut app);
+
+    let split_orbit_states: Vec<(f32, bool, bool)> = {
+        let mut q = app.world_mut().query::<(&ActiveCameraMode, &SplitViewportSlot)>();
+        q.iter(app.world()).filter_map(|(m, _)| match m {
+            ActiveCameraMode::Orbit(o) => Some((o.zoom_speed, o.orbit_lmb, o.orbit_rmb)),
+            _ => None,
+        }).collect()
+    };
+    assert_eq!(split_orbit_states.len(), 2, "both split cameras must be Orbit-mode");
+    for (zoom_speed, orbit_lmb, orbit_rmb) in split_orbit_states {
+        assert_eq!(zoom_speed, 0.0, "camera_mode's zoom_speed: 0.0 must reach the spawned split camera, not default_camera_config()'s 10.0");
+        assert!(!orbit_lmb && !orbit_rmb, "camera_mode's orbit_button: \"None\" must disable mouse-orbit on the spawned split camera — a shared mouse must not orbit both players' cameras");
+    }
+}
+
+#[test]
+fn test_every_shared_mouse_disabled_split_camera_also_disables_character_rotate() {
+    // Regression for a real bug found live during camera_modes.md v1's room4 playtest:
+    // `camera_orbit_system` has no per-viewport cursor check (confirmed via a runtime
+    // diagnostic) — it reads the mouse/keyboard state once per frame and applies it identically
+    // to every active Orbit-mode camera. `orbit_button: "None"` disables the camera's own
+    // mouse-orbit, but `character_rotate_button` (default `Some("Right")`) is a SEPARATE switch
+    // that independently rotates the character model on RMB-drag, with the same no-per-viewport-
+    // check limitation. Every one of local_coop_demo's 15 split-screen camera blocks had disabled
+    // `orbit_button`/`zoom_speed` but never `character_rotate_button` — holding RMB and moving the
+    // mouse spun EVERY split player's character at once, from either viewport. Parses the REAL
+    // prefabs.ron (not synthetic data) through the exact same RON options the engine's
+    // AssetLoader uses, so this catches the authored RON directly, not just the Rust types.
+    let text = std::fs::read_to_string(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/projects/local_coop_demo/prefabs/prefabs.ron")
+    ).expect("read local_coop_demo/prefabs/prefabs.ron");
+    let catalog: PrefabCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(&text)
+        .expect("parse local_coop_demo/prefabs/prefabs.ron");
+
+    let mut checked = 0;
+    for (key, prefab) in &catalog.prefabs {
+        // Any prefab that has already opted into disabling mouse-orbit (either via the legacy
+        // `camera:` field or the new `camera_mode: Orbit(...)` sibling) is, by definition, a
+        // split-screen (or otherwise shared-mouse) player — it must disable ALL THREE fields
+        // together, not just the two `orbit_button`/`zoom_speed` this bug's fix already covers.
+        let orbit_cfg = match (&prefab.components.camera, &prefab.components.camera_mode) {
+            (_, Some(CameraModeDef::Orbit(cfg))) => Some(cfg),
+            (Some(cfg), None) => Some(cfg),
+            _ => None,
+        };
+        let Some(cfg) = orbit_cfg else { continue };
+        if cfg.orbit_button != "None" {
+            continue;
+        }
+        checked += 1;
+        assert!(
+            cfg.character_rotate_button.is_none(),
+            "prefab '{key}' disables orbit_button (\"None\") for shared-mouse split-screen play \
+             but leaves character_rotate_button at its default (Some(\"Right\")) — RMB-drag will \
+             spin every split player's character at once. Set character_rotate_button: None \
+             alongside orbit_button: \"None\" and zoom_speed: 0.0."
+        );
+    }
+    assert!(checked >= 15, "expected to check at least the 15 known split-screen camera blocks, only found {checked} — did prefabs.ron structure change?");
 }
 
 // ── per_viewport_target_ring_visibility.md: RenderLayers on split cameras ───────
@@ -785,7 +1028,7 @@ fn test_dynamic_split_own_viewport_only_gives_party_camera_the_full_layer_union(
     assert_eq!(split_layers.len(), 2, "both split cameras must carry a RenderLayers component");
 
     let party_layers = {
-        let mut q = app.world_mut().query_filtered::<&RenderLayers, With<PartyOrbitCamera>>();
+        let mut q = app.world_mut().query_filtered::<&RenderLayers, With<PartyCameraMode>>();
         q.iter(app.world()).next().cloned()
     };
     let party_layers = party_layers.expect(
@@ -1287,6 +1530,52 @@ fn test_hot_join_own_viewport_only_gives_the_joined_players_camera_its_own_reser
 }
 
 #[test]
+fn test_action_spawn_fallback_camera_gets_no_render_layers_in_own_viewport_only_scene() {
+    // Named test for the specific non-insertion path `camera_modes.md` v1's confirmation pass
+    // flagged as the real risk of collapsing three camera-spawn call sites into one shared
+    // helper: `drain_spawn_queue_system`'s non-hot-join branch (`Action::Spawn`/character-select)
+    // spawns its own dedicated full-window Orbit-mode camera via `spawn_player_entity`, which must
+    // still get NO `RenderLayers` component (and the existing warn! must still fire) in an
+    // `own_viewport_only` scene — unlike hot-join's `spawn_split_camera_for_player`, which
+    // correctly gets one (see the test directly above).
+    let mut app = setup_test_app();
+    app.update();
+    n_player_catalogs_with_split(
+        &mut app, MAX_SPLIT_PLAYERS,
+        Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: true }),
+    );
+    load_grid_scene_with_join_slots(&mut app, 2);
+    assert_eq!(*app.world().resource::<TargetRingVisibilityMode>(), TargetRingVisibilityMode::OwnViewportOnly);
+
+    // Simulate a non-hot-join Action::Spawn of a player prefab (e.g. character-select) landing
+    // directly in PendingEntitySpawns — the same shape `Action::Spawn`'s executor arm produces,
+    // with `is_hot_join: false` (unlike the sibling test above, which pushes `Action::JoinPlayer`).
+    app.world_mut().resource_mut::<PendingEntitySpawns>().0.push_back(QueuedSpawn {
+        prefab_def: PrefabDef::default(),
+        model_path: String::new(),
+        transform: Transform::from_xyz(20.0, 0.5, 0.0),
+        spawn_id: "spawned_player_test".to_string(),
+        prefab_key: "test_player_3".to_string(),
+        project_root: String::new(),
+        player_config: Some(minimal_player_config(None, 5, None)),
+        is_hot_join: false,
+    });
+    app.update();
+
+    let cameras_without_layers = app.world_mut()
+        .query_filtered::<Entity, (With<CameraTargets>, Without<RenderLayers>)>()
+        .iter(app.world())
+        .count();
+    assert_eq!(
+        cameras_without_layers, 1,
+        "exactly one camera (the Action::Spawn fallback camera) must carry NO RenderLayers \
+         component — every pre-existing split-screen camera in this own_viewport_only scene has \
+         one, so a count of 1 proves the fallback camera specifically was left componentless, not \
+         that RenderLayers insertion broke everywhere"
+    );
+}
+
+#[test]
 fn test_hot_join_spawns_at_the_correct_1_based_spawn_point_not_on_top_of_an_existing_player() {
     // Regression for the alignment-reviewer's off-by-one finding: the executor must resolve
     // spawn_points["player_{next_slot + 1}_start"], not "player_{next_slot}_start" — the latter
@@ -1561,6 +1850,9 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_
         model_source: PlayerModelSource::Glb("char_a".to_string()),
         initial_position: (0.0, 0.5, 0.0),
         camera: base_camera_config(),
+        camera_mode: None,
+        split: None,
+        party: None,
         inputs: InputMap { gamepad_index, ..test_input_map() },
         animation_policy: None,
         movement: MovementConfig::default(),
@@ -2217,9 +2509,8 @@ fn test_gamepad_only_action_bar_slot_on_cooldown_emits_event_and_does_not_fire()
 
 // ── Stage 5: dynamic_split_screen_system (unit-level) ───────────────────────────
 
-fn test_orbit_camera(target: Entity) -> OrbitCamera {
-    OrbitCamera {
-        target,
+fn test_orbit_state() -> ironhold_core::capabilities::camera::OrbitState {
+    ironhold_core::capabilities::camera::OrbitState {
         radius: 10.0,
         offset: Vec3::new(0.0, 4.5, 9.0),
         zoom_speed: 0.0,
@@ -2244,9 +2535,22 @@ fn test_orbit_camera(target: Entity) -> OrbitCamera {
     }
 }
 
-fn test_party_orbit_camera(targets: Vec<Entity>) -> PartyOrbitCamera {
-    PartyOrbitCamera {
-        targets,
+fn test_orbit_camera(target: Entity) -> (ActiveCameraMode, OrbitCameraMode, CameraTargets) {
+    (ActiveCameraMode::Orbit(test_orbit_state()), OrbitCameraMode, CameraTargets(vec![target]))
+}
+
+/// Reads back the `OrbitState` payload of an `Orbit`-mode camera spawned via `test_orbit_camera`/
+/// `test_orbit_state`. Panics if `camera` isn't currently in `Orbit` mode — every call site here
+/// spawns one directly, so a mismatch means the test itself is wrong, not a real runtime case.
+fn get_orbit<'a>(app: &'a App, camera: Entity) -> &'a ironhold_core::capabilities::camera::OrbitState {
+    match app.world().get::<ActiveCameraMode>(camera).unwrap() {
+        ActiveCameraMode::Orbit(o) => o,
+        _ => panic!("expected an Orbit-mode camera at {camera:?}"),
+    }
+}
+
+fn test_party_orbit_camera(targets: Vec<Entity>) -> (ActiveCameraMode, PartyCameraMode, CameraTargets) {
+    (ActiveCameraMode::Party(ironhold_core::capabilities::camera::PartyState {
         zoom_margin: 3.0,
         allow_manual_zoom: false,
         manual_zoom_offset: 0.0,
@@ -2261,7 +2565,7 @@ fn test_party_orbit_camera(targets: Vec<Entity>) -> PartyOrbitCamera {
         max_pitch: 0.9,
         orbit_lmb: true,
         orbit_rmb: true,
-    }
+    }), PartyCameraMode, CameraTargets(targets))
 }
 
 /// Spawns the minimal 3-camera rig `dynamic_split_screen_system` operates on: two "player"
@@ -2464,7 +2768,7 @@ fn test_dynamic_split_initial_state_starts_split_when_distance_exceeds_threshold
     assert_eq!(app.world().resource::<ActiveSplitScreen>().0, Some(SplitOrientation::Vertical), "8.0 > split_distance 5.0 -> must start split");
 
     let party_active: Vec<bool> = {
-        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyOrbitCamera>>();
+        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyCameraMode>>();
         q.iter(app.world()).map(|c| c.is_active).collect()
     };
     assert_eq!(party_active, vec![false], "party camera must start inactive when the scene starts split");
@@ -2498,7 +2802,7 @@ fn test_dynamic_split_initial_state_starts_merged_when_within_threshold() {
     assert_eq!(app.world().resource::<ActiveSplitScreen>().0, None, "8.0 < split_distance 12.0 -> must start merged");
 
     let party_active: Vec<bool> = {
-        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyOrbitCamera>>();
+        let mut q = app.world_mut().query_filtered::<&Camera, With<PartyCameraMode>>();
         q.iter(app.world()).map(|c| c.is_active).collect()
     };
     assert_eq!(party_active, vec![true], "party camera must start active when the scene starts merged");
@@ -2573,8 +2877,8 @@ fn test_split_label_text_and_color_match_player_index_not_material() {
     app.update();
 
     let cams: Vec<(Entity, Entity)> = {
-        let mut q = app.world_mut().query::<(&OrbitCamera, &LinkedPlayerLabel)>();
-        q.iter(app.world()).map(|(o, l)| (o.target, l.0)).collect()
+        let mut q = app.world_mut().query::<(&CameraTargets, &LinkedPlayerLabel)>();
+        q.iter(app.world()).filter_map(|(t, l)| t.0.first().copied().map(|target| (target, l.0))).collect()
     };
     assert_eq!(cams.len(), 4);
     for (target, label_entity) in cams {
@@ -3605,18 +3909,20 @@ fn test_gamepad_right_stick_y_increases_pitch_same_direction_as_look_up() {
         test_character_controller(),
         Transform::from_xyz(0.0, 0.0, 0.0),
         GlobalTransform::default(),
-        // `camera_orbit_system` resolves gamepad input via `BoundGamepad` through `orbit.target`
-        // (`OrbitCamera.gamepad_index` was a spawn-frozen positional copy and has been removed —
+        // `camera_orbit_system` resolves gamepad input via `BoundGamepad` through `CameraTargets`
+        // (`OrbitState` carries no gamepad_index — a spawn-frozen positional copy would be wrong;
         // see `gamepad_player_binding_hardening.md`).
         BoundGamepad(Some(gamepad)),
     )).id();
 
     let camera = app.world_mut().spawn((
         Transform::default(),
-        OrbitCamera { target: player, pitch: 0.5, ..test_orbit_camera(player) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { pitch: 0.5, ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
     )).id();
 
-    let pitch_before = app.world().get::<OrbitCamera>(camera).unwrap().pitch;
+    let pitch_before = get_orbit(&app, camera).pitch;
 
     set_gamepad_axis(&mut app, gamepad, GamepadAxis::RightStickY, 1.0);
     // Large deterministic delta, same rationale as the keyboard look_up test above — a real
@@ -3624,7 +3930,7 @@ fn test_gamepad_right_stick_y_increases_pitch_same_direction_as_look_up() {
     app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(1));
     app.update();
 
-    let pitch_after = app.world().get::<OrbitCamera>(camera).unwrap().pitch;
+    let pitch_after = get_orbit(&app, camera).pitch;
     assert!(
         pitch_after > pitch_before,
         "pushing right-stick-Y up (positive value) must increase pitch, same direction as the \
@@ -4427,8 +4733,8 @@ fn test_target_hud_shows_each_players_own_target_independently() {
 
     // Map each split camera's HUD readout entity to its owning player entity.
     let cams: Vec<(Entity, Entity)> = {
-        let mut q = app.world_mut().query::<(&OrbitCamera, &LinkedTargetHud)>();
-        q.iter(app.world()).map(|(o, l)| (o.target, l.0)).collect()
+        let mut q = app.world_mut().query::<(&CameraTargets, &LinkedTargetHud)>();
+        q.iter(app.world()).filter_map(|(t, l)| t.0.first().copied().map(|target| (target, l.0))).collect()
     };
     assert_eq!(cams.len(), 2, "both split cameras must get a target-HUD readout entity");
 
@@ -5431,13 +5737,17 @@ fn test_keyboard_look_left_rotates_only_the_bound_camera_not_a_sibling() {
 
     let cam_with_look = app.world_mut().spawn((
         Transform::IDENTITY,
-        OrbitCamera { look_left_key: Some(KeyCode::KeyZ), ..test_orbit_camera(p0) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { look_left_key: Some(KeyCode::KeyZ), ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![p0]),
     )).id();
     // Bound to a DIFFERENT key, not left unbound — this is the actual 4-way grid scenario
     // (every scheme's look keys are distinct), a stronger proof than an unbound sibling would be.
     let cam_without_look = app.world_mut().spawn((
         Transform::IDENTITY,
-        OrbitCamera { look_left_key: Some(KeyCode::Comma), ..test_orbit_camera(p1) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { look_left_key: Some(KeyCode::Comma), ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![p1]),
     )).id();
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyZ);
@@ -5450,8 +5760,8 @@ fn test_keyboard_look_left_rotates_only_the_bound_camera_not_a_sibling() {
         app.world_mut().run_system_once(camera_orbit_system).unwrap();
     }
 
-    let yaw_with_look = app.world().get::<OrbitCamera>(cam_with_look).unwrap().yaw;
-    let yaw_without_look = app.world().get::<OrbitCamera>(cam_without_look).unwrap().yaw;
+    let yaw_with_look = get_orbit(&app, cam_with_look).yaw;
+    let yaw_without_look = get_orbit(&app, cam_without_look).yaw;
     assert!(
         yaw_with_look > 0.0,
         "look_left held should increase yaw over several ticks, got {yaw_with_look}"
@@ -5471,7 +5781,9 @@ fn test_keyboard_look_right_decreases_yaw() {
     let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
     let cam = app.world_mut().spawn((
         Transform::IDENTITY,
-        OrbitCamera { look_right_key: Some(KeyCode::KeyX), ..test_orbit_camera(p0) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { look_right_key: Some(KeyCode::KeyX), ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![p0]),
     )).id();
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyX);
@@ -5480,7 +5792,7 @@ fn test_keyboard_look_right_decreases_yaw() {
         app.world_mut().run_system_once(camera_orbit_system).unwrap();
     }
 
-    let yaw = app.world().get::<OrbitCamera>(cam).unwrap().yaw;
+    let yaw = get_orbit(&app, cam).yaw;
     assert!(yaw < 0.0, "look_right held should decrease yaw, got {yaw}");
 }
 
@@ -5492,7 +5804,9 @@ fn test_keyboard_look_up_increases_pitch_toward_max_and_clamps() {
     let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
     let cam = app.world_mut().spawn((
         Transform::IDENTITY,
-        OrbitCamera { look_up_key: Some(KeyCode::KeyC), pitch: 0.5, ..test_orbit_camera(p0) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { look_up_key: Some(KeyCode::KeyC), pitch: 0.5, ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![p0]),
     )).id();
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyC);
@@ -5501,7 +5815,7 @@ fn test_keyboard_look_up_increases_pitch_toward_max_and_clamps() {
     app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(5));
     app.world_mut().run_system_once(camera_orbit_system).unwrap();
 
-    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    let orbit = get_orbit(&app, cam);
     assert!(
         orbit.pitch > 0.5,
         "look_up held should increase pitch toward max_pitch (matching this codebase's mouse \
@@ -5521,14 +5835,16 @@ fn test_keyboard_look_down_decreases_pitch_toward_min_and_clamps() {
     let p0 = app.world_mut().spawn((test_character_controller(), Transform::IDENTITY)).id();
     let cam = app.world_mut().spawn((
         Transform::IDENTITY,
-        OrbitCamera { look_down_key: Some(KeyCode::KeyV), pitch: 0.5, ..test_orbit_camera(p0) },
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState { look_down_key: Some(KeyCode::KeyV), pitch: 0.5, ..test_orbit_state() }),
+        OrbitCameraMode,
+        CameraTargets(vec![p0]),
     )).id();
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyV);
     app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_secs(5));
     app.world_mut().run_system_once(camera_orbit_system).unwrap();
 
-    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    let orbit = get_orbit(&app, cam);
     assert!(orbit.pitch < 0.5, "look_down held should decrease pitch, got {}", orbit.pitch);
     assert!(
         (orbit.pitch - orbit.min_pitch).abs() < 0.001,
@@ -5560,7 +5876,7 @@ fn test_no_look_keys_bound_is_unaffected_by_keyboard_input_regression() {
         app.world_mut().run_system_once(camera_orbit_system).unwrap();
     }
 
-    let orbit = app.world().get::<OrbitCamera>(cam).unwrap();
+    let orbit = get_orbit(&app, cam);
     assert_eq!(orbit.yaw, 0.0, "no look keys bound -> yaw must stay exactly at its spawned value");
     assert_eq!(orbit.pitch, 0.5, "no look keys bound -> pitch must stay exactly at its spawned value");
 }
@@ -5619,7 +5935,7 @@ fn test_scene_load_resolves_look_keys_and_look_speed_onto_spawned_split_orbit_ca
 
     load_two_player_scene(&mut app);
 
-    // OrbitCamera doesn't derive Clone, so snapshot just the fields this test needs.
+    // ActiveCameraMode doesn't derive Clone, so snapshot just the fields this test needs.
     struct LookSnapshot {
         look_left_key: Option<KeyCode>,
         look_right_key: Option<KeyCode>,
@@ -5627,12 +5943,15 @@ fn test_scene_load_resolves_look_keys_and_look_speed_onto_spawned_split_orbit_ca
         look_down_key: Option<KeyCode>,
         look_speed: f32,
     }
-    let mut q = app.world_mut().query::<&OrbitCamera>();
-    let cams: Vec<LookSnapshot> = q.iter(app.world()).map(|c| LookSnapshot {
-        look_left_key: c.look_left_key, look_right_key: c.look_right_key,
-        look_up_key: c.look_up_key, look_down_key: c.look_down_key, look_speed: c.look_speed,
+    let mut q = app.world_mut().query::<&ActiveCameraMode>();
+    let cams: Vec<LookSnapshot> = q.iter(app.world()).filter_map(|mode| {
+        let ActiveCameraMode::Orbit(c) = mode else { return None };
+        Some(LookSnapshot {
+            look_left_key: c.look_left_key, look_right_key: c.look_right_key,
+            look_up_key: c.look_up_key, look_down_key: c.look_down_key, look_speed: c.look_speed,
+        })
     }).collect();
-    assert_eq!(cams.len(), 2, "split-screen scene must spawn one OrbitCamera per player");
+    assert_eq!(cams.len(), 2, "split-screen scene must spawn one Orbit-mode camera per player");
 
     let p1_cam = cams.iter().find(|c| c.look_left_key == Some(KeyCode::KeyZ))
         .expect("player 1's camera (the one with a custom look_left) must exist among the spawned cameras");

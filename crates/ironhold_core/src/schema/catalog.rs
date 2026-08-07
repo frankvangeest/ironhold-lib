@@ -1316,11 +1316,27 @@ pub struct PrefabComponents {
     /// Only read for prefabs with `tags: ["flycam"]`.
     #[serde(default)]
     pub flycam: Option<FlyCamDef>,
-    /// Orbit camera configuration for the player.
+    /// Orbit camera configuration for the player. Legacy field — only read when
+    /// `camera_mode` is absent (loader-side backward-compat detection, keyed on the
+    /// `"player"`/`"flycam"` tag; see `planning/features/camera_modes.md`).
     /// Only read for prefabs with `tags: ["player"]`.
     /// When omitted, engine defaults apply (offset 10 m behind, 5 m up).
     #[serde(default)]
     pub camera: Option<CameraConfig>,
+    /// Named camera preset. Only read for prefabs with `tags: ["player"]`/`tags: ["flycam"]`.
+    /// When present, takes priority over the legacy `camera`/`flycam` fields above.
+    #[serde(default)]
+    pub camera_mode: Option<crate::schema::camera::CameraModeDef>,
+    /// Local co-op split-screen viewport assignment — a sibling of `camera_mode`, not nested
+    /// inside it (viewport assignment is orthogonal to which camera-following mode a player
+    /// uses). Authored on the *first* `tags: ["player"]` entity only, same convention as the
+    /// legacy `camera.split`. Mutually exclusive with `party` below.
+    #[serde(default)]
+    pub split: Option<crate::schema::player::SplitScreenDef>,
+    /// Local co-op shared-camera framing — a sibling of `camera_mode`. Authored on the first
+    /// player only. Mutually exclusive with `split` above.
+    #[serde(default)]
+    pub party: Option<crate::schema::player::PartyZoomDef>,
 }
 
 /// Movement parameters for any prefab with the "player" tag (primitive or GLB).
