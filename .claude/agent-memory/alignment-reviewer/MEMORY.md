@@ -28,3 +28,4 @@
 - [Gamepad action-bar slots](gamepad_action_bar_slots_pattern.md) — ActionSlotDef.gamepad_key 5 touchpoints; two-differently-scoped collision checks; "South" vs gamepad_jump-default footgun; missing gamepad_index silent no-op
 - [RenderLayers reserved-layer scheme](render_layers_reserved_scheme.md) — own_viewport_only rings: layers 0/1-4/31 map, camera-must-carry-ring-layer invariant, hardcoded [0..4] union vs MAX_SPLIT_PLAYERS, unvalidated player_index modulo collisions
 - [Gamepad binding pattern](gamepad_binding_pattern.md) — BoundGamepad seed-then-lock replaces resolve_gamepad; 4 stale schema/RON doc-comment sites; per-scene-not-per-catalog scoping rule for player-prefab validate checks
+- [Camera modes v1 pattern](camera_modes_v1_pattern.md) — ActiveCameraMode/CameraTargets/per-mode markers; only 1 of 6+ camera-spawn sites honors camera_mode; unregistered-system + FOV 45→60 compat breaks

@@ -1,6 +1,6 @@
 ---
 name: camera-architecture
-description: How OrbitCamera and FlyCamera coexist as siloed camera components, the Update-schedule camera chain, and the camera_modes unification plan that will replace them
+description: Camera component history (OrbitCamera/FlyCamera/PartyOrbitCamera) plus the camera_modes v1 unification that replaced them — ActiveCameraMode/CameraTargets/markers, the Update-schedule chain, and v1's four structural traps
 metadata:
   type: project
 ---
@@ -44,3 +44,21 @@ small `SplitCameraOpts`/`PartyCameraOpts` struct rather than a 7th positional pa
 **`OrbitCamera.gamepad_index` was DELETED (`f4cca59`, 2026-08-05).** `camera_orbit_system` now resolves the pad live via a disjoint `bound_q: Query<&BoundGamepad>` looked up **through `orbit.target`** — so `camera_orbit_system` itself is now a **sixth** "which player owns this camera" consumer, on top of the five-site list below. `PartyOrbitCamera` still deliberately has no gamepad/look bindings (no single owner), so "no gamepad pitch in `Party` mode" is the correct, intended answer for any unification.
 
 **The scene_loader camera-spawn chain is FOUR branches, not three** (`scene_loader.rs` ~753-848): players → flycam → `spawn_points` non-empty (deliberately spawns **nothing**, FSM will) → default fallback camera.
+
+---
+
+**`camera_modes` v1 LANDED (feature/camera-modes-v1, code-reviewed 2026-08-07).** `OrbitCamera`/`PartyOrbitCamera`/`FlyCamera` are GONE; replaced by `ActiveCameraMode` enum component (`OrbitState`/`PartyState`/`FixedState`/`FollowState`/`FirstPersonState`/`FlycamState` payloads) + `CameraTargets(Vec<Entity>)` + six zero-sized markers (`OrbitCameraMode` … `FlycamCameraMode`). Schema side is the separate `CameraModeDef` in `schema/camera.rs`; `PrefabComponents` gained `camera_mode`/`split`/`party` as siblings; `PlayerConfig` gained the same three. All 4 plan blockers verified honored. **SEVEN camera spawn sites**, all marker-in-sync: `spawn_orbit_camera_from_config`, the 5 arms of `spawn_active_camera_for_player`, `spawn_party_orbit_camera` (camera.rs), the scene_loader flycam block, plus the `Default Camera` fallback (deliberately bare — no `ActiveCameraMode`/`CameraTargets`; every consumer uses `Option<&CameraTargets>` or a marker filter).
+
+**THE ONE STRUCTURAL TRAP `camera_mode` INTRODUCED — "the multiplayer branches never read `camera_mode`."** `resolve_camera_mode()` is called ONLY from `spawn_active_camera_for_player`, which is only reachable from the single-player path (`spawn_players_and_camera`'s `entities.len() < 2` branch + `spawn_player_entity`). Every 2+-player branch in `spawn_players_and_camera` (static split, dynamic split, party, and the no-party/no-split fallback warn) still reads `&player_config.camera` / `&first.camera` — the LEGACY field, which `assemble_player_config` fills with `default_camera_config()` whenever the prefab authored only `camera_mode:`. So migrating a co-op prefab to `camera_mode: Orbit((...))` silently reverts its whole camera tuning to engine defaults (`orbit_button "Either"`, `zoom_speed 10.0`, `character_rotate_button Some("Right")`) — which is exactly the shared-mouse-delta split-screen bug from [[split-screen-and-shared-mouse]]. Caught in review on the shipped `local_coop_demo/room4` migration. Whenever anything touches these spawn paths, check `.camera` vs `resolve_camera_mode` at `entity_spawner.rs` ~723 / ~766 / ~830 / ~844 / `spawn_orbit_camera_for_player`.
+
+**`fov` is the other v1 landmine.** `insert_fov` (entity_spawner.rs) inserts `Projection::Perspective{fov}` explicitly; before v1 nothing inserted `Projection` at all, so `Camera3d`'s required-component default was **PI/4 = 45°**. `default_fov()` = 60.0 → every pre-existing project silently widens 45→60 and all 27 screenshot baselines diverge. Party cameras (`spawn_party_orbit_camera`) and the flycam/Default-Camera paths do NOT call `insert_fov`, so they stay 45° — in a dynamic-split scene the FOV pops at every merge/split. `PartyCameraDef` has no `fov` field and `spawn_party_orbit_camera` ignores `base_camera.fov`. Cleanest fix: `fov: Option<f32>`, skip the insert when `None`.
+
+**Three of six mode systems were written but never registered in `lib.rs`** at v1 review time: `follow_camera_system`, `fixed_camera_system`, `first_person_camera_system`. They're `pub fn` in a lib crate so no dead-code warning fires and the suite stays green — `camera_mode: Follow/Fixed/FirstPerson` authored in RON spawns a camera frozen at its spawn transform, silently. Verify registration before trusting any claim that a mode "works".
+
+**`CameraModeDef::Party` is dead schema in v1** — no spawn path honors `PartyCameraDef`; the multiplayer dispatch builds `PartyState` from `CameraConfig` + `PartyZoomDef`, and the single-player arm warns and falls back to Orbit.
+
+**Blocker 1 is only HALF resolved:** `CameraConfig` still carries `split`/`party`, so `CameraModeDef::Orbit(CameraConfig)` re-exposes them inside the payload — but `assemble_player_config` reads them only from `prefab.components.camera` or the new siblings, never from the `camera_mode` payload. `camera_mode: Orbit((split: (...)))` parses and does nothing.
+
+**Marker/enum sync is convention-only** — no single constructor derives the marker from the variant. v2's `SetCameraMode` needs remove-5-markers/insert-1; land a `fn camera_bundle(mode) -> impl Bundle` before then.
+
+**RON gotcha for every `CameraModeDef` variant: DOUBLE parens** — `Orbit((field: value, ...))`. Single-paren fails with `Expected struct CameraConfig but found "offset"`. `ironhold_cli` has zero camera awareness (no validation of `camera:` + `camera_mode:` both set, no Party-on-single-player check).

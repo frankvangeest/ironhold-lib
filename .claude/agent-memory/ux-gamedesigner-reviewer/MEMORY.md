@@ -3,6 +3,8 @@
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Player-count-change assumptions](project_player_count_change_assumptions.md) — seat index vs viewport slot conflated at join; "2+ players" gating assumes count is fixed per scene; both break on leave
 - [CameraConfig party/split nesting](project_camera_config_party_split_nesting.md) — party:/split: live inside components.camera; flycam is TAG-driven not field-driven; real docs/20 camera surface is ~1814-2557
+- [camera_mode reachability matrix](project_camera_mode_reachability_matrix.md) — camera_mode: is ignored on the split/party spawn paths (Orbit-only, reads legacy .camera); nesting split: inside Orbit(()) parses but is dropped
+- [RON enum double-paren trap](project_ron_enum_double_paren.md) — enum variants wrapping a named struct need Orbit((field: value)); single-paren examples fail to parse; only cli validate catches it
 - [Docs lag the action schema](project_docs_lag_actions.md) — docs/20_data_formats.md, docs/30_runtime_events_and_logic.md, docs/STATUS.md consistently miss new Action variants when added
 - [pkg/ web build must be rebuilt](project_pkg_rebuild_required.md) — staged schema/action changes do not reach designers until wasm-pack build + commit of pkg/
 - [Color tuples vary RGB vs RGBA](project_color_tuple_inconsistency.md) — DamagePopupStyle uses 3-tuple RGB while StatLabelDef/WorldStatBarDef use 4-tuple RGBA in the same prefab block
