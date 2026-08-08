@@ -61,7 +61,7 @@ no camera code._
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | Camera mode unification — `ActiveCameraMode` component, backward-compat mapping | Done | `8bcecb5` (2026-08-07) |
-| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Queued | — |
+| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Active | — |
 
 ## What
 
