@@ -128,7 +128,7 @@ camera_mode: Orbit((
     fov: 60.0,   // optional, degrees
     transition: (
         duration_secs: 0.4,
-        ease: "EaseInOut",
+        ease: EaseInOut,
     ),
 )),
 ```
@@ -140,7 +140,7 @@ camera_mode: Fixed((
     look_at: (0.0, 0.0, 0.0),
     // look_at_entity: "boss",   // tracks a moving entity each frame
     fov: 50.0,   // optional; narrower FOV suits cinematic fixed shots
-    transition: (duration_secs: 0.6, ease: "EaseIn"),
+    transition: (duration_secs: 0.6, ease: EaseIn),
 )),
 ```
 
@@ -151,7 +151,7 @@ camera_mode: Follow((
     smoothing: 8.0,         // position lerp speed — higher = snappier, 0 = instant
     rotation_smoothing: 6.0, // separate smoothing for look-at rotation
     fov: 75.0,               // optional, degrees; default 60
-    transition: (duration_secs: 0.3, ease: "Linear"),
+    transition: (duration_secs: 0.3, ease: Linear),
 )),
 ```
 
@@ -205,9 +205,11 @@ The existing `CameraConfig` and `FlyCamDef` structs become the inner payloads of
 ```rust
 pub struct CameraTransition {
     pub duration_secs: f32,
-    pub ease: EaseKind,   // Linear, EaseIn, EaseOut, EaseInOut
+    pub ease: EaseKind,   // Linear, EaseIn, EaseOut, EaseInOut — real enum, unquoted in RON
 }
 ```
+
+**RON quoting note (ux-gamedesigner-reviewer, 2026-08-09 confirmation pass):** `ease:` is a real deserialized enum, written **unquoted** in RON (`ease: EaseInOut`, not `ease: "EaseInOut"`) — matching every other designer-facing enum field in this codebase (`velocity_curve: EaseOut`, `emitter: Point`, `orientation: Vertical`). Every fence in this doc has been corrected to the unquoted form; the plan's original drafts had this wrong. `EaseKind` is a **separate type from particles' `VelocityCurve`** despite the name overlap in `Linear`/`EaseIn`/`EaseOut` — `EaseKind` needs `EaseInOut` (no camera use for `Pulse`) and `VelocityCurve` needs `Pulse` (no particle use for `EaseInOut`); the variant sets don't fully overlap, so they stay two distinct enums rather than one shared type with unused variants on either side. Document both tables side-by-side in `docs/20_data_formats.md` so a designer moving between particles and cameras doesn't assume they're interchangeable.
 
 Every mode variant carries an optional `transition` field. When `SetCameraMode` fires, the system lerps `Transform` (position + rotation via `Quat::slerp`) over `duration_secs` from the old position to the new one. If `transition` is absent, the cut is instant.
 
@@ -466,17 +468,31 @@ matching marker in sync — insert-or-swap on mode change, not two independently
      component types, not `ActiveCameraMode`'s enum variant
    - One unified `camera_system` that dispatches on the active mode
    - `CameraBlendState` component for in-progress transitions (**v2**)
+   - `AuthoredCameraMode(CameraModeDef)` component, written once at spawn from `resolve_camera_mode`
+     (and synthesized explicitly for the dynamic-split merged camera, which has no authored
+     `camera_mode:` of its own) — what `SetCameraMode(mode: "default")` restores to (**v2** — see
+     "Named mode registry" resolution)
 
-3. **`schema/actions.rs`** (**v2**)
+3. **`schema/scene_v2.rs`** (**v2**)
+   - Add `camera_modes: BTreeMap<String, CameraModeDef>` to `GameSceneV2` (`#[serde(default)]`) — the
+     scene-scoped named-preset registry `SetCameraMode` resolves against (see "Named mode registry"
+     resolution above). `"default"` is a reserved key (rejected if authored); `Party(...)` values are
+     rejected (dead schema); `Flycam(...)` is accepted
+   - `runtime/scene_manager/mod.rs`: `LoadedCameraModes(BTreeMap<String, CameraModeDef>)` resource,
+     inserted in `scene_loader.rs`'s Replace branch only (mirrors `LoadedSpawnPoints` exactly — never
+     on an overlay load)
+
+4. **`schema/actions.rs`** (**v2**)
    - Add `SetCameraMode { mode: String, owner_player: Option<u32> }` (struct variant — see the
      multi-camera targeting decision above); extend `Action::CameraShake` with the same
      `owner_player: Option<u32>` field in the same pass
 
-4. **`runtime/action_executor.rs`** (**v2**)
-   - Handle `SetCameraMode`: resolve `owner_player` to the target camera(s) per the table above,
-     look up the named mode, set `ActiveCameraMode`, insert `CameraBlendState`
+5. **`runtime/action_executor.rs`** (**v2**)
+   - Handle `SetCameraMode`: resolve `mode` against `LoadedCameraModes` (`"default"` resolves to the
+     target camera's own `AuthoredCameraMode` instead of a registry lookup), resolve `owner_player`
+     to the target camera(s) per the table above, set `ActiveCameraMode`, insert `CameraBlendState`
 
-5. **`runtime/scene_manager/scene_loader.rs`** and **`runtime/scene_manager/entity_spawner.rs`**
+6. **`runtime/scene_manager/scene_loader.rs`** and **`runtime/scene_manager/entity_spawner.rs`**
    - Replace the camera-spawn construction (today: `spawn_orbit_camera_for_player`, the sole
      `OrbitCamera` construction site as of `player_model_source_unification` v1 removing the
      scene_loader's inline capsule/primitive block) with a single helper that builds
@@ -507,7 +523,7 @@ matching marker in sync — insert-or-swap on mode change, not two independently
      only supplies tuning when the tag is already `"flycam"`/`"player"`.** Full tag retirement is
      deferred, matching that icebox item's own existing scope.
 
-6. **`ironhold_cli`** — **v1 scope is just the `cargo check -p ironhold_cli` compile gate**: v1
+7. **`ironhold_cli`** — **v1 scope is just the `cargo check -p ironhold_cli` compile gate**: v1
    adds no new `Action` variant (that's v2's `SetCameraMode`), and `PrefabComponents`' new
    `camera_mode`/relocated `split`/`party` fields carry no `deny_unknown_fields`, so they flow
    through the CLI's shared schema types without a code change there. Still worth a spot-check of
@@ -594,22 +610,56 @@ matching marker in sync — insert-or-swap on mode change, not two independently
       capability the split-screen reconciliation spent the most words on)
 
 **v2 (runtime mode-switching):**
+- [ ] Add `camera_modes: BTreeMap<String, CameraModeDef>` to `GameSceneV2` (`schema/scene_v2.rs`,
+      `#[serde(default)]`); add `LoadedCameraModes(BTreeMap<String, CameraModeDef>)` resource,
+      inserted in `scene_loader.rs`'s Replace branch only (beside `LoadedSpawnPoints`) — never on an
+      overlay load. Reject (load-time `warn!` + `ironhold_cli validate` error) a registry key named
+      `"default"` (reserved) or a `Party(...)` value (dead schema, no per-camera meaning); confirm
+      `Flycam(...)` is accepted. Apply v1's nested-`split`/`party`-inside-`Orbit(...)` warn
+      (`entity_spawner.rs:1511`) to registry values too, not just prefab values
+- [ ] Add `AuthoredCameraMode(CameraModeDef)` component, inserted at every camera spawn site from
+      `resolve_camera_mode`'s return value (`entity_spawner.rs:1275`) — the thing `SetCameraMode(mode:
+      "default")` restores to. Define what the dynamic-split merged (`Party`) camera's
+      `AuthoredCameraMode` is, written at the point `dynamic_split_screen_system` constructs that
+      camera — it has no authored `camera_mode:` of its own, so this needs an explicit synthesized
+      value, not an assumption it falls out for free
 - [ ] Add `SetCameraMode { mode: String, owner_player: Option<u32> }` to `Action` enum and document
       it; extend `Action::CameraShake` with the same `owner_player` field in the same pass
-- [ ] Implement `CameraBlendState` transition lerp (position + slerp rotation + FOV lerp)
-- [ ] Handle `SetCameraMode` in `action_executor.rs`, resolving `owner_player` per the targeting
-      table above (including the `warn!`+no-op cases: party scene, unjoined seat, out-of-range
-      index)
+- [ ] Implement `CameraBlendState` transition lerp (position + slerp rotation + FOV lerp); fix the
+      plan's own RON fences to use unquoted `EaseKind` values (`ease: EaseInOut`, not `ease:
+      "EaseInOut"`) matching every other designer-facing enum in this codebase — carry that into the
+      real schema and docs, don't just fix the plan text
+- [ ] Handle `SetCameraMode` in `action_executor.rs`: resolve `mode` against `LoadedCameraModes`
+      (`"default"` resolves to the target camera's own `AuthoredCameraMode` instead), then resolve
+      `owner_player` per the targeting table above (including the `warn!`+no-op cases: party scene,
+      unjoined seat, out-of-range index). `owner_player` omitted on a `"default"` restore means every
+      active camera restores its own authored mode independently, not one shared mode
+- [ ] `ironhold_cli validate`: `SetCameraMode(mode:)` must be `"default"` or a key present in some
+      scene's `camera_modes` (project-scoped, so a cross-scene mismatch isn't caught — documented
+      limitation, matching the project-scoped rules-vs-scene-scoped-registry gap); a `Fixed` registry
+      entry's `look_at_entity` must resolve to an id in that same scene's `entities:` list
 - [ ] Hot-join interaction: a player joining after `SetCameraMode` has retargeted another camera
       spawns in the scene-authored default mode, not the currently-active override — the two are
       independent per-camera states
 - [ ] `dynamic_split_screen_system` interaction: suspend automatic merge/split transitions on any
       camera currently under a `SetCameraMode` override, resuming only on an explicit
       `SetCameraMode` back or a scene reload (see the precedence decision above)
-- [ ] Update `entity_logic_demo`/`quick_scene` with a single-player camera-switch example, and
-      complete the `local_coop_demo` per-viewport retargeting demo named in v1's task list
+- [ ] Docs: `docs/20_data_formats.md` — add the scene-level `camera_modes:` section (place directly
+      after `spawn_points:` per the existing field-table order); reword line ~2130 to stop calling the
+      *singular* prefab `camera_mode:` field "a preset" (reserve that word for registry entries) and
+      add a two-line disambiguation cross-link between the two sections; add a "Valid in
+      `camera_modes:`?" column (or footnote) to the `CameraModeDef` variant table (~line 2146) once
+      `Party` is registry-illegal; document `EaseKind` beside `VelocityCurve` (particles) noting they
+      are deliberately separate enums with only partially-overlapping variants, not one shared type
+- [ ] Update `entity_logic_demo`/`quick_scene` with a single-player camera-switch example — round-trip
+      through `"default"` (switch away, then explicitly switch back), not just one-way, since that's
+      the sentinel's only teaching surface — and complete the `local_coop_demo` per-viewport
+      retargeting demo named in v1's task list, demonstrating `split:` is unaffected by a
+      `SetCameraMode` fired in that scene
 - [ ] Integration tests: mode switch fires correctly (including `owner_player` targeting each
-      `warn!` case), transition completes, fallback camera spawns
+      `warn!` case), transition completes, fallback camera spawns, `"default"` round-trip restores
+      the original authored mode (including on the dynamic-split merged camera), reserved-key and
+      `Party`-in-registry rejection both fire
 
 ---
 
@@ -671,7 +721,100 @@ migrated shapes above pass `ironhold_cli validate` and their full existing test 
 
 ## Open questions
 
-- **Named mode registry**: should named modes live in the prefab catalog, in a new `camera_modes:` block at scene level, or as inline RON in the action argument? Inline is simplest but prevents reuse across scenes. A scene-level `camera_modes:` map (key → `CameraModeDef`) feels right — small and local to the scene.
+- **Named mode registry**: **(resolved 2026-08-09, system-architect + ux-gamedesigner-reviewer)** —
+  named modes live in a new scene-level `camera_modes: BTreeMap<String, CameraModeDef>` field on
+  `GameSceneV2`, resolved into a `LoadedCameraModes` resource inserted at scene load **in the
+  Replace branch only** (beside `LoadedSpawnPoints`, `scene_loader.rs:123` — an overlay load must
+  not clobber the live world's registry). `SetCameraMode`'s `mode: String` resolves against the
+  current scene's registry only; cross-scene lookup is neither possible nor desirable, since
+  `Fixed`'s `position`/`look_at` are world coordinates and `look_at_entity` is a `SpawnRegistry` id
+  scoped to one scene. Map (not list-with-`name:`) matches every named registry in this codebase;
+  the closest structural precedent is `spawn_points:` — a scene-level named map referenced by string
+  from a project-level action (`Action::Spawn { spawn_point }`). Prefab-catalog placement was
+  rejected (`PrefabCatalog` is an archetype catalog; camera config living on prefabs is the
+  divergence Blocker 4 already wants to move *away* from). Inline-in-action was rejected (no other
+  `Action` variant carries an inline definition payload, and it would prevent reuse between two
+  rules in the same scene). A project-level `camera_modes:` tier with per-key scene-wins overlay
+  (mirroring `global_key_bindings`/`scene_key_bindings`) is a purely additive future addition,
+  deliberately not built in v2.
+
+  ```ron
+  // assets/projects/{project}/scenes/main.scene.ron
+  (
+      schema_version: 2,
+      name: "main",
+      spawn_points: { "hero_start": (0.0, 0.5, 0.0) },
+      // Named, switchable camera presets for THIS scene — what `Action::SetCameraMode(mode: "...")`
+      // resolves against. Does NOT change what any camera starts as (that's each player prefab's
+      // singular camera_mode: field, v1) — this is the list of presets available to switch *to*.
+      // Same double-paren rule as camera_mode: — Fixed((...)), not Fixed(...).
+      // The reserved key "default" always means "this camera's scene-authored starting mode" and
+      // must not be defined here (CLI error + load-time warn if it is).
+      camera_modes: {
+          "cutscene_fixed": Fixed((
+              position: (20.0, 10.0, 0.0),
+              look_at_entity: "boss_01",   // a scene entity id from entities: below, not a prefab key
+              fov: 50.0,
+              transition: (duration_secs: 0.6, ease: EaseIn),
+          )),
+          "topdown": Follow((
+              offset: (0.0, 18.0, 0.1),
+              look_at_offset: (0.0, 1.0, 0.0),
+              smoothing: 10.0,
+              fov: 55.0,
+              transition: (duration_secs: 0.3, ease: EaseInOut),
+          )),
+      },
+      entities: [ /* ... including ( id: "boss_01", prefab: "enemy_boss", ... ) ... */ ],
+  )
+  ```
+  ```ron
+  // logic/state_machine.ron or rules.ron
+  ( on: "ui.button_pressed:enter_cutscene", do_actions: [SetCameraMode(mode: "cutscene_fixed")] ),
+  ( on: "dialogue.ended:dialogue/boss_intro.ron", do_actions: [SetCameraMode(mode: "default")] ),
+  // co-op: retarget only player 2's viewport, player 1 keeps playing uninterrupted
+  ( on: "entity.entered:puzzle_room", do_actions: [SetCameraMode(mode: "topdown", owner_player: 1)] ),
+  ```
+
+  **Four v2 requirements fall out of this decision, all added to the Tasks list below:**
+  1. **The `"default"` sentinel restores a camera's scene-authored starting mode** — backed by a new
+     `AuthoredCameraMode(CameraModeDef)` component, inserted at every camera spawn site from
+     `resolve_camera_mode`'s return value (`entity_spawner.rs:1275`, already pure
+     override-or-fallback — reusable verbatim). This is what the dynamic-split suspend/resume rule
+     above needs, since the prefab's inline `camera_mode:` otherwise has no name to resume *to*.
+     **The dynamic-split merged (`Party`) camera is engine-synthesized, not resolved from an authored
+     `camera_mode:` — it needs its own `AuthoredCameraMode` written at the point
+     `dynamic_split_screen_system` constructs it**, or `SetCameraMode(mode: "default")` on that camera
+     has nothing to restore to. Define this explicitly during implementation, not discovered via a
+     failing test. `owner_player` omitted on a `"default"` restore means "every active camera restores
+     *its own* authored mode independently," not "all cameras adopt one shared mode."
+  2. **A scene authoring `camera_modes: { "default": ... }` is rejected** — `ironhold_cli validate`
+     error, plus a load-time `warn!` (the reserved-key collision case) — not a silent shadow of the
+     restore verb.
+  3. **`Party(...)` entries in `camera_modes:` are rejected** with a `warn!` + CLI error — dead schema
+     today, and no N-target meaning under a per-player `SetCameraMode` fired at a single camera.
+     `Flycam(...)` **is** legal in the registry (a designer's first instinct for "free-fly debug
+     camera" via a rule) — state this explicitly in docs next to the `Party` restriction so both are
+     answered, not just the one that needed a restriction.
+  4. **`ironhold_cli validate` gains two new checks** (mirroring the existing prefab/model/effect/
+     modifier key-reference checks in `commands/validate.rs`): `SetCameraMode(mode:)` must name either
+     `"default"` or a key present in *some* scene's `camera_modes` (weaker than project-scoped catalog
+     checks — rules are project-scoped, so "defined in scene A, fired while scene B is active" isn't
+     caught — but catches the dominant typo'd-key failure); and a `Fixed` registry entry's
+     `look_at_entity` must resolve to an id in that same scene's `entities:` list (possible precisely
+     *because* the registry is scene-scoped — this is a strictly stronger check than `spawn_points`
+     gets today, which has none). Also apply v1's nested-`split`/`party`-inside-`Orbit(...)` warn
+     (`entity_spawner.rs:1511`) to registry values, not just prefab values — a registry entry parses
+     fine either way today and would otherwise be silently inert the same way the v1 case was.
+
+  **Docs vocabulary split (ux-gamedesigner-reviewer):** `docs/20_data_formats.md:2130` currently calls
+  the *singular* prefab field "a named preset" (*"`components.camera_mode` is a named preset that
+  replaces the implicit dispatch"*) — exactly the sentence a designer will misapply to the new plural
+  registry. Reword that line to drop "preset" (*"...is **the mode a camera starts in**..."*) and
+  reserve "preset" exclusively for `camera_modes:` registry entries, with a two-line disambiguation
+  block at the top of both doc sections, each linking to the other. The `CameraModeDef` variant table
+  (`docs/20_data_formats.md:2146`) needs a "Valid in `camera_modes:`?" column (or a footnote) once
+  `Party` is registry-illegal, so it stops over-promising all 6 variants.
 
 - **Multiple cameras / split-screen**: **(resolved 2026-08-01, post plan-review — no longer
   hypothetical or open)**. Local co-op split-screen shipped and is load-bearing, heavily-used
