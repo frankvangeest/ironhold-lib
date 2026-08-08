@@ -1,6 +1,6 @@
 # Feature: Camera Modes
 
-_Status: In Progress (v1 Done, v2 Queued)_
+_Status: In Progress (v1 Done, v2 Active)_
 _Post-implementation review (2026-08-07): all 5 reviews (alignment, system-architect,
 debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer) independently converged on the same
 3 critical bugs, giving unusually strong confidence they were real: (1) `follow_camera_system`/
