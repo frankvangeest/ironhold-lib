@@ -1262,6 +1262,9 @@ pub struct FlyCamDef {
     /// Mouse button that activates look mode. `"Left"`, `"Right"`, or `"Either"`. Default: `"Either"`.
     #[serde(default = "default_flycam_look_button")]
     pub look_button: String,
+    /// Blend behavior when `SetCameraMode` switches onto this mode (**v2**). Absent = instant cut.
+    #[serde(default)]
+    pub transition: Option<crate::schema::camera::CameraTransition>,
 }
 
 impl Default for FlyCamDef {
@@ -1277,6 +1280,7 @@ impl Default for FlyCamDef {
             up: default_flycam_up(),
             down: default_flycam_down(),
             look_button: default_flycam_look_button(),
+            transition: None,
         }
     }
 }

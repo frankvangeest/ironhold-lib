@@ -1423,6 +1423,7 @@ pub(crate) fn default_camera_config() -> CameraConfig {
         split: None,
         look_speed: 2.0,
         fov: crate::schema::player::default_fov(),
+        transition: None,
     }
 }
 

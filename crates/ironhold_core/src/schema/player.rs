@@ -155,6 +155,9 @@ pub struct CameraConfig {
     /// a `SetCameraMode` transition is v2 scope. Default: 60.0.
     #[serde(default = "default_fov")]
     pub fov: f32,
+    /// Blend behavior when `SetCameraMode` switches onto this mode (**v2**). Absent = instant cut.
+    #[serde(default)]
+    pub transition: Option<crate::schema::camera::CameraTransition>,
 }
 
 // 45.0, not a rounder "60.0", deliberately: Bevy's `PerspectiveProjection::default()` is exactly

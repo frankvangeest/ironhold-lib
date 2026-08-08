@@ -146,6 +146,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedSpawnPoints>()
+            .init_resource::<crate::runtime::scene_manager::LoadedCameraModes>()
             .init_resource::<crate::runtime::scene_manager::SpawnRegistry>()
             .init_resource::<crate::runtime::scene_manager::PendingSceneLoadMode>()
             .init_resource::<crate::runtime::scene_manager::PreloadedScenes>()

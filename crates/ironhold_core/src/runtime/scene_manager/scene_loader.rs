@@ -14,7 +14,7 @@ use crate::runtime::material_factory::MaterialFactory;
 use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
-    LoadedSpawnPoints, SpawnRegistry, MergedModelFixes,
+    LoadedSpawnPoints, LoadedCameraModes, SpawnRegistry, MergedModelFixes,
     ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate, WorldLabel,
     WorldLabelRank, LoadedGamepadBindings,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
@@ -101,6 +101,7 @@ pub fn spawn_scene_v2(
 
     warn_cross_bar_duplicate_keys(scene);
     warn_same_player_gamepad_duplicate_slots(scene);
+    warn_camera_modes_registry(scene);
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
     // `try_despawn` (not `despawn`): only the 3 overlay root entities are tagged
@@ -121,6 +122,7 @@ pub fn spawn_scene_v2(
     } else {
         // Replace mode: tear down the existing world.
         commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
+        commands.insert_resource(LoadedCameraModes(scene.camera_modes.clone()));
         spawn_registry.entities.clear();
         spawn_registry.counter = 0;
 
@@ -1309,6 +1311,34 @@ fn warn_same_player_gamepad_duplicate_slots(scene: &GameSceneV2) {
                     seen.insert((owner_player, btn), (bar.id.clone(), slot.key.clone()));
                 }
             }
+        }
+    }
+}
+
+/// `camera_modes:` registry entries (**v2**, `planning/features/camera_modes.md` "Named mode
+/// registry" resolution) have two authoring mistakes that parse fine but are silently wrong at
+/// runtime: a key literally named `"default"` (reserved — it's what `SetCameraMode(mode:
+/// "default")` restores to, not a definable preset) and a `Party(...)` value (dead schema outside
+/// the engine-internal split/party dispatch; no per-camera meaning under a `SetCameraMode` fired at
+/// one camera). Mirrors the CLI-side checks in `ironhold_cli::commands::validate`.
+fn warn_camera_modes_registry(scene: &GameSceneV2) {
+    for (key, mode) in &scene.camera_modes {
+        if key == "default" {
+            warn!(
+                "camera_modes: scene defines a preset named \"default\", which is a reserved key \
+                 (SetCameraMode(mode: \"default\") always restores a camera's own scene-authored \
+                 starting mode, never a designer-defined preset). This entry will never be reachable \
+                 by that name — rename it."
+            );
+        }
+        if matches!(mode, crate::schema::camera::CameraModeDef::Party(_)) {
+            warn!(
+                "camera_modes: preset \"{}\" is Party(...), which is not usable from this registry — \
+                 Party has no per-camera meaning under a SetCameraMode fired at a single camera, and \
+                 the engine's own split/party dispatch never reads camera_modes. This entry will be \
+                 rejected if referenced by a SetCameraMode action.",
+                key
+            );
         }
     }
 }

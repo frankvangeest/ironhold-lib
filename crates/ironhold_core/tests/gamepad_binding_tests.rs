@@ -62,6 +62,7 @@ fn test_camera_config() -> CameraConfig {
         split: None,
         look_speed: 2.0,
         fov: 60.0,
+        transition: None,
     }
 }
 

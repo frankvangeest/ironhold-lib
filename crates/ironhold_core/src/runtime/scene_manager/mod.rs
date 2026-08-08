@@ -317,6 +317,14 @@ pub struct LoadedPrefabCatalog(pub PrefabCatalog);
 #[derive(Resource, Default, Clone)]
 pub struct LoadedSpawnPoints(pub BTreeMap<String, (f32, f32, f32)>);
 
+/// Named, switchable camera presets from the most recently loaded scene (`GameSceneV2::
+/// camera_modes`, **v2**). `Action::SetCameraMode` resolves its `mode: String` against this map
+/// (the reserved key `"default"` never appears here — it resolves against each target camera's
+/// own `AuthoredCameraMode` instead). Inserted only in `scene_loader.rs`'s Replace branch, mirroring
+/// `LoadedSpawnPoints` exactly — an overlay load must not clobber the live world's registry.
+#[derive(Resource, Default, Clone)]
+pub struct LoadedCameraModes(pub BTreeMap<String, crate::schema::camera::CameraModeDef>);
+
 /// Tracks externally-loaded project config files that are still loading.
 /// Inserted by `check_project_loaded` on the first frame the project config is ready,
 /// removed implicitly once the project transitions to `LoadingScene`.

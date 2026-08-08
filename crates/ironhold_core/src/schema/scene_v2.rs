@@ -54,6 +54,16 @@ pub struct GameSceneV2 {
     pub terrain: Option<TerrainConfigV2>,
     #[serde(default)]
     pub spawn_points: BTreeMap<String, (f32, f32, f32)>,
+    /// Named, switchable camera presets for this scene (**v2**) — what
+    /// `Action::SetCameraMode(mode: "...")` resolves `mode` against. Does NOT change what any
+    /// camera starts as (that's each player prefab's singular `components.camera_mode`, v1); this
+    /// is the list of presets available to switch *to* at runtime. The key `"default"` is reserved
+    /// (restores a camera's own scene-authored starting mode) and must not be defined here — a
+    /// scene that does is a load-time `warn!` and an `ironhold_cli validate` error. `Party(...)`
+    /// values are likewise rejected (see `CameraModeDef` doc). See
+    /// `planning/features/camera_modes.md`'s "Named mode registry" resolution.
+    #[serde(default)]
+    pub camera_modes: BTreeMap<String, crate::schema::camera::CameraModeDef>,
     #[serde(default)]
     pub entities: Vec<SceneEntityDef>,
     #[serde(default)]
