@@ -273,7 +273,8 @@ async def test_button_fires_action(context: BrowserContext) -> None:
 async def test_scene_transition(context: BrowserContext) -> None:
     """
     3rd_person_game_demo starts at start_menu.scene.ron.
-    Clicking 'Start Game' → LoadScene("scenes/main.scene.ron") → new scene loads.
+    Clicking 'Start Game' → LoadScene("scenes/character_select.scene.ron").
+    Clicking a character on that screen → LoadScene("scenes/main.scene.ron").
     """
     page, errors = await open_project(context, "3rd_person_game_demo")
     try:
@@ -285,10 +286,24 @@ async def test_scene_transition(context: BrowserContext) -> None:
         # Start Game button: position=(100,100) size=(300,65) → center=(250,132)
         await page.mouse.click(250, 132)
 
+        # Wait for character_select to become ready in InGame
+        select_state = await wait_for_debug_state(
+            page,
+            lambda s: s.get("app_state") == "InGame" and s.get("scene", "") != initial_scene,
+            timeout_s=CANVAS_TIMEOUT,
+        )
+        if "character_select" not in select_state.get("scene", ""):
+            raise TestFailure(
+                f"Expected scene to contain 'character_select', got: {select_state.get('scene')}"
+            )
+
+        # Select Male Warrior button: position=(360,520) size=(230,56) → center=(475,548)
+        await page.mouse.click(475, 548)
+
         # Wait for a different scene to become ready in InGame
         final_state = await wait_for_debug_state(
             page,
-            lambda s: s.get("app_state") == "InGame" and s.get("scene", "") != initial_scene,
+            lambda s: s.get("app_state") == "InGame" and s.get("scene", "") != select_state.get("scene", ""),
             timeout_s=CANVAS_TIMEOUT,
         )
 
@@ -380,10 +395,14 @@ async def test_pause_menu_navigation(
     Button coordinates (absolute-positioned, 1280×720 viewport):
       Start Game: position=(100,100) size=(300,65) → click (250, 132)
 
-    Resume button (ui_panel centered layout, panel width=320 padding=30 gap=16):
-      Panel height = 30 + (50+16+65+16+65) + 30 = 272 → top = (720-272)/2 = 224
-      Resume center y = 224 + 30 + 50 + 16 + 65/2 = 352
-      Resume center x = 1280/2 = 640 → click (640, 352)
+    Resume button (ui_panel centered layout, panel width=320 padding=30 gap=16).
+    Panel content: title(50) + resume(65) + audio_state label(36) + mute button(65) + quit(65),
+    each separated by a 16 gap — the audio_state label and mute button were added by the audio
+    mute toggle feature after this math was first computed; recompute here if pause.scene.ron's
+    ui list changes again.
+      Panel height = 30 + (50+16+65+16+36+16+65+16+65) + 30 = 405 → top = (720-405)/2 = 157.5
+      Resume center y = 157.5 + 30 + 50 + 16 + 65/2 = 286
+      Resume center x = 1280/2 = 640 → click (640, 286)
     """
     page, errors = await open_project(context, "3rd_person_game_demo")
     steps_dir = screenshot_dir / "pause_nav"
@@ -425,10 +444,16 @@ async def test_pause_menu_navigation(
         await wait_for_scene_ready(page)
         await snap("01_start_menu")
 
-        # ── Step 2: Start Game → main scene ────────────────────────────────
+        # ── Step 2: Start Game → character select → main scene ─────────────
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
         await page.mouse.click(250, 132)   # Start Game button
+        await wait_for_debug_state(
+            page,
+            lambda s: s.get("app_state") == "InGame" and "character_select" in s.get("scene", ""),
+            timeout_s=CANVAS_TIMEOUT,
+        )
+        await page.mouse.click(475, 548)   # Male Warrior button
         await wait_for_debug_state(
             page,
             lambda s: s.get("app_state") == "InGame" and "main" in s.get("scene", ""),
@@ -469,7 +494,7 @@ async def test_pause_menu_navigation(
         # ── Step 6: Resume button → overlay dismissed ───────────────────────
         state = await wait_for_debug_state(page, lambda s: True)
         frame = state["frame"]
-        await page.mouse.click(640, 352)   # Resume button (centered panel layout)
+        await page.mouse.click(640, 286)   # Resume button (centered panel layout)
         await wait_for_debug_state(
             page,
             lambda s: s.get("frame", 0) > frame and s.get("logic_state") == "playing",
@@ -493,13 +518,18 @@ async def run_all(
     filter_projects: set[str],
     chromium_args: list[str] | None = None,
     headless: bool = True,
+    executable_path: str | None = None,
 ) -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
     # When --project is given, restrict to those projects; otherwise run all.
     active_projects = [p for p in PROJECTS if not filter_projects or p in filter_projects]
 
     async with async_playwright() as pw:
-        browser: Browser = await pw.chromium.launch(headless=headless, args=chromium_args or CHROMIUM_ARGS_GL)
+        browser: Browser = await pw.chromium.launch(
+            headless=headless,
+            args=chromium_args or CHROMIUM_ARGS_GL,
+            executable_path=executable_path,
+        )
         context: BrowserContext = await browser.new_context(viewport={"width": 1280, "height": 720})
 
         # --- Smoke tests ---
@@ -510,7 +540,7 @@ async def run_all(
                 await test_smoke(context, project)
                 results.append((label, True, ""))
                 print(f"    PASS")
-            except TestFailure as e:
+            except Exception as e:
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
 
@@ -522,7 +552,7 @@ async def run_all(
                 last_action = await test_button_fires_action(context)
                 results.append((label, True, ""))
                 print(f"    PASS  (last_action={last_action})")
-            except TestFailure as e:
+            except Exception as e:
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
 
@@ -534,7 +564,7 @@ async def run_all(
                 before, after = await test_scene_transition(context)
                 results.append((label, True, ""))
                 print(f"    PASS  ({before!r} -> {after!r})")
-            except TestFailure as e:
+            except Exception as e:
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
 
@@ -551,7 +581,7 @@ async def run_all(
                     )
                     results.append((label, True, ""))
                     print(f"    PASS")
-                except TestFailure as e:
+                except Exception as e:
                     results.append((label, False, str(e)))
                     print(f"    FAIL: {e}")
 
@@ -564,7 +594,7 @@ async def run_all(
                 await test_pause_menu_navigation(context, screenshot_dir, update_nav)
                 results.append((label, True, ""))
                 print(f"    PASS")
-            except TestFailure as e:
+            except Exception as e:
                 results.append((label, False, str(e)))
                 print(f"    FAIL: {e}")
 
@@ -609,6 +639,11 @@ def main() -> None:
                                 "without requiring a display or physical GPU")
     gpu_group.add_argument("--real-gpu", action="store_true",
                            help="Use real GPU via non-headless Chromium; requires a display")
+    parser.add_argument("--browser-path", metavar="PATH", default=None,
+                        help="Launch a specific installed browser binary (e.g. a portable Brave "
+                             "install) instead of Playwright's bundled Chromium. Implies "
+                             "--real-gpu (non-headless, real GPU args) unless --webgpu is also "
+                             "given explicitly.")
     args = parser.parse_args()
 
     screenshot_dir = Path(args.screenshot_dir)
@@ -632,18 +667,21 @@ def main() -> None:
     )
     time.sleep(1)
 
-    if args.real_gpu:
-        chromium_args = CHROMIUM_ARGS_REAL_GPU
-        headless = False
-    elif args.webgpu:
+    if args.webgpu:
         chromium_args = CHROMIUM_ARGS_WEBGPU
         headless = True
+    elif args.real_gpu or args.browser_path:
+        chromium_args = CHROMIUM_ARGS_REAL_GPU
+        headless = False
     else:
         chromium_args = CHROMIUM_ARGS_GL
         headless = True
 
     try:
-        results = asyncio.run(run_all(screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects, chromium_args, headless))
+        results = asyncio.run(run_all(
+            screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects,
+            chromium_args, headless, executable_path=args.browser_path,
+        ))
     finally:
         server.terminate()
         server.wait()
