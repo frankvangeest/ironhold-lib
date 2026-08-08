@@ -1175,7 +1175,9 @@ fn spawn_orbit_camera_for_player(
     player_entity: Entity,
 ) -> Entity {
     let cam = resolve_orbit_config_for_multiplayer(player_config);
-    spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity)
+    let entity = spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity);
+    commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Orbit(cam)));
+    entity
 }
 
 /// Resolves the effective `CameraConfig` for the local-coop split/party/dynamic dispatch, which
@@ -1290,12 +1292,14 @@ fn spawn_active_camera_for_player(
     let initial_pos = Vec3::from(player_config.initial_position);
     match resolve_camera_mode(player_config) {
         CameraModeDef::Orbit(cam) => {
-            spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity)
+            let entity = spawn_orbit_camera_from_config(commands, tonemapping, &cam, &player_config.inputs, player_config.initial_position, player_entity);
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Orbit(cam)));
+            entity
         }
         CameraModeDef::Flycam(fc) => {
             use crate::capabilities::flycam::parse_flycam_look_button;
             let (look_lmb, look_rmb) = parse_flycam_look_button(&fc.look_button);
-            commands.spawn((
+            let entity = commands.spawn((
                 Name::new("Flycam"),
                 Camera3d::default(),
                 tonemapping,
@@ -1318,7 +1322,9 @@ fn spawn_active_camera_for_player(
                 }),
                 crate::capabilities::camera::FlycamCameraMode,
                 CameraTargets::default(),
-            )).id()
+            )).id();
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Flycam(fc)));
+            entity
         }
         CameraModeDef::Follow(f) => {
             let start_pos = initial_pos + Vec3::from(f.offset);
@@ -1339,6 +1345,7 @@ fn spawn_active_camera_for_player(
                 CameraTargets(vec![player_entity]),
             )).id();
             insert_fov(commands, entity, f.fov);
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Follow(f)));
             entity
         }
         CameraModeDef::FirstPerson(fp) => {
@@ -1359,6 +1366,7 @@ fn spawn_active_camera_for_player(
                 CameraTargets(vec![player_entity]),
             )).id();
             insert_fov(commands, entity, fp.fov);
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::FirstPerson(fp)));
             entity
         }
         CameraModeDef::Fixed(fx) => {
@@ -1391,6 +1399,7 @@ fn spawn_active_camera_for_player(
                 CameraTargets::default(),
             )).id();
             insert_fov(commands, entity, fx.fov);
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Fixed(fx)));
             entity
         }
         CameraModeDef::Party(_) => {
@@ -1400,7 +1409,14 @@ fn spawn_active_camera_for_player(
                  `party:`/`split:` sibling fields instead of being authored directly.",
                 player_config.spawn_id
             );
-            spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity)
+            // `spawn_orbit_camera_for_player` -> `resolve_orbit_config_for_multiplayer` matches
+            // this same `Some(Party(_))` shape and falls back to `player_config.camera.clone()`
+            // (its `Some(other)` arm) — record that exact value here directly rather than calling
+            // `resolve_orbit_config_for_multiplayer` a second time, which would re-warn with a
+            // split/party-scoped message that doesn't apply to this single-player fallback path.
+            let entity = spawn_orbit_camera_for_player(commands, tonemapping, player_config, player_entity);
+            commands.entity(entity).insert(crate::capabilities::camera::AuthoredCameraMode(CameraModeDef::Orbit(player_config.camera.clone())));
+            entity
         }
     }
 }

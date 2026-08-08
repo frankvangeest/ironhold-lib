@@ -61,6 +61,17 @@ pub struct FirstPersonCameraMode;
 #[derive(Component)]
 pub struct FlycamCameraMode;
 
+/// The `CameraModeDef` a camera was spawned with (**v2**) — what `Action::SetCameraMode(mode:
+/// "default")` restores a camera to after one or more registry-driven switches. Written once at
+/// spawn time (from the same `CameraModeDef` that produced the camera's initial `ActiveCameraMode`)
+/// and never mutated afterward — a `SetCameraMode` targeting a *named registry preset* changes only
+/// `ActiveCameraMode`/the marker/`CameraBlendState`, never this component. The dynamic-split merged
+/// camera (built by `dynamic_split_screen_system`'s owning spawn site, not from any authored
+/// `camera_mode:`) gets an explicitly synthesized `Party`-mode value here — it has no authored mode
+/// of its own to record.
+#[derive(Component, Clone)]
+pub struct AuthoredCameraMode(pub crate::schema::camera::CameraModeDef);
+
 /// Runtime-resolved camera state, one variant per `CameraModeDef` case. The single source of
 /// truth for a camera's per-frame mutable state (yaw/pitch/radius/etc.); the marker components
 /// above exist alongside it purely so other systems can query by kind (see module doc above).
@@ -304,6 +315,24 @@ pub fn spawn_party_orbit_camera(
     if own_viewport_only {
         commands.entity(entity).insert(all_ring_layers());
     }
+    // Synthesized `AuthoredCameraMode` (**v2**) — this camera is engine-constructed (the shared
+    // `party:` field, or the merged camera in a `split.dynamic` scene), not resolved from a
+    // directly-authored `components.camera_mode: Party(...)`, so it has no authored mode of its
+    // own to record. Build an equivalent `PartyCameraDef` from the same fields `PartyState` above
+    // was built from, so `SetCameraMode(mode: "default")` on this camera has something to restore.
+    commands.entity(entity).insert(AuthoredCameraMode(crate::schema::camera::CameraModeDef::Party(
+        crate::schema::camera::PartyCameraDef {
+            look_at_offset: base_camera.look_at_offset,
+            zoom_margin: party.zoom_margin,
+            min_radius: base_camera.min_radius,
+            max_radius: base_camera.max_radius,
+            orbit_speed: base_camera.orbit_speed,
+            zoom_speed: base_camera.zoom_speed,
+            orbit_button: base_camera.orbit_button.clone(),
+            allow_manual_zoom: party.allow_manual_zoom,
+            transition: None,
+        },
+    )));
     entity
 }
 
