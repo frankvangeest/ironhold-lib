@@ -610,53 +610,53 @@ matching marker in sync — insert-or-swap on mode change, not two independently
       capability the split-screen reconciliation spent the most words on)
 
 **v2 (runtime mode-switching):**
-- [ ] Add `camera_modes: BTreeMap<String, CameraModeDef>` to `GameSceneV2` (`schema/scene_v2.rs`,
+- [x] Add `camera_modes: BTreeMap<String, CameraModeDef>` to `GameSceneV2` (`schema/scene_v2.rs`,
       `#[serde(default)]`); add `LoadedCameraModes(BTreeMap<String, CameraModeDef>)` resource,
       inserted in `scene_loader.rs`'s Replace branch only (beside `LoadedSpawnPoints`) — never on an
       overlay load. Reject (load-time `warn!` + `ironhold_cli validate` error) a registry key named
       `"default"` (reserved) or a `Party(...)` value (dead schema, no per-camera meaning); confirm
       `Flycam(...)` is accepted. Apply v1's nested-`split`/`party`-inside-`Orbit(...)` warn
       (`entity_spawner.rs:1511`) to registry values too, not just prefab values
-- [ ] Add `AuthoredCameraMode(CameraModeDef)` component, inserted at every camera spawn site from
+- [x] Add `AuthoredCameraMode(CameraModeDef)` component, inserted at every camera spawn site from
       `resolve_camera_mode`'s return value (`entity_spawner.rs:1275`) — the thing `SetCameraMode(mode:
       "default")` restores to. Define what the dynamic-split merged (`Party`) camera's
       `AuthoredCameraMode` is, written at the point `dynamic_split_screen_system` constructs that
       camera — it has no authored `camera_mode:` of its own, so this needs an explicit synthesized
       value, not an assumption it falls out for free
-- [ ] Add `SetCameraMode { mode: String, owner_player: Option<u32> }` to `Action` enum and document
+- [x] Add `SetCameraMode { mode: String, owner_player: Option<u32> }` to `Action` enum and document
       it; extend `Action::CameraShake` with the same `owner_player` field in the same pass
-- [ ] Implement `CameraBlendState` transition lerp (position + slerp rotation + FOV lerp); fix the
+- [x] Implement `CameraBlendState` transition lerp (position + slerp rotation + FOV lerp); fix the
       plan's own RON fences to use unquoted `EaseKind` values (`ease: EaseInOut`, not `ease:
       "EaseInOut"`) matching every other designer-facing enum in this codebase — carry that into the
       real schema and docs, don't just fix the plan text
-- [ ] Handle `SetCameraMode` in `action_executor.rs`: resolve `mode` against `LoadedCameraModes`
+- [x] Handle `SetCameraMode` in `action_executor.rs`: resolve `mode` against `LoadedCameraModes`
       (`"default"` resolves to the target camera's own `AuthoredCameraMode` instead), then resolve
       `owner_player` per the targeting table above (including the `warn!`+no-op cases: party scene,
       unjoined seat, out-of-range index). `owner_player` omitted on a `"default"` restore means every
       active camera restores its own authored mode independently, not one shared mode
-- [ ] `ironhold_cli validate`: `SetCameraMode(mode:)` must be `"default"` or a key present in some
+- [x] `ironhold_cli validate`: `SetCameraMode(mode:)` must be `"default"` or a key present in some
       scene's `camera_modes` (project-scoped, so a cross-scene mismatch isn't caught — documented
       limitation, matching the project-scoped rules-vs-scene-scoped-registry gap); a `Fixed` registry
       entry's `look_at_entity` must resolve to an id in that same scene's `entities:` list
-- [ ] Hot-join interaction: a player joining after `SetCameraMode` has retargeted another camera
+- [x] Hot-join interaction: a player joining after `SetCameraMode` has retargeted another camera
       spawns in the scene-authored default mode, not the currently-active override — the two are
       independent per-camera states
-- [ ] `dynamic_split_screen_system` interaction: suspend automatic merge/split transitions on any
+- [x] `dynamic_split_screen_system` interaction: suspend automatic merge/split transitions on any
       camera currently under a `SetCameraMode` override, resuming only on an explicit
       `SetCameraMode` back or a scene reload (see the precedence decision above)
-- [ ] Docs: `docs/20_data_formats.md` — add the scene-level `camera_modes:` section (place directly
+- [x] Docs: `docs/20_data_formats.md` — add the scene-level `camera_modes:` section (place directly
       after `spawn_points:` per the existing field-table order); reword line ~2130 to stop calling the
       *singular* prefab `camera_mode:` field "a preset" (reserve that word for registry entries) and
       add a two-line disambiguation cross-link between the two sections; add a "Valid in
       `camera_modes:`?" column (or footnote) to the `CameraModeDef` variant table (~line 2146) once
       `Party` is registry-illegal; document `EaseKind` beside `VelocityCurve` (particles) noting they
       are deliberately separate enums with only partially-overlapping variants, not one shared type
-- [ ] Update `entity_logic_demo`/`quick_scene` with a single-player camera-switch example — round-trip
+- [x] Update `entity_logic_demo`/`quick_scene` with a single-player camera-switch example — round-trip
       through `"default"` (switch away, then explicitly switch back), not just one-way, since that's
       the sentinel's only teaching surface — and complete the `local_coop_demo` per-viewport
       retargeting demo named in v1's task list, demonstrating `split:` is unaffected by a
       `SetCameraMode` fired in that scene
-- [ ] Integration tests: mode switch fires correctly (including `owner_player` targeting each
+- [x] Integration tests: mode switch fires correctly (including `owner_player` targeting each
       `warn!` case), transition completes, fallback camera spawns, `"default"` round-trip restores
       the original authored mode (including on the dynamic-split merged camera), reserved-key and
       `Party`-in-registry rejection both fire

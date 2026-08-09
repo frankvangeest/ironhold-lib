@@ -752,6 +752,29 @@ flycam scene must keep getting the explicit `warn!("no orbit camera in scene —
 instead of a silent overwrite, since `fly_camera_system` runs after the shake system and
 unconditionally rewrites `Transform::rotation` every frame.
 
+**`Action::SetCameraMode` / `camera_modes:` registry (`camera_modes.md` v2):** the runtime switch
+lives in `action_executor.rs`; `entity_spawner.rs::apply_camera_mode` (`pub(crate)`) is its
+switch-time analog of the spawn-time per-mode match arms in `spawn_active_camera_for_player` —
+some deliberate duplication between the two, logged in `planning/claude_suggestions.md` rather than
+unified in this pass (touching the shipped v1 spawn path for a v2-only feature). Three things worth
+knowing before touching this code:
+- `AuthoredCameraMode` (a camera's scene-authored starting mode, written once at spawn, never
+  mutated) and `ActiveCameraMode` (the live, per-frame-mutable state) are deliberately two separate
+  components — `SetCameraMode(mode: "default")` resolves against the former, everything else
+  against `LoadedCameraModes` (the current scene's registry, inserted in `scene_loader.rs`'s
+  Replace branch only, mirroring `LoadedSpawnPoints`).
+- `CameraBlendState`/`camera_blend_system` blend the *rendered* `Transform`/FOV from a pre-switch
+  snapshot toward whatever the *already-switched* mode's own per-frame system computes that same
+  frame (Design A: let the new mode run unsuppressed, then interpolate on top) — it does **not**
+  precompute a target pose itself, so it must run after every per-mode system in `lib.rs`'s
+  `.chain()` (it's the last entry there, right before `animation_playback_system`). Player input to
+  the new mode is not suppressed during the blend — a deliberate v2 simplification, see
+  `planning/claude_suggestions.md` ▸ Camera.
+- `CameraModeOverride` (zero-sized marker) is present on a camera only while it's under an explicit
+  registry-preset switch (cleared by `mode: "default"`); `dynamic_split_screen_system` checks it
+  per-camera and skips its automatic `is_active` merge/split toggle on any camera that has it, so a
+  scripted override survives the dynamic split system fighting it every frame.
+
 **`world_label_screen_pos_system` (`lib.rs`) is viewport-aware** (fixed — this was the root cause
 of "Portal room-name labels render static and mis-positioned in every split-screen room"; see
 `planning/features/world_label_split_screen_positioning.md`). It queries every active `Camera3d`

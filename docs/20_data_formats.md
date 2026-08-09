@@ -171,6 +171,7 @@ File extension must be `.scene.ron`.
 | `lighting` | `Option<SceneLightingV2>` | Ambient, directional, and point light config. See below. |
 | `terrain` | `Option<TerrainConfigV2>` | Heightmap-based terrain |
 | `spawn_points` | `Map<String, (f32,f32,f32)>` | Named world-space positions |
+| `camera_modes` | `Map<String, CameraModeDef>` | Named, switchable camera presets `Action::SetCameraMode` can jump to at runtime (v2). Does not affect what any camera starts as. See [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) below. |
 | `entities` | `Vec<SceneEntityDef>` | Prefab instances to spawn |
 | `ui` | `Vec<UiNodeDef>` | UI elements (buttons, labels, rects) to show in this scene |
 | `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
@@ -2127,23 +2128,28 @@ on: [
 
 ### Unified camera modes (`camera_mode:`) ✅
 
-Added in `planning/features/camera_modes.md` v1. `components.camera_mode` is a named preset that
-replaces the implicit "orbit if `tags: ["player"]`, flycam if `tags: ["flycam"]`" dispatch with an
-explicit, designer-chosen mode — and is the modern way to author any of the camera behavior
-documented on this page and below. **The legacy `camera:`/`flycam:` fields below still work
-unchanged and are not deprecated** — every existing project keeps working with zero migration
+Added in `planning/features/camera_modes.md` v1. `components.camera_mode` is **the mode a camera
+starts in** — it replaces the implicit "orbit if `tags: ["player"]`, flycam if `tags: ["flycam"]`"
+dispatch with an explicit, designer-chosen mode, and is the modern way to author any of the camera
+behavior documented on this page and below. **The legacy `camera:`/`flycam:` fields below still
+work unchanged and are not deprecated** — every existing project keeps working with zero migration
 required (see "Backward compatibility" below). New authoring should prefer `camera_mode:`.
+
+> **Not to be confused with the plural `camera_modes:` registry** (a *scene-level* field, v2, see
+> below) — that's the list of **switchable presets** `Action::SetCameraMode` can jump to at
+> runtime. This singular field never changes at runtime on its own; it only describes the mode a
+> camera has the moment it spawns.
 
 **`CameraModeDef` variants** (`components.camera_mode`, one prefab authors exactly one):
 
-| Variant | What it does | Payload |
-|---|---|---|
-| `Orbit` | Mouse/keyboard/gamepad-orbitable camera following a target at a variable radius — the same behavior `camera:` below describes | Reuses `CameraConfig` (the same struct `camera:` uses) |
-| `Follow` | Fixed-offset follow camera, no free orbit — good for top-down/side-scrollers | `offset`, `look_at_offset`, `smoothing`, `rotation_smoothing`, `fov` |
-| `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov` |
-| `Fixed` | Static camera at a world position, looking at a fixed point or a named tracked entity (re-resolved every frame) | `position`, `look_at` or `look_at_entity`, `fov` |
-| `Flycam` | Free-flying, keyboard + mouse look, no target — the same behavior `flycam:` above describes | Reuses `FlyCamDef` (the same struct `flycam:` uses) |
-| `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` |
+| Variant | What it does | Payload | Valid in `camera_modes:` registry? (v2) |
+|---|---|---|---|
+| `Orbit` | Mouse/keyboard/gamepad-orbitable camera following a target at a variable radius — the same behavior `camera:` below describes | Reuses `CameraConfig` (the same struct `camera:` uses) | Yes |
+| `Follow` | Fixed-offset follow camera, no free orbit — good for top-down/side-scrollers | `offset`, `look_at_offset`, `smoothing`, `rotation_smoothing`, `fov` | Yes |
+| `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov` | Yes |
+| `Fixed` | Static camera at a world position, looking at a fixed point or a named tracked entity (re-resolved every frame) | `position`, `look_at` or `look_at_entity`, `fov` | Yes — the mode most `camera_modes:` presets will use |
+| `Flycam` | Free-flying, keyboard + mouse look, no target — the same behavior `flycam:` above describes | Reuses `FlyCamDef` (the same struct `flycam:` uses) | Yes |
+| `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` | **No** — rejected with a load-time `warn!` and an `ironhold_cli validate` error; no per-camera meaning under a `SetCameraMode` fired at one camera |
 
 **RON syntax gotcha (verified, not just written from the schema):** a `CameraModeDef` variant
 wrapping a named-field struct (`Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam`) needs a
@@ -2214,10 +2220,94 @@ tuning blocks that were *already* fully defaulted when omitted, before this feat
 syntax as living proof; every other project and room deliberately keeps the legacy form as the
 compat path's own regression test.
 
-**`fov:` is static in v1** — applied once at spawn/mode-resolve time on every variant that has the
-field (`Orbit` via `CameraConfig.fov`, `Follow`, `FirstPerson`, `Fixed`; `Party`/`Flycam` have no
-`fov:` field). Only *interpolating* `fov` smoothly during a runtime mode switch is v2 scope
-(`SetCameraMode`, not yet implemented).
+**`fov:` at spawn is static** — applied once when a camera first spawns/resolves its mode, on every
+variant that has the field (`Orbit` via `CameraConfig.fov`, `Follow`, `FirstPerson`, `Fixed`;
+`Party`/`Flycam` have no `fov:` field). *Interpolating* `fov` smoothly during a **runtime** mode
+switch is handled by `SetCameraMode`'s `transition:` — see the next section.
+
+### `camera_modes:` registry and `SetCameraMode` (v2) ✅
+
+Added in `planning/features/camera_modes.md` v2. `components.camera_mode` (above) is *the mode a
+camera starts in* — this section is a different, plural thing: `GameSceneV2.camera_modes` is a
+scene-level, named list of **switchable presets** that `Action::SetCameraMode` can jump a camera to
+at runtime, from a `rules.ron`/`state_machine.ron` rule or FSM state. It does not change what any
+camera starts as.
+
+```ron
+// In a .scene.ron file, alongside spawn_points: (same map shape, same nesting level)
+spawn_points: {
+  "hero_start": (0.0, 0.5, 0.0),
+},
+camera_modes: {
+  "cutscene_fixed": Fixed((
+    position: (20.0, 10.0, 0.0),
+    look_at_entity: "boss_01",   // an id from this scene's entities: list, not a prefab key
+    fov: 50.0,
+    transition: (duration_secs: 0.6, ease: EaseIn),
+  )),
+  "topdown": Follow((
+    offset: (0.0, 18.0, 0.1),
+    look_at_offset: (0.0, 1.0, 0.0),
+    smoothing: 10.0,
+    fov: 55.0,
+    transition: (duration_secs: 0.3, ease: EaseInOut),
+  )),
+},
+```
+
+```ron
+// logic/rules.ron or state_machine.ron
+( on: "ui.button_pressed:enter_cutscene", do_actions: [SetCameraMode(mode: "cutscene_fixed")] ),
+( on: "dialogue.ended:dialogue/boss_intro.ron", do_actions: [SetCameraMode(mode: "default")] ),
+// Local co-op: retarget only player 2's viewport — player 1 keeps playing uninterrupted.
+( on: "entity.entered:puzzle_room", do_actions: [SetCameraMode(mode: "topdown", owner_player: 1)] ),
+```
+
+**`"default"` is a reserved key, not a preset you define.** `SetCameraMode(mode: "default")`
+restores a camera to its *own* scene-authored starting mode (whatever `components.camera_mode` —
+or the legacy `camera:`/`flycam:` tag-driven fallback — resolved to when that camera spawned). A
+`camera_modes:` entry literally named `"default"` is rejected: a load-time `warn!` and an
+`ironhold_cli validate` error, since it would never be reachable under that name anyway.
+
+**`owner_player`** (`SetCameraMode`, and `CameraShake` — see the actions table below) targets one
+local-coop player's camera instead of every active camera:
+
+| `owner_player` | Behavior |
+|---|---|
+| omitted | Every active camera |
+| `Some(n)`, that player has a camera of their own | Only that camera |
+| `Some(n)`, player hasn't joined yet, or `n` is out of range | `warn!` + no-op |
+| `Some(n)`, but that player shares a single Party camera with others | `warn!` + no-op — no single per-player camera to retarget |
+
+**`transition:`** (present on every `CameraModeDef` variant except `Party`) blends the switch
+instead of cutting instantly:
+
+```ron
+transition: (
+  duration_secs: 0.4,
+  ease: EaseInOut,   // Linear | EaseIn | EaseOut | EaseInOut — unquoted, see note below
+),
+```
+
+Absent `transition:` on the *target* mode is an instant cut. When present, the camera's position,
+rotation, and FOV all blend from wherever it was the moment `SetCameraMode` fired toward the new
+mode's live behavior over `duration_secs`, eased by `ease`. Recommended: keep blends ≤0.4s for
+gameplay transitions — player input to the newly-active mode is not suppressed during the blend
+(a deliberate simplification; see `planning/claude_suggestions.md` ▸ Camera), so a long blend risks
+the player's own mouse/keyboard visibly perturbing the destination camera mid-transition.
+
+> **`ease:` is a real enum, written unquoted** (`ease: EaseInOut`), matching every other
+> designer-facing enum on this page (`velocity_curve: EaseOut`, `orientation: Vertical`) — not a
+> quoted string. It is a **separate type from `assets.ron`'s `EffectDef`/`LayerDef` `velocity_curve`
+> enum** despite sharing `Linear`/`EaseIn`/`EaseOut`: camera transitions need `EaseInOut` (no
+> particle use for it) and particles need `Pulse` (no camera use for it), so the two enums don't
+> fully overlap and stay distinct rather than one type carrying unused variants on either side.
+
+**Validation:** `ironhold_cli validate` checks `SetCameraMode(mode:)` against `"default"` or a key
+present in *some* scene's `camera_modes` (project-scoped rules vs. scene-scoped registries, so a
+rule that only makes sense while a *different* scene is loaded isn't caught — the dominant real
+mistake, a typo'd key, is), and checks a `Fixed` preset's `look_at_entity` against that same
+scene's `entities:` list.
 
 ### Shared party camera (`PartyZoomDef`) ✅
 
@@ -3423,7 +3513,8 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetTarget("spawn_id")` | Set `CurrentTarget` to the given spawn ID. Emits `target.changed:{id}` and `target.changed`. |
 | `ClearTarget` | Clear `CurrentTarget`. Emits `target.cleared`. Also cleared automatically on `LoadScene`. |
 | `ResetToSpawn("{self}")` | Teleport an NPC entity to its scene-placed origin and zero its velocity. Call before `SetEntityVisible(visible: true)` in respawn entry_actions so the entity appears at its spawn point instead of where it died. Warns and no-ops for non-NPC entities. `{self}` is substituted in behavior files. |
-| `CameraShake(duration_secs: f32, intensity: f32)` | Apply a procedural position shake to every active `Orbit`- or `Party`-mode camera (both split-screen's per-player cameras and a shared party camera shake correctly). `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
+| `CameraShake(duration_secs: f32, intensity: f32, owner_player: Option<u32>)` | Apply a procedural position shake to every active `Orbit`- or `Party`-mode camera (both split-screen's per-player cameras and a shared party camera shake correctly). `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). `owner_player` (v2, omit for the pre-v2 behavior: every active camera) targets one local-coop player's camera — see the `owner_player` targeting table under [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) above, which this field follows identically. Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
+| `SetCameraMode(mode: "preset_or_default", owner_player: Option<u32>)` | Switch a camera's active mode at runtime (v2). `mode` is either the reserved key `"default"` (restore the camera's own scene-authored starting mode) or a key from the current scene's `camera_modes:` registry. `owner_player` targets one local-coop player's camera; omitted targets every active camera. See [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) above for the full targeting table, `transition:` blending, and validation rules. Examples: `SetCameraMode(mode: "cutscene_fixed")`, `SetCameraMode(mode: "default", owner_player: 1)` |
 | `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `rules.ron` or `state_machine.ron`. |
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
