@@ -1042,3 +1042,55 @@ pub fn camera_shake_system(
         cam_transform.translation += Vec3::new(x, y, 0.0);
     }
 }
+
+/// In-progress `Action::SetCameraMode` transition (**v2**). Inserted alongside the marker/
+/// `ActiveCameraMode` swap when the *target* mode authors a `transition:`; absent means an
+/// instant cut. `from_translation`/`from_rotation`/`from_fov` are snapshotted once, at the moment
+/// of the switch, from the camera's pose *before* the switch — see `camera_blend_system`'s doc for
+/// how they're used.
+#[derive(Component)]
+pub struct CameraBlendState {
+    pub remaining: f32,
+    pub duration: f32,
+    pub ease: crate::schema::camera::EaseKind,
+    pub from_translation: Vec3,
+    pub from_rotation: Quat,
+    pub from_fov: f32,
+    pub to_fov: f32,
+}
+
+/// Blends a camera's rendered `Transform`/FOV from a frozen pre-switch snapshot toward whichever
+/// live pose the *newly active* mode's own per-frame system computes this frame — **must run
+/// after every per-mode system** in `lib.rs`'s `.chain()` (`camera_orbit_system`,
+/// `party_camera_follow_system`, `follow_camera_system`, `first_person_camera_system`,
+/// `fixed_camera_system`, `fly_camera_system`), which is why it's the last entry there. Each
+/// frame, the new mode's system already overwrote `Transform` to its own live target (as if no
+/// blend were happening); this system then overwrites it again with
+/// `from.lerp(that_live_target, eased_t)` — so `eased_t → 1.0` converges exactly onto the new
+/// mode's real behavior, and player input to the new mode (mouse-orbit, etc.) is NOT suppressed
+/// during the blend (a deliberate v2 simplification — blends are recommended ≤0.4s, per
+/// `planning/features/camera_modes.md`, short enough that this is imperceptible; logged as a
+/// possible future refinement rather than blocking the feature on it).
+pub fn camera_blend_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut camera_query: Query<(Entity, &mut Transform, Option<&mut Projection>, &mut CameraBlendState)>,
+) {
+    for (entity, mut transform, projection, mut blend) in &mut camera_query {
+        blend.remaining = (blend.remaining - time.delta_secs()).max(0.0);
+        let t_raw = 1.0 - (blend.remaining / blend.duration.max(f32::EPSILON));
+        let t = blend.ease.apply(t_raw.clamp(0.0, 1.0));
+        transform.translation = blend.from_translation.lerp(transform.translation, t);
+        transform.rotation = blend.from_rotation.slerp(transform.rotation, t);
+        if let Some(mut projection) = projection {
+            if let Projection::Perspective(ref mut persp) = *projection {
+                let from_rad = blend.from_fov.to_radians();
+                let to_rad = blend.to_fov.to_radians();
+                persp.fov = from_rad + (to_rad - from_rad) * t;
+            }
+        }
+        if blend.remaining <= 0.0 {
+            commands.entity(entity).remove::<CameraBlendState>();
+        }
+    }
+}

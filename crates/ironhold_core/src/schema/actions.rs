@@ -251,10 +251,28 @@ pub enum Action {
     /// `intensity` is the peak displacement in world-space metres (typically 0.05–0.3).
     /// Re-triggering while a shake is active restarts it with the new parameters.
     /// No-op (with a warning) in scenes that use a flycam instead of an orbit camera.
+    /// `owner_player` (**v2**) targets one player's camera(s) in local co-op — omitted shakes
+    /// every active orbit/party camera, exactly as before this field existed.
     /// Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)`
+    /// Example (co-op, player 1's viewport only): `CameraShake(duration_secs: 0.4, intensity: 0.15, owner_player: 1)`
     CameraShake {
         duration_secs: f32,
         intensity: f32,
+        #[serde(default)]
+        owner_player: Option<u32>,
+    },
+    /// Switch a camera's active mode at runtime (**v2**). `mode` is either the reserved key
+    /// `"default"` (restores the camera's own scene-authored starting mode — see
+    /// `AuthoredCameraMode`) or a key from the current scene's `GameSceneV2.camera_modes` registry.
+    /// `owner_player`: omitted targets every active camera; `Some(n)` targets only player `n`'s
+    /// camera (local co-op) — `warn!`+no-op if that player hasn't joined yet, is out of range, or
+    /// owns a shared party camera (no single per-player camera to retarget there).
+    /// Example: `SetCameraMode(mode: "cutscene_fixed")`
+    /// Example (co-op, player 2's viewport only): `SetCameraMode(mode: "topdown", owner_player: 1)`
+    SetCameraMode {
+        mode: String,
+        #[serde(default)]
+        owner_player: Option<u32>,
     },
     /// Open the dialogue panel and begin playing a `.dialogue.ron` conversation.
     /// `npc_id` is the spawn ID of the NPC entity; `dialogue_path` is the project-relative path

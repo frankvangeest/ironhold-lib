@@ -3371,8 +3371,34 @@ fn test_action_camera_shake_parses() {
         .expect("CameraShake should parse");
     assert!(matches!(
         action,
-        Action::CameraShake { duration_secs, intensity }
+        Action::CameraShake { duration_secs, intensity, owner_player: None }
             if (duration_secs - 0.4).abs() < 0.001 && (intensity - 0.15).abs() < 0.001
+    ));
+}
+
+#[test]
+fn test_action_camera_shake_with_owner_player_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str("CameraShake(duration_secs: 0.4, intensity: 0.15, owner_player: 1)")
+        .expect("CameraShake with owner_player should parse");
+    assert!(matches!(action, Action::CameraShake { owner_player: Some(1), .. }));
+}
+
+#[test]
+fn test_action_set_camera_mode_parses() {
+    use ironhold_core::schema::actions::Action;
+    let action: Action = from_str(r#"SetCameraMode(mode: "cutscene_fixed")"#)
+        .expect("SetCameraMode should parse");
+    assert!(matches!(
+        action,
+        Action::SetCameraMode { ref mode, owner_player: None } if mode == "cutscene_fixed"
+    ));
+
+    let action: Action = from_str(r#"SetCameraMode(mode: "topdown", owner_player: 1)"#)
+        .expect("SetCameraMode with owner_player should parse");
+    assert!(matches!(
+        action,
+        Action::SetCameraMode { ref mode, owner_player: Some(1) } if mode == "topdown"
     ));
 }
 

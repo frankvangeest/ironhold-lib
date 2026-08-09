@@ -333,7 +333,7 @@ fn test_camera_shake_inserts_component_on_orbit_camera() {
     // Fire CameraShake through the action queue.
     app.world_mut()
         .resource_mut::<ActionQueue>()
-        .push(Action::CameraShake { duration_secs: 0.5, intensity: 0.2 });
+        .push(Action::CameraShake { duration_secs: 0.5, intensity: 0.2, owner_player: None });
 
     app.update();
 
@@ -352,7 +352,7 @@ fn test_camera_shake_no_orbit_camera_is_noop() {
 
     app.world_mut()
         .resource_mut::<ActionQueue>()
-        .push(Action::CameraShake { duration_secs: 0.3, intensity: 0.1 });
+        .push(Action::CameraShake { duration_secs: 0.3, intensity: 0.1, owner_player: None });
 
     // Should not panic.
     app.update();

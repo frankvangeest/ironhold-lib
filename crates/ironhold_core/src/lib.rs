@@ -316,6 +316,10 @@ impl Plugin for GamePlugin {
                 target_hud_update_system,
                 camera_shake_system,
                 fly_camera_system,
+                // Blends a switched camera's rendered pose/FOV toward whatever the newly-active
+                // mode's system (any of the per-mode systems above) just computed this frame —
+                // must run after all of them. See camera_blend_system's doc comment.
+                crate::capabilities::camera::camera_blend_system,
                 animation_playback_system,
             ).chain())
             .add_systems(Update, split_viewport_player_label_spawn_system)

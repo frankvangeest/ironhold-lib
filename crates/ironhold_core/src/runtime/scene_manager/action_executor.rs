@@ -7,7 +7,8 @@ use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::AnimationRequests;
-use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
+use crate::capabilities::camera::{MAX_SPLIT_PLAYERS, CameraBlendState};
+use crate::schema::camera::CameraModeDef;
 use crate::capabilities::damage_popup::DamagePopup;
 use crate::capabilities::particle::QueuedParticleEffect;
 use super::{
@@ -15,7 +16,7 @@ use super::{
     SceneHandleV2, SceneStateParams, SpawnParams, SpawnId, WorldLabel, WorldLabelRank,
     resolve_project_path,
 };
-use super::entity_spawner::assemble_player_config;
+use super::entity_spawner::{assemble_player_config, apply_camera_mode};
 
 pub fn action_executor_system(
     mut commands: Commands,
@@ -828,10 +829,34 @@ pub fn action_executor_system(
                     game_events.write(GameEvent::Trigger("target.cleared".to_string()));
                 }
             }
-            Action::CameraShake { duration_secs, intensity } => {
-                info!("Action::CameraShake: duration={:.2}s intensity={:.3}", duration_secs, intensity);
+            Action::CameraShake { duration_secs, intensity, owner_player } => {
+                info!(
+                    "Action::CameraShake: duration={:.2}s intensity={:.3} owner_player={:?}",
+                    duration_secs, intensity, owner_player
+                );
+                let target_player = owner_player.and_then(|n| {
+                    let resolved = resolve_player_entity_by_index(n, &scene_state.player_targets);
+                    if resolved.is_none() {
+                        warn!(
+                            "Action::CameraShake: owner_player {} has no live player entity \
+                             (not yet joined, or out of range) — shake ignored",
+                            n
+                        );
+                    }
+                    resolved
+                });
+                if owner_player.is_some() && target_player.is_none() {
+                    continue; // warned above; nothing to shake
+                }
                 let mut found = false;
-                for camera_entity in scene_state.orbit_cameras.iter() {
+                for (camera_entity, targets) in scene_state.orbit_cameras.iter() {
+                    let applies = match target_player {
+                        None => true, // owner_player omitted — every active orbit/party camera
+                        Some(player) => targets.0.contains(&player),
+                    };
+                    if !applies {
+                        continue;
+                    }
                     commands.entity(camera_entity).insert(
                         crate::capabilities::camera::CameraShakeState {
                             remaining: duration_secs,
@@ -841,8 +866,118 @@ pub fn action_executor_system(
                     );
                     found = true;
                 }
-                if !found {
+                if !found && target_player.is_none() {
                     warn!("Action::CameraShake: no orbit camera in scene — shake ignored");
+                } else if !found {
+                    warn!(
+                        "Action::CameraShake: owner_player {:?} owns no orbit/party camera in \
+                         scene — shake ignored",
+                        owner_player
+                    );
+                }
+            }
+            Action::SetCameraMode { mode, owner_player } => {
+                info!("Action::SetCameraMode: mode='{}' owner_player={:?}", mode, owner_player);
+
+                // Resolve `mode` against the scene's camera_modes registry — except "default",
+                // which resolves per-camera below (each target restores its OWN authored mode,
+                // not one shared value).
+                let registry_mode: Option<CameraModeDef> = if mode == "default" {
+                    None
+                } else {
+                    match scene_state.loaded_camera_modes.0.get(&mode) {
+                        Some(m) => Some(m.clone()),
+                        None => {
+                            warn!(
+                                "Action::SetCameraMode: no camera mode named '{}' in this scene's \
+                                 camera_modes registry (and it isn't \"default\") — ignoring",
+                                mode
+                            );
+                            continue;
+                        }
+                    }
+                };
+
+                // Resolve owner_player -> target camera entities. Omitted = every active camera;
+                // Some(n) = only player n's own camera(s), warn+no-op for every other case in the
+                // targeting table (unjoined seat, out-of-range index, or a shared Party camera —
+                // no single per-player camera to retarget there).
+                let targets: Vec<Entity> = match owner_player {
+                    None => scene_state.all_cameras.iter().map(|(e, ..)| e).collect(),
+                    Some(n) => {
+                        let Some(player_entity) = resolve_player_entity_by_index(n, &scene_state.player_targets) else {
+                            warn!(
+                                "Action::SetCameraMode: owner_player {} has no live player entity \
+                                 (not yet joined, or out of range) — ignoring",
+                                n
+                            );
+                            continue;
+                        };
+                        let matching: Vec<Entity> = scene_state.all_cameras.iter()
+                            .filter(|(_, targets, ..)| targets.0.contains(&player_entity))
+                            .map(|(e, ..)| e)
+                            .collect();
+                        if matching.is_empty() {
+                            warn!(
+                                "Action::SetCameraMode: owner_player {} owns no camera in this \
+                                 scene — ignoring",
+                                n
+                            );
+                            continue;
+                        }
+                        let shared = scene_state.all_cameras.iter()
+                            .any(|(e, targets, ..)| matching.contains(&e) && targets.0.len() > 1);
+                        if shared {
+                            warn!(
+                                "Action::SetCameraMode: owner_player {} shares a single Party \
+                                 camera with other players — no single per-player camera to \
+                                 retarget; ignoring",
+                                n
+                            );
+                            continue;
+                        }
+                        matching
+                    }
+                };
+
+                for camera_entity in targets {
+                    let Ok((_, camera_targets, authored, transform, projection)) =
+                        scene_state.all_cameras.get(camera_entity) else { continue };
+                    let resolved_mode = match &registry_mode {
+                        Some(m) => m.clone(),
+                        None => authored.0.clone(), // "default"
+                    };
+                    let from_translation = transform.translation;
+                    let from_rotation = transform.rotation;
+                    let from_fov = match projection {
+                        Some(Projection::Perspective(persp)) => persp.fov.to_degrees(),
+                        _ => 45.0, // matches PerspectiveProjection::default() / this codebase's default_fov()
+                    };
+                    let transition = resolved_mode.transition().cloned();
+                    let owner_inputs = camera_targets.0.first()
+                        .and_then(|owner| scene_state.character_controllers.get(*owner).ok())
+                        .map(|cc| &cc.inputs);
+                    let Some(new_fov) = apply_camera_mode(&mut commands, camera_entity, &resolved_mode, owner_inputs) else {
+                        continue; // Party(...) rejected inside apply_camera_mode; already warned there
+                    };
+                    match transition {
+                        Some(t) => {
+                            commands.entity(camera_entity).insert(CameraBlendState {
+                                remaining: t.duration_secs,
+                                duration: t.duration_secs,
+                                ease: t.ease,
+                                from_translation,
+                                from_rotation,
+                                from_fov,
+                                to_fov: new_fov,
+                            });
+                        }
+                        None => {
+                            // Instant cut — cancel any transition already in progress on this
+                            // camera rather than letting it keep blending toward a now-stale target.
+                            commands.entity(camera_entity).remove::<CameraBlendState>();
+                        }
+                    }
                 }
             }
             Action::StartDialogue { npc_id, dialogue_path } => {
@@ -1504,4 +1639,23 @@ pub fn action_executor_system(
             }
         }
     }
+}
+
+/// Resolves `owner_player: Some(n)` (`Action::CameraShake`/`Action::SetCameraMode`, **v2**) to the
+/// live player entity carrying `PlayerIndex(n)` — or, for `n == 0`, a player with no `PlayerIndex`
+/// component at all, matching `targeting::is_primary_player`'s existing convention for the
+/// single-player (no local-coop) case. Returns `None` if no live player currently has that index
+/// (seat not yet hot-joined, or `n` is out of range) — the caller's cue to `warn!` + no-op rather
+/// than silently acting on the wrong player or on nobody.
+fn resolve_player_entity_by_index(
+    n: u32,
+    player_targets: &Query<
+        (Entity, &mut crate::capabilities::player::PlayerTarget, Option<&crate::capabilities::player::PlayerIndex>),
+        With<crate::capabilities::player::CharacterController>,
+    >,
+) -> Option<Entity> {
+    player_targets.iter().find_map(|(entity, _, idx)| {
+        let matches = idx.map_or(n == 0, |i| i.0 == n);
+        matches.then_some(entity)
+    })
 }

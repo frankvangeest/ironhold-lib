@@ -42,6 +42,23 @@ pub enum CameraModeDef {
     Party(PartyCameraDef),
 }
 
+impl CameraModeDef {
+    /// The `transition:` this mode was authored with, if any (**v2**) — `None` means an instant
+    /// cut when a `SetCameraMode` switches a camera onto this mode. `Party(...)` always returns
+    /// its own field for completeness, even though it's unreachable via `SetCameraMode`/
+    /// `camera_modes:` (see this enum's own doc).
+    pub fn transition(&self) -> Option<&CameraTransition> {
+        match self {
+            CameraModeDef::Orbit(c) => c.transition.as_ref(),
+            CameraModeDef::Follow(f) => f.transition.as_ref(),
+            CameraModeDef::FirstPerson(fp) => fp.transition.as_ref(),
+            CameraModeDef::Fixed(fx) => fx.transition.as_ref(),
+            CameraModeDef::Flycam(fc) => fc.transition.as_ref(),
+            CameraModeDef::Party(p) => p.transition.as_ref(),
+        }
+    }
+}
+
 fn default_follow_smoothing() -> f32 { 8.0 }
 fn default_follow_rotation_smoothing() -> f32 { 6.0 }
 fn default_fov() -> f32 { 60.0 }

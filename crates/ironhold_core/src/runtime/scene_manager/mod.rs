@@ -604,17 +604,41 @@ pub struct SceneStateParams<'w, 's> {
     pub nameplate_pref: ResMut<'w, crate::capabilities::nameplate::PlayerNameplatePreference>,
     /// Used by `Action::ResetToSpawn` to read the NPC's stored spawn origin.
     pub npc_agents: Query<'w, 's, &'static crate::capabilities::npc::NpcAgent>,
-    /// Used by `Action::ResetToSpawn` to teleport the entity's transform.
-    pub transforms: Query<'w, 's, &'static mut Transform>,
+    /// Used by `Action::ResetToSpawn` to teleport the entity's transform. `Without<ActiveCameraMode>`
+    /// (**v2**) avoids a query-data conflict with the new `all_cameras` query below, which reads
+    /// `&Transform` on camera entities — safe, since `ResetToSpawn` only ever targets NPCs/props,
+    /// never a camera.
+    pub transforms: Query<'w, 's, &'static mut Transform, Without<crate::capabilities::camera::ActiveCameraMode>>,
     /// Used by `Action::ResetToSpawn` to zero residual velocity after teleport.
     pub npc_velocities: Query<'w, 's, &'static mut bevy_rapier3d::prelude::Velocity>,
     /// Used by `Action::CameraShake` to insert `CameraShakeState` on every active orbit/party
     /// camera. Covers both marker components (not just `OrbitCameraMode`) so a `party:` scene's
     /// shared camera shakes too — see `capabilities::camera::camera_shake_system`'s own filter.
-    pub orbit_cameras: Query<'w, 's, Entity, Or<(
+    /// `&CameraTargets` (**v2**) lets `Action::CameraShake`'s `owner_player` filter to one
+    /// player's camera(s) instead of always shaking every active orbit/party camera.
+    pub orbit_cameras: Query<'w, 's, (Entity, &'static crate::capabilities::camera::CameraTargets), Or<(
         With<crate::capabilities::camera::OrbitCameraMode>,
         With<crate::capabilities::camera::PartyCameraMode>,
     )>>,
+    /// Every camera entity regardless of mode (**v2**, `Action::SetCameraMode`). `&CameraTargets`
+    /// for `owner_player` targeting; `&AuthoredCameraMode` for resolving `mode: "default"`;
+    /// `&Transform`/`Option<&Projection>` snapshotted into `CameraBlendState.from_*` before the
+    /// mode switch is applied.
+    pub all_cameras: Query<'w, 's, (
+        Entity,
+        &'static crate::capabilities::camera::CameraTargets,
+        &'static crate::capabilities::camera::AuthoredCameraMode,
+        &'static Transform,
+        Option<&'static Projection>,
+    ), With<crate::capabilities::camera::ActiveCameraMode>>,
+    /// Used by `Action::SetCameraMode` (**v2**) to resolve the owning player's `InputMap` when
+    /// switching a camera onto `CameraModeDef::Orbit` (needed for its keyboard-look bindings) —
+    /// the switch-time analog of `PlayerConfig.inputs` at spawn time.
+    pub character_controllers: Query<'w, 's, &'static crate::capabilities::player::CharacterController>,
+    /// Named camera-mode registry for the current scene (**v2**) — `Action::SetCameraMode`
+    /// resolves its `mode` string against this (the `"default"` sentinel is handled separately,
+    /// against each target camera's own `AuthoredCameraMode`).
+    pub loaded_camera_modes: Res<'w, LoadedCameraModes>,
     /// Cleared on `LoadScene` so stale dialogue state doesn't bleed across scene transitions.
     pub active_dialogue: ResMut<'w, crate::capabilities::dialogue::ActiveDialogue>,
     /// Player inventory — persists across scene loads.

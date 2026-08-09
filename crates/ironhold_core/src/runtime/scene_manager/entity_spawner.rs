@@ -1205,7 +1205,11 @@ fn resolve_orbit_config_for_multiplayer(pc: &PlayerConfig) -> CameraConfig {
     }
 }
 
-fn orbit_state_from_config(cam: &CameraConfig, inputs: &InputMap) -> OrbitState {
+/// `inputs: None` (**v2**, `apply_camera_mode`'s switch-time path for a camera with no owning
+/// player — `CameraTargets` empty) falls back to no keyboard-look bindings and a neutral gamepad
+/// deadzone, rather than requiring a full `InputMap` to exist for a camera that has none to draw
+/// from. Every spawn-time caller always has a real player's `InputMap` and passes `Some(inputs)`.
+fn orbit_state_from_config(cam: &CameraConfig, inputs: Option<&InputMap>) -> OrbitState {
     let (orbit_lmb, orbit_rmb) = crate::capabilities::camera::parse_orbit_button(&cam.orbit_button);
     let (char_rot_lmb, char_rot_rmb) = cam.character_rotate_button
         .as_deref()
@@ -1227,12 +1231,12 @@ fn orbit_state_from_config(cam: &CameraConfig, inputs: &InputMap) -> OrbitState 
         orbit_rmb,
         character_rotate_lmb: char_rot_lmb,
         character_rotate_rmb: char_rot_rmb,
-        look_left_key: inputs.look_left.as_deref().and_then(InputMap::parse_key),
-        look_right_key: inputs.look_right.as_deref().and_then(InputMap::parse_key),
-        look_up_key: inputs.look_up.as_deref().and_then(InputMap::parse_key),
-        look_down_key: inputs.look_down.as_deref().and_then(InputMap::parse_key),
+        look_left_key: inputs.and_then(|i| i.look_left.as_deref().and_then(InputMap::parse_key)),
+        look_right_key: inputs.and_then(|i| i.look_right.as_deref().and_then(InputMap::parse_key)),
+        look_up_key: inputs.and_then(|i| i.look_up.as_deref().and_then(InputMap::parse_key)),
+        look_down_key: inputs.and_then(|i| i.look_down.as_deref().and_then(InputMap::parse_key)),
         look_speed: cam.look_speed,
-        gamepad_deadzone: inputs.gamepad_deadzone,
+        gamepad_deadzone: inputs.map_or(0.15, |i| i.gamepad_deadzone),
     }
 }
 
@@ -1252,7 +1256,7 @@ fn spawn_orbit_camera_from_config(
         Transform::from_translation(start_pos)
             .looking_at(Vec3::from(target_initial_position), Vec3::Y),
         LevelEntity,
-        ActiveCameraMode::Orbit(orbit_state_from_config(cam, inputs)),
+        ActiveCameraMode::Orbit(orbit_state_from_config(cam, Some(inputs))),
         OrbitCameraMode,
         CameraTargets(vec![player_entity]),
     )).id();
@@ -1267,6 +1271,124 @@ fn insert_fov(commands: &mut Commands, entity: Entity, fov_degrees: f32) {
         fov: fov_degrees.to_radians(),
         ..default()
     }));
+}
+
+/// Builds and applies the runtime `ActiveCameraMode` + matching marker component for `mode` onto
+/// an existing camera `entity` — the switch-time analog of `spawn_active_camera_for_player`'s
+/// per-mode match arms (**v2**, `Action::SetCameraMode`). Instantly applies the resolved FOV too
+/// (`insert_fov`) — for an instant cut that's the whole story; for a blended transition, the
+/// caller additionally inserts `CameraBlendState`, which overwrites both `Transform` and this FOV
+/// value every frame until the blend completes (see `capabilities::camera::camera_blend_system`).
+///
+/// Deliberately does NOT touch `CameraTargets` (ownership is fixed at spawn time and never changes
+/// on a mode switch) or otherwise duplicate `Transform` — the newly-active mode's own per-frame
+/// system computes that the very same frame, once the marker swap below (via `Commands`) takes
+/// effect. `Party(...)` is rejected (returns `None`, no-op): it's excluded from the
+/// `camera_modes:` registry and from the `"default"` restore path (whose `AuthoredCameraMode` is
+/// never literally `Party` on a per-player camera — see that component's own doc), so this should
+/// be unreachable; kept defensive rather than panicking if it ever is.
+///
+/// Some duplication with `spawn_active_camera_for_player`'s per-mode field-mapping exists here
+/// deliberately — unifying "construct runtime state from a `CameraModeDef`" across spawn-time and
+/// switch-time would touch the already-shipped v1 spawn path for a v2-only feature, which is a
+/// real DRY win but adds regression risk; logged as a `claude_suggestions.md` candidate rather
+/// than attempted in this pass.
+pub(crate) fn apply_camera_mode(
+    commands: &mut Commands,
+    entity: Entity,
+    mode: &CameraModeDef,
+    inputs: Option<&InputMap>,
+) -> Option<f32> {
+    if matches!(mode, CameraModeDef::Party(_)) {
+        warn!(
+            "Action::SetCameraMode: target mode is Party(...), which cannot be switched to via \
+             SetCameraMode — camera mode left unchanged"
+        );
+        return None;
+    }
+    {
+        let mut ec = commands.entity(entity);
+        ec.remove::<OrbitCameraMode>();
+        ec.remove::<crate::capabilities::camera::PartyCameraMode>();
+        ec.remove::<crate::capabilities::camera::FixedCameraMode>();
+        ec.remove::<crate::capabilities::camera::FollowCameraMode>();
+        ec.remove::<crate::capabilities::camera::FirstPersonCameraMode>();
+        ec.remove::<crate::capabilities::camera::FlycamCameraMode>();
+    }
+    let fov = match mode {
+        CameraModeDef::Orbit(cam) => {
+            commands.entity(entity).insert((
+                ActiveCameraMode::Orbit(orbit_state_from_config(cam, inputs)),
+                OrbitCameraMode,
+            ));
+            cam.fov
+        }
+        CameraModeDef::Follow(f) => {
+            commands.entity(entity).insert((
+                ActiveCameraMode::Follow(crate::capabilities::camera::FollowState {
+                    offset: Vec3::from(f.offset),
+                    look_at_offset: Vec3::from(f.look_at_offset),
+                    smoothing: f.smoothing,
+                    rotation_smoothing: f.rotation_smoothing,
+                }),
+                crate::capabilities::camera::FollowCameraMode,
+            ));
+            f.fov
+        }
+        CameraModeDef::FirstPerson(fp) => {
+            commands.entity(entity).insert((
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
+                    eye_offset: Vec3::from(fp.eye_offset),
+                    sensitivity: fp.sensitivity,
+                    pitch: 0.0,
+                    min_pitch: fp.min_pitch,
+                    max_pitch: fp.max_pitch,
+                }),
+                crate::capabilities::camera::FirstPersonCameraMode,
+            ));
+            fp.fov
+        }
+        CameraModeDef::Fixed(fx) => {
+            commands.entity(entity).insert((
+                ActiveCameraMode::Fixed(crate::capabilities::camera::FixedState {
+                    look_at: fx.look_at.map(Vec3::from),
+                    look_at_entity: fx.look_at_entity.clone(),
+                }),
+                crate::capabilities::camera::FixedCameraMode,
+            ));
+            fx.fov
+        }
+        CameraModeDef::Flycam(fc) => {
+            use crate::capabilities::flycam::parse_flycam_look_button;
+            let (look_lmb, look_rmb) = parse_flycam_look_button(&fc.look_button);
+            commands.entity(entity).insert((
+                ActiveCameraMode::Flycam(crate::capabilities::camera::FlycamState {
+                    speed: fc.speed,
+                    fast_speed: fc.fast_speed,
+                    sensitivity: fc.sensitivity,
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    key_forward:  InputMap::parse_key(&fc.forward).unwrap_or(KeyCode::KeyW),
+                    key_backward: InputMap::parse_key(&fc.backward).unwrap_or(KeyCode::KeyS),
+                    key_left:     InputMap::parse_key(&fc.left).unwrap_or(KeyCode::KeyA),
+                    key_right:    InputMap::parse_key(&fc.right).unwrap_or(KeyCode::KeyD),
+                    key_up:       InputMap::parse_key(&fc.up).unwrap_or(KeyCode::Space),
+                    key_down:     InputMap::parse_key(&fc.down).unwrap_or(KeyCode::KeyQ),
+                    look_lmb,
+                    look_rmb,
+                }),
+                crate::capabilities::camera::FlycamCameraMode,
+            ));
+            // FlyCamDef has no `fov:` field (v1 never gave Flycam one — spawn-time never called
+            // `insert_fov` for it either, leaving Bevy's real default). 45.0 reproduces that
+            // exact default explicitly here, since `apply_camera_mode` always calls `insert_fov`
+            // (unlike the spawn-time match arms, which only did for the modes that have the field).
+            45.0
+        }
+        CameraModeDef::Party(_) => unreachable!("rejected above"),
+    };
+    insert_fov(commands, entity, fov);
+    Some(fov)
 }
 
 /// Resolves a player's effective `CameraModeDef` — the explicit `camera_mode` override if set,
