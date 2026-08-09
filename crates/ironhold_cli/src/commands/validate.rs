@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
@@ -645,6 +646,80 @@ fn cross_file_checks(
                     });
                 }
             }
+        }
+    }
+
+    // `camera_modes:` registry authoring mistakes (planning/features/camera_modes.md v2, "Named
+    // mode registry" resolution) — mirrors the load-time `warn!`s in `warn_camera_modes_registry`
+    // (scene_loader.rs), as the design-time counterpart.
+    for (scene_path, scene) in scenes {
+        for (key, mode) in &scene.camera_modes {
+            if key == "default" {
+                errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "camera_modes: preset {:?} uses the reserved key \"default\" — \
+                         SetCameraMode(mode: \"default\") always restores a camera's own \
+                         scene-authored starting mode, never a designer-defined preset; rename \
+                         this entry",
+                        key
+                    ),
+                    error_type: "reserved_camera_mode_key",
+                });
+            }
+            if matches!(mode, CameraModeDef::Party(_)) {
+                errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "camera_modes: preset {:?} is Party(...), which cannot be reached via \
+                         SetCameraMode (no per-camera meaning when targeting a single camera) — \
+                         remove it or replace it with a different mode",
+                        key
+                    ),
+                    error_type: "unsupported_registry_camera_mode",
+                });
+            }
+            if let CameraModeDef::Fixed(fx) = mode {
+                if let Some(target_id) = &fx.look_at_entity {
+                    if !scene.entities.iter().any(|e| &e.id == target_id) {
+                        errors.push(CrossFileError {
+                            source_file: scene_path.clone(),
+                            message: format!(
+                                "camera_modes: preset {:?}: Fixed's look_at_entity {:?} does not \
+                                 match any entity id in this scene's entities — the camera will \
+                                 silently fail to find it and hold its last known rotation \
+                                 (or none, if it never resolved) every frame",
+                                key, target_id
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // `Action::SetCameraMode(mode:)` must be either the reserved "default" or a key present in
+    // SOME scene's camera_modes registry. Weaker than the project-scoped catalog checks above
+    // (rules.ron/state_machine.ron are project-scoped, but camera_modes is scene-scoped, so
+    // "defined in scene A, fired only while scene B is active" isn't caught) — still catches the
+    // dominant failure, a typo'd key, which today only surfaces as a silent runtime warn!+no-op.
+    for (source, action) in actions {
+        let Action::SetCameraMode { mode, .. } = action else { continue };
+        if mode == "default" {
+            continue;
+        }
+        let found_in_any_scene = scenes.iter().any(|(_, scene)| scene.camera_modes.contains_key(mode));
+        if !found_in_any_scene {
+            errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!(
+                    "SetCameraMode: mode {:?} is not \"default\" and not found in any scene's \
+                     camera_modes registry — this will silently warn+no-op at runtime",
+                    mode
+                ),
+                error_type: "missing_reference",
+            });
         }
     }
 
