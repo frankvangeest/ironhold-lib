@@ -2084,7 +2084,8 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. Mutually exclusive with `split` — see below. |
 | `split` | `Option<SplitScreenDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list. When the scene has 2+ players and this is set, the engine gives every player their own real camera, each locked to its own half of the window, instead of one shared camera. See [Split-screen camera](#split-screen-camera-splitscreendef-) below. Mutually exclusive with `party` — see below. |
 | `look_speed` | `f32` | `2.0` | Angular rate (radians/sec) for keyboard-held camera look (`InputMap.look_left`/`look_right`/`look_up`/`look_down`) — roughly a full turn every ~3s at the default. A **separate** dial from `orbit_speed`, which is tuned as a mouse-pixel-delta multiplier and would be far too slow if reused as a keyboard-hold rate. Authored per-player, same as every other `CameraConfig` field. |
-| `fov` | `f32` | `60.0` | Field of view in degrees. Static — applied once at spawn (see [Unified camera modes](#unified-camera-modes-camera_mode-) above); interpolating it during a runtime mode switch is v2 scope. |
+| `fov` | `f32` | `45.0` | Field of view in degrees — matches Bevy's own `PerspectiveProjection` default exactly, so omitting this field reproduces the framing every project had before this field existed. Applied once at spawn (see [Unified camera modes](#unified-camera-modes-camera_mode-) above); a `SetCameraMode` switch (v2) with a `transition:` interpolates it smoothly instead — see [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) below. Note `Follow`/`Fixed`'s own `fov` default is `60.0`, not `45.0` — a different struct with its own default, not an inconsistency in this one. |
+| `transition` | `Option<CameraTransition>` | `None` | **v2.** Has **no effect at spawn** — a camera has nothing to blend from on its first frame. Only takes effect later, when `Action::SetCameraMode(mode: "default")` restores this mode and finds a `transition:` authored here to blend with. See [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) below for the field's shape (`duration_secs`, `ease: EaseKind`). |
 
 > **2+ players without a `party` or `split` block:** if a scene has 2+ `"player"`-tagged entities and the first player's `camera.party`/`camera.split` are both unset, the engine logs a warning and falls back to a single orbit camera that follows only the first player. It never silently spawns two competing per-player cameras — you must opt in to a shared or split camera explicitly.
 
@@ -2270,14 +2271,17 @@ or the legacy `camera:`/`flycam:` tag-driven fallback — resolved to when that 
 `ironhold_cli validate` error, since it would never be reachable under that name anyway.
 
 **`owner_player`** (`SetCameraMode`, and `CameraShake` — see the actions table below) targets one
-local-coop player's camera instead of every active camera:
+local-coop player's camera instead of every active camera. `n` matches the `player_index:` field
+on a player prefab (see `PrefabDef` above) — `local_coop_demo` room11's `player_p1_camera_switch`
+sets `player_index: 0`, which is exactly what `SetCameraMode(mode: "cinematic_fixed", owner_player:
+0)` targets:
 
 | `owner_player` | Behavior |
 |---|---|
-| omitted | Every active camera |
-| `Some(n)`, that player has a camera of their own | Only that camera |
+| omitted | Every active camera except a shared Party camera (it can never round-trip back to `"default"`, so it's simply left alone — see `Some(n)`'s last row for why) |
+| `Some(n)`, that player has a single-owner camera of their own | Only that camera (even in a `split.dynamic` scene, where the same player is also a member of the merged Party camera's ownership — that shared camera is skipped, not the whole action) |
 | `Some(n)`, player hasn't joined yet, or `n` is out of range | `warn!` + no-op |
-| `Some(n)`, but that player shares a single Party camera with others | `warn!` + no-op — no single per-player camera to retarget |
+| `Some(n)`, but that player owns only a shared Party camera | `warn!` + no-op — no single per-player camera to retarget |
 
 **`transition:`** (present on every `CameraModeDef` variant except `Party`) blends the switch
 instead of cutting instantly:
@@ -2308,6 +2312,12 @@ present in *some* scene's `camera_modes` (project-scoped rules vs. scene-scoped 
 rule that only makes sense while a *different* scene is loaded isn't caught — the dominant real
 mistake, a typo'd key, is), and checks a `Fixed` preset's `look_at_entity` against that same
 scene's `entities:` list.
+
+**Worked examples:** `entity_logic_demo/scenes/main.scene.ron` (single-player — press C/V to
+round-trip through a `"birdseye"` `Fixed` preset and back to `"default"`) and
+`local_coop_demo/scenes/room11.scene.ron` (split-screen — `Digit1`/`Digit2` retarget only player
+1's camera via `owner_player: 0`, proving the switch is per-player, not scene-wide, while the
+split viewport layout stays unaffected).
 
 ### Shared party camera (`PartyZoomDef`) ✅
 

@@ -1567,6 +1567,10 @@
           max_radius:     9.0,
           orbit_button:   "None",
           character_rotate_button: None,
+          // transition: is read from the mode SetCameraMode switches TO, including "default" —
+          // without this, Digit2's restore in room11 would snap instead of blending, asymmetric
+          // with Digit1's blended switch away (ux-gamedesigner-reviewer finding).
+          transition: (duration_secs: 0.5, ease: EaseInOut),
         )),
         split: (
           orientation: Vertical,
