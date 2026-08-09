@@ -147,6 +147,19 @@
       label: (text: "Room 9", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // room10 -> room11 (camera_modes v2 demo). See prefabs.ron's "portal_to_room11" comment —
+    // the return trip reuses the existing "portal_to_room10" prefab, no new prefab for it.
+    (
+      id: "portal_to_room11",
+      prefab: "portal_to_room11",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 11", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   ui: [
@@ -154,6 +167,15 @@
       id: "room_hint",
       text: "Room 10: mixed player bodies (P1 = GLB, P2 = primitive) | Red portal -> room 9",
       position: (20.0, 20.0),
+      size: (900.0, 32.0),
+    )),
+    // camera_modes v2 demo exit — moved up to sit right below room_hint (same reasoning as
+    // room9's room10_exit_hint: a player scanning for "where do I go next" should see every
+    // exit together, not have a later one buried after several unrelated lines).
+    Label((
+      id: "room11_exit_hint",
+      text: "Lime portal -> room 11 (SetCameraMode retargets one player's viewport)",
+      position: (20.0, 64.0),
       size: (900.0, 32.0),
     )),
     // Trimmed to 71 chars (ux-gamedesigner-reviewer review: room8's 82-char room_hint is the
@@ -165,7 +187,7 @@
     Label((
       id: "controls_hint",
       text: "P1: WASD+Space+Shift | P2: Arrows+Enter+RShift | Pads: connect P1 first",
-      position: (20.0, 64.0),
+      position: (20.0, 108.0),
       size: (900.0, 32.0),
     )),
     // Reworded (ux-gamedesigner-reviewer review) — "same mana" read as "equal mana", but P1 has
@@ -175,14 +197,14 @@
     Label((
       id: "parity_hint",
       text: "Targeting, action bar, and own private mana pool - only the body differs",
-      position: (20.0, 108.0),
+      position: (20.0, 152.0),
       size: (900.0, 32.0),
     )),
     // Trimmed to 73 chars, same clipping-budget reason as controls_hint above.
     Label((
       id: "targeting_hint",
       text: "Target: P1=T P2=M | Click a sphere | Each ring shows only in its own half",
-      position: (20.0, 152.0),
+      position: (20.0, 196.0),
       size: (900.0, 32.0),
     )),
     // Animation-gap hint (ux-gamedesigner-reviewer, 2026-08-01 plan-review): no primitive player
@@ -191,7 +213,7 @@
     Label((
       id: "animation_gap_hint",
       text: "P2 has no rig, so it slides instead of walking - the only real difference",
-      position: (20.0, 196.0),
+      position: (20.0, 240.0),
       size: (900.0, 32.0),
     )),
     ActionBar((

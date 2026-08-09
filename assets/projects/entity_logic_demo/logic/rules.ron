@@ -19,5 +19,16 @@
         Log("Score zone exited"),
       ],
     ),
+    // camera_modes v2 demo — see main.scene.ron's camera_modes registry + scene_key_bindings.
+    // Round-trips through the reserved "default" key, not just a one-way switch, since that's
+    // the sentinel's only real teaching surface.
+    (
+      on: "ui.button_pressed:camera_birdseye",
+      do_actions: [SetCameraMode(mode: "birdseye")],
+    ),
+    (
+      on: "ui.button_pressed:camera_reset",
+      do_actions: [SetCameraMode(mode: "default")],
+    ),
   ],
 )

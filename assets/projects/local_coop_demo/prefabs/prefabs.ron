@@ -1511,5 +1511,123 @@
       ],
     ),
 
+    // Room 11 — camera_modes v2 demo (planning/features/camera_modes.md). Lime tone: the last
+    // two free colours per ux-gamedesigner-reviewer's room-conventions memory were lime/white.
+    "ground_room11": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (50.0, 1.0, 50.0),
+        color: (0.24, 0.34, 0.10),
+        roughness: 0.95,
+        physics: true,
+      ),
+    ),
+
+    // Room10 -> room11 forward portal. Room11's own back portal reuses "portal_to_room10"
+    // verbatim (the prefab room9 already placed as ITS forward portal into room10) — same
+    // convention every prior stage used, so no new prefab is needed for the return trip.
+    "portal_to_room11": (
+      kind: Primitive,
+      model: "",
+      components: (),
+      trigger_zone: (radius: 1.5),
+      children: [
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.14, 0.20, 0.08), roughness: 0.85), offset: (-1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (0.30, 2.80, 0.30), color: (0.14, 0.20, 0.08), roughness: 0.85), offset: ( 1.0, 1.40, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cuboid,   primitive: (size: (2.60, 0.25, 0.30), color: (0.10, 0.14, 0.05), roughness: 0.90), offset: ( 0.0, 2.92, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+        ( shape: Cylinder, primitive: (radius: 0.85, height: 0.04, color: (0.55, 0.90, 0.15), roughness: 0.05, metallic: 0.30), offset: (0.0, 0.02, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      ],
+    ),
+
+    // Room 11 players — same input schemes as player_p1_split_h/player_p2_split_h (WASD+Space+
+    // LShift+KeyZ/KeyX look for P1, Arrows+Enter+RShift+Comma/Period look for P2), migrated
+    // camera_mode:/split: syntax (this is a brand-new room, no legacy-compat baggage to
+    // preserve, so it follows room4's precedent rather than the 9 legacy-syntax rooms). P1's
+    // camera_mode is the one Action::SetCameraMode retargets — see room11.scene.ron's
+    // scene_key_bindings/camera_modes registry and logic/rules.ron's cam_p1_fixed/cam_p1_default
+    // rules. P2 keeps its own Orbit camera untouched throughout, proving SetCameraMode's
+    // owner_player targeting retargets only the named player's viewport.
+    "player_p1_camera_switch": (
+      kind: Actor,
+      model: "character_male",
+      display_name: "Player 1",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 0,
+      components: (
+        tags: ["player"],
+        camera_mode: Orbit((
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+          character_rotate_button: None,
+        )),
+        split: (
+          orientation: Vertical,
+        ),
+        inputs: (
+          forward:      "KeyW",
+          backward:     "KeyS",
+          left:         "KeyA",
+          right:        "KeyD",
+          strafe_left:  "KeyQ",
+          strafe_right: "KeyE",
+          jump:         "Space",
+          run:          "ShiftLeft",
+          strafe_mouse_button: None,
+          look_left:  "KeyZ",
+          look_right: "KeyX",
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
+    "player_p2_camera_switch": (
+      kind: Actor,
+      model: "character_female",
+      display_name: "Player 2",
+      animation_policy: "prefabs/animation/player_locomotion.ron",
+      player_index: 1,
+      components: (
+        tags: ["player"],
+        camera_mode: Orbit((
+          offset:         (0.0, 4.5, 9.0),
+          look_at_offset: (0.0, 1.2, 0.0),
+          zoom_speed:     0.0,
+          orbit_speed:    0.4,
+          min_radius:     4.5,
+          max_radius:     9.0,
+          orbit_button:   "None",
+          character_rotate_button: None,
+        )),
+        inputs: (
+          forward:      "ArrowUp",
+          backward:     "ArrowDown",
+          left:         "ArrowLeft",
+          right:        "ArrowRight",
+          strafe_left:  "ArrowLeft",
+          strafe_right: "ArrowRight",
+          jump:         "Enter",
+          run:          "ShiftRight",
+          strafe_mouse_button: None,
+          look_left:  "Comma",
+          look_right: "Period",
+        ),
+        movement: (
+          walk_speed: 5.0,
+          run_speed: 8.5,
+        ),
+      ),
+    ),
+
   }
 )

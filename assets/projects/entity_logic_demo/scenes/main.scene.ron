@@ -19,6 +19,25 @@
     "player_start": (0.0, 0.5, 10.0),
   },
 
+  // camera_modes v2 demo: a single named preset the player can switch to and back from via
+  // rules.ron-driven key bindings below (Press C / V). "default" is reserved — it always
+  // restores the player's own scene-authored starting camera (here: the tag-driven default
+  // orbit camera this project has always used, since `player` has no `camera`/`camera_mode:`
+  // block at all) and must not be defined as a registry entry.
+  camera_modes: {
+    "birdseye": Fixed((
+      position: (0.0, 14.0, 10.0),
+      look_at: (0.0, 0.0, 3.0),
+      fov: 55.0,
+      transition: (duration_secs: 0.4, ease: EaseInOut),
+    )),
+  },
+
+  scene_key_bindings: {
+    "KeyC": "camera_birdseye",
+    "KeyV": "camera_reset",
+  },
+
   entities: [
 
     // ── Ground ────────────────────────────────────────────────────────────────
@@ -105,6 +124,13 @@
       id: "hint",
       text: "Walk to the score zone for points",
       position: (16.0, 52.0),
+      size: (600.0, 28.0),
+      align: Left,
+    )),
+    Label((
+      id: "camera_hint",
+      text: "C: birdseye camera — V: back to default (camera_modes v2 demo)",
+      position: (16.0, 80.0),
       size: (600.0, 28.0),
       align: Left,
     )),
