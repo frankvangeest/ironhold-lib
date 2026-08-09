@@ -960,6 +960,14 @@ pub fn action_executor_system(
                     let Some(new_fov) = apply_camera_mode(&mut commands, camera_entity, &resolved_mode, owner_inputs) else {
                         continue; // Party(...) rejected inside apply_camera_mode; already warned there
                     };
+                    // A registry preset switch marks this camera "overridden" so
+                    // dynamic_split_screen_system suspends its automatic merge/split is_active
+                    // toggling on it; restoring "default" clears the marker again.
+                    if registry_mode.is_some() {
+                        commands.entity(camera_entity).insert(crate::capabilities::camera::CameraModeOverride);
+                    } else {
+                        commands.entity(camera_entity).remove::<crate::capabilities::camera::CameraModeOverride>();
+                    }
                     match transition {
                         Some(t) => {
                             commands.entity(camera_entity).insert(CameraBlendState {

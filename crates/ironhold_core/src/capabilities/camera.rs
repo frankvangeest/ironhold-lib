@@ -61,6 +61,15 @@ pub struct FirstPersonCameraMode;
 #[derive(Component)]
 pub struct FlycamCameraMode;
 
+/// Present on a camera while it's under an explicit `Action::SetCameraMode` override (**v2**) —
+/// i.e. its current mode came from the `camera_modes:` registry, not its own scene-authored
+/// starting mode. Inserted when `SetCameraMode(mode: "<preset>")` targets this camera; removed
+/// when `SetCameraMode(mode: "default")` restores it. `dynamic_split_screen_system` checks this to
+/// suspend its automatic merge/split `is_active` toggling on an overridden camera — see that
+/// system's own doc comment.
+#[derive(Component)]
+pub struct CameraModeOverride;
+
 /// The `CameraModeDef` a camera was spawned with (**v2**) — what `Action::SetCameraMode(mode:
 /// "default")` restores a camera to after one or more registry-driven switches. Written once at
 /// spawn time (from the same `CameraModeDef` that produced the camera's initial `ActiveCameraMode`)
@@ -939,16 +948,23 @@ pub fn target_hud_update_system(
 /// `With<ActiveCameraMode>` can't distinguish variants, since it's a single enum component, not
 /// one type per mode) rather than `Without<PartyOrbitCamera>`'s old defensive-but-redundant
 /// cross-filter.
+///
+/// **v2:** a camera currently carrying `CameraModeOverride` (an explicit `Action::SetCameraMode`
+/// switch to a named preset, not this camera's own scene-authored default) has its automatic
+/// `is_active` toggling suspended here — the designer's scripted override wins until an explicit
+/// `SetCameraMode(mode: "default")` removes the marker, or the scene reloads. Each of the two split
+/// cameras and the party camera is checked independently, so one overridden camera doesn't freeze
+/// the others' normal merge/split dance.
 pub fn dynamic_split_screen_system(
     dynamic_config: Res<crate::runtime::scene_manager::DynamicSplitConfig>,
     mut active_split: ResMut<crate::runtime::scene_manager::ActiveSplitScreen>,
-    mut split_cameras: Query<(&mut Camera, &CameraTargets), (With<OrbitCameraMode>, With<SplitViewportSlot>)>,
-    mut party_camera: Query<&mut Camera, (With<PartyCameraMode>, Without<SplitViewportSlot>)>,
+    mut split_cameras: Query<(&mut Camera, &CameraTargets, Has<CameraModeOverride>), (With<OrbitCameraMode>, With<SplitViewportSlot>)>,
+    mut party_camera: Query<(&mut Camera, Has<CameraModeOverride>), (With<PartyCameraMode>, Without<SplitViewportSlot>)>,
     transforms: Query<&Transform>,
 ) {
     let Some(dynamic) = dynamic_config.0.as_ref() else { return };
 
-    let mut targets = split_cameras.iter().filter_map(|(_, t)| t.0.first().copied());
+    let mut targets = split_cameras.iter().filter_map(|(_, t, _)| t.0.first().copied());
     let Some(t0) = targets.next() else { return };
     let Some(t1) = targets.next() else { return };
     let Ok(p0) = transforms.get(t0) else { return };
@@ -979,11 +995,15 @@ pub fn dynamic_split_screen_system(
         None
     };
 
-    for (mut camera, _) in &mut split_cameras {
-        camera.is_active = should_split;
+    for (mut camera, _, overridden) in &mut split_cameras {
+        if !overridden {
+            camera.is_active = should_split;
+        }
     }
-    if let Ok(mut party_camera) = party_camera.single_mut() {
-        party_camera.is_active = !should_split;
+    if let Ok((mut party_camera, overridden)) = party_camera.single_mut() {
+        if !overridden {
+            party_camera.is_active = !should_split;
+        }
     }
 }
 
