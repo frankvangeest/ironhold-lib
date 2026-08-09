@@ -418,15 +418,20 @@ pub fn party_camera_follow_system(
 
 /// Runtime state for `ActiveCameraMode::Fixed` — new in v1, no pre-existing behavior to match.
 pub struct FixedState {
+    pub position: Vec3,
     pub look_at: Option<Vec3>,
     /// Prefab instance id, re-resolved via `SpawnRegistry` every frame so the camera keeps
     /// pointing at the target as it moves. Takes priority over `look_at` when both resolve.
     pub look_at_entity: Option<String>,
 }
 
-/// Keeps a `Fixed`-mode camera pointed at its configured `look_at`/`look_at_entity`. Position
-/// never changes after spawn (that's the point of `Fixed`) — only rotation is touched, and only
-/// when a look target actually resolves this frame.
+/// Keeps a `Fixed`-mode camera at its configured `position`, pointed at its configured
+/// `look_at`/`look_at_entity`. Writes `position` unconditionally every frame — not just at spawn
+/// — so this system is also the one `Action::SetCameraMode` (v2) relies on to actually relocate
+/// the camera on a switch; `apply_camera_mode` deliberately doesn't touch `Transform` itself (see
+/// its own doc comment), and a `CameraBlendState` blends *toward* whatever this system writes, so
+/// if this system only wrote `position` at spawn, switching to `Fixed` would silently never move
+/// the camera (real bug, caught by 3 independent post-implementation reviews before it shipped).
 pub fn fixed_camera_system(
     mut camera_query: Query<(&mut Transform, &ActiveCameraMode), With<FixedCameraMode>>,
     registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
@@ -434,6 +439,7 @@ pub fn fixed_camera_system(
 ) {
     for (mut transform, mode) in &mut camera_query {
         let ActiveCameraMode::Fixed(fixed) = mode else { continue };
+        transform.translation = fixed.position;
         let look_at = fixed.look_at_entity.as_ref()
             .and_then(|id| registry.entities.get(id))
             .and_then(|&e| transforms.get(e).ok())

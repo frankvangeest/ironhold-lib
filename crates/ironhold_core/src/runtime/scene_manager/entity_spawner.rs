@@ -1296,6 +1296,7 @@ fn insert_fov(commands: &mut Commands, entity: Entity, fov_degrees: f32) {
 pub(crate) fn apply_camera_mode(
     commands: &mut Commands,
     entity: Entity,
+    current_rotation: Quat,
     mode: &CameraModeDef,
     inputs: Option<&InputMap>,
 ) -> Option<f32> {
@@ -1314,6 +1315,10 @@ pub(crate) fn apply_camera_mode(
         ec.remove::<crate::capabilities::camera::FollowCameraMode>();
         ec.remove::<crate::capabilities::camera::FirstPersonCameraMode>();
         ec.remove::<crate::capabilities::camera::FlycamCameraMode>();
+        // A shake mid-flight when the mode switches would otherwise freeze (its owning system no
+        // longer matches this camera) and can replay stale offsets seconds later if a future
+        // switch brings the camera back onto Orbit/Party — debug-detective finding.
+        ec.remove::<crate::capabilities::camera::CameraShakeState>();
     }
     let fov = match mode {
         CameraModeDef::Orbit(cam) => {
@@ -1351,6 +1356,7 @@ pub(crate) fn apply_camera_mode(
         CameraModeDef::Fixed(fx) => {
             commands.entity(entity).insert((
                 ActiveCameraMode::Fixed(crate::capabilities::camera::FixedState {
+                    position: Vec3::from(fx.position),
                     look_at: fx.look_at.map(Vec3::from),
                     look_at_entity: fx.look_at_entity.clone(),
                 }),
@@ -1361,13 +1367,17 @@ pub(crate) fn apply_camera_mode(
         CameraModeDef::Flycam(fc) => {
             use crate::capabilities::flycam::parse_flycam_look_button;
             let (look_lmb, look_rmb) = parse_flycam_look_button(&fc.look_button);
+            // Derived from the camera's current rotation (not hardcoded 0.0/0.0) so switching
+            // onto Flycam doesn't snap the view to face -Z — same technique scene_loader.rs's
+            // standalone flycam spawn already uses to avoid a first-mouse-move jump.
+            let (yaw, pitch, _) = current_rotation.to_euler(EulerRot::YXZ);
             commands.entity(entity).insert((
                 ActiveCameraMode::Flycam(crate::capabilities::camera::FlycamState {
                     speed: fc.speed,
                     fast_speed: fc.fast_speed,
                     sensitivity: fc.sensitivity,
-                    pitch: 0.0,
-                    yaw: 0.0,
+                    pitch,
+                    yaw,
                     key_forward:  InputMap::parse_key(&fc.forward).unwrap_or(KeyCode::KeyW),
                     key_backward: InputMap::parse_key(&fc.backward).unwrap_or(KeyCode::KeyS),
                     key_left:     InputMap::parse_key(&fc.left).unwrap_or(KeyCode::KeyA),
@@ -1514,6 +1524,7 @@ fn spawn_active_camera_for_player(
                 Transform::from_translation(Vec3::from(fx.position)),
                 LevelEntity,
                 ActiveCameraMode::Fixed(crate::capabilities::camera::FixedState {
+                    position: Vec3::from(fx.position),
                     look_at: fx.look_at.map(Vec3::from),
                     look_at_entity: fx.look_at_entity.clone(),
                 }),

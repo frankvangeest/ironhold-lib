@@ -898,12 +898,24 @@ pub fn action_executor_system(
                     }
                 };
 
-                // Resolve owner_player -> target camera entities. Omitted = every active camera;
-                // Some(n) = only player n's own camera(s), warn+no-op for every other case in the
-                // targeting table (unjoined seat, out-of-range index, or a shared Party camera —
-                // no single per-player camera to retarget there).
+                // Resolve owner_player -> target camera entities. Omitted = every active camera
+                // EXCEPT a shared Party camera (see below); Some(n) = only player n's own
+                // single-owner camera(s), warn+no-op for every other case in the targeting table
+                // (unjoined seat, out-of-range index, or player n owns only a shared Party camera
+                // — no single per-player camera to retarget there).
                 let targets: Vec<Entity> = match owner_player {
-                    None => scene_state.all_cameras.iter().map(|(e, ..)| e).collect(),
+                    // A Party-authored camera can never round-trip through apply_camera_mode
+                    // (which rejects Party as an unreachable target — see its own doc), so a
+                    // "default" restore on one would resolve back to Party and fail forever,
+                    // permanently stuck on whatever preset it was switched to and permanently
+                    // breaking dynamic_split_screen_system's is_active toggling (its party_camera
+                    // query requires PartyCameraMode, which the failed switch already removed).
+                    // Excluding it here — rather than trying to recover after the fact — is what
+                    // keeps every camera this action ever touches switchable back to "default".
+                    None => scene_state.all_cameras.iter()
+                        .filter(|(_, _, authored, ..)| !matches!(authored.0, CameraModeDef::Party(_)))
+                        .map(|(e, ..)| e)
+                        .collect(),
                     Some(n) => {
                         let Some(player_entity) = resolve_player_entity_by_index(n, &scene_state.player_targets) else {
                             warn!(
@@ -913,25 +925,22 @@ pub fn action_executor_system(
                             );
                             continue;
                         };
+                        // Filtered to single-owner cameras only — a split.dynamic scene's player
+                        // owns BOTH their own split camera (CameraTargets = [self]) and the
+                        // shared merged party camera (CameraTargets = [p0, p1, ...]); rejecting
+                        // the whole action just because ONE owned camera happens to be shared
+                        // would make owner_player targeting unreachable in every split.dynamic
+                        // scene, the exact scenario CameraModeOverride was built for.
                         let matching: Vec<Entity> = scene_state.all_cameras.iter()
-                            .filter(|(_, targets, ..)| targets.0.contains(&player_entity))
+                            .filter(|(_, targets, ..)| targets.0.len() == 1 && targets.0.contains(&player_entity))
                             .map(|(e, ..)| e)
                             .collect();
                         if matching.is_empty() {
                             warn!(
-                                "Action::SetCameraMode: owner_player {} owns no camera in this \
-                                 scene — ignoring",
-                                n
-                            );
-                            continue;
-                        }
-                        let shared = scene_state.all_cameras.iter()
-                            .any(|(e, targets, ..)| matching.contains(&e) && targets.0.len() > 1);
-                        if shared {
-                            warn!(
-                                "Action::SetCameraMode: owner_player {} shares a single Party \
-                                 camera with other players — no single per-player camera to \
-                                 retarget; ignoring",
+                                "Action::SetCameraMode: owner_player {} owns no single-owner \
+                                 camera in this scene (either no camera at all, or only a shared \
+                                 Party camera with no single per-player camera to retarget) — \
+                                 ignoring",
                                 n
                             );
                             continue;
@@ -939,6 +948,14 @@ pub fn action_executor_system(
                         matching
                     }
                 };
+                if targets.is_empty() && owner_player.is_none() {
+                    // Every camera in scope was excluded (no camera at all, or every camera is a
+                    // shared Party camera) — without this, a scene with no AuthoredCameraMode-
+                    // bearing camera in it (e.g. a standalone flycam-tagged spawn missing the
+                    // component) would silently do nothing with zero diagnostic.
+                    warn!("Action::SetCameraMode: no switchable camera found in this scene — ignoring");
+                    continue;
+                }
 
                 for camera_entity in targets {
                     let Ok((_, camera_targets, authored, transform, projection)) =
@@ -957,7 +974,7 @@ pub fn action_executor_system(
                     let owner_inputs = camera_targets.0.first()
                         .and_then(|owner| scene_state.character_controllers.get(*owner).ok())
                         .map(|cc| &cc.inputs);
-                    let Some(new_fov) = apply_camera_mode(&mut commands, camera_entity, &resolved_mode, owner_inputs) else {
+                    let Some(new_fov) = apply_camera_mode(&mut commands, camera_entity, from_rotation, &resolved_mode, owner_inputs) else {
                         continue; // Party(...) rejected inside apply_camera_mode; already warned there
                     };
                     // A registry preset switch marks this camera "overridden" so

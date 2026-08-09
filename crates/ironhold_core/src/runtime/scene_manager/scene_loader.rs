@@ -854,6 +854,13 @@ pub fn spawn_scene_v2(
                 },
                 crate::capabilities::camera::FlycamCameraMode,
                 crate::capabilities::camera::CameraTargets::default(),
+                // Without this, Action::SetCameraMode's `all_cameras` query (which requires
+                // &AuthoredCameraMode) can never see this camera — owner_player: None would
+                // silently skip it with zero warning (found in camera_modes.md v2's
+                // post-implementation review; every other camera-spawn site already has this).
+                crate::capabilities::camera::AuthoredCameraMode(
+                    crate::schema::camera::CameraModeDef::Flycam(fc_def.clone()),
+                ),
             ));
         } else if !scene.spawn_points.is_empty() {
             // Spawn points exist → the FSM will spawn the player (and orbit camera).

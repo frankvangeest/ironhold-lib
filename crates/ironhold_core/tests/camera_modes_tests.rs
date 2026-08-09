@@ -9,12 +9,12 @@ use bevy::ecs::system::RunSystemOnce;
 use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2};
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
-use ironhold_core::schema::player::{CameraConfig, SplitScreenDef, SplitOrientation, PartyZoomDef, InputMap};
+use ironhold_core::schema::player::{CameraConfig, SplitScreenDef, SplitOrientation, DynamicSplitDef, PartyZoomDef, InputMap};
 use ironhold_core::schema::camera::{CameraModeDef, EaseKind};
 use ironhold_core::capabilities::camera::{
     ActiveCameraMode, CameraTargets, AuthoredCameraMode, CameraModeOverride, CameraBlendState,
-    OrbitCameraMode, FixedCameraMode, PartyCameraMode, SplitViewportSlot,
-    camera_blend_system, dynamic_split_screen_system,
+    CameraShakeState, OrbitCameraMode, FixedCameraMode, FlycamCameraMode, PartyCameraMode,
+    SplitViewportSlot, camera_blend_system, dynamic_split_screen_system,
 };
 
 mod support;
@@ -197,6 +197,60 @@ fn load_two_player_split_scene(app: &mut App, camera_modes_ron: &str) {
     app.update();
 }
 
+/// A `split.dynamic` scene: player 0 owns both their own `SplitViewportSlot` camera
+/// (`CameraTargets = [p0]`) AND is a member of the shared merged party camera's
+/// `CameraTargets = [p0, p1]` — the exact shape that made `owner_player` targeting
+/// unconditionally reject every player in this scene type before the fix (debug-detective
+/// finding #3).
+fn two_player_dynamic_split_catalogs(app: &mut App) {
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    let mut p1_camera = base_camera_config();
+    p1_camera.split = Some(SplitScreenDef {
+        orientation: SplitOrientation::Vertical,
+        dynamic: Some(DynamicSplitDef {
+            split_distance: 20.0,
+            merge_distance: 15.0,
+            merged_zoom_margin: 4.0,
+            merged_allow_manual_zoom: false,
+        }),
+        own_viewport_only: false,
+    });
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    camera: Some(p1_camera),
+                    inputs: Some(test_input_map()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_player_2".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_b".to_string(),
+                player_index: 1,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    inputs: Some(test_input_map()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+}
+
 fn load_party_scene(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
         models: std::collections::HashMap::from([
@@ -251,6 +305,55 @@ fn load_party_scene(app: &mut App) {
         entities: [
             (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
             (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+/// A scene with a single `tags: ["flycam"]` entity and no player at all — the one camera spawn
+/// site that was missing `AuthoredCameraMode` (found independently by 3 reviewers), which made
+/// `SetCameraMode` a completely silent no-op in every flycam-only scene (`terrain_demo`,
+/// `custom_materials`).
+fn load_flycam_only_scene(app: &mut App) {
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_flycam".to_string(), PrefabDef {
+                kind: PrefabKind::Primitive,
+                model: String::new(),
+                components: PrefabComponents {
+                    tags: vec!["flycam".to_string()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "cam", prefab: "test_flycam", transform: (translation: (0.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
         ],
         ui: [],
     )"#).unwrap();
@@ -601,4 +704,114 @@ fn test_authored_camera_mode_matches_scene_authored_mode_at_spawn() {
     let mut q = app.world_mut().query::<(Entity, &AuthoredCameraMode)>();
     let (_camera, authored) = q.iter(app.world()).next().expect("camera must exist");
     assert!(matches!(authored.0, CameraModeDef::Orbit(_)), "AuthoredCameraMode must record the scene-authored Orbit mode this player was actually spawned with");
+}
+
+// ── Post-review fixes: regression tests ──────────────────────────────────────────
+//
+// The 5 tests below each pin one bug found by the camera_modes v2 post-implementation review
+// (alignment-reviewer, system-architect, debug-detective, wasm-perf-reviewer all independently
+// converged on a subset of these).
+
+#[test]
+fn test_set_camera_mode_fixed_actually_relocates_the_camera() {
+    // The headline bug: FixedCameraDef.position was only ever applied at spawn time.
+    // apply_camera_mode's Fixed arm + fixed_camera_system now write it every frame, which is what
+    // both shipped demos (entity_logic_demo's "birdseye", room11's "cinematic_fixed") depend on.
+    let mut app = setup_test_app();
+    app.update();
+    one_player_catalogs(&mut app);
+    load_one_player_scene(&mut app, r#""cine": Fixed((position: (20.0, 10.0, 5.0), look_at: (0.0, 0.0, 0.0), fov: 50.0))"#);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode { mode: "cine".to_string(), owner_player: None });
+    app.update();
+    app.update(); // let fixed_camera_system run at least once past the switch frame
+
+    let mut q = app.world_mut().query_filtered::<&Transform, With<FixedCameraMode>>();
+    let transform = q.iter(app.world()).next().expect("camera must exist");
+    assert!(
+        transform.translation.distance(Vec3::new(20.0, 10.0, 5.0)) < 0.01,
+        "camera must actually relocate to the Fixed preset's position, got {:?}", transform.translation
+    );
+}
+
+#[test]
+fn test_set_camera_mode_owner_player_none_excludes_party_camera_and_stays_restorable() {
+    // A Party-authored camera can never round-trip through apply_camera_mode (which rejects Party
+    // as a target). Excluding it from owner_player: None targeting means every OTHER camera can
+    // still be switched, and the party camera itself is simply left alone rather than getting
+    // permanently stuck off a failed "default" restore.
+    let mut app = setup_test_app();
+    app.update();
+    load_party_scene(&mut app);
+
+    let mut party_q = app.world_mut().query_filtered::<Entity, With<PartyCameraMode>>();
+    let party_camera = party_q.iter(app.world()).next().expect("party camera must exist");
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode { mode: "default".to_string(), owner_player: None });
+    app.update(); // must not panic
+
+    assert!(app.world().get::<PartyCameraMode>(party_camera).is_some(), "the party camera must be excluded from owner_player: None targeting, not switched then stranded");
+    assert!(matches!(app.world().get::<ActiveCameraMode>(party_camera).unwrap(), ActiveCameraMode::Party(_)));
+}
+
+#[test]
+fn test_set_camera_mode_owner_player_targets_own_split_camera_in_dynamic_scene() {
+    // debug-detective finding: in a split.dynamic scene, player 0 owns BOTH their own
+    // single-target split camera and a share of the merged party camera's multi-target
+    // CameraTargets. owner_player: Some(0) must still find and switch their own split camera
+    // rather than unconditionally rejecting the action because ONE owned camera is shared.
+    let mut app = setup_test_app();
+    app.update();
+    two_player_dynamic_split_catalogs(&mut app);
+    load_two_player_split_scene(&mut app, r#""cine": Fixed((position: (1.0, 1.0, 1.0), look_at: (0.0, 0.0, 0.0), fov: 50.0))"#);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode { mode: "cine".to_string(), owner_player: Some(0) });
+    app.update();
+
+    let mut fixed_q = app.world_mut().query_filtered::<Entity, With<FixedCameraMode>>();
+    assert_eq!(fixed_q.iter(app.world()).count(), 1, "owner_player: Some(0) must switch player 0's own split camera in a split.dynamic scene, not no-op");
+}
+
+#[test]
+fn test_flycam_only_scene_camera_has_authored_camera_mode() {
+    // wasm-perf-reviewer/alignment-reviewer/debug-detective all independently found this gap:
+    // the standalone flycam-tagged scene-load spawn never got an AuthoredCameraMode, making it
+    // invisible to SetCameraMode's targeting query with zero warning.
+    let mut app = setup_test_app();
+    app.update();
+    load_flycam_only_scene(&mut app);
+
+    let mut q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    let camera = q.iter(app.world()).next().expect("flycam camera must exist");
+    assert!(
+        app.world().get::<AuthoredCameraMode>(camera).is_some(),
+        "the standalone flycam-tagged camera must carry AuthoredCameraMode like every other camera spawn site"
+    );
+
+    // And SetCameraMode must actually be able to act on it now.
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode { mode: "default".to_string(), owner_player: None });
+    app.update(); // must not panic, and must not silently skip it
+    assert!(app.world().get::<FlycamCameraMode>(camera).is_some(), "restoring \"default\" on the only camera in scope must leave it Flycam");
+}
+
+#[test]
+fn test_set_camera_mode_removes_stale_camera_shake_state() {
+    // debug-detective finding: without this, a shake active at the moment of a mode switch is
+    // orphaned (its owning system no longer matches the camera) and can replay stale offsets
+    // seconds later if a later switch brings the camera back onto Orbit/Party.
+    let mut app = setup_test_app();
+    app.update();
+    one_player_catalogs(&mut app);
+    load_one_player_scene(&mut app, r#""cine": Fixed((position: (20.0, 10.0, 0.0), look_at: (0.0, 0.0, 0.0), fov: 50.0))"#);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::CameraShake { duration_secs: 1.0, intensity: 0.2, owner_player: None });
+    app.update();
+    let mut shaking_before = app.world_mut().query_filtered::<Entity, With<CameraShakeState>>();
+    assert_eq!(shaking_before.iter(app.world()).count(), 1, "shake must be applied before the switch");
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode { mode: "cine".to_string(), owner_player: None });
+    app.update();
+
+    let mut shaking_after = app.world_mut().query_filtered::<Entity, With<CameraShakeState>>();
+    assert_eq!(shaking_after.iter(app.world()).count(), 0, "CameraShakeState must not survive a mode switch");
 }
