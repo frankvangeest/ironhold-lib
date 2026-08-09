@@ -1,0 +1,13 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:go_cinematic",
+            do_actions: [ SetCameraMode(mode: "cine") ],
+        ),
+        (
+            on: "ui.button_pressed:go_default",
+            do_actions: [ SetCameraMode(mode: "default") ],
+        ),
+    ],
+)

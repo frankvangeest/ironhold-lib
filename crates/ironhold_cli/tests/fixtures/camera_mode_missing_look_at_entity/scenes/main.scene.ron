@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    name: "main",
+    camera_modes: {
+        "cine": Fixed((
+            position: (0.0, 5.0, 0.0),
+            look_at_entity: "does_not_exist",
+        )),
+    },
+)

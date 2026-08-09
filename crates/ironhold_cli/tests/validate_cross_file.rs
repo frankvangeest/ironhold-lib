@@ -302,3 +302,51 @@ fn orphan_audio_strict_exits_1() {
         "expected 'orphan_sound' in output:\n{stdout}"
     );
 }
+
+// ── camera_modes registry (camera_modes.md v2) ─────────────────────────────────
+
+#[test]
+fn camera_mode_reserved_default_key_exits_1() {
+    let (code, stdout) = validate("camera_mode_reserved_default_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reserved key"),
+        "expected 'reserved key' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_party_in_registry_exits_1() {
+    let (code, stdout) = validate("camera_mode_party_in_registry");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("cannot be reached via SetCameraMode"),
+        "expected 'cannot be reached via SetCameraMode' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_missing_look_at_entity_exits_1() {
+    let (code, stdout) = validate("camera_mode_missing_look_at_entity");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("look_at_entity"),
+        "expected 'look_at_entity' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_unknown_set_camera_mode_reference_exits_1() {
+    let (code, stdout) = validate("camera_mode_unknown_set_camera_mode");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("nonexistent_preset"),
+        "expected 'nonexistent_preset' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_valid_registry_and_reference_exits_0() {
+    let (code, stdout) = validate("camera_mode_valid_registry_and_reference");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
