@@ -3,7 +3,8 @@
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Player-count-change assumptions](project_player_count_change_assumptions.md) — seat index vs viewport slot conflated at join; "2+ players" gating assumes count is fixed per scene; both break on leave
 - [CameraConfig party/split nesting](project_camera_config_party_split_nesting.md) — party:/split: live inside components.camera; flycam is TAG-driven not field-driven; real docs/20 camera surface is ~1814-2557
-- [camera_mode reachability matrix](project_camera_mode_reachability_matrix.md) — camera_mode: is ignored on the split/party spawn paths (Orbit-only, reads legacy .camera); nesting split: inside Orbit(()) parses but is dropped
+- [camera_mode reachability matrix](project_camera_mode_reachability_matrix.md) — HISTORICAL/fixed; keep for the "check WHICH spawn path the example exercises" review lesson
+- [Camera transition & "default" sentinel](project_camera_transition_and_default_sentinel.md) — transition: is read from the TARGET mode, so "default" round-trips snap back; fov has 3 different defaults (45/60/90)
 - [RON enum double-paren trap](project_ron_enum_double_paren.md) — enum variants wrapping a named struct need Orbit((field: value)); single-paren examples fail to parse; only cli validate catches it
 - [Docs lag the action schema](project_docs_lag_actions.md) — docs/20_data_formats.md, docs/30_runtime_events_and_logic.md, docs/STATUS.md consistently miss new Action variants when added
 - [pkg/ web build must be rebuilt](project_pkg_rebuild_required.md) — staged schema/action changes do not reach designers until wasm-pack build + commit of pkg/
@@ -36,3 +37,4 @@
 - [Split-switch prefab duplication](project_split_switch_prefab_duplication.md) — split switches live on the first player's prefab & scene entities can't override components, so each variant demo clones the whole prefab pair (and drifts)
 - [local_coop_demo room conventions](project_local_coop_demo_room_conventions.md) — 10-room portal chain, no ?scene= deep-link, exits must be listed, 22px font wraps-into-neighbour past a verified 82-char ceiling
 - [material override vs children](project_material_override_vs_children.md) — top-level `material:` + `children:` precedence is undocumented and had ZERO shipped examples before room10; prefer per-child colours
+- [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys

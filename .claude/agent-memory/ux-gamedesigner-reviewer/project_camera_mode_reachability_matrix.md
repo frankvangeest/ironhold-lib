@@ -1,12 +1,20 @@
 ---
 name: camera-mode-reachability-matrix
-description: camera_mode: only reaches the camera on the SINGLE-player and flycam spawn paths; split/party/dynamic paths read the legacy PlayerConfig.camera and ignore camera_mode entirely
+description: HISTORICAL — camera_mode: used to be ignored on the split/party spawn paths; fixed before v1 shipped. Kept for the review lesson about checking WHICH spawn path an example exercises.
 metadata:
   type: project
 ---
 
-`components.camera_mode` (`CameraModeDef`, shipped in `camera_modes.md` v1) is **not** honoured on
-every camera spawn path. Verified 2026-08-07 on `feature/camera-modes-v1`:
+> **STATUS: FIXED — do not cite the table below as current behaviour.** The v1 post-implementation
+> review (2026-08-07, 5 agents converging) caught this before ship; the split/party/dynamic
+> dispatch now resolves through a `resolve_orbit_config_for_multiplayer` helper (Orbit payload
+> wins, non-Orbit warns and falls back), pinned by
+> `test_split_screen_honors_camera_mode_orbit_not_just_legacy_camera_field`. `local_coop_demo`
+> room11 (v2) authors `camera_mode: Orbit((...))` + sibling `split:` on a 2-player scene and works.
+> The **review lesson** below still stands and is the reason to keep this memory.
+
+`components.camera_mode` (`CameraModeDef`, shipped in `camera_modes.md` v1) was **not** honoured on
+every camera spawn path. Verified 2026-08-07 on `feature/camera-modes-v1`, fixed before ship:
 
 | Authoring site | Does `camera_mode:` take effect? |
 |---|---|

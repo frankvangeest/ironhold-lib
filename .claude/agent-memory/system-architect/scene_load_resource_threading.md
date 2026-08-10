@@ -27,6 +27,15 @@ carries the `.before(message_interpreter_system)` constraint. Argument (2) still
 argument (1) does not. If terrain scenes ever gain multi-player split-screen, add the same
 `.before(message_interpreter_system)` for symmetry.
 
+**Overlay loads are a second, easy-to-miss branch.** `scene_loader.rs` splits on `is_overlay`
+early: the overlay path keeps the existing world (and every live camera/player) and only spawns the
+UI section, while the `else` (Replace) branch is where the world teardown *and*
+`commands.insert_resource(LoadedSpawnPoints(...))` live (~line 123). Any new scene-scoped registry
+resource must go in the Replace branch only — inserting it unconditionally would clobber the live
+world's registry the moment a pause/inventory overlay loads, and any action fired *from* that
+overlay (a pause-menu button is the canonical case) would then resolve against the overlay scene's
+empty map.
+
 **Why to apply:** when reviewing a new scene-load resource, don't demand it be threaded as a
 function parameter instead of a resource read. Do flag any code comment that justifies a resource
 read with frame separation — reword it to the atomicity argument, since the frame-separation claim
