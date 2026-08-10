@@ -1,6 +1,45 @@
 # Feature: Camera Modes
 
-_Status: In Progress (v1 Done, v2 Active)_
+_Status: Done (v1 + v2 both shipped)_
+_v2 post-implementation review (2026-08-09/10): all 5 reviews (alignment, system-architect,
+debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer) ran in parallel and independently
+converged on 2 real blockers before playtest: `Fixed`'s `position` was only ever applied at spawn —
+`apply_camera_mode`'s Fixed arm and `fixed_camera_system` never wrote `Transform`, so both shipped
+demos (`entity_logic_demo`'s "birdseye", `local_coop_demo` room11's "cinematic_fixed") would never
+have actually moved the camera on a `SetCameraMode` switch, only rotated it — fixed by having
+`fixed_camera_system` write `position` unconditionally every frame, which `CameraBlendState` then
+blends toward. A Party/merged camera switched via `owner_player: None` could never restore via
+`mode: "default"` (rejected as an unreachable target by `apply_camera_mode`) and permanently broke
+`dynamic_split_screen_system`'s `is_active` toggling for the whole scene — fixed by excluding
+`AuthoredCameraMode::Party` cameras from `owner_player: None`'s target set, since they can never
+safely round-trip. 3 more real bugs fixed in the same pass: `owner_player` was unconditionally
+rejected in every `split.dynamic` scene (a player owns both their own single-target split camera
+and a share of the multi-target merged party camera; the old "any owned camera is shared → reject"
+check caught the valid single-owner camera too — fixed by filtering to single-owner cameras before
+checking emptiness); the standalone flycam-tagged scene-load spawn never got `AuthoredCameraMode`,
+making `SetCameraMode` a totally silent no-op in flycam-only scenes (fixed, plus a new `warn!` for
+an empty resolved target list — previously silent in every case); `apply_camera_mode` never removed
+a stale `CameraShakeState`, so a shake active at the moment of a switch could freeze then replay
+later. Real-hardware playtest then caught a 4th, genuinely pre-existing-shape bug this feature
+exposed: `entity_logic_demo`'s "V" (restore to `"default"`) snapped instantly instead of blending,
+asymmetric with "C"'s blended switch — its player prefab had no `camera:`/`camera_mode:` block at
+all, so `"default"` resolved through the no-transition engine fallback with nothing to blend from;
+fixed by adding an explicit `camera_mode: Orbit(...)` reproducing that fallback's exact values plus
+a `transition:`. Same asymmetry pre-emptively fixed on `local_coop_demo` room11's player before
+playtest. Non-blocking findings (missing field-docs tables for the mode payload structs,
+`dynamic_split_screen_system`'s override-suspend not surviving a marker swap away from Orbit/Party,
+`camera_modes:` silently discarded on an overlay scene load, `CameraShake`'s `owner_player` docs
+overclaiming parity with `SetCameraMode`'s party-scene reject guard, `camera_blend_system`'s
+"blend toward the live target" design interacting oddly — but not divergently — with `Follow`/
+`Flycam`'s own `Transform`-as-accumulator state, and the dedicated `camera_modes` demo project
+having no v2 content) logged to `planning/claude_suggestions.md` ▸ Camera rather than fixed in this
+pass. Full test suite (19 new `camera_modes_tests.rs` + 5 CLI fixture tests, plus the full
+`local_coop_tests`/`npc_tests`/`ron_lint`/`ron_validation` suites) green; real-hardware playtest
+confirmed by Frank, including confirmation of the live-caught fix — `ff92fa8` (2026-08-10). Two
+pre-existing, unrelated issues surfaced during playtest (scroll-wheel zoom snapping straight to
+min/max radius; nameplate/stat-bar spacing off at zoom extremes) and were logged to
+`planning/backlog.md`'s `## Bugs` section instead, since neither is caused by or specific to this
+feature._
 _Post-implementation review (2026-08-07): all 5 reviews (alignment, system-architect,
 debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer) independently converged on the same
 3 critical bugs, giving unusually strong confidence they were real: (1) `follow_camera_system`/
@@ -61,7 +100,7 @@ no camera code._
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | Camera mode unification — `ActiveCameraMode` component, backward-compat mapping | Done | `8bcecb5` (2026-08-07) |
-| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Active | — |
+| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Done | `ff92fa8` (2026-08-10) |
 
 ## What
 
