@@ -10,6 +10,30 @@
       shape: Capsule3d,
       components: (
         tags: ["player"],
+        // Explicit camera_mode: (camera_modes v2 demo, see main.scene.ron's camera_modes
+        // registry): every field below reproduces this project's own prior no-camera-block
+        // fallback (default_camera_config()/default_fov(), entity_spawner.rs) exactly, so this
+        // is purely additive — the ONLY new behavior is `transition:`, which the fallback path
+        // has no way to author. Without it, SetCameraMode(mode: "default") restoring this
+        // camera would snap instead of blending, asymmetric with the C-key's blended switch to
+        // "birdseye" (ux-gamedesigner-reviewer finding, confirmed live by Frank's playtest).
+        camera_mode: Orbit((
+          offset:         (0.0, 5.0, 10.0),
+          look_at_offset: (0.0, 2.0, 0.0),
+          zoom_speed:     10.0,
+          orbit_speed:    0.5,
+          min_radius:     2.0,
+          max_radius:     20.0,
+          min_pitch:      0.1,
+          max_pitch:      0.9,
+          orbit_button:   "Either",
+          character_rotate_button: "Right",
+          initial_pitch:  0.5,
+          initial_yaw:    0.0,
+          look_speed:     2.0,
+          fov:            45.0,
+          transition: (duration_secs: 0.4, ease: EaseInOut),
+        )),
         movement: (
           walk_speed: 5.5,
           run_speed: 10.0,
