@@ -38,3 +38,4 @@
 - [RenderLayers reserved scheme](render_layers_reserved_scheme.md) — layer-restricted meshes drop out of layer-0 lights' shadow passes (unlit-only scheme); heap-free below layer 64; scheme has no owning module
 - [Scene-load resource threading](scene_load_resource_threading.md) — why deferred insert_resource at scene load is never stale (sync point + same-command-queue atomicity), and the unordered terrain spawn path
 - [Gamepad input pattern](gamepad_input_pattern.md) — BoundGamepad bind-once replaced resolve_gamepad (deleted); TWO writers not one (spawn path bypasses `claimed`); camera resolves via orbit.target; WASM press-order pad swap; hot-join out-of-band pad identity
+- [Mouse-wheel normalization](mouse_wheel_input_normalization.md) — winit facts: Windows Line is ALWAYS ±1.0/notch, web Pixel = deltaY×devicePixelRatio (~100-150/notch in Chrome); dt-scaling a discrete scroll impulse is the real zoom bug (Time max_delta 250ms)
