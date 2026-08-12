@@ -5,6 +5,58 @@ use crate::capabilities::player::{BoundGamepad, CharacterController};
 use crate::schema::player::InputMap;
 use crate::runtime::scene_manager::LevelEntity;
 
+/// One `MouseScrollUnit::Pixel` unit of delta this many pixels count as a single
+/// `MouseScrollUnit::Line` notch, before the per-event clamp below still applies. `100.0`
+/// approximates the de facto browser convention (Chrome/Edge report ~100 logical px per wheel
+/// notch as `deltaMode: DOM_DELTA_PIXEL`) so a *sub-notch* trackpad swipe still scales smoothly
+/// and proportionately, while a full notch-sized (or larger) `Pixel` event gets clamped exactly
+/// like a `Line` notch does — see `normalized_wheel_delta`'s doc comment for why the clamp, not
+/// this constant, is what actually matters for the reported bug.
+const SCROLL_PIXELS_PER_LINE: f32 = 100.0;
+
+/// Hard per-frame cap on the total normalized wheel delta, applied after unit conversion and
+/// summing. Backstops the case where several genuine notches land in one unusually long frame —
+/// `Time<Virtual>::max_delta` defaults to 250ms (~15x a 60fps frame), so even correctly-clamped
+/// per-notch deltas could otherwise multiply into a large radius jump on a hitch frame. Bounding
+/// the summed result keeps that impossible regardless of frame time, while still comfortably
+/// allowing several genuine notches scrolled quickly in one ordinary frame.
+const MAX_WHEEL_NOTCHES_PER_FRAME: f32 = 3.0;
+
+/// Normalizes accumulated `MouseWheel` events into a platform-independent "notches scrolled"
+/// value — the fix for `planning/backlog.md`'s "Scroll-wheel orbit zoom snaps..." bug. The bug
+/// was reported from a **browser** playtest, and the actual mechanism (verified against winit's
+/// vendored source) is specifically the `Pixel` branch, not `Line`:
+/// - **Native Windows** `Line` events are always exactly `y = ±1.0` per notch — winit derives
+///   this directly from `WHEEL_DELTA` (`platform_impl/windows/event_loop.rs`) and never consults
+///   the OS's "lines per wheel notch" setting, so a bare `Line` event was never actually
+///   unbounded on this project's native target. Firefox's web backend *does* report a few lines
+///   per notch via `DOM_DELTA_LINE` (`web_sys/event.rs`), which the ±1.0 clamp genuinely fixes.
+/// - **Chrome/Edge** (the browsers this project's WebGPU build targets) report a standard wheel
+///   notch as `MouseScrollUnit::Pixel` with `y ≈ 100`, and winit's web backend additionally
+///   multiplies that by the page's `devicePixelRatio` before Bevy ever sees it
+///   (`mouse_scroll_delta` in `platform_impl/web/web_sys/event.rs`) — so one notch could arrive
+///   as `y = 100..300+` depending on display scaling. Dividing by `SCROLL_PIXELS_PER_LINE` alone
+///   does not remove that DPI dependence, so `Pixel` events are clamped to ±1.0 per event too,
+///   exactly like `Line` — a full notch (at any DPI) counts as at most one notch; only smaller,
+///   genuinely fine-grained sub-notch deltas (an actual trackpad swipe) stay proportionate.
+///
+/// Non-finite (`NaN`/`±inf`) deltas from a malformed event are dropped before clamping —
+/// `f32::clamp` passes `NaN` through unchanged, which would otherwise permanently poison
+/// `OrbitState.radius`/`PartyState.manual_zoom_offset` for the rest of the session. The final
+/// summed value is additionally bounded by `MAX_WHEEL_NOTCHES_PER_FRAME` — see that constant's
+/// doc comment.
+fn normalized_wheel_delta(events: &mut MessageReader<bevy::input::mouse::MouseWheel>) -> f32 {
+    use bevy::input::mouse::MouseScrollUnit;
+    let total: f32 = events.read()
+        .filter(|e| e.y.is_finite())
+        .map(|e| match e.unit {
+            MouseScrollUnit::Line => e.y.clamp(-1.0, 1.0),
+            MouseScrollUnit::Pixel => (e.y / SCROLL_PIXELS_PER_LINE).clamp(-1.0, 1.0),
+        })
+        .sum();
+    total.clamp(-MAX_WHEEL_NOTCHES_PER_FRAME, MAX_WHEEL_NOTCHES_PER_FRAME)
+}
+
 /// Inserted by `Action::CameraShake` on the active orbit/party camera entity.
 /// Removed automatically when `remaining` reaches zero.
 #[derive(Component)]
@@ -157,7 +209,7 @@ pub fn camera_orbit_system(
         mouse_delta += event.delta;
     }
 
-    let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
+    let zoom_delta = normalized_wheel_delta(&mut mouse_wheel_events);
 
     for (mut cam_transform, mut mode, targets) in &mut camera_query {
         let Some(target) = targets.0.first().copied() else { continue };
@@ -369,7 +421,7 @@ pub fn party_camera_follow_system(
     for event in mouse_motion_events.read() {
         mouse_delta += event.delta;
     }
-    let zoom_delta: f32 = mouse_wheel_events.read().map(|e| e.y).sum();
+    let zoom_delta = normalized_wheel_delta(&mut mouse_wheel_events);
 
     for (mut cam_transform, mut mode, targets) in &mut camera_query {
         let ActiveCameraMode::Party(party) = &mut *mode else { continue };
@@ -397,6 +449,11 @@ pub fn party_camera_follow_system(
         }
         let radius = (max_dist + party.zoom_margin + party.manual_zoom_offset)
             .clamp(party.min_radius, party.max_radius);
+        // Bank the offset down to only what the radius clamp actually used — otherwise scrolling
+        // past a limit (or `max_dist` shrinking as players regroup) accumulates a hidden reserve
+        // in `manual_zoom_offset` that isn't visible on screen, and reversing direction requires
+        // an equal number of "dead" notches before the camera moves again at all.
+        party.manual_zoom_offset = radius - max_dist - party.zoom_margin;
 
         let lmb = mouse_button_input.pressed(MouseButton::Left);
         let rmb = mouse_button_input.pressed(MouseButton::Right);

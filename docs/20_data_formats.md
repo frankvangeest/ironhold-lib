@@ -2071,7 +2071,7 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 |-------|------|---------|-------------|
 | `offset` | `(f32, f32, f32)` | `(0, 5, 10)` | Camera position relative to the player (right, up, back) |
 | `look_at_offset` | `(f32, f32, f32)` | `(0, 2, 0)` | Point the camera looks at, relative to the player origin (use `(0, 1.5, 0)` to look at chest height) |
-| `zoom_speed` | `f32` | `10.0` | Scroll-wheel zoom speed |
+| `zoom_speed` | `f32` | `10.0` | Scroll-wheel zoom speed, in world units per second per normalized wheel "notch". One notch is one notch regardless of platform/browser/OS scroll settings — the engine normalizes the raw `MouseWheel` event before applying this multiplier, so a single click never blows past `min_radius`/`max_radius` in one step (see `capabilities/camera.rs`'s `normalized_wheel_delta`). Trackpad swipes still scroll continuously and proportionately, just below the one-notch clamp. |
 | `orbit_speed` | `f32` | `0.5` | Mouse orbit speed (radians per pixel) |
 | `min_radius` | `f32` | `2.0` | Minimum zoom distance in metres |
 | `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |

@@ -6278,3 +6278,436 @@ fn test_terrain_scene_skips_primitive_player_with_no_crash() {
          players are v3 scope, not silently spawned anyway"
     );
 }
+
+// ── Scroll-wheel zoom normalization ─────────────────────────────────────────────
+//
+// Regression for `planning/backlog.md`'s "Scroll-wheel orbit zoom snaps straight to
+// min_radius/max_radius instead of stepping gradually" bug, found live during camera_modes.md
+// v2's playtest. Root cause: `camera_orbit_system`/`party_camera_follow_system` summed raw
+// `MouseWheel.y` with no per-event bound — on platforms/OS configs that report a large "lines"
+// magnitude for a single physical click, that one click's delta already exceeded the whole
+// min_radius..max_radius range. Fixed via `normalized_wheel_delta` (`capabilities/camera.rs`):
+// `Line`-unit events are clamped to ±1.0 per event before being summed; `Pixel`-unit (trackpad)
+// events are scaled down instead of clamped, since they're already fine-grained.
+
+fn write_wheel_event(app: &mut App, y: f32, unit: bevy::input::mouse::MouseScrollUnit) {
+    app.world_mut()
+        .resource_mut::<Messages<bevy::input::mouse::MouseWheel>>()
+        .write(bevy::input::mouse::MouseWheel { unit, x: 0.0, y, window: Entity::PLACEHOLDER });
+}
+
+#[test]
+fn test_camera_orbit_zoom_line_event_clamped_to_one_notch_regardless_of_reported_magnitude() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // Simulate the exact failure mode: one physical wheel click, but the OS/driver reports a
+    // huge "lines" magnitude for it (observed on Windows with a high scroll-speed setting).
+    write_wheel_event(&mut app, 120.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 1.0 * 8.0 * dt;
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "a single notch (even one OS-reported as y=120) must change radius by exactly \
+         1.0 * zoom_speed * dt = {expected}, got {radius}"
+    );
+    assert!(
+        radius > 3.0 && radius < 18.0,
+        "one scroll click must not snap to min_radius/max_radius, got {radius}"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_negative_line_event_also_clamped_to_one_notch() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    write_wheel_event(&mut app, -500.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 + 1.0 * 8.0 * dt;
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "a single reversed notch (even one OS-reported as y=-500) must change radius by exactly \
+         1.0 * zoom_speed * dt = {expected}, got {radius}"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_sums_multiple_genuine_line_notches_in_one_frame() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // Two separate, genuine one-notch events landing in the same frame (fast scrolling) must
+    // both count — the per-event clamp must not be mistaken for a per-frame cap.
+    write_wheel_event(&mut app, 1.0, bevy::input::mouse::MouseScrollUnit::Line);
+    write_wheel_event(&mut app, 1.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 2.0 * 8.0 * dt;
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "two genuine one-notch events in the same frame must sum to a delta of 2.0, got radius \
+         {radius} (expected {expected})"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_pixel_unit_sub_notch_stays_proportionate() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // A small sub-notch trackpad delta stays fine-grained and proportionate (this is the case
+    // the /SCROLL_PIXELS_PER_LINE division exists for — the sibling test below covers a
+    // full-notch-or-larger Pixel event, which the per-event clamp bounds instead).
+    write_wheel_event(&mut app, 25.0, bevy::input::mouse::MouseScrollUnit::Pixel);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 0.25 * 8.0 * dt; // 25.0 / 100.0 == 0.25 lines, well under the clamp
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "a 25px sub-notch Pixel swipe must normalize proportionately to 0.25 lines (25/100), \
+         got radius {radius} (expected {expected})"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_pixel_unit_full_notch_clamped_regardless_of_dpi_inflation() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // Winit's web backend multiplies a Pixel-unit delta by the page's `devicePixelRatio` before
+    // Bevy ever sees it, so at 3x display scaling one physical notch can arrive as y=900 (a
+    // 100px browser notch * 3x + margin) rather than the ~100 a 1x display would report. Dividing
+    // alone would let this scale with DPI; the per-event clamp on the Pixel branch (mirroring
+    // Line's) bounds it to exactly one notch-equivalent regardless.
+    write_wheel_event(&mut app, 900.0, bevy::input::mouse::MouseScrollUnit::Pixel);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 1.0 * 8.0 * dt; // clamped to 1.0, not 9.0 (900.0 / 100.0)
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "a DPI-inflated single notch (y=900) must clamp to exactly 1.0 line, not scale with \
+         DPI, got radius {radius} (expected {expected})"
+    );
+    assert!(
+        radius > 3.0 && radius < 18.0,
+        "one physical notch, however the platform reports its magnitude, must not snap to \
+         min_radius/max_radius, got {radius}"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_many_full_notch_pixel_events_capped_per_frame() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // Each individual event clamps to 1.0 (per the sibling test above), but 5 of them landing in
+    // the same frame (a hitched/slow frame batching several notches) would still sum to 5.0
+    // without a frame-level backstop — MAX_WHEEL_NOTCHES_PER_FRAME (3.0) is what catches this.
+    for _ in 0..5 {
+        write_wheel_event(&mut app, 900.0, bevy::input::mouse::MouseScrollUnit::Pixel);
+    }
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 3.0 * 8.0 * dt; // capped at MAX_WHEEL_NOTCHES_PER_FRAME, not 5.0
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "5 full-notch events in one frame must cap at MAX_WHEEL_NOTCHES_PER_FRAME (3.0), got \
+         radius {radius} (expected {expected})"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_fractional_line_delta_stays_proportionate() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // winit emits a fractional `LineDelta` for a `WM_MOUSEWHEEL` delta smaller than one full
+    // notch (120 raw units) — this must stay 0.25, not get promoted to a full notch. Distinguishes
+    // `.clamp(-1.0, 1.0)` (correct) from `.signum()` (a wrong implementation that would still
+    // pass every other test in this file, since none of them use a sub-1.0 magnitude).
+    write_wheel_event(&mut app, 0.25, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    let expected = 10.0 - 0.25 * 8.0 * dt;
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "a fractional Line delta (0.25) must stay proportionate, not round up to a full notch, \
+         got radius {radius} (expected {expected})"
+    );
+}
+
+#[test]
+fn test_camera_orbit_zoom_non_finite_event_ignored_not_poisoning_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let player = app.world_mut().spawn(test_character_controller()).id();
+    let cam = app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::Orbit(ironhold_core::capabilities::camera::OrbitState {
+            zoom_speed: 8.0,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            radius: 10.0,
+            ..test_orbit_state()
+        }),
+        OrbitCameraMode,
+        CameraTargets(vec![player]),
+    )).id();
+
+    // f32::clamp passes NaN through unchanged, so a malformed event's `y` must be filtered out
+    // before clamping/summing — otherwise `OrbitState.radius` becomes NaN permanently (a NaN
+    // radius can never be un-set by any later legitimate scroll, since NaN survives every clamp
+    // and every arithmetic operation performed on it).
+    write_wheel_event(&mut app, f32::NAN, bevy::input::mouse::MouseScrollUnit::Line);
+    write_wheel_event(&mut app, 1.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(camera_orbit_system).unwrap();
+
+    let radius = get_orbit(&app, cam).radius;
+    assert!(radius.is_finite(), "a NaN event must not poison OrbitState.radius, got {radius}");
+    let expected = 10.0 - 1.0 * 8.0 * dt;
+    assert!(
+        (radius - expected).abs() < 0.001,
+        "the NaN event must be dropped entirely, leaving only the genuine 1.0 notch's effect, \
+         got radius {radius} (expected {expected})"
+    );
+}
+
+#[test]
+fn test_party_camera_manual_zoom_line_event_clamped_to_one_notch() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p1 = app.world_mut().spawn((test_character_controller(), Transform::from_xyz(-5.0, 0.0, 0.0))).id();
+    let p2 = app.world_mut().spawn((test_character_controller(), Transform::from_xyz(5.0, 0.0, 0.0))).id();
+    // Separation = 10.0, zoom_margin = 4.0 -> base radius 14.0 before any manual zoom, well
+    // inside [4, 20] so a clamp on the derived radius itself can't mask an unclamped offset.
+    let camera = app.world_mut().spawn((
+        Transform::IDENTITY,
+        ActiveCameraMode::Party(ironhold_core::capabilities::camera::PartyState {
+            zoom_margin: 4.0,
+            allow_manual_zoom: true,
+            manual_zoom_offset: 0.0,
+            zoom_speed: 10.0,
+            orbit_speed: 0.5,
+            min_radius: 4.0,
+            max_radius: 20.0,
+            pitch: 0.5,
+            yaw: 0.0,
+            look_at_offset: Vec3::ZERO,
+            min_pitch: 0.1,
+            max_pitch: 0.9,
+            orbit_lmb: true,
+            orbit_rmb: true,
+        }),
+        PartyCameraMode,
+        CameraTargets(vec![p1, p2]),
+    )).id();
+
+    write_wheel_event(&mut app, 300.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(party_camera_follow_system).unwrap();
+
+    let cam_transform = app.world().get::<Transform>(camera).unwrap();
+    let actual_radius = cam_transform.translation.distance(Vec3::ZERO);
+    let expected = 14.0 - 1.0 * 10.0 * dt;
+    assert!(
+        (actual_radius - expected).abs() < 0.01,
+        "a single manual-zoom notch (even one OS-reported as y=300) must move the derived \
+         radius by exactly 1.0 * zoom_speed * dt from 14.0, got {actual_radius} (expected \
+         {expected})"
+    );
+}
+
+#[test]
+fn test_party_camera_manual_zoom_offset_does_not_bank_past_the_radius_clamp() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let p1 = app.world_mut().spawn((test_character_controller(), Transform::from_xyz(-5.0, 0.0, 0.0))).id();
+    let p2 = app.world_mut().spawn((test_character_controller(), Transform::from_xyz(5.0, 0.0, 0.0))).id();
+    // Separation = 10.0, zoom_margin = 4.0 -> base radius (before offset) 14.0.
+    let camera = app.world_mut().spawn((
+        Transform::IDENTITY,
+        ActiveCameraMode::Party(ironhold_core::capabilities::camera::PartyState {
+            zoom_margin: 4.0,
+            allow_manual_zoom: true,
+            manual_zoom_offset: -50.0,
+            zoom_speed: 10.0,
+            orbit_speed: 0.5,
+            min_radius: 4.0,
+            max_radius: 20.0,
+            pitch: 0.5,
+            yaw: 0.0,
+            look_at_offset: Vec3::ZERO,
+            min_pitch: 0.1,
+            max_pitch: 0.9,
+            orbit_lmb: true,
+            orbit_rmb: true,
+        }),
+        PartyCameraMode,
+        CameraTargets(vec![p1, p2]),
+    )).id();
+
+    // `manual_zoom_offset` starts at -50.0 — simulating the pre-fix bug's end state after many
+    // scroll notches accumulated well past what the radius clamp could ever use (10.0 max_dist +
+    // 4.0 margin - 50.0 offset would derive a radius of -36.0, clamped to min_radius). A frame
+    // with no wheel input at all must still re-derive the offset down to exactly what the clamped
+    // radius used (-10.0), not leave the -50.0 "dead reserve" sitting there.
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    app.world_mut().run_system_once(party_camera_follow_system).unwrap();
+
+    let radius_at_min = app.world().get::<Transform>(camera).unwrap().translation.distance(Vec3::ZERO);
+    assert!((radius_at_min - 4.0).abs() < 0.01, "expected radius clamped to min_radius (4.0), got {radius_at_min}");
+    let offset_after_rebank = match app.world().get::<ActiveCameraMode>(camera).unwrap() {
+        ActiveCameraMode::Party(p) => p.manual_zoom_offset,
+        _ => panic!("expected a Party-mode camera"),
+    };
+    assert!(
+        (offset_after_rebank - (-10.0)).abs() < 0.01,
+        "manual_zoom_offset must be re-derived down to exactly what the clamped radius used \
+         (-10.0 = 4.0 - 10.0 - 4.0), not left at the stale -50.0, got {offset_after_rebank}"
+    );
+
+    // One single reversed notch must move the camera immediately — if the offset had stayed
+    // banked past what the clamp used, this first reversed notch would still read back radius
+    // == 4.0 instead of visibly responding.
+    write_wheel_event(&mut app, -1.0, bevy::input::mouse::MouseScrollUnit::Line);
+    app.world_mut().resource_mut::<Time>().advance_by(std::time::Duration::from_millis(16));
+    let dt = app.world().resource::<Time>().delta_secs();
+    app.world_mut().run_system_once(party_camera_follow_system).unwrap();
+
+    let radius_after_one_reversed_notch = app.world().get::<Transform>(camera).unwrap().translation.distance(Vec3::ZERO);
+    let expected = 4.0 + 1.0 * 10.0 * dt;
+    assert!(
+        (radius_after_one_reversed_notch - expected).abs() < 0.01,
+        "manual_zoom_offset must not bank a hidden reserve past what the radius clamp used — a \
+         single reversed notch after hitting min_radius must move the camera immediately, got \
+         {radius_after_one_reversed_notch} (expected {expected})"
+    );
+}
