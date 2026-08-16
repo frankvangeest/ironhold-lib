@@ -93,6 +93,14 @@ load (scene_loader.rs ~1285), so a scene with show_nameplates:false correctly re
 **Faction filter is a documented v1 stub:** HostileOnly == `has NpcAgent`. Replace when Group
 system ships. Acceptable as-is.
 
+**Nameplates now inherit `label_depth_scale` (`feature/nameplate-zoom-spacing`, 2026-08).**
+`nameplate_setup_system` gained `Res<LoadedLabelDepthScale>` and resolves `depth_scale` ONCE per
+batch (not per anchor) via `resolve_label_depth_scale(res.0.as_ref(), None)` instead of the old
+hardcoded `None`. Because a nameplate anchor carries no `TextFont` of its own, the compensation is
+applied as `Transform.scale` on the anchor (new branch in `world_label_screen_pos_system`) rather
+than as a `TextFont.font_size` rewrite — see [[label-depth-scale-pattern]] for the full branch/
+override matrix and the three anchor styles still hardcoded to `None`.
+
 **Split-screen distance-culling fix (Phase 3 of split_screen_camera_followups, 2026-07-12):**
 `nameplate_visibility_system` no longer queries cameras at all. A new INTERNAL-ONLY component
 `NameplateCameraDistance(pub Option<f32>)` (nameplate.rs) is attached to each anchor in

@@ -25,6 +25,16 @@ Net result: the configured mana bar appears on NO entity, and the player's force
 
 **v2 runtime toggle `Action::ToggleOwnNameplate` (reviewed ~2026-07):** no-args tuple action; flips a `PlayerNameplatePreference` resource; emits `nameplate.own_shown`/`nameplate.own_hidden` (mirrors ToggleMute's audio.muted/unmuted). Bind pattern = IconButton `bind` GameVariable + a `SetVariable` bridge rule, IDENTICAL to canonical `hud_audio_toggle` (docs point at it rather than duplicating — pointer is clear enough, no separate example needed). Docs: 20_data_formats actions row (~2219), "Runtime player toggle" callout blockquote (~454), assets/projects/CLAUDE.md tuple-variant list (~59), schema comment actions.rs (~71). Precedence: per-prefab `nameplate: Some(...)` override always wins (toggle still flips resource but visibility never changes — a no-op the designer docs DON'T explain, so a "button does nothing" case with a prior override is undiagnosable). NOT persistent — resets to `show_player_nameplate` on every LoadScene; this is the top designer trap (looks like a bug) and is currently only calm prose in the callout, NOT a warning-style callout. Also: `nameplate.own_shown/own_hidden` events are NOT in the events reference table (unlike audio.muted which is), and the callout doesn't restate that the SetVariable bridge rule is required.
 
+**v3 zoom/depth scaling (feature/nameplate-zoom-spacing, ~2026-08):** nameplates now inherit the scene's `label_depth_scale` (previously hardcoded off — fixed screen size at every zoom). No per-widget override. `3rd_person_game_demo/scenes/main.scene.ron` gained `label_depth_scale: (reference_distance: 8.0, min_scale: 0.5)` tuned to its Orbit `min_radius 3.0`/`max_radius 18.0`. **`local_coop_demo` room3/room9/room10 also set `show_nameplates: true` and still have NO `label_depth_scale`** — they remain unfixed and are a second set of copy-from examples. The docs' own nameplate RON example block (20_data_formats ~607) also still omits `label_depth_scale`, so copying it reproduces the original crowding bug. See [[depth-scale-field-scope]] for the formula and its clamp-at-1.0 limitation.
+
+**v3.1 round 2 (2026-08-16):** demo retuned to `(12.0, 0.5)`; new `screen_offset` field on
+`StatLabelDef`/`WorldStatBarDef` for pixel-stacking a nameplate + number + bar — see
+[[screen-offset-stacking]] for the shared-`offset` rule, the mismatched defaults, and the snake
+exception. `nameplate_options.offset` remains scene-wide with NO per-prefab override, which is the
+root cause of the snake's nameplate floating above its body and of the cross-file coupling the new
+pattern requires. The demo's "Toggle Nameplate" HUD button was renamed to "Nameplate" (16 chars
+overflowed a 200px button at the engine's fixed 26px button font — `ButtonDef` has no `font_size`).
+
 Color tuples here are correctly 4-tuple RGBA throughout (name_color, fill_color, bg_color) — consistent, no arity drift. See [[color-tuple-inconsistency]].
 
 Doc example `chest_01`/`player_warrior` blocks use `...` ellipsis and show a `nameplate: false` chest that does NOT exist in the shipped prefabs (shipped chest_01 has no nameplate field) — illustrative-only, fine, but no SHIPPED example of `nameplate: false` exists to copy.

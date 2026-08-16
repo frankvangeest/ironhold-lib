@@ -15,6 +15,8 @@ metadata:
 
 **Per-spawn cost (`Added<NameplateTag>`, one-shot):** `nameplate_setup_system` does `format!` Name strings + `meshes.add(Rectangle)` + `color_materials.add(ColorMaterial)` per stat bar. Each unique Mesh2d/ColorMaterial combo is a new WebGPU pipeline compile on first draw (~100-300ms WASM stall). Mesh2d/ColorMaterial use the Bevy sprite pipeline — fully WebGL2 AND WebGPU compatible, no compute/storage. `meshes.add()` only runs in the `Added<>` setup path, so it does NOT mark Assets<Mesh> changed every frame.
 
+**2026-08-15 (nameplate-zoom-spacing):** `nameplate_setup_system` gained `Res<LoadedLabelDepthScale>` (`init_resource`'d unconditionally in lib.rs, so no missing-resource panic risk on web) and calls `resolve_label_depth_scale` **once per system run, hoisted above the entity loop** — not per anchor. That fn is pure branching + two f32 copies, no alloc, so running it on every frame's empty `Added<NameplateTag>` pass is free. Anchors now carry `depth_scale: Some(..)` instead of hard `None`, which activates the anchor `Transform.scale` arm in [[world-label-screen-pos-system]] (see its 2026-08-15 amendment for why that costs nothing extra).
+
 **Resources are `Option<ResMut<Assets<..>>>`** for headless-test compat (early return). WASM always has them.
 
 **Binary size:** zero new deps. `std::collections::HashSet` is already in the WASM blob (used widely); importing it adds nothing.

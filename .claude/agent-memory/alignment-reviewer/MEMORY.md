@@ -31,3 +31,5 @@
 - [Camera modes v1 pattern](camera_modes_v1_pattern.md) — ActiveCameraMode/CameraTargets/per-mode markers; only 1 of 6+ camera-spawn sites honors camera_mode; unregistered-system + FOV 45→60 compat breaks
 - [Input normalization constants](input_normalization_constants.md) — device-normalization factors (SCROLL_PIXELS_PER_LINE, Line clamp) are engine constants not RON; only 2 MouseWheel readers exist; orbit/party dt-mix vs fp/flycam
 - [Camera modes v2 pattern](camera_modes_v2_pattern.md) — SetCameraMode/camera_modes registry/CameraBlendState; apply_camera_mode-vs-spawn-path field drop (Fixed.position) + AuthoredCameraMode-gated all_cameras silent no-op
+- [label_depth_scale pattern](label_depth_scale_pattern.md) — TextFont-vs-anchor scaling branch, 4 anchor sites, per-widget-override matrix, no max_scale, zero CLI validation
+- [WorldLabel screen_offset pattern](world_label_screen_offset_pattern.md) — pixel-space widget stacking; which sites expose it vs hardcode ZERO; scene-wide nameplate offset is the remaining gap

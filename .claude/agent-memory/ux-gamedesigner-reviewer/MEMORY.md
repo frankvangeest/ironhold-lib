@@ -25,7 +25,7 @@
 - [Local co-op system](project_local_coop_system.md) — Stage 1 single-machine co-op; first-scene-entity-wins party camera; player_index/gamepad_index/max_view_box; canonical local_coop_demo; distinct from unshipped LAN networking
 - [Split-screen doc gap](project_split_screen_doc_gap.md) — split-screen internal fixes update only CLAUDE.md, not designer-facing docs/20_data_formats.md; v2 Ascii-vs-Pixel asymmetry needs a note
 - [Per-player targeting gating](project_per_player_targeting_gating.md) — ring-tint + target-var-blank trigger on CharacterController count>=2 (party mode too), but target_hud only on split viewports; docs conflate the two; Tab default breaks in WASM
-- [depth_scale field scope](project_depth_scale_field_scope.md) — depth_scale exists ONLY on scene labels (EntityLabelDef/WorldLabelDef); StatLabelDef/WorldStatBarDef have NO such field despite docs+plan claiming it; deny_unknown_fields makes it a parse error
+- [depth_scale field scope](project_depth_scale_field_scope.md) — per-label depth_scale exists ONLY on EntityLabelDef/WorldLabelDef; stat widgets + nameplates only inherit; holds the clamp(ref/dist, min_scale, 1.0) formula and its never-grows limitation
 - [ActionBar single-player assumptions](project_action_bar_single_player_assumptions.md) — gamepad_key now shipped (2 new silent footguns), scene-wide slot_key collisions, doc-location trap for co-op bar features
 - [owner_player ↔ player_index wiring](project_player_index_owner_player.md) — owner_player matches prefab player_index; terminology gap + recurring "nothing reads player_index yet" stale claims
 - [ActionSlotDef.label is future-use](project_actionslotdef_label_undocumented.md) — `label` renders NOWHERE (future tooltip); only key_hint/key shows on-screen; docs now list both but omit label's not-rendered caveat
@@ -37,4 +37,6 @@
 - [Split-switch prefab duplication](project_split_switch_prefab_duplication.md) — split switches live on the first player's prefab & scene entities can't override components, so each variant demo clones the whole prefab pair (and drifts)
 - [local_coop_demo room conventions](project_local_coop_demo_room_conventions.md) — 10-room portal chain, no ?scene= deep-link, exits must be listed, 22px font wraps-into-neighbour past a verified 82-char ceiling
 - [material override vs children](project_material_override_vs_children.md) — top-level `material:` + `children:` precedence is undocumented and had ZERO shipped examples before room10; prefer per-child colours
+- [screen_offset stacking pattern](project_screen_offset_stacking.md) — shared world `offset` + pixel `screen_offset`; defaults 2.4/2.5/2.8 mismatch; 72px/m is a migration artifact, not a rule
+- [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
