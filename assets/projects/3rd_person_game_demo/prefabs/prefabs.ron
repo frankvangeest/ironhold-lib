@@ -60,7 +60,14 @@
       // drain_dynamic_stat_ui_system's Textured path, not just the scene-load path.
       world_stat_bar: (
         stat_key: "player_health",
-        offset: (0.0, 2.3, 0.0),
+        // Shares the scene's nameplate_options.offset (2.4) instead of its own close-but-not-
+        // identical 2.3 — two widgets tracking the same entity with slightly different world
+        // offsets drift apart/together as the camera zooms (perspective magnifies a fixed world
+        // gap more the closer the camera is). screen_offset stacks it below the nameplate by a
+        // fixed pixel amount instead — see docs/20_data_formats.md's "Label depth scaling"
+        // section for the full explanation and the shared-offset-plus-screen_offset pattern.
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, -8.0),
         bg_color: (0.15, 0.15, 0.15, 0.6),
         color_bands: [
           (0.0, (0.85, 0.12, 0.12, 1.0)),  // < 30% -> red
@@ -108,7 +115,14 @@
       // world_textured_stat_bar.md playtest aid — see player_male's comment above.
       world_stat_bar: (
         stat_key: "player_health",
-        offset: (0.0, 2.3, 0.0),
+        // Shares the scene's nameplate_options.offset (2.4) instead of its own close-but-not-
+        // identical 2.3 — two widgets tracking the same entity with slightly different world
+        // offsets drift apart/together as the camera zooms (perspective magnifies a fixed world
+        // gap more the closer the camera is). screen_offset stacks it below the nameplate by a
+        // fixed pixel amount instead — see docs/20_data_formats.md's "Label depth scaling"
+        // section for the full explanation and the shared-offset-plus-screen_offset pattern.
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, -8.0),
         bg_color: (0.15, 0.15, 0.15, 0.6),
         color_bands: [
           (0.0, (0.85, 0.12, 0.12, 1.0)),
@@ -212,16 +226,26 @@
           ],
         ),
       ],
+      // stat_label/world_stat_bar share nameplate_options.offset (2.4, scene-wide) instead of
+      // their own close-but-different values (were 2.8/3.1) — see the player world_stat_bar's
+      // comment above for why. screen_offset reproduces the original relative stacking (name
+      // below, stat_label above it, world_stat_bar above that) as fixed pixels instead — migrated
+      // using a ~72px/metre conversion (this scene's reference_distance of 12.0 at this project's
+      // camera FOV/window size; NOT a portable constant — it depends on both). For a NEW
+      // creature, skip the conversion entirely: screen_offset is in the same pixel units as
+      // font_size/bar size, so just tune it by eye.
       stat_label: (
         stat_key: "{self}.health",
-        offset: (0.0, 2.8, 0.0),
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, 29.0),
         font_size: 14.0,
         color: (0.45, 0.85, 0.35, 0.9),
         show_max: true,
       ),
       world_stat_bar: (
         stat_key: "{self}.health",
-        offset: (0.0, 3.1, 0.0),
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, 50.0),
         fill_color: (0.25, 0.70, 0.15, 1.0),
         bg_color:   (0.05, 0.15, 0.02, 0.85),
         color_bands: [
@@ -281,16 +305,27 @@
           ],
         ),
       ],
+      // stat_label/world_stat_bar share ONE offset (1.4, their own midpoint) instead of the
+      // scene's human-scale nameplate_options.offset (2.4) — this creature is short enough that
+      // matching the nameplate's offset would float its whole stat-widget cluster unnaturally
+      // high above its actual body. This means the nameplate name itself still sits apart from
+      // its own health bar/number, at every zoom level — a separate, pre-existing, deliberately
+      // unfixed mismatch (would need a per-prefab nameplate offset override, which doesn't exist
+      // today), NOT the zoom-based drift docs/20_data_formats.md's "Label depth scaling" section
+      // describes. screen_offset is in the same pixel units as font_size/bar size — no unit
+      // conversion needed for a new creature, just tune by eye until the number clears the bar.
       stat_label: (
         stat_key: "{self}.health",
-        offset: (0.0, 1.3, 0.0),
+        offset: (0.0, 1.4, 0.0),
+        screen_offset: (0.0, -7.0),
         font_size: 13.0,
         color: (0.25, 0.95, 0.25, 0.9),
         show_max: true,
       ),
       world_stat_bar: (
         stat_key: "{self}.health",
-        offset: (0.0, 1.55, 0.0),
+        offset: (0.0, 1.4, 0.0),
+        screen_offset: (0.0, 11.0),
         fill_color: (0.12, 0.85, 0.18, 1.0),
         bg_color:   (0.02, 0.18, 0.03, 0.85),
         color_bands: [
@@ -351,16 +386,20 @@
           ],
         ),
       ],
+      // stat_label/world_stat_bar share nameplate_options.offset (2.4) instead of their own
+      // close values (were 2.1/2.35) — see the player world_stat_bar's comment above for why.
       stat_label: (
         stat_key: "{self}.health",
-        offset: (0.0, 2.1, 0.0),
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, -22.0),
         font_size: 14.0,
         color: (0.85, 0.45, 1.0, 0.9),
         show_max: true,
       ),
       world_stat_bar: (
         stat_key: "{self}.health",
-        offset: (0.0, 2.35, 0.0),
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, -4.0),
         fill_color: (0.60, 0.10, 0.90, 1.0),
         bg_color:   (0.12, 0.02, 0.18, 0.85),
         color_bands: [

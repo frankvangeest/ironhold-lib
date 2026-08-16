@@ -178,7 +178,7 @@ File extension must be `.scene.ron`.
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
 | `scene_unclaimed_gamepad_bindings` | `Map<String, String>` | Per-scene gamepad button overrides; same format and same unclaimed-pad-only behavior as `global_unclaimed_gamepad_bindings`. Overlays per-key on top of the project base — a key present here replaces just that entry, every other project-level binding still applies (same merge rule as `scene_key_bindings`). Cleared and rebuilt on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
-| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab) have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). `style: Pixel` world stat bars are the one exception — depth scaling is not yet implemented for that style, see below. |
+| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab — all four styles, `Ascii`/`Pixel`/`Icon`/`Textured`), and nameplates (`show_nameplates`/`show_player_nameplate`), have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). Tune `reference_distance` to the scene's actual camera-to-widget distance range, not just `Orbit`/`Party`'s `min_radius`/`max_radius` — entities can sit elsewhere in the scene than the camera's own orbit target, so their real distance from the camera can exceed the radius range. A `reference_distance` well outside that real range (e.g. the `50.0` default against a project whose camera never gets that far from anything) means the `(reference_distance / distance)` ratio never drops below 1.0, so scaling silently never engages. See [Label depth scaling](#label-depth-scaling-labeldepthscaledef) below for the full field reference and tuning guidance. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
 | `target_hud` | `Option<TargetHudDef>` | Per-viewport target-name HUD readout for split-screen scenes (2+ players). Omit to disable. See [Per-player split-screen targeting](#per-player-split-screen-targeting) below. |
@@ -357,21 +357,74 @@ lighting: (
 
 Controls how labels scale with camera distance. Set at scene level; individual labels can opt out.
 
+Together, `reference_distance` and `min_scale` define a **working band**: labels are full size from
+`0` to `reference_distance`, shrink proportionally between `reference_distance` and
+`reference_distance / min_scale`, and are flat (at `min_scale`) beyond that. For example,
+`(reference_distance: 8.0, min_scale: 0.5)` means full size out to 8m, shrinking to half size by
+16m, then holding at half size beyond that. **Pick `reference_distance` near where your camera
+normally sits** — typically somewhere in the middle of your `Orbit`/`Party` camera's
+`min_radius..max_radius` range (or, if the camera's *target* isn't at the camera's own position —
+e.g. NPCs standing elsewhere in the scene — near the camera's actual distance to the entities you
+care about, which can be larger than the orbit radius alone).
+
+**This system only ever shrinks, never grows.** A label closer than `reference_distance` stays
+pinned at its authored size (scale never exceeds 1.0) — so if labels look oversized when the
+camera is zoomed all the way in, lowering `reference_distance` won't fix it; that's a
+font-size/offset tuning problem instead, unrelated to this system.
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `reference_distance` | `f32` | `50.0` | Camera distance at which labels render at their authored `font_size` (1:1). Labels further away shrink proportionally; labels closer stay at 1:1 (never grow larger). |
-| `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of `font_size` (0.0–1.0). `0.25` means labels never shrink below 25% of their authored size. Omitting `min_scale` means no floor — labels scale toward zero at extreme distances. |
+| `reference_distance` | `f32` | `50.0` | Camera distance where labels are at their authored size. Zoom closer than this and nothing changes. Zoom further and they shrink in proportion to distance — at twice this distance they are half size. Leaving this at the `50.0` default (or omitting the block entirely) on a normal 3rd-person camera whose max zoom distance never reaches 50 means scaling never engages at any zoom level — this is a common way to accidentally ship the "labels never shrink" bug. |
+| `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of authored size (0.0–1.0) — together with `reference_distance` this sets where the working band ends (see above). `0.25` means labels never shrink below 25% of their authored size. Omitting `min_scale` means no floor — labels scale toward zero at extreme distances (usually not what you want; a very small but nonzero floor like `0.2`–`0.5` keeps distant labels legible instead of vanishing). |
 
 **Per-label override** — both `WorldLabelDef` and `EntityLabelDef` accept a `depth_scale: Option<bool>` field:
 - `depth_scale: false` — pin this label at its authored size regardless of scene setting
 - `depth_scale: true` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
 - `depth_scale` omitted — inherits the scene setting (default)
 
-**Example:**
+`stat_label`/`world_stat_bar` (all four styles) and nameplates have no per-widget override at all
+— they always simply inherit the scene setting, so a `label_depth_scale` block affects every
+floating widget in the scene at once, not just nameplates. Check your smallest `font_size`/bar
+`size` against `min_scale` — e.g. a 14px stat label with `min_scale: 0.5` reads as low as 7px at
+range.
+
+> **Stacking multiple widgets on one entity — use `screen_offset`, not slightly different
+> `offset`s.** A `stat_label` and `world_stat_bar` tracking the same entity are two independent
+> `WorldLabel`s, each perspective-projected separately. If they're given close-but-not-identical
+> world-space `offset`s (e.g. `2.8` vs `3.1`) to stack a number above its bar, the *world* gap
+> between them projects to a *pixel* gap that grows the closer the camera gets and shrinks the
+> farther out it gets — the same widget stack that looks fine at one zoom level visibly spreads
+> apart or collapses at another (a real bug, caught via a playtest screenshot). Fix: give
+> co-located widgets the SAME `offset`, and use each one's `screen_offset` (`StatLabelDef`/
+> `WorldStatBarDef`) — a pixel-space offset applied after projection — for the stacking instead.
+> `screen_offset` doesn't scale with camera distance on its own, but IS scaled by the same
+> depth-scale factor as everything else here, so the whole stack still shrinks together as one
+> cohesive unit rather than the gap staying a fixed size while the widgets around it shrink.
+> `screen_offset` is available on `stat_label`/`world_stat_bar` only — scene `world_labels:` and
+> entity `label:` don't have it yet.
+>
+> **The three widget types default to different `offset`s** (`nameplate_options.offset` `2.4`,
+> `StatLabelDef.offset` `2.5`, `WorldStatBarDef.offset` `2.8`) — so simply omitting `offset` on a
+> new prefab's `stat_label`/`world_stat_bar` re-creates this exact drift bug. You must set `offset`
+> explicitly, matching whatever value your nameplate (or other reference widget) uses.
+> `nameplate_options.offset` is scene-wide with no per-prefab override, so it's usually the value
+> every prefab in the scene copies — if you change it, every prefab sharing it needs re-tuning.
+>
+> **Picking `screen_offset` values for a new creature:** you do not need to convert metres to
+> pixels. `screen_offset` is in the same pixel-space unit as `font_size` and the bar's own `size`
+> — just clear the number by roughly its own `font_size`, and the bar by roughly its own height,
+> tuning by eye. (`3rd_person_game_demo`'s `enemy_zombie` stacks its health number ~21px above its
+> bar — its `font_size` is 14, plus a few pixels of padding — a good rule of thumb to start from.)
+> If a creature is much shorter/taller than the scene's nameplate offset (see `enemy_snake` in the
+> same project), share a separate offset among the widgets you control instead of the nameplate's
+> — there's no per-prefab nameplate offset override today, so the nameplate itself will sit apart;
+> that's a distinct, known limitation, not the bug this section is about.
+
+**Example** (a scene whose camera zooms between roughly 5m and 20m):
 ```ron
 label_depth_scale: (
-  reference_distance: 80.0,
-  min_scale: 0.25,
+  reference_distance: 10.0,  // ~midpoint of the camera's zoom range
+  min_scale: 0.4,
 ),
 
 // In entities — a nearby header pinned at full size:
@@ -550,6 +603,8 @@ _Used in: `GameSceneV2.nameplate_options`_
 
 Enable the nameplate system on a scene by setting `show_nameplates: true`. Each spawned NPC/prop entity that passes the faction filter and has no `nameplate: false` override receives a floating widget above it: a name line (from `PrefabDef.display_name` or the prefab key) plus any number of pixel stat bars. The widget hides automatically when the camera moves beyond `max_distance`.
 
+The whole widget (name text + all bars) inherits the scene's [`label_depth_scale`](#label-depth-scaling-labeldepthscaledef) setting, same as `stat_label`/`world_stat_bar` — no per-widget override. Without a `label_depth_scale` block, nameplates render at a fixed screen size regardless of camera zoom, which can make two nearby entities' nameplates crowd together when zoomed far out. If your project uses an `Orbit`/`Party` camera with a wide zoom range, set `reference_distance` to somewhere inside that range (not the `50.0` default) so scaling actually engages — see the tuning note on `label_depth_scale` above.
+
 The player's own nameplate is controlled independently by `show_player_nameplate` (below) — it is never subject to `show_nameplates` or `faction_filter`, since faction hostility categorization doesn't apply to "should I see my own name." A per-prefab `nameplate: true`/`false` override still wins over either scene toggle, exactly the same way for the player as for any other entity.
 
 > **Two independent toggles:** `show_nameplates` covers NPCs/props; `show_player_nameplate` covers only your player. Setting `show_nameplates: true` does **not** show the player's own nameplate — you must also set `show_player_nameplate: true` (or a per-prefab `nameplate: true` on the player prefab) if you want it.
@@ -604,6 +659,14 @@ Each entry in `stat_bars` defines one pixel bar row in the nameplate widget.
 **Example:**
 ```ron
 // In scenes/*.scene.ron
+// Nameplates (and every other world label in this scene) shrink with camera distance.
+// Set reference_distance somewhere inside your camera's actual zoom range — leaving this block
+// out entirely (or using the 50.0 default) means scaling never engages on a normal orbit camera,
+// and nearby entities' nameplates will crowd together when the camera zooms out.
+label_depth_scale: (
+    reference_distance: 8.0,   // full size at 8m camera distance and closer
+    min_scale: 0.5,            // never smaller than half size (reached at 16m)
+),
 show_nameplates: true,
 nameplate_options: (
     faction_filter: All,
@@ -661,7 +724,7 @@ nameplate_options: (
 >
 > **`{self}.stat` requires a per-entity `stat_templates` entry.** `{self}.health` resolves to `"spawn_id.health"` and is looked up in the entity's `StatMap`. Only entities that declare a `stat_templates` block with key `"health"` have this stat in their `StatMap`. Global stats defined in `stats/stats.ron` (such as `player_health` or `score`) are not entity-scoped and will never satisfy a `{self}.` stat key — they belong to the shared game-variable pool, not any individual entity's `StatMap`. If you want a nameplate bar on the player, add a `stat_templates` entry to the player's prefab (see [Instance stats](#instance-stats-stat_templates-) for the format) and update your logic to use `ModifyStat(key: "{self}.health", ...)` targeting the player's spawn ID — player prefabs now support `stat_templates` the same as any NPC/prop prefab (this also gives the player their own independent action-bar `SlotCost` pool, see "Per-player action bars" below).
 
-> **Coexistence with `world_stat_bar`:** an entity can have both a nameplate (scene-managed, distance-culled) and a `world_stat_bar` (always visible, per-prefab). If the overlap is visually undesirable, remove `world_stat_bar` from the prefab and use the nameplate's `stat_bars` alone.
+> **Coexistence with `world_stat_bar`:** an entity can have both a nameplate (scene-managed, distance-culled) and a `world_stat_bar` (always visible, per-prefab). If the overlap is visually undesirable, remove `world_stat_bar` from the prefab and use the nameplate's `stat_bars` alone. To stack them cleanly instead, give the bar the same `offset` as `nameplate_options.offset` and separate them with `screen_offset` — see [Label depth scaling](#label-depth-scaling-labeldepthscaledef)'s stacking note.
 
 ### Terrain (`TerrainConfigV2`)
 
@@ -716,6 +779,8 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+
+> **Text always renders at a fixed 26px font size — there is no `font_size` field.** Long `text` that doesn't fit inside `size` overflows the button box rather than wrapping or shrinking to fit (a real bug caught via playtest — see `3rd_person_game_demo`'s `toggle_nameplate_button` for an example of working around it by shortening the text). Roughly 11-12 average-width characters fit comfortably in a 200px-wide button at this font size; widen `size` or shorten `text` for anything longer.
 
 #### `IconButton((...))`
 
@@ -3939,6 +4004,7 @@ A numeric text label (e.g. `"85 / 100"`).
 |-------|------|---------|-------------|
 | `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
 | `offset` | `(f32,f32,f32)` | `(0, 2.5, 0)` | World-space offset from the entity's origin in metres |
+| `screen_offset` | `(f32,f32)` | `(0, 0)` | Screen-space offset in pixels, applied AFTER projection. It does not grow/shrink with perspective the way a world-space `offset` does — but it IS multiplied by the scene's `label_depth_scale` factor when one is set, so a widget stack shrinks together as one unit (a 20px gap becomes 10px at `min_scale: 0.5`). Use this, not a slightly different `offset`, to stack this label against another widget tracking the same entity (e.g. a nameplate or `world_stat_bar`) — give them the SAME `offset` and use `screen_offset` for the pixel gap between them instead. Two widgets with nearly-but-not-quite-identical world `offset`s drift apart/together as the camera zooms, since perspective magnifies a fixed world gap more the closer the camera gets — this was a real bug (see [Label depth scaling](#label-depth-scaling-labeldepthscaledef)'s `screen_offset` note). Positive Y is up (matches `offset`'s own up-axis convention), negative Y stacks below. Available on `stat_label`/`world_stat_bar` only — scene `world_labels:` and entity `label:` have no `screen_offset` yet. |
 | `font_size` | `f32` | `16.0` | Screen-space font size in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.2, 0.9, 0.2, 1.0)` | sRGB RGBA text colour |
 | `show_max` | `bool` | `true` | When `true`, shows `"current / max"`; when `false`, shows `"current"` |
@@ -3963,6 +4029,7 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 |-------|------|---------|-------------|
 | `stat_key` | `String` | — | Stat key; supports `{self}` substitution |
 | `offset` | `(f32,f32,f32)` | `(0, 2.8, 0)` | World-space offset from the entity origin in metres |
+| `screen_offset` | `(f32,f32)` | `(0, 0)` | Screen-space offset in pixels, applied AFTER projection — see `StatLabelDef.screen_offset` above for why this exists and how to use it (same convention, same purpose: stack this bar against another widget on the same entity using a shared `offset` plus a distinct `screen_offset`, instead of slightly different `offset`s that drift apart with zoom). |
 | `fill_color` | `(f32,f32,f32,f32)` | bright green | Base fill colour; used when `color_bands` is empty or no band matches |
 | `bg_color` | `(f32,f32,f32,f32)` | dark red-brown | Background track colour |
 | `color_bands` | `Vec<(f32,(f32,f32,f32,f32))>` | `[]` | Threshold-based fill colour overrides. Each entry is `(above_ratio, (r,g,b,a))`. The **highest** `above_ratio` ≤ the current fill ratio wins. Ratios are 0.0–1.0. When empty, the `Ascii` style falls back to built-in adaptive green/yellow/red; `Pixel`/`Textured` use `fill_color` directly. Ignored by `Icon` (its filled/empty look comes from the atlas cells, not a colour). |
@@ -3981,7 +4048,7 @@ A floating stat bar above an entity. The visual style is set by the `style` fiel
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `size` | `(f32,f32)` | `(64.0, 8.0)` | Bar width × height in screen pixels. Size is constant at all camera distances. |
+| `size` | `(f32,f32)` | `(64.0, 8.0)` | Bar width × height in screen pixels, at full size. Shrinks with camera distance when the scene sets `label_depth_scale` — Pixel bars used to be excluded from depth scaling (a v1 limitation), that's no longer true. |
 | `border` | `f32` | `1.5` | Border thickness in pixels. Set to `0.0` to disable. |
 | `border_color` | `(f32,f32,f32,f32)` | near-black `(0.05,0.05,0.05,1.0)` | Border quad colour |
 
@@ -4010,7 +4077,7 @@ Texture dimensions for `icon_sheet` do **not** need to be power-of-2 — that wa
 | `texture_sheet` | `String` | — (required) | Catalog key into `AssetCatalog.textures` — ONE sheet containing both the fill and empty frames (see `fill_rect`/`empty_rect` below). Same catalog convention as `Icon.icon_sheet`. Both the fill and empty-track `Sprite` layers share this one image handle (resolved/loaded once, not twice). |
 | `fill_rect` | `(f32,f32,f32,f32)` | — (required) | `(x, y, w, h)` in **texture pixels** — the sub-rect of `texture_sheet` containing the FULL/fill frame (the solid, "100% health" art). Cropped via `Sprite.rect`. |
 | `empty_rect` | `(f32,f32,f32,f32)` | — (required) | `(x, y, w, h)` in **texture pixels** — the sub-rect of `texture_sheet` containing the EMPTY/track frame (the "0% health" / background art). |
-| `size` | `(f32,f32)` | `(64.0, 12.0)` | Bar width × height in **screen pixels**. Constant at all camera distances (no depth scaling, same limitation Pixel has). |
+| `size` | `(f32,f32)` | `(64.0, 12.0)` | Bar width × height in **screen pixels**, at full size. Shrinks with camera distance when the scene sets `label_depth_scale` — Textured bars used to be excluded from depth scaling (a v1 limitation, same as Pixel), that's no longer true. |
 | `slice_border` | `(f32,f32,f32,f32)` | `(6.0, 6.0, 6.0, 6.0)` | 9-slice cap insets `(left, right, top, bottom)` in **texture pixels**, relative to each rect's own origin — the fixed corner/cap regions of your art that must not stretch as the fill grows/shrinks. Applied identically to both `fill_rect` and `empty_rect` (both frames are assumed to share one cap geometry). For a stadium/pill shape, cap width ≈ frame height / 2. **`left + right` must be less than the rect's own `w`, and `top + bottom` less than its own `h`** — for *both* `fill_rect` and `empty_rect` — or Bevy logs a console error and renders that layer un-sliced (a plain stretched quad, caps included) instead. There is no engine-side validation of this today; check it yourself when authoring. |
 
 **What "9-slice" means, briefly:** the source rect is divided into a 3×3 grid — four fixed-size corners, four edges that stretch along one axis, and a center that stretches along both. As the bar resizes, only the edges/center stretch; the corners (and therefore your rounded caps/border) stay a constant pixel size. `slice_border` is what defines where those corner boundaries sit within your source art.

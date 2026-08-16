@@ -882,6 +882,7 @@ fn make_stat_label_def(stat_key: &str) -> StatLabelDef {
     StatLabelDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, 0.0),
         font_size: 16.0,
         color: (0.2, 0.9, 0.2, 1.0),
         show_max: true,
@@ -926,6 +927,7 @@ fn make_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     WorldStatBarDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.8, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 0.95),
         bg_color: (0.25, 0.08, 0.08, 0.75),
         color_bands: vec![],

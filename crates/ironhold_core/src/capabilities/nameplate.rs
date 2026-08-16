@@ -84,11 +84,18 @@ pub struct PlayerNameplatePreference(pub bool);
 pub fn nameplate_setup_system(
     mut commands: Commands,
     config: Res<NameplateSceneConfig>,
+    label_depth_scale: Res<crate::runtime::scene_manager::LoadedLabelDepthScale>,
     mut meshes: Option<ResMut<Assets<Mesh>>>,
     mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
     new_entities: Query<(Entity, &NameplateTag, Option<&StatMap>, Option<&SpawnId>, Option<&Player>), Added<NameplateTag>>,
 ) {
     let (Some(meshes), Some(color_materials)) = (meshes.as_deref_mut(), color_materials.as_deref_mut()) else { return };
+    // Nameplates have no per-widget `depth_scale` override (same as `stat_label`/`world_stat_bar`
+    // — see docs/20_data_formats.md) — they always simply inherit the scene's `label_depth_scale`
+    // setting, resolved once per batch of newly-tagged entities rather than per anchor.
+    let depth_scale = crate::runtime::scene_manager::resolve_label_depth_scale(
+        label_depth_scale.0.as_ref(), None,
+    );
 
     // No options = nameplate system not configured; but we still need to handle
     // per-prefab Some(true) overrides even when the scene has show_nameplates: false.
@@ -126,7 +133,7 @@ pub fn nameplate_setup_system(
                 tracked_entity: Some(entity),
                 offset: offset_v3,
                 base_font_size: 1.0,
-                depth_scale: None,
+                depth_scale,
                 screen_offset: Vec2::ZERO,
             },
             LevelEntity,

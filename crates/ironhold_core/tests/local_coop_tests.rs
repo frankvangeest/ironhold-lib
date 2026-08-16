@@ -3275,6 +3275,206 @@ fn test_world_label_repositions_immediately_across_merge_split_transition_with_n
     );
 }
 
+// ── Anchor-style depth scaling (nameplate/bar anchors with no TextFont of their own) ────
+//
+// `world_label_screen_pos_system` scales an anchor's whole child subtree (Text2d/Mesh2d/Sprite)
+// via `Transform.scale` when the WorldLabel entity itself carries no `TextFont` — see
+// planning/backlog.md "Nameplate/health-bar spacing looks wrong at the zoom extremes". Text2d-
+// bearing WorldLabel entities (Ascii bars, stat_label) are covered separately by the pre-existing
+// font-size path and are unaffected by this branch.
+
+fn anchor_world_label(world_pos: Vec3, depth_scale: Option<(f32, f32)>) -> WorldLabel {
+    WorldLabel {
+        world_pos,
+        tracked_entity: None,
+        offset: Vec3::ZERO,
+        base_font_size: 1.0,
+        depth_scale,
+        screen_offset: Vec2::ZERO,
+    }
+}
+
+fn anchor_world_label_with_screen_offset(
+    world_pos: Vec3, depth_scale: Option<(f32, f32)>, screen_offset: Vec2,
+) -> WorldLabel {
+    WorldLabel {
+        world_pos,
+        tracked_entity: None,
+        offset: Vec3::ZERO,
+        base_font_size: 1.0,
+        depth_scale,
+        screen_offset,
+    }
+}
+
+#[test]
+fn test_world_label_anchor_scale_shrinks_with_distance_past_reference() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // Camera is 10.0 world units from the label; reference_distance 5.0, no floor ->
+    // scale = (5.0 / 10.0).min(1.0).max(0.0) = 0.5.
+    let label = app.world_mut().spawn((
+        anchor_world_label(Vec3::ZERO, Some((5.0, 0.0))), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let scale = app.world().get::<Transform>(label).unwrap().scale;
+    assert!(
+        (scale.x - 0.5).abs() < 0.01 && (scale.y - 0.5).abs() < 0.01,
+        "an anchor beyond its reference_distance must shrink proportionally, got {scale:?}"
+    );
+}
+
+#[test]
+fn test_world_label_anchor_scale_clamped_to_one_when_closer_than_reference() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // Camera is 10.0 world units away; reference_distance 50.0 -> raw ratio 5.0, clamped to 1.0.
+    // This is the exact configuration a scene omitting `label_depth_scale` falls back to
+    // (default reference_distance 50.0) once a per-label override forces scaling on.
+    let label = app.world_mut().spawn((
+        anchor_world_label(Vec3::ZERO, Some((50.0, 0.0))), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let scale = app.world().get::<Transform>(label).unwrap().scale;
+    assert!(
+        (scale.x - 1.0).abs() < 0.01,
+        "an anchor closer than its reference_distance must clamp to scale 1.0 (never grow), got {scale:?}"
+    );
+}
+
+#[test]
+fn test_world_label_anchor_scale_respects_min_floor() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // Camera is 10.0 world units away; reference_distance 2.0 -> raw ratio 0.2, floored to 0.4.
+    let label = app.world_mut().spawn((
+        anchor_world_label(Vec3::ZERO, Some((2.0, 0.4))), Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let scale = app.world().get::<Transform>(label).unwrap().scale;
+    assert!(
+        (scale.x - 0.4).abs() < 0.01,
+        "an anchor's scale must never shrink past its configured min_scale floor, got {scale:?}"
+    );
+}
+
+#[test]
+fn test_world_label_anchor_scale_stays_default_when_depth_scale_none() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // No `label_depth_scale` in scope -> the anchor branch must be a true no-op, not an active
+    // reset to 1.0 every frame (a real anchor never has a non-identity scale today, but a future
+    // feature that scales an anchor for its own reasons must not have this system silently fight
+    // it back to 1.0 every frame). Spawn with a deliberately non-identity scale to prove that.
+    let label = app.world_mut().spawn((
+        anchor_world_label(Vec3::ZERO, None),
+        Transform::from_scale(Vec3::new(0.5, 0.5, 1.0)),
+        Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let scale = app.world().get::<Transform>(label).unwrap().scale;
+    assert!(
+        (scale.x - 0.5).abs() < 0.01 && (scale.y - 0.5).abs() < 0.01,
+        "an anchor with no depth_scale configured must be left untouched, not reset to 1.0, got {scale:?}"
+    );
+}
+
+/// `screen_offset` (nameplate zoom-spacing fix round 2: stacking co-located widgets by pixels
+/// instead of drifting world offsets) must reach the final screen translation, unscaled when
+/// `depth_scale` is `None` (factor 1.0) — this is the flow-through this mechanism needs and had
+/// zero coverage for before this test (architect + debug-detective both flagged it).
+#[test]
+fn test_world_label_screen_offset_applies_unscaled_when_depth_scale_none() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // A label at world origin projects to screen-centre (0, 0) with this camera (see the
+    // single-camera regression test above) — so the final translation is exactly screen_offset.
+    let label = app.world_mut().spawn((
+        anchor_world_label_with_screen_offset(Vec3::ZERO, None, Vec2::new(0.0, 50.0)),
+        Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let translation = app.world().get::<Transform>(label).unwrap().translation;
+    assert!(
+        (translation.x - 0.0).abs() < 0.5 && (translation.y - 50.0).abs() < 0.5,
+        "screen_offset must reach the final translation unscaled when depth_scale is None, got {translation:?}"
+    );
+}
+
+/// `screen_offset` must be multiplied by the same depth-scale factor as the widget itself, so a
+/// stacked pixel gap shrinks together with the widgets around it instead of staying a fixed size.
+#[test]
+fn test_world_label_screen_offset_scales_with_depth_scale_factor() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+
+    let (t, g, camera) = ortho_camera_bundle(
+        Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, 10.0, true, 0, None, UVec2::new(1280, 720),
+    );
+    app.world_mut().spawn((Camera3d::default(), camera, t, g));
+
+    // Camera is 10.0 world units from the label; reference_distance 5.0 -> factor 0.5.
+    // Expected: screen_offset (0, 50) * 0.5 = (0, 25).
+    let label = app.world_mut().spawn((
+        anchor_world_label_with_screen_offset(Vec3::ZERO, Some((5.0, 0.0)), Vec2::new(0.0, 50.0)),
+        Transform::default(), Visibility::Hidden,
+    )).id();
+
+    app.update();
+
+    let translation = app.world().get::<Transform>(label).unwrap().translation;
+    assert!(
+        (translation.x - 0.0).abs() < 0.5 && (translation.y - 25.0).abs() < 0.5,
+        "screen_offset must scale down by the same depth_scale factor as the widget it stacks against, got {translation:?}"
+    );
+}
+
 // ── WorldLabelRank: multi-viewport duplication (2026-07-10 playtest amendment) ─────
 //
 // Frank's playtest of the fix above found that a portal simultaneously visible in 2 active
@@ -4227,6 +4427,7 @@ fn stat_label_def(stat_key: &str) -> StatLabelDef {
     StatLabelDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, 0.0),
         font_size: 16.0,
         color: (0.2, 0.9, 0.2, 1.0),
         show_max: true,
@@ -4237,6 +4438,7 @@ fn ascii_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     WorldStatBarDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.8, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 0.95),
         bg_color: (0.25, 0.08, 0.08, 0.75),
         color_bands: vec![],
@@ -4248,6 +4450,7 @@ fn pixel_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     WorldStatBarDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.8, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 0.95),
         bg_color: (0.25, 0.08, 0.08, 0.75),
         color_bands: vec![],
@@ -5159,6 +5362,7 @@ fn test_spawn_world_stat_bar_widget_pixel_style_spawns_anchor_and_children_witho
     let def = WorldStatBarDef {
         stat_key: "{self}.health".to_string(),
         offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 1.0),
         bg_color: (0.2, 0.05, 0.05, 0.85),
         color_bands: vec![],
@@ -5209,6 +5413,7 @@ fn test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_scre
     let def = WorldStatBarDef {
         stat_key: "{self}.health".to_string(),
         offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 1.0),
         bg_color: (0.2, 0.05, 0.05, 0.85),
         color_bands: vec![],
@@ -5274,6 +5479,104 @@ fn test_spawn_world_stat_bar_widget_pixel_style_duplicates_ranks_when_split_scre
     );
 }
 
+/// Nameplate zoom-spacing fix: `Pixel`-style `world_stat_bar` anchors used to hardcode
+/// `depth_scale: None` regardless of `ctx.depth_scale` (a pre-existing, documented v1 exclusion —
+/// see planning/backlog.md). They now pass `ctx.depth_scale` straight through, same as every
+/// other `world_stat_bar` style — this is the one-line change under test, not a formula test
+/// (that's covered by the `test_world_label_anchor_scale_*` group above). Icon and Textured
+/// anchors changed identically at their own spawn sites in this same function; not re-tested here
+/// since the change is mechanically identical, not per-style logic.
+#[test]
+fn test_spawn_world_stat_bar_widget_pixel_style_anchor_inherits_ctx_depth_scale() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = WorldStatBarDef {
+        stat_key: "{self}.health".to_string(),
+        offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, 0.0),
+        fill_color: (0.15, 0.85, 0.15, 1.0),
+        bg_color: (0.2, 0.05, 0.05, 0.85),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Pixel { size: (48.0, 6.0), border: 1.5, border_color: (0.05, 0.05, 0.05, 1.0) },
+    };
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: color_materials.as_deref_mut(),
+            depth_scale: Some((8.0, 0.5)),
+            is_split_screen: false,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let anchor_depth_scale = app.world_mut().query::<&WorldLabel>().iter(app.world())
+        .find(|l| l.tracked_entity == Some(tracked))
+        .expect("anchor must have been spawned")
+        .depth_scale;
+    assert_eq!(
+        anchor_depth_scale,
+        Some((8.0, 0.5)),
+        "a Pixel bar anchor must inherit ctx.depth_scale instead of the pre-fix hardcoded None"
+    );
+}
+
+/// `WorldStatBarDef.screen_offset` (nameplate zoom-spacing fix round 2) must reach the spawned
+/// anchor's `WorldLabel.screen_offset` — the schema-to-runtime wiring half of that mechanism,
+/// complementing the depth_scale flow-through test above.
+#[test]
+fn test_spawn_world_stat_bar_widget_pixel_style_anchor_inherits_def_screen_offset() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+
+    let tracked = app.world_mut().spawn(SpawnId("dummy_01".to_string())).id();
+    let def = WorldStatBarDef {
+        stat_key: "{self}.health".to_string(),
+        offset: (0.0, 2.5, 0.0),
+        screen_offset: (0.0, -22.0),
+        fill_color: (0.15, 0.85, 0.15, 1.0),
+        bg_color: (0.2, 0.05, 0.05, 0.85),
+        color_bands: vec![],
+        style: WorldStatBarStyle::Pixel { size: (48.0, 6.0), border: 1.5, border_color: (0.05, 0.05, 0.05, 1.0) },
+    };
+    app.world_mut().run_system_once(move |
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut color_materials: Option<ResMut<Assets<ColorMaterial>>>,
+    | {
+        let mut ctx = StatWidgetSpawnCtx {
+            meshes: &mut meshes,
+            color_materials: color_materials.as_deref_mut(),
+            depth_scale: None,
+            is_split_screen: false,
+            atlas_layouts: None,
+            asset_server: None,
+            asset_catalog: None,
+        };
+        spawn_world_stat_bar_widget(&mut commands, tracked, "dummy_01.health", &def, &mut ctx);
+    }).unwrap();
+
+    let anchor_screen_offset = app.world_mut().query::<&WorldLabel>().iter(app.world())
+        .find(|l| l.tracked_entity == Some(tracked))
+        .expect("anchor must have been spawned")
+        .screen_offset;
+    assert_eq!(
+        anchor_screen_offset,
+        Vec2::new(0.0, -22.0),
+        "a Pixel bar anchor must inherit def.screen_offset instead of the pre-fix hardcoded Vec2::ZERO"
+    );
+}
+
 // ── world_icon_stat_bar.md: Icon-style world_stat_bar (discrete per-cell sprites) ────────
 
 fn icon_test_catalog() -> AssetCatalog {
@@ -5286,6 +5589,7 @@ fn icon_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     WorldStatBarDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.8, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 0.95),
         bg_color: (0.25, 0.08, 0.08, 0.75),
         color_bands: vec![],
@@ -5484,6 +5788,7 @@ fn textured_world_stat_bar_def(stat_key: &str) -> WorldStatBarDef {
     WorldStatBarDef {
         stat_key: stat_key.to_string(),
         offset: (0.0, 2.3, 0.0),
+        screen_offset: (0.0, 0.0),
         fill_color: (0.15, 0.85, 0.15, 0.95),
         bg_color: (0.25, 0.08, 0.08, 0.75),
         color_bands: vec![],

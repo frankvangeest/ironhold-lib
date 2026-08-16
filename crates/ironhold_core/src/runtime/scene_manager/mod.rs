@@ -454,6 +454,36 @@ pub fn should_insert_nameplate(nameplate: Option<bool>, show: bool) -> bool {
     nameplate != Some(false) && (show || nameplate == Some(true))
 }
 
+/// Single source of truth for resolving a scene's `label_depth_scale` setting for a stat
+/// widget/nameplate — no per-widget override exists for these (unlike `WorldLabelDef`/
+/// `EntityLabelDef`'s `depth_scale: Option<bool>`), so `per_label` is always `None` at every
+/// call site today; the parameter exists to keep this function's contract identical to the one
+/// scene `world_labels:`/entity `label:` resolve against, in case a per-widget override is ever
+/// added. Returns `Some((reference_distance, min_scale_floor))` when scaling is active, or `None`
+/// when the label should always render at its authored size.
+///
+/// Resolution order:
+///   - `per_label = Some(false)` → always disabled, regardless of scene config.
+///   - `per_label = Some(true)`  → always enabled; uses scene params or fallback defaults.
+///   - `per_label = None`        → inherits scene config (enabled iff scene has a block).
+pub(crate) fn resolve_label_depth_scale(
+    scene: Option<&crate::schema::scene_v2::LabelDepthScaleDef>,
+    per_label: Option<bool>,
+) -> Option<(f32, f32)> {
+    let enabled = match per_label {
+        Some(b) => b,
+        None => scene.is_some(),
+    };
+    if !enabled {
+        return None;
+    }
+    let (ref_dist, min_floor) = match scene {
+        Some(cfg) => (cfg.reference_distance, cfg.min_scale.unwrap_or(0.0)),
+        None => (50.0, 0.0),
+    };
+    Some((ref_dist, min_floor))
+}
+
 /// Temporary component inserted at spawn time when a prefab has a `behavior` path.
 /// Replaced by `BehaviorHandle` + `EntityFsmState` once the asset resolves.
 #[derive(Component)]

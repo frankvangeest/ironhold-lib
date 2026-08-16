@@ -949,6 +949,18 @@ pub struct StatLabelDef {
     /// World-space offset from the entity's origin in metres. Default: 2.5 units up.
     #[serde(default = "default_stat_label_offset")]
     pub offset: (f32, f32, f32),
+    /// Screen-space offset in pixels, applied AFTER projection — unlike `offset`, this does not
+    /// grow/shrink with perspective as the camera moves. It IS still multiplied by the scene's
+    /// `label_depth_scale` factor when one is set, so a widget stack shrinks together as one unit
+    /// rather than the gap between pieces staying a fixed size while the pieces around it shrink.
+    /// Use this (not a slightly different `offset`) to stack this label against another widget
+    /// tracking the same entity (e.g. a nameplate or `world_stat_bar` with the same `offset`) —
+    /// two widgets with nearly-but-not-quite-identical world offsets drift apart/together as the
+    /// camera zooms (perspective magnifies a fixed world gap more the closer the camera gets);
+    /// give them the SAME `offset` and use `screen_offset` for the pixel-space stacking instead.
+    /// Default: `(0.0, 0.0)`.
+    #[serde(default)]
+    pub screen_offset: (f32, f32),
     /// Font size in screen pixels. Default: 16.
     #[serde(default = "default_stat_label_font_size")]
     pub font_size: f32,
@@ -977,6 +989,10 @@ pub struct WorldStatBarDef {
     /// World-space offset from the entity's origin in metres. Default: `(0.0, 2.8, 0.0)`.
     #[serde(default = "default_world_bar_offset")]
     pub offset: (f32, f32, f32),
+    /// Screen-space offset in pixels, applied AFTER projection — see `StatLabelDef.screen_offset`
+    /// for why this exists and how to use it (same convention, same purpose). Default: `(0.0, 0.0)`.
+    #[serde(default)]
+    pub screen_offset: (f32, f32),
     /// Fill base colour (RGBA linear). Used when `color_bands` is absent or no band matches.
     /// Default: bright green `(0.15, 0.85, 0.15, 0.95)`.
     #[serde(default = "default_world_bar_fill_color")]
@@ -1007,7 +1023,8 @@ pub enum WorldStatBarStyle {
         font_size: f32,
     },
     /// Pixel-rendered sprite-quad bar (border + background + fill).
-    /// Size is in screen pixels — constant at all camera distances (no depth scaling in v1).
+    /// Size is in screen pixels — scales with camera distance if the scene has a
+    /// `label_depth_scale` block, same as every other `world_stat_bar` style.
     Pixel {
         /// Bar dimensions in screen pixels `(width, height)`. Clamped to min `(1.0, 1.0)`.
         /// Default: `(64.0, 8.0)`.
@@ -1026,7 +1043,8 @@ pub enum WorldStatBarStyle {
     /// (a cell is either fully filled or fully empty; the fill count is whole-cell `ceil`-rounded).
     /// Reuses the same `icon_sheet`/`icon_cols`/`icon_rows`/`icon_cell_size` atlas convention as
     /// `ActionBarDef`/`ItemDef`. Size/spacing are in screen pixels — same coordinate space as
-    /// `Pixel.size` (constant at all camera distances, no depth scaling in v1).
+    /// `Pixel.size` — scales with camera distance if the scene has a `label_depth_scale` block,
+    /// same as every other `world_stat_bar` style.
     Icon {
         /// Catalog key into `AssetCatalog.textures` — the sprite sheet both icon variants come from.
         icon_sheet: String,
@@ -1061,8 +1079,9 @@ pub enum WorldStatBarStyle {
     /// Caps/border scale uniformly (never stretched into an oval) via Bevy's
     /// `SpriteImageMode::Sliced` (9-slice) as the fill width changes — see
     /// `docs/20_data_formats.md`'s Textured section for exactly when corners render at native
-    /// pixel size vs. uniformly scaled down. Size is in screen pixels — constant at all camera
-    /// distances (no depth scaling in v1). `fill_color` tints the fill layer, `bg_color` tints
+    /// pixel size vs. uniformly scaled down. Size is in screen pixels — scales with camera
+    /// distance if the scene has a `label_depth_scale` block, same as every other `world_stat_bar`
+    /// style. `fill_color` tints the fill layer, `bg_color` tints
     /// the empty/track layer — reuses the shared colour fields, no `Textured`-only tint field.
     Textured {
         /// Catalog key into `AssetCatalog.textures` — ONE sheet containing both the fill and

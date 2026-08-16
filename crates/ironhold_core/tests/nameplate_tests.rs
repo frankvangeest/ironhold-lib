@@ -1021,3 +1021,115 @@ fn test_nameplate_visibility_prefab_override_wins_over_own_toggle() {
 
     let _ = cam_entity; // suppress unused warning
 }
+
+/// `nameplate_setup_system` must resolve the scene's `label_depth_scale` (via
+/// `resolve_label_depth_scale`) into the anchor's `WorldLabel.depth_scale`, instead of the
+/// pre-fix hardcoded `None` — see planning/backlog.md "Nameplate/health-bar spacing looks wrong
+/// at the zoom extremes". Registers `Assets<ColorMaterial>` (see `load_two_player_scene_with_
+/// pixel_stat_prop` in local_coop_tests.rs for the same pattern) so the real spawn path runs
+/// instead of early-returning.
+#[test]
+fn test_nameplate_setup_resolves_scene_label_depth_scale_into_anchor() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateSceneConfig};
+    use ironhold_core::schema::scene_v2::{NameplateOptionsDef, LabelDepthScaleDef};
+    use ironhold_core::runtime::scene_manager::{WorldLabel, LoadedLabelDepthScale};
+
+    let mut app = setup_test_app();
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: false,
+        options: Some(NameplateOptionsDef {
+            faction_filter: ironhold_core::schema::scene_v2::NameplateFactionFilter::All,
+            max_distance: 20.0,
+            offset: (0.0, 2.4, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: false,
+        }),
+    });
+    app.world_mut().insert_resource(LoadedLabelDepthScale(Some(LabelDepthScaleDef {
+        reference_distance: 8.0,
+        min_scale: Some(0.5),
+    })));
+
+    let tagged_entity = app.world_mut().spawn(NameplateTag {
+        display_name: "Goblin".to_string(),
+        prefab_override: None,
+    }).id();
+
+    app.update();
+    app.update();
+
+    let anchor = app.world()
+        .get::<NameplateAnchor>(tagged_entity)
+        .expect("nameplate_setup_system must have spawned an anchor now that render assets are available")
+        .0;
+    let world_label = app.world()
+        .get::<WorldLabel>(anchor)
+        .expect("anchor entity must have WorldLabel");
+    assert_eq!(
+        world_label.depth_scale,
+        Some((8.0, 0.5)),
+        "the anchor must inherit the scene's label_depth_scale instead of the pre-fix hardcoded None"
+    );
+}
+
+/// Regression: a scene with no `label_depth_scale` block must still resolve to `None` (no
+/// scaling), matching pre-fix behavior exactly.
+#[test]
+fn test_nameplate_setup_depth_scale_none_when_scene_has_no_label_depth_scale_block() {
+    use ironhold_core::capabilities::nameplate::{NameplateTag, NameplateAnchor, NameplateSceneConfig};
+    use ironhold_core::schema::scene_v2::NameplateOptionsDef;
+    use ironhold_core::runtime::scene_manager::WorldLabel;
+
+    let mut app = setup_test_app();
+    app.world_mut().init_resource::<Assets<ColorMaterial>>();
+    app.update();
+
+    app.world_mut().insert_resource(NameplateSceneConfig {
+        enabled: true,
+        player_enabled: false,
+        options: Some(NameplateOptionsDef {
+            faction_filter: ironhold_core::schema::scene_v2::NameplateFactionFilter::All,
+            max_distance: 20.0,
+            offset: (0.0, 2.4, 0.0),
+            name_font_size: 14.0,
+            name_color: (0.95, 0.95, 0.95, 1.0),
+            text_shadow: false,
+            stat_bars: vec![],
+            bar_width: 100.0,
+            bar_height: 6.0,
+            bar_spacing: 9.0,
+            show_player_nameplate: false,
+        }),
+    });
+    // LoadedLabelDepthScale defaults to None — no label_depth_scale block authored.
+
+    let tagged_entity = app.world_mut().spawn(NameplateTag {
+        display_name: "Goblin".to_string(),
+        prefab_override: None,
+    }).id();
+
+    app.update();
+    app.update();
+
+    let anchor = app.world()
+        .get::<NameplateAnchor>(tagged_entity)
+        .expect("nameplate_setup_system must have spawned an anchor now that render assets are available")
+        .0;
+    let world_label = app.world()
+        .get::<WorldLabel>(anchor)
+        .expect("anchor entity must have WorldLabel");
+    assert_eq!(
+        world_label.depth_scale, None,
+        "no regression: a scene with no label_depth_scale block must still yield no depth scaling"
+    );
+}

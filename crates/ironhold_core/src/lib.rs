@@ -513,6 +513,27 @@ fn icon_button_click_system(
     }
 }
 
+/// Depth-scale multiplier for a label at `dist` from its selected camera; `1.0` when `depth_scale`
+/// is `None` (scaling disabled). Shared by both the font-size branch (Text2d-bearing labels) and
+/// the anchor-scale branch (nameplate/bar anchors) of `world_label_screen_pos_system` so the
+/// curve can't drift between the two — see `depth_scale_factor_from` for the raw formula.
+#[inline]
+fn depth_scale_factor(depth_scale: Option<(f32, f32)>, dist: f32) -> f32 {
+    match depth_scale {
+        Some((ref_dist, min_floor)) => depth_scale_factor_from(ref_dist, min_floor, dist),
+        None => 1.0,
+    }
+}
+
+/// Raw depth-scale formula: 1:1 at `ref_dist` and closer (never grows past 1.0), shrinking
+/// proportionally beyond it, floored at `min_floor`. Deliberately `.min()`/`.max()` chained rather
+/// than `f32::clamp(min_floor, 1.0)` — `min_floor` is designer-authored and unvalidated
+/// (`LabelDepthScaleDef.min_scale`), and `clamp` panics if `min > max`.
+#[inline]
+fn depth_scale_factor_from(ref_dist: f32, min_floor: f32, dist: f32) -> f32 {
+    (ref_dist / dist.max(0.001)).min(1.0).max(min_floor)
+}
+
 /// Projects each [`WorldLabel`]'s 3-D world position through whichever active
 /// `Camera3d` actually shows it on-screen, and repositions the entity in
 /// `Camera2d` screen space so `Camera2d` renders the `Text2d` at the correct
@@ -613,23 +634,46 @@ fn world_label_screen_pos_system(
             cam_dist.0 = Some(dist_to_selected_camera);
         }
 
-        // Depth-based font size — only applies to Text2d-bearing WorldLabel entities.
-        // Pixel bar anchors carry no TextFont, so this block is skipped for them.
+        // Depth-based scaling. Computed once and reused below for `screen_offset` too, so the
+        // font-size, anchor-scale, and screen-offset-stacking curves can never drift apart.
+        let scale = depth_scale_factor(label.depth_scale, dist_to_selected_camera);
+
+        // Text2d-bearing WorldLabel entities (Ascii bars, stat_label) scale via font size, so the
+        // rasterized glyph stays crisp at any zoom level. Anchor-style WorldLabel entities
+        // (nameplate, Pixel/Icon/Textured bar anchors) carry no TextFont of their own — their
+        // whole Text2d/Mesh2d/Sprite child subtree scales instead via the anchor's own
+        // Transform.scale (XY only — Z is left alone so each anchor's authored child z-layering,
+        // e.g. nameplate bar/name/shadow ordering, doesn't compress toward zero and drift
+        // relative to a differently-scaled neighbor's ordering).
         if let Some(mut text_font) = text_font_opt {
-            let new_size = if let Some((ref_dist, min_floor)) = label.depth_scale {
-                let dist = dist_to_selected_camera.max(0.001);
-                let scale = (ref_dist / dist).min(1.0).max(min_floor);
-                (label.base_font_size * scale).round()
-            } else {
-                label.base_font_size
-            };
+            let new_size = (label.base_font_size * scale).round();
             if (text_font.font_size - new_size).abs() >= 0.5 {
                 text_font.font_size = new_size;
             }
+        } else if label.depth_scale.is_some() {
+            // Same dirty-Transform guard as the position write below — an unconditional write
+            // would re-propagate the whole subtree every frame even when the scale hasn't
+            // meaningfully changed.
+            if (t.scale.x - scale).abs() >= 0.005 || (t.scale.y - scale).abs() >= 0.005 {
+                t.scale.x = scale;
+                t.scale.y = scale;
+            }
         }
+        // `depth_scale: None` on an anchor-style label is a true no-op — anchors are always
+        // spawned at `Transform::default()` (scale 1.0) and nothing else ever writes anchor
+        // scale, so there is nothing to reset here (unlike leaving this branch to unconditionally
+        // recompute and reassert 1.0 every frame, which would silently fight any future feature
+        // that scales an anchor for its own reasons).
 
-        let new_x = vp.x - half_w + label.screen_offset.x;
-        let new_y = half_h - vp.y + label.screen_offset.y;
+        // `screen_offset` stacks widgets that share (nearly) the same world `offset` — e.g. a
+        // stat_label and world_stat_bar tracking the same entity as its nameplate — by a fixed
+        // pixel amount that, unlike `offset`, doesn't drift with camera distance (see
+        // `StatLabelDef.screen_offset`'s doc comment for why). It's scaled by the same depth-scale
+        // factor as everything else here so the whole stack shrinks together as one cohesive unit
+        // instead of the gap between widgets staying a constant size while the widgets themselves
+        // shrink around it.
+        let new_x = vp.x - half_w + label.screen_offset.x * scale;
+        let new_y = half_h - vp.y + label.screen_offset.y * scale;
         // Guard: only write when position meaningfully changes (≥0.5 px).
         // An unconditional write marks the Transform dirty every frame, forcing
         // Bevy to re-propagate transforms and re-layout every Text2d/Mesh2d child

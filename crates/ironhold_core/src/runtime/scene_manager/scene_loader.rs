@@ -15,7 +15,8 @@ use super::{
     SceneV2Params, SceneMaterialParams,
     LevelEntity, OverlayEntity, PendingSceneLoadMode,
     LoadedSpawnPoints, LoadedCameraModes, SpawnRegistry, MergedModelFixes,
-    ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate, WorldLabel,
+    ProjectKeyBindings, LoadedKeyBindings, tag_spawned_entity, should_insert_nameplate,
+    resolve_label_depth_scale, WorldLabel,
     WorldLabelRank, LoadedGamepadBindings,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
     DynamicStatUiQueue,
@@ -2678,7 +2679,7 @@ fn apply_lighting_v2(
 /// entry. These are entities created by `Action::Spawn`; scene-placed entities still go through
 /// the inline path in `spawn_scene_v2`. Reads `LoadedLabelDepthScale` (the active scene's
 /// `label_depth_scale` block, if any) so dynamic spawns inherit the same depth-based scaling as
-/// scene-placed widgets — see `resolve_label_depth_scale` below.
+/// scene-placed widgets — see `resolve_label_depth_scale` in `mod.rs`.
 pub fn drain_dynamic_stat_ui_system(
     mut commands: Commands,
     mut queue: ResMut<DynamicStatUiQueue>,
@@ -2725,31 +2726,6 @@ pub fn drain_dynamic_stat_ui_system(
             spawn_world_stat_bar_widget(&mut commands, entry.entity, &stat_key, &wb, &mut ctx);
         }
     }
-}
-
-/// Returns `Some((reference_distance, min_scale_floor))` when scaling is active,
-/// or `None` when the label should always render at its authored font size.
-///
-/// Resolution order:
-///   - `per_label = Some(false)` → always disabled, regardless of scene config.
-///   - `per_label = Some(true)`  → always enabled; uses scene params or fallback defaults.
-///   - `per_label = None`        → inherits scene config (enabled iff scene has a block).
-fn resolve_label_depth_scale(
-    scene: Option<&crate::schema::scene_v2::LabelDepthScaleDef>,
-    per_label: Option<bool>,
-) -> Option<(f32, f32)> {
-    let enabled = match per_label {
-        Some(b) => b,
-        None => scene.is_some(),
-    };
-    if !enabled {
-        return None;
-    }
-    let (ref_dist, min_floor) = match scene {
-        Some(cfg) => (cfg.reference_distance, cfg.min_scale.unwrap_or(0.0)),
-        None => (50.0, 0.0),
-    };
-    Some((ref_dist, min_floor))
 }
 
 // ─── Jump velocity helper ─────────────────────────────────────────────────────

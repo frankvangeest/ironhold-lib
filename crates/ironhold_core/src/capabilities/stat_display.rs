@@ -463,7 +463,7 @@ pub fn spawn_stat_label_widget(
                 offset: Vec3::from(def.offset),
                 base_font_size: def.font_size,
                 depth_scale: ctx.depth_scale,
-                screen_offset: Vec2::ZERO,
+                screen_offset: Vec2::from(def.screen_offset),
             },
             StatLabelMarker { stat_key: stat_key.to_string(), show_max: def.show_max },
             LevelEntity,
@@ -498,6 +498,7 @@ pub fn spawn_world_stat_bar_widget(
     ctx: &mut StatWidgetSpawnCtx,
 ) {
     let offset_v3 = Vec3::from(def.offset);
+    let screen_offset_v2 = Vec2::from(def.screen_offset);
     let fill_color = def.fill_color;
     let (fr, fg, fb, fa) = fill_color;
     let (bgr, bgg, bgb, bga) = def.bg_color;
@@ -523,7 +524,7 @@ pub fn spawn_world_stat_bar_widget(
                         offset: offset_v3,
                         base_font_size: font_size,
                         depth_scale: ctx.depth_scale,
-                        screen_offset: Vec2::ZERO,
+                        screen_offset: screen_offset_v2,
                     },
                     LevelEntity,
                 ));
@@ -544,7 +545,7 @@ pub fn spawn_world_stat_bar_widget(
                         offset: offset_v3,
                         base_font_size: font_size,
                         depth_scale: ctx.depth_scale,
-                        screen_offset: Vec2::ZERO,
+                        screen_offset: screen_offset_v2,
                     },
                     WorldStatBarFillMarker {
                         stat_key: stat_key.to_string(), cells, fill_color,
@@ -576,8 +577,9 @@ pub fn spawn_world_stat_bar_widget(
 
             for rank in 0..ranks {
                 // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
-                // Depth scaling intentionally not applied to Pixel-style bars (pre-existing
-                // documented exclusion — see docs/20_data_formats.md's Pixel bar depth-scaling note).
+                // Scales via the anchor's own Transform (world_label_screen_pos_system), same
+                // mechanism the nameplate anchor uses — border/background/fill quads all scale
+                // uniformly as Bevy-parented children.
                 let mut anchor_cmds = commands.spawn((
                     Name::new(format!("PixelBarAnchor: {} (rank {})", stat_key, rank)),
                     Transform::default(),
@@ -587,8 +589,8 @@ pub fn spawn_world_stat_bar_widget(
                         tracked_entity: Some(tracked),
                         offset: offset_v3,
                         base_font_size: 1.0,
-                        depth_scale: None,
-                        screen_offset: Vec2::ZERO,
+                        depth_scale: ctx.depth_scale,
+                        screen_offset: screen_offset_v2,
                     },
                     LevelEntity,
                 ));
@@ -668,8 +670,8 @@ pub fn spawn_world_stat_bar_widget(
             for rank in 0..ranks {
                 // Invisible anchor — WorldLabel tracks the entity; WorldIconBar resolves the
                 // stat ONCE per anchor (not once per cell — see WorldIconBar's doc comment);
-                // children follow via hierarchy. Depth scaling intentionally not applied
-                // (same pre-existing exclusion as Pixel bars).
+                // children follow via hierarchy. Scales via the anchor's own Transform, same
+                // mechanism as the nameplate/Pixel-bar anchors.
                 let mut anchor_cmds = commands.spawn((
                     Name::new(format!("IconBarAnchor: {} (rank {})", stat_key, rank)),
                     Transform::default(),
@@ -679,8 +681,8 @@ pub fn spawn_world_stat_bar_widget(
                         tracked_entity: Some(tracked),
                         offset: offset_v3,
                         base_font_size: 1.0,
-                        depth_scale: None,
-                        screen_offset: Vec2::ZERO,
+                        depth_scale: ctx.depth_scale,
+                        screen_offset: screen_offset_v2,
                     },
                     WorldIconBar {
                         stat_key: stat_key.to_string(),
@@ -757,8 +759,9 @@ pub fn spawn_world_stat_bar_widget(
 
             for rank in 0..ranks {
                 // Invisible anchor — WorldLabel tracks the entity; children follow via hierarchy.
-                // Depth scaling intentionally not applied (same pre-existing exclusion as
-                // Pixel/Icon bars).
+                // Scales via the anchor's own Transform, same mechanism as the nameplate/Pixel/
+                // Icon anchors — a Transform.scale write does not touch Sprite, so it does not
+                // trigger `compute_slices_on_sprite_change`'s 9-slice recompute on these layers.
                 let mut anchor_cmds = commands.spawn((
                     Name::new(format!("TexturedBarAnchor: {} (rank {})", stat_key, rank)),
                     Transform::default(),
@@ -768,8 +771,8 @@ pub fn spawn_world_stat_bar_widget(
                         tracked_entity: Some(tracked),
                         offset: offset_v3,
                         base_font_size: 1.0,
-                        depth_scale: None,
-                        screen_offset: Vec2::ZERO,
+                        depth_scale: ctx.depth_scale,
+                        screen_offset: screen_offset_v2,
                     },
                     LevelEntity,
                 ));

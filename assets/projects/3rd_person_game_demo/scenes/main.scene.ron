@@ -3,11 +3,31 @@
   name: "main",
 
   show_nameplates: true,
+  // Tuned to this project's actual camera-to-widget distances, NOT just the Orbit min_radius/
+  // max_radius (3.0/18.0, prefabs.ron) — enemies/props sit elsewhere in the scene, so their
+  // distance from the camera is orbit radius PLUS however far they are from the player (this
+  // project's NPCs land around 16-26 units from camera across the zoom range). Without this
+  // block at all, reference_distance defaults to 50.0 (far outside either range) and the
+  // (ref/dist) depth-scale formula stays clamped at 1.0 (no compensation) at every zoom level.
+  // First shipped as (8.0, 0.25) — a real-hardware playtest screenshot at max zoom-out showed
+  // 14px name text rendering at ~3.5px, illegible (only bar *colour* survived, not fill amount
+  // or the "X / Y" numbers). Retuned to (12.0, 0.5): still shrinks enough to stop the crowding,
+  // floors at a readable ~7px instead.
+  // See docs/20_data_formats.md's "Label depth scaling" section for the full explanation.
+  label_depth_scale: (
+    reference_distance: 12.0,
+    min_scale: 0.5,
+  ),
   nameplate_options: (
     faction_filter: All,
-    show_player_nameplate: true,  // player's own nameplate shown by default; toggle with the "Toggle Nameplate" HUD button
+    show_player_nameplate: true,  // player's own nameplate shown by default; toggle with the "Nameplate" HUD button
     max_distance: 25.0,
     text_shadow: true,
+    // Authored explicitly (matches the schema default) so this is the visible, single source of
+    // truth every stat_label/world_stat_bar in prefabs.ron is tuned to share — see their RON
+    // comments and docs/20_data_formats.md's "Label depth scaling" callout for why co-located
+    // widgets need a shared offset. Changing this value means re-tuning every prefab that shares it.
+    offset: (0.0, 2.4, 0.0),
     // No stat_bars here — enemies already use world_stat_bar + stat_label for health display.
     // To add nameplate bars, give entities a stat_templates entry and reference the stat key as
     // "{self}.health" (entity-scoped). Global stats.ron keys (e.g. player_health) are not
@@ -202,7 +222,11 @@
     )),
     Button((
       id: "toggle_nameplate_button",
-      text: "Toggle Nameplate",
+      // "Toggle Nameplate" overflowed this 200px-wide button — button text renders at a fixed
+      // 26px, ButtonDef has no font_size field (see docs/20_data_formats.md's Button table) —
+      // caught via a real playtest screenshot. Shortened rather than widened: widening risks
+      // colliding with target_label at x=256 (this button's box starts at x=16).
+      text: "Nameplate",
       action: "ui.toggle_own_nameplate",
       position: (16.0, 280.0),
       size: (200.0, 44.0),
