@@ -4,8 +4,15 @@
 
     tonemapping: AcesFitted,
 
+    // Pre-existing misconfiguration fixed alongside the screen_offset migration in prefabs.ron:
+    // reference_distance was 20.0, but player_capsule authors no camera: block, so it inherits
+    // the engine's default Orbit range (min_radius 2.0 / max_radius 20.0,
+    // entity_spawner.rs's default_camera_config) — 20.0 sat right at the very edge of that range,
+    // so the (reference_distance / distance) ratio only dropped below 1.0 at the single most
+    // extreme zoom-out frame, i.e. depth scaling was effectively inert in practice. Retuned to
+    // sit inside the real range.
     label_depth_scale: (
-        reference_distance: 20.0,
+        reference_distance: 10.0,
         min_scale: 0.5,
     ),
 

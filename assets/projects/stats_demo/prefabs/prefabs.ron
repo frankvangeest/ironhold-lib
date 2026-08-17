@@ -87,16 +87,26 @@
                     ],
                 ),
             ],
+            // stat_label/world_stat_bar share ONE offset (2.4, their own midpoint) instead of
+            // their own close-but-different values (were 2.2/2.55) — see
+            // docs/20_data_formats.md's "Label depth scaling" section for why. screen_offset
+            // stacks them apart by a fixed pixel amount instead, migrated using this scene's
+            // reference_distance (10.0, after the fix above): ~87px/metre
+            // (viewport-height/FOV-dependent, not a portable constant — this conversion only
+            // reproduces the previous static look; for a NEW prefab, don't convert metres to
+            // pixels, just tune screen_offset by eye against font_size/bar size per the docs).
             stat_label: (
                 stat_key: "{self}.health",
-                offset: (0.0, 2.2, 0.0),
+                offset: (0.0, 2.4, 0.0),
+                screen_offset: (0.0, -17.0),
                 font_size: 14.0,
                 color: (0.88, 0.88, 0.88, 0.90),
                 show_max: true,
             ),
             world_stat_bar: (
                 stat_key: "{self}.health",
-                offset: (0.0, 2.55, 0.0),
+                offset: (0.0, 2.4, 0.0),
+                screen_offset: (0.0, 13.0),
                 fill_color: (0.15, 0.85, 0.15, 1.0),
                 bg_color:   (0.20, 0.05, 0.05, 0.85),
                 color_bands: [

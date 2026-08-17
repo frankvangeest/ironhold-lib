@@ -9,6 +9,14 @@
   // per-player mechanic (targeting, own-viewport ring, action bar, mana pool) exactly like a GLB
   // player does — only the body construction differs.
   show_nameplates: true,
+  // Tuned to this room's split-screen ORBIT radius range (min_radius 4.5 / max_radius 9.0,
+  // prefabs.ron's player_p1_split_ring/player_p2_primitive_split_ring) — see room3's identical
+  // block for why, and its caveat about orbit radius vs. actual camera-to-widget distance. See
+  // docs/20_data_formats.md's "Label depth scaling" section.
+  label_depth_scale: (
+    reference_distance: 6.0,
+    min_scale: 0.5,
+  ),
   nameplate_options: (
     faction_filter: All,
     // Explicitly on (defaults to false, independent of show_nameplates/faction_filter, which
@@ -144,7 +152,8 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: (text: "Room 9", offset: (0.0, 4.0, 0.0)),
+      // depth_scale: false pins this portal signpost at full size — see room3's identical note.
+      label: (text: "Room 9", offset: (0.0, 4.0, 0.0), depth_scale: false),
     ),
 
     // room10 -> room11 (camera_modes v2 demo). See prefabs.ron's "portal_to_room11" comment —
@@ -157,7 +166,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: (text: "Room 11", offset: (0.0, 4.0, 0.0)),
+      label: (text: "Room 11", offset: (0.0, 4.0, 0.0), depth_scale: false),
     ),
 
   ],

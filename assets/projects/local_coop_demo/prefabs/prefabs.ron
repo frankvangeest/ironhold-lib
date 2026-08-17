@@ -147,13 +147,23 @@
           max: 100.0,
         ),
       ],
+      // stat_label/world_stat_bar share ONE offset (1.4, their own midpoint) instead of their
+      // own close-but-different values (were 1.2/1.6) — see docs/20_data_formats.md's "Label
+      // depth scaling" section for why. screen_offset stacks them apart by a fixed pixel amount
+      // instead, migrated using room3's new reference_distance (6.0): ~145px/metre
+      // (viewport-height/FOV-dependent — this room's Vertical split keeps the full 720px
+      // viewport height; a Horizontal split would halve it — and not a portable constant. This
+      // conversion only reproduces the previous static look; for a NEW prefab, don't convert
+      // metres to pixels, just tune screen_offset by eye against font_size/bar size per the docs).
       stat_label: (
         stat_key: "{self}.health",
-        offset: (0.0, 1.2, 0.0),
+        offset: (0.0, 1.4, 0.0),
+        screen_offset: (0.0, -29.0),
       ),
       world_stat_bar: (
         stat_key: "{self}.health",
-        offset: (0.0, 1.6, 0.0),
+        offset: (0.0, 1.4, 0.0),
+        screen_offset: (0.0, 29.0),
         style: Ascii( cells: 10, font_size: 14.0 ),
       ),
     ),

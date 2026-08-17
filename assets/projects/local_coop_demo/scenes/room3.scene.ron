@@ -9,6 +9,17 @@
   // at all in this scene. max_distance left at its default (20.0) — both click targets sit
   // well within it from either split camera under normal play.
   show_nameplates: true,
+  // Tuned to this room's split-screen ORBIT radius range (min_radius 4.5 / max_radius 9.0,
+  // prefabs.ron's player_p1_split/player_p2_split) — without this, reference_distance defaults
+  // to 50.0 (far outside range) and depth scaling silently never engages at any zoom level. Note
+  // this is the camera's orbit radius, not necessarily actual camera-to-widget distance (props
+  // can sit farther from the camera than the raw orbit radius, as 3rd_person_game_demo's own fix
+  // found) — playtest-verify at both zoom extremes rather than trusting this number blindly. See
+  // docs/20_data_formats.md's "Label depth scaling" section.
+  label_depth_scale: (
+    reference_distance: 6.0,
+    min_scale: 0.5,
+  ),
   nameplate_options: (
     faction_filter: All,
   ),
@@ -128,7 +139,10 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: (text: "Room 2", offset: (0.0, 4.0, 0.0)),
+      // depth_scale: false pins this portal signpost at full size — this room's new
+      // label_depth_scale block (see above) would otherwise shrink it to ~9px at typical
+      // distances, since its default font_size (18) has no per-widget floor of its own.
+      label: (text: "Room 2", offset: (0.0, 4.0, 0.0), depth_scale: false),
     ),
 
     // room3 -> room4 (Stage 4, horizontal split). See prefabs.ron's "portal_to_room4" comment —
@@ -141,7 +155,7 @@
         rotation_euler_deg: (0.0, 0.0, 0.0),
         scale: (1.0, 1.0, 1.0),
       ),
-      label: (text: "Room 4", offset: (0.0, 4.0, 0.0)),
+      label: (text: "Room 4", offset: (0.0, 4.0, 0.0), depth_scale: false),
     ),
 
   ],
