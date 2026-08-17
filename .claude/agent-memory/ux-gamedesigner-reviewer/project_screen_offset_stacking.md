@@ -40,11 +40,24 @@ the nameplate's scene-wide `2.4`, so its nameplate is NOT part of the stack. Roo
 missing per-prefab nameplate offset override — logged in `planning/claude_suggestions.md`
 ("Nameplate System" section) but with no designer-facing explanation in `docs/`.
 
-**Still shipping the pre-fix anti-pattern (close-but-different offsets) as of this review:**
-`primitive_world` (2.1 / 2.5, scene has `label_depth_scale` 25.0/0.4), `stats_demo` (2.2 / 2.55,
-20.0/0.5), `local_coop_demo` (1.2 / 1.6, no `label_depth_scale`). The first two visibly drift.
+**Migrated (feature/nameplate-screen-offset-migration, 2026-08-17):** `primitive_world`
+attack_dummy + attack_dummy_ascii (2.1/2.5 → 2.3 ± 7px), `stats_demo` attack_dummy (2.2/2.55 →
+2.4, -9/+7), `local_coop_demo` stat_widget_test (1.2/1.6 → 1.4 ± 29px). Arithmetic verified
+correct in all three (delta_m × viewport_h/(2·d·tan(fov/2)), signs & original order preserved).
 `EntityLabelDef`/`WorldLabelDef` have NO `screen_offset` — you cannot pixel-stack an entity
 `label:` against a stat widget.
+
+**The px/metre conversion in RON comments CONTRADICTS the docs.** `docs/20_data_formats.md`
+("Picking `screen_offset` values for a new creature") explicitly says *do not* convert metres to
+pixels — clear the number by roughly its own `font_size` and tune by eye (~21px rule of thumb).
+The migration comments in all three projects teach the opposite. The conversion is only valid as a
+*migration* device (reproduce the old look at one distance); flag it whenever a comment presents it
+as the authoring method for a new prefab.
+
+**A `reference_distance` above the camera's `max_radius` makes the block inert.** Orbit defaults are
+`min_radius: 2.0`/`max_radius: 20.0`. `primitive_world` (ref 25) and `stats_demo` (ref 20) set no
+camera block at all, so depth scaling never engages there — their `screen_offset` gaps are constant,
+and the px/metre figure was derived at a distance the camera can never reach.
 
 **Round-2 playtest confirmation (2026-08-16 screenshots, `3rd_person_game_demo`):** stacking works —
 Spider name↔"75 / 75" stayed ~21px apart at default zoom AND zoomed in (was ~40px drift in round 1);
