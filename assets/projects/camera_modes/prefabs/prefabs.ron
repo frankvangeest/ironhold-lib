@@ -15,6 +15,15 @@
       ),
     ),
 
+    // ── Chest (flycam-scene entity-drop regression check) ───────────────────
+    // Plain Prop with no flycam/player tags — used to confirm ordinary entities still spawn
+    // correctly in a scene that also contains a flycam (planning/features/done/flycam_scene_conflicts.md).
+    "chest_01": (
+      kind: Prop,
+      model: "chest_01",
+      nameplate: false,
+    ),
+
     // ── Hub player: camera_mode: Orbit ──────────────────────────────────────
     // The main hub scene's player, authored via the new camera_mode: syntax (not the legacy
     // camera: field) — this whole project is a living planning/features/camera_modes.md demo.

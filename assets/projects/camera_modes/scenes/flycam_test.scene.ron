@@ -26,6 +26,14 @@
       prefab: "flycam_demo",
       transform: ( translation: (0.0, 6.0, 12.0), rotation_euler_deg: (-15.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
     ),
+    // Regression check for planning/features/done/flycam_scene_conflicts.md — a plain Prop with
+    // no flycam/player tags, placed directly in the flycam's forward view (camera looks toward
+    // -Z, pitched down) to visually confirm ordinary entities still spawn in a flycam scene.
+    (
+      id: "chest_01",
+      prefab: "chest_01",
+      transform: ( translation: (0.0, 0.4, 0.0), rotation_euler_deg: (0.0, 20.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+    ),
   ],
 
   // A flycam has no CharacterController/collider, so it can never trigger a walkable portal —
