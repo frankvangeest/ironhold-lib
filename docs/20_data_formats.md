@@ -1949,6 +1949,80 @@ To display the camera's world position in the UI, add a label element with `id: 
 ),
 ```
 
+**Duplicate flycam entities.** A scene should have at most one `tags: ["flycam"]` entity. If two or
+more are authored, only the last one in `entities:` order is actually spawned — the rest are
+silently discarded except for a console `warn!` naming both. Delete all but one to silence it.
+
+**Two authoring paths for a flycam, not one.** `tags: ["flycam"]` on its own standalone entity (this
+section) is one way to get a free-flying camera. The other is `camera_mode: Flycam(...)` authored
+directly on a **player** prefab (see [Unified camera modes (`camera_mode:`)](#unified-camera-modes-camera_mode-)
+below) — that gives a `tags: ["player"]` entity itself free-fly controls instead of an orbit camera,
+with no separate camera entity at all. Don't confuse the two: a standalone flycam entity is a
+camera with no character behind it (no stats, no movement systems, no CharacterController); a
+player prefab with `camera_mode: Flycam` is a full player character whose camera happens to fly
+freely.
+
+#### Spectator mode: `"player"` + `"flycam"` in one scene
+
+A scene can combine a normal `tags: ["player"]` entity with a standalone `tags: ["flycam"]` entity.
+When both are present, **the flycam takes priority**: it becomes the scene's sole active camera,
+and the player entity spawns and plays normally alongside it — movement, stats, targeting, AI
+reactions, and nameplates all keep working exactly as if the player had its own camera — but the
+player gets **no camera of its own**. A console `warn!` confirms this is intentional, not a bug,
+and tells you how to get the player's camera back (remove the flycam entity).
+
+This is useful for a spectator/debug view over live gameplay: watching NPC AI without controlling
+the camera yourself, free-flying around a scene while the player (and anything scripted to react to
+it) keeps running, or framing a screenshot/cinematic shot independently of the player's own camera
+rig.
+
+```ron
+// In scenes/main.scene.ron — both entities in the same `entities:` list
+(
+  id: "player_01",
+  prefab: "player_orbit_demo",   // any normal `tags: ["player"]` prefab
+  transform: ( translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+),
+(
+  id: "camera_01",
+  prefab: "flycam_demo",         // any normal `tags: ["flycam"]` prefab
+  transform: ( translation: (0.0, 6.0, 12.0), rotation_euler_deg: (-15.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+),
+```
+
+What still works / what doesn't, compared to a normal player scene:
+- ✅ Player movement, stats, targeting, AI reactions, nameplates, HUD — all unaffected.
+- ✅ Free-fly camera controls (WASD + mouse look) on the flycam, independent of the player.
+- ❌ The player gets no camera of its own — nothing follows it. If the scene has 2+ players and the
+  first also authors `camera.split`/`camera.party`, that's ignored too (a second `warn!` names this
+  specifically); split-screen is fully suppressed, not downgraded to a single camera. (`split`/
+  `party` are already "local co-op only" and inert with a single player, flycam or not, so this
+  doesn't change anything for the 1-player case — see the `split`/`party` field rows further below.)
+- ❌ The flycam entity's own `model:` field still never renders (see the note at the top of this
+  section) — a flycam is camera-only, with or without a player also present.
+- ❌ `Action::CameraShake` still no-ops on the flycam (it has neither an orbit nor a party camera to
+  shake) — same as a flycam-only scene.
+- ❌ Both entities read input independently, so the player's default WASD/Space/Q keys and the
+  flycam's default WASD/Space/Q fly controls fire from the same keypresses at once — neither system
+  knows the other exists. Re-bind one side if you want them separate: give the flycam prefab its
+  own `flycam: (forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
+  ...)`, or change the player prefab's `inputs:`.
+
+See `assets/projects/camera_modes/scenes/flycam_spectator_test.scene.ron` for a working example
+(reachable from that project's hub scene via the "Spectator" pad).
+
+**Known limitations** (not yet handled by this priority rule):
+- Dynamically spawning a `tags: ["player"]` prefab at runtime (`Action::Spawn`, e.g. character
+  select or hot-join) always gives that player its own full-window camera, even in a scene that
+  started in spectator mode — this priority rule only applies to entities present at scene load.
+- `Action::SetCameraMode` with `owner_player` omitted targets every camera in the scene, including
+  the flycam itself — it's possible to accidentally convert the flycam into a targetless `Orbit`
+  camera this way. Use `"default"` to recover, or pass an explicit `owner_player` targeting only
+  the player's own camera when one exists.
+- Once suppressed, the player's camera has no in-scene way back — there's no action that re-spawns
+  a player's own camera mid-scene. The only way to restore it is `LoadScene` (removing the flycam
+  entity from the scene first).
+
 ### Special tag: `"player"` ✅
 
 A prefab with `components.tags: ["player"]` spawns a third-person character controller with an orbit camera. Works on both `kind: "actor"` (GLB model) and `kind: "primitive"` (capsule shape). Movement is tuned via `components.movement`; key bindings are tuned via `components.inputs`.

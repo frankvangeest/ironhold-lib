@@ -6,14 +6,16 @@
     ( on: "scene.ready:first_person_test", do_actions: [ Log("camera_modes demo: FirstPerson room ready") ] ),
     ( on: "scene.ready:fixed_test", do_actions: [ Log("camera_modes demo: Fixed room ready") ] ),
     ( on: "scene.ready:flycam_test", do_actions: [ Log("camera_modes demo: Flycam room ready") ] ),
+    ( on: "scene.ready:flycam_spectator_test", do_actions: [ Log("camera_modes demo: Spectator (player + flycam) room ready") ] ),
 
     ( on: "entity.entered:portal_to_follow_01", do_actions: [ LoadScene("scenes/follow_test.scene.ron") ] ),
     ( on: "entity.entered:portal_to_first_person_01", do_actions: [ LoadScene("scenes/first_person_test.scene.ron") ] ),
     ( on: "entity.entered:portal_to_fixed_01", do_actions: [ LoadScene("scenes/fixed_test.scene.ron") ] ),
     ( on: "entity.entered:portal_to_flycam_01", do_actions: [ LoadScene("scenes/flycam_test.scene.ron") ] ),
+    ( on: "entity.entered:portal_to_spectator_01", do_actions: [ LoadScene("scenes/flycam_spectator_test.scene.ron") ] ),
     // Same portal_to_main prefab, reused in the 3 walkable satellite scenes — same event name,
-    // one rule. flycam_test uses a UI button instead (see below) since a flycam has no
-    // CharacterController/collider to trigger a walkable portal.
+    // one rule. flycam_test/flycam_spectator_test use a UI button instead (see below) since a
+    // flycam has no CharacterController/collider to trigger a walkable portal.
     ( on: "entity.entered:portal_to_main_01", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
     ( on: "ui.button_pressed:back_to_main", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
   ],

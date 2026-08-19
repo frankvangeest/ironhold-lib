@@ -377,6 +377,35 @@ fn cross_file_checks(
         }
     }
 
+    // A scene authoring 2+ `tags: ["flycam"]` entities silently keeps only the last one in
+    // `entities:` order at runtime (`scene_loader.rs`) — this is the design-time counterpart so a
+    // scene author sees it before ever running the project. See
+    // `planning/features/flycam_scene_conflicts.md`.
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut flycam_ids: Vec<&str> = Vec::new();
+            for entity in &scene.entities {
+                let Some(prefab) = catalog.prefabs.get(&entity.prefab) else { continue };
+                if prefab.components.tags.iter().any(|t| t == "flycam") {
+                    flycam_ids.push(&entity.id);
+                }
+            }
+            if flycam_ids.len() > 1 {
+                errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "scene has {} `tags: [\"flycam\"]` entities ({}) — only the last one in \
+                         `entities:` order is used at runtime, the rest are silently discarded. \
+                         Remove all but one flycam-tagged entity from this scene.",
+                        flycam_ids.len(),
+                        flycam_ids.join(", ")
+                    ),
+                    error_type: "duplicate_flycam_entity",
+                });
+            }
+        }
+    }
+
     for (scene_path, scene) in scenes {
         // Scene-wide (not per-bar) so a slot key shared across two different `ActionBar`s is
         // also caught here, not just within one bar's own slots — per-player action bars

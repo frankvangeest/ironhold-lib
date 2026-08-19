@@ -204,6 +204,9 @@ pub fn spawn_scene_v2(
         // `planning/features/player_model_source_unification.md`.
         let mut player_configs: Vec<PlayerConfig> = Vec::new();
         let mut flycam_start: Option<(Transform, crate::schema::camera::CameraModeDef)> = None;
+        // Tracks the id of whichever flycam-tagged entity `flycam_start` currently holds, purely
+        // to name both offenders in the duplicate-flycam-tags warning below.
+        let mut flycam_id: Option<String> = None;
         for entity_def in &scene.entities {
             let Some(prefab) = params.prefab_catalog.0.prefabs.get(&entity_def.prefab) else {
                 load_errors.push(format!(
@@ -238,6 +241,15 @@ pub fn spawn_scene_v2(
                 let fc_def = prefab.components.flycam.clone().unwrap_or_default();
                 let mode = prefab.components.camera_mode.clone()
                     .unwrap_or_else(|| crate::schema::camera::CameraModeDef::Flycam(fc_def));
+                if let Some(previous_id) = flycam_id.replace(entity_def.id.clone()) {
+                    warn!(
+                        "Scene has 2+ `tags: [\"flycam\"]` entities ('{}' and '{}') — only the \
+                         last one in `entities:` order is used, the rest are silently discarded. \
+                         Remove all but one flycam-tagged entity from this scene to silence this \
+                         warning.",
+                        previous_id, entity_def.id
+                    );
+                }
                 flycam_start = Some((transform, mode));
                 continue;
             }
@@ -752,7 +764,14 @@ pub fn spawn_scene_v2(
         // whose prefab happens to carry a `camera.split` block (e.g. copy-pasted from a co-op
         // prefab) must not trigger 4-way rank duplication when the engine only ever renders
         // one full-window camera for it.
-        let is_split_screen = player_configs.len() >= 2
+        // A flycam entity elsewhere in this scene takes camera priority over any player-owned
+        // camera (spectator mode, `planning/features/flycam_scene_conflicts.md`) — a split-screen
+        // scene combined with a flycam never actually spawns split cameras, so `is_split_screen`
+        // must not report `true` in that case (it gates `WorldLabelRank`/stat-widget duplication
+        // below, which would otherwise duplicate entities that can never display).
+        let has_flycam = flycam_start.is_some();
+        let is_split_screen = !has_flycam
+            && player_configs.len() >= 2
             && player_configs.first().is_some_and(|p| p.split.is_some());
 
         warn_missing_player_stat_templates(scene, &player_configs);
@@ -760,51 +779,12 @@ pub fn spawn_scene_v2(
         warn_duplicate_gamepad_index(scene, &player_configs);
         warn_missing_stat_widget_templates(scene, prefab_catalog);
 
-        // Spawn player(s) (delayed if terrain present), flycam, or fallback camera. GLB and
-        // primitive players share this one path — `spawn_players_and_camera` dispatches body
-        // construction per player via `PlayerConfig.model_source`. See
-        // `planning/features/player_model_source_unification.md`.
-        if !player_configs.is_empty() {
-            if scene.terrain.is_some() {
-                info!("Terrain detected. Delaying player spawn...");
-                commands.spawn((
-                    crate::runtime::scene_manager::PendingPlayerConfig(player_configs),
-                    crate::runtime::scene_manager::PendingTonemapping(tonemapping),
-                    LevelEntity,
-                ));
-            } else {
-                // Built unconditionally (cheap borrows) even if every player in this scene is
-                // GLB — only actually read by `spawn_player_entity_core`'s `Primitive` arm.
-                let mut primitive_ctx = super::entity_spawner::PrimitivePlayerCtx {
-                    child_ctx: ChildSpawnCtx {
-                        meshes:    &mut mats.meshes,
-                        standard:  &mut mats.standard,
-                        built_mats: &mats.built.0,
-                        custom_mats: &mats.custom,
-                        primitive_default_color: project.primitive_default_color,
-                        asset_server:  &asset_server,
-                        model_spawner: &model_spawner,
-                        fixes: &merged_fixes.0,
-                        asset_catalog,
-                        project_root,
-                    },
-                    prefab_catalog,
-                    load_errors: &mut load_errors,
-                };
-                super::entity_spawner::spawn_players_and_camera(
-                    &mut commands,
-                    &asset_server,
-                    &merged_fixes.0,
-                    &model_spawner,
-                    &player_configs,
-                    &params.project_root.0,
-                    tonemapping,
-                    &mut spawn_registry,
-                    dyn_stat_ui_queue,
-                    Some(&mut primitive_ctx),
-                );
-            }
-        } else if let Some((fc_transform, mode)) = flycam_start {
+        // Flycam spawns unconditionally and immediately, ahead of the player/spawn-points/default
+        // dispatch below — it has no terrain dependency (a plain Transform + Camera3d spawn) and,
+        // per `planning/features/flycam_scene_conflicts.md`, takes priority over any player-owned
+        // camera when both are present (the player still spawns and plays normally, just without
+        // its own camera — see `SuppressPlayerCameras` below).
+        if let Some((fc_transform, mode)) = flycam_start {
             // Extract initial yaw/pitch from the spawn transform so the camera
             // starts oriented correctly and the first mouse move causes no jump.
             let (yaw, pitch, _) = fc_transform.rotation.to_euler(EulerRot::YXZ);
@@ -863,11 +843,89 @@ pub fn spawn_scene_v2(
                     crate::schema::camera::CameraModeDef::Flycam(fc_def.clone()),
                 ),
             ));
-        } else if !scene.spawn_points.is_empty() {
+
+            if !player_configs.is_empty() {
+                warn!(
+                    "Scene has both a `tags: [\"player\"]` entity and a `tags: [\"flycam\"]` \
+                     entity — flycam takes priority; the player spawns and plays normally but \
+                     gets no camera of its own. This is supported (spectator mode) — remove the \
+                     flycam entity if you wanted the player's own camera."
+                );
+                // `len() >= 2` guard mirrors `is_split_screen` above: a lone player whose prefab
+                // happens to carry a `camera.split`/`camera.party` block (e.g. copy-pasted from a
+                // co-op prefab) never actually reaches split/party — `spawn_players_and_camera`'s
+                // own `entities.len() < 2` branch would give it a single Orbit camera regardless of
+                // a flycam. Without this guard, the warning falsely claims removing the flycam
+                // "restores split-screen" when it would just produce a single-camera fallback.
+                if player_configs.len() >= 2
+                    && player_configs.first().is_some_and(|p| p.split.is_some() || p.party.is_some())
+                {
+                    warn!(
+                        "Scene's first player has `camera.split`/`camera.party` set, but a \
+                         `tags: [\"flycam\"]` entity is also present — that config is ignored \
+                         entirely, split-screen is fully suppressed rather than downgraded to a \
+                         single camera. Remove the flycam entity to restore split-screen."
+                    );
+                }
+            }
+        }
+
+        commands.insert_resource(crate::runtime::scene_manager::SuppressPlayerCameras(has_flycam));
+
+        // Spawn player(s) (delayed if terrain present), or a fallback camera when there's no
+        // flycam to fall back to. GLB and primitive players share this one path —
+        // `spawn_players_and_camera` dispatches body construction per player via
+        // `PlayerConfig.model_source`. See `planning/features/player_model_source_unification.md`.
+        if !player_configs.is_empty() {
+            if scene.terrain.is_some() {
+                info!("Terrain detected. Delaying player spawn...");
+                commands.spawn((
+                    crate::runtime::scene_manager::PendingPlayerConfig(player_configs),
+                    crate::runtime::scene_manager::PendingTonemapping(tonemapping),
+                    LevelEntity,
+                ));
+            } else {
+                // Built unconditionally (cheap borrows) even if every player in this scene is
+                // GLB — only actually read by `spawn_player_entity_core`'s `Primitive` arm.
+                let mut primitive_ctx = super::entity_spawner::PrimitivePlayerCtx {
+                    child_ctx: ChildSpawnCtx {
+                        meshes:    &mut mats.meshes,
+                        standard:  &mut mats.standard,
+                        built_mats: &mats.built.0,
+                        custom_mats: &mats.custom,
+                        primitive_default_color: project.primitive_default_color,
+                        asset_server:  &asset_server,
+                        model_spawner: &model_spawner,
+                        fixes: &merged_fixes.0,
+                        asset_catalog,
+                        project_root,
+                    },
+                    prefab_catalog,
+                    load_errors: &mut load_errors,
+                };
+                super::entity_spawner::spawn_players_and_camera(
+                    &mut commands,
+                    &asset_server,
+                    &merged_fixes.0,
+                    &model_spawner,
+                    &player_configs,
+                    &params.project_root.0,
+                    tonemapping,
+                    &mut spawn_registry,
+                    dyn_stat_ui_queue,
+                    Some(&mut primitive_ctx),
+                    if has_flycam {
+                        crate::runtime::scene_manager::CameraSpawnMode::Suppressed
+                    } else {
+                        crate::runtime::scene_manager::CameraSpawnMode::Spawn
+                    },
+                );
+            }
+        } else if !has_flycam && !scene.spawn_points.is_empty() {
             // Spawn points exist → the FSM will spawn the player (and orbit camera).
             // Do not create a redundant fallback camera that would waste GPU time.
             info!("No direct player entity but spawn_points present — skipping fallback camera; expecting FSM to spawn player.");
-        } else {
+        } else if !has_flycam {
             info!("No player entity in v2 scene, spawning default camera...");
             commands.spawn((
                 Name::new("Default Camera"),

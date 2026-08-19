@@ -529,10 +529,17 @@ pub fn spawn_player_when_terrain_ready(
     project_root: Res<ProjectRoot>,
     mut registry: ResMut<SpawnRegistry>,
     mut stat_ui_queue: ResMut<DynamicStatUiQueue>,
+    suppress_player_cameras: Res<super::SuppressPlayerCameras>,
 ) {
     if terrain_query.is_empty() {
         return;
     }
+
+    let camera_spawn = if suppress_player_cameras.0 {
+        super::CameraSpawnMode::Suppressed
+    } else {
+        super::CameraSpawnMode::Spawn
+    };
 
     for (pending_entity, pending, pending_tm) in &pending_query {
         info!("Terrain is ready. Spawning player(s)...");
@@ -554,6 +561,7 @@ pub fn spawn_player_when_terrain_ready(
             &mut registry,
             &mut stat_ui_queue,
             None,
+            camera_spawn,
         );
         commands.entity(pending_entity).despawn();
     }
@@ -598,6 +606,11 @@ pub(crate) fn spawn_player_entity(
 /// a designer oversight, not "use single-player mode": rather than silently spawning
 /// competing per-player cameras, this logs a warning and falls back to a single Orbit-mode camera
 /// targeting only the first player.
+///
+/// `camera_spawn: CameraSpawnMode::Suppressed` skips every camera-related resource insert and
+/// camera spawn below, right after the player-entity loop — used when a `tags: ["flycam"]` entity
+/// is also present in the scene and takes camera priority (spectator mode, see
+/// `planning/features/flycam_scene_conflicts.md`). Player entities still spawn normally either way.
 pub(crate) fn spawn_players_and_camera(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -609,6 +622,7 @@ pub(crate) fn spawn_players_and_camera(
     registry: &mut SpawnRegistry,
     stat_ui_queue: &mut DynamicStatUiQueue,
     mut primitive_ctx: Option<&mut PrimitivePlayerCtx<'_>>,
+    camera_spawn: super::CameraSpawnMode,
 ) {
     // Per-player targeting (capabilities/targeting.rs) treats `player_index: 0` (the default —
     // `#[serde(default)]` on `PrefabDef.player_index`) as "the primary player": the one whose
@@ -637,6 +651,15 @@ pub(crate) fn spawn_players_and_camera(
             commands, asset_server, fixes, model_spawner, pc, project_root, registry, stat_ui_queue,
             primitive_ctx.as_mut().map(|ctx| &mut **ctx),
         ));
+    }
+
+    // A flycam-tagged entity elsewhere in this scene takes camera priority (spectator mode, see
+    // `planning/features/flycam_scene_conflicts.md`) — the player(s) above still spawned normally,
+    // but they get no camera of their own. Every camera-related resource is left exactly as
+    // `Action::LoadScene` (or app startup) already set it, matching a flycam-only zero-player
+    // scene's existing resource state.
+    if camera_spawn == super::CameraSpawnMode::Suppressed {
+        return;
     }
 
     let Some(first) = player_configs.first() else { return };

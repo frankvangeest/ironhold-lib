@@ -59,6 +59,7 @@ pub fn action_executor_system(
                 commands.insert_resource(crate::runtime::scene_manager::DynamicSplitConfig(None));
                 commands.insert_resource(crate::runtime::scene_manager::ActiveSplitSlotCount(None));
                 commands.insert_resource(crate::runtime::scene_manager::TargetRingVisibilityMode::AllViewports);
+                commands.insert_resource(crate::runtime::scene_manager::SuppressPlayerCameras(false));
                 *scene_state.load_mode = PendingSceneLoadMode::Replace;
                 let resolved = resolve_project_path(&project_root.0, &path);
                 info!("Executing Action::LoadScene: {}", resolved);

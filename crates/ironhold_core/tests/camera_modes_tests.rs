@@ -6,7 +6,9 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 
-use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2};
+use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2, SuppressPlayerCameras, ActiveSplitScreen, WorldLabelRank};
+use ironhold_core::capabilities::player::CharacterController;
+use ironhold_core::schema::catalog::StatLabelDef;
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
 use ironhold_core::schema::player::{CameraConfig, SplitScreenDef, SplitOrientation, DynamicSplitDef, PartyZoomDef, InputMap};
@@ -814,4 +816,317 @@ fn test_set_camera_mode_removes_stale_camera_shake_state() {
 
     let mut shaking_after = app.world_mut().query_filtered::<Entity, With<CameraShakeState>>();
     assert_eq!(shaking_after.iter(app.world()).count(), 0, "CameraShakeState must not survive a mode switch");
+}
+
+// ── flycam_scene_conflicts.md: duplicate flycam tags + player/flycam priority ───────────────────
+//
+// Plan reviewed pre-implementation by system-architect + ux-gamedesigner-reviewer (2026-08-17):
+// `is_split_screen` must gate on flycam presence (else split-screen `WorldLabelRank`/stat-widget
+// entities duplicate for cameras that never spawn), and the split/party-ignored combo needed its
+// own diagnostic distinct from the generic suppression warning. Both covered below.
+
+fn flycam_prefab() -> PrefabDef {
+    PrefabDef {
+        kind: PrefabKind::Primitive,
+        model: String::new(),
+        components: PrefabComponents {
+            tags: vec!["flycam".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn player_and_flycam_catalogs(app: &mut App) {
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    camera_mode: Some(CameraModeDef::Orbit(base_camera_config())),
+                    inputs: Some(test_input_map()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_flycam".to_string(), flycam_prefab()),
+        ]),
+        ..Default::default()
+    }));
+}
+
+fn load_player_and_flycam_scene(app: &mut App, terrain: bool) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let terrain_block = if terrain {
+        r#"Some((
+            heightmap: "projects/terrain_demo/terrain/heightmap.png",
+            splatmap: "shared/terrain/splatmap.png",
+            scale: (0.5, 30.0, 0.5),
+            material_paths: ["shared/terrain/grass.png"],
+        ))"#
+    } else {
+        "None"
+    };
+    let ron_str = format!(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (0.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "cam", prefab: "test_flycam", transform: (translation: (0.0, 2.0, 5.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+        terrain: {terrain_block},
+    )"#);
+    let scene: GameSceneV2 = ron::de::from_str(&ron_str).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn test_duplicate_flycam_tags_only_last_one_used() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([("test_flycam".to_string(), flycam_prefab())]),
+        ..Default::default()
+    }));
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "cam_a", prefab: "test_flycam", transform: (translation: (0.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "cam_b", prefab: "test_flycam", transform: (translation: (10.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let mut q = app.world_mut().query_filtered::<(Entity, &Transform), With<FlycamCameraMode>>();
+    let cams: Vec<_> = q.iter(app.world()).map(|(e, t)| (e, *t)).collect();
+    assert_eq!(cams.len(), 1, "only one flycam camera must ever spawn, even with 2 flycam-tagged entities");
+    assert!(
+        cams[0].1.translation.distance(Vec3::new(10.0, 2.0, 0.0)) < 0.01,
+        "the LAST flycam-tagged entity in `entities:` order must win — unchanged behavior, got {:?}", cams[0].1.translation
+    );
+}
+
+#[test]
+fn test_player_and_flycam_scene_flycam_takes_priority_no_player_camera() {
+    let mut app = setup_test_app();
+    app.update();
+    player_and_flycam_catalogs(&mut app);
+    load_player_and_flycam_scene(&mut app, false);
+
+    let mut flycam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(flycam_q.iter(app.world()).count(), 1, "exactly one flycam camera must spawn");
+
+    let mut orbit_q = app.world_mut().query_filtered::<Entity, With<OrbitCameraMode>>();
+    assert_eq!(orbit_q.iter(app.world()).count(), 0, "the player must NOT get its own camera when a flycam is also present");
+
+    let mut player_q = app.world_mut().query_filtered::<Entity, With<CharacterController>>();
+    assert_eq!(player_q.iter(app.world()).count(), 1, "the player entity must still spawn and act normally");
+
+    assert!(
+        app.world().resource::<SuppressPlayerCameras>().0,
+        "SuppressPlayerCameras must be set when a flycam is present alongside a player"
+    );
+}
+
+#[test]
+fn test_player_and_flycam_terrain_deferred_scene_flycam_takes_priority() {
+    let mut app = setup_test_app();
+    app.update();
+    player_and_flycam_catalogs(&mut app);
+    load_player_and_flycam_scene(&mut app, true);
+
+    // Flycam has no terrain dependency — it must already be active even before terrain (and thus
+    // the player) is ready.
+    let mut flycam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(flycam_q.iter(app.world()).count(), 1, "flycam must spawn immediately, without waiting for terrain");
+
+    let mut pending_q = app.world_mut().query::<&ironhold_core::runtime::PendingPlayerConfig>();
+    assert_eq!(pending_q.iter(app.world()).count(), 1, "the player must be terrain-deferred, not spawned immediately");
+
+    // Fake terrain becoming ready without running the real (async) terrain generation pipeline —
+    // `spawn_player_when_terrain_ready` only checks `Added<TerrainReady>`, not who owns it.
+    app.world_mut().spawn(ironhold_core::capabilities::terrain::TerrainReady);
+    app.update();
+
+    let mut player_q = app.world_mut().query_filtered::<Entity, With<CharacterController>>();
+    assert_eq!(player_q.iter(app.world()).count(), 1, "the player must spawn once terrain is ready");
+
+    let mut orbit_q = app.world_mut().query_filtered::<Entity, With<OrbitCameraMode>>();
+    assert_eq!(orbit_q.iter(app.world()).count(), 0, "the terrain-deferred player must also get no camera of its own when a flycam is present");
+
+    let mut flycam_q_after = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(flycam_q_after.iter(app.world()).count(), 1, "still exactly one flycam camera after the player spawns");
+}
+
+#[test]
+fn test_flycam_and_split_screen_combo_suppresses_split_resources() {
+    // A stray flycam entity in an otherwise-split-screen scene must fully suppress split-screen
+    // (not just fall back to a single camera) — `ActiveSplitScreen` must stay at its post-LoadScene
+    // default (`None`), never populated, since `spawn_players_and_camera` returns before touching
+    // it when suppressed.
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+            ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    let mut p1_camera = base_camera_config();
+    p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false });
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("test_player_1".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_a".to_string(),
+                player_index: 0,
+                // A stat_label exercises `is_split_screen`'s gating directly (system-architect
+                // finding from post-implementation review): with the flycam-presence gate
+                // missing, this would wrongly spawn MAX_SPLIT_PLAYERS ranked siblings for a
+                // split-screen layout that never actually exists.
+                stat_label: Some(StatLabelDef {
+                    stat_key: "{self}.health".to_string(),
+                    offset: (0.0, 2.5, 0.0),
+                    screen_offset: (0.0, 0.0),
+                    font_size: 16.0,
+                    color: (0.2, 0.9, 0.2, 1.0),
+                    show_max: true,
+                }),
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    camera: Some(p1_camera),
+                    inputs: Some(test_input_map()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_player_2".to_string(), PrefabDef {
+                kind: PrefabKind::Actor,
+                model: "char_b".to_string(),
+                player_index: 1,
+                components: PrefabComponents {
+                    tags: vec!["player".to_string()],
+                    inputs: Some(test_input_map()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ("test_flycam".to_string(), flycam_prefab()),
+        ]),
+        ..Default::default()
+    }));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "p1", prefab: "test_player_1", transform: (translation: (-4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "p2", prefab: "test_player_2", transform: (translation: (4.0, 0.5, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+            (id: "cam", prefab: "test_flycam", transform: (translation: (0.0, 2.0, 10.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<ActiveSplitScreen>().0, None,
+        "split-screen must be fully suppressed (not downgraded to one camera) when a flycam is also present"
+    );
+    let mut split_q = app.world_mut().query_filtered::<Entity, With<SplitViewportSlot>>();
+    assert_eq!(split_q.iter(app.world()).count(), 0, "no split-viewport cameras must spawn when a flycam is present");
+    let mut flycam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(flycam_q.iter(app.world()).count(), 1, "the flycam must still be the sole active camera");
+    let mut player_q = app.world_mut().query_filtered::<Entity, With<CharacterController>>();
+    assert_eq!(player_q.iter(app.world()).count(), 2, "both players must still spawn and act normally");
+    let mut rank_q = app.world_mut().query_filtered::<Entity, With<WorldLabelRank>>();
+    assert_eq!(
+        rank_q.iter(app.world()).count(), 0,
+        "is_split_screen must be false with a flycam present, so stat_label must spawn exactly \
+         1 entity (no WorldLabelRank siblings) even though 2 players are in the scene"
+    );
+}
+
+#[test]
+fn test_suppress_player_cameras_resets_on_load_scene() {
+    // debug-detective finding: `SuppressPlayerCameras` must not leak a stale `true` from a
+    // previous flycam scene into the next `Action::LoadScene`'s player-only scene, before
+    // `scene_loader.rs` gets a chance to re-evaluate it for the new scene's own content.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(SuppressPlayerCameras(true));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("scenes/does_not_need_to_exist.ron".to_string()));
+    app.update();
+
+    assert!(
+        !app.world().resource::<SuppressPlayerCameras>().0,
+        "Action::LoadScene must reset SuppressPlayerCameras to false alongside the other camera resources, not carry over the previous scene's value"
+    );
+}
+
+#[test]
+fn test_player_only_scene_still_gets_its_own_camera_regression() {
+    // Regression guard for the flycam_scene_conflicts.md restructure: a scene with no flycam
+    // entity must be byte-identical to pre-fix behavior — the player still gets its own camera.
+    let mut app = setup_test_app();
+    app.update();
+    one_player_catalogs(&mut app);
+    load_one_player_scene(&mut app, "");
+
+    let mut orbit_q = app.world_mut().query_filtered::<Entity, With<OrbitCameraMode>>();
+    assert_eq!(orbit_q.iter(app.world()).count(), 1, "a player-only scene must still get its own camera");
+    assert!(
+        !app.world().resource::<SuppressPlayerCameras>().0,
+        "SuppressPlayerCameras must stay false when no flycam entity is present"
+    );
 }

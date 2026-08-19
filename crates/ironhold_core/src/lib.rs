@@ -162,6 +162,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::DynamicSplitConfig>()
             .init_resource::<crate::runtime::scene_manager::ActiveSplitSlotCount>()
             .init_resource::<crate::runtime::scene_manager::TargetRingVisibilityMode>()
+            .init_resource::<crate::runtime::scene_manager::SuppressPlayerCameras>()
             .init_resource::<crate::capabilities::nameplate::NameplateSceneConfig>()
             .init_resource::<crate::capabilities::nameplate::PlayerNameplatePreference>()
             .init_resource::<crate::runtime::scene_manager::DelayedEventQueue>()

@@ -247,6 +247,18 @@ fn missing_stat_widget_template_exits_1() {
     );
 }
 
+/// `flycam_scene_conflicts.md`: 2+ `tags: ["flycam"]` entities in one scene silently keep only
+/// the last one at runtime (`scene_loader.rs`) — this is the design-time counterpart.
+#[test]
+fn duplicate_flycam_entity_exits_1() {
+    let (code, stdout) = validate("duplicate_flycam_entity");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("camera_a") && stdout.contains("camera_b") && stdout.contains("flycam"),
+        "expected both colliding entity ids and a mention of flycam in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

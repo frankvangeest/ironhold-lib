@@ -1,0 +1,16 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "camera_a",
+            prefab: "test_flycam",
+            transform: (translation: (0.0, 2.0, 0.0)),
+        ),
+        (
+            id: "camera_b",
+            prefab: "test_flycam",
+            transform: (translation: (10.0, 2.0, 0.0)),
+        ),
+    ],
+)

@@ -545,7 +545,15 @@ remains is:
    v3 section).
 4. **Shared spawn functions** — `entity_spawner.rs`'s `spawn_player_entity` (single player, own
    `ActiveCameraMode::Orbit`), `spawn_players_and_camera` (1+ players; 2+ share one camera or split-screen),
-   and `spawn_player_when_terrain_ready`. All three call the private `spawn_player_entity_core`,
+   and `spawn_player_when_terrain_ready`. Only `spawn_players_and_camera` takes a `CameraSpawnMode`
+   (`Spawn`/`Suppressed`) parameter — when a scene also has a `tags: ["flycam"]` entity, both its
+   call sites (scene load, and `spawn_player_when_terrain_ready` reading the `SuppressPlayerCameras`
+   resource) pass `Suppressed`, skipping every camera resource insert/spawn after the player-entity
+   loop (see `planning/features/flycam_scene_conflicts.md`). `spawn_player_entity` (site 1, dynamic
+   `Action::Spawn`/character-select) and the hot-join path (site 5 below) do **not** check
+   `SuppressPlayerCameras` — a player dynamically spawned at runtime always gets its own camera,
+   even in a scene that started in spectator mode; a known, documented limitation, not an oversight.
+   All three call the private `spawn_player_entity_core`,
    which dispatches body construction on `PlayerConfig.model_source: PlayerModelSource` (`Glb(key)`
    or `Primitive { shape, params, children }`) — everything **after** that dispatch (physics
    bundle, `tag_spawned_entity`, `PlayerIndex`/`PlayerOwnership`/`PlayerTarget`/`BoundGamepad`,

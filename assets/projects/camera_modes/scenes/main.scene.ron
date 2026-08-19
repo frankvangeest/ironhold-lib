@@ -33,33 +33,39 @@
     (
       id: "portal_to_follow_01",
       prefab: "portal_to_follow",
-      transform: ( translation: (-9.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      transform: ( translation: (-12.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       label: ( text: "Follow", offset: (0.0, 1.2, 0.0) ),
     ),
     (
       id: "portal_to_first_person_01",
       prefab: "portal_to_first_person",
-      transform: ( translation: (-3.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      transform: ( translation: (-6.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       label: ( text: "First-Person", offset: (0.0, 1.2, 0.0) ),
     ),
     (
       id: "portal_to_fixed_01",
       prefab: "portal_to_fixed",
-      transform: ( translation: (3.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      transform: ( translation: (0.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       label: ( text: "Fixed", offset: (0.0, 1.2, 0.0) ),
     ),
     (
       id: "portal_to_flycam_01",
       prefab: "portal_to_flycam",
-      transform: ( translation: (9.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      transform: ( translation: (6.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
       label: ( text: "Flycam", offset: (0.0, 1.2, 0.0) ),
+    ),
+    (
+      id: "portal_to_spectator_01",
+      prefab: "portal_to_spectator",
+      transform: ( translation: (12.0, 0.0, -6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "Spectator", offset: (0.0, 1.2, 0.0) ),
     ),
   ],
 
   ui: [
     Label((
       id: "hint",
-      text: "camera_modes.md feature demo. This hub uses camera_mode: Orbit. Walk onto a pad to try Follow / FirstPerson / Fixed / Flycam.",
+      text: "camera_modes.md demo. Walk onto a pad to try Follow / FirstPerson / Fixed / Flycam / Spectator.",
       position: (16.0, 16.0),
       size: (900.0, 28.0),
       align: Left,

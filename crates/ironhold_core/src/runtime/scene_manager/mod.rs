@@ -207,6 +207,25 @@ pub enum TargetRingVisibilityMode {
     OwnViewportOnly,
 }
 
+/// `true` when the current scene has a `tags: ["flycam"]` entity — flycam takes priority over any
+/// player-owned camera (see `planning/features/flycam_scene_conflicts.md`). Player entities still
+/// spawn and run normally; only their camera is suppressed. Set by `scene_loader.rs` once the
+/// scene's `flycam_start` is resolved; read by both `spawn_players_and_camera` call sites
+/// (immediate and terrain-deferred) to decide `CameraSpawnMode`. Reset to `false` on every full
+/// `LoadScene` alongside the other camera resources, so a scene without a flycam entity never
+/// inherits suppression from a previous one.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SuppressPlayerCameras(pub bool);
+
+/// Whether `spawn_players_and_camera` should spawn the player(s)' own camera and camera-related
+/// resources. `Suppressed` when a flycam-tagged entity is also present in the scene — the flycam
+/// becomes the sole active camera instead (spectator mode).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum CameraSpawnMode {
+    Spawn,
+    Suppressed,
+}
+
 /// Resolved (catalog key → texture path) target indicator config for the current scene.
 pub struct ResolvedTargetIndicator {
     pub texture_path: String,
