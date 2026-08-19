@@ -32,10 +32,12 @@ Items flow: **Icebox → Queued → Active → Done**
 One line in the `## Bugs` section is enough for most bugs:
 
 ```
-- [ ] **short title** — what goes wrong; Reproduce: exact project + exact steps to trigger it; suspected cause, candidate fix.
+- [ ] **short title** _(found at `<hash>` <YYYY-MM-DD>)_ — what goes wrong; Reproduce: exact project + exact steps to trigger it; suspected cause, candidate fix.
 ```
 
 **Reproduction steps are mandatory.** A bug without repro steps cannot be verified as fixed and may be re-introduced silently. Always include: which project to open, what sequence of actions triggers the bug, and what the wrong vs. expected outcome is.
+
+**The `found at` commit hash is also mandatory** — run `git rev-parse --short HEAD` when you log the bug, same convention as a feature file's `Planned at:`. This lets whoever picks up the fix later run `git log --oneline <hash>..HEAD -- <affected paths>` to see everything that's changed in the affected area since the bug was reported, before assuming the original repro/root-cause still holds (see "Code change workflow" step 1 in the root `CLAUDE.md`).
 
 If the bug needs investigation before it can be fixed, add the backlog entry _and_ create an investigation file:
 

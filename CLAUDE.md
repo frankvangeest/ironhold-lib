@@ -355,6 +355,15 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     - planned out enough - Require more input or decisions from the Frank or not?
     - project goal aligned - Goal alignment review for the feature plan
     - follows proper UX design - UX review for the feature plan
+    - **for a bug fix specifically: reproduce it before writing any fix.** Confirm the bug still
+      reproduces against current `HEAD` — or, for a bug provable by static code inspection alone
+      (e.g. a diagnostic-only fix where the fix can't make anything worse), cite the exact current
+      line(s) proving the mechanism still matches the backlog entry's description, and say so in the
+      feature/fix plan. If the backlog entry has a `found at: <hash>` citation (see
+      `planning/CLAUDE.md`), run `git log --oneline <hash>..HEAD -- <affected paths>` first to see
+      what's changed in the affected area since it was reported — the bug may already be fixed, a
+      later change may have altered its mechanism, or the repro steps may be stale. If it no longer
+      reproduces, stop and update or close the backlog entry instead of proceeding with a fix.
  2. **Create the feature branch + worktree from latest `main`, mark it Active in the backlog, and commit before coding:**
     ```bash
     git worktree add ../ironhold-lib-{slug} -b feature/{slug} main
