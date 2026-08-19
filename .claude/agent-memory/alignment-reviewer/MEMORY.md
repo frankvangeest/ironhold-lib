@@ -33,3 +33,4 @@
 - [Camera modes v2 pattern](camera_modes_v2_pattern.md) — SetCameraMode/camera_modes registry/CameraBlendState; apply_camera_mode-vs-spawn-path field drop (Fixed.position) + AuthoredCameraMode-gated all_cameras silent no-op
 - [label_depth_scale pattern](label_depth_scale_pattern.md) — TextFont-vs-anchor scaling branch, 4 anchor sites, per-widget-override matrix, no max_scale, zero CLI validation
 - [WorldLabel screen_offset pattern](world_label_screen_offset_pattern.md) — pixel-space widget stacking; which sites expose it vs hardcode ZERO; scene-wide nameplate offset is the remaining gap
+- [Flycam spectator mode pattern](flycam_spectator_mode_pattern.md) — SuppressPlayerCameras as derived-not-authored state (reuse this); early-return hides split/party warns; no RON un-do for suppression
