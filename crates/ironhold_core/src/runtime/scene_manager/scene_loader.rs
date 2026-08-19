@@ -31,8 +31,6 @@ use crate::capabilities::stat_display::{
 use crate::capabilities::stat_radar::{RadarMaterial, RadarUniforms, StatRadarNode};
 use crate::schema::scene_v2::BarOrientation;
 
-const TAG_FLYCAM: &str = "flycam";
-const TAG_PLAYER: &str = "player";
 const TAG_COLLECTABLE: &str = "collectable";
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::PipelineWarmup;
@@ -216,8 +214,8 @@ pub fn spawn_scene_v2(
                 continue;
             };
 
-            let is_flycam = prefab.components.tags.contains(&TAG_FLYCAM.to_string());
-            let is_player = prefab.components.tags.contains(&TAG_PLAYER.to_string());
+            let is_flycam = prefab.is_flycam();
+            let is_player = prefab.is_player();
 
             // Build transform early — needed before model lookup so flycam can early-out.
             let t = &entity_def.transform;
@@ -232,6 +230,39 @@ pub fn spawn_scene_v2(
             let transform = Transform { translation, rotation, scale };
 
             if is_flycam {
+                // See `planning/features/flycam_model_never_renders_warning.md`. `is_flycam`
+                // takes priority below (the `continue` a few lines down) before `prefab.model`/
+                // `.shape`/`.primitive`/`.children` or `is_player` are ever consulted for
+                // anything — any of these being non-default on a flycam-tagged prefab placed as
+                // a scene entity is a silent discard. (A dynamically `Action::Spawn`ed flycam
+                // prefab does NOT go through this branch and is not covered — logged as a known
+                // gap in `planning/claude_suggestions.md`.)
+                if is_player {
+                    warn!(
+                        "Flycam prefab '{}' (entity '{}') has both \"player\" and \"flycam\" \
+                         tags — the flycam tag makes it spawn as a camera-only entity and its \
+                         player components never spawn at all. Use camera_mode: Flycam(...) on a \
+                         \"player\"-only prefab instead if you want a flying player character, or \
+                         remove the \"player\" tag if you wanted a plain camera-only flycam.",
+                        entity_def.prefab, entity_def.id
+                    );
+                } else {
+                    let ignored_fields = prefab.flycam_ignored_fields();
+                    if !ignored_fields.is_empty() {
+                        let remedy = PrefabDef::flycam_ignored_fields_remedy(&ignored_fields);
+                        warn!(
+                            "Flycam prefab '{}' (entity '{}') sets {} — a flycam is camera-only \
+                             and never renders a body, so that body will never appear. To \
+                             silence this, {}. To give a flying camera a visible body, use \
+                             camera_mode: Flycam(...) on a \"player\" prefab instead, or spawn \
+                             the body as a separate non-flycam entity at the same position.",
+                            entity_def.prefab, entity_def.id,
+                            ignored_fields.join(", "),
+                            remedy
+                        );
+                    }
+                }
+
                 // No model needed — just record the spawn transform and the resolved mode.
                 // Backward compat is tag-driven, not field-presence-driven (2026-08-07
                 // confirmation pass): `flycam` is already unconditionally defaulted below, so an

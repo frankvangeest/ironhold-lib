@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use ironhold_core::schema::camera::CameraModeDef;
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabKind};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::player::InputMap;
@@ -386,7 +386,7 @@ fn cross_file_checks(
             let mut flycam_ids: Vec<&str> = Vec::new();
             for entity in &scene.entities {
                 let Some(prefab) = catalog.prefabs.get(&entity.prefab) else { continue };
-                if prefab.components.tags.iter().any(|t| t == "flycam") {
+                if prefab.is_flycam() {
                     flycam_ids.push(&entity.id);
                 }
             }
@@ -401,6 +401,58 @@ fn cross_file_checks(
                         flycam_ids.join(", ")
                     ),
                     error_type: "duplicate_flycam_entity",
+                });
+            }
+        }
+    }
+
+    // A `tags: ["flycam"]` prefab's `model`/`shape`/`primitive`/`children` are silently discarded
+    // at scene load (`scene_loader.rs`'s `is_flycam` branch `continue`s before any of them are
+    // ever consulted), and a prefab tagged both `"player"` and `"flycam"` never spawns its player
+    // components at all — this is the design-time counterpart to both scene-load `warn!`s.
+    // Prefab-catalog-scoped (not per-scene, unlike `duplicate_flycam_entity` above): the condition
+    // is entirely prefab-local, so one bad prefab would otherwise report once per scene that
+    // instantiates it. Both scoped to scene-`entities:`-placed flycams specifically — a flycam
+    // prefab dynamically `Action::Spawn`ed at runtime doesn't go through this branch and isn't
+    // covered (logged in `planning/claude_suggestions.md`).
+    // See `planning/features/flycam_model_never_renders_warning.md`.
+    if let Some(catalog) = prefab_catalog {
+        let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+        prefab_keys.sort();
+        for prefab_key in prefab_keys {
+            let prefab = &catalog.prefabs[prefab_key];
+            if !prefab.is_flycam() {
+                continue;
+            }
+            if prefab.is_player() {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab '{}' has both \"player\" and \"flycam\" tags — the flycam tag \
+                         makes it spawn as a camera-only entity and its player components never \
+                         spawn at all. Use camera_mode: Flycam(...) on a \"player\"-only prefab \
+                         instead if you want a flying player character, or remove the \"player\" \
+                         tag if you wanted a plain camera-only flycam.",
+                        prefab_key
+                    ),
+                    error_type: "flycam_player_tag_conflict",
+                });
+                continue;
+            }
+            let ignored_fields = prefab.flycam_ignored_fields();
+            if !ignored_fields.is_empty() {
+                let remedy = PrefabDef::flycam_ignored_fields_remedy(&ignored_fields);
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "flycam prefab '{}' sets {} — a flycam is camera-only and never renders \
+                         a body, so that body will never appear. To silence this, {}. To give a \
+                         flying camera a visible body, use camera_mode: Flycam(...) on a \
+                         \"player\" prefab instead, or spawn the body as a separate non-flycam \
+                         entity at the same position.",
+                        prefab_key, ignored_fields.join(", "), remedy
+                    ),
+                    error_type: "flycam_model_never_renders",
                 });
             }
         }

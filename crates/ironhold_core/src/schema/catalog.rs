@@ -873,6 +873,61 @@ pub struct PrefabDef {
     pub player_index: u32,
 }
 
+/// Runtime-meaningful tags that affect spawning (see `components.tags`, `docs/20_data_formats.md`).
+pub const TAG_FLYCAM: &str = "flycam";
+pub const TAG_PLAYER: &str = "player";
+
+impl PrefabDef {
+    pub fn is_flycam(&self) -> bool {
+        self.components.tags.iter().any(|t| t == TAG_FLYCAM)
+    }
+
+    pub fn is_player(&self) -> bool {
+        self.components.tags.iter().any(|t| t == TAG_PLAYER)
+    }
+
+    /// The visible-body fields a `tags: ["flycam"]` prefab declares that the scene loader
+    /// silently discards — a flycam entity spawns a bare camera, never a body. This covers the
+    /// fields that actually produce a visible mesh (`model`, `shape`/`primitive`, `children`);
+    /// it is NOT an exhaustive list of every field the flycam branch ignores (colliders,
+    /// `stat_templates`, `nameplate`, etc. are equally discarded but have no visible-render
+    /// consequence, so they aren't diagnosed here). Returns `[]` for a non-flycam prefab.
+    pub fn flycam_ignored_fields(&self) -> Vec<&'static str> {
+        if !self.is_flycam() {
+            return Vec::new();
+        }
+        let mut fields = Vec::new();
+        if !self.model.is_empty() {
+            fields.push("model");
+        }
+        if self.shape.is_some() || self.primitive.is_some() {
+            fields.push("shape/primitive");
+        }
+        if !self.children.is_empty() {
+            fields.push("children");
+        }
+        fields
+    }
+
+    /// Builds the field-specific silencing remedy for whichever fields
+    /// `flycam_ignored_fields()` returned, so the warn!/CLI messages never give advice for a
+    /// field that isn't actually the offender (e.g. telling a `children`-only prefab to set
+    /// `model: ""`, which it already has).
+    pub fn flycam_ignored_fields_remedy(fields: &[&str]) -> String {
+        let mut steps = Vec::new();
+        if fields.contains(&"model") {
+            steps.push("set model: \"\"".to_string());
+        }
+        if fields.contains(&"shape/primitive") {
+            steps.push("remove shape/primitive".to_string());
+        }
+        if fields.contains(&"children") {
+            steps.push("remove the children list".to_string());
+        }
+        steps.join(" and ")
+    }
+}
+
 pub(crate) fn default_select_aim_height() -> f32 { 1.0 }
 
 /// One physics collider shape in a `PrefabDef.colliders` list.

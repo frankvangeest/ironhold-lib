@@ -259,6 +259,68 @@ fn duplicate_flycam_entity_exits_1() {
     );
 }
 
+/// `flycam_model_never_renders_warning.md`: a `tags: ["flycam"]` prefab's `model:` is silently
+/// discarded at scene load (`scene_loader.rs`) — this is the design-time counterpart. Scoped to
+/// the prefab catalog, so this reports once per offending *prefab*, not per scene entity.
+#[test]
+fn flycam_model_never_renders_exits_1() {
+    let (code, stdout) = validate("flycam_model_never_renders");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("flycam_with_body") && stdout.contains("model") && stdout.contains("never render"),
+        "expected the offending prefab key and a mention of the ignored field in output:\n{stdout}"
+    );
+}
+
+/// Same check, `children:` half — a composite `kind: Primitive` flycam prefab. Distinct code path
+/// from `model:` (`flycam_ignored_fields()`'s `children` branch), previously untested.
+#[test]
+fn flycam_children_never_render_exits_1() {
+    let (code, stdout) = validate("flycam_children_never_render");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("flycam_with_children") && stdout.contains("children") && stdout.contains("never render"),
+        "expected the offending prefab key and a mention of the ignored field in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("model") || stdout.contains("children"),
+        "remedy must not tell a children-only offender to set model: \"\" as if that were the cause:\n{stdout}"
+    );
+}
+
+/// Same check, `shape`/`primitive` half — a `kind: Primitive` flycam prefab authored the
+/// idiomatic single-shape way (no `model:`, no `children:`), the dominant authoring style for
+/// every other visible `Primitive` prefab in this repo's example projects. Previously a total
+/// blind spot: neither `model` nor `children` fire for this shape.
+#[test]
+fn flycam_shape_never_renders_exits_1() {
+    let (code, stdout) = validate("flycam_shape_never_renders");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("flycam_with_shape") && stdout.contains("shape/primitive") && stdout.contains("never render"),
+        "expected the offending prefab key and a mention of the ignored field in output:\n{stdout}"
+    );
+}
+
+/// `flycam_model_never_renders_warning.md`: a prefab tagged both `"player"` and `"flycam"` never
+/// spawns its player components at all (the flycam branch `continue`s first) — distinct error
+/// from the ignored-fields case above since the fix and the failure are different. Asserts the
+/// distinguishing phrase, not just "player"/"flycam" (both appear in the *other* message's
+/// remedy text too, so a looser assertion couldn't tell the two error types apart).
+#[test]
+fn flycam_player_tag_conflict_exits_1() {
+    let (code, stdout) = validate("flycam_player_tag_conflict");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("confused_flying_player") && stdout.contains("never spawn at all"),
+        "expected the offending prefab key and the dual-tag-specific failure text in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("never render"),
+        "a dual-tagged prefab must get only the dual-tag error, not also the ignored-fields error:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]

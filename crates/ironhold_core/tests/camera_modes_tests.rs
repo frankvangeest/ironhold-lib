@@ -6,11 +6,11 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 
-use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2, SuppressPlayerCameras, ActiveSplitScreen, WorldLabelRank};
+use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2, SuppressPlayerCameras, ActiveSplitScreen, WorldLabelRank, SpawnRegistry};
 use ironhold_core::capabilities::player::CharacterController;
 use ironhold_core::schema::catalog::StatLabelDef;
 use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSceneV2, Action};
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents};
+use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, ChildPrimitiveDef, PrimitiveShapeKind, PrimitiveParams};
 use ironhold_core::schema::player::{CameraConfig, SplitScreenDef, SplitOrientation, DynamicSplitDef, PartyZoomDef, InputMap};
 use ironhold_core::schema::camera::{CameraModeDef, EaseKind};
 use ironhold_core::capabilities::camera::{
@@ -942,6 +942,175 @@ fn test_duplicate_flycam_tags_only_last_one_used() {
         cams[0].1.translation.distance(Vec3::new(10.0, 2.0, 0.0)) < 0.01,
         "the LAST flycam-tagged entity in `entities:` order must win — unchanged behavior, got {:?}", cams[0].1.translation
     );
+}
+
+// ── flycam_model_never_renders_warning.md: body-defining fields stay silently unspawned ─────────
+
+fn flycam_with_model_prefab(model_key: &str) -> PrefabDef {
+    // `kind: Prop` (not `Primitive`) matches both the reported bug and the CLI fixture —
+    // `model:` is the field a Prop/Actor-kind prefab actually uses for its visible body.
+    PrefabDef {
+        kind: PrefabKind::Prop,
+        model: model_key.to_string(),
+        components: PrefabComponents {
+            tags: vec!["flycam".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_flycam_with_model_field_still_spawns_only_camera_no_mesh() {
+    // Regression guard: the new scene-load `warn!`/CLI validate diagnostic must not change
+    // runtime behavior — a flycam-tagged prefab's `model:` stays silently ignored, not spawned.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("anvil".to_string(), ModelCatalogEntry { path: "shared/models/props/anvil.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([("test_flycam_model".to_string(), flycam_with_model_prefab("anvil"))]),
+        ..Default::default()
+    }));
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "cam_a", prefab: "test_flycam_model", transform: (translation: (0.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let mut cam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(cam_q.iter(app.world()).count(), 1, "exactly one flycam camera must spawn despite model: being set");
+
+    assert!(
+        !app.world().resource::<SpawnRegistry>().entities.contains_key("cam_a"),
+        "a flycam entity must never be registered as an addressable spawned entity — model: must stay unspawned"
+    );
+
+    let mut mesh_q = app.world_mut().query::<&Mesh3d>();
+    assert_eq!(mesh_q.iter(app.world()).count(), 0, "flycam's model: must never spawn a Mesh3d");
+}
+
+#[test]
+fn test_flycam_with_children_still_spawns_only_camera_no_mesh() {
+    // Regression guard for the `children:` half of `flycam_ignored_fields()` — a composite
+    // `kind: Primitive` flycam prefab with children must stay just as camera-only as a `model:`
+    // one; the composite path (`spawn_primitive_children`) is a different code path than the GLB
+    // `model:` path the test above covers, so this isn't redundant with it.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    let mut flycam_with_children = flycam_prefab();
+    flycam_with_children.kind = PrefabKind::Primitive;
+    flycam_with_children.children = vec![ChildPrimitiveDef {
+        shape: Some(PrimitiveShapeKind::Cuboid),
+        primitive: PrimitiveParams::default(),
+        offset: (0.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+        material: None,
+        prefab: None,
+    }];
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([("test_flycam_children".to_string(), flycam_with_children)]),
+        ..Default::default()
+    }));
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "cam_a", prefab: "test_flycam_children", transform: (translation: (0.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let mut cam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(cam_q.iter(app.world()).count(), 1, "exactly one flycam camera must spawn despite children: being set");
+
+    assert!(
+        !app.world().resource::<SpawnRegistry>().entities.contains_key("cam_a"),
+        "a flycam entity must never be registered as an addressable spawned entity — children: must stay unspawned"
+    );
+
+    let mut mesh_q = app.world_mut().query::<&Mesh3d>();
+    assert_eq!(mesh_q.iter(app.world()).count(), 0, "flycam's children: must never spawn a Mesh3d");
+}
+
+#[test]
+fn test_dual_player_flycam_tag_prefab_spawns_no_character_controller() {
+    // Regression guard for the dual-tag case: a prefab with both "player" and "flycam" tags
+    // must spawn zero player components — the flycam branch takes over entirely.
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    let confused_prefab = PrefabDef {
+        kind: PrefabKind::Actor,
+        model: "char_a".to_string(),
+        components: PrefabComponents {
+            tags: vec!["player".to_string(), "flycam".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([("test_confused".to_string(), confused_prefab)]),
+        ..Default::default()
+    }));
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig { schema_version: 1, initial_scene: "scenes/t.ron".to_string(), ..Default::default() });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let scene: GameSceneV2 = ron::de::from_str(r#"(
+        schema_version: 2,
+        entities: [
+            (id: "cam_a", prefab: "test_confused", transform: (translation: (0.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0))),
+        ],
+        ui: [],
+    )"#).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    let mut cam_q = app.world_mut().query_filtered::<Entity, With<FlycamCameraMode>>();
+    assert_eq!(cam_q.iter(app.world()).count(), 1, "the flycam tag must still spawn exactly one flycam camera");
+
+    let mut player_q = app.world_mut().query_filtered::<Entity, With<CharacterController>>();
+    assert_eq!(player_q.iter(app.world()).count(), 0, "a dual-tagged prefab's player components must never spawn");
 }
 
 #[test]

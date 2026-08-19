@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "flycam_with_children": (
+            kind: Primitive,
+            model: "",
+            children: [
+                ( shape: Cuboid, offset: (0.0, 0.0, 0.0) ),
+            ],
+            components: (
+                tags: ["flycam"],
+            ),
+        ),
+    },
+)

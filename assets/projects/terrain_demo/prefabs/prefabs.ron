@@ -3,7 +3,10 @@
   prefabs: {
     // FlyCamera prefab. No model — the engine detects the "flycam" tag and
     // spawns Camera3d + FlyCamera directly. The model field is required by the
-    // schema but is ignored for flycam entities.
+    // schema but must stay "" for flycam entities — a non-empty model (or
+    // non-empty children) warns at scene load and fails `ironhold_cli validate`,
+    // since a flycam never renders a body. See docs/20_data_formats.md's
+    // "Special tag: flycam" section.
     "flycam": (
       kind: Prop,
       model: "",

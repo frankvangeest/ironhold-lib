@@ -1879,7 +1879,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 
 ### Special tag: `"flycam"` ✅
 
-A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying camera instead of a model. The `model` field is ignored. The engine creates a `Camera3d` + `ActiveCameraMode::Flycam` component (plus a `FlycamCameraMode` marker) at the entity's transform.
+A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying camera instead of a model. Any body-defining field — `model`, `shape`/`primitive`, or `children` (the latter two for a `Primitive` prefab) — is ignored, and warns if you set one, see below. The engine creates a `Camera3d` + `ActiveCameraMode::Flycam` component (plus a `FlycamCameraMode` marker) at the entity's transform.
 
 **Controls:**
 - **W/S** — forward / back
@@ -1953,6 +1953,24 @@ To display the camera's world position in the UI, add a label element with `id: 
 more are authored, only the last one in `entities:` order is actually spawned — the rest are
 silently discarded except for a console `warn!` naming both. Delete all but one to silence it.
 
+**A flycam-tagged prefab's body-defining fields never render.** A flycam is camera-only — it has no
+body to attach a visible mesh to, so `model:`, `shape:`/`primitive:`, or (for a `Primitive` prefab)
+non-empty `children:` are all silently dropped at spawn time. Setting any of these now fires a
+`warn!` **in the browser console** (the only diagnostic channel available if you're working from a
+prebuilt WASM build with no `ironhold_cli` access) and fails `ironhold_cli validate` as a hard
+error, naming the field(s) and prescribing the fix. This only covers entities placed directly in a
+scene's `entities:` list — a flycam prefab spawned dynamically via `Action::Spawn` is not checked.
+
+```ron
+// ❌ never renders — a flycam has no body
+"flycam_with_body": ( kind: Prop, model: "anvil", components: ( tags: ["flycam"] ) ),
+// ✅ camera-only, as intended
+"flycam":           ( kind: Prop, model: "",      components: ( tags: ["flycam"] ) ),
+```
+
+If you actually want a flying character with a visible body, this isn't the way — see "Two
+authoring paths" below.
+
 **Two authoring paths for a flycam, not one.** `tags: ["flycam"]` on its own standalone entity (this
 section) is one way to get a free-flying camera. The other is `camera_mode: Flycam(...)` authored
 directly on a **player** prefab (see [Unified camera modes (`camera_mode:`)](#unified-camera-modes-camera_mode-)
@@ -1961,6 +1979,13 @@ with no separate camera entity at all. Don't confuse the two: a standalone flyca
 camera with no character behind it (no stats, no movement systems, no CharacterController); a
 player prefab with `camera_mode: Flycam` is a full player character whose camera happens to fly
 freely.
+
+**Don't put both tags on the same prefab.** `components.tags: ["player", "flycam"]` on one prefab
+doesn't combine the two — the flycam tag takes priority at scene load, so the entity spawns as a
+camera-only flycam and its player components (movement, stats, `CharacterController`, everything)
+never spawn at all. This is also a scene-load `warn!` and an `ironhold_cli validate` hard error. If
+you want a flying player character, use `camera_mode: Flycam(...)` on a `"player"`-only prefab
+(above) instead; if you wanted a plain camera-only flycam, remove the `"player"` tag.
 
 #### Spectator mode: `"player"` + `"flycam"` in one scene
 
@@ -1998,8 +2023,9 @@ What still works / what doesn't, compared to a normal player scene:
   specifically); split-screen is fully suppressed, not downgraded to a single camera. (`split`/
   `party` are already "local co-op only" and inert with a single player, flycam or not, so this
   doesn't change anything for the 1-player case — see the `split`/`party` field rows further below.)
-- ❌ The flycam entity's own `model:` field still never renders (see the note at the top of this
-  section) — a flycam is camera-only, with or without a player also present.
+- ❌ The flycam entity's own body-defining fields still never render (see **A flycam-tagged
+  prefab's body-defining fields never render** above) — a flycam is camera-only, with or without a
+  player also present — and now warns at scene load / fails `ironhold_cli validate` either way.
 - ❌ `Action::CameraShake` still no-ops on the flycam (it has neither an orbit nor a party camera to
   shake) — same as a flycam-only scene.
 - ❌ Both entities read input independently, so the player's default WASD/Space/Q keys and the

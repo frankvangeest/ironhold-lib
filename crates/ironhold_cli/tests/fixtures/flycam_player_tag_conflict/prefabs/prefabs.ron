@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "confused_flying_player": (
+            kind: Actor,
+            model: "char_a",
+            components: (
+                tags: ["player", "flycam"],
+            ),
+        ),
+    },
+)

@@ -2,7 +2,8 @@
     schema_version: 2,
     prefabs: {
 
-        // ── Player (flycam for free exploration) ────────────────────────────────
+        // ── Camera (standalone flycam for free exploration — NOT a "player" prefab; see
+        // docs/20_data_formats.md's "Special tag: flycam" section) ─────────────────
         "explorer": (
             kind: Prop,
             model: "",

@@ -1,7 +1,9 @@
 (
   schema_version: 2,
   prefabs: {
-    // FlyCamera — no model, engine detects "flycam" tag
+    // FlyCamera — no model; a flycam is camera-only and a non-empty model/shape/children
+    // warns at scene load and fails `ironhold_cli validate` (docs/20_data_formats.md's
+    // "Special tag: flycam" section).
     "flycam": (
       kind: Prop,
       model: "",
