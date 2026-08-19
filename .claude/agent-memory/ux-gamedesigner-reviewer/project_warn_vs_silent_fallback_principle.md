@@ -35,4 +35,24 @@ Known GAP where the principle says warn but nothing does (flag on any gamepad/ac
 - `gamepad_key` colliding with the owning player's own `gamepad_jump`/`run`/`interact`/`target_next`
   (all four default to South/East/West/North) — one press does both; entirely unchecked.
 
+- Flycam prefab with non-empty `model`/`children`, and dual `tags: ["player","flycam"]`
+  (scene_loader.rs `is_flycam` branch, shipped 2026-08-19) — paired cli
+  `flycam_model_never_renders` / `flycam_player_tag_conflict` hard errors. See
+  [[flycam-spectator-priority]] for the still-uncovered `shape:`/`primitive:` variant.
+
+**Message-content rule (separate from the warn/silent decision):** a diagnostic must end with the
+*remedy*, not just the diagnosis. The house precedent is the duplicate-flycam docs note — "Delete
+all but one to silence it." Any new `warn!`/validate error should name (a) the offending
+entity/prefab/field keys, (b) what will not happen, (c) the exact edit that silences it, and (d) the
+alternative authoring path if the designer's evident intent is achievable another way. Plans that
+only specify "name the ids and state it's by-design" are incomplete — "this is by design" reads as
+the engine excusing itself, not as instructions.
+
+**Corollary (learned on the flycam diagnostic, 2026-08-19): when a diagnostic covers 2+ possible
+offending fields, the remedy clause must be derived from the fields actually detected, not a single
+fixed string covering all of them.** A message that always says `Set model: "" (and/or remove
+children)` tells a designer whose only mistake was `children:` to make an edit they've already made
+(`model: ""` is the Primitive convention) — reads as a broken/generic error. Branch the remedy on
+the detected field list, and add a test fixture per branch so each wording is actually exercised.
+
 **How to apply:** When reviewing a new fallback path, recommend WARN if the fallback contradicts an evident per-entity/per-player intent signal (e.g. `owner_player` set, 2+ players, a partial `stat_templates` block present but missing the referenced key). Recommend SILENT if the fallback is the ordinary single-player/global case. Always specify TIMING: prefer scene-load or cli-validate time (follows `warn_cross_bar_duplicate_keys`) over per-frame/per-press, which spams the log.

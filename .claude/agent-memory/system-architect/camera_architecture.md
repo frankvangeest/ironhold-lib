@@ -90,4 +90,25 @@ scene-authored default mode" for any reset-to-default mechanism.
 
 Two deliberate residual holes (documented in `docs/20_data_formats.md`, logged in `claude_suggestions.md`): dynamic `Action::Spawn`/hot-join player paths call `spawn_active_camera_for_player` unconditionally and never read `SuppressPlayerCameras`; and `SetCameraMode` with `owner_player: None` still targets the flycam itself.
 
-**RON gotcha for every `CameraModeDef` variant: DOUBLE parens** — `Orbit((field: value, ...))`. Single-paren fails with `Expected struct CameraConfig but found "offset"`. `ironhold_cli` has zero camera awareness (no validation of `camera:` + `camera_mode:` both set, no Party-on-single-player check).
+**RON gotcha for every `CameraModeDef` variant: DOUBLE parens** — `Orbit((field: value, ...))`. Single-paren fails with `Expected struct CameraConfig but found "offset"`. `ironhold_cli` has *near*-zero camera awareness (no validation of `camera:` + `camera_mode:` both set, no Party-on-single-player check) — the exceptions are `duplicate_flycam_entity` (scene-scoped) and the two prefab-catalog-scoped flycam checks below.
+
+---
+
+**Flycam tag predicates + the `Action::Spawn` blind spot (feature/flycam-model-warning, 2026-08-19).**
+`impl PrefabDef` in `schema/catalog.rs` gained `is_flycam()`/`is_player()`/`flycam_ignored_fields()`
+(+ `pub const TAG_FLYCAM`/`TAG_PLAYER`) — **the first behavioral-predicate impl on any schema type**
+(every other impl there is `Default`/`From`/`validate()`). This is now the correct home for any
+engine-semantics predicate both `runtime/` and `ironhold_cli` need, since the CLI can only reach
+`ironhold_core::schema::*`. Contrast `should_insert_nameplate` (`runtime/scene_manager/mod.rs`),
+which is CLI-unreachable and therefore duplicated as string literals in `validate.rs`. `is_flycam()`
+is fully adopted (2/2 sites); `is_player()` is adopted at 1 of ~10 — the rest still hand-roll
+`tags.iter().any(|t| t == "player")` in `validate.rs`, `action_executor.rs`, and `query.rs`.
+
+**`Action::Spawn` has ZERO flycam awareness** (`action_executor.rs` ~140-190, verified 2026-08-19) —
+this is the one path where a flycam-tagged prefab's `model:` is NOT dead. Dynamically spawning such
+a prefab does a normal `asset_catalog.models.get(prefab_def.model)` lookup: `model: ""` (every
+shipped flycam) → warn + no-op; a *resolvable* `model:` → the body spawns as an ordinary prop with
+**no camera at all**, and if the prefab is also `"player"`-tagged it gets a full `PlayerConfig`
+assembled. So the `flycam_model_never_renders` / `flycam_player_tag_conflict` validate errors' wording
+("never appear", "never spawn at all") is true for scene `entities:` placement, not universally —
+don't repeat "unconditionally" in docs or messages.
