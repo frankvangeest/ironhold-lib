@@ -21,7 +21,7 @@ use super::{
     PendingBehavior, BehaviorHandle, EntityFsmState, SpawnId, SpawnRegistry,
     PendingEntitySpawns, tag_spawned_entity, should_insert_nameplate,
     resolve_project_path,
-    scene_loader::{resolve_jump_velocity, ChildSpawnCtx, build_primitive_mesh, primitive_material, spawn_primitive_children},
+    scene_loader::{resolve_jump_velocity, warn_jump_cannot_clear_ground_sensor, warn_invalid_walkable_slope_limit, warn_negative_coyote_time_secs, ChildSpawnCtx, build_primitive_mesh, primitive_material, spawn_primitive_children},
 };
 use crate::runtime::actions::ActionQueue;
 use super::message_interpreter::rewrite_self;
@@ -995,6 +995,12 @@ fn spawn_player_entity_core(
     } else {
         jump_velocity
     };
+    warn_jump_cannot_clear_ground_sensor(&player_config.spawn_id, "jump", jump_velocity, cap_radius, mv.ground_cast_length);
+    if double_jump_enabled {
+        warn_jump_cannot_clear_ground_sensor(&player_config.spawn_id, "double_jump_height", double_jump_velocity, cap_radius, mv.ground_cast_length);
+    }
+    warn_invalid_walkable_slope_limit(&player_config.spawn_id, mv.max_walkable_slope_deg);
+    warn_negative_coyote_time_secs(&player_config.spawn_id, mv.coyote_time_secs);
     commands.entity(player_entity).insert((
         Name::new("Player"),
         // LevelEntity attached by tag_spawned_entity below (sole owner).
@@ -1011,7 +1017,12 @@ fn spawn_player_entity_core(
             max_jumps,
             collider_radius: cap_radius,
             ground_cast_length: mv.ground_cast_length,
+            max_walkable_slope_deg: mv.max_walkable_slope_deg,
+            coyote_time_secs: mv.coyote_time_secs,
+            coyote_ticks_remaining: 0,
             idle_drag: mv.idle_drag,
+            jump_air_grace: 0,
+            jump_liftoff_y: None,
         },
         LocomotionState::default(),
         AnimationRequests::default(),

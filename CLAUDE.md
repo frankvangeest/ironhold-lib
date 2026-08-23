@@ -83,7 +83,8 @@ cargo test -p ironhold_core --test '*' -- --nocapture
 # compiler crashes before anyone noticed):
 for t in fsm_tests entity_logic_tests scene_lifecycle_tests spawn_tests action_tests npc_tests \
          nameplate_tests ui_tests audio_tests stats_tests particle_tests ron_validation ron_lint \
-         ui_panel_blocker assets_schema_version_regression; do
+         ui_panel_blocker assets_schema_version_regression local_coop_tests camera_modes_tests \
+         gamepad_binding_tests player_slope_jump_tests prop_ground_veto_tests; do
   echo "=== $t ==="
   cargo test -p ironhold_core --test "$t" | tail -15
   [ "${PIPESTATUS[0]}" -ne 0 ] && { echo "FAILED: $t"; break; }

@@ -1,0 +1,18 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "bad_slope_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                movement: (
+                    max_walkable_slope_deg: 0.0,
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

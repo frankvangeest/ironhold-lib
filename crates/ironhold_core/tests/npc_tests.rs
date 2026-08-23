@@ -25,7 +25,7 @@ fn npc_aggro_test_player_controller() -> CharacterController {
         },
         is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
         double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
-        collider_radius: 0.4, ground_cast_length: 0.3, idle_drag: 0.8,
+        collider_radius: 0.4, ground_cast_length: 0.3, max_walkable_slope_deg: 45.0, coyote_time_secs: 0.1, coyote_ticks_remaining: 0, idle_drag: 0.8, jump_air_grace: 0, jump_liftoff_y: None,
     }
 }
 

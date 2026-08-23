@@ -1862,7 +1862,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: Primitive`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: Actor` / `kind: Prop`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
 | `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `Primitive` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
-| `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). |
+| `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). Ghost collider — excluded from player ground detection, so however large the radius, it can never be stood on and never suppresses grounding on the real floor beneath/near it. |
 | `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Field: `radius: f32`. |
 | `click_selectable` | `bool` | `false` | When `true`, left-clicking near this entity on screen sets it as `CurrentTarget` and emits `target.clicked:{id}`, `target.changed:{id}`, and `target.changed`. Selection is screen-space proximity (the entity nearest the cursor within ~70px), so it works for animated/skinned GLB characters as well as primitives. Clicking empty space clears the target. |
 | `targetable` | `bool` | `false` | When `true`, this entity participates in Tab-cycle targeting. Pressing Tab selects the nearest `targetable` entity within `target_range` units and emits `target.changed:{id}` and `target.changed`. |
@@ -2224,11 +2224,29 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `idle_drag` | `f32` | `0.8` | Velocity decay multiplier on the XZ plane per physics tick when no input is given (0 = instant stop, 1 = no friction). The player collider's own `Friction` (fixed at `0.15` for every player regardless of model source, not per-prefab-authorable) is the primary defense against downhill creep on sloped terrain; lowering `idle_drag` further bounds any residual creep but cannot zero it on its own. Applies in the air as well as on the ground (no grounded check) — a very low value also cancels horizontal momentum immediately after releasing input mid-jump |
 | `linear_damping` | `f32` | `0.5` | Rapier `linear_damping` on the player capsule rigid body |
 | `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the player capsule rigid body |
-| `ground_cast_length` | `f32` | `0.3` | Distance (metres) the ground-detection sphere is swept downward each frame — increase for uneven terrain or fast vertical movement |
+| `ground_cast_length` | `f32` | `0.3` | Distance (metres) the ground-detection sphere is swept downward each frame — increase for uneven terrain or fast vertical movement, but keep it well below your jump's apex height (see the note below) or the jump will stop cleanly detaching from the ground |
+| `max_walkable_slope_deg` | `f32` | `45.0` | Maximum surface angle (degrees from horizontal) treated as walkable "floor". A surface steeper than this never counts as grounded — the player cannot jump from it (falls back to `double_jump` if enabled, otherwise jump does nothing) and plays airborne/falling animation while on it. **This does not add slope physics** (no slowdown, no slide force) — any actual sliding is an incidental side effect of the player's fixed `Friction` (`0.15`), not something this field controls. Valid range `(0, 90]`; `90.0` disables the check entirely (falls back to pre-fix proximity-only grounding — every surface within `ground_cast_length` counts as ground regardless of angle). A value at/below `0` or above `90` is flagged by a console `warn!` and `ironhold_cli validate --strict` (`invalid_walkable_slope_limit`) — it silently breaks grounding rather than just mis-tuning it. **Known limitation:** a solid prop or wall tall enough to reach the ground sensor (roughly `collider_radius` above the feet) can also read as an unwalkable surface when the player stands pressed directly against it, silently blocking jump the same way a too-steep slope does — tracked in `planning/backlog.md` ▸ Bugs, not yet fixed |
+| `coyote_time_secs` | `f32` | `0.1` | How long (seconds) the player is still treated as grounded — for animation and *first*-jump availability only — after the ground sensor genuinely stops reporting contact. Absorbs single-tick ground-sensor noise from walking over uneven terrain/small ledges (a real-world "coyote time" buffer, the standard fix for false-positive falling states on bumpy geometry) and gives a brief forgiving jump window right after leaving a platform edge. Refreshed to the full value every tick the sensor genuinely reports ground. Does **not** affect `jumps_used` reset timing (still governed by the physically-derived grace/velocity/liftoff-height checks above) — a very large value cannot reintroduce the hover/pogo exploit those checks close, though it can make an ordinary jump's airborne/landing animation disappear entirely (not just delayed) if it's large enough relative to the jump's own airtime, since the sensor never gets a chance to report "ungrounded" before the player lands again — physics itself is unaffected either way. There is no fixed safe upper bound (it scales with how high the authored `jump` actually goes); no shipped project is anywhere near it at the 0.1s default. Also does **not** affect `double_jump`'s own availability — that always keys off the real sensor, never this buffer, so raising this value can't delay or block a second jump. `0.0` disables the buffer entirely (exact pre-coyote-time behavior). A negative value silently also means "disabled" (same as `0.0`) rather than doing anything with the negative number — flagged by a console `warn!` and `ironhold_cli validate --strict` (`negative_coyote_time_secs`) since it's far more likely a typo than an intentional way to spell "off" |
 
 **`JumpConfig` variants:**
 - `Fixed(height: <f32>)` — absolute world-space height in metres (e.g. `Fixed(height: 2.5)`)
 - `RelativeToHeight(percent: <f32>)` — fraction of the player's own height (e.g. `RelativeToHeight(percent: 100)`)
+
+> **A jump must clear `collider_radius + ground_cast_length`, or it re-arms on a delay instead of
+> instantly.** The ground-detection sensor (a downward sphere-cast from the player's feet) can
+> report "grounded" for as long as the player is within `collider_radius + ground_cast_length`
+> of a surface — so a jump whose apex (`v² / 2·gravity`, i.e. roughly the authored `jump` height)
+> doesn't clear that combined distance may never register a clean "left the ground" moment, on a
+> steep slope *or* on perfectly flat ground with a too-short `jump`/too-long `ground_cast_length`.
+> The engine still lets you jump again — a small internal fallback re-arms it — but that fallback
+> only kicks in on a short delay rather than the instant you actually land, and holding a
+> non-detaching-slope character in place can produce a slower, "stepped" re-jump cadence instead
+> of an ordinary responsive jump. `ironhold_cli validate --strict` (`jump_cannot_clear_ground_sensor`)
+> and a console warning both flag this at design time — if you see either, raise `jump` (or
+> `double_jump_height`) or lower `ground_cast_length` rather than relying on the fallback. This
+> only applies to slopes at or below `max_walkable_slope_deg` — anything steeper is never treated
+> as ground at all (see that field above), so it doesn't hit this fallback in the first place; it
+> just slides.
 
 **`CameraConfig` fields** (`components.camera` — omit the entire block to use engine defaults):
 
@@ -3228,7 +3246,7 @@ When `kind: Primitive`, no GLB model is loaded. Instead the runtime generates a 
 | `roughness` | `Option<f32>` | `0.5` | PBR perceptual roughness (0 = mirror, 1 = fully rough) |
 | `metallic` | `Option<f32>` | `0.0` | PBR metallic factor (0 = dielectric, 1 = full metal) |
 | `physics` | `bool` | `false` | Spawn a static `RigidBody::Fixed` Rapier collider (supported: Cuboid, Sphere, Cylinder) |
-| `sensor` | `bool` | `false` | Spawn a ghost `Sensor` collider that fires `GameEvent::Trigger` on overlap (takes precedence over `physics`; supported: same shapes) |
+| `sensor` | `bool` | `false` | Spawn a ghost `Sensor` collider that fires `GameEvent::Trigger` on overlap (takes precedence over `physics`; supported: same shapes). Excluded from player ground detection — can never be stood on and never suppresses grounding on the real floor beneath/near it. |
 
 **Example:**
 ```ron

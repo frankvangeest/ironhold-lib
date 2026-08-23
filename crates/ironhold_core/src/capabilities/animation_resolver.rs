@@ -20,6 +20,14 @@ pub struct AnimationPolicyComponent(pub AnimationPolicy);
 pub struct LocomotionState {
     pub moving: bool,
     pub running: bool,
+    /// A *debounced* grounded signal, not the raw ground-sensor reading — written by
+    /// `player_movement_system` from `raw_grounded` buffered through a short "coyote time" window
+    /// (`CharacterController.coyote_time_secs`/`coyote_ticks_remaining`) so brief single-tick
+    /// sensor noise (uneven terrain, a mesh seam) doesn't flicker consumers of this field. If you
+    /// need the true, un-debounced sensor result (e.g. a future step-offset/auto-step feature —
+    /// see `planning/backlog.md`), that's `player_movement_system`'s own `raw_grounded` local, not
+    /// this field — it is not currently exposed outside that function. See
+    /// `crates/ironhold_core/src/CLAUDE.md`'s "Coyote time" section for the full design.
     pub is_grounded: bool,
 }
 

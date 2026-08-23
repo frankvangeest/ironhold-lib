@@ -860,6 +860,115 @@ fn strict_checks(
                 });
             }
         }
+
+        // A player prefab's jump can never ballistically clear its own ground-detection
+        // sensor's combined reach (collider_radius + ground_cast_length) — the design-time
+        // counterpart of the scene-load `warn!` in `scene_loader.rs::
+        // warn_jump_cannot_clear_ground_sensor`. Not slope-specific: even on flat ground the
+        // ground-check can then never truthfully report "ungrounded", so the jump only re-arms
+        // via the bounded jump_air_grace fallback rather than a real landing — a real, working
+        // fallback, not a broken feature, which is why this is a `--strict`-only warning rather
+        // than a hard error (matching the runtime side, which is also a `warn!`, not a panic or
+        // rejected spawn). See `planning/features/uphill_jump_lock.md`. Resolves the jump-height
+        // target directly (mirroring `resolve_jump_velocity`'s height resolution) rather than
+        // round-tripping through velocity — `apex == height` by construction when the runtime
+        // derives velocity from a target height via `v = sqrt(2*g*h)`.
+        let mut keys: Vec<&String> = catalog.prefabs.keys().collect();
+        keys.sort();
+        for key in keys {
+            let def = &catalog.prefabs[key];
+            if !def.components.tags.iter().any(|t| t == "player") { continue }
+            let player_height = if def.kind == PrefabKind::Primitive {
+                def.primitive.as_ref().and_then(|p| p.height).unwrap_or(1.8)
+            } else {
+                def.components.movement.collider_height.unwrap_or(1.8)
+            };
+            let collider_radius = if def.kind == PrefabKind::Primitive {
+                def.primitive.as_ref().and_then(|p| p.radius).unwrap_or(0.4)
+            } else {
+                def.components.movement.collider_radius.unwrap_or(0.4)
+            };
+            let reach = collider_radius + def.components.movement.ground_cast_length;
+            let resolve_height = |config: Option<&ironhold_core::schema::catalog::JumpConfig>| -> f32 {
+                use ironhold_core::schema::catalog::JumpConfig;
+                match config {
+                    None => player_height,
+                    Some(JumpConfig::Fixed { height }) => *height,
+                    Some(JumpConfig::RelativeToHeight { percent }) => player_height * percent / 100.0,
+                }
+            };
+            let mut checks = vec![("jump", resolve_height(def.components.movement.jump.as_ref()))];
+            if def.components.movement.double_jump {
+                checks.push(("double_jump_height", resolve_height(def.components.movement.double_jump_height.as_ref())));
+            }
+            for (field_name, apex) in checks {
+                // `!(apex > reach)`, not `apex <= reach`: a negative/zero authored height (or a
+                // negative `RelativeToHeight` percent) makes the resolved velocity NaN at
+                // runtime, and `NaN <= reach` is false — silently missing the exact
+                // misconfiguration this check exists to catch.
+                if !(apex > reach) {
+                    warnings.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: `{}` gives a jump apex of {:.2}m, which does not \
+                             clear this player's ground-check reach of {:.2}m (collider_radius \
+                             {:.2}m + ground_cast_length {:.2}m) — the ground sensor may never \
+                             report \"ungrounded\" even on flat ground. Raise `{}` (or \
+                             `double_jump_height`) or lower `ground_cast_length`",
+                            key, field_name, apex, reach, collider_radius,
+                            def.components.movement.ground_cast_length, field_name
+                        ),
+                        kind: "jump_cannot_clear_ground_sensor",
+                    });
+                }
+            }
+
+            // `max_walkable_slope_deg` outside a sane range silently breaks grounding entirely —
+            // a value at or below 0 means no surface is ever walkable, and a player can then only
+            // jump if `double_jump` is enabled (the grounded branch of `can_jump` never applies).
+            // A value above 90 makes every surface (however overhanging) count as walkable, which
+            // is likely not intended either. `90.0` itself is meaningful and valid — it's the
+            // "disable this check, fall back to proximity-only grounding" escape hatch, matching
+            // this project's pre-fix behavior — so the valid range is `(0.0, 90.0]`, not `(0.0,
+            // 90.0)`. See `MovementConfig.max_walkable_slope_deg`'s doc comment.
+            let slope_limit = def.components.movement.max_walkable_slope_deg;
+            if !(slope_limit > 0.0 && slope_limit <= 90.0) {
+                warnings.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {:?}: `max_walkable_slope_deg` is {:.2}, outside the valid \
+                         (0, 90] range — a value at or below 0 means no surface is ever walkable \
+                         (jump only works via double_jump, if enabled at all); above 90 makes \
+                         every surface, however overhanging, count as walkable",
+                        key, slope_limit
+                    ),
+                    kind: "invalid_walkable_slope_limit",
+                });
+            }
+
+            // Unlike `max_walkable_slope_deg`, `coyote_time_secs` has no invalid range that breaks
+            // grounding outright — any non-negative value just makes the debounce buffer bigger or
+            // smaller (it does have a practical, jump-height-dependent upper bound where a large
+            // enough value can mask an entire jump's animation, but that's not checked here — see
+            // `planning/claude_suggestions.md`). A negative value is the one case worth flagging
+            // unconditionally: it silently launders to a zero-tick buffer (same as `0.0`) rather
+            // than doing anything with the negative value, which is far more likely a sign-flip
+            // typo than an intentional way to spell "disabled".
+            let coyote_time_secs = def.components.movement.coyote_time_secs;
+            if coyote_time_secs < 0.0 {
+                warnings.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {:?}: `coyote_time_secs` is {:.3}, which is negative — this \
+                         silently disables the coyote-time buffer entirely (same as `0.0`) rather \
+                         than doing anything with the negative value. If you meant to disable it, \
+                         use `0.0` instead",
+                        key, coyote_time_secs
+                    ),
+                    kind: "negative_coyote_time_secs",
+                });
+            }
+        }
     }
     if let Some(catalog) = asset_catalog {
         let mut effect_keys: Vec<&String> = catalog.effects.keys().collect();

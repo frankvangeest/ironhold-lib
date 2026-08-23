@@ -438,7 +438,7 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 | Capability | PrefabDef field | Emitted event | Notes |
 |---|---|---|---|
 | `CharacterController` | `components.movement` | `player.jumped` | Emitted on every jump; bind sound/effect in `state_machine.ron` |
-| `TriggerZone` | `trigger_zone: ( radius: 2.0 )` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate` |
+| `TriggerZone` | `trigger_zone: ( radius: 2.0 )` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate`. Ghost collider — excluded from player ground detection, so it can never be stood on and never suppresses grounding on the real floor beneath/near it |
 | `Interactable` | `interactable: ( radius: 2.5 )` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
 
 ### Respawn pattern (hide + delayed re-emit)

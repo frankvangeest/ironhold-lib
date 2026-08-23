@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "bad_coyote_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+)
