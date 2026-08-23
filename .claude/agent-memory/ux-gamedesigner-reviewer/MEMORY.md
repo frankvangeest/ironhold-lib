@@ -40,4 +40,5 @@
 - [material override vs children](project_material_override_vs_children.md) — top-level `material:` + `children:` precedence is undocumented and had ZERO shipped examples before room10; prefer per-child colours
 - [screen_offset stacking pattern](project_screen_offset_stacking.md) — shared world `offset` + pixel `screen_offset`; defaults 2.4/2.5/2.8 mismatch; 72px/m is a migration artifact, not a rule
 - [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
+- [Jump re-arm coupling](project_jump_rearm_coupling.md) — jumps re-arm only on a ground-cast landing edge; jump height + collider radius + ground_cast_length form one undocumented invariant
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys

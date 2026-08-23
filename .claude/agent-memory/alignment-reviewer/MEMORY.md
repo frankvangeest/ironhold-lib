@@ -34,4 +34,5 @@
 - [label_depth_scale pattern](label_depth_scale_pattern.md) — TextFont-vs-anchor scaling branch, 4 anchor sites, per-widget-override matrix, no max_scale, zero CLI validation
 - [WorldLabel screen_offset pattern](world_label_screen_offset_pattern.md) — pixel-space widget stacking; which sites expose it vs hardcode ZERO; scene-wide nameplate offset is the remaining gap
 - [Flycam spectator mode pattern](flycam_spectator_mode_pattern.md) — SuppressPlayerCameras as derived-not-authored state (reuse this); early-return hides split/party warns; no RON un-do for suppression
+- [Derived physics constant pattern](derived_physics_constant_pattern.md) — three-tier derive/expose/invariant rule (jump_air_grace, slope+coyote knobs, sensors-are-never-floor); single CharacterController site; can_jump branch-exclusivity footgun
 - [Diagnostic-only feature pattern](diagnostic_only_feature_pattern.md) — runtime-warn + CLI-error twin; prefab-catalog vs per-scene scoping rule; PrefabDef tag helpers moved to schema/ for CLI reach

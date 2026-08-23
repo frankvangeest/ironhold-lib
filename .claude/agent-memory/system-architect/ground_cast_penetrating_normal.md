@@ -1,0 +1,117 @@
+---
+name: ground-cast-penetrating-normal
+description: The player ground shape-cast's normal1 is an EPA minimum-translation vector, not a surface normal (fixed by lifting the cast origin by collider_radius); plus the second-order consequence — cast_shape returns ONE nearest hit, so once that hit's normal became load-bearing, any collider near the feet can veto the real floor (sensors fixed via exclude_sensors; solid walls still can).
+metadata:
+  type: project
+---
+
+Measured during the third review round of `uphill_jump_lock.md` (2026-08-21), with a throwaway
+probe test against real Rapier. **Any future feature that reads a normal, contact point, or
+`ShapeCastHitDetails` out of `player_movement_system`'s ground cast must account for this.**
+
+**The cast always starts penetrating.** `spawn_player_entity_core` builds the player collider as
+`Collider::compound([(Vec3::Y * (cap_half + cap_radius), .., capsule_y(cap_half, cap_radius))])`
+— the capsule bottom sits at the entity origin, so `feet_pos = global_transform.translation()` is
+at the contact surface. The ground cast sweeps `Collider::ball(collider_radius)` *centered at
+that origin*, so at rest the query ball is buried ~`collider_radius` (0.4 m at defaults) inside
+the ground. Status is therefore `PenetratingOrWithinTargetDist` with `time_of_impact == 0.0`
+essentially always while standing or walking.
+
+**Consequence: `normal1` is not a surface normal in that state.** With
+`compute_impact_geometry_on_penetration: true`, parry takes the penetration branch
+(`parry3d/src/query/shape_cast/shape_cast_support_map_support_map.rs:~36`) and returns
+`contact_support_map_support_map(.., prediction = Real::MAX)`'s normal — a GJK/EPA **minimum
+translation vector** (shortest way to push the shapes apart), not the surface's geometric normal.
+Those coincide only when the shortest exit happens to be "straight up", i.e. for a **thick convex
+solid** (a `Collider::cuboid` ground plate). They do not coincide for a **zero-thickness
+`TriMesh`**, where the shortest exit is sideways toward the nearest triangle edge (edge distance
+<= ~0.1 m on terrain_demo's 0.5 m cells, vs 0.4 m for the vertical exit) or straight down.
+
+Measured at a settled capsule pose, `max_walkable_slope_deg = 45`:
+
+| ground | true angle | origin = feet (penetrating) | origin = feet + collider_radius |
+|---|---|---|---|
+| TriMesh 0.5-cell | 0° | **90.7° → unwalkable** | 0.0° ✓ |
+| TriMesh 0.5-cell | 20° | **64.4° → unwalkable** | 20.0° ✓ |
+| TriMesh 0.5-cell | 40° | 9.2° | 40.0° ✓ |
+| TriMesh 0.5-cell | 60° | **17.0° → walkable** | 60.0° ✓ |
+| cuboid (solid) | 0/20/40/60° | 0/20/40/60° ✓ | 0/20/40/60° ✓ |
+
+So on a TriMesh the reported angle has *no monotonic relationship* to the real slope — it's
+effectively noise that also flickers with sub-millimetre motion.
+
+**The fix that works** (verified): lift the cast origin to `feet_pos + Vec3::Y * collider_radius`
+and set `max_time_of_impact = collider_radius + ground_cast_length`. The ball then starts clear
+of the surface, so total reach below the feet is unchanged (`collider_radius +
+ground_cast_length`, still 0.7 m at defaults — see [[ground_detection_jump_invariants]]) and the
+normal becomes the true face normal. Keep
+`compute_impact_geometry_on_penetration: true` even then: at rest the lifted ball still grazes
+~1 mm into the surface (`PenetratingOrWithinTargetDist`, toi 0), but with the ball *center* ~0.4 m
+above the surface EPA resolves upward correctly. With a lifted origin, a sphere-cast landing on a
+triangle *edge* returns a blend of the two adjacent face normals, so walkable/unwalkable
+transitions at a seam are smooth — per-triangle flicker is not a concern.
+
+**Where TriMesh ground exists:** `capabilities/terrain.rs:111` is the only
+`Collider::from_bevy_mesh(.., ComputedColliderShape::TriMesh(..))` site in the crate, but it
+covers all terrain. Scenes with real terrain: `quick_scene/scenes/main.scene.ron` (has a real
+`player_warrior` — the flagship gallery project), `terrain_demo/scenes/terrain.scene.ron` (flycam
+only, no player), `integration_tests/scenes/terrain_test.scene.ron`.
+
+**Test-coverage trap that hid this:** every case in `tests/player_slope_jump_tests.rs` uses
+`Collider::cuboid(60.0, 0.25, 60.0)` — the one geometry family for which the penetrating normal is
+accidentally correct. A slope/grounding test that only uses a solid cuboid ground proves nothing
+about terrain. Always add a trimesh-ground case (a flat grid trimesh must report grounded; a 60°
+grid trimesh must not).
+
+**The bigger structural consequence (found by playtest 2026-08-23, same feature): `cast_shape`
+returns exactly ONE hit — the nearest.** Before the walkable-slope gate, `is_grounded =
+cast_shape(..).is_some()`, so *which* collider answered never mattered. The gate made that single
+hit's normal load-bearing, which silently promoted every collider near the feet into a potential
+floor **veto** — a nearer/penetrating hit with a near-horizontal normal permanently masks the real
+floor underneath. Two instances:
+
+- **Sensors** (worst case — they penetrate *by design*, so `toi == 0` always beats the floor's
+  small-but-nonzero toi). Fixed with `.exclude_sensors()` on the ground `QueryFilter`. This is a
+  *schema-invariant* fix, not a workaround: `PrimitiveParams.sensor` is documented as "no physical
+  presence" and is mutually exclusive with `physics` (`schema/catalog.rs:~1506`), so a sensor can
+  never be legitimate floor. `capabilities/npc.rs`'s LOS raycast already did this — core has only
+  two physics queries and now both exclude sensors, so this is the crate-wide rule.
+  Don't reach for `CollisionGroups` instead: nothing in the schema or engine uses collision/solver
+  groups today, and moving a physics invariant into designer-authored membership bits turns a
+  mis-authored group into "player never grounded".
+- **Solid geometry** (still unfixed as of 2026-08-23): a prop/wall whose side face reaches the
+  lifted cast ball's centre height (`feet + collider_radius + 0.01`) vetoes the floor when the
+  player is pressed against it. Needs real contact, not proximity, so the window is narrow — but
+  it is a **regression vs pre-gate behaviour**, and it is not cosmetic: after coyote expires,
+  `raw_grounded == false` sends `can_jump` down the airborne branch, which is `false` for every
+  shipped project (double jump defaults off) ⇒ **jump silently dies while pressed against a wall**.
+  Ready-made repro: `local_coop_demo`'s portal frame posts (`0.30 × 2.80 × 0.30` cuboids).
+  Cheapest candidate fix (no extra query): `ShapeCastHitDetails.witness1` is already computed and
+  is **world space** for `cast_shape` (rapier3d-0.31 `pipeline/query_pipeline.rs:~496` states
+  witness/normal 1 are world-space) — only apply the walkability veto when the contact point is
+  at/below the feet. Fallback: one bounded `exclude_collider` re-cast. The "read the full contact
+  manifold" fix in `claude_suggestions.md` is the general answer but much larger.
+
+**`QueryFilter` cost:** `QueryFilterFlags::test` (rapier3d-0.31 `pipeline/query_pipeline.rs:601`)
+is a bitflag + `collider.is_sensor()` bool per *candidate collider*, evaluated before narrow phase
+— so `.exclude_sensors()` is strictly cost-*negative* here: it removes sensor leaves from the
+`compute_impact_geometry_on_penetration` GJK+EPA path (which allocates per call, see below).
+
+**API facts worth not re-deriving** (bevy_rapier3d 0.33 / rapier3d 0.31 / parry3d 0.25.3):
+- `ShapeCastHitDetails::normal1` *is* the hit collider's outward normal *in world space* for
+  `RapierContext::cast_shape`. The struct's own doc comment (`bevy_rapier3d/src/geometry/mod.rs:101`,
+  "local-space outward normal on the first shape") is copied verbatim from parry and is
+  misleading here; the method doc (`src/plugin/context/mod.rs:478`) is authoritative. Mechanism:
+  rapier passes its `QueryPipeline` as parry's *composite shape 1*
+  (`rapier3d/src/pipeline/query_pipeline.rs:~489`), and each leaf hit is mapped back with
+  `hit.transform1_by(part_pose1)`
+  (`parry3d/src/query/shape_cast/shape_cast_composite_shape_shape.rs:53`) into the composite's
+  frame = world space.
+- `compute_impact_geometry_on_penetration: true` is **not purely additive**: the penetration
+  branch ends in `contact_support_map_support_map(..)?` on an `Option`, so an EPA failure
+  (`GJKResult::NoIntersection`) turns what would have been `Some(hit)` into `None` — it can flip a
+  hit into a miss, not just populate `details`. It also runs a second full GJK+EPA query (with a
+  per-call `EPA::new()` allocation) per penetrating candidate leaf — on a TriMesh that is per
+  candidate triangle, not once per cast.
+- `ShapeCastStatus` semantics are unaffected by the flag; `Failed` maps `details` to `None`
+  regardless (`bevy_rapier3d/src/geometry/mod.rs:113`).
