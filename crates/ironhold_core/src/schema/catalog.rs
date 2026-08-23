@@ -1386,6 +1386,42 @@ pub struct MovementConfig {
     /// Decrease for flat terrain; increase for uneven terrain or fast vertical movement. Default: 0.3.
     #[serde(default = "default_ground_cast_length")]
     pub ground_cast_length: f32,
+    /// Maximum surface angle (degrees, from horizontal) the ground sensor treats as walkable
+    /// "floor". A surface steeper than this is never counted as grounded — the player cannot
+    /// jump from it (only `double_jump`, if enabled) and plays airborne/falling animation while
+    /// on it — matching how Unity's `CharacterController.slopeLimit`, Unreal's
+    /// `WalkableFloorAngle`, and Godot's `floor_max_angle` all define "floor" by contact-normal
+    /// angle rather than raw proximity. **This does not add slope physics** — no slowdown, no
+    /// slide force; movement (`player_movement_system`'s XZ velocity block) doesn't consult
+    /// `is_grounded` at all, so a player still walks up an "unwalkable" incline at full speed,
+    /// just permanently classified as airborne while doing so. This is what actually
+    /// distinguishes a genuinely steep, unwalkable incline (where continuous ground-sensor
+    /// contact while sliding would otherwise let jump silently re-arm every tick — see
+    /// `planning/features/uphill_jump_lock.md`) from an ordinary walkable hill (where continuous
+    /// contact while climbing/descending is correct, intended grounding). Valid range `(0, 90]`;
+    /// `90.0` disables this check entirely (every hit counts as ground regardless of angle,
+    /// this project's pre-fix behavior). A value at/below `0` or above `90` silently breaks
+    /// grounding rather than just mis-tuning it — flagged by `warn_invalid_walkable_slope_limit`
+    /// and `ironhold_cli validate --strict`'s `invalid_walkable_slope_limit` check. Default: 45.0.
+    #[serde(default = "default_max_walkable_slope_deg")]
+    pub max_walkable_slope_deg: f32,
+    /// Seconds the ground sensor keeps reporting "grounded" after it first stops finding a
+    /// walkable surface, before actually switching to airborne — commonly called "coyote time".
+    /// Two purposes at once: (1) it debounces single-tick sensor noise from uneven terrain (a
+    /// small rock, a mesh seam, a decorative prop's edge) that would otherwise flicker the
+    /// falling animation on and off while just walking over mildly bumpy ground; (2) it's the
+    /// same well-known jump-forgiveness feature most action/platformer character controllers
+    /// implement deliberately (a jump pressed just after walking off a ledge still fires). Only
+    /// delays the grounded→airborne transition — becoming grounded again is always immediate, so
+    /// landing responsiveness (`planning/features/uphill_jump_lock.md`) is unaffected. Does not
+    /// affect `double_jump` availability (always keyed off the real sensor, never this buffer) or
+    /// the `jumps_used` reset (governed by the separate grace/velocity/liftoff-height mechanism) —
+    /// only the *first*-jump-after-leaving-ground forgiveness and the falling animation. `0.0`
+    /// disables the buffer entirely; a negative value also means "disabled" but is flagged (likely
+    /// a typo) — see `warn_negative_coyote_time_secs`. Default: 0.1 (100ms, a typical value —
+    /// Celeste uses roughly this).
+    #[serde(default = "default_coyote_time_secs")]
+    pub coyote_time_secs: f32,
 }
 
 impl Default for MovementConfig {
@@ -1403,6 +1439,8 @@ impl Default for MovementConfig {
             linear_damping: default_linear_damping(),
             angular_damping: default_angular_damping(),
             ground_cast_length: default_ground_cast_length(),
+            max_walkable_slope_deg: default_max_walkable_slope_deg(),
+            coyote_time_secs: default_coyote_time_secs(),
         }
     }
 }
@@ -1412,7 +1450,9 @@ fn default_run_speed() -> f32 { 10.0 }
 fn default_idle_drag() -> f32 { 0.8 }
 fn default_linear_damping() -> f32 { 0.5 }
 fn default_angular_damping() -> f32 { 0.5 }
+fn default_max_walkable_slope_deg() -> f32 { 45.0 }
 fn default_ground_cast_length() -> f32 { 0.3 }
+fn default_coyote_time_secs() -> f32 { 0.1 }
 
 /// Jump height expressed either as an absolute world-space value or as a fraction
 /// of the entity's own height.

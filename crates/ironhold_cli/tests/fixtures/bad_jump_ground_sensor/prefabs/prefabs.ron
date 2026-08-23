@@ -1,0 +1,18 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "bad_jump_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                movement: (
+                    jump: Fixed(height: 0.2),
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

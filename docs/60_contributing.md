@@ -253,6 +253,9 @@ ironhold --json validate assets/projects/quick_scene/
 - Effect keys in `assets.ron` never used in any `SpawnEffect` action
 - Audio keys in `assets.ron` never used in any `PlaySound` or `PlayMusicLoop` action
 - Decal keys in `assets.ron` never used in any `ProjectDecal` action
+- A player prefab's `jump`/`double_jump_height` apex does not clear `collider_radius + ground_cast_length` (`jump_cannot_clear_ground_sensor`) — see the `MovementConfig` note in `docs/20_data_formats.md`
+- A player prefab's `max_walkable_slope_deg` is outside the valid `(0, 90]` range (`invalid_walkable_slope_limit`) — see the `MovementConfig` note in `docs/20_data_formats.md`
+- A player prefab's `coyote_time_secs` is negative (`negative_coyote_time_secs`) — silently disables the coyote-time buffer (same as `0.0`), most likely a typo — see the `MovementConfig` note in `docs/20_data_formats.md`
 
 ```bash
 ironhold validate --strict assets/projects/particles_demo/

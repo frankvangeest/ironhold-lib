@@ -2755,7 +2755,10 @@ fn resolve_label_depth_scale(
 // ─── Jump velocity helper ─────────────────────────────────────────────────────
 
 /// Standard gravitational acceleration (m/s²), matching Rapier's default.
-const GRAVITY: f32 = 9.81;
+/// `pub(crate)` so `capabilities/player.rs`'s jump air-grace window (uphill_jump_lock fix) can
+/// derive its detach-time estimate from the same constant `resolve_jump_velocity` uses below —
+/// keeping the two formulas from silently drifting apart.
+pub(crate) const GRAVITY: f32 = 9.81;
 
 fn ui_justify(align: UiTextAlign) -> JustifyContent {
     match align {
@@ -2775,6 +2778,81 @@ pub(super) fn resolve_jump_velocity(config: Option<&crate::schema::catalog::Jump
         Some(JumpConfig::RelativeToHeight { percent }) => player_height * percent / 100.0,
     };
     (2.0 * GRAVITY * h).sqrt()
+}
+
+/// Warns when a player prefab's jump can never ballistically clear its own ground-detection
+/// sensor's combined reach (`collider_radius + ground_cast_length`) — the non-slope-specific
+/// instance of the "uphill jump lock" bug class (`planning/features/uphill_jump_lock.md`): even
+/// on perfectly flat ground, `player_movement_system`'s downward shape-cast can then never
+/// truthfully report "ungrounded", so the jump-reset relies entirely on the bounded
+/// `jump_air_grace` fallback (capping at one full jump's airborne duration) rather than a real
+/// landing. Not a hard error — the grace fallback keeps this from permanently locking — but worth
+/// flagging so a designer can fix the root authoring mismatch (raise `jump`/`double_jump_height`,
+/// or lower `ground_cast_length`) instead of relying on the fallback.
+pub(super) fn warn_jump_cannot_clear_ground_sensor(
+    spawn_id: &str,
+    field_name: &str,
+    jump_velocity: f32,
+    collider_radius: f32,
+    ground_cast_length: f32,
+) {
+    let reach = collider_radius + ground_cast_length;
+    let apex = jump_velocity * jump_velocity / (2.0 * GRAVITY);
+    // `!(apex > reach)`, not `apex <= reach`: a negative/zero authored jump height (or a
+    // negative `RelativeToHeight` percent) makes `resolve_jump_velocity`'s `sqrt` produce NaN,
+    // and `NaN <= reach` is false — silently skipping the exact misconfiguration this check
+    // exists to catch. `!(NaN > reach)` is true, correctly flagging it.
+    if !(apex > reach) {
+        warn!(
+            "Player '{}': `{}` gives a jump apex of {:.2}m, which does not clear this player's \
+             ground-check reach of {:.2}m (collider_radius {:.2}m + ground_cast_length {:.2}m) — \
+             the ground sensor may never report \"ungrounded\" even on flat ground, so the jump \
+             will only re-arm via a bounded fallback rather than a real landing. Raise `{}` \
+             (or `double_jump_height`) or lower `ground_cast_length` to fix this cleanly.",
+            spawn_id, field_name, apex, reach, collider_radius, ground_cast_length, field_name
+        );
+    }
+}
+
+/// Warns when a player prefab's `max_walkable_slope_deg` is outside the valid `(0, 90]` range,
+/// which silently breaks grounding rather than just mis-tuning it: at or below `0`, no surface is
+/// ever walkable (jump then only works via `double_jump`, if enabled at all); above `90`, every
+/// surface — however overhanging — counts as walkable. `90.0` itself is the valid, meaningful
+/// "disable this check" escape hatch (falls back to proximity-only grounding, this project's
+/// pre-fix behavior), not an error. See `MovementConfig.max_walkable_slope_deg`'s doc comment and
+/// `planning/features/uphill_jump_lock.md`.
+pub(super) fn warn_invalid_walkable_slope_limit(spawn_id: &str, max_walkable_slope_deg: f32) {
+    if !(max_walkable_slope_deg > 0.0 && max_walkable_slope_deg <= 90.0) {
+        warn!(
+            "Player '{}': `max_walkable_slope_deg` is {:.2}, outside the valid (0, 90] range — a \
+             value at or below 0 means no surface is ever walkable (jump only works via \
+             double_jump, if enabled at all); above 90 makes every surface, however overhanging, \
+             count as walkable.",
+            spawn_id, max_walkable_slope_deg
+        );
+    }
+}
+
+/// Unlike `max_walkable_slope_deg`, `coyote_time_secs` has no invalid *range* that breaks
+/// grounding outright — any non-negative value just makes the debounce buffer bigger or smaller
+/// (see `MovementConfig::coyote_time_secs`'s doc comment). It does have a practical upper bound,
+/// though not a fixed one: a value large enough relative to a jump's own airtime (roughly
+/// `2 * jump_velocity / GRAVITY`) can mask the entire jump/fall, suppressing the airborne animation
+/// and `jump_exit` clip — this is jump-height-dependent, so it isn't checked here (no shipped
+/// project is anywhere near it at the 0.1s default; see `planning/claude_suggestions.md`). A
+/// negative value is the one case worth flagging unconditionally: it silently launders to a
+/// zero-tick buffer (`coyote_ticks()`'s `f32::max` clamp in `capabilities/player.rs`), which is
+/// very likely not what a designer typing a negative number intended — most plausibly a sign-flip
+/// typo rather than a deliberate "disable" (`0.0` already means that unambiguously).
+pub(super) fn warn_negative_coyote_time_secs(spawn_id: &str, coyote_time_secs: f32) {
+    if coyote_time_secs < 0.0 {
+        warn!(
+            "Player '{}': `coyote_time_secs` is {:.3}, which is negative — this silently disables \
+             the coyote-time buffer entirely (same as `0.0`) rather than doing anything with the \
+             negative value. If you meant to disable it, use `0.0` instead.",
+            spawn_id, coyote_time_secs
+        );
+    }
 }
 
 // ─── Nested-prefab child spawner ──────────────────────────────────────────────

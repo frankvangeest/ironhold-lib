@@ -423,6 +423,197 @@ See `docs/25_custom_shaders.md` for the full shader authoring guide.
 ## Physics & movement must use `FixedUpdate`
 All player movement, physics processing, and camera-follow logic must run in `FixedUpdate`. Using `Update` for physics-driven movement causes stuttering.
 
+### Jump reset cannot rely on a ground-check edge (`planning/features/uphill_jump_lock.md`)
+
+`player_movement_system`'s ground detection (`capabilities/player.rs`) is a fixed-reach downward
+shape-cast (`collider_radius + ground_cast_length`), re-evaluated fresh every tick — **it cannot be
+assumed to ever report `is_grounded = false`**. On a slope steep enough (~12°+ at shipped
+defaults), the incline's rising surface closes the vertical gap a jump's Y-velocity opens *faster
+than gravity does*, so the cast keeps reporting contact on every single tick, forever. The same
+failure is reachable on perfectly flat ground too, with no slope involved: any player prefab whose
+`jump`/`double_jump_height` apex doesn't clear `collider_radius + ground_cast_length` hits the
+identical lock (a scene-load `warn!` — `scene_loader.rs::warn_jump_cannot_clear_ground_sensor` —
+plus a matching `ironhold_cli validate` error, `jump_cannot_clear_ground_sensor`, flag this
+misconfiguration).
+
+**A slope-normal walkability gate is the first line of defense — added after real playtesting
+found the mirror-image bug: an unbounded re-jump exploit while falling/sliding down a steep
+decline.** The ground shape-cast's hit (`ShapeCastHit::details.normal1`, requesting
+`compute_impact_geometry_on_penetration: true` in `ShapeCastOptions` so the normal is populated
+even for the common near-zero-clearance resting case) is checked against
+`CharacterController.max_walkable_slope_deg` (from `MovementConfig`, default 45°, matching Unity's
+`CharacterController.slopeLimit` / Unreal's `WalkableFloorAngle` / Godot's `floor_max_angle`) —
+**a surface steeper than that never counts as grounded at all**, regardless of proximity. Root
+cause of the downhill bug: on any incline the sensor can't cleanly detach from (whether ascending
+*or* descending), `velocity.linvel.y` is trivially `<= 0.0` for the entire descending portion, so
+without this gate the tick/velocity/height reset logic below would re-arm `jumps_used` on *every*
+tick once grace expires — an unbounded re-jump exploit that gets worse the longer the fall/slide
+continues, exactly mirroring the original uphill lock but in the opposite direction. The gate fixes
+this at the source rather than special-casing it in the reset logic: an unwalkably steep surface
+is simply never "ground," so the character is correctly airborne/sliding on it and the whole reset
+mechanism below never engages. **This does not replace the grace/velocity/liftoff-height mechanism
+below for *walkable* slopes** (≤ `max_walkable_slope_deg`, e.g. an ordinary 12–30° hill) — a
+walkable incline's contact is genuinely correct, continuous grounding while climbing or
+descending it, so the sensor still can't cleanly detach there, and the bounded "pogo" cadence
+tradeoff documented further down still applies to that range. See
+`player_slope_jump_tests.rs::unwalkable_slope_does_not_allow_endless_rejump_while_sliding` and
+`::walkable_slope_pogo_cadence_is_unaffected_by_the_slope_limit_check`.
+
+Because of this, `jumps_used` is **not** reset on a `!was_grounded && is_grounded` edge (an
+edge-triggered reset can starve permanently if the edge never fires). The landing *animation*
+request (`jump_exit`) still fires on that real edge, unchanged from before this fix — a plain
+fall (e.g. walking off a ledge, `jumps_used` already `0`) must still play the landing clip. The
+`jumps_used` **reset** is a separate, level-gated check, re-evaluated every tick:
+
+1. `CharacterController.jump_air_grace` — a `FixedUpdate` tick countdown, set at jump-fire time
+   from `jump_air_grace_ticks()`, derived analytically from the jump's own velocity, `GRAVITY`
+   (`scene_loader.rs`, `pub(crate)` specifically so this formula can share it), and the
+   controller's own `collider_radius`/`ground_cast_length` — never a separate hand-tuned constant
+   that could drift out of sync with a project's authored values. While `> 0`, a grounded reading
+   isn't even considered as a possible landing.
+2. Once grace hits `0`, the reset additionally requires **either** `velocity.linvel.y <= 0.0`
+   (the jump's ballistic ascent has genuinely ended) **or** the entity having risen at least
+   `collider_radius + ground_cast_length` above `CharacterController.jump_liftoff_y` (its Y
+   position at jump-fire time) — proof the sensor's overlap with the liftoff pose can no longer
+   explain a grounded reading.
+
+**Both of those two extra checks are physical quantities, not clock-derived — this is deliberate,
+not redundant with the tick counter.** `jump_air_grace` alone is not sufficient: it's counted in
+`FixedUpdate` ticks, but Rapier's own physics stepping runs on `TimestepMode::Variable` in
+`PostUpdate` (`capabilities/physics.rs`) — a *different*, framerate-coupled clock, not guaranteed
+to advance in lockstep with `FixedUpdate`'s tick count. At a low enough real framerate (or one
+`Time<Virtual>::max_delta`-clamped hitch), real elapsed physics time can lag behind what the tick
+count assumes, so a tick-only grace could expire while the body is still genuinely rising — see
+`player_slope_jump_tests.rs::grace_expiry_does_not_reset_early_when_real_physics_time_lags_ticks`,
+which decouples the two clocks on purpose (`physics_dt != 1.0/64.0`) to prove this. The two checks
+serve different terrain: `velocity.linvel.y <= 0.0` covers a jump whose ascent has genuinely ended
+(flat ground, or a jump too short to ever clear the sensor); the liftoff-height check covers a
+*continuously climbing* slope, where the contact solver keeps `linvel.y` pinned positive (matching
+the climb rate) for as long as the player keeps walking uphill — `linvel.y <= 0.0` alone would
+never fire there, but net height risen since the jump still grows the whole time.
+`CharacterController.jump_liftoff_y`'s only clearing path is a successful reset; if a future
+change ever removes the `velocity.linvel.y <= 0.0` half of that `||`, double check nothing can
+leave a stale `jump_liftoff_y` behind after a non-jump position change (e.g. a teleport) — today
+this is benign only because a teleport also zeroes `Velocity`, which the surviving `<= 0.0` clause
+happens to catch.
+
+**The `jumps_used`/`jump_liftoff_y` reset logic above intentionally never reads the coyote-buffered
+`LocomotionState.is_grounded` — it reads a separate `raw_grounded` local, computed identically to
+before coyote-time existed, in both the Rapier-context and no-physics branches.** An earlier version
+of this fix (pre-coyote-time) forced `is_grounded = false` for a fixed window instead — rejected in
+plan review because (1) `can_jump`'s airborne branch (`double_jump_enabled && jumps_used <
+max_jumps`) would then go live immediately after a ground jump, letting a fast double-tap consume
+the second jump at ground level instead of at a real airborne height, and (2) a fixed window's
+safety margin is a function of authorable content (`jump` height, `collider_radius`,
+`ground_cast_length`) and no single constant is safe across every project's authored values. If
+touching this system again: `animation_resolver.rs`'s jump/land clip selection and `can_jump`'s
+branch selection may legitimately read the coyote-buffered `loco.is_grounded` (that's the whole
+point of the buffer — smoothing *feel*), but the `jumps_used` reset's grace/velocity/liftoff-height
+gate must keep reading `raw_grounded`, never the buffered value.
+
+**Real bug hit while adding coyote-time, kept here as the concrete cautionary example:** feeding the
+coyote-buffered `loco.is_grounded` into the reset condition broke
+`grace_expiry_does_not_reset_early_when_real_physics_time_lags_ticks` — `jumps_used` reset to `0`
+while `linvel.y` was still clearly positive (~4.16). Root cause: right at the tick the sensor first
+genuinely detaches, the coyote buffer keeps `loco.is_grounded` artificially `true` for several more
+ticks; if the liftoff-height threshold (`risen_since_liftoff >= ground_sensor_reach()`) also happens
+to cross in that same window — a check specifically designed to fire *while still rising*, for the
+continuously-climbing-slope case — the reset fires prematurely on an ordinary flat-ground jump
+nowhere near any slope. Two mechanisms, each correct for its own purpose, reintroduced exactly the
+bug the other one already fixed. Fixed by the `raw_grounded`/`loco.is_grounded` split described
+above — a debounce that smooths one consumer's *feel* must never leak into another consumer's
+*correctness*-critical timing check.
+
+### Coyote time — debounced grounding for uneven terrain (`planning/features/uphill_jump_lock.md`)
+
+Playtesting `3rd_person_game_demo` surfaced a third, distinct problem from the two above: walking
+over ordinary uneven terrain (bumps, small ledges, barely-there slope) made the character flicker
+into the falling state constantly, even though no jump-lock or hover-exploit logic was involved —
+just single-tick gaps in the raw ground shape-cast as the character crossed terrain irregularities
+too small to be a real "leave the ground" event. Other engines solve exactly this with a debounce
+buffer, universally nicknamed **coyote time** (Wile E. Coyote not falling until he looks down):
+delay the grounded→airborne *transition* by a short window, refreshed every tick the sensor
+genuinely reports contact.
+
+`CharacterController.coyote_ticks_remaining` (a `FixedUpdate` tick countdown, refreshed to
+`coyote_ticks(controller.coyote_time_secs)` every tick `raw_grounded` is `true`) buffers
+`LocomotionState.is_grounded` — **and only that**: `raw_grounded` still exists as its own local,
+computed once per tick before the buffer is applied, and is what the `jumps_used` reset logic reads
+(see above). The buffer widens two things on purpose: how long the falling animation is suppressed
+after a real-but-brief loss of contact, and how late a jump input can land after leaving a platform
+edge and still fire (the classic "coyote time" forgiving-jump-timing benefit, not just an
+anti-flicker fix). `MovementConfig.coyote_time_secs` (default `0.1`s) is a real designer-facing
+tuning field, unlike `jump_air_grace` — see Q2 in the feature plan for why `jump_air_grace` is
+deliberately *not* authorable while this is. `0.0`/negative both disable the buffer (negative is
+flagged by `warn_negative_coyote_time_secs` + `ironhold_cli validate --strict`'s
+`negative_coyote_time_secs`, since it's more likely a typo than an intentional "off").
+
+**`can_jump`'s two branches read different grounded signals on purpose — this is not the same
+mistake as feeding the buffer into the `jumps_used` reset, but it looks similar enough that three
+independent post-implementation reviews all found the same real bug in the first version of this
+fix.** The grounded (first-jump) branch is gated by `raw_grounded || (coyote_ticks_remaining > 0 &&
+jumps_used == 0)` — deliberately buffered, since first-jump coyote-forgiveness is the whole point.
+The airborne (double-jump) branch is reached only when that combined condition is false, and its own
+`double_jump_enabled && jumps_used < max_jumps` check has **no** buffering in it at all — it depends
+purely on the branch *not* having taken the grounded path, which for `jumps_used > 0` means purely
+on `raw_grounded`. The first version of this fix instead gated the grounded branch on the fully
+buffered `loco.is_grounded` with no `jumps_used == 0` qualifier — mutually exclusive with the
+airborne branch, so for the entire coyote window after a real ground jump (`jumps_used == 1`),
+*neither* branch was reachable: a double-jump press was silently swallowed until the buffer expired,
+up to permanently for a large `coyote_time_secs`. If touching `can_jump` again: the coyote buffer
+must only ever unlock a *first* jump (`jumps_used == 0`), never gate whether a *second* jump is
+reachable — that must always come down to `raw_grounded` alone, exactly as if coyote-time didn't
+exist.
+
+**The ground shape-cast must exclude sensors, and must `normalize_or_zero()` a hit's normal before
+using it — both found by a real playtest, not by the reviews.** `QueryFilter::new().exclude_rigid_
+body(entity).exclude_sensors()` (`capabilities/player.rs`): without `.exclude_sensors()`, a nearby
+prop's `trigger_zone` (a ghost `Collider::ball` + `Sensor` child, `entity_spawner.rs`'s
+`attach_prefab_features`) could be swept by the ground cast just like real geometry. The cast ball
+starts embedded in a large, nearby sensor sphere (the sensor's own radius, e.g. 2.5m for
+`3rd_person_game_demo`'s chest, easily contains it from up to `radius + collider_radius` away), so
+the resulting `time_of_impact == 0` "penetrating" hit beats the real floor's small-but-nonzero toi —
+and the ball-in-ball EPA normal at that embedded position is radial, i.e. near-horizontal,
+misclassified as an unwalkable wall by the slope-walkability gate above. Symptom: the player played
+the falling animation while standing on ordinary flat ground, for as long as they stood within
+range of *any* nearby `trigger_zone` prop. Matches the existing `.exclude_sensors()` precedent in
+`capabilities/npc.rs`'s line-of-sight raycast — a sensor is a ghost collider by definition and must
+never count as floor. Second, independently-found bug in the same code path: a penetrating hit's
+`normal1` is not always unit length (measured ~0.52 for the ball-in-sensor case above) — a bare
+`.dot(Vec3::Y).acos()` on that computes `acos(|n| * cos(theta))`, not the real angle theta, silently
+biasing every penetrating-hit angle toward 90°. Fixed by `.normalize_or_zero()`-ing the normal
+first; a fully degenerate (zero) result dots to 0 (90°, unwalkable), matching the existing
+"no computable normal" treatment for a `details: None` hit. See
+`crates/ironhold_core/tests/prop_ground_veto_tests.rs` — separately documents (without fixing) a
+narrower, **deliberately-deferred regression, not a pre-existing limitation**: on `main`, the ground
+cast was proximity-only (`hit.is_some()`), so no collider's normal was ever load-bearing; this
+feature's slope-walkability gate is what made a solid (non-sensor) prop/wall's normal matter at all,
+so a tall prop pressed directly against the player can now veto the floor the same way an unwalkable
+slope does. This **silently disables jump entirely** for any project with `double_jump_enabled:
+false` (every shipped project's default) — not just a wrong animation, since `can_jump`'s only
+reachable branch then requires `raw_grounded`. Tracked as a real bug with a repro
+(`local_coop_demo`'s portal frame posts) in `planning/backlog.md` ▸ Bugs, with a candidate fix
+(gate the veto on the hit's world-space contact point being at/below the feet, not beside/above)
+noted there but not yet implemented or verified.
+
+`jump_air_grace_ticks()` clamps its input velocity via `f32::max(0.0, vel)` (which also launders a
+NaN velocity — from a negative/misconfigured `jump`/`double_jump_height` — to `0.0`) and floors
+its result at 1 tick, so a near-zero or invalid jump height degrades to a bounded (if rapid)
+re-arm rather than either a NaN-poisoned permanent lock or a same-tick event storm. The design-time
+`warn!`/`ironhold_cli validate` check (below) should catch that authoring mistake before it ships;
+this is defense-in-depth for if it doesn't.
+
+One accepted, physically-unavoidable consequence: on a slope steep enough that the cast never
+truthfully detaches, holding jump produces a bounded "pogo" cadence (roughly one re-jump per grace
+window, ~0.26s at shipped defaults) rather than either the old permanent lock or an unbounded
+hover exploit — see `player_slope_jump_tests.rs`'s cadence-bound test. Two secondary, accepted
+consequences of that same tradeoff: a jump whose real airtime is shorter than the grace window
+(e.g. landing on a nearby raised platform) plays its landing animation on the real edge but stays
+un-rejumpable for the remainder of the window (bounded, ≤ the grace duration); and on a
+never-detaching slope, `jump_exit` never fires at all (no real edge ever happens) while
+`jump_enter` re-arms every pogo cycle, which can visibly pin the takeoff animation for as long as
+the player holds jump uphill.
+
 ## Terrain generation is async
 Terrain mesh generation is compute-heavy. Always use Bevy's `AsyncComputeTaskPool` and poll `Task` components — never block the main thread.
 

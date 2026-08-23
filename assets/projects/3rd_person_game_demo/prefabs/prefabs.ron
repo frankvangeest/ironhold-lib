@@ -9,6 +9,13 @@
       animation_policy: "prefabs/animation/player_policy.ron",
       components: (
         tags: ["player"],
+        // Explicit (matches the engine default) so the coyote-time debounce — added to fix
+        // false-positive falling-state flicker while walking this project's uneven terrain
+        // (planning/features/uphill_jump_lock.md) — is discoverable by example here, not just
+        // in docs/20_data_formats.md.
+        movement: (
+          coyote_time_secs: 0.1,
+        ),
         // Migrated to `camera_mode:` (planning/features/camera_modes.md v1) — this project is
         // the v1 migration proof: 3 plain Orbit blocks, no party/split/flycam.
         camera_mode: Orbit((

@@ -1,0 +1,18 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "bad_coyote_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                movement: (
+                    coyote_time_secs: -0.1,
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

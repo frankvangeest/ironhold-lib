@@ -247,6 +247,72 @@ fn missing_stat_widget_template_exits_1() {
     );
 }
 
+/// See `planning/features/uphill_jump_lock.md`. `bad_jump_player` sets `jump: Fixed(height: 0.2)`
+/// — well under the default ground-check reach (collider_radius 0.4 + ground_cast_length 0.3 =
+/// 0.7m) — so its jump can never ballistically clear the sensor, even on flat ground. A
+/// `--strict`-only warning, not a hard error: the runtime's `jump_air_grace` fallback keeps this
+/// from actually breaking the jump (see `planning/features/uphill_jump_lock.md`), matching the
+/// scene-load side (`warn_jump_cannot_clear_ground_sensor`, a `warn!`, not a rejected spawn).
+#[test]
+fn jump_cannot_clear_ground_sensor_without_strict_exits_0() {
+    let (code, _) = validate("bad_jump_ground_sensor");
+    assert_eq!(code, 0, "jump-sensor-reach misconfiguration without --strict should exit 0");
+}
+
+#[test]
+fn jump_cannot_clear_ground_sensor_strict_exits_1() {
+    let (code, stdout) = validate_strict("bad_jump_ground_sensor");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bad_jump_player")
+            && stdout.contains("does not clear this player's ground-check reach"),
+        "expected the offending prefab key and the jump-sensor-reach message in output:\n{stdout}"
+    );
+}
+
+/// See `planning/features/uphill_jump_lock.md`. `bad_slope_player` sets
+/// `max_walkable_slope_deg: 0.0` — outside the valid `(0, 90]` range — which silently breaks
+/// grounding entirely (no surface is ever walkable) rather than just mis-tuning slope behavior.
+/// `--strict`-only, matching `jump_cannot_clear_ground_sensor`'s severity.
+#[test]
+fn invalid_walkable_slope_limit_without_strict_exits_0() {
+    let (code, _) = validate("bad_walkable_slope_limit");
+    assert_eq!(code, 0, "invalid max_walkable_slope_deg without --strict should exit 0");
+}
+
+#[test]
+fn invalid_walkable_slope_limit_strict_exits_1() {
+    let (code, stdout) = validate_strict("bad_walkable_slope_limit");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bad_slope_player") && stdout.contains("outside the valid"),
+        "expected the offending prefab key and the range message in output:\n{stdout}"
+    );
+}
+
+// ── coyote_time_secs negative (soft, --strict only) ────────────────────────────
+//
+// Unlike `max_walkable_slope_deg`, a negative `coyote_time_secs` doesn't break grounding at all —
+// it silently launders to a zero-tick (disabled) buffer, same as `0.0` — so this is `--strict`-only
+// too, but for a different reason: it's flagging a likely typo (a negative value spelling "off"
+// when `0.0` already does that unambiguously), not a design-time misconfiguration that breaks a
+// feature. See `planning/features/uphill_jump_lock.md`'s coyote-time section.
+#[test]
+fn negative_coyote_time_secs_without_strict_exits_0() {
+    let (code, _) = validate("bad_coyote_time");
+    assert_eq!(code, 0, "negative coyote_time_secs without --strict should exit 0");
+}
+
+#[test]
+fn negative_coyote_time_secs_strict_exits_1() {
+    let (code, stdout) = validate_strict("bad_coyote_time");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("bad_coyote_player") && stdout.contains("negative"),
+        "expected the offending prefab key and the negative-value message in output:\n{stdout}"
+    );
+}
+
 // ── Parse error ───────────────────────────────────────────────────────────────
 
 #[test]
