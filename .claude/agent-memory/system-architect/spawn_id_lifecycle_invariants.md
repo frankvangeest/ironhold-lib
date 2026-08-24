@@ -1,0 +1,43 @@
+---
+name: spawn-id-lifecycle-invariants
+description: Non-obvious invariants around SpawnRegistry id reuse, Action::Spawn transform capture timing, Despawn's warn-on-missing, and container.looted's empty-skip — found reviewing monster_corpse_loot
+metadata:
+  type: project
+---
+
+Four load-bearing facts about the spawn/despawn/container lifecycle that keep resurfacing in
+design reviews (verified 2026-08-24, `452e2e2`-era):
+
+1. **`Action::Spawn` captures its `Transform` at action-execution time**, into
+   `QueuedSpawn.transform` (`runtime/scene_manager/mod.rs`), and `drain_spawn_queue_system`
+   only reads it. So any entity-relative resolution (`at_entity`-style, mirroring
+   `SpawnEffect.entity`) is safe against the source entity being despawned in the same
+   executor run — the value is already snapshotted. `SPAWNS_PER_FRAME = 2` means the
+   spawn itself can lag several frames behind, but its position won't drift.
+
+2. **`SpawnRegistry.entities` is a `HashMap<String, Entity>` — reusing a spawn id
+   silently orphans the previous entity.** It can then never be `Despawn`ed (the id now
+   maps to the newer entity) and leaks until scene unload. Any design that authors a
+   *derived* stable id (`"{self}_corpse"`) requires the source id itself to be unique per
+   instance; "monster respawns with a fresh id" becomes a hard requirement, not a
+   preference.
+
+3. **`Action::Despawn` on an unknown id `warn!`s** (`action_executor.rs`) — it is a
+   functional no-op but not a silent one. Any "two timers race, loser no-ops" design
+   therefore emits a guaranteed warning per instance. The clean fix is behavior-FSM state
+   gating (put the two outcomes in different states so only the state-appropriate event has
+   a transition) rather than relying on the no-op.
+
+4. **`Action::TakeAllFromContainer` returns early on an empty container
+   (`if items_to_transfer.is_empty() { continue; }`) so `container.looted:{id}` never
+   fires for a zero-loot container.** Any RON logic keyed on `container.looted` silently
+   never runs for empty containers. Same arm also removes from the container *before*
+   `add_to_slots` respects the player's `max_slots` — items are destroyed when the player
+   inventory is full (pre-existing; amplified by anything that multiplies container count).
+
+**Why:** all four were only findable by reading the executor arm, not from schema docs, and
+each one invalidates an otherwise-reasonable plan.
+
+**How to apply:** cite these when reviewing any feature that spawns/despawns entities from
+RON on a timer, derives one spawn id from another, or hangs logic off `container.looted`.
+See [[deferred_despawn_double_queue]] for the adjacent double-despawn class.

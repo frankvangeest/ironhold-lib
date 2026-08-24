@@ -313,3 +313,9 @@
 
 - ~~**Conditionally-shown dialogue choices gated on a GameVariable**~~ _(promoted to backlog 2026-06-23 → Queued ▸ Gameplay & Environment)_
 
+## Inventory / Loot
+
+- ~~**`TakeAllFromContainer` removes items from the container before checking the player's own `max_slots`, destroying them if the player is full**~~ _(observed during plan review of `monster_corpse_loot.md`, system-architect, 2026-08-24; promoted to backlog `452e2e2` 2026-08-24 → Bugs)_
+
+- ~~**Behavior-file `entry_actions` get `{self}` substitution but never `{target}` substitution**~~ _(observed during plan review of `monster_corpse_loot.md`, system-architect, 2026-08-24; promoted to backlog `452e2e2` 2026-08-24 → Bugs)_
+

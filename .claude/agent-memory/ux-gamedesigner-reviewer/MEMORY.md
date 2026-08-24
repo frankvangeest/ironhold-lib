@@ -42,3 +42,4 @@
 - [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
 - [Jump re-arm coupling](project_jump_rearm_coupling.md) — jumps re-arm only on a ground-cast landing edge; jump height + collider radius + ground_cast_length form one undocumented invariant
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
+- [container.* events undocumented](project_container_events_undocumented.md) — opened/closed/looted in no docs/ file; only literal-id chest wiring ships; canonical container prefab needs trigger_zone
