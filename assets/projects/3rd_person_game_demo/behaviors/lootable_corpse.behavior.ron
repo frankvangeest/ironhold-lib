@@ -1,0 +1,57 @@
+// Shared behavior for every {monster}_corpse prefab (planning/features/monster_corpse_loot.md
+// v2). Generic — reusable across zombie_corpse/snake_corpse/spider_corpse and any future one
+// with no changes, since every field here is {self}-relative.
+//
+// Two states: "fresh" arms a long ambient decay; looting transitions to "looted", which closes
+// the panel and decays much sooner.
+//
+// Decay uses SetDespawnTimer, not EmitEventAfterDelay + an on: handler reacting to a global
+// string event. This corpse's own id (`"{self}_corpse"`) is deliberately REUSED across every
+// death of the same monster slot (see the monster behavior files' Despawn-before-Spawn guard
+// comment) — a global delayed event has no owner, so a decay timer armed by an OLDER corpse
+// generation would still fire and despawn a NEWER corpse that happens to share the same id,
+// well before its own legitimate decay time (found by debug-detective review: this compounds
+// every kill cycle and eventually makes a slot's loot permanently unobtainable). SetDespawnTimer
+// lives directly on the corpse entity itself, so it can only ever affect that one entity/
+// generation — despawning the corpse through any other means (e.g. the id-reuse guard's own
+// Despawn) removes the timer with it, and it can never leak onto a later, unrelated corpse.
+(
+    schema_version: 1,
+    initial_state: "fresh",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "fresh",
+            entry_actions: [
+                SetDespawnTimer(entity: "{self}", delay_secs: 300.0),
+            ],
+            exit_actions: [],
+            on: [
+                (
+                    event: "entity.interacted:{self}",
+                    do_actions: [
+                        OpenContainer("{self}"),
+                    ],
+                ),
+            ],
+        ),
+        (
+            name: "looted",
+            // Close the panel before anything else — entry actions are queued FIFO, so this
+            // always runs before the shorter decay timer below, never leaving the panel open
+            // and bound to a corpse that's about to disappear.
+            entry_actions: [
+                CloseContainer,
+                SetDespawnTimer(entity: "{self}", delay_secs: 5.0),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( from: "fresh", on: "container.looted:{self}", to: "looted" ),
+    ],
+)

@@ -8,6 +8,32 @@
     global_on: [
         ( event: "audio.muted",   do_actions: [ SetVariable("audio_state", "Muted"),    SetVariable("audio_muted", "true")  ] ),
         ( event: "audio.unmuted", do_actions: [ SetVariable("audio_state", "Sound On"), SetVariable("audio_muted", "false") ] ),
+
+        // Monster respawn (planning/features/monster_corpse_loot.md v2) — must live in global_on,
+        // NOT in "playing"'s own on: list: a dying monster arms `monster.respawn:{self}` (a fixed
+        // 60s after death, independent of whether its corpse gets looted) *before* despawning
+        // itself, so the event can only ever be caught globally, by literal id — the per-entity
+        // behavior file that armed it belongs to an entity that no longer exists by the time it
+        // fires, so no per-entity interpreter can react to it. Scoping this to "playing"'s on:
+        // list instead (an earlier revision did) is a real bug, not just poor organization: if
+        // the game is in "paused" (or any other global state) at the exact moment the 60s timer
+        // fires, a state-scoped `on:` handler simply never matches and the event is silently
+        // dropped — that monster slot then never respawns for the rest of the session.
+        // `monster.respawn:{self}` (not a per-type `zombie.respawn:{self}`/etc.) is a uniform
+        // convention across all three monster behavior files — a per-type prefix that must also
+        // be kept in sync with each new monster's own event name is an easy thing to typo/forget
+        // when copying the pattern onto a fourth monster type, and would fail completely silently
+        // (no matching rule, no warning) if missed.
+        // `spawn_point` (not `at_entity`) is deliberate: the replacement should reappear at its
+        // original patrol spot, not wherever the previous instance happened to die. `spawn_point`
+        // coordinates and `yaw_deg` are copied from each instance's own `transform` in
+        // `main.scene.ron` — keep them in sync if that entity's placement ever changes.
+        ( event: "monster.respawn:zombie_01", do_actions: [ Spawn(prefab: "enemy_zombie", id: "zombie_01", spawn_point: "zombie_01_spawn", yaw_deg: 200.0) ] ),
+        ( event: "monster.respawn:zombie_02", do_actions: [ Spawn(prefab: "enemy_zombie", id: "zombie_02", spawn_point: "zombie_02_spawn", yaw_deg: 160.0) ] ),
+        ( event: "monster.respawn:snake_01",  do_actions: [ Spawn(prefab: "enemy_snake",  id: "snake_01",  spawn_point: "snake_01_spawn",  yaw_deg: 90.0)  ] ),
+        ( event: "monster.respawn:snake_02",  do_actions: [ Spawn(prefab: "enemy_snake",  id: "snake_02",  spawn_point: "snake_02_spawn",  yaw_deg: 200.0) ] ),
+        ( event: "monster.respawn:spider_01", do_actions: [ Spawn(prefab: "enemy_spider", id: "spider_01", spawn_point: "spider_01_spawn", yaw_deg: 135.0) ] ),
+        ( event: "monster.respawn:spider_02", do_actions: [ Spawn(prefab: "enemy_spider", id: "spider_02", spawn_point: "spider_02_spawn", yaw_deg: 190.0) ] ),
     ],
 
     states: [
@@ -101,6 +127,12 @@
                 PreloadPrefab("enemy_snake"),
                 PreloadPrefab("enemy_spider"),
                 PreloadPrefab("enemy_zombie"),
+                // Lootable-corpse prefabs (planning/features/monster_corpse_loot.md) — preloaded
+                // here too so the first death of the session doesn't stall on a fresh WebGPU
+                // pipeline compile for the corpse's own render/UI materials.
+                PreloadPrefab("zombie_corpse"),
+                PreloadPrefab("snake_corpse"),
+                PreloadPrefab("spider_corpse"),
                 // Warm WebGPU particle pipelines during the loading window.
                 SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
                 SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
@@ -138,6 +170,11 @@
                 ( event: "entity.exited:chest_02_spawned",           do_actions: [ CloseContainer ] ),
                 ( event: "ui.button_pressed:close_container",        do_actions: [ CloseContainer ] ),
                 ( event: "ui.button_pressed:take_all_from_container", do_actions: [ TakeAllFromContainer ] ),
+
+                // Monster respawn rules moved to the top-level global_on: block — see its comment
+                // for why (a state-scoped on: list here would silently drop the respawn event if
+                // the game happens to be paused when the 60s timer fires).
+
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_mute",        do_actions: [ ToggleMute                                              ] ),
                 ( event: "ui.button_pressed:toggle_hitboxes_on",  do_actions: [ SetVariable("debug_target_hitboxes", "true")            ] ),

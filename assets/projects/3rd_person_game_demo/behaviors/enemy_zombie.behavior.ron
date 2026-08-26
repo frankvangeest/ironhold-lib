@@ -1,8 +1,16 @@
 // Zombie enemy — slow patrol → shamble → scratch loop.
-// The NPC system handles all movement. This behavior drives the attack state and alive/dead cycle.
+// The NPC system handles all movement. This behavior drives the attack state and death.
 // npc.player_reached:{self}  fires when the zombie closes to approach_distance (1.8 m).
 // npc.player_lost:{self}     fires when the player exits chase_radius or detection is lost.
 // Zombies are tough but slow — they scratch hard every 4 s and take 15 damage per hit.
+//
+// Death (planning/features/monster_corpse_loot.md v2): this entity never revives — on death it
+// plays its death animation, then swaps itself for a separate `zombie_corpse` entity at the same
+// position (`Spawn(..., at_entity: "{self}")`) and despawns. Looting/decay is entirely the
+// corpse's own concern (behaviors/lootable_corpse.behavior.ron). A fixed 60s respawn timer is
+// armed at death, independent of whether the corpse ever gets looted — it's caught by a global
+// rule in logic/state_machine.ron, since by the time it fires this entity (and its per-entity
+// behavior state) no longer exists to catch it itself.
 (
     schema_version: 1,
     initial_state: "alive",
@@ -12,8 +20,10 @@
     states: [
         (
             name: "alive",
-            // npc_revive clears the death-pose override (stop_action sentinel) so the zombie
-            // returns to idle rather than staying frozen in its death frame after respawn.
+            // npc_revive clears the death-pose override (stop_action sentinel). Only reachable
+            // via the "give up chasing" transition below now (attacking -> alive) — this entity
+            // is never revived in place after death, so ResetToSpawn/SpawnEffect here only ever
+            // fire on that unrelated transition, not as part of the death/respawn cycle.
             entry_actions: [
                 PlayAnimationOn(target: "{self}", clip: "npc_revive"),
                 EmitEvent("npc.revive:{self}"),
@@ -48,23 +58,29 @@
         ),
         (
             name: "dead",
-            // npc.dead stops the NPC system from moving the corpse.
-            // Death01 animation is 3.0 s; hide at 4 s so it completes before disappearing.
-            // Respawn at 20 s — zombie is the toughest ground enemy so the rest window is longer.
+            // npc.dead stops the NPC system from moving the corpse for the remainder of the death
+            // animation. Death01 animation is 3.0 s — swap to the corpse once it's finished so the
+            // two never visibly overlap. The 60s respawn timer is armed here (before the swap
+            // despawns this entity) so it survives independent of the swap/corpse lifecycle.
             entry_actions: [
                 EmitEvent("npc.dead:{self}"),
                 PlayAnimationOn(target: "{self}", clip: "death"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
-                EmitEventAfterDelay(event: "zombie.hide:{self}", delay_secs: 10.0),
-                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 20.0),
+                EmitEventAfterDelay(event: "zombie.swap_to_corpse:{self}", delay_secs: 3.0),
+                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 60.0),
             ],
             exit_actions: [],
             on: [
                 (
-                    event: "zombie.hide:{self}",
+                    event: "zombie.swap_to_corpse:{self}",
                     do_actions: [
-                        SetEntityVisible(entity: "{self}", visible: false),
+                        // Guard against a still-lingering earlier corpse under this exact id (up
+                        // to 5 minutes old if unlooted) before this entity's own next death cycle
+                        // reuses the same derived id — idempotent no-op if none exists yet.
+                        Despawn("{self}_corpse"),
+                        Spawn(prefab: "zombie_corpse", id: "{self}_corpse", at_entity: "{self}"),
+                        Despawn("{self}"),
                     ],
                 ),
             ],
@@ -76,6 +92,5 @@
         ( from: "attacking", on: "npc.player_lost:{self}",      to: "alive"     ),
         ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"      ),
         ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"      ),
-        ( from: "dead",      on: "entity.respawned:{self}",     to: "alive"     ),
     ],
 )

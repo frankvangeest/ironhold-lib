@@ -58,7 +58,7 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
     // Spawn with an explicit ID
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()), position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_test".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update();
 
@@ -105,7 +105,7 @@ fn test_spawn_action_attaches_prefab_key_and_level_entity() {
     }));
 
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_meta".to_string()), position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_meta".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update();
 
@@ -147,10 +147,10 @@ fn test_spawn_auto_id_increments_counter() {
 
     // Spawn twice without explicit IDs
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update();
 
@@ -193,7 +193,7 @@ fn test_despawn_removes_entity_by_spawn_id() {
 
     // Spawn then despawn
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()), position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("doomed_orc".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update();
 
@@ -250,13 +250,13 @@ fn test_spawn_id_collision_orphans_old_entity() {
 
     // First spawn with explicit ID "crate_1".
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None },
     );
     app.update();
 
     // Second spawn with the same ID â€” silently overwrites the registry entry.
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None },
+        Action::Spawn { prefab: "crate".to_string(), id: Some("crate_1".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None },
     );
     app.update();
 
@@ -328,6 +328,7 @@ fn test_spawn_yaw_deg_sets_transform_rotation() {
             position: Some((0.0, 0.0, 0.0)),
             spawn_point: None,
             yaw_deg: Some(90.0),
+            at_entity: None,
         }
     );
     app.update();
@@ -416,7 +417,7 @@ fn test_primitive_player_prefab_with_resolvable_model_key_rejected_not_panicked_
         Action::Spawn {
             prefab: "primitive_player_wrong_model".to_string(),
             id: Some("bad_primitive_player".to_string()),
-            position: None, spawn_point: None, yaw_deg: None,
+            position: None, spawn_point: None, yaw_deg: None, at_entity: None,
         }
     );
     // Must not panic.
@@ -446,7 +447,7 @@ fn test_spawn_queue_rate_limits_to_two_per_frame() {
             Action::Spawn {
                 prefab: "enemy_orc_melee".to_string(),
                 id: Some(format!("orc_{}", i)),
-                position: None, spawn_point: None, yaw_deg: None,
+                position: None, spawn_point: None, yaw_deg: None, at_entity: None,
             }
         );
     }
@@ -665,7 +666,7 @@ fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
     }));
 
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "enemy_snake".to_string(), id: Some("snake_01".to_string()), position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "enemy_snake".to_string(), id: Some("snake_01".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update();
 
@@ -854,7 +855,7 @@ fn test_scene_load_populates_label_depth_scale_for_dynamically_spawned_prefab() 
 
     // Spawn the prefab dynamically via Action::Spawn, exactly like a wave-spawner would.
     app.world_mut().resource_mut::<ActionQueue>().push(
-        Action::Spawn { prefab: "test_stat_prefab".to_string(), id: Some("dyn_stat_01".to_string()), position: None, spawn_point: None, yaw_deg: None }
+        Action::Spawn { prefab: "test_stat_prefab".to_string(), id: Some("dyn_stat_01".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
     );
     app.update(); // executor -> drain_spawn_queue_system -> drain_dynamic_stat_ui_system, all chained this frame
 
@@ -1093,4 +1094,119 @@ fn test_dynamic_stat_widgets_duplicate_ranks_when_dynamic_split_configured_but_m
         "a merged dynamic split must still duplicate ranks — ActiveSplitScreen being None here \
          does not mean the scene isn't split-screen-capable"
     );
+}
+
+// ── Action::Spawn.at_entity (planning/features/monster_corpse_loot.md v2) ──────────────────
+
+#[test]
+fn test_spawn_at_entity_copies_position_and_facing_from_a_live_entity() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    // A live "source" entity with a distinctive position and yaw — nothing about it needs to be
+    // a real spawned prefab; at_entity only ever reads Transform via GlobalTransform.
+    let source = app.world_mut()
+        .spawn((
+            SpawnId("zombie_01".to_string()),
+            Transform::from_xyz(3.0, 0.0, -4.0).with_rotation(Quat::from_rotation_y(200f32.to_radians())),
+        ))
+        .id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("zombie_01".to_string(), source);
+    app.update(); // let TransformPropagate populate GlobalTransform
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Spawn {
+        prefab: "enemy_orc_melee".to_string(),
+        id: Some("zombie_01_corpse".to_string()),
+        position: None,
+        spawn_point: None,
+        yaw_deg: None,
+        at_entity: Some("zombie_01".to_string()),
+    });
+    app.update();
+
+    let corpse = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
+        .expect("at_entity spawn must succeed and register");
+    let tf = app.world().get::<Transform>(corpse).unwrap();
+    assert_eq!(tf.translation, Vec3::new(3.0, 0.0, -4.0), "at_entity must copy the source's position");
+
+    let (_, source_rot, _) = app.world().get::<GlobalTransform>(source).unwrap().to_scale_rotation_translation();
+    assert!(
+        tf.rotation.angle_between(source_rot) < 0.01,
+        "at_entity must also copy the source's facing, not just position (got {:?}, expected {:?})",
+        tf.rotation, source_rot
+    );
+}
+
+#[test]
+fn test_spawn_at_entity_position_wins_over_position_and_spawn_point_with_a_warning() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    let source = app.world_mut()
+        .spawn((SpawnId("src".to_string()), Transform::from_xyz(9.0, 0.0, 9.0)))
+        .id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("src".to_string(), source);
+    app.update();
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Spawn {
+        prefab: "enemy_orc_melee".to_string(),
+        id: Some("both_given".to_string()),
+        position: Some((0.0, 0.0, 0.0)), // deliberately conflicting — at_entity must win
+        spawn_point: None,
+        yaw_deg: None,
+        at_entity: Some("src".to_string()),
+    });
+    app.update();
+
+    let spawned = *app.world().resource::<SpawnRegistry>().entities.get("both_given").unwrap();
+    assert_eq!(
+        app.world().get::<Transform>(spawned).unwrap().translation, Vec3::new(9.0, 0.0, 9.0),
+        "at_entity must take precedence over an explicit position, not the other way around"
+    );
+}
+
+#[test]
+fn test_spawn_at_entity_unresolvable_with_no_fallback_skips_the_spawn() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Spawn {
+        prefab: "enemy_orc_melee".to_string(),
+        id: Some("never_spawned".to_string()),
+        position: None,
+        spawn_point: None,
+        yaw_deg: None,
+        at_entity: Some("does_not_exist".to_string()),
+    });
+    app.update();
+
+    assert!(
+        !app.world().resource::<SpawnRegistry>().entities.contains_key("never_spawned"),
+        "an unresolvable at_entity with no position/spawn_point fallback must skip the spawn \
+         entirely — never fall back to the world origin"
+    );
+}
+
+#[test]
+fn test_spawn_at_entity_unresolvable_falls_back_to_position_when_given() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::Spawn {
+        prefab: "enemy_orc_melee".to_string(),
+        id: Some("fallback_used".to_string()),
+        position: Some((5.0, 0.0, 5.0)),
+        spawn_point: None,
+        yaw_deg: None,
+        at_entity: Some("does_not_exist".to_string()),
+    });
+    app.update();
+
+    let spawned = *app.world().resource::<SpawnRegistry>().entities.get("fallback_used")
+        .expect("an unresolvable at_entity with an explicit position fallback must still spawn");
+    assert_eq!(app.world().get::<Transform>(spawned).unwrap().translation, Vec3::new(5.0, 0.0, 5.0));
 }

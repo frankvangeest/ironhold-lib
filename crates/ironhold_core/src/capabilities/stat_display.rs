@@ -1,9 +1,44 @@
 use bevy::prelude::*;
+use std::collections::HashSet;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::schema::scene_v2::BarOrientation;
 use crate::schema::catalog::{StatLabelDef, WorldStatBarDef, WorldStatBarStyle, AssetCatalog};
 use crate::runtime::scene_manager::{SpawnId, WorldLabel, WorldLabelRank, LevelEntity};
 use crate::capabilities::camera::MAX_SPLIT_PLAYERS;
+
+/// Despawns any `WorldLabel`-carrying stat widget (`stat_label` text; `world_stat_bar`'s Ascii
+/// bg/fill text, or Pixel/Icon/Textured anchor — bg/border/fill children of an anchor are removed
+/// recursively with it) once the entity it tracks is despawned. Mirrors
+/// `nameplate::nameplate_cleanup_system`'s exact `RemovedComponents` pattern, generalized via
+/// `SpawnId` (every spawned entity gets one — `tag_spawned_entity`) since stat widgets have no
+/// nameplate-style shared marker component on their owner to key off of.
+///
+/// Needed because `Action::Despawn` only removes the one entity it's given — it has no idea a
+/// separate cosmetic widget entity exists that merely references the owner by `Entity`/`SpawnId`.
+/// `world_label_screen_pos_system` already degrades gracefully when a tracked entity disappears
+/// (hides the widget), but that's a different, independent code path from each style's own
+/// per-frame fill-update system (`world_pixel_bar_update_system` and siblings), which does its
+/// own `SpawnId`-string stat lookup regardless of `Visibility` — before this fix, an orphaned
+/// fill kept failing that lookup and `warn!`-ing every single frame forever, since nothing ever
+/// removed the widget entity itself. First surfaced by `monster_corpse_loot.md` v2's
+/// death→corpse-swap, the first feature to `Despawn` a live entity carrying `stat_label`/
+/// `world_stat_bar` mid-game — previously these widgets were only ever cleared in bulk via a full
+/// `LoadScene` teardown, alongside their owner, so this gap was never reachable before.
+pub fn stat_widget_cleanup_system(
+    mut commands: Commands,
+    mut removed: RemovedComponents<SpawnId>,
+    widgets: Query<(Entity, &WorldLabel)>,
+) {
+    let removed_set: HashSet<Entity> = removed.read().collect();
+    if removed_set.is_empty() { return; }
+    for (widget_entity, world_label) in widgets.iter() {
+        if let Some(tracked) = world_label.tracked_entity {
+            if removed_set.contains(&tracked) {
+                commands.entity(widget_entity).try_despawn();
+            }
+        }
+    }
+}
 
 /// Resolves a stat by key from either `LoadedStats` (global) or `StatMap` (per-entity).
 ///

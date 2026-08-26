@@ -227,12 +227,17 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         },
         Action::EmitEvent(event) => Action::EmitEvent(event.replace("{self}", spawn_id)),
         Action::Despawn(id) => Action::Despawn(id.replace("{self}", spawn_id)),
-        Action::Spawn { prefab, id, position, spawn_point, yaw_deg } => Action::Spawn {
+        Action::SetDespawnTimer { entity, delay_secs } => Action::SetDespawnTimer {
+            entity: entity.replace("{self}", spawn_id),
+            delay_secs,
+        },
+        Action::Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity } => Action::Spawn {
             prefab,
             id: id.map(|i| i.replace("{self}", spawn_id)),
             position,
             spawn_point: spawn_point.map(|s| s.replace("{self}", spawn_id)),
             yaw_deg,
+            at_entity: at_entity.map(|e| e.replace("{self}", spawn_id)),
         },
         Action::ModifyStat { key, delta } => Action::ModifyStat {
             key: key.replace("{self}", spawn_id),
@@ -302,17 +307,20 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::SetEntityVisible { entity, visible } =>
             Action::SetEntityVisible { entity: s(&entity, target_id), visible },
         Action::Despawn(id) => Action::Despawn(s(&id, target_id)),
+        Action::SetDespawnTimer { entity, delay_secs } =>
+            Action::SetDespawnTimer { entity: s(&entity, target_id), delay_secs },
         Action::EmitEvent(ev) => Action::EmitEvent(s(&ev, target_id)),
         Action::EmitEventAfterDelay { event, delay_secs } =>
             Action::EmitEventAfterDelay { event: s(&event, target_id), delay_secs },
         Action::PlayAnimationOn { target, clip } =>
             Action::PlayAnimationOn { target: s(&target, target_id), clip },
-        Action::Spawn { prefab, id, position, spawn_point, yaw_deg } => Action::Spawn {
+        Action::Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity } => Action::Spawn {
             prefab,
             id: id.map(|i| s(&i, target_id)),
             position,
             spawn_point: spawn_point.map(|sp| s(&sp, target_id)),
             yaw_deg,
+            at_entity: at_entity.map(|e| s(&e, target_id)),
         },
         // Substitutes {target} in the value so rules can track the current target:
         // SetVariable("target_name", "{target}") → SetVariable("target_name", "orc_01")

@@ -304,6 +304,8 @@ fn substitute_self_in_action(action: Action, npc_id: &str) -> Action {
     let s = |st: &str| st.replace("{self}", npc_id);
     match action {
         Action::Despawn(id)            => Action::Despawn(s(&id)),
+        Action::SetDespawnTimer { entity, delay_secs } =>
+            Action::SetDespawnTimer { entity: s(&entity), delay_secs },
         Action::ResetToSpawn(id)       => Action::ResetToSpawn(s(&id)),
         Action::Log(msg)               => Action::Log(s(&msg)),
         Action::EmitEvent(ev)          => Action::EmitEvent(s(&ev)),
@@ -328,6 +330,19 @@ fn substitute_self_in_action(action: Action, npc_id: &str) -> Action {
             Action::SpawnEffect { key, position, entity: entity.map(|e| s(&e)) },
         Action::ProjectDecal { key, entity, position, radius, duration_secs, color, pulse_speed } =>
             Action::ProjectDecal { key, entity: entity.map(|e| s(&e)), position, radius, duration_secs, color, pulse_speed },
+        // Pre-existing gap widened by `at_entity` (alignment-reviewer finding,
+        // monster_corpse_loot.md v2): this arm was missing entirely, so `id`/`spawn_point` never
+        // got `{self}` substitution here either — a dialogue choice's `do_actions` is the 4th
+        // substitution site alongside `rewrite_self`/`rewrite_target`/`action_needs_target`.
+        Action::Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity } =>
+            Action::Spawn {
+                prefab,
+                id: id.map(|i| s(&i)),
+                position,
+                spawn_point: spawn_point.map(|sp| s(&sp)),
+                yaw_deg,
+                at_entity: at_entity.map(|e| s(&e)),
+            },
         other => other,
     }
 }

@@ -219,6 +219,9 @@
       targetable: true,
       click_selectable: true,
       indicator_category: "hostile",
+      // Loot-on-death (planning/features/monster_corpse_loot.md v2): on death this entity
+      // despawns and is replaced by a separate `zombie_corpse` entity (see that prefab) at the
+      // same position — this entity itself carries no `interactable`/`inventory` of its own.
       behavior: "behaviors/enemy_zombie.behavior.ron",
       stat_templates: [
         (
@@ -298,6 +301,8 @@
       click_selectable: true,
       select_aim_height: 0.4,
       indicator_category: "hostile",
+      // Loot-on-death (planning/features/monster_corpse_loot.md v2) — see enemy_zombie's prefab
+      // comment; on death this entity despawns and is replaced by a separate `snake_corpse`.
       behavior: "behaviors/enemy_snake.behavior.ron",
       stat_templates: [
         (
@@ -379,6 +384,8 @@
       click_selectable: true,
       select_aim_height: 0.6,
       indicator_category: "hostile",
+      // Loot-on-death (planning/features/monster_corpse_loot.md v2) — see enemy_zombie's prefab
+      // comment; on death this entity despawns and is replaced by a separate `spider_corpse`.
       behavior: "behaviors/enemy_spider.behavior.ron",
       stat_templates: [
         (
@@ -415,6 +422,68 @@
           (0.6,  (0.60, 0.10, 0.90, 1.0)),
         ],
         style: Pixel( size: (48.0, 6.0) ),
+      ),
+    ),
+
+    // ── Lootable corpses (planning/features/monster_corpse_loot.md v2) ──────────────
+    // Spawned via `Spawn(prefab: "..._corpse", id: "{self}_corpse", at_entity: "{self}")` right
+    // where each monster dies, replacing it. Reuse the live monster's own GLB model as a
+    // placeholder fallen pose — no dedicated corpse art exists yet, an accepted v2 limitation
+    // (see the plan's "Open questions"). No `trigger_zone` (the Dynamic-body mass bug found
+    // during v1 doesn't apply here since these are Prop-kind/no rigid body, but there's also no
+    // need for auto-close-on-exit — the panel's own close button covers it, same as the monsters
+    // themselves in v1). No colliders — a corpse is a purely visual + lootable prop, not a
+    // physical obstacle. `nameplate: false` matches chest_01/chest_02's convention.
+    "zombie_corpse": (
+      kind: Prop,
+      model: "zombie",
+      display_name: "Zombie Corpse",
+      nameplate: false,
+      click_selectable: true,
+      indicator_category: "neutral",
+      behavior: "behaviors/lootable_corpse.behavior.ron",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      inventory: (
+        max_slots: 6,
+        initial_items: [
+          (item_key: "gold_coin", count: 15),
+          (item_key: "health_potion", count: 1),
+        ],
+      ),
+    ),
+
+    "snake_corpse": (
+      kind: Prop,
+      model: "snake",
+      display_name: "Snake Corpse",
+      nameplate: false,
+      click_selectable: true,
+      indicator_category: "neutral",
+      behavior: "behaviors/lootable_corpse.behavior.ron",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      inventory: (
+        max_slots: 4,
+        initial_items: [
+          (item_key: "gold_coin", count: 5),
+        ],
+      ),
+    ),
+
+    "spider_corpse": (
+      kind: Prop,
+      model: "spider",
+      display_name: "Spider Corpse",
+      nameplate: false,
+      click_selectable: true,
+      indicator_category: "neutral",
+      behavior: "behaviors/lootable_corpse.behavior.ron",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      inventory: (
+        max_slots: 6,
+        initial_items: [
+          (item_key: "gold_coin", count: 8),
+          (item_key: "health_potion", count: 1),
+        ],
       ),
     ),
 

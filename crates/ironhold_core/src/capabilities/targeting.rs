@@ -346,9 +346,17 @@ fn debug_selectables_system(
 }
 
 /// Clears each player's `PlayerTarget` independently when their targeted entity becomes hidden
-/// (e.g. dead/despawned) — one player's target being hidden does not touch any other player's
-/// target. Prevents the action bar from firing at invisible enemies and keeps the target UI
+/// (e.g. dead) or is genuinely despawned (e.g. a corpse swap or decay removing the entity
+/// entirely) — one player's target being cleared does not touch any other player's target.
+/// Prevents the action bar from firing at invisible/nonexistent enemies and keeps the target UI
 /// clean.
+///
+/// The despawned case matters specifically for monster_corpse_loot.md v2: a targeted monster's
+/// `Despawn("{self}")` on death removes it from `SpawnRegistry` outright rather than merely
+/// hiding it, so `registry.entities.get(&target_id)` returning `None` must be treated the same
+/// as "hidden," not skipped — otherwise the stale target silently survives until the same id is
+/// reused by that slot's next respawn (up to 60s later), at which point the player appears to
+/// have re-targeted an entity they never clicked.
 pub fn target_auto_clear_system(
     mut controllers: Query<(&mut PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>,
     mut current_target: ResMut<CurrentTarget>,
@@ -359,12 +367,14 @@ pub fn target_auto_clear_system(
 ) {
     for (mut player_target, player_index) in &mut controllers {
         let Some(target_id) = player_target.0.clone() else { continue };
-        let Some(&entity) = registry.entities.get(&target_id) else { continue };
-        let Ok(vis) = visibility_q.get(entity) else { continue };
-        if *vis == Visibility::Hidden {
+        let should_clear = match registry.entities.get(&target_id) {
+            Some(&entity) => visibility_q.get(entity).is_ok_and(|vis| *vis == Visibility::Hidden),
+            None => true,
+        };
+        if should_clear {
             let is_primary = is_primary_player(player_index);
             clear_player_target(is_primary, &mut player_target, &mut current_target, &mut game_vars, &mut game_events);
-            info!("Targeting: auto-cleared '{}' (entity hidden)", target_id);
+            info!("Targeting: auto-cleared '{}' (entity hidden or despawned)", target_id);
         }
     }
 }

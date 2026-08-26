@@ -13,6 +13,15 @@ pub enum Action {
     ///   If neither `position` nor `spawn_point` is given, the entity spawns at the world origin.
     /// - `yaw_deg` — optional Y-axis rotation in degrees (0 = model default facing, 90 = 90° clockwise).
     ///   Covers N/S/E/W compass orientations. Defaults to 0 if omitted.
+    /// - `at_entity` — spawn ID of a live entity to copy the full transform from (resolved via
+    ///   `SpawnRegistry` → `GlobalTransform::compute_transform()`, same registry lookup
+    ///   `SpawnEffect`'s `entity` field uses) — position, rotation, *and* scale, not just
+    ///   position and facing; harmless for a unit-scale, upright source entity but worth knowing
+    ///   if the source has a non-default scale or pitch/roll. Takes precedence over
+    ///   `position`/`spawn_point` for position, and over `yaw_deg` for rotation — one field
+    ///   captures both. Supports `{self}`/`{target}` substitution. If the named entity can't be
+    ///   resolved and neither `position` nor `spawn_point` is also given, the spawn is skipped
+    ///   with a warning rather than falling back to the world origin.
     Spawn {
         prefab: String,
         #[serde(default)]
@@ -23,9 +32,25 @@ pub enum Action {
         spawn_point: Option<String>,
         #[serde(default)]
         yaw_deg: Option<f32>,
+        #[serde(default)]
+        at_entity: Option<String>,
     },
     /// Despawn a previously spawned entity by the ID used in Spawn.
     Despawn(String),
+    /// Arm a self-contained despawn timer directly on an entity: after `delay_secs` of real time,
+    /// that entity despawns automatically, no event round-trip required. Re-arming (calling this
+    /// again on the same entity) overwrites any previous countdown rather than stacking.
+    /// - `entity` — spawn ID to resolve via `SpawnRegistry`. Supports `{self}`/`{target}`.
+    /// Prefer this over `EmitEventAfterDelay` + a `Despawn` reacting to a global string event for
+    /// any timer whose derived spawn ID might be reused by a *later*, unrelated entity (e.g. a
+    /// disposable prop respawned under the same id) — a global delayed event has no owner and
+    /// will match whichever entity currently holds that id when it fires, not necessarily the one
+    /// that armed it. This timer lives on the entity itself, so it is inert once that entity is
+    /// gone and can never affect a different entity that later reuses the same id.
+    SetDespawnTimer {
+        entity: String,
+        delay_secs: f32,
+    },
     PlayAnimation(String),
     /// Play a one-shot sound effect by catalog key.
     /// `volume` (0.0–1.0) multiplies the entry's catalog volume. Defaults to 1.0 when omitted.

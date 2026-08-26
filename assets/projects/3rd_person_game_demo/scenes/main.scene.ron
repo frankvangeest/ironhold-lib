@@ -58,6 +58,15 @@
     // Chest_02 test-spawn: to the player's right, slightly forward, y=0.4 so the
     // center-origin chest sits flush with the ground.
     "chest_spawn": (4.0, 0.4, 10.5),
+    // Monster respawn points (planning/features/monster_corpse_loot.md) — match each
+    // scene-placed monster's own original transform.translation, so a respawned replacement
+    // reappears at its original patrol spot, not wherever it happened to die.
+    "zombie_01_spawn": (2.0, 0.0, -8.0),
+    "zombie_02_spawn": (-5.0, 0.0, -9.0),
+    "snake_01_spawn": (-10.0, 0.0, -4.0),
+    "snake_02_spawn": (6.0, 0.0, -12.0),
+    "spider_01_spawn": (-6.0, 0.0, -12.0),
+    "spider_02_spawn": (12.0, 0.0, -3.0),
   },
 
   entities: [

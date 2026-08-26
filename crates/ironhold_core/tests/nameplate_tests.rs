@@ -291,6 +291,61 @@ fn test_nameplate_cleanup_despawns_anchor_after_tagged_entity_removed() {
     );
 }
 
+/// Sibling of the test above for `stat_widget_cleanup_system` (`capabilities/stat_display.rs`) —
+/// found by `monster_corpse_loot.md` v2's death→corpse-swap, the first feature to `Despawn` a
+/// live entity carrying `stat_label`/`world_stat_bar` mid-game. Before this fix, an orphaned
+/// widget's own per-frame fill-update system (independent of `WorldLabel`/`Visibility`) kept
+/// failing its `SpawnId`-string stat lookup and `warn!`-ing every single frame forever, since
+/// nothing ever despawned the widget itself.
+#[test]
+fn test_stat_widget_cleanup_despawns_widget_after_tracked_entity_removed() {
+    use ironhold_core::runtime::scene_manager::{SpawnId, WorldLabel};
+    use ironhold_core::capabilities::stat_display::WorldPixelBarFillMarker;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    // A monster-like entity with SpawnId — the thing every widget's WorldLabel tracks.
+    let tracked_entity = app.world_mut().spawn(SpawnId("zombie_02".to_string())).id();
+
+    // Its world_stat_bar fill widget, unparented (same shape as the real Pixel-bar fill).
+    let widget_entity = app.world_mut().spawn((
+        WorldLabel {
+            world_pos: Vec3::ZERO,
+            tracked_entity: Some(tracked_entity),
+            offset: Vec3::new(0.0, 2.4, 0.0),
+            base_font_size: 1.0,
+            depth_scale: None,
+            screen_offset: Vec2::ZERO,
+        },
+        WorldPixelBarFillMarker {
+            stat_key: "zombie_02.health".to_string(),
+            full_width: 56.0,
+            fill_color: (0.25, 0.70, 0.15, 1.0),
+            color_bands: vec![],
+        },
+        Visibility::Hidden,
+        Transform::default(),
+    )).id();
+
+    app.update();
+    assert!(app.world().get_entity(tracked_entity).is_ok(), "tracked entity must exist before despawn");
+    assert!(app.world().get_entity(widget_entity).is_ok(), "widget entity must exist before despawn");
+
+    // Despawn the monster the way Action::Despawn does — the widget has no parent/child
+    // relationship to it, so nothing else would ever clean it up on its own.
+    app.world_mut().despawn(tracked_entity);
+
+    // Two update frames: first processes RemovedComponents<SpawnId>, second flushes the despawn.
+    app.update();
+    app.update();
+
+    assert!(
+        app.world().get_entity(widget_entity).is_err(),
+        "stat_widget_cleanup_system must despawn the orphaned widget entity after its tracked entity is removed"
+    );
+}
+
 /// `nameplate_visibility_system` forces the anchor to `Hidden` when the entity is beyond
 /// `max_distance`. The camera starts at the origin; the entity is placed far away.
 #[test]

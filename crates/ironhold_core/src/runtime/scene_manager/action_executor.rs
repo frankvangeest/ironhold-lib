@@ -110,7 +110,7 @@ pub fn action_executor_system(
             Action::Log(msg) => {
                 info!("Action::Log: {}", msg);
             }
-            Action::Spawn { prefab, id, position, spawn_point, yaw_deg } => {
+            Action::Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity } => {
                 let Some(prefab_def) = spawn_params.prefab_catalog.0.prefabs.get(&prefab) else {
                     warn!("Action::Spawn: prefab {:?} not found in catalog", prefab);
                     continue;
@@ -155,26 +155,70 @@ pub fn action_executor_system(
                         spawn_id
                     );
                 }
-                let (sx, sy, sz) = if let Some(pos) = position {
-                    pos
+                if at_entity.is_some() && (position.is_some() || spawn_point.is_some()) {
+                    // debug!, not warn! — authoring a position/spawn_point fallback alongside
+                    // at_entity is the documented, encouraged safe pattern (it's what makes the
+                    // "unresolvable at_entity" case degrade to a known position instead of
+                    // skipping the spawn entirely), not a misconfiguration. Warning on the
+                    // correct usage every time would be spurious noise (system-architect finding).
+                    debug!(
+                        "Action::Spawn '{}': both at_entity and position/spawn_point are set; at_entity wins",
+                        spawn_id
+                    );
+                }
+                let fallback_pos = if let Some(pos) = position {
+                    Some(pos)
                 } else if let Some(ref name) = spawn_point {
                     match spawn_params.spawn_points.0.get(name.as_str()) {
-                        Some(&pt) => pt,
+                        Some(&pt) => Some(pt),
                         None => {
                             warn!("Action::Spawn: spawn_point {:?} not found in scene, using origin", name);
-                            (0.0, 0.0, 0.0)
+                            Some((0.0, 0.0, 0.0))
                         }
                     }
                 } else {
-                    (0.0, 0.0, 0.0)
+                    None
                 };
-                let yaw_rad = yaw_deg.unwrap_or(0.0).to_radians();
-                let transform = Transform::from_xyz(sx, sy, sz)
-                    .with_rotation(Quat::from_rotation_y(yaw_rad));
+                // `at_entity` resolves both position and facing from a live entity's
+                // GlobalTransform (same SpawnRegistry lookup SpawnEffect's `entity` field uses) —
+                // it takes precedence over position/spawn_point/yaw_deg entirely, since the caller
+                // doesn't know its own current yaw to also write a matching `yaw_deg`. Unlike a
+                // missing spawn_point (which falls back to the origin), an unresolvable
+                // `at_entity` with no other position given skips the spawn outright — placing a
+                // dynamically-important entity (e.g. a lootable corpse) at the origin would be
+                // worse than not spawning it at all.
+                let at_entity_transform = at_entity.as_ref().and_then(|target_id| {
+                    spawn_params.registry.entities.get(target_id)
+                        .and_then(|e| scene_state.global_transforms.get(*e).ok())
+                        .map(|gt| gt.compute_transform())
+                });
+                let transform = if let Some(tf) = at_entity_transform {
+                    tf
+                } else if at_entity.is_some() {
+                    let Some((sx, sy, sz)) = fallback_pos else {
+                        warn!(
+                            "Action::Spawn: at_entity {:?} not found and no position/spawn_point \
+                             fallback given; skipping spawn",
+                            at_entity
+                        );
+                        continue;
+                    };
+                    warn!(
+                        "Action::Spawn: at_entity {:?} not found in registry; falling back to \
+                         position/spawn_point",
+                        at_entity
+                    );
+                    Transform::from_xyz(sx, sy, sz)
+                        .with_rotation(Quat::from_rotation_y(yaw_deg.unwrap_or(0.0).to_radians()))
+                } else {
+                    let (sx, sy, sz) = fallback_pos.unwrap_or((0.0, 0.0, 0.0));
+                    Transform::from_xyz(sx, sy, sz)
+                        .with_rotation(Quat::from_rotation_y(yaw_deg.unwrap_or(0.0).to_radians()))
+                };
 
                 info!(
                     "Action::Spawn: queued '{}' (prefab: {}) at ({:.1}, {:.1}, {:.1})",
-                    spawn_id, prefab, sx, sy, sz
+                    spawn_id, prefab, transform.translation.x, transform.translation.y, transform.translation.z
                 );
 
                 // Detect player-tagged prefabs and assemble a PlayerConfig so the drain
@@ -186,7 +230,7 @@ pub fn action_executor_system(
                         &prefab,
                         &spawn_id,
                         Some(model_path.clone()),
-                        (sx, sy, sz),
+                        (transform.translation.x, transform.translation.y, transform.translation.z),
                         spawn_params.nameplate_config.player_enabled,
                     ))
                 } else {
@@ -220,8 +264,42 @@ pub fn action_executor_system(
                     // (its removal is deferred, not yet applied) and would double-despawn it.
                     commands.entity(entity).try_despawn();
                     spawn_params.registry.entities.remove(&target_id);
+
+                    // If the despawned entity was the currently-open container (e.g. a lootable
+                    // corpse decaying, or the id-reuse guard's own Despawn firing while its panel
+                    // is still open), tear the panel down the same way CloseContainer does.
+                    // Otherwise this leaves a ghost panel bound to a gone entity and
+                    // `panels_open` stuck above 0, permanently blocking interact/pickup/
+                    // tab-targeting (debug-detective finding, monster_corpse_loot.md v2).
+                    if scene_state.container_ui.active_container == Some(entity) {
+                        for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
+                            if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+                        }
+                        scene_state.inventory_ui.set_panel_open(false);
+                        game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
+                        scene_state.container_ui.active_container = None;
+                        game_events.write(GameEvent::Trigger("container.closed".to_string()));
+                    }
                 } else {
                     warn!("Action::Despawn: no entity with spawn id {:?}", target_id);
+                }
+            }
+            Action::SetDespawnTimer { entity: target_id, delay_secs } => {
+                let found = spawn_params
+                    .spawned
+                    .iter()
+                    .find(|(_, sid)| sid.0 == target_id)
+                    .map(|(e, _)| e);
+                if let Some(entity) = found {
+                    info!(
+                        "Action::SetDespawnTimer: '{}' (entity {:?}) despawns in {:.1}s",
+                        target_id, entity, delay_secs
+                    );
+                    commands
+                        .entity(entity)
+                        .insert(crate::capabilities::DespawnTimer { remaining_secs: delay_secs });
+                } else {
+                    warn!("Action::SetDespawnTimer: no entity with spawn id {:?}", target_id);
                 }
             }
             Action::PlayAnimation(anim) => {
@@ -1200,8 +1278,16 @@ pub fn action_executor_system(
                     warn!("Action::OpenShop: no ShopPanel in scene — add a ShopPanel UI node");
                     continue;
                 };
-                scene_state.inventory_ui.set_panel_open(true);
-                game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
+                // Same guard as Action::OpenContainer (see its comment): the single ShopPanel can
+                // only ever show one merchant at a time, so a second OpenShop while one is already
+                // active (e.g. two interactable merchants both in range of one interact press)
+                // must not double-count panels_open — otherwise the one matching CloseShop only
+                // brings it back to 1, permanently suppressing interact/collectible-pickup/
+                // tab-targeting until the next LoadScene.
+                if scene_state.inventory_ui.active_merchant_id.is_none() {
+                    scene_state.inventory_ui.set_panel_open(true);
+                    game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
+                }
 
                 // Track active merchant so BuyItem knows where to look up prices.
                 scene_state.inventory_ui.active_merchant_id = Some(merchant_id.clone());
@@ -1432,8 +1518,19 @@ pub fn action_executor_system(
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }
                 }
 
-                scene_state.inventory_ui.set_panel_open(true);
-                game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
+                // Only count this as a *new* panel opening if none was already open. The
+                // ContainerPanel is a single UI node with one `active_container` slot — a second
+                // OpenContainer while one is already showing just re-targets that same slot, it
+                // doesn't add a second visible panel. Without this guard, two interactable entities
+                // both in range of one interact press (each queuing its own OpenContainer in the
+                // same frame — e.g. two nearby lootable corpses) would increment `panels_open`
+                // twice for one visual panel, and the single matching CloseContainer that follows
+                // only brings it back to 1 — permanently suppressing interact/collectible
+                // pickup/tab-targeting (all gated on `panels_open == 0`) until the next LoadScene.
+                if scene_state.container_ui.active_container.is_none() {
+                    scene_state.inventory_ui.set_panel_open(true);
+                    game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
+                }
                 scene_state.container_ui.active_container = Some(container_entity);
                 game_events.write(GameEvent::Trigger(format!("container.opened:{}", entity_id)));
             }

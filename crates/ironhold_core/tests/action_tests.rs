@@ -996,3 +996,113 @@ fn test_set_target_and_clear_target_actions_mirror_into_primary_player() {
     let ring_count_after = app.world_mut().query::<&TrackingTarget>().iter(app.world()).count();
     assert_eq!(ring_count_after, 0, "the ring must despawn via the real Action::ClearTarget path");
 }
+
+// Regression coverage for `planning/features/monster_corpse_loot.md` v1's debug-detective
+// finding: `interactable_system` fires `entity.interacted` for every interactable within radius
+// on one keypress, not just the nearest, so two nearby lootable entities can each queue their own
+// `OpenContainer` in the same frame. Before the fix, `Action::OpenContainer` incremented
+// `panels_open` unconditionally on every call — a second open while one was already active
+// over-incremented a counter that only ever gets decremented once per `CloseContainer`,
+// permanently suppressing interact/collectible-pickup/tab-targeting (all gated on
+// `panels_open == 0`) until the next `LoadScene`.
+#[test]
+fn test_open_container_twice_without_close_does_not_double_count_panels_open() {
+    use ironhold_core::capabilities::inventory::{ContainerPanelMarker, Inventory, LoadedInventoryUi};
+    use ironhold_core::runtime::scene_manager::SpawnRegistry;
+
+    let mut app = setup_test_app();
+
+    // A single ContainerPanel UI node, as any project with lootable containers has.
+    app.world_mut().spawn((ContainerPanelMarker { columns: 3, rows: 3, font_size: 14.0 }, Visibility::Hidden));
+
+    // Two separate lootable entities (e.g. two corpses that both landed within interact range).
+    let corpse_a = app.world_mut().spawn((SpawnId("corpse_a".to_string()), Inventory::new(6))).id();
+    let corpse_b = app.world_mut().spawn((SpawnId("corpse_b".to_string()), Inventory::new(6))).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("corpse_a".to_string(), corpse_a);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("corpse_b".to_string(), corpse_b);
+
+    app.update();
+
+    // Both OpenContainer calls land in the same frame, exactly like two interactables hit by one
+    // interact keypress.
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::OpenContainer("corpse_a".to_string()));
+        queue.push(Action::OpenContainer("corpse_b".to_string()));
+    }
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<LoadedInventoryUi>().panels_open, 1,
+        "a second OpenContainer while one container is already open must not double-count panels_open"
+    );
+
+    // A single matching CloseContainer must fully clear it back to 0 — proving the counter isn't
+    // left permanently stuck above 0 from the earlier over-increment.
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::CloseContainer);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
+        "one CloseContainer must fully release the panel opened by two OpenContainer calls"
+    );
+}
+
+// Same class of bug as the OpenContainer test above, found in Action::OpenShop by the
+// debug-detective investigation into the monster_corpse_loot.md v1 playtest report — two
+// interactable merchants both in range of one interact press could each queue their own OpenShop
+// in the same frame, over-incrementing panels_open exactly like the OpenContainer case.
+#[test]
+fn test_open_shop_twice_without_close_does_not_double_count_panels_open() {
+    use ironhold_core::capabilities::inventory::{ShopPanelMarker, ShopEntriesContainerMarker, LoadedInventoryUi};
+    use ironhold_core::runtime::scene_manager::{SpawnRegistry, PrefabKey, LoadedPrefabCatalog};
+    use ironhold_core::schema::catalog::{PrefabCatalog, PrefabDef, PrefabKind, MerchantDef};
+    use std::collections::HashMap;
+
+    let mut app = setup_test_app();
+
+    // Two merchant prefabs, each with their own (empty) stock — contents don't matter for this test.
+    let mut prefabs = HashMap::new();
+    for key in ["merchant_a", "merchant_b"] {
+        prefabs.insert(key.to_string(), PrefabDef {
+            kind: PrefabKind::Prop,
+            merchant: Some(MerchantDef { stock: vec![], currency_stat: "gold".to_string() }),
+            ..Default::default()
+        });
+    }
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog { schema_version: 2, prefabs }));
+
+    // A single ShopPanel UI node with its entries container child, as any project with a shop has.
+    let shop_panel = app.world_mut().spawn((ShopPanelMarker { font_size: 14.0 }, Visibility::Hidden)).id();
+    app.world_mut().spawn((ShopEntriesContainerMarker, ChildOf(shop_panel)));
+
+    // Two separate interactable merchants.
+    let merchant_a = app.world_mut().spawn((SpawnId("merchant_a_01".to_string()), PrefabKey("merchant_a".to_string()))).id();
+    let merchant_b = app.world_mut().spawn((SpawnId("merchant_b_01".to_string()), PrefabKey("merchant_b".to_string()))).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("merchant_a_01".to_string(), merchant_a);
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("merchant_b_01".to_string(), merchant_b);
+
+    app.update();
+
+    // Both OpenShop calls land in the same frame, exactly like two interactables hit by one
+    // interact keypress.
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::OpenShop("merchant_a_01".to_string()));
+        queue.push(Action::OpenShop("merchant_b_01".to_string()));
+    }
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<LoadedInventoryUi>().panels_open, 1,
+        "a second OpenShop while one shop is already open must not double-count panels_open"
+    );
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::CloseShop);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
+        "one CloseShop must fully release the panel opened by two OpenShop calls"
+    );
+}
