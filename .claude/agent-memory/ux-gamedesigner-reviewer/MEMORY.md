@@ -42,4 +42,5 @@
 - [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
 - [Jump re-arm coupling](project_jump_rearm_coupling.md) — jumps re-arm only on a ground-cast landing edge; jump height + collider radius + ground_cast_length form one undocumented invariant
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
-- [container.* events undocumented](project_container_events_undocumented.md) — opened/closed/looted in no docs/ file; only literal-id chest wiring ships; canonical container prefab needs trigger_zone
+- [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — separate corpse entity via Spawn.at_entity + 6 per-instance global respawn rules; docs/30's corpse section is stale v1
+- [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot

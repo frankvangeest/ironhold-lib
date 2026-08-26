@@ -9,7 +9,7 @@
 - [Audio state pattern](audio_state_pattern.md) — AudioConfig/AudioState/SetVolume/ToggleMute six touchpoints; two project_loader insert sites; dual-write-to-GlobalVolume footgun
 - [NPC GLB Actor capsule pattern](npc_glb_actor_pattern.md) — components.npc works on GLB Actors via entity_spawner.rs; capsule dims now data-driven (NpcDef.collider_radius/height); npc.rs emits GameEvent not ActionQueue (correct)
 - [stat_overrides flow](stat_overrides_pattern.md) — SceneEntityDef.stat_overrides correctly covers all 3 non-player spawn paths (positive reference); StatMap-build is triplicated (refactor candidate)
-- [WorldLabel stat UI pattern](world_label_stat_ui_pattern.md) — stat_label/world_stat_bar dynamic-spawn route via DynamicStatUiQueue; depth_scale:None on dynamic spawns is accepted (popup precedent); widget-spawn block triplicated
+- [WorldLabel stat UI pattern](world_label_stat_ui_pattern.md) — stat_label/world_stat_bar dynamic-spawn route via DynamicStatUiQueue; dynamic spawns DO inherit depth_scale now; 4 bar styles; shared spawn helpers
 - [Player spawn via Action::Spawn](player_spawn_via_action_pattern.md) — tags:["player"] prefab → full player on Action::Spawn; PlayerConfig assembly duplicated in scene_loader.rs + action_executor.rs (must stay in sync)
 - [Camera shake / singleton-targeted action](camera_shake_pattern.md) — CameraShake targets OrbitCamera singleton via SceneStateParams query (not spawn-ID); decay system mutates only Transform, no ActionQueue; chain AFTER camera_orbit_system
 - [Dialogue system pattern](dialogue_system_pattern.md) — capability-pushes-designer-authored-Action is OK (action_bar precedent); ActiveDialogue is one resource via SceneState SystemParam; choice do_actions bypass {self}/{target} rewrite; portrait field is dead; dialogue.started/ended undocumented
@@ -35,4 +35,5 @@
 - [WorldLabel screen_offset pattern](world_label_screen_offset_pattern.md) — pixel-space widget stacking; which sites expose it vs hardcode ZERO; scene-wide nameplate offset is the remaining gap
 - [Flycam spectator mode pattern](flycam_spectator_mode_pattern.md) — SuppressPlayerCameras as derived-not-authored state (reuse this); early-return hides split/party warns; no RON un-do for suppression
 - [Derived physics constant pattern](derived_physics_constant_pattern.md) — three-tier derive/expose/invariant rule (jump_air_grace, slope+coyote knobs, sensors-are-never-floor); single CharacterController site; can_jump branch-exclusivity footgun
+- [Lootable corpse pattern](lootable_corpse_pattern.md) — v2 separate-corpse + generic `Action::Spawn.at_entity`; 5-file RON recipe; 6 traps incl. respawn-rule-in-`on:`-lost-while-paused, no at_entity offset
 - [Diagnostic-only feature pattern](diagnostic_only_feature_pattern.md) — runtime-warn + CLI-error twin; prefab-catalog vs per-scene scoping rule; PrefabDef tag helpers moved to schema/ for CLI reach
