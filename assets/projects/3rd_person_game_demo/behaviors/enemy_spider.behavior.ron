@@ -1,6 +1,13 @@
 // Spider enemy — wide patrol → fast chase → aggressive claw attack loop.
 // npc.player_reached:{self}  fires when the spider closes to approach_distance (2.0 m).
 // npc.player_lost:{self}     fires when the player escapes chase_radius.
+//
+// Death (planning/features/monster_corpse_loot.md v2) — same pattern as
+// enemy_zombie.behavior.ron: this entity never revives; it swaps for a separate `spider_corpse`
+// entity at death and despawns, with a fixed respawn timer armed independently before that. This
+// supersedes the old single-"dead"-state design entirely — planning/backlog.md's "Stale
+// EmitEventAfterDelay fires after entity state exit" bug described a `spider.hide:{self}` timer
+// that no longer exists in this file at all; if that symptom resurfaces, it is not this mechanism.
 (
     schema_version: 1,
     initial_state: "alive",
@@ -11,6 +18,8 @@
         (
             name: "alive",
             // ResetToSpawn first so the entity appears at its spawn point, not its death spot.
+            // Only reachable via the "give up chasing" transition below now — this entity is
+            // never revived in place after death.
             entry_actions: [
                 PlayAnimationOn(target: "{self}", clip: "npc_revive"),
                 EmitEvent("npc.revive:{self}"),
@@ -46,20 +55,26 @@
         ),
         (
             name: "dead",
+            // npc.dead stops the NPC system from moving the corpse for the remainder of the death
+            // animation. No authoritative death-animation-duration comment existed for this
+            // prefab before this change (unlike zombie's 3.0s/snake's 2.25s) — 2.5s is an estimate
+            // in that same range; retune if the swap visibly cuts the animation short or lags it.
             entry_actions: [
                 EmitEvent("npc.dead:{self}"),
                 PlayAnimationOn(target: "{self}", clip: "death"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
-                EmitEventAfterDelay(event: "spider.hide:{self}", delay_secs: 15.0),
-                EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 30.0),
+                EmitEventAfterDelay(event: "spider.swap_to_corpse:{self}", delay_secs: 2.5),
+                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 60.0),
             ],
             exit_actions: [],
             on: [
                 (
-                    event: "spider.hide:{self}",
+                    event: "spider.swap_to_corpse:{self}",
                     do_actions: [
-                        SetEntityVisible(entity: "{self}", visible: false),
+                        Despawn("{self}_corpse"),
+                        Spawn(prefab: "spider_corpse", id: "{self}_corpse", at_entity: "{self}"),
+                        Despawn("{self}"),
                     ],
                 ),
             ],
@@ -69,8 +84,7 @@
     transitions: [
         ( from: "alive",     on: "npc.player_reached:{self}",  to: "attacking" ),
         ( from: "attacking", on: "npc.player_lost:{self}",     to: "alive"     ),
-        ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"      ),
-        ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"      ),
-        ( from: "dead",      on: "entity.respawned:{self}",     to: "alive"     ),
+        ( from: "alive",     on: "stat.{self}.health.depleted", to: "dead"     ),
+        ( from: "attacking", on: "stat.{self}.health.depleted", to: "dead"     ),
     ],
 )

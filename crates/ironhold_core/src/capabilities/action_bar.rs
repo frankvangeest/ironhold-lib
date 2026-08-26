@@ -386,8 +386,10 @@ fn action_needs_target(action: &Action) -> bool {
         Action::ShowFloatingText { entity, .. } => entity.contains("{target}"),
         Action::SetEntityVisible { entity, .. } => entity.contains("{target}"),
         Action::Despawn(s) => s.contains("{target}"),
+        Action::SetDespawnTimer { entity, .. } => entity.contains("{target}"),
         Action::EmitEvent(s) => s.contains("{target}"),
         Action::PlayAnimationOn { target, .. } => target.contains("{target}"),
+        Action::Spawn { at_entity, .. } => at_entity.as_deref().is_some_and(|e| e.contains("{target}")),
         _ => false,
     }
 }

@@ -104,6 +104,9 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.interacted:<id>"` — player within radius + pressed the interact key (default: `"KeyF"`; override via `inputs.interact` on the player prefab) ✅
+- `"container.opened:<id>"` — emitted by `Action::OpenContainer(id)` after the `ContainerPanel` UI is shown for the given entity's `Inventory` ✅
+- `"container.closed"` — emitted by `Action::CloseContainer` (no entity id — only one container can be open at a time) ✅
+- `"container.looted:<id>"` — emitted by `Action::TakeAllFromContainer` once every item has been transferred out of the given entity's `Inventory`. **Does not fire if the container was already empty** — `TakeAllFromContainer` early-returns before emitting when there is nothing to transfer, so an empty container is indistinguishable from "never looted" to anything listening for this event ✅
 - `"entity.attacked:<id>"` — emitted from skill slot `do_actions` (alongside `ModifyStat`) when the player hits an enemy; causes NPCs with `on_player_near: Chase | Interact` to enter `Investigating` state (walks toward attacker's last-known position); `on_player_near: Flee` NPCs are immune ✅
 - `"npc.player_spotted:<id>"` — NPC transitioned from Alerted to Chase after detecting player ✅
 - `"npc.player_reached:<id>"` — NPC reached the player's position (entered Interact) ✅
@@ -498,6 +501,194 @@ When an entity should reappear after a delay — training dummies, respawning en
 | Entity has persistent state (stats, position, spawn ID) to preserve | hide + delay + restore |
 | Entity is a one-shot consumable (coin, key) that should not reappear | `Despawn` |
 | Entity is dynamically cloned from a template each time | `Despawn` + `Spawn` |
+| A killed enemy should be lootable, then decay faster once looted than an unlooted one | `Despawn` + `Spawn(..., at_entity: "{self}")` into a separate corpse entity — see "Lootable corpse (loot-on-death)" below |
+
+### Lootable corpse (loot-on-death)
+
+*(`planning/features/monster_corpse_loot.md` v2 — supersedes an earlier same-entity design that
+put `interactable:`/`inventory:` directly on the monster prefab and used `SetEntityVisible` +
+`entity.respawned` for revival. That approach could not support a respawn timer independent of the
+corpse's own loot-decay timer — see "Why not the same entity?" below — so it was replaced with the
+separate-entity approach documented here.)*
+
+A monster's corpse is a **separate entity**, not the monster hidden in place. On death, the
+monster plays its death animation, spawns a dedicated `{monster}_corpse` prop entity at its exact
+death position, and despawns itself. Looting and decay are entirely the corpse's own concern; the
+monster's own respawn (a fixed delay, independent of whether the corpse is ever looted) is handled
+by a global rule that no longer depends on the original entity existing.
+
+```ron
+// behaviors/enemy_zombie.behavior.ron — "dead" state (excerpt)
+(
+  name: "dead",
+  entry_actions: [
+    // ...death animation, effects...
+    EmitEventAfterDelay(event: "zombie.swap_to_corpse:{self}", delay_secs: 3.0), // matches death anim length
+    EmitEventAfterDelay(event: "monster.respawn:{self}",       delay_secs: 60.0),
+  ],
+  on: [
+    (
+      event: "zombie.swap_to_corpse:{self}",
+      do_actions: [
+        Despawn("{self}_corpse"),                                       // guard — see below
+        Spawn(prefab: "zombie_corpse", id: "{self}_corpse", at_entity: "{self}"),
+        Despawn("{self}"),
+      ],
+    ),
+  ],
+),
+```
+
+`Spawn`'s `at_entity` field (see `docs/20_data_formats.md`) resolves the corpse's full transform —
+position, rotation, and scale — from the monster's own live `GlobalTransform` at the moment the
+swap fires, so the corpse always appears exactly where the monster died, even though monsters
+patrol and their death position varies run to run. A fixed `position:`/`spawn_point:` would not
+work here for that reason.
+
+**The `Despawn("{self}_corpse")` guard exists because the corpse's id is deliberately reused**
+across every death of the same monster slot (`zombie_01` always produces `zombie_01_corpse`, never
+a uniquely-numbered id). This keeps the respawn rule below simple — a fixed `spawn_point`, not a
+counter — at the cost of a real constraint: **a `SetDespawnTimer` (see below), not
+`EmitEventAfterDelay`, must be what despawns a corpse.** `EmitEventAfterDelay` fires a global,
+string-matched event with no owner — a decay timer armed by an *older* corpse generation would
+still match and despawn a *newer* corpse sharing the same reused id, arriving well before the new
+corpse's own legitimate decay time. This was found, during this feature's own review pass, to
+compound every kill cycle and eventually make a slot's loot permanently unobtainable — not a
+theoretical concern. `SetDespawnTimer` avoids the whole class of bug: the timer is a component
+living directly on the corpse entity, so despawning that entity (via this guard, or via decay)
+removes the timer with it — a later corpse under the same id starts with no leftover timer to
+compete with its own.
+
+**Global respawn rule** (`logic/state_machine.ron`'s top-level `global_on:`, not `"playing"`'s
+own state-scoped `on:` list):
+
+```ron
+global_on: [
+  ( event: "monster.respawn:zombie_01", do_actions: [
+      Spawn(prefab: "enemy_zombie", id: "zombie_01", spawn_point: "zombie_01_spawn", yaw_deg: 200.0)
+  ] ),
+  // ...one rule per monster slot...
+],
+```
+
+This **must** be `global_on`, not a state-scoped rule. `tick_delayed_events_system` ticks on raw
+`Time` with no pause-gate, so a monster's respawn timer can fire while the game is in a
+non-`"playing"` state (e.g. paused) — a state-scoped `on:` handler simply never matches in that
+case, silently and permanently losing that monster's respawn for the rest of the session.
+`global_on` fires "regardless of state, no state change," so it always catches the event. The event
+name is a single, monster-type-agnostic `monster.respawn:{id}` convention (not
+`zombie.respawn:{id}`/`snake.respawn:{id}`/etc.) specifically so a future 4th monster type is a
+copy-paste of one rule line, not a new per-type event name to keep in sync everywhere.
+
+**The corpse prefab** carries the fields a static chest would, plus a shared behavior file:
+
+```ron
+// prefabs/prefabs.ron — zombie_corpse (excerpt)
+"zombie_corpse": (
+  kind: Prop,
+  interactable: (radius: 2.0, hint_text: "Loot"),
+  inventory: (
+    max_slots: 6,
+    initial_items: [
+      (item_key: "gold_coin", count: 15),
+      (item_key: "health_potion", count: 1),
+    ],
+  ),
+  behavior: "behaviors/lootable_corpse.behavior.ron",
+  // no trigger_zone, no colliders — see the mass-veto note below
+),
+```
+
+**Deliberately no `trigger_zone`.** A `trigger_zone` sensor gets no `ColliderMassProperties`
+override at spawn, so its own volume-derived mass would fold into the entity's total rigid-body
+mass. Corpse props have no collider at all, sidestepping this — a real engine bug independent of
+this feature, tracked in `planning/backlog.md`. The consequence is just that there's no
+auto-close-on-walk-away — the player closes the loot panel with its own close button instead
+(already globally wired via `ui.button_pressed:close_container`, the same as `chest_01`'s panel).
+
+**`behaviors/lootable_corpse.behavior.ron` is shared by every monster's corpse prefab** — every
+field in it is `{self}`-relative, so `zombie_corpse`/`snake_corpse`/`spider_corpse`/any future one
+point at the same file with no changes needed:
+
+```ron
+(
+  schema_version: 1,
+  initial_state: "fresh",
+  states: [
+    (
+      name: "fresh",
+      entry_actions: [ SetDespawnTimer(entity: "{self}", delay_secs: 300.0) ],
+      on: [ ( event: "entity.interacted:{self}", do_actions: [ OpenContainer("{self}") ] ) ],
+    ),
+    (
+      name: "looted",
+      entry_actions: [
+        CloseContainer,                                        // close before anything else
+        SetDespawnTimer(entity: "{self}", delay_secs: 5.0),
+      ],
+      on: [],
+    ),
+  ],
+  transitions: [ ( from: "fresh", on: "container.looted:{self}", to: "looted" ) ],
+)
+```
+
+`SetDespawnTimer(entity, delay_secs)` arms a self-contained despawn on the named entity — after
+`delay_secs` of real time it despawns automatically, no event round-trip and no `on:` handler
+needed to react to it (unlike `EmitEventAfterDelay`, which needs a paired `on:` handler and shares
+the corpse-id-reuse hazard described above). Re-arming it (calling it again on the same entity, as
+the `fresh` → `looted` transition does) overwrites the previous countdown rather than stacking.
+
+**Why not the same entity? (superseded v1 approach)** An earlier version of this feature put
+`interactable:`/`inventory:` directly on the monster prefab and split its `dead` state into
+`dead_full`/`dead_looted`, using `SetEntityVisible` to hide the corpse and `entity.respawned` to
+revive it in place. This worked until the feature's actual requirement — the corpse persists for
+up to 5 minutes independent of when the monster respawns (a fixed 1 minute after death) — because
+a same-entity design has no way to keep the monster "dead" (so its own corpse state machine can
+keep tracking loot/decay) while also being independently "alive" (so it can be fought again). The
+two timers are only independent if they belong to two different entities, hence the redesign above.
+
+**Key notes:**
+- `container.looted:{id}` only fires when `TakeAllFromContainer` actually transfers at least one
+  item — a corpse spawned with no loot never reaches `looted` via this path, and just decays on
+  `fresh`'s own 300s ambient timer instead. This is expected, not a bug: "empty" and "never looted"
+  are indistinguishable to this pattern.
+- `CloseContainer` in `looted`'s entry actions runs before `SetDespawnTimer` — entry actions are
+  queued FIFO, so the panel is never left open and bound to a corpse that's about to disappear.
+- **Opening a container while one is already open no longer double-counts `panels_open`.**
+  `interactable_system` fires `entity.interacted` for *every* interactable within radius on one
+  keypress, not just the nearest — with two corpses near each other, one interact press could queue
+  two `OpenContainer` calls in the same frame. `Action::OpenContainer` only increments `panels_open`
+  when no container was already open, since the single `ContainerPanel` UI can only ever show one
+  container at a time regardless of how many `OpenContainer` calls land — without this guard, a
+  second call while one was already open would over-increment a counter that only ever gets
+  decremented once per `CloseContainer`, permanently suppressing interact/collectible-pickup/
+  tab-targeting (all gated on `panels_open == 0`) until the next `LoadScene`. The same guard applies
+  to `OpenShop`.
+- **`Action::Despawn` closes the container panel if the despawned entity is the one currently
+  open.** Without this, a corpse decaying (or the id-reuse guard above) while its own loot panel is
+  open would leave a ghost panel bound to a gone entity and `panels_open` stuck above 0,
+  permanently blocking interact/pickup/tab-targeting.
+- **The player's target selection clears when the targeted entity is genuinely despawned, not just
+  hidden.** `target_auto_clear_system` originally only checked `Visibility::Hidden` on an entity
+  still present in `SpawnRegistry` — correct for the old hide-in-place revival, but a real
+  `Despawn` (this feature's death sequence) removes the entity from the registry outright. Treating
+  "not found in the registry" the same as "hidden" prevents a stale target from silently surviving
+  until the same id is reused by that slot's next respawn, up to 60s later.
+- An orphaned `stat_label`/`world_stat_bar` widget (one still tracking a despawned entity) is
+  cleaned up automatically by `stat_widget_cleanup_system` (mirrors the pre-existing
+  `nameplate_cleanup_system` pattern) — without it, `Action::Despawn` alone left every stat-bar
+  update system logging a "stat_key not found" warning every frame for the gone entity.
+- Corpse-id reuse has one accepted, narrow residual: if the same monster slot dies again while its
+  previous corpse is *still on screen* (not yet decayed or looted), the guard despawn silently
+  replaces the old corpse with the new one — the older corpse's loot, if unlooted, is lost rather
+  than merged. Logged to `planning/backlog.md`'s Icebox ("Monotonic per-entity id generation for
+  RON action substitution") as a real fix would need a counter-based id primitive RON doesn't have
+  today.
+- See `crates/ironhold_core/src/capabilities/inventory.rs` for `Inventory`/`ContainerPanel`,
+  `crates/ironhold_core/src/capabilities/despawn_timer.rs` for `SetDespawnTimer`'s implementation,
+  and `assets/projects/3rd_person_game_demo/behaviors/{enemy_zombie,lootable_corpse}.behavior.ron`
+  for the full files.
 
 ### Multi-scene navigation via portal prefabs
 

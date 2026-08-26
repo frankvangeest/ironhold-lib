@@ -560,6 +560,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::Log(_) => "Log",
         Action::Spawn { .. } => "Spawn",
         Action::Despawn(_) => "Despawn",
+        Action::SetDespawnTimer { .. } => "SetDespawnTimer",
         Action::PlayAnimation(_) => "PlayAnimation",
         Action::PlaySound { .. } => "PlaySound",
         Action::PlayMusicLoop { .. } => "PlayMusicLoop",
