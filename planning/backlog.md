@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Dynamic animation control — seek + freeze on `PlayAnimationOn`** — `feature/dynamic-animation-control`. See `planning/features/dynamic_animation_control.md`.
+
 ---
 
 ## Bugs
