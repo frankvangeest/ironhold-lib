@@ -11,7 +11,7 @@
 
 ## Active
 
-_(nothing currently active — pull the next batch from Queued below.)_
+- [ ] **Authorable `Label`/`Button` font size + overflow clipping** — `feature/ui-label-font-size`. See `planning/features/ui_label_font_size.md`.
 
 ---
 
