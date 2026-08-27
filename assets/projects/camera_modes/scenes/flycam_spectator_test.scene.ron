@@ -45,7 +45,7 @@
   ui: [
     Label((
       id: "hint",
-      text: "Spectator mode: flycam has camera priority. WASD + mouse to fly. Player also moves on WASD — nothing follows it.",
+      text: "Spectator mode: flycam has camera priority. WASD + mouse to fly. Player also moves on WASD - nothing follows it.",
       position: (16.0, 16.0),
       size: (900.0, 28.0),
       align: Left,

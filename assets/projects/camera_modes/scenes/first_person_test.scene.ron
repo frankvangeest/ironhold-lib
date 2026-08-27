@@ -41,7 +41,7 @@
   ui: [
     Label((
       id: "hint",
-      text: "camera_mode: FirstPerson — mouse look pitches the camera and turns the character. WASD to move.",
+      text: "camera_mode: FirstPerson - mouse look pitches the camera and turns the character. WASD to move.",
       position: (16.0, 16.0),
       size: (760.0, 28.0),
       align: Left,

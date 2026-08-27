@@ -43,7 +43,7 @@
   ui: [
     Label((
       id: "hint",
-      text: "camera_mode: Fixed — static camera at a world position, looking at a fixed point. Walk out of frame and back in.",
+      text: "camera_mode: Fixed - static camera at a world position, looking at a fixed point. Walk out of frame and back in.",
       position: (16.0, 16.0),
       size: (800.0, 28.0),
       align: Left,

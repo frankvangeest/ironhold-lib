@@ -19,6 +19,7 @@
 - [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — 3 old gaps CLOSED; still no policy field table, clips-alias looping + un-freezing undocumented
 - [dynamic_animation_control demo](project_dynamic_animation_control_demo.md) — canonical seek/freeze demo; flycam default speed 100 is wrong for dioramas; test_web baselines EVERY scene, no skip hook
 - [World label legibility](project_world_label_legibility.md) — captions are fixed screen-px & never wrap; px/m depends only on viewport HEIGHT; camera-back makes overlap WORSE; short-token+legend pattern
+- [Em-dash font glyph gap](project_em_dash_font_glyph_gap.md) — engine font has no `—` glyph, renders as tofu box in ANY project's in-game text; always flag it, recommend ASCII hyphen `-`
 - [Target indicator color tiers](project_target_indicator_color_tiers.md) — 3-tier ring color (indicator_color > category > scene color); silent fallthrough undocumented; indicator_color & "ally" have no shipped example
 - [CameraShake re-trigger ambiguity](project_camera_shake_retrigger_ambiguity.md) — re-trigger semantics documented 3 contradictory ways (restart vs merge+cap vs replace); verify doc against shipped executor
 - [Dialogue system doc gaps](project_dialogue_system_doc_gaps.md) — hint_text undocumented on InteractableDef; dialogue.started payload is spawn id not prefab; condition absent-key semantics unexplained; canonical example 3rd_person_game_demo

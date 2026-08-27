@@ -121,7 +121,7 @@
     // scene where each player's own action bar visibly drains their own mana pool.
     Label((
       id: "static_bars_hint",
-      text: "(Mana bars here are static — see Room 3 to see per-player pools drain live)",
+      text: "(Mana bars here are static - see Room 3 to see per-player pools drain live)",
       position: (20.0, 152.0),
       size: (900.0, 32.0),
     )),

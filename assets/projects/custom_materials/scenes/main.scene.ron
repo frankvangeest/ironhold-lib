@@ -352,7 +352,7 @@
     )),
     Label((
       id: "title_label",
-      text: "Custom Materials Demo — WASD + mouse to fly",
+      text: "Custom Materials Demo - WASD + mouse to fly",
       position: (16.0, 56.0),
       size: (480.0, 32.0),
     )),

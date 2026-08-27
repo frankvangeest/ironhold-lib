@@ -4,7 +4,7 @@
         (
             id: "greeting",
             speaker: "Guard",
-            body: "Hail, traveller! You've ventured into dangerous lands. The undead have been restless — stay sharp and keep your weapon ready.",
+            body: "Hail, traveller! You've ventured into dangerous lands. The undead have been restless - stay sharp and keep your weapon ready.",
             choices: [
                 (
                     label: "What's happened here?",
@@ -53,13 +53,13 @@
         (
             id: "ruins_accepted",
             speaker: "Guard",
-            body: "Good luck, warrior. The ruins lie north-east, past the old stone bridge. Don't let the spiders slow you down — they're the least of your problems up there.",
+            body: "Good luck, warrior. The ruins lie north-east, past the old stone bridge. Don't let the spiders slow you down - they're the least of your problems up there.",
             advance_delay_secs: 3.0,
         ),
         (
             id: "farewell",
             speaker: "Guard",
-            body: "Stay safe, traveller. And if you change your mind about those ruins — you know where to find me.",
+            body: "Stay safe, traveller. And if you change your mind about those ruins - you know where to find me.",
             choices: [
                 (
                     label: "Farewell.",

@@ -178,7 +178,7 @@
     // the same clipping-budget reason as ring_hint above.
     Label((
       id: "tint_hint",
-      text: "Rings still tint by colour (P1 blue, P2 pink) — only WHERE they show changed",
+      text: "Rings still tint by colour (P1 blue, P2 pink) - only WHERE they show changed",
       position: (20.0, 240.0),
       size: (900.0, 32.0),
     )),
