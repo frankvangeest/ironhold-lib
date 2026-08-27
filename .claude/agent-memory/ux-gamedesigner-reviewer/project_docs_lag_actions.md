@@ -4,11 +4,30 @@ description: Designer-facing docs (20_data_formats.md actions table, 30_runtime_
 type: project
 ---
 
-When new `Action` variants land in `crates/ironhold_core/src/schema/actions.rs`, three doc surfaces are consistently missed:
+When new `Action` variants — **or new optional fields on an existing variant** — land in
+`crates/ironhold_core/src/schema/actions.rs`, five doc surfaces are consistently missed:
 
-1. `docs/20_data_formats.md` — the "Available actions" table at ~line 1143 (under `## logic/rules.ron — LogicRulesAsset`)
-2. `docs/30_runtime_events_and_logic.md` — the `### Actions ✅` appendix at ~line 258 AND the `## Action model` action-category section at ~line 125
-3. `docs/STATUS.md` — the `Engine ABI` actions list at ~line 85
+1. `docs/20_data_formats.md` — the "Available actions" table (~line 3700, under
+   `## logic/rules.ron — LogicRulesAsset`). **This one usually DOES get updated** — it's the other
+   four that lag.
+2. `docs/30_runtime_events_and_logic.md` — the "Implementation snapshot" action bullets (~line 47-60),
+   the `#### Animation/audio actions` / `## Action model` category lists (~line 167-173), AND the
+   `### Actions ✅` appendix (~line 297-303)
+3. `docs/STATUS.md` — the `Engine ABI` actions list at ~line 103
+4. `docs/STATUS.md` — the `### Capabilities` table row for the affected area (e.g. the
+   "Animation playback" row, ~line 53, still reads only "Data-configured via `player.animations`")
+5. `docs/60_contributing.md` — the `validate <project_dir>` ▸ **"Checks performed"** list
+   (~line 236) and its `--strict` counterpart (~line 251), whenever the change also adds an
+   `ironhold_cli validate` error. House style there: name the `error_type` string in backticks and
+   cross-link to the relevant docs/20 section.
+
+**Confirmed instance (2026-08-26, `feature/dynamic-animation-control`):** `PlayAnimationOn` gained
+`start_at_fraction` + `freeze`. Surface 1 was updated well; surfaces 2, 3, 4 and 5 were all missed
+(docs/30 still says `PlayAnimationOn { target, clip }`, and `PlayAnimationOn` is *entirely absent*
+from both docs/30 category lists; STATUS.md still says
+`Action::PlayAnimationOn { target: String, clip: String }`; docs/60 has no
+`animation_start_at_fraction_out_of_range` line). Same shape as the older list below — new fields
+on an existing action lag exactly like new actions do.
 
 There is an explicit reminder in `30_runtime_events_and_logic.md` at the end of the appendix:
 > "New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example."

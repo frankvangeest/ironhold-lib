@@ -1,15 +1,42 @@
 ---
-name: AnimationPolicy doc gaps (sources + PlayAnimationOn)
-description: animation_sources field is undocumented in the AnimationPolicy section, and PlayAnimationOn is absent from the Available actions table; the clip-vs-id distinction is unexplained
-type: project
+name: animation-policy-doc-gaps
+description: AnimationPolicy has no top-level field table in docs/20; clips-alias looping semantics undocumented; historical record of which gaps closed when (PlayAnimationOn row, clip resolution order, animation_sources)
+metadata:
+  type: project
 ---
 
-The AnimationPolicy section of `docs/20_data_formats.md` (## prefabs/animation/*.ron, ~line 1676) has two persistent designer-facing gaps:
+Section: `docs/20_data_formats.md` ▸ `## prefabs/animation/*.ron — AnimationPolicy` (~line 3510).
 
-1. **`animation_sources` is undocumented as a field.** It appears only in a prose warning (~line 1682: "Without it, `animation_sources` retargeting silently does nothing") and is ABSENT from both the example RON block (~1685-1719) and any field table. Yet it is load-bearing: in `3rd_person_game_demo/prefabs/animation/player_policy_human.ron` a designer MUST add the GLB source (e.g. `anim_magic`, `anim_hit_death`) to `animation_sources` before a clip in that source can be referenced. The list entries are catalog keys pointing at animation GLBs. A designer cannot discover this from docs — they will add a clip to `clips:`/`overrides:` and silently get no animation because the source GLB was never loaded.
+**CLOSED as of 2026-08-26 (`feature/dynamic-animation-control`)** — do not re-flag these:
+1. `animation_sources` is now explained in a comment inside the example RON block (~3532-3535:
+   "A clip referenced in `clips:` or `overrides[].clip` must come from a GLB listed here, or it
+   silently won't play"). Still no field-table row, but the footgun is now discoverable.
+2. `PlayAnimationOn` now HAS a row in the "Available actions" table (~line 3711), with target,
+   clip, `start_at_fraction`, `freeze` all described.
+3. Clip-vs-id resolution IS now documented (~line 3590): **override `id` → `clips:` alias → raw
+   glTF clip name**, in that order. Cite this instead of flagging it as unknown.
 
-2. **`PlayAnimationOn` is absent from the "Available actions" table** (~line 1776-1809). The table lists only `PlayAnimation("id")` (semantic ID, no target — uses the implicit player). But scenes/state machines target a specific entity with `PlayAnimationOn(target: "player_01", clip: "attack_light")`. This is the form actually used in `main.scene.ron` action bar slots and `state_machine.ron` death rule. (Already tracked in [[Docs lag the action schema]] as a missing action; this memory adds the clip-vs-id nuance.)
+**STILL OPEN:**
+- **There is no top-level `AnimationPolicy` field table anywhere in docs/.** `default_transition_ms`,
+  `animation_sources`, `base` (and its four required sub-fields `idle`/`walk`/`run`/`jump_loop`),
+  `clips`, `overrides` are documented ONLY by the example RON block + prose. Only
+  `AnimationOverrideDef` gets a real table (~3594). A designer cannot see which fields are
+  optional.
+- **Whether a `clips:`-alias playback loops is undocumented.** `clips:` entries are a bare
+  `name → glTF clip` map with no `looping` field, unlike `overrides[]` which has an explicit
+  `looping: bool`. `dynamic_animation_control`'s third example asserts a `clips:` alias
+  ("walk") keeps looping after a mid-clip seek — that behaviour is asserted in RON and in a
+  scene label but stated nowhere in docs/. Flag as "needs verification" on any animation work.
+- **How to UN-freeze a frozen clip is undocumented.** `PlayAnimationOn(..., freeze: true)` has no
+  documented inverse. Whether a later `PlayAnimationOn` with `freeze: false` (or a different
+  clip) resumes/replaces it is not stated and has no shipped example.
 
-3. **`PlayAnimation(id)` vs `PlayAnimationOn(clip:)` are semantically different and the docs never contrast them.** `PlayAnimation` takes a *semantic override id* (an `overrides[].id`). `PlayAnimationOn` takes a `clip:` arg — designers reasonably assume this is also a semantic id, and in the demo it happens to work because each override's `id` equals a `clips:` alias of the same name. Whether `clip:` resolves against `overrides[].id`, the `clips:` map alias, or the raw glTF clip name is NOT documented. Needs verification against the executor before asserting which one it is. Flag as "needs verification" in reviews.
+**Reserved override IDs** `jump_enter`/`jump_exit` are fired automatically for every player
+prefab; a locomotion-only policy still needs both or you get per-jump WARN spam. Smallest working
+example: `local_coop_demo/prefabs/animation/player_locomotion.ron` (docs/20 ~3519-3526).
 
-**How to apply:** When reviewing animation changes, check that (a) any new GLB referenced by clips/overrides is in `animation_sources`, (b) `PlayAnimationOn` has a row in the actions table, and (c) the clip-vs-id resolution is documented. Canonical full example: `3rd_person_game_demo/prefabs/animation/player_policy_human.ron`.
+Canonical full policy: `3rd_person_game_demo/prefabs/animation/player_policy_human.ron`.
+Canonical seek/freeze policy: `dynamic_animation_control/prefabs/animation/zombie_policy.ron`
+(deliberately carries an override id, a `clips:` alias, AND raw-name-reachable clips so all three
+resolution branches are exercised in one file).
+Related: [[docs-lag-actions]], [[dynamic-animation-control-demo]], [[corpse-loot-v2-pattern]].

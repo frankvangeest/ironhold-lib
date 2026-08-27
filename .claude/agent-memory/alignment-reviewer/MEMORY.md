@@ -36,5 +36,5 @@
 - [Flycam spectator mode pattern](flycam_spectator_mode_pattern.md) — SuppressPlayerCameras as derived-not-authored state (reuse this); early-return hides split/party warns; no RON un-do for suppression
 - [Derived physics constant pattern](derived_physics_constant_pattern.md) — three-tier derive/expose/invariant rule (jump_air_grace, slope+coyote knobs, sensors-are-never-floor); single CharacterController site; can_jump branch-exclusivity footgun
 - [Lootable corpse pattern](lootable_corpse_pattern.md) — v2 separate-corpse + generic `Action::Spawn.at_entity`; 5-file RON recipe; 6 traps incl. respawn-rule-in-`on:`-lost-while-paused, no at_entity offset
-- [Animation seek/freeze pattern](animation_seek_freeze_pattern.md) — 3 silent-break traps for `PlayAnimationOn.start_at`/`freeze`: resolver branch merge, executor-before-drain_spawn_queue, WASM re-play
+- [Animation seek/freeze pattern](animation_seek_freeze_pattern.md) — shipped `start_at_fraction`/`freeze`: 6 touchpoints, corpse-pose recipe, freeze-without-fraction + no-unfreeze-in-place footguns, test_web has no scene-exclusion
 - [Diagnostic-only feature pattern](diagnostic_only_feature_pattern.md) — runtime-warn + CLI-error twin; prefab-catalog vs per-scene scoping rule; PrefabDef tag helpers moved to schema/ for CLI reach

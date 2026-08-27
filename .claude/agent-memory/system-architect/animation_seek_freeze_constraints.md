@@ -42,7 +42,22 @@ removing an `ActiveAnimation` entirely leaves the last-written bone transforms i
 pose persists for free — that's the cheap path for a long-lived static pose, and it's also why
 bug (1) stays invisible until something else plays.
 
-**6. `start_at` of 1.0 only means "final frame" for a non-looping clip.** `update()` does
+**6a. `AnimationPlayer::start` → `ActiveAnimation::replay()` (lib.rs:552) resets ONLY
+`just_completed`/`completions`/`elapsed`/`last_seek_time`/`seek_time` — NOT `paused`, NOT `repeat`,
+NOT `weight`.** So any code path that replays the *same* node index twice inherits the previous
+play's repeat mode and paused flag. Verified 2026-08-26. **Why it matters:** our
+`animation_playback_system` only ever calls `active_anim.repeat()` when `should_loop` is true and
+has no `else set_repeat(Never)`. That was unreachable while the gate was `current != last_played`
+(same node twice was impossible); `pending_seek` makes it reachable, so a looping→non-looping
+same-clip re-seek keeps `RepeatAnimation::Forever`. Prefer an unconditional
+`set_repeat(if should_loop { Forever } else { Never })`, and an explicit `resume()` when
+not freezing, over relying on pre-play cleanup alone.
+
+**6b. `AnimationTransitions::play` with `new_animation == old_animation_index`** pushes a fade-out
+transition for the old (same) node then immediately `retain`s it away, so a same-node replay is
+safe and leaves no lingering transition. (transition.rs:78-100.)
+
+**7. `start_at` of 1.0 only means "final frame" for a non-looping clip.** `update()` does
 `seek_time %= clip_duration`, so on a `repeat()`ed clip a 100% seek wraps to 0. The existing
 "hold last frame" behavior of `death`/`attack_light` overrides comes from `RepeatAnimation::Never`
 + `is_finished()` short-circuiting `update()` — no new mechanism needed for a natural end-hold.

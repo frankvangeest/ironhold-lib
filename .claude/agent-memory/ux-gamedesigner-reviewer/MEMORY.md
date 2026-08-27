@@ -7,7 +7,7 @@
 - [camera_mode reachability matrix](project_camera_mode_reachability_matrix.md) — HISTORICAL/fixed; keep for the "check WHICH spawn path the example exercises" review lesson
 - [Camera transition & "default" sentinel](project_camera_transition_and_default_sentinel.md) — transition: is read from the TARGET mode, so "default" round-trips snap back; fov has 3 different defaults (45/60/90)
 - [RON enum double-paren trap](project_ron_enum_double_paren.md) — enum variants wrapping a named struct need Orbit((field: value)); single-paren examples fail to parse; only cli validate catches it
-- [Docs lag the action schema](project_docs_lag_actions.md) — docs/20_data_formats.md, docs/30_runtime_events_and_logic.md, docs/STATUS.md consistently miss new Action variants when added
+- [Docs lag the action schema](project_docs_lag_actions.md) — FIVE doc surfaces miss new Action variants AND new optional fields; docs/20 table usually fine, the other four lag
 - [pkg/ web build must be rebuilt](project_pkg_rebuild_required.md) — staged schema/action changes do not reach designers until wasm-pack build + commit of pkg/
 - [Color tuples vary RGB vs RGBA](project_color_tuple_inconsistency.md) — DamagePopupStyle uses 3-tuple RGB while StatLabelDef/WorldStatBarDef use 4-tuple RGBA in the same prefab block
 - [{self} substitution pattern](project_self_substitution_pattern.md) — Entity-targeted actions accept {self} in .behavior.ron; canonical example is primitive_world/behaviors/attack_dummy.behavior.ron
@@ -16,7 +16,9 @@
 - [Audio writes no GameVariable](project_audio_no_gamevariable.md) — ToggleMute/SetVolume only emit events; mute state must be bridged to a variable via SetVariable on audio.muted/unmuted for a Label to show it
 - [NPC collider canonical example](project_npc_collider_canonical_example.md) — collider_height/radius worked example lives in 3rd_person_game_demo snake/spider prefabs, not docs' own orc_guard/rat examples
 - [decals: map has two consumers](project_decals_map_two_consumers.md) — assets.ron decals: feeds BOTH Action::ProjectDecal and scene target_indicator; doc sections don't cross-link; texture: field resolves against decals not textures
-- [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — animation_sources undocumented as a field; PlayAnimationOn missing from actions table; clip-vs-id distinction unexplained
+- [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — 3 old gaps CLOSED; still no policy field table, clips-alias looping + un-freezing undocumented
+- [dynamic_animation_control demo](project_dynamic_animation_control_demo.md) — canonical seek/freeze demo; flycam default speed 100 is wrong for dioramas; test_web baselines EVERY scene, no skip hook
+- [World label legibility](project_world_label_legibility.md) — captions are fixed screen-px & never wrap; px/m depends only on viewport HEIGHT; camera-back makes overlap WORSE; short-token+legend pattern
 - [Target indicator color tiers](project_target_indicator_color_tiers.md) — 3-tier ring color (indicator_color > category > scene color); silent fallthrough undocumented; indicator_color & "ally" have no shipped example
 - [CameraShake re-trigger ambiguity](project_camera_shake_retrigger_ambiguity.md) — re-trigger semantics documented 3 contradictory ways (restart vs merge+cap vs replace); verify doc against shipped executor
 - [Dialogue system doc gaps](project_dialogue_system_doc_gaps.md) — hint_text undocumented on InteractableDef; dialogue.started payload is spawn id not prefab; condition absent-key semantics unexplained; canonical example 3rd_person_game_demo
@@ -42,5 +44,5 @@
 - [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
 - [Jump re-arm coupling](project_jump_rearm_coupling.md) — jumps re-arm only on a ground-cast landing edge; jump height + collider radius + ground_cast_length form one undocumented invariant
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
-- [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — separate corpse entity via Spawn.at_entity + 6 per-instance global respawn rules; docs/30's corpse section is stale v1
+- [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot

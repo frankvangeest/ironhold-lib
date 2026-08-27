@@ -26,6 +26,7 @@
 - [RNG & determinism](rng_and_determinism.md) — seed RNG in core (ChaCha8Rng) from day one, never thread_rng; getrandom js only needed by the self-seeding path; Beta 0.5 needs seeded RNG anyway
 - [Event pipeline & intent layer](event_pipeline_intent_layer.md) — pipeline IS intent/exec/result; action_bar shortcuts it (pushes to ActionQueue directly); minimal fix = intent.{slot} strings + rule mapping; defer 4-phase combat; CLI event validator for typo risk
 - [Animation seek/freeze constraints](animation_seek_freeze_constraints.md) — bevy_animation 0.18 facts: paused clip is never faded out (permanent blend bug), seek applies only on clip change, must be durable for WASM GLTF respawn
+- [Spawn-frame visibility accounting](spawn_frame_visibility_accounting.md) — SpawnScene runs after Update so "hide after spawn" is always ≥1 rendered frame too late; animate_targets writes nothing the frame a graph is created
 - [Animation two-stage pipeline](animation_two_stage_pipeline.md) — resolver (single writer of .current, owns stop_action sentinel) vs animation.rs (graph build/play); npc_revive sentinel leak = benign double-warning
 - [Audio mute/volume state machine](audio_mute_state_machine.md) — AudioState.muted is single source of truth; bind:audio_state label is pure read projection driven only by executor-emitted audio.muted/unmuted; ui. prefix stripped from button action
 - [Guard vs behavior distinction](guard_vs_behavior_distinction.md) — emission guards (panel_open) belong in Rust not RON; LogicState is a scalar mode-slot not an orthogonal flag; hybrid = keep bool + emit ui.panel_opened/closed events
@@ -45,3 +46,4 @@
 - [Delayed-event staleness class](delayed_event_staleness_class.md) — no cancellation, never cleared on LoadScene, and dropped if the FSM left the state handling it (use global_on); initial_items is spawn-only
 - [Ground cast penetrating normal](ground_cast_penetrating_normal.md) — normal1 is an EPA MTV not a surface normal (lift origin by collider_radius); + cast_shape's single-nearest-hit means any collider can veto the floor: sensors fixed via exclude_sensors, solid walls still kill jump
 - [WorldLabel cleanup & at_entity](world_label_cleanup_and_at_entity.md) — two overlapping owners for WorldLabel widget teardown; at_entity copies full GlobalTransform incl. scale
+- [Demo project baseline determinism](demo_project_baseline_determinism.md) — test_web.py globs EVERY scene for a 4%-threshold baseline, no exclusion mechanism; animated demo scenes flake by construction
