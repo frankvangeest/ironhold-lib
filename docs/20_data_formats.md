@@ -377,6 +377,29 @@ font-size/offset tuning problem instead, unrelated to this system.
 | `reference_distance` | `f32` | `50.0` | Camera distance where labels are at their authored size. Zoom closer than this and nothing changes. Zoom further and they shrink in proportion to distance — at twice this distance they are half size. Leaving this at the `50.0` default (or omitting the block entirely) on a normal 3rd-person camera whose max zoom distance never reaches 50 means scaling never engages at any zoom level — this is a common way to accidentally ship the "labels never shrink" bug. |
 | `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of authored size (0.0–1.0) — together with `reference_distance` this sets where the working band ends (see above). `0.25` means labels never shrink below 25% of their authored size. Omitting `min_scale` means no floor — labels scale toward zero at extreme distances (usually not what you want; a very small but nonzero floor like `0.2`–`0.5` keeps distant labels legible instead of vanishing). |
 
+**Fields** — `world_labels:` (scene-level, `WorldLabelDef`) and entity `label:` (per-entity, `EntityLabelDef`) share every field except how they're positioned:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `String` | — (required, `WorldLabelDef` only) | Scene-unique identifier for this world label. Not present on `EntityLabelDef` — a `label:` is already scoped to the one entity it's attached to. |
+| `text` | `String` | — (required) | The label's text. Supports `\n` for multiple lines. Renders in `Camera2d` screen space, projected from the label's world position each frame. See the em-dash warning below. |
+| `translation` (`WorldLabelDef`) / `offset` (`EntityLabelDef`) | `(f32, f32, f32)` | required for `WorldLabelDef`; `(0.0, 7.0, 0.0)` for `EntityLabelDef` | `WorldLabelDef.translation` is an absolute 3-D world position. `EntityLabelDef.offset` is relative to the entity's own origin — the `7.0`-metre-up default is tuned for wide open-world signage, not character-scale entities; override it (e.g. `2.2`) for anything human-sized or a label floats far overhead. |
+| `font_size` | `f32` | `18.0` | Font size in screen pixels at `reference_distance` (see `label_depth_scale` above). |
+| `color` | `(f32, f32, f32, f32)` | near-white | Linear RGBA (0.0–1.0). |
+| `depth_scale` | `Option<bool>` | `None` (inherit scene) | Per-label depth-scale override — see below. |
+
+Entity `label:` auto-hides when its attached entity is hidden (`Action::SetEntityVisible`) — see that action's row above. `world_labels:` has no attached entity (it's a fixed world position, e.g. a room sign) and so has nothing to auto-hide against.
+
+> **Never use an em-dash (`—`, U+2014) in any in-game `text:` field — use a plain ASCII hyphen
+> `-` instead.** The engine's embedded UI font has no glyph for it; it renders as a visible tofu
+> box, not a dash. Confirmed pre-existing across multiple shipped projects (e.g.
+> `custom_materials`'s own title label), not specific to any one scene — see `planning/backlog.md`
+> ▸ Bugs. This applies to every `text:` field that renders through the game's own font: scene
+> `ui:` `Label`/`Button` text, entity `label:`, `world_labels:`, `ShowFloatingText`/
+> `ShowDamagePopup`. It does NOT apply to comments or documentation (including this file) — the
+> em-dash is fine there; it's rendered by whatever markdown viewer or IDE you're reading it in,
+> not by this engine's font.
+
 **Per-label override** — both `WorldLabelDef` and `EntityLabelDef` accept a `depth_scale: Option<bool>` field:
 - `depth_scale: false` — pin this label at its authored size regardless of scene setting
 - `depth_scale: true` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
@@ -3735,7 +3758,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
 | `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. |
 | `ShowFloatingText(entity: "id", text: "msg")` | Spawns a floating text label above the entity with the given spawn ID. Rises and fades using the same animation as `ShowDamagePopup`. Colour is warm yellow; use `ShowDamagePopup` for numeric health feedback. Uses `{self}` and `{target}` substitution. Optional `offset: (x, y, z)` overrides the default spawn height set by `damage_popup_style.spawn_offset` — useful when multiple floating texts fire at the same time and would otherwise overlap. Example: `ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))` |
-| `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label) auto-hide automatically. Uses `{self}` in behavior files. |
+| `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label, and per-entity `label:`) auto-hide automatically — all three spawn as the same underlying `WorldLabel` component, which `world_label_screen_pos_system` hides whenever its tracked entity's own `Visibility` is `Hidden`. Uses `{self}` in behavior files. |
 | `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. |
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
@@ -4145,7 +4168,7 @@ ModifyStat(key: "goblin_01.health", delta: -10.0)
 
 These fields on `PrefabDef` attach floating UI to a spawned entity. Both widgets track a live stat and update every frame via `resolve_stat` — the same routing that drives `StatBar` and `StatSpread`.
 
-**Auto-hide:** When the tracked entity is hidden (`SetEntityVisible(visible: false)`), both widgets automatically hide. They restore automatically when the entity is shown again.
+**Auto-hide:** When the tracked entity is hidden (`SetEntityVisible(visible: false)`), both widgets automatically hide. They restore automatically when the entity is shown again. A per-entity `label:` (see `EntityLabelDef` below) behaves identically — all three are the same underlying `WorldLabel` mechanism.
 
 **Player prefabs support `stat_label`/`world_stat_bar` too**, exactly the same fields and syntax as any NPC/prop prefab (`tags: ["player"]` doesn't change anything about how they're read) — see `planning/features/player_stat_widgets.md`. A player-authored widget is queued through the same `DynamicStatUiQueue` mechanism `Action::Spawn`-created entities use, so it appears one frame after the player spawns; in split-screen it duplicates across viewports exactly like any other entity's widget (see the split-screen visibility note below).
 
