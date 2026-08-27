@@ -13,6 +13,7 @@ use crate::capabilities::camera::{ActiveCameraMode, OrbitCameraMode, OrbitState,
 use crate::schema::camera::CameraModeDef;
 use crate::capabilities::animation_resolver::{
     ActiveOverride, AnimationPolicyComponent, AnimationRequests, LocomotionState,
+    resolve_initial_override,
 };
 use bevy_rapier3d::prelude::*;
 use super::{
@@ -182,6 +183,14 @@ pub fn spawn_prefab_instance(
         let policy_handle: Handle<AnimationPolicy> = asset_server.load(resolved);
         let gltf_path = model_path.split('#').next().unwrap_or("").to_string();
         let gltf_handle = asset_server.load(gltf_path.clone());
+        // Every animation_policy entity is hidden from its very first spawned frame, not
+        // just once animation_policy_loader_system gets a chance to hide it — the policy RON
+        // load is async, and by the time it resolves the GLTF mesh (often already cached from
+        // an earlier spawn of the same model) has typically already rendered one or more
+        // frames in its bind/rest pose. See AnimationController.awaiting_reveal. Revealed
+        // either the moment a pose is confirmed applied, immediately if the policy turns out
+        // to have no `initial_override`, or by the bounded failsafe if neither ever happens.
+        ec.insert(Visibility::Hidden);
         ec.insert((
             PendingAnimationPolicy(policy_handle),
             AnimationController {
@@ -195,6 +204,10 @@ pub fn spawn_prefab_instance(
                 transition_ms: 0,
                 should_loop: true,
                 last_player_entity: None,
+                pending_seek: false,
+                graph_handle: None,
+                awaiting_reveal: true,
+                awaiting_reveal_since: None,
             },
             LocomotionState::default(),
             AnimationRequests::default(),
@@ -453,14 +466,59 @@ pub fn drain_spawn_queue_system(
 
 pub fn animation_policy_loader_system(
     mut commands: Commands,
-    mut pending: Query<(Entity, &PendingAnimationPolicy, &mut AnimationController)>,
+    mut pending: Query<(Entity, &PendingAnimationPolicy, &mut AnimationController, &mut ActiveOverride)>,
     policies: Res<Assets<AnimationPolicy>>,
     asset_catalog: Res<LoadedAssetCatalog>,
     asset_server: Res<AssetServer>,
+    time: Res<Time>,
 ) {
-    for (entity, pending_policy, mut controller) in &mut pending {
+    for (entity, pending_policy, mut controller, mut active_override) in &mut pending {
         if let Some(policy) = policies.get(&pending_policy.0) {
-            controller.current = policy.base.idle.clone();
+            // `initial_override` applies synchronously, right here, instead of falling through
+            // to the `base.idle` fallback below — closes a real race (found via playtest, not
+            // by inspection): without it, an entity whose `base.idle` deliberately points at a
+            // non-idle clip (a corpse's death pose, so ANY fallback is safe — see
+            // corpse_policy_zombie.ron) would play that clip unseeked and looping for however
+            // many frames it takes its own posing request to arrive via the slower behavior-
+            // file/action-pipeline path. Visible symptom: the corpse fell, snapped back to
+            // standing as the untended loop wrapped, then fell again once the real request
+            // finally won.
+            match resolve_initial_override(policy, time.elapsed_secs()) {
+                Some(resolved) => {
+                    debug!(
+                        "initial_override applied: clip={:?} seek_fraction={:?} frozen={} looping={}",
+                        resolved.clip, resolved.seek_fraction, resolved.frozen, resolved.looping
+                    );
+                    controller.current = resolved.clip.clone().unwrap_or_default();
+                    controller.should_loop = resolved.looping;
+                    controller.pending_seek = resolved.seek_fraction.is_some() || resolved.frozen;
+                    *active_override = resolved;
+                    // Hide until animation_playback_system confirms this pose is actually
+                    // applied (AnimationController.awaiting_reveal) — closes the separate
+                    // "bind pose visible before the animation graph even initializes" flash a
+                    // real playtest found once the looping bug above was fixed. Scoped to
+                    // initial_override users only (not every animated entity) — an ordinary
+                    // player/NPC's base.idle fallback has no "wrong" intermediate pose worth
+                    // hiding for, and hiding them too would risk a MUCH longer invisible window
+                    // on a slow connection where the GLTF mesh itself is still streaming in.
+                    controller.awaiting_reveal = true;
+                    controller.awaiting_reveal_since = Some(time.elapsed_secs());
+                    info!("[DIAG] hiding {:?} pending confirmed pose (awaiting_reveal=true)", entity);
+                    commands.entity(entity).insert(Visibility::Hidden);
+                }
+                None => {
+                    // No initial_override — this entity was hidden at spawn purely as a
+                    // precaution (every animation_policy entity is), but nothing further will
+                    // ever confirm a pose for it, since its playback just falls through to the
+                    // ordinary base.idle path. Reveal immediately or it stays hidden forever.
+                    controller.current = policy.base.idle.clone();
+                    if controller.awaiting_reveal {
+                        controller.awaiting_reveal = false;
+                        controller.awaiting_reveal_since = None;
+                        commands.entity(entity).insert(Visibility::Inherited);
+                    }
+                }
+            }
 
             // Load animation-source GLBs declared in the policy.
             let mut source_handles: Vec<Handle<Gltf>> = Vec::new();
@@ -480,7 +538,7 @@ pub fn animation_policy_loader_system(
                 .remove::<PendingAnimationPolicy>();
             info!(
                 "AnimationPolicy loaded — initial: '{}', {} animation source(s)",
-                policy.base.idle,
+                controller.current,
                 policy.animation_sources.len()
             );
         }
@@ -1128,6 +1186,10 @@ fn spawn_player_entity_core(
             let path = resolve_project_path(project_root, rel);
             info!("Loading AnimationPolicy from: {}", path);
             let policy_handle: Handle<AnimationPolicy> = asset_server.load(path);
+            // Same spawn-time hide as spawn_prefab_instance (see AnimationController.awaiting_reveal)
+            // — a GLB player is just as subject to the SpawnScene-instantiates-before-anything-can-
+            // react bind-pose flash as any other animation_policy entity.
+            commands.entity(player_entity).insert(Visibility::Hidden);
             commands.entity(player_entity).insert((
                 PendingAnimationPolicy(policy_handle),
                 AnimationController {
@@ -1141,6 +1203,10 @@ fn spawn_player_entity_core(
                     transition_ms: 0,
                     should_loop: true,
                     last_player_entity: None,
+                    pending_seek: false,
+                    graph_handle: None,
+                    awaiting_reveal: true,
+                    awaiting_reveal_since: None,
                 },
             ));
         }

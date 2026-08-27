@@ -233,7 +233,7 @@ fn step(case: &mut Case, moving: bool, jumping: bool) -> (bool, u8) {
 fn drain_animation_requests(case: &mut Case) -> Vec<String> {
     let mut entity = case.app.world_mut().entity_mut(case.player);
     let mut requests = entity.get_mut::<AnimationRequests>().unwrap();
-    requests.queue.drain(..).collect()
+    requests.queue.drain(..).map(|r| r.clip_or_id).collect()
 }
 
 /// Runs `ticks` ticks holding Move + spamming Jump every tick (as in the original bug report:

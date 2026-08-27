@@ -5,6 +5,20 @@
 // Two states: "fresh" arms a long ambient decay; looting transitions to "looted", which closes
 // the panel and decays much sooner.
 //
+// The corpse's death pose (see "Spawn-already-posed pattern" in docs/20_data_formats.md) is set
+// entirely by its own corpse_policy_{monster}.ron via `initial_override: "death"` — NOT by a
+// PlayAnimationOn here. Two reasons a behavior-file PlayAnimationOn doesn't work for this:
+// (1) action_executor_system runs before drain_spawn_queue_system, so firing one alongside the
+// monster's own Spawn(...) that creates this entity would hit a "no entity with spawn id"
+// warning and silently drop (no retry); (2) even fired from THIS entity's own "fresh"
+// entry_actions instead, it round-trips through the full action pipeline (behavior asset load ->
+// entry_actions -> ActionQueue -> action_executor_system -> AnimationRequests -> next resolver
+// tick) — slower than the animation policy's own, more direct load path, so the corpse could
+// still flash through several frames of its "death" clip playing unseeked and looping before the
+// request won (found via a real playtest: the corpse fell, snapped back to standing as the
+// untended loop wrapped, then fell again). `initial_override` applies synchronously the instant
+// the policy loads, closing that window entirely — see corpse_policy_zombie.ron.
+//
 // Decay uses SetDespawnTimer, not EmitEventAfterDelay + an on: handler reacting to a global
 // string event. This corpse's own id (`"{self}_corpse"`) is deliberately REUSED across every
 // death of the same monster slot (see the monster behavior files' Despawn-before-Spawn guard

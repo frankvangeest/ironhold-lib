@@ -1,0 +1,15 @@
+(
+  schema_version: 1,
+  models: {
+    // Reuses 3rd_person_game_demo's zombie rig/animation packs — same GLBs, same clip names,
+    // so this demo's `PlayAnimationOn(..., start_at_fraction:, freeze:)` calls exercise exactly
+    // the clips the corpse-pose fix in 3rd_person_game_demo depends on.
+    "zombie":          ( path: "shared/models/characters/zombie-01.glb#Scene0" ),
+    "anim_zombie":     ( path: "shared/models/characters/character-animations/zombie.glb#Scene0" ),
+    "anim_locomotion": ( path: "shared/models/characters/character-animations/locomotion.glb#Scene0" ),
+    "anim_hit_death":  ( path: "shared/models/characters/character-animations/hit_death.glb#Scene0" ),
+  },
+  textures: {},
+  audio: {},
+  materials: {},
+)

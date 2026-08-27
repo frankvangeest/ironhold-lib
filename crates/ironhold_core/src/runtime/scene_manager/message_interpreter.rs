@@ -221,9 +221,11 @@ pub fn entity_fsm_interpreter_system(
 /// Called by `entity_fsm_interpreter_system` before pushing actions onto the queue.
 pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
     match action {
-        Action::PlayAnimationOn { target, clip } => Action::PlayAnimationOn {
+        Action::PlayAnimationOn { target, clip, start_at_fraction, freeze } => Action::PlayAnimationOn {
             target: target.replace("{self}", spawn_id),
             clip,
+            start_at_fraction,
+            freeze,
         },
         Action::EmitEvent(event) => Action::EmitEvent(event.replace("{self}", spawn_id)),
         Action::Despawn(id) => Action::Despawn(id.replace("{self}", spawn_id)),
@@ -312,8 +314,8 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::EmitEvent(ev) => Action::EmitEvent(s(&ev, target_id)),
         Action::EmitEventAfterDelay { event, delay_secs } =>
             Action::EmitEventAfterDelay { event: s(&event, target_id), delay_secs },
-        Action::PlayAnimationOn { target, clip } =>
-            Action::PlayAnimationOn { target: s(&target, target_id), clip },
+        Action::PlayAnimationOn { target, clip, start_at_fraction, freeze } =>
+            Action::PlayAnimationOn { target: s(&target, target_id), clip, start_at_fraction, freeze },
         Action::Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity } => Action::Spawn {
             prefab,
             id: id.map(|i| s(&i, target_id)),

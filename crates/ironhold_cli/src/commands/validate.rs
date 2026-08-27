@@ -247,6 +247,19 @@ fn cross_file_checks(
                     }
                 }
             }
+            Action::PlayAnimationOn { start_at_fraction: Some(fraction), .. } => {
+                if !(0.0..=1.0).contains(fraction) {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!(
+                            "PlayAnimationOn: start_at_fraction {:?} is outside the valid \
+                             [0.0, 1.0] range — it's a fraction of the clip's duration, not seconds",
+                            fraction
+                        ),
+                        error_type: "animation_start_at_fraction_out_of_range",
+                    });
+                }
+            }
             _ => {}
         }
     }

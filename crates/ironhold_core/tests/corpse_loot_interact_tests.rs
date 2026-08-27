@@ -21,6 +21,11 @@
 
 use bevy::prelude::*;
 use ironhold_core::capabilities::action_bar::CurrentTarget;
+use ironhold_core::capabilities::animation::AnimationController;
+use ironhold_core::capabilities::animation_resolver::{
+    ActiveOverride, AnimationPolicyComponent, AnimationRequests, LocomotionState,
+    resolve_initial_override,
+};
 use ironhold_core::capabilities::interactable::Interactable;
 use ironhold_core::capabilities::inventory::{
     ContainerPanelMarker, Inventory, LoadedContainerUi, LoadedInventoryUi, add_to_slots,
@@ -31,7 +36,7 @@ use ironhold_core::runtime::{
     SpawnRegistry,
 };
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
-use ironhold_core::schema::player::InputMap;
+use ironhold_core::schema::player::{AnimationPolicy, InputMap};
 use ironhold_core::schema::stats::{LiveStat, StatDef, StatMap};
 use ironhold_core::schema::{Action, StateMachineAsset};
 
@@ -58,6 +63,12 @@ fn real_asset_catalog() -> AssetCatalog {
 }
 
 fn real_behavior(path: &str) -> StateMachineAsset {
+    let s = std::fs::read_to_string(format!("{DEMO}/{path}"))
+        .unwrap_or_else(|e| panic!("{path} readable: {e}"));
+    ron_opts().from_str(&s).unwrap_or_else(|e| panic!("{path} parses: {e}"))
+}
+
+fn real_animation_policy(path: &str) -> AnimationPolicy {
     let s = std::fs::read_to_string(format!("{DEMO}/{path}"))
         .unwrap_or_else(|e| panic!("{path} readable: {e}"));
     ron_opts().from_str(&s).unwrap_or_else(|e| panic!("{path} parses: {e}"))
@@ -107,8 +118,8 @@ fn self_sub(action: Action, id: &str) -> Action {
         Action::EmitEvent(e) => Action::EmitEvent(e.replace("{self}", id)),
         Action::EmitEventAfterDelay { event, delay_secs } =>
             Action::EmitEventAfterDelay { event: event.replace("{self}", id), delay_secs },
-        Action::PlayAnimationOn { target, clip } =>
-            Action::PlayAnimationOn { target: target.replace("{self}", id), clip },
+        Action::PlayAnimationOn { target, clip, start_at_fraction, freeze } =>
+            Action::PlayAnimationOn { target: target.replace("{self}", id), clip, start_at_fraction, freeze },
         Action::SpawnEffect { key, position, entity } =>
             Action::SpawnEffect { key, position, entity: entity.map(|e| e.replace("{self}", id)) },
         Action::ShowFloatingText { entity, text, offset } =>
@@ -223,10 +234,7 @@ fn spawn_real_corpse(app: &mut App, corpse_prefab_key: &str, id: &str, pos: Vec3
 
     let fsm = real_behavior("behaviors/lootable_corpse.behavior.ron");
     let initial = fsm.initial_state.clone();
-    // Fire "fresh"'s entry actions (arms the 300s ambient decay) — see fire_initial_entry_actions'
-    // doc comment for why this doesn't happen automatically here the way it does in production.
-    fire_initial_entry_actions(app, &fsm, &initial, id);
-    let handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm);
+    let handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
 
     let e = app
         .world_mut()
@@ -240,10 +248,61 @@ fn spawn_real_corpse(app: &mut App, corpse_prefab_key: &str, id: &str, pos: Vec3
             },
             inv,
             BehaviorHandle(handle),
-            EntityFsmState { current: initial },
+            EntityFsmState { current: initial.clone() },
         ))
         .id();
     app.world_mut().resource_mut::<SpawnRegistry>().entities.insert(id.to_string(), e);
+
+    // Real corpses declare their own (minimal, death-pose-only) `animation_policy` — see
+    // corpse_policy_zombie.ron and dynamic_animation_control.md. Loaded synchronously and
+    // inserted directly here (skipping the async PendingAnimationPolicy resolution production
+    // uses) since this test harness never fetches real asset files over an AssetServer anyway
+    // (see insert_real_catalogs' doc comment) — the policy's *content* is what a test needs to
+    // exercise, not the loading mechanics, which are covered by scene_lifecycle_tests.rs instead.
+    if let Some(policy_path) = &def.animation_policy {
+        let policy = real_animation_policy(policy_path);
+        // Mirrors animation_policy_loader_system::resolve_initial_override — a real corpse's
+        // death pose is applied SYNCHRONOUSLY at policy-attach time (via corpse_policy_{monster}.
+        // ron's `initial_override: "death"`), not by a PlayAnimationOn in the behavior file's
+        // entry_actions (there isn't one — see lootable_corpse.behavior.ron's header comment for
+        // why a behavior-file PlayAnimationOn couldn't close this race reliably).
+        let (current, should_loop, pending_seek, active_override) =
+            match resolve_initial_override(&policy, 0.0) {
+                Some(resolved) => {
+                    let current = resolved.clip.clone().unwrap_or_default();
+                    let should_loop = resolved.looping;
+                    let pending_seek = resolved.seek_fraction.is_some() || resolved.frozen;
+                    (current, should_loop, pending_seek, resolved)
+                }
+                None => (policy.base.idle.clone(), true, false, ActiveOverride::default()),
+            };
+
+        app.world_mut().entity_mut(e).insert((
+            AnimationPolicyComponent(policy),
+            AnimationController {
+                current,
+                last_played: String::new(),
+                gltf_path: String::new(),
+                gltf_handle: Default::default(),
+                source_handles: Vec::new(),
+                node_indices: Default::default(),
+                graph_initialized: false,
+                transition_ms: 0,
+                should_loop,
+                last_player_entity: None,
+                pending_seek,
+                graph_handle: None,
+                awaiting_reveal: false,
+                awaiting_reveal_since: None,
+            },
+            LocomotionState::default(),
+            AnimationRequests::default(),
+            active_override,
+        ));
+    }
+
+    // Fire "fresh"'s entry actions (arms the 300s ambient decay).
+    fire_initial_entry_actions(app, &fsm, &initial, id);
     e
 }
 
@@ -314,12 +373,14 @@ fn zombie_death_swaps_to_a_corpse_at_the_same_position_and_despawns_the_original
         "zombie_01 must still exist right after death — only the swap (after the death anim) despawns it"
     );
 
-    // Death anim is 3.0s before the swap fires; go a little past it.
-    advance(&mut app, 3.5);
+    // Death anim is 3.0s before the swap fires; the original then gets SetDespawnTimer(1.0s),
+    // not an immediate Despawn (see the "seamless overlap" comment in
+    // enemy_zombie.behavior.ron's swap_to_corpse handler) — go a little past both.
+    advance(&mut app, 4.5);
 
     assert!(
         !app.world().resource::<SpawnRegistry>().entities.contains_key("zombie_01"),
-        "the original entity must be despawned once its corpse swap fires"
+        "the original entity must be despawned once its corpse swap fires and its overlap timer elapses"
     );
     let corpse = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
         .expect("a zombie_01_corpse entity must exist after the swap");
@@ -347,7 +408,7 @@ fn dying_again_before_the_old_corpse_decays_does_not_orphan_the_registry() {
 
     spawn_real_monster(&mut app, "enemy_zombie", "behaviors/enemy_zombie.behavior.ron", "zombie_01", Vec3::ZERO);
     kill(&mut app, "zombie_01");
-    advance(&mut app, 3.5);
+    advance(&mut app, 4.5);
     assert!(app.world().resource::<SpawnRegistry>().entities.contains_key("zombie_01_corpse"));
 
     // A second "zombie_01" (as the real respawn spawner would produce) dies again while the
@@ -356,7 +417,7 @@ fn dying_again_before_the_old_corpse_decays_does_not_orphan_the_registry() {
     // the same id.
     spawn_real_monster(&mut app, "enemy_zombie", "behaviors/enemy_zombie.behavior.ron", "zombie_01", Vec3::new(1.0, 0.0, 1.0));
     kill(&mut app, "zombie_01");
-    advance(&mut app, 3.5);
+    advance(&mut app, 4.5);
 
     let corpse = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
         .expect("a corpse must still exist under the same derived id");
@@ -599,7 +660,7 @@ fn a_despawned_monsters_target_selection_clears_instead_of_surviving_to_the_next
     app.update();
 
     kill(&mut app, "zombie_01");
-    advance(&mut app, 3.5); // past the death->corpse-swap despawn of the original entity
+    advance(&mut app, 4.5); // past the death->corpse-swap despawn of the original entity
 
     assert_eq!(
         app.world().get::<PlayerTarget>(player).unwrap().0, None,
@@ -609,4 +670,62 @@ fn a_despawned_monsters_target_selection_clears_instead_of_surviving_to_the_next
         app.world().resource::<CurrentTarget>().0, None,
         "a genuinely despawned target must clear the global CurrentTarget mirror too"
     );
+}
+
+// ── Death pose at spawn (planning/features/dynamic_animation_control.md) ──────────────────
+
+/// The bug this feature fixes: before it, `zombie_corpse`/`snake_corpse`/`spider_corpse` had no
+/// `animation_policy` at all, so a corpse rendered in raw bind/rest pose, not lying dead. Fixed
+/// by giving each corpse its own minimal `corpse_policy_{monster}.ron` with
+/// `initial_override: "death"` (`start_at_fraction: 1.0, freeze: true` on the override itself).
+///
+/// **Not** a `PlayAnimationOn` in `lootable_corpse.behavior.ron`'s entry_actions — an earlier
+/// version of this fix used that, and a real playtest found it wasn't actually race-free: the
+/// behavior-file path (asset load -> entry_actions -> ActionQueue -> action_executor_system ->
+/// AnimationRequests -> next resolver tick) is slower than the animation policy's own load path,
+/// so the corpse could still flash through several frames of "death" playing unseeked and
+/// looping (visibly: fell, snapped back to standing as the untended loop wrapped, fell again)
+/// before the request won. `initial_override` applies synchronously the instant the policy loads
+/// instead, closing the window entirely — see `resolve_initial_override` and
+/// `lootable_corpse.behavior.ron`'s header comment.
+///
+/// This test cannot drive the real Bevy `AnimationPlayer` end-to-end — this harness never loads
+/// a real GLTF asset (see `insert_real_catalogs`' doc comment), so `AnimationController.
+/// graph_initialized` never becomes true here. What it CAN and does prove: the real RON wiring
+/// (prefab -> corpse_policy_zombie.ron's `initial_override`) resolves into an `ActiveOverride`
+/// that unambiguously requests the death pose, frozen, at the end of the clip, from the moment
+/// the entity exists — not eventually, once some other request arrives. The resolver-level
+/// mechanics of applying that (seek/freeze/pause) are covered by `animation_seek_freeze_tests.rs`
+/// against synthetic Gltf/AnimationClip assets instead.
+#[test]
+fn a_freshly_spawned_corpse_immediately_requests_its_frozen_death_pose() {
+    let mut app = setup_test_app();
+    insert_real_catalogs(&mut app);
+    app.update();
+
+    spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
+
+    let entity = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
+        .expect("corpse must be registered");
+
+    let assert_correct_pose = |app: &App, msg: &str| {
+        let active = app.world().get::<ActiveOverride>(entity).expect("corpse must carry ActiveOverride");
+        assert_eq!(active.clip.as_deref(), Some("Death01"), "{msg}: must resolve to the zombie's real death clip via the override-id lookup, not fall back to idle");
+        assert_eq!(active.seek_fraction, Some(1.0), "{msg}: must request the final frame of the clip, not replay it from the start");
+        assert!(active.frozen, "{msg}: must freeze at that frame instead of continuing to play (or idling once a non-looping clip would otherwise finish)");
+        assert!(!active.looping, "{msg}: freeze must force looping off, matching the resolver's documented precedence");
+    };
+
+    // Correct immediately, with zero updates — the whole point of `initial_override` is that
+    // there is no window where this could be anything else (unlike the earlier, reverted design,
+    // where a PlayAnimationOn in the behavior file needed 1-2 updates to round-trip through the
+    // action pipeline, and a real playtest found that window visibly leaked).
+    assert_correct_pose(&app, "immediately after spawn_real_corpse");
+
+    // Still correct after a couple of real resolver/playback ticks — proves the synchronously-
+    // applied pose isn't disturbed by the normal per-frame resolver pass finding an empty
+    // AnimationRequests queue (which would otherwise fall through to the base.idle fallback).
+    app.update();
+    app.update();
+    assert_correct_pose(&app, "after 2 further updates");
 }

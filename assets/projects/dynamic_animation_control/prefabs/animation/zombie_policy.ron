@@ -1,0 +1,35 @@
+// Demo policy for dynamic_animation_control. Same base/animation_sources as
+// 3rd_person_game_demo's player_policy_zombie.ron, plus a "walk" semantic alias — not present in
+// the original — so this demo's rules.ron can exercise all three PlayAnimationOn resolution
+// branches: override id ("death"), clips: alias ("walk"), and raw clip name
+// ("Zombie_Idle_Loop" directly, used by continue.scene.ron's pose_raw_clip).
+//
+// default_transition_ms: 0 — the frozen-pose scene wants an exact, reproducible pose for its
+// screenshot baseline; a nonzero blend would still converge to the right pose but makes the
+// baseline capture timing-sensitive for no benefit here (there is no locomotion to blend from).
+(
+    default_transition_ms: 0,
+
+    animation_sources: ["anim_zombie", "anim_locomotion", "anim_hit_death"],
+
+    base: (
+        idle:      "Zombie_Idle_Loop",
+        walk:      "Zombie_Walk_Fwd_Loop",
+        run:       "Zombie_Walk_Fwd_Loop",
+        jump_loop: "Jump_Loop",
+    ),
+
+    clips: {
+        "walk": "Zombie_Walk_Fwd_Loop",
+    },
+
+    overrides: [
+        (
+            id: "death",
+            clip: "Death01",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+        ),
+    ],
+)

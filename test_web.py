@@ -48,10 +48,18 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 PORT = 8000
 BASE_URL = f"http://localhost:{PORT}"
 
-PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo", "particles_demo", "effect_mayhem_demo", "foliage_demo", "stats_demo", "blank_project", "local_coop_demo", "camera_modes"]
+PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo", "particles_demo", "effect_mayhem_demo", "foliage_demo", "stats_demo", "blank_project", "local_coop_demo", "camera_modes", "dynamic_animation_control"]
 
 # Root of the asset tree, relative to the working directory where this script runs.
 ASSETS_ROOT = Path("assets/projects")
+
+# Scenes excluded from the screenshot-baseline diff (they never converge to a fixed pixel
+# state — e.g. a scene that intentionally keeps an animation playing rather than freezing it —
+# so any committed baseline would flake against BASELINE_DIFF_THRESHOLD regardless of run count).
+# Keyed the same way as PROJECTS: "project/relative/scene/path.scene.ron".
+NON_DETERMINISTIC_SCENES = {
+    "dynamic_animation_control/scenes/continue.scene.ron",
+}
 
 # Committed baseline screenshots.  Two sub-dirs:
 #   scenes/     — one PNG per scene (used by the gallery)
@@ -160,10 +168,14 @@ def discover_scenes(project: str) -> list[str]:
     scenes_dir = ASSETS_ROOT / project / "scenes"
     if not scenes_dir.is_dir():
         return []
-    return sorted(
+    relative_paths = sorted(
         str(p.relative_to(ASSETS_ROOT / project)).replace("\\", "/")
         for p in scenes_dir.glob("*.scene.ron")
     )
+    return [
+        rel for rel in relative_paths
+        if f"{project}/{rel}" not in NON_DETERMINISTIC_SCENES
+    ]
 
 
 async def open_project(
@@ -354,6 +366,13 @@ async def test_screenshot_scene_baseline(
 
         await page.screenshot(path=str(current_path))
 
+        # Checked before either the create/update path or the diff path returns/raises — a scene
+        # getting its baseline created for the first time still deserves its console-error check;
+        # skipping it here previously meant a new project's very first baseline run (exactly what
+        # happens when a project is added) verified nothing about console output.
+        if errors:
+            raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+
         if update or not baseline_path.exists():
             baselines_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(current_path, baseline_path)
@@ -367,9 +386,6 @@ async def test_screenshot_scene_baseline(
                 f"Inspect: {current_path}"
             )
         print(f"    Diff: {diff:.2%} (threshold {BASELINE_DIFF_THRESHOLD:.0%}) — OK")
-
-        if errors:
-            raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
     finally:
         await page.close()
 

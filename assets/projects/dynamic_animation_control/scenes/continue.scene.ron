@@ -1,0 +1,166 @@
+// Continue-playing / looping-clip-seek / raw-clip-name examples — see "Spawn-already-posed
+// pattern" in docs/20_data_formats.md. Genuinely non-deterministic (freeze: false entities keep
+// animating forever) — excluded from screenshot baselines via test_web.py's
+// NON_DETERMINISTIC_SCENES set, not just by convention.
+(
+  schema_version: 2,
+  name: "continue",
+
+  tonemapping: AcesFitted,
+
+  lighting: (
+    ambient: (0.28, 0.30, 0.36),
+    ambient_brightness: 120.0,
+    directional: (
+      color: (1.0, 0.95, 0.85),
+      intensity: 32000.0,
+      rotation_euler_deg: (-45.0, 25.0, 0.0),
+      shadows_enabled: true,
+    ),
+  ),
+
+  // See main.scene.ron for why this exists — keeps world-space labels legible at any camera
+  // distance instead of pinned at a fixed screen pixel size.
+  label_depth_scale: (
+    reference_distance: 8.0,
+    min_scale: 0.5,
+  ),
+
+  entities: [
+    (
+      id: "camera_01",
+      prefab: "flycam",
+      transform: (
+        translation: (0.0, 3.2, 8.0),
+        rotation_euler_deg: (-10.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+    (
+      id: "ground_01",
+      prefab: "ground",
+      transform: (
+        translation: (0.0, -0.25, 0.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
+
+    // "Contact sheet" pattern — see main.scene.ron's entities comment. These four don't form a
+    // single progression (they exercise three different resolution branches: override id,
+    // clips: alias, raw glTF name), so tokens are A-D rather than a percentage, but the
+    // principle is the same: short colour-coded token on the model, full explanation in the
+    // legend below keyed by the same colour. 3m pitch keeps every specimen in-frame at 16:9.
+    (
+      id: "pose_continue_25",
+      prefab: "zombie_pose",
+      transform: ( translation: (-4.5, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "A", offset: (0.0, 2.2, 0.0), font_size: 30.0, color: (0.3, 0.55, 1.0, 1.0) ),
+    ),
+    (
+      id: "pose_continue_75",
+      prefab: "zombie_pose",
+      transform: ( translation: (-1.5, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "B", offset: (0.0, 2.2, 0.0), font_size: 30.0, color: (0.65, 0.35, 1.0, 1.0) ),
+    ),
+    (
+      id: "pose_loop_seek",
+      prefab: "zombie_pose",
+      transform: ( translation: (1.5, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "C", offset: (0.0, 2.2, 0.0), font_size: 30.0, color: (0.2, 0.85, 0.8, 1.0) ),
+    ),
+    (
+      id: "pose_raw_clip",
+      prefab: "zombie_pose",
+      transform: ( translation: (4.5, 0.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ),
+      label: ( text: "D", offset: (0.0, 2.2, 0.0), font_size: 30.0, color: (1.0, 0.4, 0.75, 1.0) ),
+    ),
+  ],
+
+  ui: [
+    Label((
+      id: "title",
+      text: "Dynamic Animation Control - Page 2 of 2: Continue-Playing",
+      position: (16.0, 16.0),
+      size: (700.0, 30.0),
+      align: Left,
+    )),
+    Label((
+      id: "camera_hint",
+      text: "WASD move, E/Space up/down, Shift fast, hold LMB/RMB to look",
+      position: (16.0, 54.0),
+      size: (700.0, 30.0),
+      align: Left,
+    )),
+    Button((
+      id: "back_button",
+      text: "<- Page 1",
+      action: "ui.goto_main",
+      position: (16.0, 96.0),
+      size: (160.0, 44.0),
+    )),
+
+    // Legend — swatch colours match each zombie's on-model token above 1:1. See main.scene.ron's
+    // legend comment for why the rows are spaced 34px apart (fixed 22px/26px Label/Button font
+    // sizes, not driven by `size`) and why there's no shared background Rect.
+    Label((
+      id: "legend_head",
+      text: "All four: freeze: false",
+      position: (16.0, 152.0),
+      size: (700.0, 28.0),
+      align: Left,
+    )),
+    Rect((
+      id: "legend_swatch_a",
+      position: (16.0, 190.0),
+      size: (16.0, 16.0),
+      color: (0.3, 0.55, 1.0, 1.0),
+    )),
+    Label((
+      id: "legend_a",
+      text: "A: death (override), 0.25",
+      position: (40.0, 186.0),
+      size: (480.0, 26.0),
+      align: Left,
+    )),
+    Rect((
+      id: "legend_swatch_b",
+      position: (16.0, 224.0),
+      size: (16.0, 16.0),
+      color: (0.65, 0.35, 1.0, 1.0),
+    )),
+    Label((
+      id: "legend_b",
+      text: "B: death (override), 0.75",
+      position: (40.0, 220.0),
+      size: (480.0, 26.0),
+      align: Left,
+    )),
+    Rect((
+      id: "legend_swatch_c",
+      position: (16.0, 258.0),
+      size: (16.0, 16.0),
+      color: (0.2, 0.85, 0.8, 1.0),
+    )),
+    Label((
+      id: "legend_c",
+      text: "C: walk (clips alias), 0.5",
+      position: (40.0, 254.0),
+      size: (480.0, 26.0),
+      align: Left,
+    )),
+    Rect((
+      id: "legend_swatch_d",
+      position: (16.0, 292.0),
+      size: (16.0, 16.0),
+      color: (1.0, 0.4, 0.75, 1.0),
+    )),
+    Label((
+      id: "legend_d",
+      text: "D: Zombie_Idle_Loop (raw), 0.0",
+      position: (40.0, 288.0),
+      size: (480.0, 26.0),
+      align: Left,
+    )),
+  ],
+)

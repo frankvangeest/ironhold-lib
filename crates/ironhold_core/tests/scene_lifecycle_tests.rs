@@ -121,6 +121,7 @@ fn test_input_abstraction_flow() {
             overrides: vec![],
             default_transition_ms: None,
             animation_sources: vec![],
+            initial_override: None,
         }),
         AnimationController {
             current: "idle".to_string(),
@@ -133,6 +134,10 @@ fn test_input_abstraction_flow() {
             transition_ms: 0,
             should_loop: true,
             last_player_entity: None,
+            pending_seek: false,
+            graph_handle: None,
+            awaiting_reveal: false,
+            awaiting_reveal_since: None,
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),
@@ -424,6 +429,7 @@ fn test_animation_graph_only_includes_present_clips() {
         overrides: vec![],
         default_transition_ms: None,
         animation_sources: vec![],
+        initial_override: None,
     };
 
     // Spawn with AnimationPlayer on the same entity so find_player_entity_recursive
@@ -432,6 +438,7 @@ fn test_animation_graph_only_includes_present_clips() {
         Transform::default(),
         GlobalTransform::default(),
         AnimationPolicyComponent(policy),
+        ActiveOverride::default(),
         AnimationController {
             current: "Walk_Loop".to_string(),
             last_played: String::new(),
@@ -443,6 +450,10 @@ fn test_animation_graph_only_includes_present_clips() {
             transition_ms: 0,
             should_loop: true,
             last_player_entity: None,
+            pending_seek: false,
+            graph_handle: None,
+            awaiting_reveal: false,
+            awaiting_reveal_since: None,
         },
         bevy::animation::AnimationPlayer::default(),
     )).id();
@@ -488,7 +499,9 @@ fn test_animation_missing_clip_stops_retrying() {
             overrides: vec![],
             default_transition_ms: None,
             animation_sources: vec![],
+            initial_override: None,
         }),
+        ActiveOverride::default(),
         AnimationController {
             current: "missing_clip".to_string(),
             last_played: String::new(),
@@ -500,6 +513,10 @@ fn test_animation_missing_clip_stops_retrying() {
             transition_ms: 0,
             should_loop: true,
             last_player_entity: None,
+            pending_seek: false,
+            graph_handle: None,
+            awaiting_reveal: false,
+            awaiting_reveal_since: None,
         },
         bevy::animation::AnimationPlayer::default(),
     )).id();

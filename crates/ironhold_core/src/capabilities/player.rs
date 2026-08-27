@@ -398,7 +398,7 @@ pub fn player_movement_system(
         // fix (a plain fall — e.g. walking off a ledge with `jumps_used` already 0 — must still
         // play the landing clip). This is independent of the jump-count reset below.
         if !was_grounded && loco.is_grounded {
-            requests.queue.push_back("jump_exit".to_string());
+            requests.queue.push_back("jump_exit".into());
         }
 
         // Reset the jump count once genuinely landed. Gated by `jump_air_grace`, not the
@@ -525,7 +525,7 @@ pub fn player_movement_system(
             controller.jumps_used += 1;
             controller.jump_air_grace = jump_air_grace_ticks(vel, &controller);
             controller.jump_liftoff_y = Some(global_transform.translation().y);
-            requests.queue.push_back("jump_enter".to_string());
+            requests.queue.push_back("jump_enter".into());
             game_events.write(GameEvent::Trigger("player.jumped".to_string()));
         }
     }

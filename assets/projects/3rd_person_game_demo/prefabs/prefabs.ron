@@ -441,6 +441,7 @@
       nameplate: false,
       click_selectable: true,
       indicator_category: "neutral",
+      animation_policy: "prefabs/animation/corpse_policy_zombie.ron",
       behavior: "behaviors/lootable_corpse.behavior.ron",
       interactable: (radius: 2.0, hint_text: "Loot"),
       inventory: (
@@ -459,6 +460,7 @@
       nameplate: false,
       click_selectable: true,
       indicator_category: "neutral",
+      animation_policy: "prefabs/animation/corpse_policy_snake.ron",
       behavior: "behaviors/lootable_corpse.behavior.ron",
       interactable: (radius: 2.0, hint_text: "Loot"),
       inventory: (
@@ -476,6 +478,7 @@
       nameplate: false,
       click_selectable: true,
       indicator_category: "neutral",
+      animation_policy: "prefabs/animation/corpse_policy_spider.ron",
       behavior: "behaviors/lootable_corpse.behavior.ron",
       interactable: (radius: 2.0, hint_text: "Loot"),
       inventory: (

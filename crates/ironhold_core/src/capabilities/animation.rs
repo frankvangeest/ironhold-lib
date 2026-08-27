@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::capabilities::animation_resolver::AnimationPolicyComponent;
+use crate::capabilities::animation_resolver::{AnimationPolicyComponent, ActiveOverride};
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -22,26 +22,87 @@ pub struct AnimationController {
     /// Graph init waits until all of these are loaded before building the merged graph.
     pub source_handles: Vec<Handle<Gltf>>,
     pub node_indices: HashMap<String, AnimationNodeIndex>,
+    /// The `AnimationGraph` asset `node_indices` was built against. Stored here (synchronously
+    /// updated alongside `node_indices`) rather than read from the entity's `AnimationGraphHandle`
+    /// component, because that component is inserted via a *deferred* command — on the exact
+    /// frame a re-init happens (e.g. `animation.rs`'s GLTF-hierarchy-respawn recovery path),
+    /// `node_indices` is already the fresh map but the component still reflects the OLD graph
+    /// until commands flush. Reading the component for a duration lookup on that transitional
+    /// frame pairs a fresh index against a stale graph, which is a mismatch a `HashSet`'s
+    /// non-deterministic iteration order between builds can turn into a completely wrong clip
+    /// duration (found by this feature's own test suite, not by inspection).
+    pub graph_handle: Option<Handle<AnimationGraph>>,
     pub graph_initialized: bool,
     pub transition_ms: u64,
     pub should_loop: bool,
     /// Entity that held `AnimationPlayer` on the last successful play; used to detect
     /// hierarchy changes that would silently invalidate the animation graph.
     pub last_player_entity: Option<Entity>,
+    /// Set by `animation_resolver_system` whenever it accepts a queued request that carries a
+    /// `seek_fraction`/`freeze` (`ActiveOverride`'s durable fields) — even one naming the
+    /// clip that's already current. Playback normally only re-triggers on
+    /// `current != last_played`, which is a no-op for "re-seek the same clip to a different
+    /// fraction" (exactly the `dynamic_animation_control` demo's QA matrix). This flag forces
+    /// that replay; cleared by `animation_playback_system` once applied.
+    pub pending_seek: bool,
+    /// Set to `true` (with the entity spawned `Visibility::Hidden`, see
+    /// `entity_spawner.rs::spawn_prefab_instance`) for every entity that gets an `animation_policy`
+    /// — hiding happens at spawn itself, before the policy RON has even loaded, because
+    /// `bevy_scene`'s `SpawnScene` step instantiates the (often-cached) GLTF hierarchy in that same
+    /// spawn frame, well before anything in this engine gets a chance to react. Left hidden that
+    /// long would show a raw GLTF bind/rest pose for at least one real rendered frame — found via a
+    /// real playtest as a corpse briefly appearing to "stand" before settling into its frozen death
+    /// pose, separate from (and only visible after fixing) an earlier looping bug this feature also
+    /// fixed. `animation_playback_system` reveals (`Visibility::Inherited`) the moment a pose is
+    /// actually confirmed applied — which for `AnimationPolicy.initial_override` entities (e.g. a
+    /// corpse's frozen death pose) is the seek+freeze application, and for every other entity is
+    /// simply "no override, fall through to `base.idle`" the instant the policy loads. A bounded
+    /// failsafe (`awaiting_reveal_since`) force-reveals regardless if neither ever happens.
+    pub awaiting_reveal: bool,
+    /// Wall-clock (`Time::elapsed_secs()`) timestamp of when `awaiting_reveal` was last set —
+    /// used by `animation_playback_system`'s failsafe to force-reveal an entity that never gets
+    /// a confirmed pose (e.g. a broken `animation_policy` path, or a model with no
+    /// `AnimationPlayer` in its hierarchy). `None` until `animation_policy_loader_system` gets a
+    /// chance to stamp it (spawn itself has no `Time` access), so the failsafe's window doesn't
+    /// start ticking until then — acceptable since that gap is bounded by the same async RON
+    /// fetch this whole mechanism exists to hide.
+    pub awaiting_reveal_since: Option<f32>,
 }
 
 pub fn animation_playback_system(
     mut commands: Commands,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
-    mut controller_query: Query<(Entity, &mut AnimationController, &AnimationPolicyComponent)>,
+    clips: Res<Assets<AnimationClip>>,
+    mut controller_query: Query<(Entity, &mut AnimationController, &AnimationPolicyComponent, &ActiveOverride)>,
     player_marker_query: Query<(), With<AnimationPlayer>>,
     mut player_query: Query<(&mut AnimationPlayer, Option<&mut AnimationTransitions>)>,
     children_query: Query<&Children>,
     names: Query<&Name>,
+    time: Res<Time>,
 ) {
-    for (entity, mut controller, policy_comp) in &mut controller_query {
+    /// If an entity is still hidden waiting for a confirmed pose this long after
+    /// `awaiting_reveal_since` was stamped, reveal it anyway — an incorrect pose is preferable
+    /// to a permanently invisible entity (e.g. a broken `animation_policy`/model reference, or
+    /// a GLB with no `AnimationPlayer` in its hierarchy).
+    const REVEAL_FAILSAFE_SECS: f32 = 5.0;
+
+    for (entity, mut controller, policy_comp, active_override) in &mut controller_query {
         let entity_name = names.get(entity).map(|n| n.as_str()).unwrap_or("<unnamed>");
+
+        if controller.awaiting_reveal {
+            if let Some(since) = controller.awaiting_reveal_since {
+                if time.elapsed_secs() - since > REVEAL_FAILSAFE_SECS {
+                    warn!(
+                        "[{}] awaiting_reveal exceeded {}s with no confirmed pose — revealing anyway to avoid a permanently invisible entity",
+                        entity_name, REVEAL_FAILSAFE_SECS
+                    );
+                    controller.awaiting_reveal = false;
+                    controller.awaiting_reveal_since = None;
+                    commands.entity(entity).insert(Visibility::Inherited);
+                }
+            }
+        }
 
         // 1. Initialize Graph if not done and GLTF is ready
         if !controller.graph_initialized {
@@ -120,10 +181,11 @@ pub fn animation_playback_system(
                 match find_player_entity_recursive(entity, &player_marker_query, &children_query) {
                     Some(player_ent) => {
                         commands.entity(player_ent).insert((
-                            AnimationGraphHandle(graph_handle),
+                            AnimationGraphHandle(graph_handle.clone()),
                             AnimationTransitions::new(),
                         ));
                         controller.node_indices = indices;
+                        controller.graph_handle = Some(graph_handle);
                         controller.graph_initialized = true;
                         controller.last_player_entity = Some(player_ent);
                         info!(
@@ -176,6 +238,18 @@ pub fn animation_playback_system(
                             controller.graph_initialized = false;
                             controller.last_player_entity = None;
                             controller.last_played = String::new();
+                            // The replacement hierarchy's meshes start in the GLTF's rest/bind
+                            // pose until graph re-init re-applies the current pose to the new
+                            // AnimationPlayer entity — re-arm the same hide/reveal guard used on
+                            // initial spawn (see AnimationController.awaiting_reveal) so this
+                            // mid-life re-spawn doesn't flash the bind pose too.
+                            controller.awaiting_reveal = true;
+                            controller.awaiting_reveal_since = Some(time.elapsed_secs());
+                            info!(
+                                "[DIAG] [{}] re-hiding {:?} — GLTF hierarchy re-spawned, pose not yet reapplied",
+                                entity_name, entity
+                            );
+                            commands.entity(entity).insert(Visibility::Hidden);
                             continue;
                         }
                         None => {
@@ -186,6 +260,13 @@ pub fn animation_playback_system(
                             controller.graph_initialized = false;
                             controller.last_player_entity = None;
                             controller.last_played = String::new();
+                            controller.awaiting_reveal = true;
+                            controller.awaiting_reveal_since = Some(time.elapsed_secs());
+                            info!(
+                                "[DIAG] [{}] re-hiding {:?} — AnimationPlayer lost, pose not yet reapplied",
+                                entity_name, entity
+                            );
+                            commands.entity(entity).insert(Visibility::Hidden);
                             continue;
                         }
                     }
@@ -197,7 +278,9 @@ pub fn animation_playback_system(
         }
 
         // 2. Handle Playback
-        if controller.graph_initialized && controller.current != controller.last_played {
+        if controller.graph_initialized
+            && (controller.current != controller.last_played || controller.pending_seek)
+        {
             // Fast path: use the cached entity (staleness check above confirmed it's valid).
             // Fall back to the recursive walk only when last_player_entity is None, which
             // shouldn't happen in production (graph init always sets both together) but can
@@ -210,16 +293,99 @@ pub fn animation_playback_system(
                         let duration = if controller.transition_ms == 0 { Duration::ZERO } else { Duration::from_millis(controller.transition_ms) };
                         if let Some(mut transitions) = maybe_transitions {
                             controller.last_player_entity = Some(player_ent);
-                            let active_anim = transitions.play(&mut player, index, duration);
-                            if controller.should_loop {
-                                active_anim.repeat();
+
+                            // A frozen (paused) previous clip is invisible to
+                            // AnimationTransitions::play's own fade-out guard (it explicitly
+                            // skips creating a transition for a paused outgoing animation), so
+                            // it would otherwise never decay out of the player's active
+                            // animations and stay permanently blended at full weight against
+                            // whatever plays next. Resume it first so the normal fade-out path
+                            // applies exactly as it would for any other clip switch.
+                            if let Some(&prev_index) = controller.node_indices.get(&controller.last_played) {
+                                if let Some(prev_anim) = player.animation_mut(prev_index) {
+                                    if prev_anim.is_paused() {
+                                        prev_anim.resume();
+                                    }
+                                }
                             }
+
+                            info!(
+                                "[DIAG] [{}] playing clip={:?} should_loop={} seek_fraction={:?} frozen={} awaiting_reveal={} (last_played was {:?})",
+                                entity_name, controller.current, controller.should_loop,
+                                active_override.seek_fraction, active_override.frozen, controller.awaiting_reveal, controller.last_played
+                            );
+                            let active_anim = transitions.play(&mut player, index, duration);
+                            // Explicit set_repeat every play, not just a conditional `.repeat()`
+                            // — `AnimationPlayer::start()` (called by `transitions.play()`)
+                            // reuses the existing `ActiveAnimation` entry when replaying the
+                            // SAME node index (exactly what a `pending_seek` same-clip re-seek
+                            // does) and its `.replay()` does not reset `repeat`. Without this
+                            // being unconditional, a node previously set to `Forever` (e.g. by
+                            // an earlier `should_loop: true` play) would stay stuck looping
+                            // forever even after a later play sets `should_loop: false`.
+                            active_anim.set_repeat(if controller.should_loop {
+                                bevy::animation::RepeatAnimation::Forever
+                            } else {
+                                bevy::animation::RepeatAnimation::Never
+                            });
+
+                            // Seek/freeze — durable on ActiveOverride, so this reapplies on
+                            // every real play (not just the first), including a later replay
+                            // forced by the GLTF-hierarchy-respawn recovery path above. Use
+                            // set_seek_time (not seek_to) so no animation events between the
+                            // old and new time are replayed.
+                            if let Some(fraction) = active_override.seek_fraction {
+                                let clip_duration = controller.graph_handle.as_ref()
+                                    .and_then(|h| graphs.get(h))
+                                    .and_then(|g| g.get(index))
+                                    .and_then(|node| match &node.node_type {
+                                        AnimationNodeType::Clip(handle) => Some(handle),
+                                        _ => None,
+                                    })
+                                    .and_then(|handle| clips.get(handle))
+                                    .map(|clip| clip.duration());
+                                match clip_duration {
+                                    Some(d) => {
+                                        active_anim.set_seek_time(fraction * d);
+                                    }
+                                    None => warn!(
+                                        "[{}] Could not resolve duration for clip {:?} — seek to fraction {} skipped",
+                                        entity_name, controller.current, fraction
+                                    ),
+                                }
+                            }
+                            // `freeze` is independent of whether a fraction was given — `freeze:
+                            // true` with no `start_at_fraction` means "hold at the start (0.0),
+                            // don't play at all", a legitimate hard-stop use. Previously this
+                            // pause() lived inside the `seek_fraction` block above, so `freeze:
+                            // true` alone silently did nothing (found by 3 independent reviews).
+                            // Symmetric `resume()` covers the same-node re-seek case: switching
+                            // TO a different clip is handled by the resume-before-play step
+                            // above, but re-seeking the SAME already-current clip from frozen to
+                            // continuing never goes through that step (last_played == current).
+                            if active_override.frozen {
+                                active_anim.pause();
+                            } else {
+                                active_anim.resume();
+                            }
+
                             // Only commit last_played when AnimationTransitions is ready.
                             // AnimationGraphHandle + AnimationTransitions are inserted via deferred
                             // commands on the same frame the graph is initialized, so they won't
                             // be present until the next frame. Skipping last_played here causes
                             // a retry next frame via the transitions path.
                             controller.last_played = controller.current.clone();
+                            controller.pending_seek = false;
+
+                            // The pose this frame's play() call just applied is now real and
+                            // fully seeked/frozen — reveal an entity that was hidden pending
+                            // exactly this confirmation (see AnimationController.awaiting_reveal).
+                            if controller.awaiting_reveal {
+                                controller.awaiting_reveal = false;
+                                controller.awaiting_reveal_since = None;
+                                info!("[DIAG] [{}] revealing {:?} — pose confirmed applied", entity_name, entity);
+                                commands.entity(entity).insert(Visibility::Inherited);
+                            }
                         } else {
                             // AnimationTransitions not yet applied (normal 1-frame deferred window
                             // after graph init). Don't update last_played — retry next frame.

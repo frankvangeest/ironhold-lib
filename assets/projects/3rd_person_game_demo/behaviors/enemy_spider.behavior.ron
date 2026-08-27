@@ -74,7 +74,17 @@
                     do_actions: [
                         Despawn("{self}_corpse"),
                         Spawn(prefab: "spider_corpse", id: "{self}_corpse", at_entity: "{self}"),
-                        Despawn("{self}"),
+                        // Not an immediate Despawn: the corpse spawns Visibility::Hidden and only
+                        // reveals once its animation_policy RON loads and its frozen death pose is
+                        // confirmed applied (several frames, longer on a cold web fetch) — see
+                        // AnimationController.awaiting_reveal in capabilities/animation.rs. Despawning
+                        // "{self}" immediately would leave a visible gap with nothing on screen. This
+                        // entity's own death clip already played to completion with looping: false, so
+                        // it's already sitting frozen on the exact same last frame the corpse spawns
+                        // into (same model, same clip, same at_entity transform) — keeping it alive a
+                        // little longer costs nothing visually, it's a bit-identical overlap, not a
+                        // crossfade.
+                        SetDespawnTimer(entity: "{self}", delay_secs: 1.0),
                     ],
                 ),
             ],

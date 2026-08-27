@@ -552,6 +552,20 @@ pub struct AnimationPolicy {
     /// Last entry wins on duplicate clip names.
     #[serde(default)]
     pub animation_sources: Vec<String>,
+
+    /// An override `id` (from `overrides`) to apply synchronously the moment this policy
+    /// attaches — before any `PlayAnimationOn` request has had a chance to arrive, and before
+    /// the resolver's own `base.idle` fallback would otherwise apply. Use this to spawn an
+    /// entity already in a specific pose (e.g. a lootable corpse's frozen death pose) with no
+    /// visible flash of the wrong animation first. Without this, an entity whose `base.idle`
+    /// deliberately points at a non-idle clip (as a corpse's does — see `corpse_policy_zombie.
+    /// ron`) can briefly play that clip unseeked and looping if its own posing request arrives
+    /// via a slower path (e.g. a behavior file's entry_actions, which round-trips through the
+    /// full action pipeline) than this policy's own load does — found via a real playtest, not
+    /// by inspection: the corpse visibly fell, snapped back to standing as the untended loop
+    /// wrapped, then fell again once the real request finally won.
+    #[serde(default)]
+    pub initial_override: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -597,6 +611,18 @@ pub struct AnimationOverrideDef {
     /// Per-override transition duration (ms). If set, overrides the global default.
     #[serde(default)]
     pub transition_ms: Option<u64>,
+
+    /// Fraction (0.0-1.0) of the clip's duration to seek to, and whether to freeze there —
+    /// consulted ONLY when this override is applied via `AnimationPolicy.initial_override`, not
+    /// by an ordinary `PlayAnimationOn(clip: "<this id>")` call (which has its own, independent
+    /// `start_at_fraction`/`freeze` fields and ignores these). Kept separate rather than acting
+    /// as a default for every trigger of this override, to avoid an unresolvable ambiguity: a
+    /// runtime request's `freeze: false` has no way to mean "explicitly false" vs "unset, inherit
+    /// the override's own default" once both are plain `bool`s.
+    #[serde(default)]
+    pub start_at_fraction: Option<f32>,
+    #[serde(default)]
+    pub freeze: bool,
 }
 
 fn default_priority() -> i32 {

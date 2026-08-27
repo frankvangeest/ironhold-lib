@@ -509,6 +509,70 @@ separate-corpse-entity design sidesteps both by construction (fresh `Inventory` 
 decay always ending in a real `Despawn` rather than a state transition a stale timer could
 re-trigger).
 
+### Animation resolver/playback pipeline (`capabilities/animation_resolver.rs` + `capabilities/animation.rs`)
+
+Two-stage pipeline, chained back-to-back in `lib.rs`'s `Update` set:
+`animation_resolver_system` (turns `LocomotionState` + queued `AnimationRequest`s into a single
+`AnimationController.current`) → `animation_playback_system` (drives the real Bevy
+`AnimationPlayer`/`AnimationTransitions` from that). **Field ownership is split between the two,
+not fully owned by either** — despite the resolver's own doc comment saying it's the sole writer
+of `current`, `animation.rs`'s missing-node-index recovery path also writes it (a last-resort
+fallback to `base.idle`, not a normal write). The full split:
+
+| Field | Owner | Notes |
+|---|---|---|
+| `current`, `transition_ms`, `should_loop` | resolver (write); playback (idle-fallback exception) | |
+| `pending_seek` | resolver sets; playback clears | see below |
+| `last_played`, `graph_initialized`, `node_indices`, `last_player_entity` | playback | |
+
+**`AnimationController.pending_seek`** (`planning/features/dynamic_animation_control.md`) exists
+because playback only re-triggers `transitions.play()` on `current != last_played` — a no-op for
+"re-seek the *same* clip to a different fraction" (`PlayAnimationOn(..., start_at_fraction: ...)`
+called twice in a row against an already-current clip). The resolver sets `pending_seek = true`
+whenever it accepts a queued request that carries `start_at_fraction`/`freeze` — deliberately
+**not** for an ordinary re-request with neither (e.g. rapid re-presses of a plain
+`attack_light` override), which keeps its pre-existing behavior of not restarting the clip. Only
+seek/freeze requests need the forced replay.
+
+**A frozen (paused) clip must be resumed before the *next* clip plays, or it leaks forever.**
+`AnimationTransitions::play`'s own fade-out guard explicitly skips creating a fade transition for
+an outgoing clip that `is_paused()` — so a paused `ActiveAnimation` never decays out of
+`AnimationPlayer.active_animations` on its own, and stays permanently blended at full weight
+against whatever plays next. Invisible for an entity that only ever plays one clip in its
+lifetime (a corpse), but immediately visible for one that cycles through several (the
+`dynamic_animation_control` demo). `animation_playback_system` resumes `last_played`'s
+`ActiveAnimation` (if paused) immediately before calling `transitions.play()` for the new clip —
+this is not optional cleanup, it's required for `AnimationTransitions`' own fade-out mechanism to
+engage at all.
+
+**Seeking uses `ActiveAnimation::set_seek_time`, not `seek_to`.** `seek_to` intentionally replays
+every animation event between the old and new time on the next update; a `0 → duration` jump
+would replay a clip's entire event track. `set_seek_time` is the no-events variant — use it for
+any future seek-like feature in this pipeline, even though no GLB in this project currently
+declares animation events.
+
+**Clip duration for a seek is resolved via the live `AnimationGraph`/`AnimationNodeType::Clip`,
+not a separate `clip name → Handle<AnimationClip>` map.** `animation_playback_system` already has
+the graph handle and node index in scope at the point it needs the duration; a second map keyed
+by clip name would duplicate `node_indices`' key space and risks the exact "two maps built from
+one source, allowed to desync" shape `tag_spawned_entity`'s own doc comment warns about.
+
+**`ActiveOverride.seek_fraction`/`.frozen` are durable, not consumed-and-cleared on first
+apply.** They must survive `animation.rs`'s documented GLTF-hierarchy-respawn recovery path (a
+WASM-specific case: Bevy's `SceneSpawner` replaces the animated hierarchy after sub-assets finish
+loading, forcing a second `transitions.play()` later in the entity's lifetime) — a one-shot seek
+would silently un-freeze a frozen pose (e.g. a corpse) the moment that recovery path fires on the
+web, which would be a hard-to-reproduce, web-only regression.
+
+**Spawning an entity already posed mid-clip** (not just holding a death pose after a full
+playthrough — see `docs/20_data_formats.md`'s "Spawn-already-posed pattern") needs its own
+minimal `AnimationPolicy` file with `base.idle`/`walk`/`run`/`jump_loop` all pointing at the
+target clip, not a reuse of a live character's full policy — see
+`prefabs/animation/corpse_policy_zombie.ron`. Reusing the full policy leaves three independent
+fallback paths (no active override, missing node index, graph validation failure) that all land
+on `base.idle`, which for a "should look dead" entity is a strictly worse degraded state than for
+a live one.
+
 ### Dialogue system (`capabilities/dialogue.rs`)
 
 **`DialoguePath(String)` component** — inserted by the scene loader on entities whose `PrefabDef.dialogue` is set. `dialogue_tick_system` reads `entity.interacted:{id}` events and matches them against `DialoguePath` entities to auto-fire `Action::StartDialogue`.

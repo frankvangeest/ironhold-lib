@@ -1,0 +1,47 @@
+// Corpse-only animation policy for zombie_corpse. See "Spawn-already-posed pattern" in
+// docs/20_data_formats.md.
+//
+// Deliberately NOT a reuse of player_policy_zombie.ron. A corpse never moves and only ever
+// plays one clip (its death pose, seeked to the final frame and frozen), so base.idle/walk/run/
+// jump_loop all point at the same death clip here. This closes three independent silent-
+// fallback paths that would otherwise make the corpse visibly "stand up and idle" if the
+// resolver ever falls back to `base.idle` (no active override, a missing node index recovery,
+// or a graph-validation failure) — with the full monster policy, any of those lands on a
+// standing idle loop, which is a strictly worse degraded state for a corpse than for a live
+// monster.
+//
+// initial_override: "death" applies the death override SYNCHRONOUSLY the moment this policy
+// loads, instead of waiting for lootable_corpse.behavior.ron's own PlayAnimationOn to arrive via
+// the (much slower) behavior-file -> action-queue -> executor -> animation-request round trip.
+// This is load-bearing, not a style choice: without it, base.idle's own fallback (see above)
+// would play "Death01" unseeked and looping for however many frames the behavior-file path takes
+// to catch up — visibly, the corpse fell, snapped back to standing as the untended loop wrapped,
+// then fell again once the real request finally won. Found via a real playtest.
+(
+    default_transition_ms: 200,
+
+    animation_sources: ["anim_zombie", "anim_locomotion", "anim_hit_death"],
+
+    base: (
+        idle:      "Death01",
+        walk:      "Death01",
+        run:       "Death01",
+        jump_loop: "Death01",
+    ),
+
+    clips: {},
+
+    initial_override: "death",
+
+    overrides: [
+        (
+            id: "death",
+            clip: "Death01",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+            start_at_fraction: 1.0,
+            freeze: true,
+        ),
+    ],
+)

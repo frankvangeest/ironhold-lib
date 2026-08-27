@@ -131,11 +131,37 @@ pub enum Action {
     /// Play an animation clip on a specific entity identified by its spawn ID.
     /// Use `target: "{self}"` inside behavior files — the entity FSM interpreter
     /// substitutes `{self}` with the entity's spawn ID before queuing the action.
+    ///
+    /// `start_at_fraction` (0.0–1.0, a *fraction* of the clip's duration, not seconds) seeks
+    /// into the clip before playback starts — e.g. `1.0` starts at the final frame. `freeze`
+    /// (default `false`) pauses the clip instead of letting it continue playing — at
+    /// `start_at_fraction` if given, otherwise at `0.0` (a "hard stop on the first frame" use).
+    /// The two are independent: `freeze: true` with no `start_at_fraction` is a legitimate,
+    /// fully-supported combination, not a no-op. Both default to "play from the start, keep
+    /// playing" — identical to the pre-existing behavior. Only available on `PlayAnimationOn`,
+    /// not the broadcast `PlayAnimation(String)` (a tuple variant — adding fields to it would
+    /// break every existing call site); target the player explicitly
+    /// (`PlayAnimationOn(target: "player_01", ...)`) if seeking/freezing is needed there.
+    ///
+    /// If the resolved override also has its own `duration: Some(_)` (see
+    /// `AnimationOverrideDef`), that timer still auto-expires on schedule regardless of
+    /// `freeze` — the override clears and playback falls back to the base/idle clip. `freeze`
+    /// does not cancel or extend an override's own expiry.
+    /// Example: `PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true)`.
     PlayAnimationOn {
         /// Spawn ID of the target entity, or `"{self}"` inside behavior files.
         target: String,
         /// Name of the animation clip to play.
         clip: String,
+        /// Fraction (0.0–1.0) of the clip's duration to start playback at. Defaults to `0.0`
+        /// (start of clip). Values outside `[0.0, 1.0]` are clamped with a runtime warning
+        /// (`ironhold_cli validate` also rejects them outright at design time).
+        #[serde(default)]
+        start_at_fraction: Option<f32>,
+        /// If `true`, pause the clip at `start_at_fraction` (or `0.0` if unset) instead of
+        /// continuing playback.
+        #[serde(default)]
+        freeze: bool,
     },
     /// Emit a `GameEvent::Trigger` with the given name.
     /// Inside behavior files, `{self}` in the event name is replaced with the entity's

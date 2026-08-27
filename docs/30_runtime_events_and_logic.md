@@ -51,7 +51,7 @@ This section is factual and reflects what exists right now.
   - `Spawn { prefab, id, position, spawn_point, yaw_deg }` / `Despawn(id)` spawn/remove prefab instances by ID; spawn is frame-paced (max 2/frame) to cap WASM pipeline-compile stalls.
   - `PreloadPrefab(key)` loads a prefab's GLB early (fire on `scene.ready`) to prevent the first-spawn decode stall on WASM.
   - `PlayAnimation(clip)` plays an animation on available controllers.
-  - `PlayAnimationOn { target, clip }` plays an animation on a specific entity by spawn ID.
+  - `PlayAnimationOn { target, clip, start_at_fraction, freeze }` plays an animation on a specific entity by spawn ID; `start_at_fraction` (0.0–1.0) seeks into the clip's duration before playback, `freeze` pauses it there instead of continuing — see [Spawn-already-posed pattern](20_data_formats.md) in `docs/20_data_formats.md`.
   - `EmitEvent(name)` emits a `GameEvent::Trigger`; `{self}` is substituted in behavior contexts.
   - `PlaySound(key: k)` / `PlayMusicLoop(key: k)` / `StopMusic` control audio; optional `volume: f32` multiplies the per-entry catalog volume.
   - `SetVolume(pct)` sets global volume (0–100).
@@ -167,7 +167,8 @@ Actions represent explicit operations the runtime can execute.
 - `SetTransform(entity, transform)` 🧭
 
 #### Animation/audio actions
-- `PlayAnimation(clip_id)` ✅ — plays a named animation by semantic ID (see AnimationPolicy)
+- `PlayAnimation(clip_id)` ✅ — plays a named animation on all animated entities by semantic ID (see AnimationPolicy); cannot seek/freeze (see `PlayAnimationOn` below)
+- `PlayAnimationOn { target, clip, start_at_fraction, freeze }` ✅ — plays a clip on one entity by spawn ID (`{self}`/`{target}` substituted). `start_at_fraction` (0.0–1.0, a fraction of the clip's *duration*, not seconds) seeks to that point before playback starts; `freeze: true` pauses it there (or at `0.0` if `start_at_fraction` is omitted) instead of continuing. Demo: `assets/projects/dynamic_animation_control/`. See the "Spawn-already-posed pattern" in `docs/20_data_formats.md`.
 - `PlaySound(key: audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `PlayMusicLoop(key: audio_key)` ✅ — starts a looping background music track by `AssetCatalog` audio key; stops any currently playing music; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` ✅ — stops the current background music
@@ -298,6 +299,7 @@ Applies actions to the world. Key design points:
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn (handles cleared on `LoadScene`)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
+- `PlayAnimationOn { target, clip, start_at_fraction, freeze }` — plays a clip on one entity by spawn ID; `start_at_fraction`/`freeze` seek/pause into the clip (see the Animation/audio actions list above)
 - `PlaySound { key, volume }` — fire-and-forget audio by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume; warns for unsupported formats or missing keys
 - `PlayMusicLoop { key, volume }` — starts a looping background music track by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` — stops the current background music
@@ -580,12 +582,14 @@ name is a single, monster-type-agnostic `monster.respawn:{id}` convention (not
 `zombie.respawn:{id}`/`snake.respawn:{id}`/etc.) specifically so a future 4th monster type is a
 copy-paste of one rule line, not a new per-type event name to keep in sync everywhere.
 
-**The corpse prefab** carries the fields a static chest would, plus a shared behavior file:
+**The corpse prefab** carries the fields a static chest would, plus a shared behavior file and its
+own animation policy (see "Spawn-already-posed pattern" in `docs/20_data_formats.md`):
 
 ```ron
 // prefabs/prefabs.ron — zombie_corpse (excerpt)
 "zombie_corpse": (
   kind: Prop,
+  animation_policy: "prefabs/animation/corpse_policy_zombie.ron",
   interactable: (radius: 2.0, hint_text: "Loot"),
   inventory: (
     max_slots: 6,
@@ -598,6 +602,35 @@ copy-paste of one rule line, not a new per-type event name to keep in sync every
   // no trigger_zone, no colliders — see the mass-veto note below
 ),
 ```
+
+**`animation_policy` points at a corpse-specific policy file, not the live monster's full one.**
+`corpse_policy_zombie.ron` sets `base.idle`/`walk`/`run`/`jump_loop` all to the death clip and
+keeps only the `death` override — so any resolver fallback (no active override, a missing node
+index, a graph-validation failure) still lands on the death pose instead of a standing idle loop.
+Without `animation_policy` at all, a corpse prop renders in raw bind/rest pose — not lying dead —
+since nothing ever drives its skeleton.
+
+**Adding a corpse for a new monster type — the complete list:**
+1. `prefabs/animation/corpse_policy_{monster}.ron` — copy an existing one; set all four
+   `base.idle`/`walk`/`run`/`jump_loop` and the single `death` override to *this* model's death
+   clip name (check it with `ironhold inspect glb`). Only list `animation_sources` if this
+   model's death clip lives in an external animation-pack GLB, like the zombie's does — the
+   snake/spider ones need none, since their clip is embedded in their own model GLB.
+2. `prefabs/prefabs.ron` — a `{monster}_corpse` prefab: `kind: Prop`, the monster's own `model`,
+   `animation_policy:` pointing at step 1, `interactable:`, `inventory:`, and
+   `behavior: "behaviors/lootable_corpse.behavior.ron"` (shared — do not copy or edit it).
+3. `behaviors/enemy_{monster}.behavior.ron` — the `dead` state's two `EmitEventAfterDelay` lines
+   and the `swap_to_corpse` handler's Despawn → Spawn → Despawn trio (see the zombie example
+   above).
+4. `scenes/main.scene.ron` — a `spawn_points:` entry per instance, matching that entity's own
+   placement/`yaw_deg`.
+5. `logic/state_machine.ron`'s `global_on:` — one `monster.respawn:{literal_id}` rule per
+   instance (see the Global respawn rule example above).
+6. `logic/state_machine.ron`'s `entry_actions` — a `PreloadPrefab("{monster}_corpse")` line, or
+   that type's first death stalls the browser while its corpse GLB decodes.
+
+You do **not** need to touch `lootable_corpse.behavior.ron` itself — every field in it is
+`{self}`-relative, so it already covers any new monster type with zero changes.
 
 **Deliberately no `trigger_zone`.** A `trigger_zone` sensor gets no `ColliderMassProperties`
 override at spawn, so its own volume-derived mass would fold into the entity's total rigid-body
@@ -617,7 +650,15 @@ point at the same file with no changes needed:
   states: [
     (
       name: "fresh",
-      entry_actions: [ SetDespawnTimer(entity: "{self}", delay_secs: 300.0) ],
+      entry_actions: [
+        // Jump straight to the final frame of the death clip and hold it there, instead of
+        // playing the whole clip from scratch (the player already watched it play out on the
+        // now-despawned live monster). See docs/20_data_formats.md's "Spawn-already-posed
+        // pattern". Fired from here, not the monster's own death sequence, because the corpse
+        // entity doesn't exist yet at the point the monster's Spawn(...) action runs.
+        PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true),
+        SetDespawnTimer(entity: "{self}", delay_secs: 300.0),
+      ],
       on: [ ( event: "entity.interacted:{self}", do_actions: [ OpenContainer("{self}") ] ) ],
     ),
     (

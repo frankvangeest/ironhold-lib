@@ -1,0 +1,41 @@
+(
+  schema_version: 2,
+  prefabs: {
+
+    // FlyCamera — no model; camera-only. WASD move | LMB/RMB + mouse look | Shift fast | E/Space
+    // up | Q/Ctrl down. Used instead of a full player so this demo can focus purely on the
+    // animation-seek/freeze primitive, with no movement/physics setup to author.
+    "flycam": (
+      kind: Prop,
+      model: "",
+      components: (
+        tags: ["flycam"],
+        // speed/fast_speed tuned way down from the engine defaults (100/200 units/sec, sized
+        // for terrain-scale worlds) — this whole diorama is only 24m wide, so the defaults fly
+        // straight out of it on the first W tap.
+        flycam: ( speed: 5.0, fast_speed: 12.0 ),
+      ),
+    ),
+
+    "ground": (
+      kind: Primitive,
+      model: "",
+      shape: Cuboid,
+      components: (),
+      primitive: (
+        size: (24.0, 0.5, 8.0),
+      ),
+    ),
+
+    // One prefab reused for every posed instance in both scenes — each scene entity differs
+    // only by `id`/`transform`/`label`; which pose it ends up in comes entirely from the
+    // PlayAnimationOn call logic/rules.ron fires at it by id on scene.ready.
+    "zombie_pose": (
+      kind: Actor,
+      model: "zombie",
+      display_name: "Zombie",
+      nameplate: false,
+      animation_policy: "prefabs/animation/zombie_policy.ron",
+    ),
+  },
+)

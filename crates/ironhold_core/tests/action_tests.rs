@@ -197,6 +197,7 @@ fn test_player_jump_emits_game_event() {
             overrides: vec![],
             default_transition_ms: None,
             animation_sources: vec![],
+            initial_override: None,
         }),
         AnimationController {
             current: "idle".to_string(),
@@ -209,6 +210,10 @@ fn test_player_jump_emits_game_event() {
             transition_ms: 0,
             should_loop: true,
             last_player_entity: None,
+            pending_seek: false,
+            graph_handle: None,
+            awaiting_reveal: false,
+            awaiting_reveal_since: None,
         },
         bevy_rapier3d::prelude::RigidBody::Dynamic,
         bevy_rapier3d::prelude::Velocity::zero(),

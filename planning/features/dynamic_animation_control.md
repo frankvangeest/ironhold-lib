@@ -1,6 +1,6 @@
 # Feature: Dynamic animation control (seek + freeze on `PlayAnimationOn`)
 
-_Status: In Progress_
+_Status: Done_
 _Planned at: `237e548` (2026-08-26)_
 
 > **Branched from `integration`, not `main`** (deviation from the usual `feature/{slug}` convention
@@ -211,31 +211,185 @@ catalog entries to the project's `assets.ron`, then `python tools/asset_checker/
 `python tools/build_asset_manifest.py`.
 
 ## Tasks
-- [ ] `Action::PlayAnimationOn` — add `start_at_fraction: Option<f32>` + `freeze: bool` (`schema/actions.rs`)
-- [ ] `AnimationRequests.queue`: `VecDeque<String>` → `VecDeque<AnimationRequest>` (clip/id name + the two new fields); give it a `From<&str>` or constructor so the existing one-liner call sites (`jump_enter`/`jump_exit` in `player.rs`, the `PlayAnimation` broadcast in `action_executor.rs`) don't need to change shape
-- [ ] `ActiveOverride`: add `seek_fraction: Option<f32>` + `frozen: bool`, reset in `.clear()`; fix the pre-existing `looping` default/clear inconsistency while touching this struct (`#[derive(Default)]` yields `false`, `.clear()` sets `true` — currently benign since `clip` is `None` either way, but should not be left free to drift)
-- [ ] `AnimationController`: add `pending_seek: bool`
-- [ ] `animation_resolver_system`: merge `start_at_fraction`/`freeze` into all three `ActiveOverride`-construction branches via one shared helper; set `pending_seek = true` whenever a queued request is accepted, regardless of whether it names the already-current clip; force `looping = false` when `freeze` is requested
-- [ ] `animation_playback_system`: replay condition becomes `current != last_played || pending_seek` (clearing `pending_seek` once applied); before calling `transitions.play()`, `.resume()` the previous clip's `ActiveAnimation` if it `.is_paused()`; after play, resolve clip duration via the `AnimationGraph`/`AnimationNodeType::Clip` and, when `seek_fraction` is set, `.set_seek_time(fraction * duration)` (not `.seek_to()`), then `.pause()` if `frozen`
-- [ ] Clamp `start_at_fraction` to `[0.0, 1.0]` with a one-shot `warn!`; warn when a fraction is requested against a resolved-looping override
-- [ ] `ironhold_cli validate`: new check — `PlayAnimationOn.start_at_fraction` outside `[0.0, 1.0]` in any rules/state_machine/behavior file → validate error (matches the `negative_coyote_time_secs` precedent; no `AnimationPolicy` file loading needed for this check)
-- [ ] `cargo check -p ironhold_cli` — confirm `query actions` still compiles/reports correctly (struct-variant field addition, should be a no-op for `{ .. }`-style matches, but verify per the workflow's mandatory schema-change gate)
-- [ ] Corpse fix: 3 new `prefabs/animation/corpse_policy_{zombie,snake,spider}.ron` files
-- [ ] Corpse fix: `animation_policy:` added to `zombie_corpse`/`snake_corpse`/`spider_corpse` in `prefabs.ron`
-- [ ] Corpse fix: `PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true)` added to `lootable_corpse.behavior.ron`'s `"fresh"` `entry_actions`
-- [ ] New demo project `dynamic_animation_control` (frozen-pose scene + continue-from-fraction scene, RON/UI-button driven) + full new-project registration checklist
-- [ ] Tests — resolver-level unit tests using a synthetic `AnimationController`/`graph_initialized: true` (mirroring `tests/scene_lifecycle_tests.rs`'s existing pattern, no real GLB assets needed) covering: (a) same-clip re-seek via `pending_seek` actually replays, (b) the override-id branch (not just raw clip name) honors `start_at_fraction`/`freeze` — the case most likely to be silently missed, (c) a previously-paused clip is resumed before its node plays again, (d) freeze state survives a simulated graph-reinit replay
-- [ ] Test — `corpse_loot_interact_tests.rs`: a freshly-spawned corpse is immediately in its death pose (regression test for the actual bug this feature fixes)
-- [ ] Docs — `docs/20_data_formats.md` (new fields + the documented `PlayAnimation`/`PlayAnimationOn` seek asymmetry), `docs/30_runtime_events_and_logic.md`, `crates/ironhold_core/src/CLAUDE.md` (resolver/playback field-ownership split — extend the existing "single writer of `AnimationController.current`" note, which is already slightly stale since the missing-node-index recovery path also writes it, into an explicit ownership table; document the "resume before replay" invariant from Task 2 above, since it is not otherwise rediscoverable from reading either function in isolation)
+- [x] `Action::PlayAnimationOn` — add `start_at_fraction: Option<f32>` + `freeze: bool` (`schema/actions.rs`)
+- [x] `AnimationRequests.queue`: `VecDeque<String>` → `VecDeque<AnimationRequest>`, with `From<&str>`/`From<String>` so `jump_enter`/`jump_exit`/the `PlayAnimation` broadcast stay one-liners
+- [x] `ActiveOverride`: `seek_fraction`/`frozen` added; `.clear()` simplified to `*self = Self::default()` (post-review fix — was a hand-enumerated field list, exactly the shape that already drifted once)
+- [x] `AnimationController`: `pending_seek: bool` + `graph_handle: Option<Handle<AnimationGraph>>` (the latter added mid-implementation — see below)
+- [x] `animation_resolver_system`: `apply_seek_and_freeze` merges into all three branches; `pending_seek` is assigned (not just set-true) per accepted candidate, gated on `wants_seek` so an ordinary non-seek re-request keeps its old no-restart behavior; NaN fraction laundered to `0.0` before clamping (post-review fix)
+- [x] `animation_playback_system`: `current != last_played || pending_seek` replay gate; resumes a previously-paused clip before switching away from it; resolves clip duration via `AnimationController.graph_handle` (not the entity's `AnimationGraphHandle` component, which is deferred-command-stale for one frame during a re-init — found by the test suite, not by inspection); `set_seek_time` (not `seek_to`); `set_repeat(Forever/Never)` unconditionally every play, not just conditionally (post-review fix — see below); `pause()`/`resume()` unconditionally based on `frozen`, independent of whether a fraction was given (post-review fix — see below)
+- [x] Clamp `start_at_fraction` to `[0.0, 1.0]` with a runtime `warn!` (not one-shot — corrected in docs to match); warn when a fraction is requested against a resolved-looping override
+- [x] `ironhold_cli validate`: new `animation_start_at_fraction_out_of_range` check, covering rules/state_machine/behavior files
+- [x] `cargo check -p ironhold_cli` clean; `cargo run -p ironhold_cli -- query actions` spot-checked (`PlayAnimationOn ×12` reported correctly)
+- [x] Corpse fix: 3 new `prefabs/animation/corpse_policy_{zombie,snake,spider}.ron` files
+- [x] Corpse fix: `animation_policy:` added to `zombie_corpse`/`snake_corpse`/`spider_corpse` in `prefabs.ron`
+- [x] Corpse fix: `PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true)` added to `lootable_corpse.behavior.ron`'s `"fresh"` `entry_actions`
+- [x] New demo project `dynamic_animation_control` (frozen-pose scene + continue-from-fraction scene, RON/UI-button driven, all 3 `PlayAnimationOn` resolution branches exercised) + new-project registration (`test_web.py` PROJECTS list, `index.html` card — baseline screenshot still pending, see Playtest below)
+- [x] Tests — `animation_seek_freeze_tests.rs`, 8 tests (grew from the originally-planned 4 during post-implementation review): same-clip re-seek, override-id branch, paused-clip resume, freeze-survives-reinit, **`freeze: true` with no `start_at_fraction` still pauses** (regression for a real bug found by 3 independent reviews), **`should_loop: false` on a same-node re-seek doesn't stay stuck at `RepeatAnimation::Forever`** (regression for a real bug found by system-architect + debug-detective), out-of-range clamp, NaN-fraction laundering
+- [x] Test — `corpse_loot_interact_tests.rs::a_freshly_spawned_corpse_immediately_requests_its_frozen_death_pose` (verified meaningful by debug-detective: proves the override-id resolution path specifically, not a trivial pass)
+- [x] Test infra fix — `tests/support/mod.rs` needed `.init_asset::<AnimationClip>()` added (was entirely missing; every test touching `animation_playback_system` panicked once `Res<Assets<AnimationClip>>` was added — found immediately by the first full-suite run)
+- [x] Docs — `docs/20_data_formats.md`, `docs/30_runtime_events_and_logic.md` (+ new "adding a corpse for a new monster type" checklist), `docs/STATUS.md`, `assets/projects/CLAUDE.md`, `crates/ironhold_core/src/CLAUDE.md` (new "Animation resolver/playback pipeline" section with the field-ownership table)
+
+**Two real bugs found by the mandatory post-implementation review pass (alignment-reviewer, system-architect, debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer — all 5 launched in parallel), fixed before merge:**
+1. **`freeze: true` with no `start_at_fraction` silently did nothing** — `pause()` lived inside the `if let Some(fraction) = seek_fraction` block, so a freeze-only request replayed the clip once and held its *last* frame (via Bevy's own non-looping-completion behavior) instead of pausing at frame 0 as documented. Found independently by 3 of the 5 reviewers. Fixed by hoisting `pause()`/`resume()` out to run unconditionally on `active_override.frozen`.
+2. **A same-node re-seek could get stuck at `RepeatAnimation::Forever`** — `AnimationPlayer::start()` (called by `transitions.play()`) reuses the existing `ActiveAnimation` when replaying the *same* node index, and its `.replay()` resets timing fields but not `repeat`. The old code only called `.repeat()` conditionally (`if should_loop`), with no `else` — harmless before this feature (same-node replay was unreachable), but `pending_seek` makes it reachable (e.g. an entity idling on a looping base clip, then seeked via a non-looping override on the *same* clip name — exactly the corpse policies' own `base.idle == death clip` shape). Found by system-architect and debug-detective independently, both citing the vendored Bevy source. Fixed by calling `set_repeat(Forever/Never)` unconditionally every play.
+
+Also fixed as part of the same pass: `pending_seek` is now assigned per-candidate rather than only ever set true (closes a same-frame priority-race edge case); `ActiveOverride::clear()` simplified to `*self = Self::default()`; NaN fraction laundered before clamping; `test_web.py`'s baseline-screenshot function checked browser console errors *before* the create-baseline early-return, not after (previously skipped entirely on a project's first-ever baseline run); a real `NON_DETERMINISTIC_SCENES` exclusion mechanism added to `test_web.py` for `continue.scene.ron` (its header comment previously claimed an exclusion that didn't exist); the demo's `flycam` speed tuned down from engine defaults (100/200 units/sec is sized for terrain-scale worlds, not a 24m diorama); stale `PlayAnimationOn` signatures fixed in `docs/30_runtime_events_and_logic.md`, `docs/STATUS.md`, `assets/projects/CLAUDE.md`; `continue.scene.ron` gained a 4th entity exercising the raw-clip-name resolution branch (closing a real gap — the file's own comments claimed 3 branches were exercised while only 2 were).
+
+**Logged to `planning/claude_suggestions.md` as separate, out-of-scope follow-ups** (not fixed here): `Action` has no `deny_unknown_fields`, so a typo'd field name silently no-ops rather than erroring (needs a full RON sweep across every project before adopting — too large a change to fold into this feature); `ironhold_cli validate`'s action-collector never walks dialogue `do_actions`; the test harness has no real `bevy::animation::AnimationPlugin`, so Bevy's own fade-out/event systems never actually run in any test (found to matter for one test's assertion meaningfulness); a frozen `AnimationController` pays full per-frame skeletal evaluation forever, not just at the seek moment (Bevy quirk — `paused` only gates event triggering, not sampling); promoting `start_at_fraction`/`freeze` to `AnimationOverrideDef` + a new `AnimationPolicy.initial_override` for fully declarative posing (this feature's demo needed 7 rule lines to pose 7 props, which is exactly the repetition that would justify it — deferred per this plan's original scope boundary, revisit if a second real use case appears).
 
 ## Open questions
-- Is `transition_ms: 0` required for the corpse's `PlayAnimationOn` call, or is the zombie
-  policy's existing 200ms transition acceptable? There's no outgoing clip on a fresh corpse
-  spawn, so the seeked pose should be exact either way, but worth confirming visually during
-  playtest rather than assuming.
-- Should the `AnimationOverrideDef`-level (policy-file) version of `start_at_fraction`/`freeze`
-  go on the backlog now as a named future item, or just stay as a paragraph in this plan until a
-  second use case actually wants it?
+- **Resolved during review** — `transition_ms: 0` is not required for the corpse. Confirmed by
+  system-architect: there's no outgoing clip on a fresh corpse spawn, so `AnimationTransitions`
+  has nothing to blend from and the seeked pose is exact regardless of transition duration.
+  `corpse_policy_zombie.ron` keeps the original 200ms (matching the live monster's policy) for
+  consistency; the demo's own `zombie_policy.ron` still uses `0` since it *does* need an exact
+  pose the instant it's set, for the screenshot baseline. Still worth a visual glance during
+  playtest, but not expected to matter.
+- **Resolved during review** — the `AnimationOverrideDef`-level version stays a paragraph in this
+  plan, not a named backlog item yet. Logged to `planning/claude_suggestions.md` instead (see
+  the "Two real bugs" section above) with the concrete evidence for when to promote it: if a
+  second use case needs the same frozen fraction fired from several scattered RON sites (this
+  feature's own demo needed 7 rule lines for 7 props, which is suggestive but not yet a second
+  independent use case).
+
+## Playtest checklist
+
+`python serve.py` then open both `?project=3rd_person_game_demo` and
+`?project=dynamic_animation_control`. **Note: this session's sandboxed headless-Chromium
+environment has no WebGPU adapter available at all** (confirmed against an existing,
+already-shipped project too — not specific to this feature), so none of the below could be
+verified in-session. All of it needs a real browser pass.
+
+**Round 1 playtest finding, fixed:** Frank found the exact race debug-detective's original
+"theoretical" note (below, struck through) was actually predicting, every time, not just on cold
+cache — a corpse briefly rendered T-pose, then played through its death fall, then **snapped back
+to standing and fell again** before settling. Root cause: `animation_policy_loader_system` wrote
+`controller.current = policy.base.idle` (= the death clip, for a corpse) directly, the instant the
+policy asset loaded — bypassing the seek/freeze machinery entirely. Since that load path is
+faster than the one that eventually applies the real posing request (behavior file loads →
+entry_actions fire → action queue → executor → animation request → next resolver tick), the death
+clip played unseeked and looping (`should_loop: true`, the un-corrected default) for however many
+frames the slower path took to catch up — visually: falls (first loop), loop wraps back to start
+("stands"), falls again (the real request finally wins and freezes it).
+
+**Fix:** added `AnimationPolicy.initial_override: Option<String>` — an override id applied
+*synchronously* the moment the policy attaches, before any fallback window can be reached at all.
+`AnimationOverrideDef` gained its own `start_at_fraction`/`freeze` fields (consulted only by
+`initial_override`, not by ordinary `PlayAnimationOn` calls referencing the same override id —
+keeps the two paths independent, no ambiguity about which `freeze: false` means "explicit" vs
+"inherit"). All three corpse policies now set `initial_override: "death"` with
+`start_at_fraction: 1.0, freeze: true` on the override itself; the now-redundant
+`PlayAnimationOn` in `lootable_corpse.behavior.ron` was removed. New unit tests in
+`animation_seek_freeze_tests.rs` cover `resolve_initial_override` directly (4 tests, pure
+function, no ECS needed) plus updated `corpse_loot_interact_tests.rs` coverage proving the pose
+is correct *immediately*, with zero updates, not eventually. Console logs from a real playtest
+(with temporary `[DIAG]` logging, since removed/downgraded to `debug!`) confirmed the fix applies
+correctly — exactly one playback event, seeked and frozen, no looping.
+
+**Round 2 playtest finding, also fixed:** with the looping bug gone, Frank confirmed what remained
+was a *separate*, smaller issue — the corpse still briefly shows in bind pose (reads as
+"standing") before settling into its death pose, since the GLTF mesh can render before the
+animation graph finishes initializing and applying the pose. General engine characteristic (true
+for any animated entity, not corpse-specific) that predates this feature, but Frank asked for it
+to be fixed before this batch ships. **Fix:** `AnimationController.awaiting_reveal: bool` — when
+`initial_override` resolves, the entity is spawned `Visibility::Hidden` and only revealed
+(`Visibility::Inherited`) by `animation_playback_system` once that exact pose is confirmed
+applied. Deliberately scoped to `initial_override` users only, not every animated entity —
+hiding players/NPCs too would risk a much longer invisible window on a slow connection where the
+GLTF mesh itself is still streaming in, for no benefit (an ordinary `base.idle` fallback has no
+"wrong" pose worth hiding). New regression test
+`awaiting_reveal_entity_stays_hidden_until_the_pose_is_confirmed_applied`. Full test suite
+re-confirmed green (22/22 binaries); WASM dev build rebuilt — **ready for a third playtest round.**
+
+**Round 3 playtest finding, fixed:** the bind-pose flash from round 2 persisted after the
+hide-until-revealed fix. Two debug-detective + system-architect investigation passes found the
+real mechanism: the corpse was spawned with default Visibility::Inherited, and bevy_scene's
+SpawnScene step instantiates the (often GLB-cache-warm) mesh hierarchy in that same spawn frame
+- rendering one real frame in bind pose - well before animation_policy_loader_system (a separate,
+unordered system group) even gets a chance to see the entity, and that system is itself gated
+behind an async AnimationPolicy RON fetch. The awaiting_reveal hide only ever fired after that
+first bad frame had already rendered. Fix: hide at spawn itself (Visibility::Hidden in the same
+command batch spawn_prefab_instance creates the entity with), for every animation_policy entity,
+not just ones with initial_override - widening the hide from "only known-posed entities" to "any
+entity whose pose isn't confirmed yet" is what actually closes the gap, since there's no way to
+know synchronously whether the not-yet-loaded policy has an initial_override at all. This makes a
+stuck-hidden-forever entity a real new failure mode, so a bounded 5-second failsafe
+(awaiting_reveal_since + a check in animation_playback_system) force-reveals if a pose is never
+confirmed (broken animation_policy/model reference) - an incorrect pose beats a permanently
+invisible entity. The loader's "no initial_override" branch now also reveals immediately instead
+of relying on animation_playback_system's play block to do it. Full test suite green; WASM dev
+rebuilt; playtest confirmed the flash is gone.
+
+**Round 4 playtest finding, fixed:** with the flash gone, a new (expected, given round 3's fix)
+gap appeared - the original monster despawns in the same event batch that queues the corpse
+spawn, but the corpse now stays hidden for several frames while its animation_policy loads, so
+there's a visible window with nothing on screen between "monster gone" and "corpse revealed."
+System-architect found the key fact that made this a one-line RON fix instead of a new engine
+primitive: the dying monster's own death clip (should_loop: false) is already frozen on its exact
+last frame - the same GLB, same clip, same sample time, same at_entity-copied transform the
+corpse spawns into - so overlapping them for a second is a bit-identical no-op, not a crossfade
+problem. Fix: replaced the immediate Despawn("{self}") with SetDespawnTimer(entity: "{self}",
+delay_secs: 1.0) in the swap_to_corpse handler of all three enemy_*.behavior.ron files - the old
+monster just stays visible a beat longer while the corpse loads underneath it. No new Action, no
+new event, no schema change. (Considered and rejected: a dedicated Action::ReplaceEntity - it
+can't be atomic without the same readiness signal internally, and would duplicate Action::Spawn's
+~130 lines of resolution logic.) Playtest confirmed by Frank: seamless, no gap, no flash -
+3rd_person_game_demo corpse fix fully confirmed working.
+
+**Round 5 playtest finding, fixed:** dynamic_animation_control's own UI (not the corpse fix) had
+overlapping, illegible text - both the per-model captions and the top-left title/hint/button/
+legend column. Root cause: every Label/Button UI node renders at a hardcoded font size (22px/26px
+respectively) regardless of the RON size: field, which only sets the layout box - a fact that
+cost several iterations to pin down empirically (real per-character width is much wider than a
+first guess, ~15px/char at 22px font). Fix: replaced each zombie's full-sentence world-space
+caption with a short colour-coded token ("0%"/"50%"/"75%"/"100%" in main.scene.ron, "A"-"D" in
+continue.scene.ron) plus a screen-space legend panel keyed by the same colours (the "contact
+sheet" pattern already used by custom_materials/particles_demo) - considered and rejected a
+one-at-a-time click-through catalog per ux-gamedesigner-reviewer's advice, since this demo is a
+parameter sweep whose whole teaching value is comparing all four at once, and a real catalog
+would need net-new per-page interpreter-state machinery this codebase doesn't have (no
+value-based LogicRule conditions, no dynamic button text). Added label_depth_scale to both scenes
+(8 of ~14 other example projects already have it; this one was the outlier), narrowed specimen
+spacing to a 3m pitch so nothing falls outside the camera frustum on a 16:9-or-narrower canvas,
+and re-spaced/shortened the top UI column (title/camera hint/nav button/legend) to clear the real
+22px/26px line heights. Also replaced em-dash with an ASCII hyphen in all newly-authored text -
+the game's embedded font has no glyph for it (confirmed pre-existing in custom_materials too, out
+of scope to fix broadly here). ironhold_cli validate + ron_lint/ron_validation green after every
+iteration; baseline screenshot regenerated with a real, non-headless GPU browser (python
+test_web.py --real-gpu, Playwright's bundled Chromium - no system browser install needed).
+Playtest confirmed by Frank.
+
+**`3rd_person_game_demo` — the corpse fix:**
+- [x] Kill a zombie/snake/spider; confirm the corpse appears immediately lying in its death pose
+      — no T-pose/standing flash at all now (not just no fall→stand→fall glitch — the bind-pose
+      flash itself should be gone too), no replay of the death animation.
+- [x] Kill the same monster slot a second time (wait for or trigger respawn); confirm the new
+      corpse also poses correctly and the old one's decay/interact/loot behavior is unaffected
+      (this is exactly what `corpse_loot_interact_tests.rs` already covers headlessly — this is
+      the visual confirmation).
+- [x] ~~Specifically watch for a brief flash of movement on a corpse's very first spawn in a
+      fresh session~~ — was the round-1 looping bug, confirmed fixed.
+- [x] ~~Bind-pose/standing flash before the correct pose settles~~ — was the round-2 finding,
+      fixed via hide-until-confirmed above.
+
+**`dynamic_animation_control` — the new demo:**
+- [x] `main.scene.ron` loads with 4 zombies frozen at 0%/50%/75%/100% of the death clip, each
+      visibly further along than the last (0% = still standing, 100% = fully down).
+- [x] Multi-line entity labels (`\n` in `label: text:`) actually render as separate lines and
+      don't overlap neighboring labels — this is the first use of a multi-line world label in
+      this repo, so it needs visual confirmation, not just an assumption it works.
+- [x] Flycam moves at a sane speed for the 24m scene (tuned down from engine defaults during
+      review — confirm it doesn't still feel too fast/slow).
+- [x] "View continue-playing examples" button navigates to `continue.scene.ron`; its 4 zombies
+      show: two `death`-clip entities visibly finishing their fall and holding the last frame,
+      one visibly walking in a loop (seeked to 50% first), one in an idle loop (the raw-clip-name
+      case). "Back to frozen poses" button returns correctly.
+- [x] No console errors/warnings beyond expected ones on either scene.
+
+**Once playtest is confirmed**, the baseline screenshot for `main.scene.ron` still needs
+generating from a real browser environment: `python test_web.py --project
+dynamic_animation_control --update-baselines --skip-build` (the `continue` scene is excluded from
+baselining on purpose — see `test_web.py`'s `NON_DETERMINISTIC_SCENES`).
 
 ## Acceptance criteria
 - Given `PlayAnimationOn(target: "npc_01", clip: "wave", start_at_fraction: 0.5, freeze: true)`,

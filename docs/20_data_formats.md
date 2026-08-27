@@ -3628,6 +3628,48 @@ Defines the locomotion clips and override animations for a character type.
 >
 > The `"npc_revive"` clip does not need to exist in the GLB — if it resolves to nothing, the animation system simply clears the override with no visual transition, which is the intended result for an instant-revive effect.
 
+> **Spawn-already-posed pattern** — the death-pose pattern above is for an entity that's *already
+> playing* the clip and will later revive. A different, common need is spawning an entity
+> **already at a specific point in a clip**, with no live playthrough at all — e.g. a lootable
+> corpse prop that should appear already lying dead, not stand in bind pose and then play a
+> multi-second death animation the player already watched on the original monster. Use
+> `PlayAnimationOn`'s `start_at_fraction`/`freeze` fields for this:
+>
+> ```ron
+> // lootable_corpse.behavior.ron — "fresh" state entry_actions
+> PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true),
+> ```
+>
+> `start_at_fraction: 1.0` seeks straight to the final frame instead of playing from `0.0`;
+> `freeze: true` holds it there instead of letting playback continue (which would matter for a
+> looping clip, or for a one-shot clip started mid-way rather than at its very end). `freeze:
+> true` with no `start_at_fraction` at all is also valid — it holds the clip's first frame (`0.0`)
+> rather than doing nothing. Any fraction in `[0.0, 1.0]` works, not just `1.0` — this is a
+> general animation-scrubbing primitive, not a death-pose-specific one; see the
+> `dynamic_animation_control` example project for a full fraction/freeze/continue matrix.
+> `ironhold_cli validate` rejects a `start_at_fraction` outside `[0.0, 1.0]` outright (it's a
+> fraction of the clip's duration, not seconds — a value like `1.5` is almost certainly a typo,
+> not an intentional out-of-range seek). If a bad value does reach the runtime anyway (e.g.
+> `validate` was never run), it's clamped into `[0.0, 1.0]` with a warning rather than ignored —
+> so `1.5` behaves as `1.0` at runtime, but is a hard validate error at design time.
+>
+> To resume a frozen clip, re-issue `PlayAnimationOn` with an explicit `start_at_fraction` and
+> `freeze: false` — `freeze: false` alone, with no fraction, does not restart playback on its own
+> if the clip is already current (the resolver only replays on a genuine clip change or an
+> explicit seek).
+>
+> If the resolved override also has its own `duration: Some(_)` (see `AnimationOverrideDef`
+> below), that timer still auto-expires on schedule regardless of `freeze` — the override clears
+> and playback falls back to the base/idle clip. `freeze` does not cancel or extend an override's
+> own expiry.
+>
+> A corpse prop needs its own `animation_policy` pointing at a **corpse-specific** policy file
+> (not the live monster's full one) with `base.idle`/`walk`/`run`/`jump_loop` all set to the death
+> clip — see `corpse_policy_zombie.ron` for the pattern. This means any resolver fallback (no
+> active override, a clip missing from the graph, etc.) lands back on the death pose instead of a
+> standing idle loop, which would be a strictly worse degraded state for something meant to look
+> dead.
+
 ---
 
 ## `logic/rules.ron` — LogicRulesAsset ✅
@@ -3680,7 +3722,7 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 | `Despawn("id")` | Remove a previously spawned entity by its spawn ID |
 | `SetDespawnTimer(entity: "id", delay_secs: f32)` | Arm a self-contained despawn on the named entity — after `delay_secs` of real time it despawns automatically, no paired event/`on:` handler needed. Re-arming (calling it again on the same entity) overwrites the previous countdown rather than stacking. Uses `{self}`/`{target}` substitution. Prefer this over `EmitEventAfterDelay` + a `Despawn` reacting to a global string event for any timer whose derived spawn id might later be reused by an unrelated entity — the timer lives on the entity itself, so it's inert once that entity is gone and can never affect a different entity that later reuses the same id. |
 | `PlayAnimation("id")` | Broadcast an animation to **all** animated entities. Use for global emotes (dance). Resolves via AnimationPolicy — see override `id` / `clips:` alias / raw clip name order above |
-| `PlayAnimationOn(target: "id", clip: "name")` | Play an animation on a **specific** spawned entity by spawn ID. Use this from skill-bar `do_actions`, FSM rules, and behavior files whenever you want to target one entity. `{self}` / `{target}` substitution applies in `target`. Clip resolves via the entity's AnimationPolicy (override `id` → `clips:` alias → raw glTF name) |
+| `PlayAnimationOn(target: "id", clip: "name", start_at_fraction: f32, freeze: bool)` | Play an animation on a **specific** spawned entity by spawn ID. Use this from skill-bar `do_actions`, FSM rules, and behavior files whenever you want to target one entity. `{self}` / `{target}` substitution applies in `target`. Clip resolves via the entity's AnimationPolicy (override `id` → `clips:` alias → raw glTF name). `start_at_fraction` (optional, `0.0`–`1.0`) seeks into the clip's duration before playback starts — `1.0` starts at the final frame; omit for the pre-existing "start at 0.0" behavior. `freeze` (optional, default `false`) pauses the clip exactly at `start_at_fraction` instead of letting it continue playing. Only available on `PlayAnimationOn`, not the broadcast `PlayAnimation` below (a tuple-form action — adding fields would break every existing call site) — target the player explicitly if you need to seek/freeze there |
 | `PlaySound(key: "key")` | Play a sound by audio catalog key (`.wav`, `.ogg`, `.mp3`); warns on missing key or unsupported format; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume |
 | `PlayMusicLoop(key: "key")` | Start a looping background track by audio catalog key; stops any currently playing music; optional `volume: f32` multiplies the per-entry catalog volume |
 | `Log("message")` | Emit an `info!` log line |

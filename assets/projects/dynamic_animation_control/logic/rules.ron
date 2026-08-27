@@ -1,0 +1,50 @@
+// See "Spawn-already-posed pattern" in docs/20_data_formats.md — every pose in this project is
+// set by one of the PlayAnimationOn calls below, fired once each scene finishes spawning. No
+// Rust involved: a designer reproducing this demo only ever edits this file plus the two scene
+// files.
+(
+    schema_version: 2,
+    rules: [
+        // ── main.scene.ron: frozen poses, one per fraction ──────────────────────────────
+        (
+            on: "scene.ready:main",
+            do_actions: [
+                // Warms all three animation-source GLBs before the poses below fire, so a cold
+                // browser load doesn't briefly show bind pose while they decode.
+                PreloadGlb("anim_zombie"),
+                PreloadGlb("anim_locomotion"),
+                PreloadGlb("anim_hit_death"),
+                PlayAnimationOn(target: "pose_0",   clip: "death", start_at_fraction: 0.0,  freeze: true),
+                PlayAnimationOn(target: "pose_50",  clip: "death", start_at_fraction: 0.5,  freeze: true),
+                PlayAnimationOn(target: "pose_75",  clip: "death", start_at_fraction: 0.75, freeze: true),
+                PlayAnimationOn(target: "pose_100", clip: "death", start_at_fraction: 1.0,  freeze: true),
+            ],
+        ),
+
+        // ── continue.scene.ron: seek then keep playing (freeze: false) ──────────────────
+        // Between them, pose_continue_*/pose_loop_seek/pose_raw_clip exercise all three
+        // PlayAnimationOn(clip:) resolution branches (see docs/20_data_formats.md's resolution
+        // order): "death" is an override id, "walk" is a `clips:` alias, and
+        // "Zombie_Idle_Loop" is a raw glTF clip name used directly.
+        (
+            on: "scene.ready:continue",
+            do_actions: [
+                PreloadGlb("anim_zombie"),
+                PreloadGlb("anim_locomotion"),
+                PreloadGlb("anim_hit_death"),
+                PlayAnimationOn(target: "pose_continue_25", clip: "death",            start_at_fraction: 0.25, freeze: false),
+                PlayAnimationOn(target: "pose_continue_75", clip: "death",            start_at_fraction: 0.75, freeze: false),
+                PlayAnimationOn(target: "pose_loop_seek",   clip: "walk",             start_at_fraction: 0.5,  freeze: false),
+                PlayAnimationOn(target: "pose_raw_clip",    clip: "Zombie_Idle_Loop", start_at_fraction: 0.0,  freeze: false),
+            ],
+        ),
+
+        // ── Navigation between the two scenes ────────────────────────────────────────────
+        ( on: "ui.button_pressed:goto_continue", do_actions: [ LoadScene("scenes/continue.scene.ron") ] ),
+        ( on: "ui.button_pressed:goto_main",      do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+
+        // Fired by the project's global "Escape" key binding (dynamic_animation_control.project.ron),
+        // not a UI button in either scene.
+        ( on: "ui.button_pressed:quit", do_actions: [ Quit ] ),
+    ],
+)

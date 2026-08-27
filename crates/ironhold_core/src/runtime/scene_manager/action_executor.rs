@@ -6,7 +6,7 @@ use crate::schema::scene_v2::GameSceneV2;
 use crate::schema::stats::{ActiveModifier, StackRule};
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
-use crate::capabilities::animation_resolver::AnimationRequests;
+use crate::capabilities::animation_resolver::{AnimationRequests, AnimationRequest};
 use crate::capabilities::camera::{MAX_SPLIT_PLAYERS, CameraBlendState};
 use crate::schema::camera::CameraModeDef;
 use crate::capabilities::damage_popup::DamagePopup;
@@ -305,15 +305,22 @@ pub fn action_executor_system(
             Action::PlayAnimation(anim) => {
                 info!("Executing Action::PlayAnimation: {}", anim);
                 for (mut req, _) in &mut animation_requests {
-                    req.queue.push_back(anim.clone());
+                    req.queue.push_back(anim.clone().into());
                 }
             }
-            Action::PlayAnimationOn { target, clip } => {
-                info!("Executing Action::PlayAnimationOn: target={} clip={}", target, clip);
+            Action::PlayAnimationOn { target, clip, start_at_fraction, freeze } => {
+                info!(
+                    "Executing Action::PlayAnimationOn: target={} clip={} start_at_fraction={:?} freeze={}",
+                    target, clip, start_at_fraction, freeze
+                );
                 let mut found = false;
                 for (mut req, sid) in &mut animation_requests {
                     if sid.map_or(false, |s| s.0 == target) {
-                        req.queue.push_back(clip.clone());
+                        req.queue.push_back(AnimationRequest {
+                            clip_or_id: clip.clone(),
+                            start_at_fraction,
+                            freeze,
+                        });
                         found = true;
                     }
                 }

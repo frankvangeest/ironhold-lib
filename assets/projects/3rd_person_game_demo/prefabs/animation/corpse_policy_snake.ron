@@ -1,0 +1,35 @@
+// Corpse-only animation policy for snake_corpse. See corpse_policy_zombie.ron for the full
+// rationale: base.idle/walk/run/jump_loop all point at the death clip so any resolver fallback
+// path lands on the death pose, not a standing idle; initial_override applies the death pose
+// synchronously at policy-load time so there's no window where the untended base.idle fallback
+// could play the clip unseeked and looping.
+//
+// No animation_sources here, unlike the zombie one — this model's "Death" clip is embedded in
+// its own GLB (snake01.glb), not split across external animation-pack GLBs like the zombie's
+// clips are. Copy whichever of the two matches your rig when adding a new monster type.
+(
+    default_transition_ms: 200,
+
+    base: (
+        idle:      "Death",
+        walk:      "Death",
+        run:       "Death",
+        jump_loop: "Death",
+    ),
+
+    clips: {},
+
+    initial_override: "death",
+
+    overrides: [
+        (
+            id: "death",
+            clip: "Death",
+            priority: 150,
+            looping: false,
+            cancel_on_move: false,
+            start_at_fraction: 1.0,
+            freeze: true,
+        ),
+    ],
+)

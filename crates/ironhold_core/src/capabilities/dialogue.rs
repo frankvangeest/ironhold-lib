@@ -314,8 +314,8 @@ fn substitute_self_in_action(action: Action, npc_id: &str) -> Action {
         Action::IncrementVariable(k, d) => Action::IncrementVariable(s(&k), d),
         Action::EmitEventAfterDelay { event, delay_secs } =>
             Action::EmitEventAfterDelay { event: s(&event), delay_secs },
-        Action::PlayAnimationOn { target, clip } =>
-            Action::PlayAnimationOn { target: s(&target), clip },
+        Action::PlayAnimationOn { target, clip, start_at_fraction, freeze } =>
+            Action::PlayAnimationOn { target: s(&target), clip, start_at_fraction, freeze },
         Action::ModifyStat { key, delta } =>
             Action::ModifyStat { key: s(&key), delta },
         Action::SetStat { key, value } =>

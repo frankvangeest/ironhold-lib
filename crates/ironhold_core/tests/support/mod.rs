@@ -36,6 +36,13 @@ pub fn setup_test_app() -> App {
        .init_asset::<Scene>()
        .init_asset::<Gltf>()
        .init_asset::<AnimationGraph>()
+       // `animation_playback_system` reads `Res<Assets<AnimationClip>>` to resolve a clip's
+       // duration for PlayAnimationOn's start_at_fraction/freeze seek (dynamic_animation_
+       // control.md) — every test that spawns any AnimationController entity now needs this
+       // resource registered, not just tests that construct clips themselves (which previously
+       // called `app.init_asset::<AnimationClip>()` individually; centralized here instead so
+       // no test file has to remember it).
+       .init_asset::<bevy::animation::AnimationClip>()
        .init_asset::<ironhold_core::schema::player::AnimationPolicy>()
        .init_asset::<ironhold_core::schema::project::LogicRulesAsset>()
        .init_asset::<ironhold_core::schema::project::StateMachineAsset>()
