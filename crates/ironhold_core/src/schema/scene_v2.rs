@@ -499,7 +499,25 @@ pub struct ButtonDef {
     /// top-left corner using its `position` field instead of flowing in the column.
     #[serde(default)]
     pub absolute: bool,
+    /// Font size in screen pixels. `size:` sets this button's layout box only — it does NOT
+    /// scale the rendered text, so a `font_size`/`size:` mismatch is on the designer to catch.
+    /// Bevy's default font is ~monospace: budget roughly `size.0 / (font_size * 0.6)` characters
+    /// per line, and at least `font_size * 1.2` of `size.1` per line of text. See `clip` below —
+    /// by default, text that doesn't fit its box overflows visibly rather than being hidden.
+    #[serde(default = "default_button_font_size")]
+    pub font_size: f32,
+    /// When `true`, text that doesn't fit this button's box is clipped at the box edge instead
+    /// of overflowing past it. Off by default — many shipped buttons/labels rely on overflow
+    /// remaining visible (a multi-line hint that intentionally spills below a short backdrop),
+    /// so this is opt-in, not a blanket safety net. When enabled, text is also top-anchored
+    /// (instead of vertically centered) so a too-short box clips only the trailing/bottom
+    /// content, not a jagged slice out of every line. Note Bevy clips inside the button's own
+    /// 5px border, so the effective clip area is `size` shrunk by 10px in each dimension.
+    #[serde(default)]
+    pub clip: bool,
 }
+
+fn default_button_font_size() -> f32 { 26.0 }
 
 /// An interactive icon-only button that swaps between two catalog textures
 /// based on a bound `GameVariables` key, and emits a `UiEvent::ButtonPressed`
@@ -587,7 +605,24 @@ pub struct LabelDef {
     /// top-left corner using its `position` field instead of flowing in the column.
     #[serde(default)]
     pub absolute: bool,
+    /// Font size in screen pixels. `size:` sets this label's layout box only — it does NOT
+    /// scale the rendered text, so a `font_size`/`size:` mismatch is on the designer to catch.
+    /// Bevy's default font is ~monospace: budget roughly `size.0 / (font_size * 0.6)` characters
+    /// per line, and at least `font_size * 1.2` of `size.1` per line of text. See `clip` below —
+    /// by default, text that doesn't fit its box overflows visibly rather than being hidden.
+    #[serde(default = "default_label_font_size")]
+    pub font_size: f32,
+    /// When `true`, text that doesn't fit this label's box is clipped at the box edge instead
+    /// of overflowing past it. Off by default — many shipped labels rely on overflow remaining
+    /// visible (e.g. a multi-line hint that intentionally spills below a short backdrop), so
+    /// this is opt-in, not a blanket safety net. When enabled, text is also top-anchored
+    /// (instead of vertically centered) so a too-short box clips only the trailing/bottom
+    /// content, not a jagged slice out of every line.
+    #[serde(default)]
+    pub clip: bool,
 }
+
+fn default_label_font_size() -> f32 { 22.0 }
 
 /// Non-interactive coloured rectangle. Used for decorative backgrounds, dividers, and map tiles.
 #[derive(Deserialize, Debug, Clone)]

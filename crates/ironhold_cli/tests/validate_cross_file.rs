@@ -112,6 +112,16 @@ fn primitive_player_on_terrain_exits_1() {
 }
 
 #[test]
+fn label_font_size_zero_exits_1() {
+    let (code, stdout) = validate("bad_font_size");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken_label") && stdout.contains("font_size"),
+        "expected an invalid_font_size error naming the label in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn unparseable_action_bar_key_exits_1() {
     let (code, stdout) = validate("bad_action_bar_key");
     assert_eq!(code, 1, "expected exit 1, got {code}");

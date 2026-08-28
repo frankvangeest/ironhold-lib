@@ -231,11 +231,13 @@
     )),
     Button((
       id: "toggle_nameplate_button",
-      // "Toggle Nameplate" overflowed this 200px-wide button — button text renders at a fixed
-      // 26px, ButtonDef has no font_size field (see docs/20_data_formats.md's Button table) —
-      // caught via a real playtest screenshot. Shortened rather than widened: widening risks
-      // colliding with target_label at x=256 (this button's box starts at x=16).
-      text: "Nameplate",
+      // Originally shortened to "Nameplate" because "Toggle Nameplate" overflowed this 200px-wide
+      // button at the fixed 26px default (ButtonDef had no font_size field at the time — caught
+      // via a real playtest screenshot). Restored to the full label with a smaller font_size
+      // instead of widening the box (widening risks colliding with target_label at x=256, since
+      // this button's box starts at x=16) — see docs/20_data_formats.md's Button table.
+      text: "Toggle Nameplate",
+      font_size: 20.0,
       action: "ui.toggle_own_nameplate",
       position: (16.0, 280.0),
       size: (200.0, 44.0),
