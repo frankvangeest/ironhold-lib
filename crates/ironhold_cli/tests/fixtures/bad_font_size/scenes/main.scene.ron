@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Label((
+            id: "broken_label",
+            text: "This vanishes",
+            font_size: 0.0,
+        )),
+    ],
+)

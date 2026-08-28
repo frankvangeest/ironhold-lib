@@ -1595,17 +1595,22 @@ fn spawn_ui_element_node(
         }
         UiNodeDef::Label(label) => {
             let label_id = label.id.clone();
+            let mut label_node = node;
+            if label.clip {
+                label_node.overflow = Overflow::clip();
+                label_node.align_items = AlignItems::FlexStart;
+            }
             parent
                 .spawn((
                     Name::new(format!("Label: {}", label.text)),
-                    node,
+                    label_node,
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
                 ))
                 .with_children(|parent| {
                     let mut text_cmd = parent.spawn((
                         Name::new(format!("Text: {}", label.text)),
                         Text::new(label.text.clone()),
-                        TextFont { font_size: 22.0, ..default() },
+                        TextFont { font_size: label.font_size, ..default() },
                         TextColor(Color::WHITE),
                     ));
                     if label_id == "flycam_position" {
@@ -1625,6 +1630,10 @@ fn spawn_ui_element_node(
             let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action).to_string();
             let mut btn_node = node;
             btn_node.border = UiRect::all(Val::Px(5.0));
+            if btn.clip {
+                btn_node.overflow = Overflow::clip();
+                btn_node.align_items = AlignItems::FlexStart;
+            }
             parent
                 .spawn((
                     Name::new(format!("Button: {}", btn.text)),
@@ -1638,7 +1647,7 @@ fn spawn_ui_element_node(
                     parent.spawn((
                         Name::new(format!("Text: {}", btn.text)),
                         Text::new(btn.text.clone()),
-                        TextFont { font_size: 26.0, ..default() },
+                        TextFont { font_size: btn.font_size, ..default() },
                         TextColor(Color::srgb(0.9, 0.9, 0.9)),
                     ));
                 });

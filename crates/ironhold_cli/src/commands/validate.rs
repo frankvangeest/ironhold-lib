@@ -518,6 +518,31 @@ fn cross_file_checks(
             }
         }
 
+        // `Label`/`Button.font_size <= 0.0` — Bevy's text pipeline doesn't panic on this (guarded
+        // before cosmic-text's own `assert_ne!(font_size, 0.0)`), it just silently renders
+        // nothing, and the one `warn!` it does log fires via `once!` — a per-process flag, so
+        // only the very first offending entity in the whole session is ever reported; a second
+        // mis-authored label anywhere, or the same one on a scene reload, produces no diagnostic
+        // at all. That "looks fine but is subtly wrong" failure mode is exactly what this CLI
+        // check exists to catch at design time instead.
+        for node in &scene.ui {
+            let (kind, id, font_size) = match node {
+                ironhold_core::schema::scene_v2::UiNodeDef::Label(l) => ("Label", &l.id, l.font_size),
+                ironhold_core::schema::scene_v2::UiNodeDef::Button(b) => ("Button", &b.id, b.font_size),
+                _ => continue,
+            };
+            if font_size <= 0.0 {
+                errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "{kind} {id:?}: font_size {font_size} must be > 0.0 — the text will silently \
+                         render nothing (Bevy only warns once, ever, for the whole process)"
+                    ),
+                    error_type: "invalid_font_size",
+                });
+            }
+        }
+
         // Same-player gamepad-slot collision — a different failure mode than the keyboard check
         // above, so a separate pass: the intent/cooldown pipeline is never keyed by `gamepad_key`,
         // so there's no cross-bar pipeline entanglement risk here. The risk is a same-player

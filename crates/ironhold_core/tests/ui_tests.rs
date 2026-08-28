@@ -2,7 +2,7 @@
 use bevy::ecs::system::RunSystemOnce;
 use ironhold_core::GameVariables;
 use ironhold_core::runtime::{UiEvent, ActionQueue, LoadedRules, SceneHandleV2};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, GameSceneV2};
 
 mod support;
 use support::setup_test_app;
@@ -311,4 +311,113 @@ fn test_icon_button_click_system_ignores_plain_buttons() {
 
     let press_count = fired.iter().filter(|e| matches!(e, UiEvent::ButtonPressed(t) if t == "plain_button_trigger")).count();
     assert_eq!(press_count, 1, "plain Button must still fire exactly once via button_system, not be double-fired by icon_button_click_system");
+}
+
+/// Drives a real Replace-mode scene load (mirrors `scene_lifecycle_tests.rs`'s
+/// `drive_replace_load` pattern) with a `ui:` block exercising `Label`/`Button`'s new
+/// `font_size`/`clip` fields, both set and omitted.
+fn load_scene_with_ui(app: &mut App, ui_ron: &str) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let ron_text = format!("(schema_version: 2, entities: [], ui: [{ui_ron}])");
+    let scene: GameSceneV2 = ron::de::from_str(&ron_text).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+fn text_font_sizes_by_name(app: &mut App) -> std::collections::HashMap<String, f32> {
+    let mut query = app.world_mut().query::<(&Name, &TextFont)>();
+    query
+        .iter(app.world())
+        .map(|(name, font)| (name.as_str().to_string(), font.font_size))
+        .collect()
+}
+
+fn node_overflow_and_align_by_name(app: &mut App) -> std::collections::HashMap<String, (Overflow, AlignItems)> {
+    let mut query = app.world_mut().query::<(&Name, &Node)>();
+    query
+        .iter(app.world())
+        .map(|(name, node)| (name.as_str().to_string(), (node.overflow, node.align_items)))
+        .collect()
+}
+
+#[test]
+fn test_label_and_button_font_size_override() {
+    let mut app = setup_test_app();
+    app.update();
+
+    load_scene_with_ui(&mut app, r#"
+        Label((id: "custom_label", text: "Custom", position: (0.0, 0.0), font_size: 14.0)),
+        Button((id: "custom_button", text: "Go", action: "ui.go", position: (0.0, 40.0), font_size: 18.0)),
+    "#);
+
+    let sizes = text_font_sizes_by_name(&mut app);
+    assert_eq!(sizes.get("Text: Custom"), Some(&14.0), "Label.font_size must override the hardcoded default");
+    assert_eq!(sizes.get("Text: Go"), Some(&18.0), "Button.font_size must override the hardcoded default");
+}
+
+#[test]
+fn test_label_and_button_font_size_default_unchanged() {
+    let mut app = setup_test_app();
+    app.update();
+
+    load_scene_with_ui(&mut app, r#"
+        Label((id: "default_label", text: "Default", position: (0.0, 0.0))),
+        Button((id: "default_button", text: "Ok", action: "ui.ok", position: (0.0, 40.0))),
+    "#);
+
+    let sizes = text_font_sizes_by_name(&mut app);
+    assert_eq!(sizes.get("Text: Default"), Some(&22.0), "omitting font_size must reproduce the pre-feature Label default exactly");
+    assert_eq!(sizes.get("Text: Ok"), Some(&26.0), "omitting font_size must reproduce the pre-feature Button default exactly");
+}
+
+#[test]
+fn test_label_and_button_clip_defaults_to_off_and_preserves_center_alignment() {
+    let mut app = setup_test_app();
+    app.update();
+
+    load_scene_with_ui(&mut app, r#"
+        Label((id: "plain_label", text: "Plain", position: (0.0, 0.0))),
+        Button((id: "plain_button", text: "Ok", action: "ui.ok", position: (0.0, 40.0))),
+    "#);
+
+    let nodes = node_overflow_and_align_by_name(&mut app);
+    let (label_overflow, label_align) = nodes.get("Label: Plain").expect("label node must exist");
+    let (btn_overflow, btn_align) = nodes.get("Button: Ok").expect("button node must exist");
+    assert_eq!(*label_overflow, Overflow::visible(), "clip: false (the default) must leave overflow visible, matching every existing scene's shipped behavior");
+    assert_eq!(*label_align, AlignItems::Center, "clip: false must not touch the default vertical centering");
+    assert_eq!(*btn_overflow, Overflow::visible(), "clip: false (the default) must leave overflow visible, matching every existing scene's shipped behavior");
+    assert_eq!(*btn_align, AlignItems::Center, "clip: false must not touch the default vertical centering");
+}
+
+#[test]
+fn test_label_and_button_clip_true_enables_clipping_and_top_anchors() {
+    let mut app = setup_test_app();
+    app.update();
+
+    load_scene_with_ui(&mut app, r#"
+        Label((id: "clipped_label", text: "Clipped", position: (0.0, 0.0), clip: true)),
+        Button((id: "clipped_button", text: "Ok", action: "ui.ok", position: (0.0, 40.0), clip: true)),
+    "#);
+
+    let nodes = node_overflow_and_align_by_name(&mut app);
+    let (label_overflow, label_align) = nodes.get("Label: Clipped").expect("label node must exist");
+    let (btn_overflow, btn_align) = nodes.get("Button: Ok").expect("button node must exist");
+    assert_eq!(*label_overflow, Overflow::clip(), "clip: true must enable clipping");
+    assert_eq!(*label_align, AlignItems::FlexStart, "clip: true must top-anchor content so overflow is trimmed only from the bottom, not sliced out of every line");
+    assert_eq!(*btn_overflow, Overflow::clip(), "clip: true must enable clipping");
+    assert_eq!(*btn_align, AlignItems::FlexStart, "clip: true must top-anchor content so overflow is trimmed only from the bottom, not sliced out of every line");
 }

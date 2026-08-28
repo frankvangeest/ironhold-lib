@@ -779,8 +779,10 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `font_size` | `f32` | `26.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note below. |
+| `clip` | `bool` | `false` | When `true`, text that overflows `size` clips at the box edge (and is top-anchored, not vertically centered) instead of spilling past it. See the sizing note below for why this defaults off. |
 
-> **Text always renders at a fixed 26px font size — there is no `font_size` field.** Long `text` that doesn't fit inside `size` overflows the button box rather than wrapping or shrinking to fit (a real bug caught via playtest — see `3rd_person_game_demo`'s `toggle_nameplate_button` for an example of working around it by shortening the text). Roughly 11-12 average-width characters fit comfortably in a 200px-wide button at this font size; widen `size` or shorten `text` for anything longer.
+> **Sizing text to its box.** Bevy's default font is close to monospace: budget roughly `size.0 / (font_size * 0.6)` characters per line, and at least `font_size * 1.2` of `size.1` per line of wrapped text. Text that doesn't fit **overflows visibly by default** (`clip: false`) rather than being hidden — this is deliberate, since several shipped scenes rely on a multi-line hint spilling below a short backdrop, and a hidden overflow is much harder to notice than a visible one. Set `clip: true` only where you specifically want overflow clipped instead of shown (e.g. a label whose `bind`-driven text length varies at runtime and must never spill into whatever sits below it) — clipping happens inside the button's 5px border, so the effective clip area is `size` shrunk by 10px in each dimension. A `font_size <= 0.0` renders nothing (`ironhold_cli validate` rejects it as `invalid_font_size`). Real incident this sizing guidance comes from: `3rd_person_game_demo`'s `toggle_nameplate_button` originally had to shorten its label from `"Toggle Nameplate"` to `"Nameplate"` to fit a fixed 26px font — restored to the full text with `font_size: 20.0` once this field shipped.
 
 #### `IconButton((...))`
 
@@ -838,6 +840,8 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value |
 | `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
 | `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `font_size` | `f32` | `22.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note under `Button` above (same behavior, same 26px→22px default swap, same `clip` field). |
+| `clip` | `bool` | `false` | When `true`, text that overflows `size` clips at the box edge (top-anchored) instead of spilling past it. Off by default for the same reason as `Button` — see the sizing note above. Worth setting `true` on a `bind`-driven label whose runtime text length varies, since a growing value overflowing into whatever sits below is easy to miss until it happens live. |
 
 **GameVariables auto-written by capabilities** (bind a `Label` to these — no rule wiring needed):
 
