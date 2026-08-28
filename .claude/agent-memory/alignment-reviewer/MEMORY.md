@@ -38,3 +38,4 @@
 - [Lootable corpse pattern](lootable_corpse_pattern.md) — v2 separate-corpse + generic `Action::Spawn.at_entity`; 5-file RON recipe; 6 traps incl. respawn-rule-in-`on:`-lost-while-paused, no at_entity offset
 - [Animation seek/freeze pattern](animation_seek_freeze_pattern.md) — shipped `start_at_fraction`/`freeze`: 6 touchpoints, corpse-pose recipe, freeze-without-fraction + no-unfreeze-in-place footguns, test_web has no scene-exclusion
 - [Diagnostic-only feature pattern](diagnostic_only_feature_pattern.md) — runtime-warn + CLI-error twin; prefab-catalog vs per-scene scoping rule; PrefabDef tag helpers moved to schema/ for CLI reach
+- [UI text node font_size + clip](ui_text_node_font_size_clip_pattern.md) — one shared Label/Button spawn site; implicit_some vs `Some(` in tests; f32+default_fn convention; shipped scenes that rely on overflow bleed; 4% baseline threshold hides UI regressions

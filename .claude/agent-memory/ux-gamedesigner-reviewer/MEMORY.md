@@ -47,3 +47,4 @@
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
 - [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot
+- [ui: Label/Button font & clip](project_ui_label_button_font_and_clip.md) — font_size house style is f32+default fn (13 precedents); 22/26px, ~11px/char; clip+wrap+center = half-cut lines; camera_modes hints overflow today
