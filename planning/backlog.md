@@ -11,7 +11,7 @@
 
 ## Active
 
-_(nothing currently active — pull the next batch from Queued below.)_
+- [ ] **Monotonic per-entity id generation for RON action substitution** — `feature/monotonic-entity-id`. See `planning/features/monotonic_entity_id.md`.
 
 ---
 
