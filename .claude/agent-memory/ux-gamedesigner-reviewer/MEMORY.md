@@ -48,3 +48,4 @@
 - [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot
 - [ui: Label/Button font & clip](project_ui_label_button_font_and_clip.md) — font_size house style is f32+default fn (13 precedents); 22/26px, ~11px/char; clip+wrap+center = half-cut lines; camera_modes hints overflow today
+- [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op
