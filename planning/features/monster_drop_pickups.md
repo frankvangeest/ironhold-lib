@@ -3,6 +3,17 @@
 _Status: Draft_
 _Planned at: `7e9eb47` (2026-06-15)_
 
+> **Update (2026-08-30): `Action::Spawn.at_entity` already shipped**, via
+> `planning/features/done/monster_corpse_loot.md` v2 (`55072fc`, 2026-08-26) — a different feature
+> landed it first. It matches this plan's own design almost exactly (same field name/semantics,
+> `SpawnRegistry` → `GlobalTransform` resolution, precedence over `position`/`spawn_point`), with
+> two differences worth knowing before resuming this plan: it resolves the *full* transform
+> (position, rotation, **and scale** via `GlobalTransform::compute_transform()`), not just
+> position, and it **skips the spawn with a warning** rather than silently no-op-ing when the
+> entity can't be resolved (unless a `position`/`spawn_point` fallback was also given). Section 1
+> below ("New `at_entity` field") is therefore already done — skip straight to section 2 (drop
+> prefabs) and the Tasks list, which has been updated to reflect this.
+
 ## What
 
 When an enemy dies, it drops a pickup item — a health potion, coin stack, or gem — that appears
@@ -168,8 +179,12 @@ SpawnEffect(key: "pickup_sparkle", position: (0.0, -100.0, 0.0)),  // pipeline w
 
 ## Tasks
 
-- [ ] **Schema**: add `at_entity: Option<String>` to `Action::Spawn` in `schema/actions.rs`
-- [ ] **Executor**: resolve `at_entity` in `action_executor.rs` — query `SpawnRegistry` + `GlobalTransform`; if entity not found, skip spawn (log warning); apply Y+0.3 offset
+- [x] ~~**Schema**: add `at_entity: Option<String>` to `Action::Spawn` in `schema/actions.rs`~~ —
+      already shipped via `monster_corpse_loot.md` v2.
+- [x] ~~**Executor**: resolve `at_entity` in `action_executor.rs`~~ — already shipped (resolves the
+      full transform via `GlobalTransform::compute_transform()`, warns and skips rather than
+      silently no-op-ing when unresolvable with no fallback — slightly stricter than this plan's
+      original "silently skipped" design, worth double-checking against when resuming).
 - [ ] **CLI**: run `cargo check -p ironhold_cli` — `query.rs` picks up new field automatically since it's `#[serde(default)]` and has no display logic
 - [ ] **stats.ron**: add `player_gold`
 - [ ] **assets.ron**: add `pickup_health`, `pickup_coin` audio keys; add `pickup_sparkle` effect; add model paths for `health_pickup`, `stack_of_coins_01`, `gem`
@@ -177,15 +192,15 @@ SpawnEffect(key: "pickup_sparkle", position: (0.0, -100.0, 0.0)),  // pipeline w
 - [ ] **behavior files**: `behaviors/drop_health.behavior.ron`, `behaviors/drop_coin.behavior.ron`, `behaviors/drop_gem.behavior.ron`
 - [ ] **Enemy behaviors**: add `Spawn(...at_entity...)` to dead state of enemy_snake, enemy_spider, enemy_orc
 - [ ] **state_machine.ron**: add preloads, gold reset, sparkle warmup to playing entry_actions
-- [ ] **Tests**: integration test for `at_entity` field — verify spawn position matches entity world transform; test that drop behavior file fires `Despawn` on interact
-- [ ] **Docs**: `docs/20_data_formats.md` — document `at_entity` field on `Action::Spawn`; note auto-expire pattern in behavior examples
+- [x] ~~**Tests**: integration test for `at_entity` field~~ — already covered (`spawn_tests.rs`: position/facing resolution, precedence over `position`, warn-and-skip on unresolvable with no fallback). Still needed: a test that the drop behavior file fires `Despawn` on interact.
+- [x] ~~**Docs**: document `at_entity` field on `Action::Spawn`~~ — already done (`docs/20_data_formats.md`, `crates/ironhold_core/src/CLAUDE.md`). Still needed: the auto-expire pattern note in behavior examples, specific to this feature's drop prefabs.
 - [ ] **asset_manifest**: run `python tools/build_asset_manifest.py` after adding models to assets.ron
 
 ## Relationship to Other Features
 
-**`at_entity` is a general engine primitive, not a loot-only concept.** This feature is the smallest vehicle that ships it end-to-end; but it is useful for any system that needs to spawn an entity at another entity's world position — spawn waves, scripted cutscenes, impact decals, loot bags. Do not scope it as loot infrastructure; it lives on `Action::Spawn` and is available everywhere `Spawn` is.
+**`at_entity` is a general engine primitive, not a loot-only concept** — and, as of `monster_corpse_loot.md` v2, no longer something this feature needs to ship itself. It's useful for any system that needs to spawn an entity at another entity's world position — spawn waves, scripted cutscenes, impact decals, loot bags, corpses. It lives on `Action::Spawn` and is available everywhere `Spawn` is.
 
-**Loot System v1** (`planning/features/loot_system.md`) has a soft dependency on this feature. Its `RollLootTable` executor currently resolves `GlobalTransform` by hand to position the loot bag. Once `at_entity` lands, the loot executor should drop that hand-rolled lookup and use `at_entity: Some(entity.clone())` — closing a duplicate code path. If monster drops ships first (it should; it has no inventory dep), the loot executor is written against `at_entity` from the start. If loot ships first, the manual transform lookup must be replaced when this feature lands.
+**Loot System v1** (`planning/features/loot_system.md`) had a soft dependency on this feature landing `at_entity` first. That's now moot — `at_entity` already exists — so Loot v1's `RollLootTable` executor can use `at_entity: Some(entity.clone())` directly whenever it's implemented, regardless of whether this feature has shipped yet.
 
 The `drop_table: Option<String>` extension noted below is the on-ramp toward loot tables — it would use `RollLootTable` under the hood once the loot system exists.
 

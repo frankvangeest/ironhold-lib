@@ -4,7 +4,13 @@ _Status: Draft_
 _Planned at: `6adb6bf` (2026-06-02)_
 _Hard dep: Inventory & item system_
 _Soft deps: Quest system (Collect objective auto-advance), Equipment system (equippable drops)_
-_Soft dep: `at_entity` field on `Action::Spawn` — lands with `monster_drop_pickups` (see `planning/features/monster_drop_pickups.md`); the `RollLootTable` executor should use `at_entity` to position the loot bag rather than hand-resolving `GlobalTransform`_
+_`at_entity` field on `Action::Spawn` — **already shipped**, via `planning/features/done/monster_corpse_loot.md`
+v2 (`55072fc`, 2026-08-26), not `monster_drop_pickups` as originally planned. The `RollLootTable`
+executor below should use `at_entity` directly (see `docs/20_data_formats.md`/
+`crates/ironhold_core/src/CLAUDE.md` for its exact semantics — it resolves the full transform,
+not just position, and warns-and-skips rather than silently no-op-ing when unresolvable with no
+fallback) instead of hand-resolving `GlobalTransform`. No longer blocks on `monster_drop_pickups`
+landing first._
 
 ## Phases
 
@@ -251,7 +257,7 @@ Action::RollLootTable { entity } => {
             ));
         }
     } else {
-        // Spawn a loot bag entity — use at_entity (lands with monster_drop_pickups)
+        // Spawn a loot bag entity — use at_entity (already shipped, monster_corpse_loot.md v2)
         // so we don't hand-resolve GlobalTransform here.
         let bag_id = format!("loot_bag_{}", registry.next_id());
 
@@ -363,7 +369,7 @@ loot.collected:{item_key}:{count}
 - `schema/loot.rs` (new file) — `LootCatalog`, `LootTableDef`, `LootRollStrategy`, `LootEntry`, `ItemQuality`.
 - `schema/catalog.rs` — `loot_table: Option<String>` on `PrefabDef`.
 - `schema/scene_v2.rs` — `auto_loot: bool` on `GameSceneV2`.
-- `schema/actions.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag`. Note: `Action::Spawn` gains `at_entity: Option<String>` via `monster_drop_pickups` — use it in the bag-spawn path rather than adding a manual `GlobalTransform` lookup here.
+- `schema/actions.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag`. Note: `Action::Spawn.at_entity: Option<String>` already exists (shipped via `monster_corpse_loot.md` v2) — use it in the bag-spawn path rather than adding a manual `GlobalTransform` lookup here.
 - `capabilities/loot.rs` (new file) — `LootTableRef`, `LootBag`, `LoadedLootCatalog`, `LootSceneConfig`, `roll_table`.
 - `capabilities/mod.rs` — register module.
 - `runtime/scene_manager/action_executor.rs` — `RollLootTable`, `PickupLoot`, `ClearLootBag` arms.
