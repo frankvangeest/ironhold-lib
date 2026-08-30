@@ -3673,7 +3673,10 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 
 | Action | Description |
 |--------|-------------|
-| `LoadScene("path")` | Load a `.scene.ron` file relative to the project root |
+| `LoadScene("path")` | Load a `.scene.ron` file relative to the project root. `ironhold_cli validate` checks this path exists on disk (same for `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay` below) |
+| `LoadSceneOverlay("path")` | Load a `.scene.ron` as an overlay on top of the current scene (e.g. pause menu) without unloading it; only the UI section spawns, tagged `OverlayEntity`; a transparent full-screen backdrop blocks clicks through to the base scene |
+| `UnloadOverlay` | Remove all `OverlayEntity` entities (dismiss the current overlay) |
+| `ToggleOverlay("path")` | If an overlay is active, unload it; otherwise load `path` as an overlay. Use for an ESC-style toggle bound to one key/button |
 | `Spawn { prefab, id, position, spawn_point, yaw_deg }` | Enqueue a prefab spawn (max 2/frame); `id` auto-generated if omitted; `spawn_point` looks up a scene-defined named point; `yaw_deg` rotates around Y axis |
 | `PreloadPrefab("key")` | Load a prefab's GLB early and cache the handle; fire on `scene.ready` to eliminate the first-spawn WASM decode stall |
 | `PreloadGlb("key")` | Load a **model catalog** GLB (from `assets.ron` `models:`) early — use for animation-source GLBs that have no prefab entry. The full GLTF including all clips is decoded and cached; the handle is kept alive in `PreloadedGlbHandles` until the next scene load. Validates that the key exists in `assets.ron` |
@@ -4424,7 +4427,11 @@ The slot count label in `InventoryPanel` and `ContainerPanel` now shows `"N/MAX"
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `stock` | `Vec<ShopEntry>` | ✅ | Items the merchant sells/buys |
-| `currency_stat` | `String` | `"gold"` | Stat key used as currency (display-only in v1; buy/sell transactions are planned for v1.1) |
+| `currency_stat` | `String` | `"gold"` | Global stat key used as currency for `Action::BuyItem` (deducted on purchase — see the scope note below; selling is not yet implemented). Defaults to `"gold"` when omitted, so `ironhold_cli validate`'s cross-check against `stats.ron` uses `"gold"` too if this field isn't authored |
+
+`ironhold_cli validate` cross-checks `currency_stat` against `stats.ron` and every `ShopEntry.item_key`
+against `items.ron` (when the project sets `items_path`) — a typo in either previously only surfaced
+as a runtime no-op the first time a player opened the shop.
 
 **`ShopEntry` fields:**
 
@@ -4505,7 +4512,7 @@ The slot count label in `InventoryPanel` and `ContainerPanel` now shows `"N/MAX"
 | `inventory.removed:{entity}:{item_key}:{count}` | `RemoveItem` removes items (count = actual removed) |
 | `inventory.transferred:{from}:{to}:{item_key}` | `TransferItem` completes a move between entities |
 
-> **v1 scope note:** `MerchantDef.buy_price`, `sell_price`, and `currency_stat` are display-only in v1. The shop panel shows pricing information but does not yet deduct or credit the `currency_stat`. Full buy/sell transaction support (stat deduction, item transfer) is planned for v1.1.
+> **v1 scope note (corrected — this previously said buy/sell were display-only in v1; that's out of date):** `Action::BuyItem` is fully implemented — it checks stock, deducts `buy_price` from the player's `currency_stat`, adds the item to the player's inventory, and emits `item.bought:{item_key}`. **Selling is still not implemented** — `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet.
 
 ---
 

@@ -1,0 +1,4 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/missing_boot_scene.scene.ron",
+)

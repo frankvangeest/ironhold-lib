@@ -1,0 +1,5 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    items_path: "items/items.ron",
+)

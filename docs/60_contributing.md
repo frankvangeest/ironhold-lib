@@ -240,6 +240,8 @@ references without starting the engine.
 - Prefab keys in scene entity defs and `Spawn` / `PreloadPrefab` actions exist in `prefabs.ron`
 - Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
 - Behavior file paths on `PrefabDef` exist on disk
+- Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`)
+- A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 
 ```bash

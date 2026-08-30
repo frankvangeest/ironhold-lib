@@ -18,10 +18,6 @@
             do_actions: [ Log("Test Action Triggered"), PlaySound(key: "click"), Spawn(prefab: "chest_02") ],
         ),
         (
-            on: "ui.button_pressed:start_menu",
-            do_actions: [ Log("LoadScene Triggered"), PlaySound(key: "click"), LoadScene("scenes/start_menu.scene.ron") ],
-        ),
-        (
             on: "ui.button_pressed:dance",
             do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlaySound(key: "click"), PlayAnimation("dance") ],
         ),
