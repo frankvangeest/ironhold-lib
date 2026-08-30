@@ -76,6 +76,18 @@ Mitigations:
 - Use stable ordering (Vec + sort, BTreeMap)
 - Avoid relying on iteration order for gameplay decisions
 
+### Dynamic spawn ids are not reproducible across runs 🧭
+`SpawnRegistry.counter` (backing both `Action::Spawn`'s auto-generated id and the `{new_id}` RON
+substitution token) is a plain per-scene increment, but its *value* on any given spawn depends on
+`ActionQueue` execution order — which mixes `Update`- and `FixedUpdate`-originated events, so it is
+not guaranteed to land on the same number across different machines or frame rates. Unique within
+one session's scene, not reproducible byte-for-byte across runs.
+
+Mitigations:
+- Never use a dynamically-generated spawn id (auto-generated or `{new_id}`-derived) as a save-file
+  or network-sync key — key on something author-stable instead (prefab key + a designer-authored
+  slot id).
+
 ### Physics determinism 🧭
 General-purpose physics engines are often not deterministic across platforms.
 

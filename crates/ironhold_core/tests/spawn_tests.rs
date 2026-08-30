@@ -167,6 +167,68 @@ fn test_spawn_auto_id_increments_counter() {
     assert_eq!(registry.entities.len(), 2);
 }
 
+/// `{new_id}` resolves to a fresh, monotonically increasing counter value at spawn time —
+/// two spawns authored with the same `id` template must not collide.
+#[test]
+fn test_new_id_token_produces_unique_ids_across_spawns() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    // Same authored id template, fired twice in the same frame — must not collide.
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_corpse_{new_id}".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("orc_corpse_{new_id}".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.update();
+
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert_eq!(ids.len(), 2, "both spawns must produce distinct entities");
+    assert!(ids.iter().all(|id| id.starts_with("orc_corpse_") && !id.contains("{new_id}")),
+        "{{new_id}} must be replaced with a literal counter value, got: {:?}", ids);
+    assert_ne!(ids[0], ids[1], "{{new_id}} must resolve to a different value per spawn, got: {:?}", ids);
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert_eq!(registry.entities.len(), 2, "registry must track both uniquely-resolved ids");
+}
+
+/// `{new_id}` composes with the pre-existing counter used by the no-id-given fallback — both
+/// paths share `SpawnRegistry.counter`, so a mix of the two must never collide either.
+#[test]
+fn test_new_id_token_shares_counter_with_auto_generated_fallback() {
+    let mut app = setup_test_app();
+    app.update();
+    minimal_orc_catalogs(&mut app);
+
+    // One auto-generated id (id: None), one {new_id}-templated id — must not collide, and the
+    // counter must have advanced by exactly 2.
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: None, position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "enemy_orc_melee".to_string(), id: Some("loot_{new_id}".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.update();
+
+    let ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().any(|id| id.starts_with("enemy_orc_melee_")), "auto-generated id must be unaffected: {:?}", ids);
+    assert!(ids.iter().any(|id| id.starts_with("loot_") && !id.contains("{new_id}")), "{{new_id}} must resolve: {:?}", ids);
+
+    let registry = app.world().resource::<SpawnRegistry>();
+    assert_eq!(registry.counter, 2, "both id-generation paths must share one counter");
+}
+
 #[test]
 fn test_despawn_removes_entity_by_spawn_id() {
     use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};

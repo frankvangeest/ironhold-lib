@@ -72,6 +72,16 @@ fn missing_prefab_in_scene_exits_1() {
 }
 
 #[test]
+fn new_id_token_outside_spawn_id_exits_1() {
+    let (code, stdout) = validate("bad_new_id_placement");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("only resolves inside Action::Spawn"),
+        "expected the misplaced-{{new_id}} message in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn missing_prefab_in_spawn_action_exits_1() {
     let (code, stdout) = validate("bad_prefab_in_spawn");
     assert_eq!(code, 1, "expected exit 1, got {code}");

@@ -144,10 +144,49 @@ pub fn action_executor_system(
                 let model_path = model_entry.path.clone();
                 let prefab_def = prefab_def.clone();
 
-                let spawn_id = id.unwrap_or_else(|| {
-                    spawn_params.registry.counter += 1;
-                    format!("{}_{}", prefab, spawn_params.registry.counter)
-                });
+                // `{new_id}` inside an authored id resolves to a fresh, monotonically increasing
+                // counter value -- lets a designer compose an id (e.g. "{self}_corpse_{new_id}")
+                // that won't collide with an earlier spawn from the same source, without relying
+                // on a fixed, reused literal. Shares the same counter as the no-id-given fallback
+                // below -- it does not guard against colliding with a hand-authored literal id of
+                // the same shape (see the doc comment on Action::Spawn).
+                let spawn_id = match id {
+                    Some(raw) if raw.contains("{new_id}") => {
+                        spawn_params.registry.counter += 1;
+                        raw.replace("{new_id}", &spawn_params.registry.counter.to_string())
+                    }
+                    Some(raw) => raw,
+                    None => {
+                        spawn_params.registry.counter += 1;
+                        format!("{}_{}", prefab, spawn_params.registry.counter)
+                    }
+                };
+                // A leftover `{` means a substitution token was never resolved -- most likely
+                // `{new_id}` misspelled, or `{self}`/`{target}` authored somewhere that doesn't
+                // resolve them (e.g. a dialogue choice's do_actions, or a global rules.ron/
+                // state_machine.ron rule for `{self}`). Baking literal braces into a live spawn
+                // id silently produces the exact collision-prone id this feature exists to avoid.
+                if spawn_id.contains('{') {
+                    warn!(
+                        "Action::Spawn: id {:?} still contains an unresolved '{{...}}' token after \
+                         substitution -- check for a typo'd {{new_id}}, or {{self}}/{{target}} used \
+                         somewhere they don't resolve (e.g. dialogue do_actions)",
+                        spawn_id
+                    );
+                }
+                // Collision guard: registry.entities silently overwrites on a repeated id
+                // (pre-existing behavior, see test_spawn_id_collision_orphans_old_entity), which
+                // orphans the earlier entity rather than failing loudly. {new_id} only guarantees
+                // uniqueness among counter-derived ids, not against a hand-authored literal of the
+                // same shape, so this is the diagnostic that catches the remaining collision risk.
+                if spawn_params.registry.entities.contains_key(&spawn_id) {
+                    warn!(
+                        "Action::Spawn: id {:?} is already registered to another live entity -- \
+                         the earlier entity will be orphaned (no longer reachable by Despawn/\
+                         SetEntityVisible/etc.), only the registry entry is overwritten",
+                        spawn_id
+                    );
+                }
 
                 if position.is_some() && spawn_point.is_some() {
                     warn!(
