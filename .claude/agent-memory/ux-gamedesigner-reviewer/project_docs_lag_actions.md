@@ -29,6 +29,14 @@ from both docs/30 category lists; STATUS.md still says
 `animation_start_at_fraction_out_of_range` line). Same shape as the older list below — new fields
 on an existing action lag exactly like new actions do.
 
+**Confirmed instance (2026-08-30, `feature/cli-validate-hardening`):** two new `validate` checks
+(scene-path existence; merchant `currency_stat`/`item_key`) updated docs/20 and docs/30 well but
+**surface 5 was missed entirely** — `docs/60_contributing.md` ▸ "Checks performed" (~line 236) still
+lists neither. The feature plan's own Docs task line only named docs/20 and docs/30, so the omission
+was baked in at plan time. Note docs/60's list is *also* already missing the older
+`join_prefab_keys` checks. Treat surface 5 as the single most-missed one for validate changes.
+See [[validate-coverage-gaps]].
+
 There is an explicit reminder in `30_runtime_events_and_logic.md` at the end of the appendix:
 > "New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example."
 

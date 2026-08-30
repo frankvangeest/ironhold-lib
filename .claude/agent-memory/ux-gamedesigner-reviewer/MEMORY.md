@@ -8,6 +8,7 @@
 - [Camera transition & "default" sentinel](project_camera_transition_and_default_sentinel.md) — transition: is read from the TARGET mode, so "default" round-trips snap back; fov has 3 different defaults (45/60/90)
 - [RON enum double-paren trap](project_ron_enum_double_paren.md) — enum variants wrapping a named struct need Orbit((field: value)); single-paren examples fail to parse; only cli validate catches it
 - [Docs lag the action schema](project_docs_lag_actions.md) — FIVE doc surfaces miss new Action variants AND new optional fields; docs/20 table usually fine, the other four lag
+- [validate coverage gaps](project_validate_coverage_gaps.md) — CLI validate checks key-lookup fields asymmetrically (ToggleOverlay, initial_items, ItemDef.currency_stat uncovered); merchant checks silently skip with no items_path
 - [pkg/ web build must be rebuilt](project_pkg_rebuild_required.md) — staged schema/action changes do not reach designers until wasm-pack build + commit of pkg/
 - [Color tuples vary RGB vs RGBA](project_color_tuple_inconsistency.md) — DamagePopupStyle uses 3-tuple RGB while StatLabelDef/WorldStatBarDef use 4-tuple RGBA in the same prefab block
 - [{self} substitution pattern](project_self_substitution_pattern.md) — Entity-targeted actions accept {self} in .behavior.ron; canonical example is primitive_world/behaviors/attack_dummy.behavior.ron
