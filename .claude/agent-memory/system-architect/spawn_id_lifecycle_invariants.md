@@ -15,12 +15,17 @@ design reviews (verified 2026-08-24, `452e2e2`-era):
    executor run — the value is already snapshotted. `SPAWNS_PER_FRAME = 2` means the
    spawn itself can lag several frames behind, but its position won't drift.
 
-2. **`SpawnRegistry.entities` is a `HashMap<String, Entity>` — reusing a spawn id
+2. **`SpawnRegistry.entities` is a `BTreeMap<String, Entity>` — reusing a spawn id
    silently orphans the previous entity.** It can then never be `Despawn`ed (the id now
    maps to the newer entity) and leaks until scene unload. Any design that authors a
    *derived* stable id (`"{self}_corpse"`) requires the source id itself to be unique per
    instance; "monster respawns with a fresh id" becomes a hard requirement, not a
-   preference.
+   preference. **Escape hatch (`feature/monotonic-entity-id`, 2026-08-29): the `{new_id}`
+   token in `Spawn.id`**, resolved in the executor arm off `SpawnRegistry.counter`. Its
+   tradeoff: the resolved id is *unknowable to RON* — no spawn-completion event carries it,
+   nothing writes it to a game var — so anything that later `Despawn`s / `TransferItem`s
+   that entity must act from the entity's **own** behavior FSM via `{self}`, not from the
+   spawner's. Verify it's still on `main` before recommending it.
 
 3. **`Action::Despawn` on an unknown id `warn!`s** (`action_executor.rs`) — it is a
    functional no-op but not a silent one. Any "two timers race, loser no-ops" design
