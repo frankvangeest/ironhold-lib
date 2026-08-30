@@ -289,10 +289,10 @@ Applies actions to the world. Key design points:
 - `InputActionMessage { entity: Entity, action: InputAction }` — input bound to a specific entity (point-to-point, not pipeline)
 
 ### Actions ✅
-- `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`
+- `LoadScene(String)` — loads a `.scene.ron` and transitions to `LoadingScene`. `ironhold_cli validate` checks this path exists on disk (same for `LoadSceneOverlay` and `PreloadScene`/`ToggleOverlay` below)
 - `LoadSceneOverlay(String)` — loads a `.scene.ron` as an overlay (e.g. pause menu); automatically spawns a transparent full-screen backdrop beneath the overlay UI that blocks pointer events — base-scene buttons are not clickable through the overlay
 - `UnloadOverlay` — despawns all overlay entities (including the backdrop)
-- `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
+- `ToggleOverlay(String)` — opens overlay if none is active, closes if one is; `ironhold_cli validate` checks this path exists on disk too
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
 - `Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn (processed max 2/frame by `drain_spawn_queue_system`); `id` auto-generated if omitted, and supports `{self}`/`{target}` substitution plus `{new_id}` — a fresh counter value resolved at spawn time so a repeated `{self}` (e.g. a monster that always respawns under the same id) doesn't force the same derived id every time; see the `{new_id}` substitution note below for what it does and doesn't guarantee; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees

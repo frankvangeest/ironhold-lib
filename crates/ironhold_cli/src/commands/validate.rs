@@ -3,6 +3,7 @@ use std::path::Path;
 
 use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind};
+use ironhold_core::schema::items::ItemCatalog;
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::player::InputMap;
@@ -160,6 +161,7 @@ fn cross_file_checks(
     asset_catalog: Option<&AssetCatalog>,
     prefab_catalog: Option<&PrefabCatalog>,
     stat_catalog: Option<&StatCatalog>,
+    item_catalog: Option<&ItemCatalog>,
     scenes: &[(String, GameSceneV2)],
     actions: &[(String, Action)],
 ) -> Vec<CrossFileError> {
@@ -233,6 +235,22 @@ fn cross_file_checks(
                     }
                 }
             }
+            Action::LoadScene(path)
+            | Action::LoadSceneOverlay(path)
+            | Action::PreloadScene(path)
+            | Action::ToggleOverlay(path) => {
+                if !project_dir.join(path).exists() {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!(
+                            "scene path {:?} not found on disk (paths are relative to the \
+                             project folder, e.g. \"scenes/main.scene.ron\")",
+                            path
+                        ),
+                        error_type: "missing_file",
+                    });
+                }
+            }
             Action::ApplyModifier { modifier_key } | Action::RemoveModifier { modifier_key } => {
                 if let Some(c) = stat_catalog {
                     if !c.modifiers.contains_key(modifier_key) {
@@ -299,6 +317,51 @@ fn cross_file_checks(
         }
     }
 
+    // A merchant's currency_stat/item_key are only ever read at the moment a player opens the
+    // shop (Action::OpenShop) or attempts a purchase (Action::BuyItem) — a typo in either
+    // otherwise only surfaces as a runtime no-op the first time someone actually tries to trade.
+    // Catches it here instead, mirroring every other key-lookup check in this file.
+    if let Some(catalog) = prefab_catalog {
+        for (prefab_key, prefab) in &catalog.prefabs {
+            let Some(merchant) = &prefab.merchant else { continue };
+            if let Some(stats) = stat_catalog {
+                if !stats.stats.contains_key(&merchant.currency_stat) {
+                    // currency_stat defaults to "gold" when omitted entirely -- if that's the
+                    // value that's missing, the designer may not have authored it at all, so say
+                    // so rather than implying they typed a bad stat key.
+                    let default_note = if merchant.currency_stat == "gold" {
+                        " (this is the schema default used when currency_stat is omitted -- \
+                          either define a \"gold\" stat or set currency_stat explicitly)"
+                    } else {
+                        ""
+                    };
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: merchant currency_stat {:?} not found in stats.ron{}",
+                            prefab_key, merchant.currency_stat, default_note
+                        ),
+                        error_type: "missing_reference",
+                    });
+                }
+            }
+            if let Some(items) = item_catalog {
+                for entry in &merchant.stock {
+                    if !items.items.contains_key(&entry.item_key) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message: format!(
+                                "prefab {:?}: merchant stock item_key {:?} not found in items.ron",
+                                prefab_key, entry.item_key
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     // `join_prefab_keys` (local_coop_hot_join_leave.md) entries are read by Action::JoinPlayer
     // only at the moment a player actually presses the join key — a typo'd or missing entry
     // otherwise only surfaces as a runtime warn!+no-op, never at authoring time. Catch it here,
@@ -342,6 +405,24 @@ fn cross_file_checks(
                     });
                 }
             }
+        }
+    }
+
+    // The project's own boot scene -- the highest-consequence scene path of all, since a typo
+    // here means the project never gets past a blank/loading screen. Same on-disk-existence
+    // check as the LoadScene/LoadSceneOverlay/PreloadScene/ToggleOverlay action arm above,
+    // mirroring how the runtime resolves it (project_loader.rs's resolve_project_path).
+    if let Some(config) = project_config {
+        if !project_dir.join(&config.initial_scene).exists() {
+            errors.push(CrossFileError {
+                source_file: find_project_ron(project_dir).unwrap_or_default(),
+                message: format!(
+                    "initial_scene {:?} not found on disk (paths are relative to the project \
+                     folder, e.g. \"scenes/main.scene.ron\")",
+                    config.initial_scene
+                ),
+                error_type: "missing_file",
+            });
         }
     }
 
@@ -1097,6 +1178,27 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let stat_catalog: Option<StatCatalog> =
         try_parse(project_dir, "stats/stats.ron", &mut file_results);
 
+    // Unlike stats.ron (fixed convention path), items.ron's path is configurable via
+    // ProjectConfig.items_path -- None means this project has no item catalog at all, which is
+    // valid (not every project needs items), not a missing-file error. But an *authored* path
+    // that doesn't resolve is a real mistake (the runtime's project_loader.rs unconditionally
+    // tries to load it) -- try_parse alone would silently return None for a missing file with no
+    // FileResult pushed at all, since it's designed for "this convention path might not apply to
+    // this project," not "this configured path should exist."
+    let item_catalog: Option<ItemCatalog> = project_config
+        .as_ref()
+        .and_then(|c| c.items_path.as_deref())
+        .and_then(|path| {
+            if !project_dir.join(path).exists() {
+                file_results.push(FileResult {
+                    rel_path: path.to_string(),
+                    errors: vec!["items_path in .project.ron does not exist on disk".to_string()],
+                });
+                return None;
+            }
+            try_parse(project_dir, path, &mut file_results)
+        });
+
     let mut scenes: Vec<(String, GameSceneV2)> = Vec::new();
     for path in glob_dir(project_dir, "scenes", ".scene.ron") {
         let r = rel(project_dir, &path);
@@ -1134,6 +1236,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         asset_catalog.as_ref(),
         prefab_catalog.as_ref(),
         stat_catalog.as_ref(),
+        item_catalog.as_ref(),
         &scenes,
         &all_actions,
     );

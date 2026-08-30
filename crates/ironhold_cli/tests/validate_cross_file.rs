@@ -92,6 +92,60 @@ fn missing_prefab_in_spawn_action_exits_1() {
 }
 
 #[test]
+fn missing_scene_path_in_load_scene_exits_1() {
+    let (code, stdout) = validate("bad_scene_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("does_not_exist.scene.ron") && stdout.contains("not found on disk"),
+        "expected the missing LoadScene path in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("also_does_not_exist.scene.ron"),
+        "expected the missing ToggleOverlay path in output too:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_initial_scene_exits_1() {
+    let (code, stdout) = validate("bad_initial_scene");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("missing_boot_scene.scene.ron") && stdout.contains("initial_scene"),
+        "expected the missing initial_scene path in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_items_path_target_exits_1() {
+    let (code, stdout) = validate("bad_items_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("items_path") && stdout.contains("does not exist on disk"),
+        "expected a diagnostic for the missing items_path target in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_merchant_currency_stat_exits_1() {
+    let (code, stdout) = validate("bad_merchant_currency_stat");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("silver") && stdout.contains("not found in stats.ron"),
+        "expected the missing currency_stat in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_merchant_item_key_exits_1() {
+    let (code, stdout) = validate("bad_merchant_item_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("iron_sword") && stdout.contains("not found in items.ron"),
+        "expected the missing item_key in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn missing_behavior_file_exits_1() {
     let (code, stdout) = validate("bad_behavior_file");
     assert_eq!(code, 1, "expected exit 1, got {code}");

@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    stats: {
+        "gold": ( base: 0.0, max: 999.0 ),
+    },
+)
