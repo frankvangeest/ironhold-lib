@@ -11,7 +11,7 @@
 
 ## Active
 
-_(nothing currently active — pull the next batch from Queued below.)_
+- [ ] **CLI validate hardening (batch: scene-path check + merchant cross-validation)** — `feature/cli-validate-hardening`. See `planning/features/cli_validate_hardening.md`.
 
 ---
 
