@@ -213,6 +213,96 @@ fn test_entity_fsm_despawn_self_rewritten_to_concrete_id() {
     );
 }
 
+/// `{new_id}` composed with `{self}` in the same authored `id` string, driven through the real
+/// entity FSM interpreter (not a direct ActionQueue push like spawn_tests.rs's coverage) — pins
+/// the pass-through ordering invariant the whole feature depends on: `rewrite_self` resolves
+/// `{self}` and leaves `{new_id}` untouched, so it survives to reach the executor intact.
+#[test]
+fn test_entity_fsm_new_id_composes_with_self_substitution() {
+    use ironhold_core::runtime::{LoadedAssetCatalog, LoadedPrefabCatalog};
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("zombie_corpse".to_string(), ModelCatalogEntry { path: "shared/models/creatures/zombie_corpse.glb#Scene0".to_string() }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("zombie_corpse".to_string(), PrefabDef {
+                kind: PrefabKind::Prop,
+                model: "zombie_corpse".to_string(),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "alive".to_string(),
+        states: vec![
+            FsmState { name: "alive".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState {
+                name: "dead".to_string(),
+                entry_actions: vec![Action::Spawn {
+                    prefab: "zombie_corpse".to_string(),
+                    id: Some("{self}_corpse_{new_id}".to_string()),
+                    position: None, spawn_point: None, yaw_deg: None,
+                }],
+                exit_actions: vec![],
+                on: vec![],
+            },
+        ],
+        transitions: vec![
+            FsmTransition {
+                from: Some("alive".to_string()),
+                on: "entity.killed:{self}".to_string(),
+                to: "dead".to_string(),
+            },
+        ],
+        global_on: vec![],
+    };
+    let handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm);
+
+    let monster = app.world_mut().spawn((
+        BehaviorHandle(handle),
+        EntityFsmState { current: "alive".to_string() },
+        SpawnId("zombie_02".to_string()),
+    )).id();
+
+    // Kill the same monster slot twice — {self} is identical both times (the monster's own
+    // stable id never changes), so only {new_id} can keep the two corpse ids apart.
+    app.world_mut()
+        .resource_mut::<Messages<GameEvent>>()
+        .write(GameEvent::Trigger("entity.killed:zombie_02".to_string()));
+    app.update();
+    app.world_mut().get_mut::<EntityFsmState>(monster).unwrap().current = "alive".to_string();
+    app.world_mut()
+        .resource_mut::<Messages<GameEvent>>()
+        .write(GameEvent::Trigger("entity.killed:zombie_02".to_string()));
+    app.update();
+
+    let corpse_ids: Vec<String> = app.world_mut()
+        .query::<&SpawnId>()
+        .iter(app.world())
+        .map(|s| s.0.clone())
+        .filter(|id| id.starts_with("zombie_02_corpse_"))
+        .collect();
+
+    assert_eq!(corpse_ids.len(), 2, "both kills must spawn a corpse, got: {:?}", corpse_ids);
+    assert_ne!(corpse_ids[0], corpse_ids[1],
+        "{{self}} is identical on both kills — only {{new_id}} keeps the two corpse ids apart, got: {:?}", corpse_ids);
+    for id in &corpse_ids {
+        assert!(!id.contains("{new_id}") && !id.contains("{self}"),
+            "both tokens must be fully resolved by the time the entity is spawned, got: {:?}", id);
+    }
+}
+
 /// No intent rule present → slot's built-in do_actions must fire unchanged.
 #[test]
 fn test_intent_slot_no_rule_fires_slot_do_actions() {

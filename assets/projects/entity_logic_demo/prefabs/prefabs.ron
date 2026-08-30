@@ -145,6 +145,41 @@
       ),
     ),
 
+    // ── Respawning gem ({new_id} substitution demo, planning/features/monotonic_entity_id.md) ──
+    // Press F to collect — it hides, spawns a small residue prop with a {new_id}-derived id, then
+    // reappears a few seconds later. {self} (this gem's own spawn id) is identical on every
+    // collection, so only {new_id} keeps each residue's id from colliding with the previous one —
+    // the same shape as the corpse-id-reuse problem this token was built to solve.
+    "respawning_gem": (
+      kind: Primitive,
+      model: "",
+      shape: Sphere,
+      behavior: "behaviors/respawning_gem.behavior.ron",
+      interactable: ( radius: 2.5 ),
+      primitive: (
+        radius: 0.35,
+        color: (0.85, 0.25, 0.85),
+        roughness: 0.1,
+        metallic: 0.6,
+      ),
+      motion: (
+        rotate: (0.0, 1.5, 0.0),
+      ),
+    ),
+
+    // ── Gem residue ──────────────────────────────────────────────────────────────
+    // Purely decorative — one is spawned per gem collection to make each {new_id}-derived id
+    // visible as a distinct, surviving entity rather than a single reused one. Must be a GLB
+    // (kind: Prop) rather than a primitive shape (model: "") — Action::Spawn's executor requires
+    // a resolvable asset-catalog model key before it will queue any dynamic spawn at all,
+    // regardless of prefab kind (a real, pre-existing engine limitation this demo surfaced: a
+    // primitive-shaped prop can be scene-placed but not dynamically Action::Spawn-ed).
+    "gem_residue": (
+      kind: Prop,
+      model: "rock_residue",
+      nameplate: false,
+    ),
+
     // ── Score trigger zone ─────────────────────────────────────────────────────
     // Invisible sphere sensor. Walking through it fires entity.entered:score_zone_01
     // which the project rules.ron handles (IncrementVariable("score", 10) + PlaySound).

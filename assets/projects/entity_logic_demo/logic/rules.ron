@@ -3,6 +3,12 @@
 (
   schema_version: 1,
   rules: [
+    // Start-menu gate: the click is a real user gesture, which is what lets the browser's
+    // WebAudio AudioContext start correctly for every PlaySound/PlayMusicLoop that follows.
+    (
+      on: "ui.button_pressed:start_game",
+      do_actions: [ LoadScene("scenes/main.scene.ron") ],
+    ),
     // Score zone: walk in → +10 points + sound
     (
       on: "entity.entered:score_zone_01",

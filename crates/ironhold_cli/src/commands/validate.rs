@@ -249,6 +249,24 @@ fn cross_file_checks(
             }
             _ => {}
         }
+
+        // `{new_id}` only resolves inside Action::Spawn's `id` field (action_executor.rs) --
+        // anywhere else (a typo, or a misunderstanding of the token) it silently bakes a literal
+        // "{new_id}" substring into a live runtime string instead of resolving, which then fails
+        // to match whatever it was meant to reference.
+        let misplaced_new_id = match action {
+            Action::Spawn { .. } => false,
+            other => format!("{:?}", other).contains("{new_id}"),
+        };
+        if misplaced_new_id {
+            errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: "{new_id} only resolves inside Action::Spawn's `id` field -- it will not \
+                    be substituted here and will appear as a literal string at runtime"
+                    .to_string(),
+                error_type: "misplaced_new_id_token",
+            });
+        }
     }
 
     if let Some(catalog) = prefab_catalog {

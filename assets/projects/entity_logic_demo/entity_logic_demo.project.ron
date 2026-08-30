@@ -3,7 +3,7 @@
     project_id: "entity_logic_demo",
     display_name: "Entity Logic Demo",
 
-    initial_scene: "scenes/main.scene.ron",
+    initial_scene: "scenes/start_menu.scene.ron",
 
     asset_catalog: "assets.ron",
     prefab_catalog: "prefabs/prefabs.ron",

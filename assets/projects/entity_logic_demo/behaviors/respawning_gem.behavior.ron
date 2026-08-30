@@ -1,0 +1,178 @@
+// Demonstrates the {new_id} RON substitution token (planning/features/monotonic_entity_id.md).
+//
+// Press F near the gem to "collect" it — it hides itself, spawns a small residue prop with a
+// fresh {new_id}-derived id, then reappears after a short delay. {self} is the SAME literal on
+// every collection (this entity never changes its own spawn id), so only {new_id} keeps each
+// residue's id from colliding with the previous one — the same shape as the corpse-id-reuse
+// problem this token exists to solve (see crates/ironhold_core/src/CLAUDE.md's "{new_id}
+// substitution" note). Collect it repeatedly and watch the residue count go up with no console
+// warning — a fixed id: "{self}_residue" (no {new_id}) would instead log an "already registered"
+// collision warning starting on the second collect.
+//
+// Cycles through 10 fixed residue positions (idle_0/collected_0 .. idle_9/collected_9), spaced
+// evenly around a 2.5 m circle centered on the gem (gem itself is at (6.0, 0.6, -3.0)) — purely so
+// the residues are visually distinguishable from each other rather than stacking at one spot. RON
+// has no randomness, so this is a plain round-robin through 10 pre-authored positions, not
+// randomization. The {new_id} substitution itself doesn't need this; it's a presentation choice
+// for this demo only. An 11th+ collection reuses slot 0's position (a new residue lands on top of
+// the 1st one) — still a distinct id, just not a distinct visible spot; check the residue count
+// and the console (no collision warning) to confirm uniqueness beyond 10 collections.
+(
+  schema_version: 1,
+  initial_state: "idle_0",
+  global_on: [],
+  states: [
+    ( name: "idle_0", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_0",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (8.50, 0.15, -3.00)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_1", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_1",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (8.02, 0.15, -1.53)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_2", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_2",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (6.77, 0.15, -0.62)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_3", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_3",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (5.23, 0.15, -0.62)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_4", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_4",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (3.98, 0.15, -1.53)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_5", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_5",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (3.50, 0.15, -3.00)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_6", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_6",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (3.98, 0.15, -4.47)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_7", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_7",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (5.23, 0.15, -5.38)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_8", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_8",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (6.77, 0.15, -5.38)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    ( name: "idle_9", entry_actions: [ SetEntityVisible(entity: "{self}", visible: true) ], exit_actions: [], on: [] ),
+    (
+      name: "collected_9",
+      entry_actions: [
+        PlaySound(key: "score"),
+        SetEntityVisible(entity: "{self}", visible: false),
+        Spawn(prefab: "gem_residue", id: "{self}_residue_{new_id}", position: (8.02, 0.15, -4.47)),
+        IncrementVariable("residue_count", 1),
+        EmitEventAfterDelay(event: "gem.reappear:{self}", delay_secs: 3.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+  ],
+  transitions: [
+    ( from: "idle_0", on: "entity.interacted:{self}", to: "collected_0" ),
+    ( from: "collected_0", on: "gem.reappear:{self}", to: "idle_1" ),
+    ( from: "idle_1", on: "entity.interacted:{self}", to: "collected_1" ),
+    ( from: "collected_1", on: "gem.reappear:{self}", to: "idle_2" ),
+    ( from: "idle_2", on: "entity.interacted:{self}", to: "collected_2" ),
+    ( from: "collected_2", on: "gem.reappear:{self}", to: "idle_3" ),
+    ( from: "idle_3", on: "entity.interacted:{self}", to: "collected_3" ),
+    ( from: "collected_3", on: "gem.reappear:{self}", to: "idle_4" ),
+    ( from: "idle_4", on: "entity.interacted:{self}", to: "collected_4" ),
+    ( from: "collected_4", on: "gem.reappear:{self}", to: "idle_5" ),
+    ( from: "idle_5", on: "entity.interacted:{self}", to: "collected_5" ),
+    ( from: "collected_5", on: "gem.reappear:{self}", to: "idle_6" ),
+    ( from: "idle_6", on: "entity.interacted:{self}", to: "collected_6" ),
+    ( from: "collected_6", on: "gem.reappear:{self}", to: "idle_7" ),
+    ( from: "idle_7", on: "entity.interacted:{self}", to: "collected_7" ),
+    ( from: "collected_7", on: "gem.reappear:{self}", to: "idle_8" ),
+    ( from: "idle_8", on: "entity.interacted:{self}", to: "collected_8" ),
+    ( from: "collected_8", on: "gem.reappear:{self}", to: "idle_9" ),
+    ( from: "idle_9", on: "entity.interacted:{self}", to: "collected_9" ),
+    ( from: "collected_9", on: "gem.reappear:{self}", to: "idle_0" ),
+  ],
+)

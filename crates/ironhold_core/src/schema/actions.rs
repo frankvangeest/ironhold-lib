@@ -7,7 +7,23 @@ pub enum Action {
     Quit,
     Log(String),
     /// Spawn a prefab by ID.
-    /// - `id` — optional stable handle for later `Despawn`; auto-generated if omitted.
+    /// - `id` — optional stable handle for later `Despawn`; auto-generated if omitted. Supports
+    ///   `{self}`/`{target}` substitution — resolved earlier, by the interpreter systems, so this
+    ///   only works when the action is queued via an entity's own `.behavior.ron` (`{self}`) or a
+    ///   rule/state-machine action with a live `CurrentTarget` (`{target}`); a dialogue choice's
+    ///   `do_actions` does not currently resolve `{self}` here — see `capabilities/dialogue.rs`.
+    ///   Also supports `{new_id}` (resolved here, at spawn time, downstream of the above) — a
+    ///   fresh, monotonically increasing counter value, unique among ids produced by `{new_id}`
+    ///   or the auto-generated fallback within the current scene. It does **not** guard against
+    ///   colliding with a hand-authored literal id of the same shape (e.g. `id: "crate_{new_id}"`
+    ///   can still collide with a scene-placed entity literally named `"crate_1"`) — the same
+    ///   collision risk any static id already has, just not eliminated by this token. Repeated
+    ///   `{new_id}` occurrences in one `id` all resolve to the same counter value (one id per
+    ///   spawn). An id built with `{new_id}` cannot be referenced by literal string from another
+    ///   RON file — only the spawned entity's own behavior (`{self}`) or the current target
+    ///   (`{target}`) can address it afterward. Shares its counter with the auto-generated
+    ///   fallback used when `id` is omitted entirely; resets on `LoadScene` (safe — no spawned
+    ///   entity survives a scene transition anyway).
     /// - `position` — explicit world-space position `(x, y, z)`; takes precedence over `spawn_point`.
     /// - `spawn_point` — name of a spawn point defined in the scene's `spawn_points` map.
     ///   If neither `position` nor `spawn_point` is given, the entity spawns at the world origin.

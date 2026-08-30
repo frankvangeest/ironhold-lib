@@ -95,6 +95,20 @@
       label: ( text: "Press F", offset: (0.0, 1.5, 0.0) ),
     ),
 
+    // ── Respawning gem ({new_id} substitution demo) ────────────────────────
+    // Collect it repeatedly (F) — each collection spawns a residue with a fresh
+    // {new_id}-derived id even though the gem's own {self} never changes.
+    (
+      id: "gem_01",
+      prefab: "respawning_gem",
+      transform: (
+        translation: (6.0, 0.6, -3.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: ( text: "Press F (new_id demo)", offset: (0.0, 1.2, 0.0) ),
+    ),
+
     // ── Score trigger zone ─────────────────────────────────────────────────
     // A small visible marker (0.05 m sphere) at the zone centre.
     // The actual sensor radius (2.0 m) comes from the TriggerZoneDef in prefabs.ron.
@@ -129,10 +143,26 @@
     )),
     Label((
       id: "camera_hint",
-      text: "C: birdseye (static - walk out of frame) - V: back to default",
-      position: (16.0, 80.0),
+      text: "C: birdseye view - V: reset camera",
+      position: (16.0, 84.0),
       size: (600.0, 28.0),
       align: Left,
+    )),
+    Label((
+      id: "gem_hint",
+      text: "Collect the pink gem repeatedly (F)",
+      position: (16.0, 116.0),
+      size: (600.0, 28.0),
+      align: Left,
+    )),
+    Label((
+      id: "residue_count",
+      text: "Gem residues spawned: 0",
+      position: (16.0, 148.0),
+      size: (600.0, 28.0),
+      align: Left,
+      bind: "residue_count",
+      format: "Gem residues spawned: {}",
     )),
   ],
 )

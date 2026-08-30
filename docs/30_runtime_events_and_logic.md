@@ -291,7 +291,7 @@ Applies actions to the world. Key design points:
 - `ToggleOverlay(String)` — opens overlay if none is active, closes if one is
 - `Quit` — writes `AppExit::Success`
 - `Log(String)` — emits an `info!` log line
-- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn (processed max 2/frame by `drain_spawn_queue_system`); `id` auto-generated if omitted; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees
+- `Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn (processed max 2/frame by `drain_spawn_queue_system`); `id` auto-generated if omitted, and supports `{self}`/`{target}` substitution plus `{new_id}` — a fresh counter value resolved at spawn time so a repeated `{self}` (e.g. a monster that always respawns under the same id) doesn't force the same derived id every time; see the `{new_id}` substitution note below for what it does and doesn't guarantee; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn (handles cleared on `LoadScene`)
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
@@ -426,12 +426,36 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `Despawn("{self}")` → `Despawn("box_01")`
 - `PlayAnimationOn { target: "{self}", clip: "open" }` → `target: "box_01"`
 - `EmitEvent("door.opened:{self}")` → `"door.opened:box_01"`
-- `Spawn { prefab: "...", id: "{self}_debris" }` → id `"box_01_debris"`
+- `Spawn { prefab: "...", id: "{self}_debris_{new_id}" }` → id `"box_01_debris_1"`, `"box_01_debris_2"`, ... — a fixed `id: "{self}_debris"` alone would reuse the same literal every time `box_01`'s own id doesn't change, colliding with the previous debris spawn; see `{new_id}` substitution below
 - `ModifyStat(key: "{self}.health", delta: -35.0)` → `key: "box_01.health"` (routes to that entity's `StatMap`)
 - `SetStat(key: "{self}.mana", value: 0.0)` → `key: "box_01.mana"`
 - `ShowDamagePopup(entity: "{self}", amount: -25.0)` → `entity: "box_01"`
 - `SetEntityVisible(entity: "{self}", visible: false)` → `entity: "box_01"`
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → `event: "entity.respawned:box_01"`
+
+Note: `{self}` does not currently resolve inside a dialogue choice's `do_actions` — only in behavior
+files, `rules.ron`, and `state_machine.ron`.
+
+### `{new_id}` substitution
+
+Only supported inside `Action::Spawn`'s `id` field. Resolves to a fresh, monotonically increasing
+counter value at spawn time — use it to avoid reusing the same literal id across repeated spawns
+from the same source, e.g. a monster whose corpse should get its own id every death even though
+the monster itself always respawns under the same stable id:
+
+```ron
+Spawn(prefab: "zombie_corpse", id: "{self}_corpse_{new_id}")
+```
+
+- Guarantees no collision against other `{new_id}`/auto-generated ids **within the current
+  scene** — it does *not* guard against colliding with a hand-authored literal id of the same
+  shape (e.g. `id: "crate_{new_id}"` can still collide with a scene-placed entity literally named
+  `"crate_1"`). A collision either way logs a `warn!`.
+- An id built with `{new_id}` can't be referenced by another RON file afterward — only that
+  entity's own behavior file (`{self}`) or the current target (`{target}`) can address it. Use it
+  only for entities that manage their own lifetime (e.g. despawn themselves on a timer).
+- Resets to 0 on `LoadScene`, same as the auto-generated fallback it shares a counter with — safe,
+  since no spawned entity survives a scene transition anyway.
 
 ### New capabilities
 

@@ -1,0 +1,38 @@
+// Gates the actual gameplay scene behind a click — the click is a real user gesture, which is
+// what lets the browser's WebAudio AudioContext start correctly. Without this, PlaySound/
+// PlayMusicLoop calls that fire before any click/keypress (e.g. this project's score-zone and
+// respawning-gem sounds) hit the browser's autoplay-restriction warning ("The AudioContext was
+// not allowed to start...") and silently produce no audio. Same pattern as
+// 3rd_person_game_demo's start_menu.scene.ron.
+(
+  schema_version: 2,
+  name: "start_menu",
+
+  lighting: (
+    ambient: (0.3, 0.3, 0.35),
+    directional: (
+      color: (1.0, 0.95, 0.85),
+      intensity: 8000.0,
+      rotation_euler_deg: (-30.0, 45.0, 0.0),
+    ),
+  ),
+
+  entities: [],
+
+  ui: [
+    Label((
+      id: "title",
+      text: "Entity Logic Demo",
+      position: (16.0, 16.0),
+      size: (400.0, 40.0),
+      align: Left,
+    )),
+    Button((
+      id: "start_button",
+      text: "Start",
+      action: "ui.start_game",
+      position: (100.0, 100.0),
+      size: (300.0, 65.0),
+    )),
+  ],
+)

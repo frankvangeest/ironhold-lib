@@ -125,6 +125,49 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 - `TransferItem(from: "{self}", to: "player", item_key: "loot")` → both `from` and `to` are substituted independently
 - `OpenShop("{self}")` → the merchant ID becomes the entity's spawn ID (looks up that entity's `MerchantDef`)
 
+**`{new_id}` substitution** — independent of `{self}`/`{target}`, and supported on `Spawn`'s
+`id: Option<String>` only. (Not "the only `Option<String>` action field" — `Spawn.spawn_point`,
+`SpawnEffect.entity`, and `ProjectDecal.entity` are also `Option<String>`, but each of those
+*references* an existing name, so a freshly-minted id is meaningless there; `id` is the only field
+where minting a new identity makes sense.) Resolves to a fresh, monotonically increasing counter
+value (`SpawnRegistry.counter` — the same counter that already backs the auto-generated id used
+when `id` is omitted entirely) — use it to compose an id that won't collide with an earlier spawn
+from the same source, e.g. `Spawn(prefab: "...", id: "{self}_corpse_{new_id}")`, so a slot that
+spawns the same corpse id (`{self}` is always the *same* literal for a given monster slot, since it
+always respawns under its own stable id) more than once in a scene's lifetime doesn't reuse the
+same literal. **This is not an absolute uniqueness guarantee** — it only guarantees no collision
+among ids produced by `{new_id}`/the auto-generated fallback; a hand-authored literal id of the
+same shape (e.g. a scene-placed entity literally named `"crate_1"`) can still collide with a
+`{new_id}`-derived `"crate_1"`, since `SpawnRegistry.entities` is one flat namespace regardless of
+how an id was derived. `action_executor.rs` warns if the resolved id is already registered (same
+diagnostic that now also covers the pre-existing plain-literal-collision case), and separately
+warns if the resolved id still contains a literal `{` (a typo'd `{new_id}`, or `{self}`/`{target}`
+authored somewhere that doesn't resolve them — see below).
+
+**The resolved id is not observable from other RON files.** Only the spawned entity's own
+behavior file can reference it afterward (via `{self}`), or whatever currently holds
+`CurrentTarget` (via `{target}`) — a literal `Despawn("thing_{new_id}")` typed into `rules.ron`
+will never resolve, since `{new_id}` only exists as a token at `Action::Spawn` authoring time, not
+as a value anything else can look up. Use `{new_id}` only for entities that manage their own
+lifetime (despawn themselves, or are reached via `{target}`).
+
+**`{self}` does not currently resolve inside a dialogue choice's `Spawn.id`** —
+`capabilities/dialogue.rs`'s `substitute_self_in_action` has no `Action::Spawn` arm (falls through
+to `other => other`), a pre-existing gap unrelated to `{new_id}`. `{new_id}` still resolves
+correctly there regardless, since it's resolved later, at the executor — but don't rely on
+`{self}` inside a dialogue-authored `Spawn.id` until that gap is closed.
+
+Unlike `{self}`/`{target}` — resolved by the interpreter systems (`message_interpreter.rs`) before
+the action reaches `ActionQueue` — `{new_id}` is resolved by `action_executor.rs`'s `Action::Spawn`
+arm itself, at the moment `id` is actually consumed; this is deliberate, not an inconsistency —
+it's the only place with mutable access to the counter without threading a new resource through
+every interpreter call site for a token exactly one field uses, and resolving downstream of every
+interpreter is what makes it work uniformly regardless of which of the three interpreters (or
+dialogue) queued the action. Repeated `{new_id}` occurrences in one `id` string all resolve to the
+same counter value (one id per spawn, not one per occurrence). Resets to 0 on `LoadScene`, exactly
+like the auto-generated fallback it shares a counter with — safe, since no entity from a prior
+scene (however its id was derived) survives the `LevelEntity` teardown a `LoadScene` performs.
+
 **`{target}` substitution** — in global rules.ron, state_machine.ron, and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in all three interpreter systems before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
 
 **Per-player targeting (Phase 1, `planning/features/per_player_split_screen_targeting.md`)** —
