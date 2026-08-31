@@ -19,8 +19,14 @@ wasm-bindgen = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Location", "UrlSearchParams"] }
 
+# `wasm-opt` was previously disabled here (`wasm-opt = false`) -- re-enabling it with `-Oz`
+# (2026-08-31) cut the release ironhold_web_bg.wasm from 93.2 MiB to 30.6 MiB, a 67% reduction,
+# with no observed behavior change across a full manual playtest. Binaryen's `-Oz` is the size-
+# focused optimization level, matching the root Cargo.toml's `opt-level = "s"` intent. Do NOT
+# disable this again without re-measuring -- it is the single largest lever on this binary's size
+# relative to the GitHub Pages 100 MiB hard limit (95 MiB warn threshold).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = ["-Oz"]
 
 [features]
 inspector = ["ironhold_core/inspector"]
