@@ -21,12 +21,16 @@ good: at_entity rationale, the id-reuse guard, why `SetDespawnTimer` not `EmitEv
 `global_on` not state-scoped, the corpse-specific `animation_policy` rationale, and the
 panels_open/target-clear notes. Do not re-flag it as v1.
 
-**Remaining designer-facing gap:** there is **no single "adding a 4th monster type" checklist**.
-The artifacts are scattered across the section as prose asides. The full list is now SEVEN items:
-(1) `{monster}_corpse` prefab, (2) a NEW `corpse_policy_{monster}.ron`, (3) `animation_policy:`
-pointing at it, (4) the monster behavior's `swap_to_corpse` Despawn→Spawn→Despawn trio,
-(5) a `spawn_point`, (6) one `global_on` `monster.respawn:{id}` rule, (7) `PreloadPrefab` for the
-corpse. Only (4)/(6) and "the shared behavior needs no changes" are called out explicitly.
+**The 6-step "Adding a corpse for a new monster type" checklist NOW EXISTS** in docs/30 (~636-656)
+— that gap is closed. Its step 3 still said "Despawn → Spawn → Despawn trio" after the `{new_id}`
+retrofit removed the guard Despawn (now just Spawn → Despawn); re-check that wording.
+
+**`{new_id}` retrofit (2026-08-30, uncommitted on `integration`):** corpse ids became
+`"{self}_corpse_{new_id}"` and the `Despawn("{self}_corpse")` guard was dropped from all three
+monster behaviors — multiple corpses from the same slot now coexist for up to 300s. Recurring
+review trap: the "Key notes" bullets at the END of docs/30's corpse section (~730-751) still
+described the old guard/id-reuse residual and cited a backlog Icebox item this change resolves.
+When any corpse mechanic changes, read the section's tail bullets, not just the prose above them.
 
 **Corpse-policy footgun:** `corpse_policy_zombie.ron` carries
 `animation_sources: ["anim_zombie","anim_locomotion","anim_hit_death"]` but the snake and spider
