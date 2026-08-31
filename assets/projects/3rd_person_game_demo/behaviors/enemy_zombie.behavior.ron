@@ -11,6 +11,13 @@
 // armed at death, independent of whether the corpse ever gets looted — it's caught by a global
 // rule in logic/state_machine.ron, since by the time it fires this entity (and its per-entity
 // behavior state) no longer exists to catch it itself.
+//
+// Each corpse spawns under a fresh id (`"{self}_corpse_{new_id}"`, the monotonic `{new_id}`
+// token — see docs/30_runtime_events_and_logic.md's "`{new_id}` substitution" section) rather
+// than the old fixed `"{self}_corpse"` literal, so repeated kills of this same slot let every
+// corpse keep decaying/being lootable independently instead of an older, still-decaying corpse
+// being sacrificed early to avoid an id collision. `{new_id}` won't repeat within one scene run,
+// but is not a guarantee against colliding with a hand-authored literal id of the same shape.
 (
     schema_version: 1,
     initial_state: "alive",
@@ -75,11 +82,7 @@
                 (
                     event: "zombie.swap_to_corpse:{self}",
                     do_actions: [
-                        // Guard against a still-lingering earlier corpse under this exact id (up
-                        // to 5 minutes old if unlooted) before this entity's own next death cycle
-                        // reuses the same derived id — idempotent no-op if none exists yet.
-                        Despawn("{self}_corpse"),
-                        Spawn(prefab: "zombie_corpse", id: "{self}_corpse", at_entity: "{self}"),
+                        Spawn(prefab: "zombie_corpse", id: "{self}_corpse_{new_id}", at_entity: "{self}"),
                         // Not an immediate Despawn: the corpse spawns Visibility::Hidden and only
                         // reveals once its animation_policy RON loads and its frozen death pose is
                         // confirmed applied (several frames, longer on a cold web fetch) — see

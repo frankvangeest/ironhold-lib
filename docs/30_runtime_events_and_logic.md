@@ -556,8 +556,7 @@ by a global rule that no longer depends on the original entity existing.
     (
       event: "zombie.swap_to_corpse:{self}",
       do_actions: [
-        Despawn("{self}_corpse"),                                       // guard — see below
-        Spawn(prefab: "zombie_corpse", id: "{self}_corpse", at_entity: "{self}"),
+        Spawn(prefab: "zombie_corpse", id: "{self}_corpse_{new_id}", at_entity: "{self}"),
         Despawn("{self}"),
       ],
     ),
@@ -571,19 +570,19 @@ swap fires, so the corpse always appears exactly where the monster died, even th
 patrol and their death position varies run to run. A fixed `position:`/`spawn_point:` would not
 work here for that reason.
 
-**The `Despawn("{self}_corpse")` guard exists because the corpse's id is deliberately reused**
-across every death of the same monster slot (`zombie_01` always produces `zombie_01_corpse`, never
-a uniquely-numbered id). This keeps the respawn rule below simple — a fixed `spawn_point`, not a
-counter — at the cost of a real constraint: **a `SetDespawnTimer` (see below), not
-`EmitEventAfterDelay`, must be what despawns a corpse.** `EmitEventAfterDelay` fires a global,
-string-matched event with no owner — a decay timer armed by an *older* corpse generation would
-still match and despawn a *newer* corpse sharing the same reused id, arriving well before the new
-corpse's own legitimate decay time. This was found, during this feature's own review pass, to
-compound every kill cycle and eventually make a slot's loot permanently unobtainable — not a
-theoretical concern. `SetDespawnTimer` avoids the whole class of bug: the timer is a component
-living directly on the corpse entity, so despawning that entity (via this guard, or via decay)
-removes the timer with it — a later corpse under the same id starts with no leftover timer to
-compete with its own.
+**Each corpse's id includes `{new_id}`** (see "`{new_id}` substitution" above), a fresh,
+monotonically increasing suffix appended at the moment the `Spawn` actually
+executes — so `zombie_01`'s corpses are `zombie_01_corpse_7`, `zombie_01_corpse_12`, and so on,
+never the same literal twice. This means repeated kills of the same monster slot let every corpse
+coexist and decay/be looted independently, instead of an earlier design where the id was a fixed,
+reused `"{monster}_corpse"` literal and an older, still-decaying corpse had to be pre-emptively
+despawned to avoid two corpses colliding on the same id. **A `SetDespawnTimer` (see below), not
+`EmitEventAfterDelay`, is still what despawns a corpse** — not because of an id-collision risk
+(unique ids make that impossible now), but because `SetDespawnTimer` is simply the right tool for
+a per-entity decay timer: it's a component living directly on the corpse entity, so it Just Works
+for any number of simultaneously-decaying corpses with zero extra event-name bookkeeping, where
+`EmitEventAfterDelay` would need you to manually keep each corpse's decay event globally unique
+yourself.
 
 **Global respawn rule** (`logic/state_machine.ron`'s top-level `global_on:`, not `"playing"`'s
 own state-scoped `on:` list):
@@ -644,8 +643,8 @@ since nothing ever drives its skeleton.
    `animation_policy:` pointing at step 1, `interactable:`, `inventory:`, and
    `behavior: "behaviors/lootable_corpse.behavior.ron"` (shared — do not copy or edit it).
 3. `behaviors/enemy_{monster}.behavior.ron` — the `dead` state's two `EmitEventAfterDelay` lines
-   and the `swap_to_corpse` handler's Despawn → Spawn → Despawn trio (see the zombie example
-   above).
+   and the `swap_to_corpse` handler's Spawn → Despawn pair (`id: "{self}_corpse_{new_id}"`, see the
+   zombie example above).
 4. `scenes/main.scene.ron` — a `spawn_points:` entry per instance, matching that entity's own
    placement/`yaw_deg`.
 5. `logic/state_machine.ron`'s `global_on:` — one `monster.respawn:{literal_id}` rule per
@@ -700,9 +699,11 @@ point at the same file with no changes needed:
 
 `SetDespawnTimer(entity, delay_secs)` arms a self-contained despawn on the named entity — after
 `delay_secs` of real time it despawns automatically, no event round-trip and no `on:` handler
-needed to react to it (unlike `EmitEventAfterDelay`, which needs a paired `on:` handler and shares
-the corpse-id-reuse hazard described above). Re-arming it (calling it again on the same entity, as
-the `fresh` → `looted` transition does) overwrites the previous countdown rather than stacking.
+needed to react to it (unlike `EmitEventAfterDelay`, which needs a paired `on:` handler and, for a
+timer whose target's id might later be reused by an unrelated entity, needs careful ownership to
+avoid firing against the wrong one — see `crates/ironhold_core/src/capabilities/despawn_timer.rs`).
+Re-arming it (calling it again on the same entity, as the `fresh` → `looted` transition does)
+overwrites the previous countdown rather than stacking.
 
 **Why not the same entity? (superseded v1 approach)** An earlier version of this feature put
 `interactable:`/`inventory:` directly on the monster prefab and split its `dead` state into
@@ -731,9 +732,9 @@ two timers are only independent if they belong to two different entities, hence 
   tab-targeting (all gated on `panels_open == 0`) until the next `LoadScene`. The same guard applies
   to `OpenShop`.
 - **`Action::Despawn` closes the container panel if the despawned entity is the one currently
-  open.** Without this, a corpse decaying (or the id-reuse guard above) while its own loot panel is
-  open would leave a ghost panel bound to a gone entity and `panels_open` stuck above 0,
-  permanently blocking interact/pickup/tab-targeting.
+  open.** Without this, a corpse decaying while its own loot panel is open would leave a ghost
+  panel bound to a gone entity and `panels_open` stuck above 0, permanently blocking
+  interact/pickup/tab-targeting.
 - **The player's target selection clears when the targeted entity is genuinely despawned, not just
   hidden.** `target_auto_clear_system` originally only checked `Visibility::Hidden` on an entity
   still present in `SpawnRegistry` — correct for the old hide-in-place revival, but a real
@@ -744,12 +745,10 @@ two timers are only independent if they belong to two different entities, hence 
   cleaned up automatically by `stat_widget_cleanup_system` (mirrors the pre-existing
   `nameplate_cleanup_system` pattern) — without it, `Action::Despawn` alone left every stat-bar
   update system logging a "stat_key not found" warning every frame for the gone entity.
-- Corpse-id reuse has one accepted, narrow residual: if the same monster slot dies again while its
-  previous corpse is *still on screen* (not yet decayed or looted), the guard despawn silently
-  replaces the old corpse with the new one — the older corpse's loot, if unlooted, is lost rather
-  than merged. Logged to `planning/backlog.md`'s Icebox ("Monotonic per-entity id generation for
-  RON action substitution") as a real fix would need a counter-based id primitive RON doesn't have
-  today.
+- **Corpses no longer collide on id.** Each corpse spawns under a fresh, unique
+  `"{self}_corpse_{new_id}"` id (see "`{new_id}` substitution" above) — if the same monster slot
+  dies again while its previous corpse is still on screen, both corpses simply coexist and decay/
+  are lootable independently, rather than the newer one replacing the older.
 - See `crates/ironhold_core/src/capabilities/inventory.rs` for `Inventory`/`ContainerPanel`,
   `crates/ironhold_core/src/capabilities/despawn_timer.rs` for `SetDespawnTimer`'s implementation,
   and `assets/projects/3rd_person_game_demo/behaviors/{enemy_zombie,lootable_corpse}.behavior.ron`

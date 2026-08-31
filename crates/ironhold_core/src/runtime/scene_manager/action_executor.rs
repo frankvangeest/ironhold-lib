@@ -305,9 +305,9 @@ pub fn action_executor_system(
                     spawn_params.registry.entities.remove(&target_id);
 
                     // If the despawned entity was the currently-open container (e.g. a lootable
-                    // corpse decaying, or the id-reuse guard's own Despawn firing while its panel
-                    // is still open), tear the panel down the same way CloseContainer does.
-                    // Otherwise this leaves a ghost panel bound to a gone entity and
+                    // corpse decaying while its panel is still open), tear the panel down the
+                    // same way CloseContainer does. Otherwise this leaves a ghost panel bound to
+                    // a gone entity and
                     // `panels_open` stuck above 0, permanently blocking interact/pickup/
                     // tab-targeting (debug-detective finding, monster_corpse_loot.md v2).
                     if scene_state.container_ui.active_container == Some(entity) {

@@ -20,15 +20,15 @@
 // the policy loads, closing that window entirely — see corpse_policy_zombie.ron.
 //
 // Decay uses SetDespawnTimer, not EmitEventAfterDelay + an on: handler reacting to a global
-// string event. This corpse's own id (`"{self}_corpse"`) is deliberately REUSED across every
-// death of the same monster slot (see the monster behavior files' Despawn-before-Spawn guard
-// comment) — a global delayed event has no owner, so a decay timer armed by an OLDER corpse
-// generation would still fire and despawn a NEWER corpse that happens to share the same id,
-// well before its own legitimate decay time (found by debug-detective review: this compounds
-// every kill cycle and eventually makes a slot's loot permanently unobtainable). SetDespawnTimer
-// lives directly on the corpse entity itself, so it can only ever affect that one entity/
-// generation — despawning the corpse through any other means (e.g. the id-reuse guard's own
-// Despawn) removes the timer with it, and it can never leak onto a later, unrelated corpse.
+// string event. This corpse's own id is now a fresh, unique `"{self}_corpse_{new_id}"` per spawn
+// (the monster behavior files' `{new_id}` token — see enemy_zombie.behavior.ron's comment;
+// retrofitted from an earlier, since-superseded design where the id was a fixed, reused
+// `"{self}_corpse"` literal, and a global delayed event could then fire against the WRONG, newer
+// corpse generation that happened to reuse the same id — see `planning/claude_suggestions.md`'s
+// resolved retrofit note for the full history). SetDespawnTimer remains the right choice even with
+// unique ids: it lives directly on the corpse entity itself as a component, so N simultaneously-
+// decaying corpses from repeated kills of the same slot each just work automatically, with zero
+// extra global-event-name bookkeeping needed to keep them from interfering with each other.
 (
     schema_version: 1,
     initial_state: "fresh",

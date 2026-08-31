@@ -8,16 +8,21 @@ use crate::schema::Action;
 ///
 /// Unlike `EmitEventAfterDelay` + a `Despawn` action reacting to a global string event, this
 /// timer lives directly on the entity it targets, so it can never leak across entity generations
-/// that happen to share a derived spawn id — e.g. `monster_corpse_loot.md`'s `"{self}_corpse"`,
-/// deliberately reused across every death of the same monster slot. A global delayed event has no
+/// that happen to share a spawn id — the failure mode this was originally built to close:
+/// `monster_corpse_loot.md`'s corpses used a fixed, deliberately-reused `"{self}_corpse"` id
+/// before `corpse_new_id_retrofit` (2026-08-31) gave each corpse its own unique
+/// `"{self}_corpse_{new_id}"` id instead (see `docs/30_runtime_events_and_logic.md`'s "Lootable
+/// corpse (loot-on-death)" section). Under that older design, a global delayed event had no
 /// owner: `corpse.decay:zombie_01_corpse` armed by one corpse generation would still fire and
-/// match whichever entity currently holds that id, including an unrelated *later* corpse spawned
+/// match whichever entity currently held that id, including an unrelated *later* corpse spawned
 /// under the same reused id — found by debug-detective review to be a real, escalating bug over
 /// extended play (each kill cycle left one dangling timer; after enough cycles a slot's corpses
 /// were despawned within seconds of spawning, permanently, well before their intended decay).
 /// A component-based timer can't have this problem by construction: despawning the entity through
-/// any other means (e.g. the corpse-id-reuse guard's own `Despawn`) removes this component with
-/// it, and a still-ticking timer can only ever affect the one entity it's actually attached to.
+/// any other means removes this component with it, and a still-ticking timer can only ever affect
+/// the one entity it's actually attached to — this remains the right default for any per-entity
+/// decay timer even now that ids are unique, since it needs no global event-name bookkeeping at
+/// all to stay safe.
 #[derive(Component)]
 pub struct DespawnTimer {
     pub remaining_secs: f32,

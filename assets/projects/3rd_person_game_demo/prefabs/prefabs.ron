@@ -426,8 +426,10 @@
     ),
 
     // ── Lootable corpses (planning/features/monster_corpse_loot.md v2) ──────────────
-    // Spawned via `Spawn(prefab: "..._corpse", id: "{self}_corpse", at_entity: "{self}")` right
-    // where each monster dies, replacing it. Reuse the live monster's own GLB model as a
+    // Spawned via `Spawn(prefab: "..._corpse", id: "{self}_corpse_{new_id}", at_entity: "{self}")`
+    // right where each monster dies, replacing it — the `{new_id}` monotonic token gives every
+    // corpse a fresh, unique id, so repeated kills of the same slot let corpses coexist/decay
+    // independently instead of an older one being sacrificed early. Reuse the live monster's own GLB model as a
     // placeholder fallen pose — no dedicated corpse art exists yet, an accepted v2 limitation
     // (see the plan's "Open questions"). No `trigger_zone` (the Dynamic-body mass bug found
     // during v1 doesn't apply here since these are Prop-kind/no rigid body, but there's also no

@@ -8,6 +8,8 @@
 // supersedes the old single-"dead"-state design entirely — planning/backlog.md's "Stale
 // EmitEventAfterDelay fires after entity state exit" bug described a `spider.hide:{self}` timer
 // that no longer exists in this file at all; if that symptom resurfaces, it is not this mechanism.
+// Each corpse spawns under a fresh, unique id (`{new_id}` — see enemy_zombie.behavior.ron's
+// comment) so repeated kills let every corpse decay/loot independently.
 (
     schema_version: 1,
     initial_state: "alive",
@@ -72,8 +74,7 @@
                 (
                     event: "spider.swap_to_corpse:{self}",
                     do_actions: [
-                        Despawn("{self}_corpse"),
-                        Spawn(prefab: "spider_corpse", id: "{self}_corpse", at_entity: "{self}"),
+                        Spawn(prefab: "spider_corpse", id: "{self}_corpse_{new_id}", at_entity: "{self}"),
                         // Not an immediate Despawn: the corpse spawns Visibility::Hidden and only
                         // reveals once its animation_policy RON loads and its frozen death pose is
                         // confirmed applied (several frames, longer on a cold web fetch) — see

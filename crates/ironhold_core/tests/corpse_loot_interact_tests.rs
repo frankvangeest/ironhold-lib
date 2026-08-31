@@ -356,6 +356,30 @@ fn advance(app: &mut App, secs: f32) {
     }
 }
 
+/// A real death-spawned corpse's id is `"{monster_id}_corpse_{new_id}"` — the `{new_id}` suffix
+/// is a monotonic counter value, never predictable in a test, so lookups against a real corpse
+/// spawn go by prefix scan instead of a literal key. Panics if the count of matching entries
+/// doesn't exactly match `expected_count`, so a test asserting "exactly one corpse" can't
+/// silently pass against zero or accidentally match a second, unrelated corpse.
+fn corpses_by_prefix(app: &App, monster_id: &str, expected_count: usize) -> Vec<Entity> {
+    let prefix = format!("{monster_id}_corpse_");
+    let found: Vec<Entity> = app
+        .world()
+        .resource::<SpawnRegistry>()
+        .entities
+        .iter()
+        .filter(|(id, _)| id.starts_with(&prefix))
+        .map(|(_, e)| *e)
+        .collect();
+    assert_eq!(
+        found.len(),
+        expected_count,
+        "expected exactly {expected_count} corpse(s) with id prefix {prefix:?}, found {}",
+        found.len()
+    );
+    found
+}
+
 // ── Monster death → corpse swap (the mechanism `at_entity` exists for) ─────────────────────
 
 #[test]
@@ -382,8 +406,7 @@ fn zombie_death_swaps_to_a_corpse_at_the_same_position_and_despawns_the_original
         !app.world().resource::<SpawnRegistry>().entities.contains_key("zombie_01"),
         "the original entity must be despawned once its corpse swap fires and its overlap timer elapses"
     );
-    let corpse = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
-        .expect("a zombie_01_corpse entity must exist after the swap");
+    let corpse = corpses_by_prefix(&app, "zombie_01", 1)[0];
 
     let corpse_pos = app.world().get::<Transform>(corpse).unwrap().translation;
     assert_eq!(
@@ -400,8 +423,14 @@ fn zombie_death_swaps_to_a_corpse_at_the_same_position_and_despawns_the_original
     );
 }
 
+/// Post-`corpse_new_id_retrofit` (2026-08-31): each corpse spawns under a fresh, unique
+/// `"{self}_corpse_{new_id}"` id instead of the old fixed, reused `"{self}_corpse"` literal, so
+/// there is no longer an id-collision guard to test — dying again before an earlier corpse
+/// decays must let BOTH corpses coexist in the registry as two distinct, independently-alive
+/// entities, not replace/orphan one for the other. See `planning/claude_suggestions.md`'s
+/// resolved retrofit note for the superseded guard-based design this test used to cover.
 #[test]
-fn dying_again_before_the_old_corpse_decays_does_not_orphan_the_registry() {
+fn dying_again_before_the_old_corpse_decays_lets_both_corpses_coexist() {
     let mut app = setup_test_app();
     insert_real_catalogs(&mut app);
     app.update();
@@ -409,21 +438,32 @@ fn dying_again_before_the_old_corpse_decays_does_not_orphan_the_registry() {
     spawn_real_monster(&mut app, "enemy_zombie", "behaviors/enemy_zombie.behavior.ron", "zombie_01", Vec3::ZERO);
     kill(&mut app, "zombie_01");
     advance(&mut app, 4.5);
-    assert!(app.world().resource::<SpawnRegistry>().entities.contains_key("zombie_01_corpse"));
+    let first_corpse = corpses_by_prefix(&app, "zombie_01", 1)[0];
 
     // A second "zombie_01" (as the real respawn spawner would produce) dies again while the
-    // first corpse is still alive — the Despawn("{self}_corpse") guard must clear the stale one
-    // before the new one is spawned, so the registry never points at two different entities for
-    // the same id.
+    // first corpse is still alive and well within its own 300s decay window.
     spawn_real_monster(&mut app, "enemy_zombie", "behaviors/enemy_zombie.behavior.ron", "zombie_01", Vec3::new(1.0, 0.0, 1.0));
     kill(&mut app, "zombie_01");
     advance(&mut app, 4.5);
 
-    let corpse = *app.world().resource::<SpawnRegistry>().entities.get("zombie_01_corpse")
-        .expect("a corpse must still exist under the same derived id");
-    assert!(app.world().get_entity(corpse).is_ok(), "the id must point at a real, live entity, not a stale reference");
-    let pos = app.world().get::<Transform>(corpse).unwrap().translation;
-    assert_eq!(pos, Vec3::new(1.0, 0.0, 1.0), "the corpse must be the SECOND death's, not an orphaned first one");
+    let both = corpses_by_prefix(&app, "zombie_01", 2);
+    assert!(
+        both.contains(&first_corpse),
+        "the first death's corpse must still be alive, not despawned by the second death"
+    );
+    let second_corpse = *both.iter().find(|e| **e != first_corpse).unwrap();
+    assert!(app.world().get_entity(first_corpse).is_ok(), "first corpse must be a real, live entity");
+    assert!(app.world().get_entity(second_corpse).is_ok(), "second corpse must be a real, live entity");
+    assert_eq!(
+        app.world().get::<Transform>(first_corpse).unwrap().translation,
+        Vec3::ZERO,
+        "the first corpse must keep the first death's position"
+    );
+    assert_eq!(
+        app.world().get::<Transform>(second_corpse).unwrap().translation,
+        Vec3::new(1.0, 0.0, 1.0),
+        "the second corpse must have the second death's position"
+    );
 }
 
 // ── Corpse loot/decay behavior (lootable_corpse.behavior.ron, shared by all three monsters) ──
@@ -519,13 +559,17 @@ fn two_corpses_in_range_does_not_soft_lock_interact() {
 
 // ── Regressions found by the final mandatory review pass (debug-detective) ─────────────────
 
-/// Finding 1: reusing `"{self}_corpse"` across every death of the same monster slot means a
-/// decay timer armed by an OLDER corpse generation must never be able to affect a NEWER corpse
-/// spawned under the same id after the old one is despawned. `EmitEventAfterDelay` (a global,
-/// string-matched event with no per-entry owner) could not guarantee this; `SetDespawnTimer`
-/// (a component living directly on the entity) can, by construction — despawning corpse A
-/// removes its `DespawnTimer` along with every other component it has, so there is no timer left
-/// to mistakenly fire against corpse B later.
+/// Finding 1 (historical — real corpses no longer reuse an id at all post-`corpse_new_id_retrofit`,
+/// see the module-level "dying_again" test above; kept as a general invariant test since a
+/// designer CAN still hand-author two entities sharing a literal id by mistake elsewhere): a
+/// decay timer armed by an OLDER entity must never be able to affect a NEWER, unrelated entity
+/// that happens to reuse the same id after the old one is despawned. `EmitEventAfterDelay` (a
+/// global, string-matched event with no per-entry owner) could not guarantee this;
+/// `SetDespawnTimer` (a component living directly on the entity) can, by construction — despawning
+/// corpse A removes its `DespawnTimer` along with every other component it has, so there is no
+/// timer left to mistakenly fire against corpse B later. This test manufactures the id collision
+/// directly (`spawn_real_corpse` with a hand-picked literal id, not the real death→spawn path,
+/// which no longer produces collisions on its own) purely to exercise that invariant.
 #[test]
 fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its_id() {
     let mut app = setup_test_app();
@@ -536,8 +580,9 @@ fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its
     let corpse_a = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
     advance(&mut app, 100.0); // well within A's own 300s window — not decayed on its own yet
 
-    // Simulate the real id-reuse guard: Despawn("zombie_01_corpse") firing right before the next
-    // Spawn under the same id (see enemy_zombie.behavior.ron's "dead" state).
+    // Manufacture an id collision directly (this manual Despawn stands in for whatever caused
+    // corpse A to be replaced — no longer the monster's own death sequence, which never reuses a
+    // corpse id post-retrofit; see the doc comment above).
     app.world_mut().resource_mut::<ActionQueue>().push(Action::Despawn("zombie_01_corpse".to_string()));
     app.update();
     assert!(app.world().get_entity(corpse_a).is_err(), "corpse A must be gone after the guard despawn");
@@ -558,7 +603,7 @@ fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its
 }
 
 /// Finding 3: despawning the entity behind the currently-open container panel (e.g. its own
-/// decay firing, or the id-reuse guard's Despawn) must tear the panel down the same way
+/// decay firing, or any other Despawn) must tear the panel down the same way
 /// `CloseContainer` does — otherwise the panel is left bound to a gone entity and `panels_open`
 /// stuck above 0, permanently blocking interact/pickup/tab-targeting.
 #[test]

@@ -5,7 +5,9 @@
 //
 // Death (planning/features/monster_corpse_loot.md v2) — same pattern as
 // enemy_zombie.behavior.ron: this entity never revives; it swaps for a separate `snake_corpse`
-// entity at death and despawns, with a fixed respawn timer armed independently before that.
+// entity at death and despawns, with a fixed respawn timer armed independently before that. Each
+// corpse spawns under a fresh, unique id (`{new_id}` — see enemy_zombie.behavior.ron's comment)
+// so repeated kills let every corpse decay/loot independently.
 (
     schema_version: 1,
     initial_state: "alive",
@@ -70,8 +72,7 @@
                 (
                     event: "snake.swap_to_corpse:{self}",
                     do_actions: [
-                        Despawn("{self}_corpse"),
-                        Spawn(prefab: "snake_corpse", id: "{self}_corpse", at_entity: "{self}"),
+                        Spawn(prefab: "snake_corpse", id: "{self}_corpse_{new_id}", at_entity: "{self}"),
                         // Not an immediate Despawn: the corpse spawns Visibility::Hidden and only
                         // reveals once its animation_policy RON loads and its frozen death pose is
                         // confirmed applied (several frames, longer on a cold web fetch) — see

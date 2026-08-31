@@ -447,31 +447,41 @@ entity like a lootable corpse at the world origin would be worse than not spawni
 before `drain_spawn_queue_system` ever reads it, so resolving `at_entity` there too means a
 same-frame `Despawn("{self}")` immediately after can never race it.
 
-**Corpse id collisions are handled structurally, not by inventing a uniqueness token.** The
-corpse's derived id (`"{self}_corpse"`) is stable and safe to reuse across every future death of
-this exact monster slot, because the *live* monster always respawns under its own original,
-unchanging id (`Spawn(..., id: "zombie_01", spawn_point: ...)` from a global rule — see below), so
-`{self}` at the moment of any future death is always the same literal string. The one remaining
-risk — a second death reusing `"{self}_corpse"` while an *earlier* corpse under that same id is
-still mid-decay (up to 5 minutes if unlooted) — is closed by an idempotent `Despawn("{self}_corpse")`
-immediately before every `Spawn(id: "{self}_corpse", ...)` call. The tradeoff this accepts: a
-corpse's actual observed lifetime is `min(natural decay, time until this slot's next death)`,
-never a guaranteed full 5 minutes if the player kills that spot fast enough — a bounded, honestly
-documented edge case rather than an unbounded id-collision bug.
+**Corpse id collisions are now handled by giving every corpse a unique id, retrofitted from an
+earlier structural-reuse design (`corpse_new_id_retrofit`, 2026-08-31 — see `planning/
+claude_suggestions.md`'s resolved retrofit note for the full before/after).** Each monster behavior
+file (`enemy_zombie`/`enemy_snake`/`enemy_spider.behavior.ron`) spawns its corpse with
+`id: "{self}_corpse_{new_id}"` — the monotonic `{new_id}` token (see "Monotonic per-entity id
+generation" below) — instead of the fixed, reused `"{self}_corpse"` literal the v2 design
+originally shipped with. **Superseded, kept as a cautionary example of the failure mode this
+retrofit closed:** the original design relied on the *live* monster always respawning under its
+own stable id (`Spawn(..., id: "zombie_01", spawn_point: ...)` from a global rule — see below), so
+`{self}` at any future death was always the same literal, and paired that with an idempotent
+`Despawn("{self}_corpse")` immediately before every `Spawn(id: "{self}_corpse", ...)` call to
+sacrifice a still-decaying earlier corpse rather than let two corpses collide on one id — a
+deliberate, bounded tradeoff (`min(natural decay, time until this slot's next death)` instead of a
+guaranteed full 5 minutes) rather than an unbounded id-collision bug. With ids now unique, no
+Despawn-before-Spawn guard is needed at all: repeated kills of the same slot simply let every
+corpse coexist and decay/be looted independently, closer to the actually-intended design.
 
 **Corpse decay uses `Action::SetDespawnTimer`, not `EmitEventAfterDelay` — this is load-bearing,
-not a style choice.** An earlier version of `lootable_corpse.behavior.ron` armed
-`EmitEventAfterDelay(event: "corpse.decay:{self}", ...)` and handled it with an `on:` → `Despawn`.
-`debug-detective` proved this unsafe specifically because of the id-reuse guard above: a global,
-string-matched delayed event has no owner, so a decay timer armed by an *older* corpse generation
-can still fire and despawn a completely different, *newer* corpse that happens to share the same
-reused id — and because every kill cycle leaves one more such stale timer in the global queue, this
-compounds over extended play and eventually makes a slot's loot permanently unobtainable, not just
-"corpse decays a little early." `SetDespawnTimer` (`capabilities/despawn_timer.rs`) fixes this by
-construction: it's a `DespawnTimer` component living directly on the target entity (modeled on the
-existing `DamagePopup`/`damage_popup_system` self-despawn pattern), ticked by `despawn_timer_system`
-and removed automatically when its entity despawns for any reason — a stale timer can never reach a
-different, later entity, because there is no global registry of timers for it to leak through.
+not a style choice, though the specific bug it was chosen to avoid is now structurally impossible
+regardless of mechanism (see above — ids can no longer collide across corpse generations at all).**
+An earlier version of `lootable_corpse.behavior.ron` armed `EmitEventAfterDelay(event:
+"corpse.decay:{self}", ...)` and handled it with an `on:` → `Despawn`. `debug-detective` proved
+this unsafe under the *original* reused-id design specifically: a global, string-matched delayed
+event has no owner, so a decay timer armed by an *older* corpse generation could still fire and
+despawn a completely different, *newer* corpse that happened to share the same reused id — and
+because every kill cycle left one more such stale timer in the global queue, this compounded over
+extended play and eventually made a slot's loot permanently unobtainable, not just "corpse decays a
+little early." `SetDespawnTimer` (`capabilities/despawn_timer.rs`) fixes this by construction: it's
+a `DespawnTimer` component living directly on the target entity (modeled on the existing
+`DamagePopup`/`damage_popup_system` self-despawn pattern), ticked by `despawn_timer_system` and
+removed automatically when its entity despawns for any reason — a stale timer can never reach a
+different, later entity, because there is no global registry of timers for it to leak through. Now
+that ids are unique this specific hazard can't recur either way, but `SetDespawnTimer` remains the
+right default for any per-entity decay timer regardless — no global event-name bookkeeping needed
+to keep N simultaneously-decaying corpses from interfering with each other.
 Prefer `SetDespawnTimer` over `EmitEventAfterDelay` + `Despawn` for **any** timer whose target's
 spawn id might later be reused by an unrelated entity, not just this feature's corpses.
 
@@ -485,8 +495,8 @@ slot's next respawn. Fixed (`debug-detective` finding) by treating "not found in
 the same as "hidden."
 
 **`Action::Despawn` closes the container panel if the despawned entity is the one currently
-open.** Without this, decaying (or id-reuse-guard-despawning) a corpse whose loot panel is open at
-that moment leaves `LoadedContainerUi.active_container` pointing at a gone entity and
+open.** Without this, decaying a corpse whose loot panel is open at that moment leaves
+`LoadedContainerUi.active_container` pointing at a gone entity and
 `panels_open` stuck above 0 — the same permanently-blocked interact/pickup/tab-targeting symptom as
 the `OpenContainer` double-count bug below, just reached from the opposite direction (`Despawn`
 never closing, rather than `OpenContainer` over-opening). Fixed (`debug-detective` finding) by
