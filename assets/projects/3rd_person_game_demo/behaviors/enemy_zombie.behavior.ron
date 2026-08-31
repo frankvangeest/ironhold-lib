@@ -7,7 +7,7 @@
 // Death (planning/features/monster_corpse_loot.md v2): this entity never revives — on death it
 // plays its death animation, then swaps itself for a separate `zombie_corpse` entity at the same
 // position (`Spawn(..., at_entity: "{self}")`) and despawns. Looting/decay is entirely the
-// corpse's own concern (behaviors/lootable_corpse.behavior.ron). A fixed 60s respawn timer is
+// corpse's own concern (behaviors/lootable_corpse.behavior.ron). A fixed 30s respawn timer is
 // armed at death, independent of whether the corpse ever gets looted — it's caught by a global
 // rule in logic/state_machine.ron, since by the time it fires this entity (and its per-entity
 // behavior state) no longer exists to catch it itself.
@@ -67,7 +67,7 @@
             name: "dead",
             // npc.dead stops the NPC system from moving the corpse for the remainder of the death
             // animation. Death01 animation is 3.0 s — swap to the corpse once it's finished so the
-            // two never visibly overlap. The 60s respawn timer is armed here (before the swap
+            // two never visibly overlap. The 30s respawn timer is armed here (before the swap
             // despawns this entity) so it survives independent of the swap/corpse lifecycle.
             entry_actions: [
                 EmitEvent("npc.dead:{self}"),
@@ -75,7 +75,7 @@
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
                 EmitEventAfterDelay(event: "zombie.swap_to_corpse:{self}", delay_secs: 3.0),
-                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 60.0),
+                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 30.0),
             ],
             exit_actions: [],
             on: [

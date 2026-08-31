@@ -11,12 +11,12 @@
 
         // Monster respawn (planning/features/monster_corpse_loot.md v2) — must live in global_on,
         // NOT in "playing"'s own on: list: a dying monster arms `monster.respawn:{self}` (a fixed
-        // 60s after death, independent of whether its corpse gets looted) *before* despawning
+        // 30s after death, independent of whether its corpse gets looted) *before* despawning
         // itself, so the event can only ever be caught globally, by literal id — the per-entity
         // behavior file that armed it belongs to an entity that no longer exists by the time it
         // fires, so no per-entity interpreter can react to it. Scoping this to "playing"'s on:
         // list instead (an earlier revision did) is a real bug, not just poor organization: if
-        // the game is in "paused" (or any other global state) at the exact moment the 60s timer
+        // the game is in "paused" (or any other global state) at the exact moment the 30s timer
         // fires, a state-scoped `on:` handler simply never matches and the event is silently
         // dropped — that monster slot then never respawns for the rest of the session.
         // `monster.respawn:{self}` (not a per-type `zombie.respawn:{self}`/etc.) is a uniform
@@ -173,7 +173,7 @@
 
                 // Monster respawn rules moved to the top-level global_on: block — see its comment
                 // for why (a state-scoped on: list here would silently drop the respawn event if
-                // the game happens to be paused when the 60s timer fires).
+                // the game happens to be paused when the 30s timer fires).
 
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_mute",        do_actions: [ ToggleMute                                              ] ),

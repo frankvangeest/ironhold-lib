@@ -67,7 +67,7 @@
                 SpawnEffect(key: "death_poof", entity: "{self}"),
                 ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0)),
                 EmitEventAfterDelay(event: "spider.swap_to_corpse:{self}", delay_secs: 2.5),
-                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 60.0),
+                EmitEventAfterDelay(event: "monster.respawn:{self}", delay_secs: 30.0),
             ],
             exit_actions: [],
             on: [

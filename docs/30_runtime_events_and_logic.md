@@ -550,7 +550,7 @@ by a global rule that no longer depends on the original entity existing.
   entry_actions: [
     // ...death animation, effects...
     EmitEventAfterDelay(event: "zombie.swap_to_corpse:{self}", delay_secs: 3.0), // matches death anim length
-    EmitEventAfterDelay(event: "monster.respawn:{self}",       delay_secs: 60.0),
+    EmitEventAfterDelay(event: "monster.respawn:{self}",       delay_secs: 30.0),
   ],
   on: [
     (
@@ -680,7 +680,7 @@ point at the same file with no changes needed:
         // pattern". Fired from here, not the monster's own death sequence, because the corpse
         // entity doesn't exist yet at the point the monster's Spawn(...) action runs.
         PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true),
-        SetDespawnTimer(entity: "{self}", delay_secs: 300.0),
+        SetDespawnTimer(entity: "{self}", delay_secs: 600.0),
       ],
       on: [ ( event: "entity.interacted:{self}", do_actions: [ OpenContainer("{self}") ] ) ],
     ),
@@ -688,7 +688,7 @@ point at the same file with no changes needed:
       name: "looted",
       entry_actions: [
         CloseContainer,                                        // close before anything else
-        SetDespawnTimer(entity: "{self}", delay_secs: 5.0),
+        SetDespawnTimer(entity: "{self}", delay_secs: 20.0),
       ],
       on: [],
     ),
@@ -709,7 +709,7 @@ overwrites the previous countdown rather than stacking.
 `interactable:`/`inventory:` directly on the monster prefab and split its `dead` state into
 `dead_full`/`dead_looted`, using `SetEntityVisible` to hide the corpse and `entity.respawned` to
 revive it in place. This worked until the feature's actual requirement — the corpse persists for
-up to 5 minutes independent of when the monster respawns (a fixed 1 minute after death) — because
+up to 10 minutes independent of when the monster respawns (a fixed 30s after death) — because
 a same-entity design has no way to keep the monster "dead" (so its own corpse state machine can
 keep tracking loot/decay) while also being independently "alive" (so it can be fought again). The
 two timers are only independent if they belong to two different entities, hence the redesign above.
@@ -717,7 +717,7 @@ two timers are only independent if they belong to two different entities, hence 
 **Key notes:**
 - `container.looted:{id}` only fires when `TakeAllFromContainer` actually transfers at least one
   item — a corpse spawned with no loot never reaches `looted` via this path, and just decays on
-  `fresh`'s own 300s ambient timer instead. This is expected, not a bug: "empty" and "never looted"
+  `fresh`'s own 600s ambient timer instead. This is expected, not a bug: "empty" and "never looted"
   are indistinguishable to this pattern.
 - `CloseContainer` in `looted`'s entry actions runs before `SetDespawnTimer` — entry actions are
   queued FIFO, so the panel is never left open and bound to a corpse that's about to disappear.
@@ -740,7 +740,7 @@ two timers are only independent if they belong to two different entities, hence 
   still present in `SpawnRegistry` — correct for the old hide-in-place revival, but a real
   `Despawn` (this feature's death sequence) removes the entity from the registry outright. Treating
   "not found in the registry" the same as "hidden" prevents a stale target from silently surviving
-  until the same id is reused by that slot's next respawn, up to 60s later.
+  until the same id is reused by that slot's next respawn, up to 30s later.
 - An orphaned `stat_label`/`world_stat_bar` widget (one still tracking a despawned entity) is
   cleaned up automatically by `stat_widget_cleanup_system` (mirrors the pre-existing
   `nameplate_cleanup_system` pattern) — without it, `Action::Despawn` alone left every stat-bar

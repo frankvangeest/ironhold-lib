@@ -111,7 +111,7 @@ fn test_controller() -> CharacterController {
 /// `resolve_pending_behaviors_system` (the real production path) fires the initial state's
 /// `entry_actions` with this exact substitution once a `PendingBehavior` asset loads — this test
 /// file spawns entities directly instead of going through that system, so it must replicate the
-/// same behavior manually or timers those entry actions arm (e.g. the corpse's 300s ambient
+/// same behavior manually or timers those entry actions arm (e.g. the corpse's 600s ambient
 /// decay) would never get armed, which is a test-fidelity gap, not a real one.
 fn self_sub(action: Action, id: &str) -> Action {
     match action {
@@ -301,7 +301,7 @@ fn spawn_real_corpse(app: &mut App, corpse_prefab_key: &str, id: &str, pos: Vec3
         ));
     }
 
-    // Fire "fresh"'s entry actions (arms the 300s ambient decay).
+    // Fire "fresh"'s entry actions (arms the 600s ambient decay).
     fire_initial_entry_actions(app, &fsm, &initial, id);
     e
 }
@@ -441,7 +441,7 @@ fn dying_again_before_the_old_corpse_decays_lets_both_corpses_coexist() {
     let first_corpse = corpses_by_prefix(&app, "zombie_01", 1)[0];
 
     // A second "zombie_01" (as the real respawn spawner would produce) dies again while the
-    // first corpse is still alive and well within its own 300s decay window.
+    // first corpse is still alive and well within its own 600s decay window.
     spawn_real_monster(&mut app, "enemy_zombie", "behaviors/enemy_zombie.behavior.ron", "zombie_01", Vec3::new(1.0, 0.0, 1.0));
     kill(&mut app, "zombie_01");
     advance(&mut app, 4.5);
@@ -503,8 +503,8 @@ fn looted_corpse_transitions_to_looted_and_decays_quickly() {
         "container.looted:{{self}} must transition the corpse out of 'fresh'"
     );
 
-    // "looted" arms a 5s decay — go a little past it.
-    advance(&mut app, 5.5);
+    // "looted" arms a 20s decay — go a little past it.
+    advance(&mut app, 20.5);
     assert!(
         app.world().get_entity(corpse).is_err(),
         "a looted corpse must despawn within its short decay window"
@@ -512,20 +512,20 @@ fn looted_corpse_transitions_to_looted_and_decays_quickly() {
 }
 
 #[test]
-fn unlooted_corpse_decays_after_five_minutes() {
+fn unlooted_corpse_decays_after_ten_minutes() {
     let mut app = setup_test_app();
     app.update();
     spawn_container_panel(&mut app);
     let corpse = spawn_real_corpse(&mut app, "snake_corpse", "snake_01_corpse", Vec3::ZERO);
 
-    // Just under 5 minutes: still there.
-    advance(&mut app, 299.0);
-    assert!(app.world().get_entity(corpse).is_ok(), "an unlooted corpse must not decay before 5 minutes");
+    // Just under 10 minutes: still there.
+    advance(&mut app, 599.0);
+    assert!(app.world().get_entity(corpse).is_ok(), "an unlooted corpse must not decay before 10 minutes");
 
     advance(&mut app, 2.0);
     assert!(
         app.world().get_entity(corpse).is_err(),
-        "an unlooted corpse must despawn once its 5-minute ambient decay elapses"
+        "an unlooted corpse must despawn once its 10-minute ambient decay elapses"
     );
 }
 
@@ -576,9 +576,9 @@ fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its
     app.update();
     spawn_container_panel(&mut app);
 
-    // Corpse A: fresh 300s decay timer armed at spawn (t≈0).
+    // Corpse A: fresh 600s decay timer armed at spawn (t≈0).
     let corpse_a = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
-    advance(&mut app, 100.0); // well within A's own 300s window — not decayed on its own yet
+    advance(&mut app, 100.0); // well within A's own 600s window — not decayed on its own yet
 
     // Manufacture an id collision directly (this manual Despawn stands in for whatever caused
     // corpse A to be replaced — no longer the monster's own death sequence, which never reuses a
@@ -588,13 +588,13 @@ fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its
     assert!(app.world().get_entity(corpse_a).is_err(), "corpse A must be gone after the guard despawn");
 
     // Corpse B spawns fresh under the SAME reused id at t≈100, long before corpse A's ORIGINAL
-    // would-be decay deadline (t≈300, since A was armed at t≈0) has elapsed.
+    // would-be decay deadline (t≈600, since A was armed at t≈0) has elapsed.
     let corpse_b = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::new(1.0, 0.0, 1.0));
 
-    // Advance to t≈390: well past corpse A's original t≈300 deadline (where a stale global event
+    // Advance to t≈650: well past corpse A's original t≈600 deadline (where a stale global event
     // would have fired and despawned whichever entity then held "zombie_01_corpse" — corpse B),
-    // but still well before corpse B's OWN fresh deadline (t≈100+300=400).
-    advance(&mut app, 290.0);
+    // but still well before corpse B's OWN fresh deadline (t≈100+600=700).
+    advance(&mut app, 550.0);
 
     assert!(
         app.world().get_entity(corpse_b).is_ok(),
@@ -661,9 +661,9 @@ fn a_corpses_own_decay_timer_closes_its_open_container_panel_and_clears_its_targ
     app.world_mut().resource_mut::<CurrentTarget>().0 = Some("zombie_01_corpse".to_string());
     app.update();
 
-    // Let the corpse's own 300s ambient decay fire naturally (SetDespawnTimer), NOT a manually
+    // Let the corpse's own 600s ambient decay fire naturally (SetDespawnTimer), NOT a manually
     // pushed Action::Despawn.
-    advance(&mut app, 301.0);
+    advance(&mut app, 601.0);
 
     assert!(app.world().get_entity(corpse).is_err(), "the corpse must be gone after its ambient decay");
     assert!(
@@ -687,7 +687,7 @@ fn a_corpses_own_decay_timer_closes_its_open_container_panel_and_clears_its_targ
 /// Finding 2: `target_auto_clear_system` only checked `Visibility::Hidden` on an entity still in
 /// `SpawnRegistry` — a monster that's genuinely despawned (v2's death sequence, unlike v1's
 /// hide-in-place revival) fell through untouched, so the player's stale target selection would
-/// silently survive until the same id was reused by that slot's next respawn, up to 60s later.
+/// silently survive until the same id was reused by that slot's next respawn, up to 30s later.
 #[test]
 fn a_despawned_monsters_target_selection_clears_instead_of_surviving_to_the_next_respawn() {
     let mut app = setup_test_app();

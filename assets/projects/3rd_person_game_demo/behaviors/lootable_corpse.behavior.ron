@@ -2,8 +2,8 @@
 // v2). Generic — reusable across zombie_corpse/snake_corpse/spider_corpse and any future one
 // with no changes, since every field here is {self}-relative.
 //
-// Two states: "fresh" arms a long ambient decay; looting transitions to "looted", which closes
-// the panel and decays much sooner.
+// Two states: "fresh" arms a long ambient decay (600s / 10 minutes); looting transitions to
+// "looted", which closes the panel and decays much sooner (20s).
 //
 // The corpse's death pose (see "Spawn-already-posed pattern" in docs/20_data_formats.md) is set
 // entirely by its own corpse_policy_{monster}.ron via `initial_override: "death"` — NOT by a
@@ -39,7 +39,7 @@
         (
             name: "fresh",
             entry_actions: [
-                SetDespawnTimer(entity: "{self}", delay_secs: 300.0),
+                SetDespawnTimer(entity: "{self}", delay_secs: 600.0),
             ],
             exit_actions: [],
             on: [
@@ -58,7 +58,7 @@
             // and bound to a corpse that's about to disappear.
             entry_actions: [
                 CloseContainer,
-                SetDespawnTimer(entity: "{self}", delay_secs: 5.0),
+                SetDespawnTimer(entity: "{self}", delay_secs: 20.0),
             ],
             exit_actions: [],
             on: [],

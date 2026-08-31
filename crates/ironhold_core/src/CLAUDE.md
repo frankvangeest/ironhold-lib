@@ -460,7 +460,7 @@ own stable id (`Spawn(..., id: "zombie_01", spawn_point: ...)` from a global rul
 `Despawn("{self}_corpse")` immediately before every `Spawn(id: "{self}_corpse", ...)` call to
 sacrifice a still-decaying earlier corpse rather than let two corpses collide on one id — a
 deliberate, bounded tradeoff (`min(natural decay, time until this slot's next death)` instead of a
-guaranteed full 5 minutes) rather than an unbounded id-collision bug. With ids now unique, no
+guaranteed full 10 minutes) rather than an unbounded id-collision bug. With ids now unique, no
 Despawn-before-Spawn guard is needed at all: repeated kills of the same slot simply let every
 corpse coexist and decay/be looted independently, closer to the actually-intended design.
 
@@ -519,7 +519,7 @@ These six rules **must live in `state_machine.ron`'s top-level `global_on:` bloc
 `"playing"`'s own state-scoped `on:` list** (found by both `alignment-reviewer` and
 `system-architect`, independently, during the final review pass — a critical bug, not a style
 preference). `tick_delayed_events_system` ticks on raw `Time` with no pause-gate, so a monster's
-60s respawn timer can fire while the game is in a non-`"playing"` state (e.g. paused); a
+30s respawn timer can fire while the game is in a non-`"playing"` state (e.g. paused); a
 state-scoped `on:` handler simply never matches in that case, silently and permanently losing that
 monster's respawn for the rest of the session. `global_on` fires "regardless of state, no state
 change," so it always catches the event no matter what state the interpreter is in when it lands.
