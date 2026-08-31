@@ -49,4 +49,5 @@
 - [UI Label/Button box overflow reliance](ui_label_box_overflow_reliance.md) — ~34 shipped defs render text outside their fixed `size:` box on purpose; unconditional `Overflow::clip()` deletes it. Bevy clip cost/hit-test facts
 - [UI flat-scan blindness & taffy facts](ui_flat_scan_and_taffy_facts.md) — `scene.ui` scanned flat in 11 places (radar pre-pass is a *functional* dep); verified Bevy 0.18/taffy absolute/overflow/gap/justify semantics
 - [CLI validate coverage model](cli_validate_coverage_model.md) — checks silently vanish when a catalog is missing; hardcoded stats/prefab paths vs configurable ProjectConfig ones; partial scene-path variant coverage
+- [CLI/runtime mirror check pairs](cli_runtime_mirror_check_pairs.md) — the validate-check + scene-load-warn! pattern: duplicated predicates belong in schema/; work out which band is WIDER (CLI ⊇ runtime = runtime is noisier); watch for clamps/default changes riding along
 - [Demo project baseline determinism](demo_project_baseline_determinism.md) — test_web.py globs EVERY scene for a 4%-threshold baseline, no exclusion mechanism; animated demo scenes flake by construction

@@ -6,7 +6,9 @@ metadata:
 ---
 
 `GameSceneV2.label_depth_scale: Option<LabelDepthScaleDef>` (`schema/scene_v2.rs` ~745;
-`reference_distance` default 50.0, `min_scale: Option<f32>`) is the ONE scene-level knob for
+`reference_distance` default **20.0** since `feature/label-depth-scale-validation` — matches
+`entity_spawner::default_camera_config()`'s `max_radius`, which is now `pub` specifically so
+`ironhold_cli` can reuse the constants; `min_scale: Option<f32>`) is the ONE scene-level knob for
 distance-based label shrinking. `resolve_label_depth_scale(scene, per_label) -> Option<(f32,f32)>`
 (`scene_loader.rs` ~2737, `pub(crate)` since `feature/nameplate-zoom-spacing`) is the single
 precedence resolver; `LoadedLabelDepthScale(Option<LabelDepthScaleDef>)` (`scene_manager/mod.rs`
@@ -61,11 +63,30 @@ the two scene-loader label loops differ (nameplate resolves it; popups deliberat
 playtest showed 14px name text rendering at ~3.5px (illegible) at max zoom-out. Treat `min_scale`
 below ~0.4 as a legibility smell when the scene's smallest `font_size` is in the 13–16px range.
 
-**`ironhold_cli validate` knows NOTHING about `label_depth_scale`** (grepped: zero hits in
-`crates/ironhold_cli`). No `reference_distance`-vs-camera-radius sanity check and no
-`min_scale` 0.0–1.0 range check — a `min_scale: 2.0` silently pins every label at 2× forever
-(`.min(1.0).max(2.0)` == 2.0), and a `reference_distance` outside the camera's real
-`min_radius..max_radius` silently never engages. Both are prime CLI-validate candidates.
+**CORRECTED 2026-08-31 — `ironhold_cli validate` now covers both** (`feature/label-depth-scale-
+validation`, `planning/features/label_depth_scale_validation.md`):
+- `label_depth_scale_min_scale_out_of_range` — `CrossFileError`, always-on. Twin runtime
+  `warn_label_depth_scale_min_scale_out_of_range` (`scene_loader.rs` ~1464) + a silent
+  `.clamp(0.0, 1.0)` (NaN→0.0) now inside `resolve_label_depth_scale` (`mod.rs` ~509). This IS a
+  behavior change for `min_scale > 1.0` (was pinned at 2×, now 1×) — verified harmless, all 10
+  shipped scenes author 0.25–0.5.
+- `label_depth_scale_reference_distance_outside_camera_range` — `StrictWarning` (`--strict` only),
+  band `[overall_min*0.5, overall_max*2.0]` over the union of reachable radius-bearing cameras.
+  Twin runtime `warn_label_depth_scale_reference_distance` (`scene_loader.rs` ~1518).
+
+**Asymmetry to remember: the CLI check also scans project-wide `Action::Spawn` prefabs for
+player tags (`validate.rs` ~1067); the runtime twin only sees scene-load `player_configs`.** So
+`3rd_person_game_demo`'s main scene (player spawned from `state_machine.ron`, never in
+`scene.entities`, no `camera_modes:` registry) gets the CLI warning but NO runtime warning — the
+exact scene the feature was written for. Any future runtime-side camera-range check inherits this
+hole.
+
+**`camera_mode_radius_range` exists TWICE** — private fn in `scene_loader.rs` ~1496 and a copy in
+`validate.rs` ~164. Classifies only schema types (`Orbit`/`Party` → radii, `Follow` →
+`offset.length()` as both bounds, `Fixed`/`FirstPerson`/`Flycam` → `None`), so it belongs on
+`impl CameraModeDef` in `schema/camera.rs` per the `PrefabDef::is_flycam()` precedent (see
+[[diagnostic-only-feature-pattern]]). Both matches are exhaustive, so a *new* variant breaks
+compile in both; a *reclassification* drifts silently.
 
 **Which shipped scenes author a `label_depth_scale` block** (check this before calling a change
 to the resolver a compat break): `stats_demo`, `3rd_person_game_demo` (added by the fix),

@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; hardcoded stats/prefab paths diverge from ProjectConfig's configurable ones; scene-path coverage is partial
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); hardcoded stats/prefab paths diverge from ProjectConfig's; scene-path coverage is partial
 metadata:
   type: project
 ---
@@ -9,6 +9,16 @@ metadata:
 parsed**, and `try_parse()` returns `None` with *no diagnostic* when the file simply doesn't exist.
 Net effect: a typo in a *configured catalog path* makes every check that depends on that catalog
 silently vanish — validate exits 0 and reports nothing.
+
+**There are exactly two severity tiers, and no mid-tier "warning" in the default run.**
+`CrossFileError` (pushed in `cross_file_checks`) is *always* a hard error → exit 1. The only softer
+signal is `StrictWarning`, produced by `strict_checks(asset_catalog, prefab_catalog, scenes,
+actions)` and surfaced **only** under `--strict` (still exit 1 when present). Any proposed check
+described as "a warning, not an error" therefore belongs in `strict_checks`, not as a
+`CrossFileError` push — plan docs routinely get this backwards. `strict_checks` already receives
+`scenes` + `prefab_catalog`, so heuristic scene↔player-prefab checks fit there with no plumbing;
+`jump_cannot_clear_ground_sensor` / `negative_coyote_time_secs` are the precedent (both are
+`--strict` warnings even though `crates/ironhold_core/src/CLAUDE.md` calls them "errors").
 
 Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold_cli/src/commands/validate.rs`:
 

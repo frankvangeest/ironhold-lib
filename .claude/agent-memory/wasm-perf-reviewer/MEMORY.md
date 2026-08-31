@@ -32,3 +32,4 @@
 - [Gamepad binding hardening](project_gamepad_binding_hardening.md) — resolve_gamepad DELETED; gamepad_bind_system FixedUpdate centralizes 5x per-frame sorted Vec into 1 = net win; 3 tiny allocs/tick steady state; Local diag maps unpruned on despawn
 - [Animation hot path](project_animation_hot_path.md) — bevy 0.18 evaluates PAUSED clips every frame (freeze:true is NOT free); graph node count = policy-referenced clips only; 42-joint zombie ×6 corpses; no new pipeline
 - [Mouse wheel units on web](project_mouse_wheel_web_units.md) — WASM gets MouseScrollUnit::Pixel scaled by devicePixelRatio (native Win gets Line); DOM_DELTA_PAGE dropped by winit; read() empty on idle frames so per-event work is free
+- [Label depth scale](project_label_depth_scale.md) — resolve_label_depth_scale is spawn-time-only despite "hot" doc wording (don't re-flag); spawn_scene_v2 warn_* block is one-shot; ref_distance 20.0 must track default_camera_config max_radius (baselines!)
