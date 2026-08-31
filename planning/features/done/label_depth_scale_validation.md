@@ -1,8 +1,11 @@
 # Feature: `ironhold_cli validate` coverage for `label_depth_scale`
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `aae875a` (2026-08-16)_
 _Plan-reviewed at: `68ae660` (2026-08-30) — system-architect + ux-gamedesigner-reviewer, both addressed below_
+_Completed: `034b40c` (2026-08-31) — implementation + 5-agent post-implementation review round, all
+findings fixed in the same commit; playtest confirmed by Frank. See `planning/backlog.md`'s Done
+entry for the full summary._
 
 ## What
 Two silent-failure modes in `GameSceneV2.label_depth_scale` (`LabelDepthScaleDef`) get design-time
