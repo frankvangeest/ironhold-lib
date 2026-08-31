@@ -528,8 +528,10 @@ fn depth_scale_factor(depth_scale: Option<(f32, f32)>, dist: f32) -> f32 {
 
 /// Raw depth-scale formula: 1:1 at `ref_dist` and closer (never grows past 1.0), shrinking
 /// proportionally beyond it, floored at `min_floor`. Deliberately `.min()`/`.max()` chained rather
-/// than `f32::clamp(min_floor, 1.0)` — `min_floor` is designer-authored and unvalidated
-/// (`LabelDepthScaleDef.min_scale`), and `clamp` panics if `min > max`.
+/// than `f32::clamp(min_floor, 1.0)` — every real caller's `min_floor` is already clamped to
+/// `[0.0, 1.0]` by `resolve_label_depth_scale` (the sole resolver; see its doc comment), but
+/// `clamp` panics if `min > max`, so `.min()`/`.max()` stays the defensive choice here in case a
+/// future caller ever constructs a `depth_scale` tuple directly instead of through the resolver.
 #[inline]
 fn depth_scale_factor_from(ref_dist: f32, min_floor: f32, dist: f32) -> f32 {
     (ref_dist / dist.max(0.001)).min(1.0).max(min_floor)

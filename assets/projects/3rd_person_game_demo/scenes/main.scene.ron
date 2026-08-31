@@ -7,7 +7,7 @@
   // max_radius (3.0/18.0, prefabs.ron) — enemies/props sit elsewhere in the scene, so their
   // distance from the camera is orbit radius PLUS however far they are from the player (this
   // project's NPCs land around 16-26 units from camera across the zoom range). Without this
-  // block at all, reference_distance defaults to 50.0 (far outside either range) and the
+  // block at all, reference_distance defaults to 20.0 (still outside either range here) and the
   // (ref/dist) depth-scale formula stays clamped at 1.0 (no compensation) at every zoom level.
   // First shipped as (8.0, 0.25) — a real-hardware playtest screenshot at max zoom-out showed
   // 14px name text rendering at ~3.5px, illegible (only bar *colour* survived, not fill amount

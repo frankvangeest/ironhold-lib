@@ -57,6 +57,31 @@ impl CameraModeDef {
             CameraModeDef::Party(p) => p.transition.as_ref(),
         }
     }
+
+    /// Radius-bearing camera-distance range this mode contributes to a `reference_distance`
+    /// sanity check (`label_depth_scale.reference_distance` validation). `Orbit`/`Party`
+    /// contribute their own `min_radius`/`max_radius`; `Follow` contributes a fixed point
+    /// (`offset.length()`, both bounds — a well-defined single camera-to-target distance) unless
+    /// that offset is degenerate (effectively zero-length — a broken/misconfigured Follow camera,
+    /// not a meaningful "camera sits at the target" distance, and a `(0.0, 0.0)` band would make
+    /// every positive `reference_distance` falsely fail the check); `Fixed`/`FirstPerson`/`Flycam`
+    /// have no radius concept and return `None`. Single source of truth for both
+    /// `ironhold_cli`'s `validate.rs` and the runtime's `scene_loader.rs` — kept here (pure schema
+    /// classification, no runtime dependency) rather than duplicated per-crate, for the same
+    /// reason `default_camera_config()` was made `pub` in this feature. See
+    /// `planning/features/label_depth_scale_validation.md`.
+    pub fn radius_range(&self) -> Option<(f32, f32)> {
+        match self {
+            CameraModeDef::Orbit(c) => Some((c.min_radius, c.max_radius)),
+            CameraModeDef::Party(p) => Some((p.min_radius, p.max_radius)),
+            CameraModeDef::Follow(f) => {
+                let (x, y, z) = f.offset;
+                let d = (x * x + y * y + z * z).sqrt();
+                (d > 0.0001).then_some((d, d))
+            }
+            CameraModeDef::Fixed(_) | CameraModeDef::FirstPerson(_) | CameraModeDef::Flycam(_) => None,
+        }
+    }
 }
 
 fn default_follow_smoothing() -> f32 { 8.0 }

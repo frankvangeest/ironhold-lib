@@ -11,7 +11,8 @@
   show_nameplates: true,
   // Tuned to this room's split-screen ORBIT radius range (min_radius 4.5 / max_radius 9.0,
   // prefabs.ron's player_p1_split/player_p2_split) — without this, reference_distance defaults
-  // to 50.0 (far outside range) and depth scaling silently never engages at any zoom level. Note
+  // to 20.0 (still outside range here) and depth scaling silently never engages at any zoom
+  // level. Note
   // this is the camera's orbit radius, not necessarily actual camera-to-widget distance (props
   // can sit farther from the camera than the raw orbit radius, as 3rd_person_game_demo's own fix
   // found) — playtest-verify at both zoom extremes rather than trusting this number blindly. See

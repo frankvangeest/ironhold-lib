@@ -1,0 +1,23 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "tight_orbit_player",
+            transform: (translation: (-2.0, 0.0, 0.0)),
+        ),
+        (
+            id: "player_02",
+            prefab: "wide_orbit_player",
+            transform: (translation: (2.0, 0.0, 0.0)),
+        ),
+    ],
+    label_depth_scale: (
+        // Far outside player_01's own tight 2.0-5.0 Orbit range, but well inside the union with
+        // player_02's wide 50.0-80.0 range (band up to 80*2=160.0) — proves the union approach
+        // doesn't false-positive just because it's wrong for one specific player.
+        reference_distance: 60.0,
+        min_scale: 0.5,
+    ),
+)

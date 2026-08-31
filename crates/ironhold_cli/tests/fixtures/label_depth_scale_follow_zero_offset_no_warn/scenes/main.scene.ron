@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "degenerate_follow_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    label_depth_scale: (
+        // A zero-length Follow offset contributes no meaningful distance — must be treated the
+        // same as "no radius-bearing camera reachable", not as a (0.0, 0.0) band that would make
+        // any positive reference_distance falsely fail.
+        reference_distance: 10.0,
+        min_scale: 0.5,
+    ),
+)

@@ -241,6 +241,7 @@ references without starting the engine.
 - Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
 - Behavior file paths on `PrefabDef` exist on disk
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
+- A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
 
 ```bash
 ironhold validate assets/projects/particles_demo/
@@ -256,6 +257,7 @@ ironhold --json validate assets/projects/quick_scene/
 - A player prefab's `jump`/`double_jump_height` apex does not clear `collider_radius + ground_cast_length` (`jump_cannot_clear_ground_sensor`) — see the `MovementConfig` note in `docs/20_data_formats.md`
 - A player prefab's `max_walkable_slope_deg` is outside the valid `(0, 90]` range (`invalid_walkable_slope_limit`) — see the `MovementConfig` note in `docs/20_data_formats.md`
 - A player prefab's `coyote_time_secs` is negative (`negative_coyote_time_secs`) — silently disables the coyote-time buffer (same as `0.0`), most likely a typo — see the `MovementConfig` note in `docs/20_data_formats.md`
+- A scene's `label_depth_scale.reference_distance` falls far outside its reachable player camera(s)' radius range (`label_depth_scale_reference_distance_outside_camera_range`) — depth scaling may never visibly engage; see "Label depth scaling" in `docs/20_data_formats.md`
 
 ```bash
 ironhold validate --strict assets/projects/particles_demo/

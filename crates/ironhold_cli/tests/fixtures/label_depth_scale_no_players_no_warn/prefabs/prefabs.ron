@@ -1,0 +1,9 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "static_prop": (
+            kind: Primitive,
+            shape: Cuboid,
+        ),
+    },
+)

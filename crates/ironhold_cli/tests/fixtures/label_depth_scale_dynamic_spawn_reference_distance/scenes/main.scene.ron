@@ -1,0 +1,13 @@
+(
+    // No scene-placed player entity at all — the player only exists via the dynamic
+    // `Spawn(prefab: "dynamic_orbit_player", ...)` in logic/rules.ron, mirroring
+    // `3rd_person_game_demo`'s own player-spawning pattern (its player is spawned entirely from
+    // `state_machine.ron`'s entry_actions, never scene-placed). Proves the reference_distance
+    // check also scans Action::Spawn, not just scene.entities.
+    schema_version: 2,
+    name: "main",
+    label_depth_scale: (
+        reference_distance: 500.0,
+        min_scale: 0.5,
+    ),
+)

@@ -1,0 +1,23 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "camera_01",
+            prefab: "spectator_flycam",
+            transform: (translation: (0.0, 5.0, 10.0)),
+        ),
+        (
+            id: "player_01",
+            prefab: "suppressed_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    label_depth_scale: (
+        // A flycam entity present means the player's camera never actually spawns
+        // (SuppressPlayerCameras) — the player's Orbit(3.0-18.0) range must NOT be unioned in,
+        // so this absurd reference_distance must not warn (no meaningful range to compare).
+        reference_distance: 99999.0,
+        min_scale: 0.5,
+    ),
+)

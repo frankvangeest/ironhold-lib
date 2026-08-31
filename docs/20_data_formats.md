@@ -178,7 +178,7 @@ File extension must be `.scene.ron`.
 | `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
 | `scene_unclaimed_gamepad_bindings` | `Map<String, String>` | Per-scene gamepad button overrides; same format and same unclaimed-pad-only behavior as `global_unclaimed_gamepad_bindings`. Overlays per-key on top of the project base — a key present here replaces just that entry, every other project-level binding still applies (same merge rule as `scene_key_bindings`). Cleared and rebuilt on each scene load. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
-| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab — all four styles, `Ascii`/`Pixel`/`Icon`/`Textured`), and nameplates (`show_nameplates`/`show_player_nameplate`), have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). Tune `reference_distance` to the scene's actual camera-to-widget distance range, not just `Orbit`/`Party`'s `min_radius`/`max_radius` — entities can sit elsewhere in the scene than the camera's own orbit target, so their real distance from the camera can exceed the radius range. A `reference_distance` well outside that real range (e.g. the `50.0` default against a project whose camera never gets that far from anything) means the `(reference_distance / distance)` ratio never drops below 1.0, so scaling silently never engages. See [Label depth scaling](#label-depth-scaling-labeldepthscaledef) below for the full field reference and tuning guidance. |
+| `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab — all four styles, `Ascii`/`Pixel`/`Icon`/`Textured`), and nameplates (`show_nameplates`/`show_player_nameplate`), have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). Tune `reference_distance` to the scene's actual camera-to-widget distance range, not just `Orbit`/`Party`'s `min_radius`/`max_radius` — entities can sit elsewhere in the scene than the camera's own orbit target, so their real distance from the camera can exceed the radius range. A `reference_distance` well outside that real range means the `(reference_distance / distance)` ratio never drops below 1.0, so scaling silently never engages — `ironhold_cli validate --strict` and a scene-load `warn!` both flag this, see [Label depth scaling](#label-depth-scaling-labeldepthscaledef) below for the full field reference, tuning guidance, and validation coverage. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
 | `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
 | `target_hud` | `Option<TargetHudDef>` | Per-viewport target-name HUD readout for split-screen scenes (2+ players). Omit to disable. See [Per-player split-screen targeting](#per-player-split-screen-targeting) below. |
@@ -374,12 +374,12 @@ font-size/offset tuning problem instead, unrelated to this system.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `reference_distance` | `f32` | `50.0` | Camera distance where labels are at their authored size. Zoom closer than this and nothing changes. Zoom further and they shrink in proportion to distance — at twice this distance they are half size. Leaving this at the `50.0` default (or omitting the block entirely) on a normal 3rd-person camera whose max zoom distance never reaches 50 means scaling never engages at any zoom level — this is a common way to accidentally ship the "labels never shrink" bug. |
+| `reference_distance` | `f32` | `20.0` | Camera distance where labels are at their authored size. Zoom closer than this and nothing changes. Zoom further and they shrink in proportion to distance — at twice this distance they are half size. `20.0` matches the engine's own fallback `Orbit` camera's `max_radius` (used when a player prefab authors no `camera`/`camera_mode` at all), so leaving this at default on an out-of-the-box camera sits right at the edge of its zoom-out range rather than outside it — but a *custom* camera range far from `20.0` (e.g. a top-down or first-person project) can still reproduce the "labels never shrink" bug if left untuned. `ironhold_cli validate --strict` and a scene-load `warn!` both flag a `reference_distance` far outside the scene's reachable camera range — see below. |
 | `min_scale` | `Option<f32>` | `None` | Minimum scale floor as a fraction of authored size (0.0–1.0) — together with `reference_distance` this sets where the working band ends (see above). `0.25` means labels never shrink below 25% of their authored size. Omitting `min_scale` means no floor — labels scale toward zero at extreme distances (usually not what you want; a very small but nonzero floor like `0.2`–`0.5` keeps distant labels legible instead of vanishing). |
 
 **Per-label override** — both `WorldLabelDef` and `EntityLabelDef` accept a `depth_scale: Option<bool>` field:
 - `depth_scale: false` — pin this label at its authored size regardless of scene setting
-- `depth_scale: true` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 50.0`, no floor)
+- `depth_scale: true` — force depth scaling on even if the scene has no `label_depth_scale` block (uses `reference_distance: 20.0`, no floor)
 - `depth_scale` omitted — inherits the scene setting (default)
 
 `stat_label`/`world_stat_bar` (all four styles) and nameplates have no per-widget override at all
@@ -387,6 +387,36 @@ font-size/offset tuning problem instead, unrelated to this system.
 floating widget in the scene at once, not just nameplates. Check your smallest `font_size`/bar
 `size` against `min_scale` — e.g. a 14px stat label with `min_scale: 0.5` reads as low as 7px at
 range.
+
+> **Validation coverage.** Both silent-failure modes below get design-time *and* runtime signal —
+> a CLI check alone would never reach a designer working from a prebuilt WASM build with no
+> `ironhold_cli` access:
+> - **`min_scale` outside `[0.0, 1.0]`** — without this check, a value `> 1.0` (e.g. `1.5`) would
+>   pin every depth-scaled widget in the scene at that factor forever; a negative value is
+>   silently inert (no effect on scaling) rather than doing anything useful. `ironhold_cli
+>   validate` reports this as a **hard error** (not `--strict`-gated), and the engine clamps the
+>   value to `[0.0, 1.0]` at scene load with a matching `warn!`.
+> - **`reference_distance` far outside the scene's reachable camera range** — the exact
+>   misconfiguration described above. `ironhold_cli validate --strict` reports this as a warning
+>   (a heuristic band, not a provable misconfiguration — see the CLI's own message for the range it
+>   compared against and a suggested value), and the engine logs a matching scene-load `warn!`. The
+>   range considered is the union of every reachable player camera's radius (`Orbit`/`Party`'s
+>   `min_radius`/`max_radius`, a `Follow` camera's fixed `offset` distance, `join_prefab_keys`
+>   local-coop character-select variants, and the scene's own `camera_modes:` registry) — a scene
+>   whose only cameras are `Fixed`/`FirstPerson`/`Flycam` (no radius concept), whose player cameras
+>   are suppressed by a `tags: ["flycam"]` entity (spectator mode), or with no player prefabs at
+>   all, is skipped rather than false-flagged.
+>
+>   **The two `reference_distance` checks don't see identical camera sets.** The CLI additionally
+>   scans every project-wide `Action::Spawn` rule for a player-tagged prefab that might only ever
+>   be spawned dynamically (not scene-placed) — `3rd_person_game_demo`'s own player is the
+>   motivating example, spawned entirely from `state_machine.ron`'s entry_actions. The runtime
+>   `warn!` only sees players already present when the scene finishes loading, so it has no
+>   equivalent for a dynamically-spawned-only player: that scene gets **no runtime console
+>   warning at all**, only the CLI check catches it. If you don't have `ironhold_cli` access and
+>   your project spawns its player this way, running `ironhold_cli validate --strict` (or
+>   temporarily placing a player directly in the scene to test in-browser) is the only way to
+>   verify this setting.
 
 > **Stacking multiple widgets on one entity — use `screen_offset`, not slightly different
 > `offset`s.** A `stat_label` and `world_stat_bar` tracking the same entity are two independent
@@ -603,7 +633,7 @@ _Used in: `GameSceneV2.nameplate_options`_
 
 Enable the nameplate system on a scene by setting `show_nameplates: true`. Each spawned NPC/prop entity that passes the faction filter and has no `nameplate: false` override receives a floating widget above it: a name line (from `PrefabDef.display_name` or the prefab key) plus any number of pixel stat bars. The widget hides automatically when the camera moves beyond `max_distance`.
 
-The whole widget (name text + all bars) inherits the scene's [`label_depth_scale`](#label-depth-scaling-labeldepthscaledef) setting, same as `stat_label`/`world_stat_bar` — no per-widget override. Without a `label_depth_scale` block, nameplates render at a fixed screen size regardless of camera zoom, which can make two nearby entities' nameplates crowd together when zoomed far out. If your project uses an `Orbit`/`Party` camera with a wide zoom range, set `reference_distance` to somewhere inside that range (not the `50.0` default) so scaling actually engages — see the tuning note on `label_depth_scale` above.
+The whole widget (name text + all bars) inherits the scene's [`label_depth_scale`](#label-depth-scaling-labeldepthscaledef) setting, same as `stat_label`/`world_stat_bar` — no per-widget override. Without a `label_depth_scale` block, nameplates render at a fixed screen size regardless of camera zoom, which can make two nearby entities' nameplates crowd together when zoomed far out. If your project uses an `Orbit`/`Party` camera with a wide zoom range, set `reference_distance` to somewhere inside that range (not just leaving it at the `20.0` default) so scaling actually engages — see the tuning note on `label_depth_scale` above.
 
 The player's own nameplate is controlled independently by `show_player_nameplate` (below) — it is never subject to `show_nameplates` or `faction_filter`, since faction hostility categorization doesn't apply to "should I see my own name." A per-prefab `nameplate: true`/`false` override still wins over either scene toggle, exactly the same way for the player as for any other entity.
 
@@ -661,8 +691,9 @@ Each entry in `stat_bars` defines one pixel bar row in the nameplate widget.
 // In scenes/*.scene.ron
 // Nameplates (and every other world label in this scene) shrink with camera distance.
 // Set reference_distance somewhere inside your camera's actual zoom range — leaving this block
-// out entirely (or using the 50.0 default) means scaling never engages on a normal orbit camera,
-// and nearby entities' nameplates will crowd together when the camera zooms out.
+// out entirely (or leaving reference_distance at the 20.0 default on a camera whose range sits
+// well outside it) means scaling never engages, and nearby entities' nameplates will crowd
+// together when the camera zooms out.
 label_depth_scale: (
     reference_distance: 8.0,   // full size at 8m camera distance and closer
     min_scale: 0.5,            // never smaller than half size (reached at 16m)

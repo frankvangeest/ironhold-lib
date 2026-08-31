@@ -1,0 +1,13 @@
+(
+    // No scene-placed player at all — the only player-tagged prefab reachable from this scene is
+    // via join_prefab_keys (local-coop character-select variants), mirroring
+    // `local_coop_demo/scenes/room8.scene.ron`'s own authoring pattern. Proves the
+    // reference_distance check also scans join_prefab_keys, not just scene.entities.
+    schema_version: 2,
+    name: "main",
+    join_prefab_keys: [None, "coop_variant_player"],
+    label_depth_scale: (
+        reference_distance: 500.0,
+        min_scale: 0.5,
+    ),
+)

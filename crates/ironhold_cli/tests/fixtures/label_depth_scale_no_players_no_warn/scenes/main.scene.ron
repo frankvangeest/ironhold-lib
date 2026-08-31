@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "prop_01",
+            prefab: "static_prop",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    label_depth_scale: (
+        reference_distance: 99999.0,
+        min_scale: 0.5,
+    ),
+)

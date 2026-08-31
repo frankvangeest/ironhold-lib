@@ -1229,6 +1229,49 @@ Dynamically spawned entities (via `Action::Spawn`) receive the same prefab-drive
 - **`interactable` / `trigger_zone` / `colliders` / `stat_templates` / `behavior`** — all inserted inside `spawn_prefab_instance` for both scene and dynamic paths.
 
 - **`stat_label` / `world_stat_bar` / nameplate depth scaling** — `LoadedLabelDepthScale(Option<LabelDepthScaleDef>)` stores the active scene's `label_depth_scale` block (populated in `spawn_scene_v2` alongside `ActiveTonemapping`). `resolve_label_depth_scale` (`runtime/scene_manager/mod.rs`, beside `should_insert_nameplate`) is the single resolver every consumer calls — `drain_dynamic_stat_ui_system`, the scene-load `stat_label`/`world_stat_bar` spawn loops, and `nameplate_setup_system` (nameplates were previously hardcoded to `depth_scale: None` regardless of scene config — see `planning/backlog.md`'s "Nameplate/health-bar spacing looks wrong at the zoom extremes") — so a wave-spawned enemy's widgets, a scene-placed one, and a nameplate all shrink with distance identically. Note there is no per-widget override field on `StatLabelDef`/`WorldStatBarDef`/`NameplateOptionsDef` (unlike `WorldLabelDef`/`EntityLabelDef`, which do have `depth_scale: Option<bool>`) — these always simply inherit the scene setting. All four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) now scale — `Ascii` via the font-size branch of `world_label_screen_pos_system` (`lib.rs`), the other three (plus nameplates) via the anchor's own `Transform.scale` (XY only, Z untouched to avoid perturbing each anchor's own child z-layering), since their anchor entity carries no `TextFont` of its own (its `Mesh2d`/`Sprite` children do). Both branches share one `depth_scale_factor()` formula helper so the curve can't drift between them.
+  **Validation coverage (`planning/features/label_depth_scale_validation.md`):**
+  `default_label_ref_distance()` (`schema/scene_v2.rs`) is `20.0`, matching
+  `entity_spawner::default_camera_config()`'s `max_radius` — the engine's own fallback `Orbit`
+  camera, used whenever a player prefab authors neither `camera` nor `camera_mode` (that function
+  is `pub`, not `pub(crate)`, specifically so `ironhold_cli`'s `validate.rs` can reuse the exact
+  same numbers instead of duplicating them as a second, driftable copy). `resolve_label_depth_scale`
+  silently clamps `min_scale` to `[0.0, 1.0]` on every call (a `> 1.0` value would otherwise pin
+  every depth-scaled widget forever; negative is inert either way) — that clamp is unlogged since
+  it's a per-widget spawn-time call site, not a place to log on every call; the one-time
+  diagnostics live elsewhere: `ironhold_cli validate` reports an out-of-range `min_scale` as a hard
+  error and a `reference_distance` far outside the scene's reachable camera range as a `--strict`
+  warning; `scene_loader.rs`'s `warn_label_depth_scale_min_scale_out_of_range`/
+  `warn_label_depth_scale_reference_distance` fire the matching scene-load `warn!`s (called from
+  `spawn_scene_v2` alongside `warn_missing_player_stat_templates`) for a WASM-only designer with no
+  `ironhold_cli` access. `CameraModeDef::radius_range()` (`schema/camera.rs`) is the single source
+  of truth both the CLI and the runtime call for camera classification (`Orbit`/`Party`'s
+  `min_radius`/`max_radius`, a `Follow` camera's fixed `offset.length()` as both bounds — `None` if
+  that offset is ~zero-length, a degenerate Follow config that would otherwise collapse the band to
+  `(0.0, 0.0)` and false-flag every positive `reference_distance` — `Fixed`/`FirstPerson`/`Flycam`
+  skipped); it lives in `schema/camera.rs` rather than being duplicated per-crate since it's pure
+  schema classification with no runtime dependency (the same reasoning that made
+  `default_camera_config()` `pub`). Both checks also union `scene.join_prefab_keys` local-coop
+  character-select variants, and both skip player-camera collection entirely when a
+  `tags: ["flycam"]` entity is present (`SuppressPlayerCameras` means no player camera ever
+  spawns in that scene — see "Player-construction sites" above).
+
+  **The CLI and runtime checks still don't see identical camera sets, in either direction — this
+  is a real, accepted asymmetry, not a bug.** The CLI additionally scans every project-wide
+  `Action::Spawn` action for a player-tagged prefab, since a player is frequently spawned
+  dynamically rather than scene-placed (`3rd_person_game_demo`'s own player, the original
+  motivating example, is spawned entirely via `state_machine.ron`'s entry_actions) — the runtime
+  `warn!` has no equivalent, since it only ever sees `player_configs`/`join_prefab_keys` already
+  resolvable at the moment `spawn_scene_v2` runs. Two different failure shapes follow from this,
+  not one: **(a)** a scene whose only players are dynamically spawned (like
+  `3rd_person_game_demo`) gets zero reachable cameras at scene-load time, so the runtime check
+  skips entirely — only `ironhold_cli validate --strict`'s wider action-scan catches a bad
+  `reference_distance` there. **(b)** a scene mixing a scene-placed player with a separately,
+  more-widely-ranged dynamically-spawned one could in principle have the runtime's narrower
+  (scene-placed-only) band warn on a `reference_distance` that the CLI's wider (unioned) band
+  accepts — i.e. `validate --strict` clean, console warns anyway. No shipped project currently has
+  shape (b); shape (a) is exactly `3rd_person_game_demo`. Logged as a known, accepted scope
+  boundary in `planning/claude_suggestions.md` rather than threading `LabelDepthScaleDef` through
+  `spawn_player_entity_core`'s three call sites for one diagnostic warning.
 
 ### GLB preloading
 `Action::PreloadPrefab(key)` takes a prefab key, resolves it to a model path, calls `asset_server.load::<Scene>()`, and stores the `Handle<Scene>` in `PreloadedGlbHandles`. This prevents the ~1–2 s WASM stall caused by HTTP fetch + GLTF decode on first spawn of an uncached GLB.
