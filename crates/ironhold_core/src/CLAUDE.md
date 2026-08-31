@@ -151,11 +151,12 @@ will never resolve, since `{new_id}` only exists as a token at `Action::Spawn` a
 as a value anything else can look up. Use `{new_id}` only for entities that manage their own
 lifetime (despawn themselves, or are reached via `{target}`).
 
-**`{self}` does not currently resolve inside a dialogue choice's `Spawn.id`** —
-`capabilities/dialogue.rs`'s `substitute_self_in_action` has no `Action::Spawn` arm (falls through
-to `other => other`), a pre-existing gap unrelated to `{new_id}`. `{new_id}` still resolves
-correctly there regardless, since it's resolved later, at the executor — but don't rely on
-`{self}` inside a dialogue-authored `Spawn.id` until that gap is closed.
+**`{self}` resolves inside a dialogue choice's `Spawn.id`/`Spawn.spawn_point`, same as every other
+action field.** `capabilities/dialogue.rs`'s `substitute_self_in_action` has an `Action::Spawn` arm
+(added alongside `monster_corpse_loot.md` v2's `at_entity` work, `55072fc`) that substitutes `{self}`
+into `id`/`spawn_point` exactly like `rewrite_self`/`rewrite_target`/`action_needs_target` do
+elsewhere. `{new_id}` also resolves correctly there regardless, since it's resolved later, at the
+executor.
 
 Unlike `{self}`/`{target}` — resolved by the interpreter systems (`message_interpreter.rs`) before
 the action reaches `ActionQueue` — `{new_id}` is resolved by `action_executor.rs`'s `Action::Spawn`
