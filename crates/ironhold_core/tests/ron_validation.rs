@@ -509,7 +509,9 @@ fn test_game_scene_v2_label_depth_scale_defaults() {
     "#;
     let scene: GameSceneV2 = from_str(ron_str).expect("label_depth_scale with defaults should parse");
     let cfg = scene.label_depth_scale.expect("label_depth_scale should be Some");
-    assert_eq!(cfg.reference_distance, 50.0, "reference_distance should default to 50.0");
+    // 20.0 matches `entity_spawner::default_camera_config()`'s max_radius — see
+    // `planning/features/label_depth_scale_validation.md`.
+    assert_eq!(cfg.reference_distance, 20.0, "reference_distance should default to 20.0");
     assert_eq!(cfg.min_scale, None, "min_scale should default to None");
 }
 

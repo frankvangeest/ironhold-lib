@@ -789,7 +789,13 @@ pub struct LabelDepthScaleDef {
     pub min_scale: Option<f32>,
 }
 
-fn default_label_ref_distance() -> f32 { 50.0 }
+/// `20.0` matches `entity_spawner::default_camera_config()`'s `max_radius` — the engine's own
+/// fallback `Orbit` camera, used whenever a player prefab authors no `camera`/`camera_mode` at
+/// all. A scene that adds `label_depth_scale: ()` with no custom camera config now lands at the
+/// edge of that default camera's zoom-out range (scaling just starts to engage at max zoom-out)
+/// instead of sitting entirely outside every typical camera range and never engaging at all — see
+/// `planning/features/label_depth_scale_validation.md`.
+pub(crate) fn default_label_ref_distance() -> f32 { 20.0 }
 
 fn default_wl_font_size() -> f32 { 18.0 }
 fn default_wl_color() -> (f32, f32, f32, f32) { (0.95, 0.95, 0.95, 1.0) }

@@ -9,6 +9,7 @@ use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
+use ironhold_core::runtime::scene_manager::entity_spawner::default_camera_config;
 
 use super::utils::{glob_dir, rel, ron_from_str};
 use crate::output::OutputMode;
@@ -941,6 +942,45 @@ fn cross_file_checks(
         }
     }
 
+    // `label_depth_scale.min_scale` outside the documented [0.0, 1.0] range — design-time
+    // counterpart of the scene-load clamp+warn! in `scene_loader.rs::
+    // warn_label_depth_scale_min_scale_out_of_range`. Without this fix, a value > 1.0 would pin
+    // every depth-scaled widget in this scene at that factor forever, regardless of camera
+    // distance (the engine clamps it to 1.0 instead); a negative value is inert (never binds
+    // against an already-non-negative ratio) rather than doing anything useful. See
+    // `planning/features/label_depth_scale_validation.md`.
+    for (scene_path, scene) in scenes {
+        let Some(cfg) = &scene.label_depth_scale else { continue };
+        let Some(min_scale) = cfg.min_scale else { continue };
+        if min_scale.is_finite() && (0.0..=1.0).contains(&min_scale) {
+            continue;
+        }
+        let message = if !min_scale.is_finite() {
+            format!(
+                "label_depth_scale.min_scale is {} (not a finite number) — must be in [0.0, 1.0]",
+                min_scale
+            )
+        } else if min_scale > 1.0 {
+            format!(
+                "label_depth_scale.min_scale is {} — outside [0.0, 1.0]. Without this fix, every \
+                 nameplate/stat label/bar in this scene would pin at {:.0}% size forever, \
+                 regardless of camera distance — the engine now clamps it to 1.0 (100%) instead",
+                min_scale, min_scale * 100.0
+            )
+        } else {
+            format!(
+                "label_depth_scale.min_scale is {} — outside [0.0, 1.0]. Negative values are \
+                 silently inert (no effect on scaling) rather than doing anything useful",
+                min_scale
+            )
+        };
+        errors.push(CrossFileError {
+            source_file: scene_path.clone(),
+            message,
+            error_type: "label_depth_scale_min_scale_out_of_range",
+        });
+    }
+
     errors
 }
 
@@ -1107,6 +1147,109 @@ fn strict_checks(
             }
         }
     }
+
+    // `label_depth_scale.reference_distance` far outside the scene's reachable player-camera
+    // radius range — design-time counterpart of the scene-load `warn!` in `scene_loader.rs::
+    // warn_label_depth_scale_reference_distance`. `--strict`-only (not a hard error, unlike
+    // `min_scale` above): this is a heuristic band, not a provable misconfiguration — the CLI
+    // can't prove scaling never engages, only that it's unlikely to at any camera distance this
+    // scene's cameras can actually reach. See `planning/features/label_depth_scale_validation.md`.
+    for (scene_path, scene) in scenes {
+        let Some(cfg) = &scene.label_depth_scale else { continue };
+
+        let mut overall_min = f32::INFINITY;
+        let mut overall_max = f32::NEG_INFINITY;
+        let mut widen = |range: Option<(f32, f32)>| {
+            if let Some((min_r, max_r)) = range {
+                overall_min = overall_min.min(min_r);
+                overall_max = overall_max.max(max_r);
+            }
+        };
+
+        // A `tags: ["flycam"]` entity suppresses every player camera entirely
+        // (`SuppressPlayerCameras`, spectator mode) — a scene combining a flycam with
+        // `label_depth_scale` (e.g. `custom_materials`) has no player camera to compare
+        // `reference_distance` against, so player/join_prefab_keys collection is skipped when one
+        // is present. Mirrors the runtime's identical `has_flycam` guard in `scene_loader.rs`.
+        let has_flycam = prefab_catalog.is_some_and(|catalog| {
+            scene.entities.iter().any(|e| {
+                catalog.prefabs.get(&e.prefab).is_some_and(|p| p.is_flycam())
+            })
+        });
+        if let (Some(catalog), false) = (prefab_catalog, has_flycam) {
+            let mut widen_prefab_if_player = |prefab_key: &str| {
+                let Some(prefab) = catalog.prefabs.get(prefab_key) else { return };
+                if !prefab.components.tags.iter().any(|t| t == "player") { return }
+                match &prefab.components.camera_mode {
+                    Some(mode) => widen(mode.radius_range()),
+                    None => {
+                        let c = prefab.components.camera.clone().unwrap_or_else(default_camera_config);
+                        widen(Some((c.min_radius, c.max_radius)));
+                    }
+                }
+            };
+            for entity_def in &scene.entities {
+                widen_prefab_if_player(&entity_def.prefab);
+            }
+            // Local-coop character-select variants (`join_prefab_keys`) are player-tagged
+            // prefabs too, reachable independently of `scene.entities` — omitting them would
+            // narrow the band and risk a false positive, the opposite direction of every other
+            // tradeoff this check makes.
+            for key in scene.join_prefab_keys.iter().flatten() {
+                widen_prefab_if_player(key);
+            }
+            // A player is frequently *not* scene-placed — `3rd_person_game_demo`'s own player is
+            // spawned entirely via `Action::Spawn` in `state_machine.ron`'s entry_actions, never
+            // appearing in `scene.entities` at all. Without this, the flagship scene this feature
+            // was written to protect would silently never trigger the check. Project-wide, not
+            // scene-scoped (an action isn't reliably attributable to one scene file) — same
+            // documented tradeoff as the `SetCameraMode` registry check above: weaker than a
+            // scene-scoped check, but catches the dominant case, and erring toward more reachable
+            // cameras only ever widens the acceptable band (fewer false positives), never narrows it.
+            for (_, action) in actions {
+                if let Action::Spawn { prefab, .. } = action {
+                    widen_prefab_if_player(prefab);
+                }
+            }
+        }
+        for mode in scene.camera_modes.values() {
+            widen(mode.radius_range());
+        }
+
+        if !overall_min.is_finite() || !overall_max.is_finite() {
+            // No radius-bearing camera reachable from this scene (every camera is
+            // Fixed/FirstPerson/Flycam, there's a flycam suppressing player cameras, or there
+            // are no player prefabs at all) — no meaningful range to compare against; a false
+            // warning here would be worse than no check.
+            continue;
+        }
+        let rd = cfg.reference_distance;
+        if !rd.is_finite() {
+            warnings.push(StrictWarning {
+                source_file: scene_path.clone(),
+                message: format!(
+                    "label_depth_scale.reference_distance is {} (not a finite number) — depth \
+                     scaling will never engage",
+                    rd
+                ),
+                kind: "label_depth_scale_reference_distance_outside_camera_range",
+            });
+        } else if rd < overall_min * 0.5 || rd > overall_max * 2.0 {
+            let suggested = (overall_min + overall_max) / 2.0;
+            warnings.push(StrictWarning {
+                source_file: scene_path.clone(),
+                message: format!(
+                    "label_depth_scale.reference_distance is {:.1}, outside this scene's typical \
+                     camera zoom range ({:.1}-{:.1}) — depth scaling may never visibly engage, or \
+                     may engage immediately at max zoom-out. Try ~{:.1} (the range midpoint), \
+                     then confirm in-browser",
+                    rd, overall_min, overall_max, suggested
+                ),
+                kind: "label_depth_scale_reference_distance_outside_camera_range",
+            });
+        }
+    }
+
     if let Some(catalog) = asset_catalog {
         let mut effect_keys: Vec<&String> = catalog.effects.keys().collect();
         effect_keys.sort();

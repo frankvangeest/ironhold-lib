@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "no_camera_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

@@ -1,0 +1,29 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "spectator_flycam": (
+            kind: Primitive,
+            components: (
+                tags: ["flycam"],
+            ),
+        ),
+        "suppressed_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                camera_mode: Orbit((
+                    offset: (0.0, 2.5, 8.0),
+                    look_at_offset: (0.0, 1.0, 0.0),
+                    zoom_speed: 8.0,
+                    orbit_speed: 0.4,
+                    min_radius: 3.0,
+                    max_radius: 18.0,
+                )),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

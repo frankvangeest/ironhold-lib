@@ -1654,7 +1654,11 @@ fn spawn_active_camera_for_player(
     }
 }
 
-pub(crate) fn default_camera_config() -> CameraConfig {
+/// The engine's fallback `Orbit` camera tuning, used whenever a player prefab authors neither
+/// `camera` nor `camera_mode`. `pub` (not `pub(crate)`) so `ironhold_cli`'s `validate.rs` can read
+/// `min_radius`/`max_radius` directly for its `label_depth_scale.reference_distance` range check,
+/// instead of duplicating these numbers as a second, driftable copy in a different crate.
+pub fn default_camera_config() -> CameraConfig {
     CameraConfig {
         offset: (0.0, 5.0, 10.0),
         look_at_offset: (0.0, 2.0, 0.0),

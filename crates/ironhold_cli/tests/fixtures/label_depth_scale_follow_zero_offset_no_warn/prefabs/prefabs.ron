@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "degenerate_follow_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                camera_mode: Follow((
+                    offset: (0.0, 0.0, 0.0),
+                )),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

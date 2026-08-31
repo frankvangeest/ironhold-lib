@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "no_camera_player",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    label_depth_scale: (
+        // This player prefab authors neither `camera` nor `camera_mode` — the engine falls back
+        // to `default_camera_config()` (min_radius 2.0 / max_radius 20.0) at spawn time. 500.0 is
+        // far outside that fallback range, proving the check exercises the fallback path rather
+        // than treating a camera-less player prefab as "no radius-bearing camera" (which would
+        // wrongly skip the check).
+        reference_distance: 500.0,
+        min_scale: 0.5,
+    ),
+)

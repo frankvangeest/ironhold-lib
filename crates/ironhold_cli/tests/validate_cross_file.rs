@@ -564,3 +564,181 @@ fn camera_mode_valid_registry_and_reference_exits_0() {
     let (code, stdout) = validate("camera_mode_valid_registry_and_reference");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
+
+// ── label_depth_scale (planning/features/label_depth_scale_validation.md) ─────
+
+/// `min_scale` above 1.0 pins every depth-scaled widget in the scene forever — a hard error,
+/// not `--strict`-gated (unlike `reference_distance` below, which is a heuristic).
+#[test]
+fn label_depth_scale_min_scale_too_high_exits_1() {
+    let (code, stdout) = validate("label_depth_scale_min_scale_too_high");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("min_scale") && stdout.contains("1.5") && stdout.contains("pin"),
+        "expected the min_scale value and the pin consequence in output:\n{stdout}"
+    );
+}
+
+/// A negative `min_scale` is inert (never binds against an already-non-negative ratio), not a
+/// pin — still a hard error, just a different documented consequence in the message.
+#[test]
+fn label_depth_scale_min_scale_negative_exits_1() {
+    let (code, stdout) = validate("label_depth_scale_min_scale_negative");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("min_scale") && stdout.contains("inert"),
+        "expected the min_scale field and the inert-no-op consequence in output:\n{stdout}"
+    );
+}
+
+/// `reference_distance` inside the scene's reachable Orbit camera range must not warn, even
+/// under `--strict`.
+#[test]
+fn label_depth_scale_reference_distance_in_range_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_reference_distance_in_range");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// `reference_distance` far outside the scene's reachable Orbit camera range is `--strict`-only
+/// (a heuristic band, not a provable misconfiguration) — plain `validate` must stay clean.
+#[test]
+fn label_depth_scale_reference_distance_out_of_range_without_strict_exits_0() {
+    let (code, _) = validate("label_depth_scale_reference_distance_out_of_range");
+    assert_eq!(code, 0, "reference_distance misconfiguration without --strict should exit 0");
+}
+
+#[test]
+fn label_depth_scale_reference_distance_out_of_range_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_reference_distance_out_of_range");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance") && stdout.contains("500"),
+        "expected the reference_distance value in output:\n{stdout}"
+    );
+}
+
+/// `CameraModeDef::Follow` contributes a fixed point (`offset.length()`, both bounds) to the
+/// camera-range union rather than being skipped like Fixed/FirstPerson/Flycam — proven here by a
+/// scene with ONLY a Follow-mode player, where `reference_distance` is set well below that fixed
+/// distance's own band.
+#[test]
+fn label_depth_scale_follow_camera_narrows_band_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_follow_camera_narrows_band");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance"),
+        "expected a reference_distance warning in output:\n{stdout}"
+    );
+}
+
+/// A player whose only camera is `Fixed` (no radius concept) must not trigger the check, no
+/// matter how absurd `reference_distance` is — there's no meaningful range to compare against.
+#[test]
+fn label_depth_scale_fixed_camera_only_no_warn_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_fixed_camera_only_no_warn");
+    assert_eq!(code, 0, "expected exit 0 (no radius-bearing camera, skip), got {code}:\n{stdout}");
+}
+
+/// A scene with no player prefabs at all must not trigger the check or crash.
+#[test]
+fn label_depth_scale_no_players_no_warn_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_no_players_no_warn");
+    assert_eq!(code, 0, "expected exit 0 (no players, skip), got {code}:\n{stdout}");
+}
+
+/// Two players with very different Orbit ranges: `reference_distance` is far outside the first
+/// player's own tight range, but well inside the *union* with the second player's much wider
+/// range. Proves the union approach (fewer false positives) rather than a per-player-worst-case
+/// check, matching the plan's documented design choice.
+#[test]
+fn label_depth_scale_split_screen_union_no_false_positive_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_split_screen_union");
+    assert_eq!(code, 0, "expected exit 0 (in range via union), got {code}:\n{stdout}");
+}
+
+/// `3rd_person_game_demo`'s own player is spawned entirely via `Action::Spawn` in
+/// `state_machine.ron`'s entry_actions, never appearing in `scene.entities` — this fixture
+/// mirrors that exact pattern to prove the check also scans Action::Spawn for player-tagged
+/// prefabs, not just scene-placed entities.
+#[test]
+fn label_depth_scale_dynamic_spawn_reference_distance_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_dynamic_spawn_reference_distance");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance") && stdout.contains("500"),
+        "expected the reference_distance value in output:\n{stdout}"
+    );
+}
+
+/// `min_scale` exactly at the boundary values (`0.0`, `1.0`) is valid, not out-of-range — the
+/// hard error check uses an inclusive `0.0..=1.0` range, must not off-by-one.
+#[test]
+fn label_depth_scale_min_scale_zero_boundary_exits_0() {
+    let (code, stdout) = validate("label_depth_scale_min_scale_zero_boundary");
+    assert_eq!(code, 0, "expected exit 0 (0.0 is a valid boundary), got {code}:\n{stdout}");
+}
+
+#[test]
+fn label_depth_scale_min_scale_one_boundary_exits_0() {
+    let (code, stdout) = validate("label_depth_scale_min_scale_boundary_values");
+    assert_eq!(code, 0, "expected exit 0 (1.0 is a valid boundary), got {code}:\n{stdout}");
+}
+
+/// A NaN `reference_distance` must not silently escape the check — `NaN < x` and `NaN > y` are
+/// both `false` in Rust, so a naive band comparison would let it through even though
+/// `(NaN / dist).min(1.0)` at runtime is `1.0`, meaning scaling silently never engages (exactly
+/// the failure mode this feature exists to catch).
+#[test]
+fn label_depth_scale_reference_distance_nan_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_reference_distance_nan");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance") && stdout.contains("NaN"),
+        "expected a NaN reference_distance warning in output:\n{stdout}"
+    );
+}
+
+/// A `Follow` camera with a degenerate zero-length `offset` must not corrupt the band into
+/// `(0.0, 0.0)`, which would make any positive `reference_distance` falsely fail — it must be
+/// treated as contributing no radius information at all (same as "no radius-bearing camera").
+#[test]
+fn label_depth_scale_follow_zero_offset_no_warn_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_follow_zero_offset_no_warn");
+    assert_eq!(code, 0, "expected exit 0 (degenerate offset contributes nothing), got {code}:\n{stdout}");
+}
+
+/// A `tags: ["flycam"]` entity suppresses every player camera in the scene
+/// (`SuppressPlayerCameras`) — a player prefab's Orbit range must NOT be unioned in when a
+/// flycam is present, since that camera never actually spawns.
+#[test]
+fn label_depth_scale_flycam_with_player_no_warn_exits_0() {
+    let (code, stdout) = validate_strict("label_depth_scale_flycam_with_player_no_warn");
+    assert_eq!(code, 0, "expected exit 0 (flycam suppresses player camera), got {code}:\n{stdout}");
+}
+
+/// `join_prefab_keys` (local-coop character-select variants) are player-tagged prefabs reachable
+/// independently of `scene.entities` — omitting them from the union would narrow the band and
+/// risk a false positive.
+#[test]
+fn label_depth_scale_join_prefab_keys_union_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_join_prefab_keys_union");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance") && stdout.contains("500"),
+        "expected the reference_distance value in output:\n{stdout}"
+    );
+}
+
+/// A player prefab authoring neither `camera` nor `camera_mode` falls back to
+/// `default_camera_config()` (min_radius 2.0 / max_radius 20.0) at spawn time — the check must
+/// exercise that fallback, not treat a camera-less player prefab as "no radius-bearing camera"
+/// and wrongly skip.
+#[test]
+fn label_depth_scale_default_camera_config_fallback_strict_exits_1() {
+    let (code, stdout) = validate_strict("label_depth_scale_default_camera_config_fallback");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("reference_distance") && stdout.contains("500"),
+        "expected the reference_distance value in output:\n{stdout}"
+    );
+}

@@ -809,6 +809,8 @@ pub fn spawn_scene_v2(
         warn_gamepad_key_without_gamepad_index(scene, &player_configs);
         warn_duplicate_gamepad_index(scene, &player_configs);
         warn_missing_stat_widget_templates(scene, prefab_catalog);
+        warn_label_depth_scale_min_scale_out_of_range(scene);
+        warn_label_depth_scale_reference_distance(scene, &player_configs, prefab_catalog, has_flycam);
 
         // Flycam spawns unconditionally and immediately, ahead of the player/spawn-points/default
         // dispatch below — it has no terrain dependency (a plain Transform + Camera3d spawn) and,
@@ -1437,6 +1439,113 @@ fn warn_camera_modes_registry(scene: &GameSceneV2) {
                 key
             );
         }
+    }
+}
+
+/// Design-time counterpart: `ironhold_cli validate`'s `label_depth_scale_min_scale_out_of_range`
+/// hard error. `resolve_label_depth_scale` silently clamps any out-of-range `min_scale` to
+/// `[0.0, 1.0]` at every consumer (see its doc comment) — this is the one-time scene-load signal
+/// for the WASM-only designer who never runs `ironhold_cli validate`. A value `> 1.0` pins every
+/// depth-scaled widget in this scene at that factor forever; a negative value is inert (never
+/// binds against an already-non-negative ratio) rather than doing anything useful. See
+/// `planning/features/label_depth_scale_validation.md`.
+fn warn_label_depth_scale_min_scale_out_of_range(scene: &GameSceneV2) {
+    let Some(cfg) = &scene.label_depth_scale else { return };
+    let Some(min_scale) = cfg.min_scale else { return };
+    if !min_scale.is_finite() {
+        warn!(
+            "label_depth_scale.min_scale in scene {:?} is {} (not a finite number) — clamped to \
+             0.0 at runtime (no floor). Fix the authored value in the scene file.",
+            scene.name, min_scale
+        );
+    } else if min_scale > 1.0 {
+        warn!(
+            "label_depth_scale.min_scale in scene {:?} is {} — outside [0.0, 1.0]. Without this \
+             fix, every nameplate/stat label/bar in this scene would pin at {:.0}% size forever, \
+             regardless of camera distance — the engine now clamps it to 1.0 (100%) instead. Fix \
+             the authored value in the scene file.",
+            scene.name, min_scale, min_scale * 100.0
+        );
+    } else if min_scale < 0.0 {
+        warn!(
+            "label_depth_scale.min_scale in scene {:?} is {} — outside [0.0, 1.0]. Negative \
+             values are silently inert (no effect on scaling) rather than doing anything useful. \
+             Clamped to 0.0 at runtime; fix the authored value in the scene file.",
+            scene.name, min_scale
+        );
+    }
+}
+
+/// Design-time counterpart: `ironhold_cli validate --strict`'s
+/// `label_depth_scale_reference_distance_outside_camera_range` warning — same camera-radius-union
+/// approach (player-tagged prefabs' `camera`/`camera_mode`, `join_prefab_keys` local-coop
+/// character-select variants, plus the scene's own `camera_modes:` registry), same generous
+/// `0.5x`/`2.0x` band (this bug's own root cause showed actual camera-to-widget distance can
+/// exceed the raw radius range — `3rd_person_game_demo`: `Orbit` `3.0`-`18.0`, but real
+/// NPC-to-camera distances landed `16`-`26`). Skips entirely when no reachable camera has a radius
+/// concept (every player is `Fixed`/`FirstPerson`/`Flycam`, or the scene has no players), or when a
+/// `tags: ["flycam"]` entity is present — a flycam scene suppresses every player camera entirely
+/// (`SuppressPlayerCameras`, see "Player-construction sites" in this crate's `CLAUDE.md`), so
+/// unioning player radii there would compare against cameras that never actually spawn. See
+/// `planning/features/label_depth_scale_validation.md`.
+fn warn_label_depth_scale_reference_distance(
+    scene: &GameSceneV2,
+    player_configs: &[PlayerConfig],
+    prefab_catalog: &crate::schema::catalog::PrefabCatalog,
+    has_flycam: bool,
+) {
+    let Some(cfg) = &scene.label_depth_scale else { return };
+
+    let mut overall_min = f32::INFINITY;
+    let mut overall_max = f32::NEG_INFINITY;
+    let mut widen = |range: Option<(f32, f32)>| {
+        if let Some((min_r, max_r)) = range {
+            overall_min = overall_min.min(min_r);
+            overall_max = overall_max.max(max_r);
+        }
+    };
+    if !has_flycam {
+        for player in player_configs {
+            match &player.camera_mode {
+                Some(mode) => widen(mode.radius_range()),
+                None => widen(Some((player.camera.min_radius, player.camera.max_radius))),
+            }
+        }
+        for key in scene.join_prefab_keys.iter().flatten() {
+            let Some(prefab) = prefab_catalog.prefabs.get(key) else { continue };
+            match &prefab.components.camera_mode {
+                Some(mode) => widen(mode.radius_range()),
+                None => {
+                    if let Some(c) = &prefab.components.camera {
+                        widen(Some((c.min_radius, c.max_radius)));
+                    }
+                }
+            }
+        }
+    }
+    for mode in scene.camera_modes.values() {
+        widen(mode.radius_range());
+    }
+
+    if !overall_min.is_finite() || !overall_max.is_finite() {
+        return;
+    }
+    let rd = cfg.reference_distance;
+    if !rd.is_finite() {
+        warn!(
+            "label_depth_scale.reference_distance in scene {:?} is {} (not a finite number) — \
+             depth scaling will never engage. Fix the authored value in the scene file.",
+            scene.name, rd
+        );
+    } else if rd < overall_min * 0.5 || rd > overall_max * 2.0 {
+        let suggested = (overall_min + overall_max) / 2.0;
+        warn!(
+            "label_depth_scale.reference_distance in scene {:?} is {:.1}, outside this scene's \
+             typical camera zoom range ({:.1}-{:.1}) — depth scaling may never visibly engage, or \
+             may engage immediately at max zoom-out. Try ~{:.1} (the range midpoint), then confirm \
+             in-browser.",
+            scene.name, rd, overall_min, overall_max, suggested
+        );
     }
 }
 

@@ -485,6 +485,13 @@ pub fn should_insert_nameplate(nameplate: Option<bool>, show: bool) -> bool {
 ///   - `per_label = Some(false)` → always disabled, regardless of scene config.
 ///   - `per_label = Some(true)`  → always enabled; uses scene params or fallback defaults.
 ///   - `per_label = None`        → inherits scene config (enabled iff scene has a block).
+///
+/// `min_scale` is silently clamped to `[0.0, 1.0]` here — the documented valid range
+/// (`LabelDepthScaleDef.min_scale`'s own doc comment) — since this is a per-widget spawn-time call
+/// site (not per-frame, but still not a place to log on every call); the design-time
+/// (`ironhold_cli validate`) and scene-load `warn!` diagnostics for an out-of-range authored value
+/// live in `validate.rs`/`scene_loader.rs`'s `warn_label_depth_scale_min_scale_out_of_range`
+/// respectively, and fire once per scene load, not per widget.
 pub(crate) fn resolve_label_depth_scale(
     scene: Option<&crate::schema::scene_v2::LabelDepthScaleDef>,
     per_label: Option<bool>,
@@ -496,10 +503,11 @@ pub(crate) fn resolve_label_depth_scale(
     if !enabled {
         return None;
     }
-    let (ref_dist, min_floor) = match scene {
+    let (ref_dist, raw_min) = match scene {
         Some(cfg) => (cfg.reference_distance, cfg.min_scale.unwrap_or(0.0)),
-        None => (50.0, 0.0),
+        None => (crate::schema::scene_v2::default_label_ref_distance(), 0.0),
     };
+    let min_floor = if raw_min.is_finite() { raw_min.clamp(0.0, 1.0) } else { 0.0 };
     Some((ref_dist, min_floor))
 }
 
