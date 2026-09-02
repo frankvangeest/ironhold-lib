@@ -1474,7 +1474,9 @@ pub struct MovementConfig {
     /// `planning/features/uphill_jump_lock.md`) from an ordinary walkable hill (where continuous
     /// contact while climbing/descending is correct, intended grounding). Valid range `(0, 90]`;
     /// `90.0` disables this check entirely (every hit counts as ground regardless of angle,
-    /// this project's pre-fix behavior). A value at/below `0` or above `90` silently breaks
+    /// this project's pre-fix behavior — see `player_movement_system::ground_cast`'s doc comment
+    /// for why the underfoot-candidate loop it's paired with doesn't change this: at `90.0` the
+    /// loop always accepts its very first candidate). A value at/below `0` or above `90` silently breaks
     /// grounding rather than just mis-tuning it — flagged by `warn_invalid_walkable_slope_limit`
     /// and `ironhold_cli validate --strict`'s `invalid_walkable_slope_limit` check. Default: 45.0.
     #[serde(default = "default_max_walkable_slope_deg")]

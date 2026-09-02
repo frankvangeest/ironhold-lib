@@ -16,11 +16,20 @@
 //! See `planning/features/uphill_jump_lock.md` for the full writeup. Style follows
 //! `player_slope_jump_tests.rs`: real Rapier physics, `player_movement_system` driven directly via
 //! `run_system_once`, one `step()` == one `FixedUpdate` tick.
+//!
+//! Also covers a second, later-discovered regression from the same slope-walkability gate: a solid
+//! (non-sensor) prop/wall pressed directly against the player could win the ground cast over the
+//! real floor beneath it (its penetrating `time_of_impact == 0` contact always beats the floor's
+//! non-zero toi), silently disabling jump entirely for any project with `double_jump_enabled:
+//! false` (every shipped project's default). Fixed by re-querying, excluding any hit whose contact
+//! point isn't actually underfoot, until a genuine floor candidate is found — see the
+//! `solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against` test below and
+//! `planning/backlog.md`'s former "solid prop disables jump" entry.
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::*;
 use ironhold_core::runtime::{InputAction, InputActionMessage};
-use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system};
+use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system, ground_cast};
 use ironhold_core::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
 use ironhold_core::schema::player::InputMap;
 
@@ -69,9 +78,10 @@ impl Probe {
     }
 }
 
-/// Byte-for-byte the same cast `player_movement_system` performs (same origin lift, same ball,
-/// same `ShapeCastOptions`, same `QueryFilter` including `.exclude_sensors()`) — so whatever this
-/// reports is exactly what the real ground check sees.
+/// Calls the exact same `ground_cast()` `player_movement_system` calls (extracted to
+/// `capabilities/player.rs` specifically so this probe can never silently drift from the real
+/// ground check by hand-duplicating its cast/loop logic) — so whatever this reports is exactly
+/// what the real ground check sees.
 fn probe(case: &mut Case) -> Option<Probe> {
     case.app.world_mut().run_system_once(
         |players: Query<(Entity, &GlobalTransform, &CharacterController)>,
@@ -79,22 +89,7 @@ fn probe(case: &mut Case) -> Option<Probe> {
          ctx: ReadRapierContext| -> Option<Probe> {
             let ctx = ctx.single().ok()?;
             let (entity, gt, controller) = players.single().ok()?;
-            const GROUND_CAST_SKIN: f32 = 0.01;
-            let lift = controller.collider_radius + GROUND_CAST_SKIN;
-            let origin = gt.translation() + Vec3::Y * lift;
-            let ball = Collider::ball(controller.collider_radius);
-            let (hit_entity, hit) = ctx.cast_shape(
-                origin,
-                Quat::IDENTITY,
-                Vec3::NEG_Y,
-                ball.raw.as_ref(),
-                ShapeCastOptions {
-                    max_time_of_impact: lift + controller.ground_cast_length,
-                    compute_impact_geometry_on_penetration: true,
-                    ..default()
-                },
-                QueryFilter::new().exclude_rigid_body(entity).exclude_sensors(),
-            )?;
+            let (hit_entity, hit) = ground_cast(&ctx, entity, gt.translation(), controller)?;
             Some(Probe {
                 name: names.get(hit_entity).map(|n| n.to_string())
                     .unwrap_or_else(|_| format!("{hit_entity:?}")),
@@ -458,23 +453,20 @@ fn loot_display_replica_no_longer_reproduces_the_playtest_symptom() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// NOT fixed by this change — a deliberately-deferred REGRESSION, not a pre-existing limitation:
-// on `main`, the ground cast was proximity-only (`hit.is_some()`), so no collider's normal was
-// ever load-bearing. This feature's slope-walkability gate is what made a solid (non-sensor)
-// prop/wall's normal matter at all, so a prop tall enough to reach the cast ball's centre now
-// vetoes the floor exactly like an unwalkable slope when the player stands pressed against it —
-// and since `can_jump`'s only reachable branch then requires `raw_grounded` (for every shipped
-// project, which defaults `double_jump_enabled: false`), this **silently disables jump entirely**,
-// not just the animation. Tracked as a real bug with a repro (`local_coop_demo`'s portal frame
-// posts) in `planning/backlog.md` ▸ Bugs — a candidate fix (gate the veto on the hit's world-space
-// contact point being at/below the feet, not beside/above) is noted there but not yet implemented
-// or verified; fixing it cleanly may instead need reading multiple candidate contacts rather than
-// the single nearest hit. Kept here as a test locking in the *current* (unfixed) behavior, not a
-// dangling TODO.
+// Fixed by this change — previously a deliberately-deferred REGRESSION, not a pre-existing
+// limitation: on `main`, the ground cast was proximity-only (`hit.is_some()`), so no collider's
+// normal was ever load-bearing. `uphill_jump_lock.md`'s slope-walkability gate is what made a solid
+// (non-sensor) prop/wall's normal matter at all, so a prop tall enough to reach the cast ball's
+// centre vetoed the floor exactly like an unwalkable slope when the player stood pressed against
+// it — and since `can_jump`'s only reachable branch requires `raw_grounded` (for every shipped
+// project, which defaults `double_jump_enabled: false`), this **silently disabled jump entirely**,
+// not just the animation. Fixed by re-querying the ground cast, excluding any hit whose contact
+// point isn't actually underfoot (a side contact, not something the character is standing on),
+// until a genuine floor candidate is found — see `player.rs`'s `raw_grounded` computation.
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn solid_prop_taller_than_cast_ball_centre_still_vetoes_when_pressed_against() {
+fn solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against() {
     let mut case = setup(|world| {
         world.spawn((
             Name::new("tall_box"),
@@ -483,11 +475,50 @@ fn solid_prop_taller_than_cast_ball_centre_still_vetoes_when_pressed_against() {
             Transform::from_xyz(2.0, 0.5, 0.0),
         ));
     });
-    let mut grounded = true;
-    for _ in 0..80 { grounded = step(&mut case, true); }
-    assert!(!grounded, "expected the deferred solid-wall-veto regression (planning/backlog.md) to \
-             still apply — if this now fails, the regression may have been fixed; update the \
-             backlog entry and this test together");
+    for tick in 0..80 {
+        assert!(step(&mut case, true), "tall wall incorrectly vetoed the floor at tick {tick}");
+    }
+    let p = probe(&mut case).expect("the floor must still be detected once the wall is excluded");
+    assert_eq!(p.name, "ground", "the wall must no longer win the cast over the real floor");
+    assert!(p.angle_from_up_deg().unwrap() < 1.0, "the floor's normal must read as walkable: {p:?}");
+
+    // Prove the actual reported symptom is gone, not just the `is_grounded` proxy `step()` reads
+    // above (coyote-buffered, so it would tolerate an occasional false `raw_grounded` reading):
+    // pressing Jump while still pressed against the wall must actually launch the player.
+    {
+        let player = case.player;
+        let mut msgs = case.app.world_mut().resource_mut::<Messages<InputActionMessage>>();
+        msgs.clear();
+        msgs.write(InputActionMessage { entity: player, action: InputAction::Move(Vec2::new(1.0, 0.0)) });
+        msgs.write(InputActionMessage { entity: player, action: InputAction::Jump(true) });
+    }
+    case.app.world_mut().run_system_once(player_movement_system).unwrap();
+    let controller = case.app.world().entity(case.player).get::<CharacterController>().unwrap();
+    let velocity = case.app.world().entity(case.player).get::<Velocity>().unwrap();
+    assert_eq!(controller.jumps_used, 1, "jump must actually fire while pressed against the wall");
+    assert!(velocity.linvel.y > 0.0, "jump must impart upward velocity: {:?}", velocity.linvel);
+}
+
+/// `TriMesh`-ground counterpart of the test above — required by `tests/CLAUDE.md`'s "TriMesh vs
+/// Cuboid ground testing" rule, since the lifted-origin ground cast has already broken twice on
+/// this exact geometry family. Confirms the wall-exclusion fix holds against the engine's real
+/// terrain collider type, not just the convex-shape family the test above uses.
+#[test]
+fn solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against_on_trimesh_terrain() {
+    let mut case = setup_trimesh(|world| {
+        world.spawn((
+            Name::new("tall_box"),
+            RigidBody::Fixed,
+            Collider::cuboid(0.5, 0.5, 0.5),
+            Transform::from_xyz(2.0, 0.5, 0.0),
+        ));
+    });
+    for tick in 0..80 {
+        assert!(step(&mut case, true), "tall wall incorrectly vetoed the TriMesh floor at tick {tick}");
+    }
+    let p = probe(&mut case).expect("the TriMesh floor must still be detected once the wall is excluded");
+    assert_eq!(p.name, "ground", "the wall must no longer win the cast over the real floor");
+    assert!(p.angle_from_up_deg().unwrap() < 1.0, "the floor's normal must read as walkable: {p:?}");
 }
 
 #[test]
