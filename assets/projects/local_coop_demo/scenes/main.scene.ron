@@ -72,6 +72,53 @@
       label: (text: "Room 2", offset: (0.0, 4.0, 0.0)),
     ),
 
+    // Direct-access shortcuts to rooms 4/7/10 (2026-09-01 playtest aid, `feature/prop-ground-veto`
+    // — room10's `cube_obstacle_room10` is the recommended manual repro object for the solid-prop
+    // ground-veto fix, and walking the full room2->room3->...->room10 portal chain to reach it
+    // every time was slow). Reuses each destination room's own already-wired forward portal prefab
+    // (`portal_to_room4`/`portal_to_room7`/`portal_to_room10` — same `id`-keyed
+    // `entity.entered:portal_to_roomN` -> `LoadScene` rule every other placement of these prefabs
+    // already uses, see `logic/rules.ron`; no new prefab or rule needed) — placed a third/fourth
+    // time here, exactly like `portal_to_room10` is already reused as room11's own back-portal.
+    // Arranged in a N/E/S/W compass around the two players' spawn point (room2 due north, unchanged
+    // above) so all four are evenly spaced and visible together as the shared party camera pulls
+    // back — not a full hub (that's `planning/backlog.md`'s still-queued "restructure main.scene.ron
+    // into a hub with a portal to every room" item; this only covers the three rooms worth
+    // shortcutting to for playtesting). East/west portals are rotated 90° so their gate opening
+    // faces back toward spawn, matching how the north-facing room2 portal already reads.
+    (
+      id: "portal_to_room4",
+      prefab: "portal_to_room4",
+      transform: (
+        translation: (15.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 4", offset: (0.0, 4.0, 0.0)),
+    ),
+
+    (
+      id: "portal_to_room7",
+      prefab: "portal_to_room7",
+      transform: (
+        translation: (0.0, 0.0, 15.0),
+        rotation_euler_deg: (0.0, 0.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 7", offset: (0.0, 4.0, 0.0)),
+    ),
+
+    (
+      id: "portal_to_room10",
+      prefab: "portal_to_room10",
+      transform: (
+        translation: (-15.0, 0.0, 0.0),
+        rotation_euler_deg: (0.0, 90.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+      label: (text: "Room 10", offset: (0.0, 4.0, 0.0)),
+    ),
+
   ],
 
   ui: [

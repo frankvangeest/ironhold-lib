@@ -835,17 +835,62 @@ never count as floor. Second, independently-found bug in the same code path: a p
 biasing every penetrating-hit angle toward 90°. Fixed by `.normalize_or_zero()`-ing the normal
 first; a fully degenerate (zero) result dots to 0 (90°, unwalkable), matching the existing
 "no computable normal" treatment for a `details: None` hit. See
-`crates/ironhold_core/tests/prop_ground_veto_tests.rs` — separately documents (without fixing) a
-narrower, **deliberately-deferred regression, not a pre-existing limitation**: on `main`, the ground
-cast was proximity-only (`hit.is_some()`), so no collider's normal was ever load-bearing; this
-feature's slope-walkability gate is what made a solid (non-sensor) prop/wall's normal matter at all,
-so a tall prop pressed directly against the player can now veto the floor the same way an unwalkable
-slope does. This **silently disables jump entirely** for any project with `double_jump_enabled:
-false` (every shipped project's default) — not just a wrong animation, since `can_jump`'s only
-reachable branch then requires `raw_grounded`. Tracked as a real bug with a repro
-(`local_coop_demo`'s portal frame posts) in `planning/backlog.md` ▸ Bugs, with a candidate fix
-(gate the veto on the hit's world-space contact point being at/below the feet, not beside/above)
-noted there but not yet implemented or verified.
+`crates/ironhold_core/tests/prop_ground_veto_tests.rs`.
+
+**A solid (non-sensor) prop/wall pressed directly against the player could also veto the floor —
+fixed by re-querying (`ground_cast`), not by touching `is_walkable_contact` (the walkability check
+itself).** This feature's slope-walkability gate is what made a solid prop/wall's normal matter at
+all: on `main`, the ground cast was proximity-only (`hit.is_some()`), so no collider's normal was
+ever load-bearing. A prop tall enough to reach the cast ball's centre (feet + `collider_radius` +
+skin ≈ 0.41m) has a penetrating (`time_of_impact == 0`) contact when the player stands pressed
+against it — this always beats the real floor's non-zero toi, so `cast_shape` (which only ever
+returns the single nearest hit) reported the wall instead of the floor, and the wall's
+near-horizontal EPA normal then correctly-but-wrongly failed the walkability check. Silently
+disabled jump entirely for any project with `double_jump_enabled: false` (every shipped project's
+default) — not just a wrong animation, since `can_jump`'s only reachable branch then requires
+`raw_grounded`.
+
+Fixed by extracting the walkability check into `is_walkable_contact()` and the whole ground
+shape-cast (origin lift, `ShapeCastOptions`, `QueryFilter`) into `ground_cast()` — both `pub fn`s in
+`capabilities/player.rs`, shared by `player_movement_system` and its test probe
+(`prop_ground_veto_tests.rs::probe()`, which now calls `ground_cast` directly instead of hand-
+duplicating it, closing a real "the test and the engine can silently drift" risk a review flagged).
+`ground_cast` re-queries in a bounded loop (`MAX_GROUND_CAST_CANDIDATES = 4`), excluding (via
+`QueryFilter::predicate`, only attached once there's actually something to exclude) any hit that is
+**both** not underfoot **and** not walkable, until an accepted candidate is found or every
+candidate this tick is exhausted:
+
+- **"Underfoot"** — the contact point (`ShapeCastHitDetails.witness1`, confirmed genuinely
+  world-space for `cast_shape` despite a misleading doc comment inherited from parry — verified
+  against `bevy_rapier3d-0.33.0/src/plugin/context/mod.rs`'s `RapierContext::cast_shape` doc
+  comment, ~line 478) is at or below `feet_pos.y + collider_radius * 0.5`. A hit with no computable
+  contact point (`details: None`) defaults to underfoot — its fate is decided by the walkability
+  check either way, which itself treats a detail-less hit as unwalkable unless the `90.0` escape
+  hatch is set.
+- **Both conditions, not "not underfoot" alone**, is load-bearing — a first version of this fix
+  rejected any non-underfoot hit unconditionally and was caught by system-architect review before
+  landing: `collider_radius * 0.5` alone imposes a hidden `acos(1 - 0.5) = 60°` walkable-slope
+  ceiling *independent of* `max_walkable_slope_deg` (both the tolerance and a slope's contact-height
+  offset scale with `collider_radius`, so the ceiling angle doesn't depend on it) — a project
+  authoring a steeper walkable slope, or a player merely spawned slightly inside geometry (a
+  deep-penetration contact after a teleport/`at_entity` placement), would have had its own genuine
+  floor contact wrongly excluded, turning a previously-grounded tick ungrounded. Requiring **both**
+  conditions to fail before excluding makes the loop monotone — the underfoot check can only ever
+  *rescue* a hit `is_walkable_contact` alone would have rejected (the wall case, the actual bug),
+  never *reject* one `is_walkable_contact` alone would have accepted. This is also what makes the
+  `max_walkable_slope_deg >= 90.0` escape hatch restore this project's exact pre-fix proximity-only
+  behavior even after this loop was added: at `90.0` every hit is walkable, so the very first
+  candidate is always accepted with zero exclusions.
+
+**Known remaining gap, tracked as its own bug (`planning/backlog.md` ▸ Bugs), not covered by this
+fix:** `QueryFilter::predicate` excludes by whole `Entity`, so a wall that's part of the *same*
+collider entity as the walkable floor beneath it — any compound-collider prop with a tall-enough
+component shape, not only a raised terrain edge carved into one `TriMesh` — still excludes both
+together, reproducing the identical full-jump-lock symptom. No shipped project's compound colliders
+currently combine a tall component with player-reachable floor geometry this way.
+
+See `prop_ground_veto_tests.rs::solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against`
+(and its `_on_trimesh_terrain` sibling) plus `player_slope_jump_tests.rs::walkable_slope_steeper_than_the_ground_cast_underfoot_tolerance_is_still_grounded`.
 
 `jump_air_grace_ticks()` clamps its input velocity via `f32::max(0.0, vel)` (which also launders a
 NaN velocity — from a negative/misconfigured `jump`/`double_jump_height` — to `0.0`) and floors

@@ -224,6 +224,169 @@ pub fn update_player_speed_system(
     }
 }
 
+/// Whether a ground-cast hit's contact normal is within the walkable slope limit — the single
+/// source of truth for "is this actually floor", shared by `ground_cast`'s underfoot-candidate
+/// loop below (see its doc comment) and `player_movement_system`'s own final `raw_grounded` check.
+/// A hit with no computable normal (`details: None`, a `Failed`-status cast) is treated as
+/// unwalkable rather than assumed walkable, UNLESS `max_walkable_slope_deg >= 90.0` (the
+/// documented "disable this check" escape hatch — see `MovementConfig.max_walkable_slope_deg`'s
+/// doc comment), in which case any hit at all counts as walkable regardless of its normal
+/// (including a detail-less hit, which would otherwise incorrectly stay ungrounded even at the
+/// maximum limit) — this is what makes `90.0` restore this project's original pre-fix
+/// proximity-only grounding exactly, even after `ground_cast`'s underfoot filter (below) was
+/// added: at `90.0`, the very first hit `ground_cast` finds is always walkable, so it's accepted
+/// immediately with zero exclusion iterations, matching the old single-cast behavior.
+fn is_walkable_contact(controller: &CharacterController, details: Option<ShapeCastHitDetails>) -> bool {
+    controller.max_walkable_slope_deg >= 90.0 || details.is_some_and(|d| {
+        // `normalize_or_zero()`, not a bare `.dot()`: on a *penetrating* hit (`time_of_
+        // impact == 0`) parry's EPA normal is not unit length (measured ~0.52 in
+        // practice, not 1.0) — an un-normalized `.dot(Vec3::Y).acos()` computes
+        // `acos(|n| * cos(theta))`, not the real angle theta, silently biasing every
+        // penetrating-hit angle toward 90°. Harmless when the surface really is steep
+        // (still correctly unwalkable either way), but would report a false "too steep"
+        // for a genuinely walkable penetrating contact. A zero-length result (fully
+        // degenerate normal) dots to 0, giving a 90° angle — unwalkable, matching the
+        // existing "no computable normal" treatment above.
+        let normal = d.normal1.normalize_or_zero();
+        let angle_from_up_deg = normal.dot(Vec3::Y).clamp(-1.0, 1.0).acos().to_degrees();
+        angle_from_up_deg <= controller.max_walkable_slope_deg
+    })
+}
+
+/// The ground-detection shape-cast, including the underfoot-candidate re-query loop — shared by
+/// `player_movement_system` and its test probe (`prop_ground_veto_tests.rs`) so the two can never
+/// silently diverge (see `planning/backlog.md`'s former "solid prop disables jump" entry for the
+/// bug this loop fixes: a solid prop/wall pressed against the player has a penetrating,
+/// `time_of_impact == 0` contact that always beats the real floor's non-zero toi, so
+/// `RapierContext::cast_shape` — which only ever returns the single nearest hit — reported the
+/// wall instead of the floor).
+///
+/// Sphere cast from *above* the entity origin (feet), not from the feet themselves. Using a ball
+/// equal to the capsule radius rather than a point ray means the detection covers the full
+/// bottom-hemisphere footprint, so sloped and rough terrain is handled correctly — matching how
+/// Unity's CharacterController and Godot's CharacterBody3D sweep the capsule shape for floor
+/// detection.
+///
+/// Casting from the feet position itself (this project's original approach) starts the ball
+/// already embedded in whatever's below — a resting character's feet sit exactly on the surface.
+/// On a solid convex shape (e.g. a thick box) EPA still happens to resolve the minimum-translation
+/// vector straight up, matching the true surface normal by geometric coincidence. On this
+/// project's real terrain collider — a zero-thickness `TriMesh` (`capabilities/terrain.rs`) —
+/// there is no "up" to resolve through; the shortest way out of a buried point on a flat plane is
+/// sideways, so the returned normal comes back ~90° from vertical regardless of the triangle's
+/// actual slope, misclassifying it as unwalkable *at every angle, including dead flat*. Confirmed
+/// independently by two post-implementation reviews (measured against real `rapier3d`/`parry3d`)
+/// before this was caught — this bug never reproduced in `player_slope_jump_tests.rs` because
+/// every test there uses a solid `Collider::cuboid` slope, the one geometry family where the bug
+/// is invisible.
+///
+/// Lifting the cast's start point above the surface by the ball's own radius (plus a small skin
+/// margin so it doesn't re-embed from floating-point slop) guarantees the cast begins genuinely
+/// separated, so EPA/GJK always resolves the real contact normal — verified against both solid
+/// and `TriMesh` geometry. `max_time_of_impact` is extended by the same lift so the total reach
+/// below the feet stays exactly `collider_radius + ground_cast_length` (every formula derived from
+/// that combined reach — `ground_sensor_reach()`, `jump_air_grace_ticks()`, the design-time
+/// `warn!`/`ironhold_cli validate` check — needs no change).
+///
+/// The underfoot-candidate loop below re-queries (bounded at `MAX_GROUND_CAST_CANDIDATES`),
+/// excluding any hit whose contact point isn't actually underfoot AND isn't itself walkable —
+/// both conditions, not either alone, so a legitimate floor contact is never wrongly excluded:
+/// (1) a solid wall's contact is both above-tolerance and unwalkable (near-horizontal normal), so
+/// it's correctly excluded; (2) a walkable slope steeper than `acos(1 - 0.5) = 60°` (where the
+/// contact point would otherwise read as "not underfoot" purely from geometry) is still accepted,
+/// since its normal passes `is_walkable_contact` regardless of contact height; (3) a contact point
+/// that reads as deeply "not underfoot" only because the player is momentarily penetrating the
+/// floor by more than the tolerance (e.g. right after a spawn/teleport/`at_entity` placement) is
+/// also still accepted for the same reason. This makes the filter monotone — the underfoot check
+/// can only ever *rescue* a hit `is_walkable_contact` alone would have rejected (the wall case,
+/// the actual bug), never *reject* one `is_walkable_contact` alone would have accepted — so this
+/// fix cannot itself turn a previously-grounded tick ungrounded.
+pub fn ground_cast(
+    context: &RapierContext,
+    entity: Entity,
+    feet_pos: Vec3,
+    controller: &CharacterController,
+) -> Option<(Entity, ShapeCastHit)> {
+    const GROUND_CAST_SKIN: f32 = 0.01;
+    const MAX_GROUND_CAST_CANDIDATES: usize = 4;
+    let lift = controller.collider_radius + GROUND_CAST_SKIN;
+    let cast_origin = feet_pos + Vec3::Y * lift;
+    // Build a sphere matching the capsule's bottom hemisphere and sweep it downward. Passing the
+    // raw parry shape is required; bevy_rapier3d's Collider wrapper does not implement the parry
+    // Shape trait directly.
+    let ground_ball = Collider::ball(controller.collider_radius);
+    let cast_options = ShapeCastOptions {
+        max_time_of_impact: lift + controller.ground_cast_length,
+        // Already `true` in `ShapeCastOptions::default()` (parry3d) — kept explicit as a pin
+        // against that default ever changing, since without it a near-zero-clearance resting
+        // contact (`PenetratingOrWithinTargetDist` status) omits the hit normal entirely, silently
+        // defeating the walkable-slope check.
+        compute_impact_geometry_on_penetration: true,
+        ..default()
+    };
+    // Half the cast ball's own radius: comfortably below a wall's contact height (close to a full
+    // `collider_radius` above the feet when the ball is embedded against a vertical surface) while
+    // generous enough for genuine floor variance — per-tick position/slope drift under continuous
+    // physics resolution is a small fraction of the collider radius at any sane walk speed. Note
+    // this alone would impose a hidden `acos(1 - 0.5) = 60°` walkable-slope ceiling independent of
+    // `max_walkable_slope_deg` — closed by also accepting any `is_walkable_contact` hit regardless
+    // of this tolerance (see the loop below).
+    let underfoot_tolerance = controller.collider_radius * 0.5;
+    let mut excluded_this_tick: Vec<Entity> = Vec::new();
+    loop {
+        if excluded_this_tick.len() >= MAX_GROUND_CAST_CANDIDATES {
+            return None;
+        }
+        let excluded = &excluded_this_tick;
+        let predicate = move |e: Entity| !excluded.contains(&e);
+        let mut filter = QueryFilter::new()
+            .exclude_rigid_body(entity)
+            // `.exclude_sensors()`: a `trigger_zone` prefab field spawns a child entity with
+            // `Collider::ball(radius)` + `Sensor` (`entity_spawner.rs`'s `attach_prefab_
+            // features`) — a ghost collider that must never count as floor. Without this, the
+            // ground cast could sweep straight into a nearby prop's trigger-zone sensor and treat
+            // it as a hit — a real playtest bug (`planning/features/uphill_jump_lock.md`). Matches
+            // the existing `exclude_sensors()` precedent in `capabilities/npc.rs`'s
+            // line-of-sight raycast.
+            .exclude_sensors();
+        // Only attach the predicate once there's something to exclude — the overwhelmingly common
+        // case (open ground, or any solid prop/wall the player hasn't already been pressed against
+        // this same tick) never needs it, and skipping it avoids an extra indirect call +
+        // collider→entity decode per broad-phase candidate on every single ground cast, not just
+        // the rare re-query path.
+        if !excluded_this_tick.is_empty() {
+            filter = filter.predicate(&predicate);
+        }
+        let (hit_entity, candidate) = context.cast_shape(
+            cast_origin,
+            Quat::IDENTITY,
+            Vec3::NEG_Y,
+            ground_ball.raw.as_ref(),
+            cast_options,
+            filter,
+        )?;
+        // `witness1` (`ShapeCastHitDetails`) is world-space here despite parry's own
+        // "local-space" doc comment on the type (`parry3d-0.25.3/src/query/shape_cast/
+        // shape_cast.rs`) — verified against `bevy_rapier3d-0.33.0/src/plugin/context/mod.rs`'s
+        // `RapierContext::cast_shape` doc comment (~line 478), which explicitly states witness/
+        // normal 1 refer to the world collider, in world space. (Two nearby lookalike doc
+        // comments in the same crate are not this citation: one sits inside a commented-out
+        // `cast_shape_nonlinear` wrapper, the other documents `rapier3d`'s own
+        // `cast_shape_nonlinear`, not the plain `cast_shape` this code calls.)
+        // A hit with no computable contact point (`details: None`, a `Failed` status) is treated
+        // as underfoot by default — its fate is decided by `is_walkable_contact` below either way
+        // (which itself treats a detail-less hit as unwalkable, unless the `90.0` escape hatch is
+        // set), so this default only matters for which branch of the `||` accepts it; it doesn't
+        // change the outcome.
+        let is_underfoot = candidate.details
+            .map_or(true, |d| d.witness1.y <= feet_pos.y + underfoot_tolerance);
+        if is_underfoot || is_walkable_contact(controller, candidate.details) {
+            return Some((hit_entity, candidate));
+        }
+        excluded_this_tick.push(hit_entity);
+    }
+}
+
 pub fn player_movement_system(
     time: Res<Time>,
     mut input_events: MessageReader<InputActionMessage>,
@@ -259,107 +422,13 @@ pub fn player_movement_system(
         // reset logic reads this instead of `loco.is_grounded` once coyote-time is applied.
         let raw_grounded;
         if let Some(ref context) = rapier_context {
-            // Sphere cast from *above* the entity origin (feet), not from the feet themselves.
-            // Using a ball equal to the capsule radius rather than a point ray means the
-            // detection covers the full bottom-hemisphere footprint, so sloped and rough terrain
-            // is handled correctly — matching how Unity's CharacterController and Godot's
-            // CharacterBody3D sweep the capsule shape for floor detection.
-            //
-            // Casting from the feet position itself (this project's original approach) starts
-            // the ball already embedded in whatever's below — a resting character's feet sit
-            // exactly on the surface. On a solid convex shape (e.g. a thick box) EPA still
-            // happens to resolve the minimum-translation vector straight up, matching the true
-            // surface normal by geometric coincidence. On this project's real terrain collider —
-            // a zero-thickness `TriMesh` (`capabilities/terrain.rs`) — there is no "up" to
-            // resolve through; the shortest way out of a buried point on a flat plane is
-            // sideways, so the returned normal comes back ~90° from vertical regardless of the
-            // triangle's actual slope, misclassifying it as unwalkable *at every angle,
-            // including dead flat*. Confirmed independently by two post-implementation reviews
-            // (measured against real `rapier3d`/`parry3d`) before this was caught — this bug
-            // never reproduced in `player_slope_jump_tests.rs` because every test there uses a
-            // solid `Collider::cuboid` slope, the one geometry family where the bug is invisible.
-            //
-            // Lifting the cast's start point above the surface by the ball's own radius (plus a
-            // small skin margin so it doesn't re-embed from floating-point slop) guarantees the
-            // cast begins genuinely separated, so EPA/GJK always resolves the real contact
-            // normal — verified against both solid and `TriMesh` geometry. `max_time_of_impact`
-            // is extended by the same lift so the total reach below the feet stays exactly
-            // `collider_radius + ground_cast_length`, unchanged from before this fix (every
-            // formula derived from that combined reach — `ground_sensor_reach()`,
-            // `jump_air_grace_ticks()`, the design-time `warn!`/`ironhold_cli validate` check —
-            // needs no change).
-            const GROUND_CAST_SKIN: f32 = 0.01;
+            // See `ground_cast`'s doc comment for the full ground-detection design (sphere-cast
+            // origin lift, TriMesh-vs-cuboid normal caveat, and the underfoot-candidate re-query
+            // loop that stops a solid prop/wall from vetoing a legitimate floor beneath it) and
+            // `is_walkable_contact`'s for the walkable-slope-angle check.
             let feet_pos = global_transform.translation();
-            let lift = controller.collider_radius + GROUND_CAST_SKIN;
-            let cast_origin = feet_pos + Vec3::Y * lift;
-            // Build a sphere matching the capsule's bottom hemisphere and sweep it
-            // downward. Passing the raw parry shape is required; bevy_rapier3d's
-            // Collider wrapper does not implement the parry Shape trait directly.
-            let ground_ball = Collider::ball(controller.collider_radius);
-            let hit = context.cast_shape(
-                cast_origin,
-                Quat::IDENTITY,
-                Vec3::NEG_Y,
-                ground_ball.raw.as_ref(),
-                ShapeCastOptions {
-                    max_time_of_impact: lift + controller.ground_cast_length,
-                    // Already `true` in `ShapeCastOptions::default()` (parry3d) — kept explicit
-                    // as a pin against that default ever changing, since without it a
-                    // near-zero-clearance resting contact (`PenetratingOrWithinTargetDist`
-                    // status) omits the hit normal entirely, silently defeating the
-                    // walkable-slope check below.
-                    compute_impact_geometry_on_penetration: true,
-                    ..default()
-                },
-                // `.exclude_sensors()`: a `trigger_zone` prefab field spawns a child entity with
-                // `Collider::ball(radius)` + `Sensor` (`entity_spawner.rs`'s `attach_prefab_
-                // features`) — a ghost collider that must never count as floor. Without this, the
-                // ground cast (which excludes only the player's own body, not other colliders)
-                // could sweep straight into a nearby prop's trigger-zone sensor and treat it as a
-                // hit — a real playtest bug (`planning/features/uphill_jump_lock.md`): standing on
-                // ordinary flat ground within a trigger radius (up to `radius + collider_radius`,
-                // e.g. ~2.9m for `3rd_person_game_demo`'s chest prop) latched the falling animation
-                // on, because the cast ball starts *inside* the sensor sphere (a large, nearby
-                // trigger zone easily contains it), returning a `time_of_impact == 0` penetrating
-                // hit whose radial EPA normal is ~horizontal — unwalkable by construction,
-                // regardless of the real floor sitting right there at a real (if slightly greater)
-                // toi. Matches the existing `exclude_sensors()` precedent in
-                // `capabilities/npc.rs`'s line-of-sight raycast.
-                QueryFilter::new().exclude_rigid_body(entity).exclude_sensors(),
-            );
-            // A hit alone isn't "ground" — only a surface within the walkable slope limit is.
-            // Without this, a surface steeper than intended (a cliff face, a wall) reports
-            // grounded for as long as the sensor stays in range while sliding down it, letting
-            // `jumps_used` reset every tick (see the reset logic below) — an unbounded re-jump
-            // exploit on any sufficiently long unwalkable descent. This is the same normal-angle
-            // concept Unity's `CharacterController.slopeLimit`, Unreal's `WalkableFloorAngle`, and
-            // Godot's `floor_max_angle` all use to define "floor". See
-            // `planning/features/uphill_jump_lock.md`.
-            //
-            // `details` (and thus the normal) can still be `None` on a hit whose status is
-            // `Failed` — treat a hit with no normal as ungrounded rather than assuming it's
-            // walkable, UNLESS `max_walkable_slope_deg >= 90.0` (the documented "disable this
-            // check" escape hatch — see `MovementConfig.max_walkable_slope_deg`'s doc comment),
-            // in which case any hit at all counts as ground regardless of its normal, restoring
-            // this project's pre-fix proximity-only behavior exactly (including for a
-            // detail-less hit, which would otherwise incorrectly stay ungrounded even at the
-            // maximum limit).
-            raw_grounded = hit.is_some_and(|(_, hit)| {
-                controller.max_walkable_slope_deg >= 90.0 || hit.details.is_some_and(|d| {
-                    // `normalize_or_zero()`, not a bare `.dot()`: on a *penetrating* hit (`time_of_
-                    // impact == 0`) parry's EPA normal is not unit length (measured ~0.52 in
-                    // practice, not 1.0) — an un-normalized `.dot(Vec3::Y).acos()` computes
-                    // `acos(|n| * cos(theta))`, not the real angle theta, silently biasing every
-                    // penetrating-hit angle toward 90°. Harmless when the surface really is steep
-                    // (still correctly unwalkable either way), but would report a false "too steep"
-                    // for a genuinely walkable penetrating contact. A zero-length result (fully
-                    // degenerate normal) dots to 0, giving a 90° angle — unwalkable, matching the
-                    // existing "no computable normal" treatment just above.
-                    let normal = d.normal1.normalize_or_zero();
-                    let angle_from_up_deg = normal.dot(Vec3::Y).clamp(-1.0, 1.0).acos().to_degrees();
-                    angle_from_up_deg <= controller.max_walkable_slope_deg
-                })
-            });
+            let hit = ground_cast(context, entity, feet_pos, &controller);
+            raw_grounded = hit.is_some_and(|(_, hit)| is_walkable_contact(&controller, hit.details));
             // Coyote-time debounce: only delays *leaving* the ground, never *returning* to it —
             // becoming grounded always refreshes the buffer to full and reports grounded
             // immediately, with no added latency on landing. Without this, a single-tick sensor

@@ -324,6 +324,31 @@ fn custom_walkable_slope_limit_is_respected() {
 }
 
 #[test]
+fn walkable_slope_steeper_than_the_ground_cast_underfoot_tolerance_is_still_grounded() {
+    // Regression guard for a real bug caught in review (`planning/claude_suggestions.md`, Physics
+    // / Movement section) and never before covered by this file: `ground_cast()`
+    // (`capabilities/player.rs`) also gates a hit's floor-candidacy on whether its contact point
+    // reads as "underfoot" (`witness1.y <= feet_pos.y + collider_radius * 0.5`), a check needed to
+    // stop a solid prop/wall from vetoing a legitimate floor beneath it. That underfoot tolerance
+    // alone imposes a hidden `acos(1 - 0.5) = 60°` ceiling on which slopes can ever read as
+    // "underfoot" — independent of `max_walkable_slope_deg` — since both the tolerance and a
+    // slope's own contact-height offset scale with `collider_radius`. `ground_cast` closes this by
+    // also accepting any hit whose *normal* is walkable regardless of underfoot status, but nothing
+    // before this test proved that: every other slope-limit test in this file tops out at 30°, well
+    // under the ceiling. A 65° slope with the limit explicitly raised to 70° must still be grounded
+    // — if this regresses back to "not grounded", the underfoot-only version of the fix (which
+    // silently reintroduces this exact bug class on any project authoring a walkable slope steeper
+    // than 60°) has been reintroduced.
+    let mut case = setup_case_with_slope_limit(65.0, 5.94, false, 1, 70.0);
+    for tick in 0..60 {
+        let (grounded, _) = step(&mut case, true, false);
+        assert!(grounded, "a 65° slope must stay grounded when max_walkable_slope_deg is 70° \
+                 (tick {tick}) — the ground cast's underfoot tolerance must not impose its own \
+                 hidden slope ceiling");
+    }
+}
+
+#[test]
 fn standing_still_is_grounded_on_flat_ground() {
     // Positive control missing from every other test in this file (all of them exercise jump
     // cadence, which only proves the *negative* case — never that a resting player is correctly
