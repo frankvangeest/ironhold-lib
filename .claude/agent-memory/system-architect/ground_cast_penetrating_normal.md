@@ -92,6 +92,45 @@ floor underneath. Two instances:
   at/below the feet. Fallback: one bounded `exclude_collider` re-cast. The "read the full contact
   manifold" fix in `claude_suggestions.md` is the general answer but much larger.
 
+**`witness1` world-space chain — fully traced 2026-09-01, don't re-derive.** Verified end to end
+against the vendored crates for the *filtered* call path `player.rs` actually uses:
+`RapierContextSystemParam::cast_shape` (bevy_rapier3d-0.33
+`plugin/context/systemparams/rapier_context_systemparam.rs:415`) → `with_query_pipeline` →
+`RapierQueryPipeline::new_scoped` (`plugin/context/mod.rs:245`) →
+`rapier3d::QueryPipeline::cast_shape` (`pipeline/query_pipeline.rs:482`) →
+`CompositeShapeRef::cast_shape` (parry3d-0.25.3
+`query/shape_cast/shape_cast_composite_shape_shape.rs:14`), whose leaf callback gets
+`part_pose1 = co.position()` — the collider's **world** isometry (rapier3d
+`query_pipeline.rs:122-134`, `map_untyped_part_at`) — and returns `hit.transform1_by(part_pose1)`,
+which maps `witness1`/`normal1` (only those two; `witness2`/`normal2` are left alone) into world
+space (parry3d `query/shape_cast/shape_cast.rs:83-92`). **No further transform is applied**, so
+`witness1` is genuinely world-space in `player.rs`. Nested composites (compound colliders, TriMesh
+sub-parts) compose correctly — the inner hit is in the part frame and the outer `transform1_by`
+lifts it to world.
+**Citation correction to the older note above:** the authoritative "witness and normal 1 refer to
+the world collider, and are in world space" doc is at **bevy_rapier3d `src/plugin/context/mod.rs`
+lines 475-478** (on `RapierQueryPipeline::cast_shape`). Two nearby occurrences are *not* usable
+citations: `mod.rs:520` is inside a commented-out `/* TODO */` block for the disabled
+`nonlinear_cast_shape`, and rapier3d `query_pipeline.rs:496` documents `cast_shape_nonlinear`.
+
+**`QueryFilter::predicate` ANDs, never overrides** (rapier3d-0.31 `query_pipeline.rs:681-691`):
+`test()` is `exclude_collider && exclude_rigid_body && groups && flags.test() && predicate`. So
+`.exclude_rigid_body(..).exclude_sensors().predicate(..)` all apply together. bevy_rapier wraps the
+`Fn(Entity)` predicate via `to_rapier_query_filter_predicate` (`plugin/context/mod.rs:234`), which
+resolves the entity with `RapierContextColliders::entity_from_collider` — **the exact same mapping
+`cast_shape` uses for its returned `Entity`**. That identity is what makes an
+"exclude-the-last-hit-and-re-cast" loop guaranteed to terminate. Filtering happens in
+`map_untyped_part_at` *before* the narrow phase, so an excluded leaf is genuinely skipped and the
+next-nearest hit surfaces.
+
+**Underfoot-contact test geometry (derived 2026-09-01, `feature/prop-ground-veto`).** With the
+lifted cast (ball radius `R = collider_radius`, origin `feet + (R + 0.01)·Y`): a *flat* floor gives
+`witness1.y == feet.y`; a slope of angle θ gives `witness1.y == feet.y + R·(1 − cos θ)`; a *vertical
+wall* the player is pressed against gives `witness1.y ≈ feet.y + R` (EPA's MTV is horizontal, so
+point1 sits at the ball centre's height). A tolerance of `R · k` therefore imposes a hard walkable
+slope ceiling of `acos(1 − k)`, **independent of `collider_radius`** (both sides scale with R):
+`k = 0.5` ⇒ exactly 60°. Above that the real floor's own contact reads as "not underfoot".
+
 **`QueryFilter` cost:** `QueryFilterFlags::test` (rapier3d-0.31 `pipeline/query_pipeline.rs:601`)
 is a bitflag + `collider.is_sensor()` bool per *candidate collider*, evaluated before narrow phase
 — so `.exclude_sensors()` is strictly cost-*negative* here: it removes sensor leaves from the

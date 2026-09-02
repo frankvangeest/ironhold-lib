@@ -2,7 +2,7 @@
 - [Targeting capability hot path](project_targeting_capability.md) — click_select/tab_targeting both input-gated; cheap on idle frames; allocations only on click/Tab
 - [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — String/frame per `bind:`-labels only (DynamicLabel-gated, static scene labels are FREE); render-write guarded by text.0 != new_text
 - [rewrite_target string substitution](project_rewrite_target.md) — runs per action pushed; .replace allocations only when actions fire (not per-frame); canonical copy now in message_interpreter.rs
-- [WASM binary size](project_wasm_size.md) — release ~58 MB (measured 2026-07-06; prior 90.7 MB was stale), warn 95, hard block 100; dev builds ~190 MB (ignore); feature work adds zero deps
+- [WASM binary size](project_wasm_size.md) — release **30.6 MB** measured 2026-09-01 (wasm-opt re-enabled halved it from 58); warn 95, block 100; huge headroom; always measure, never quote 90.7
 - [Dynamic split-screen system](project_dynamic_split_screen.md) — Stage 5: dynamic_split_screen_system per-frame render-chain; None-config early-return free; per-frame 2-elem Vec alloc when active (nit); 3 cams/scene, max 2 active
 - [NPC locomotion bridge](project_npc_locomotion_bridge.md) — npc_behavior_system (FixedUpdate) writes LocomotionState read by animation_resolver (Update); is_grounded written unconditionally (latent footgun)
 - [NPC physics spawn](project_npc_physics_spawn.md) — spawn_prefab_instance adds Dynamic body for components.npc; per-spawn not per-frame; Rapier WASM-safe; risk is never-sleeping body count
@@ -33,3 +33,4 @@
 - [Animation hot path](project_animation_hot_path.md) — bevy 0.18 evaluates PAUSED clips every frame (freeze:true is NOT free); graph node count = policy-referenced clips only; 42-joint zombie ×6 corpses; no new pipeline
 - [Mouse wheel units on web](project_mouse_wheel_web_units.md) — WASM gets MouseScrollUnit::Pixel scaled by devicePixelRatio (native Win gets Line); DOM_DELTA_PAGE dropped by winit; read() empty on idle frames so per-event work is free
 - [Label depth scale](project_label_depth_scale.md) — resolve_label_depth_scale is spawn-time-only despite "hot" doc wording (don't re-flag); spawn_scene_v2 warn_* block is one-shot; ref_distance 20.0 must track default_camera_config max_radius (baselines!)
+- [Ground cast retry loop](project_ground_cast_loop.md) — player_movement_system FixedUpdate shape-cast now bounded loop (max 4); typical case still 1 cast + ZERO alloc; as_query_pipeline is O(1); FixedUpdate catch-up multiplies per-tick cost
