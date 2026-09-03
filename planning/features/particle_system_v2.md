@@ -1,7 +1,7 @@
 # Feature: Particle System v2 — Scalable Stylized Effects
 
 _Status: Draft_
-_Planned at: `2cc61ca` (2026-05-19)_
+_Planned at: `ff085be` (2026-05-19)_
 
 ---
 

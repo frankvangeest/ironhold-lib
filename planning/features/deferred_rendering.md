@@ -1,7 +1,7 @@
 # Feature: Deferred Rendering
 
 _Status: Draft_
-_Planned at: `9ca3af5` (2026-06-02)_
+_Planned at: `70ef313` (2026-06-02)_
 _Investigation: `planning/investigations/deferred_rendering_spike.md`_
 
 ---

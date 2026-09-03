@@ -1,7 +1,7 @@
 # Feature: Intent Event Layer
 
 _Status: Done_
-_Planned at: `f66f7b2` (2026-06-23)_
+_Planned at: `4c7d2eb` (2026-06-23)_
 
 ## What
 

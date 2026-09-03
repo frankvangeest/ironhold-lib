@@ -1,7 +1,7 @@
 # Feature: Uphill jump lock fix
 
-_Status: Done — playtest confirmed 2026-08-23, worktree HEAD `768a12c`_
-_Planned at: `48edf00` (2026-08-19)_
+_Status: Done — playtest confirmed 2026-08-23, worktree HEAD `71b60b0`_
+_Planned at: `e181d87` (2026-08-19)_
 _Plan reviewed: system-architect + ux-gamedesigner-reviewer (2026-08-19) — v1 approach rejected, v2 below incorporates both verdicts._
 
 ## Bug
@@ -15,7 +15,7 @@ _Plan reviewed: system-architect + ux-gamedesigner-reviewer (2026-08-19) — v1 
 
 No `found at` hash (predates that convention).
 
-## Reproduction (confirmed against current HEAD, `48edf00`)
+## Reproduction (confirmed against current HEAD, `e181d87`)
 
 The backlog's own theory ("jump cooldown", "contact normal threshold") doesn't match anything
 literally present in the code — there is no cooldown timer and no contact-normal check anywhere in

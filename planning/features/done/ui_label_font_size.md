@@ -1,7 +1,7 @@
 # Feature: Authorable `Label`/`Button` font size + overflow clipping
 
 _Status: Done_
-_Planned at: `452e2e2` (2026-08-28)_
+_Planned at: `f9849ca` (2026-08-28) — hash updated after the 2026-09-03 `pkg/` history purge; the original citation, `452e2e2`, was a pkg-only rebuild commit fully pruned during that purge, so this points to its parent instead (same code state)_
 
 ## What
 

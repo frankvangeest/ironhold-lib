@@ -1,7 +1,7 @@
 # Feature: Live Project Editor
 
 _Status: Draft_
-_Planned at: `dbcdf02` (2026-05-31) — revised `44d65f3` (2026-06-02)_
+_Planned at: `0d61f82` (2026-05-31) — revised `e001864` (2026-06-02)_
 
 ---
 

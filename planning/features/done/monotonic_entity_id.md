@@ -1,7 +1,7 @@
 # Feature: Monotonic per-entity id generation for RON action substitution
 
 _Status: Done_
-_Planned at: `2c3e035` (2026-08-29)_
+_Planned at: `6ef413b` (2026-08-29)_
 _Reviewed by system-architect, alignment-reviewer, debug-detective (2026-08-29) — findings folded
 in below; see `planning/claude_suggestions.md` for the deferred/follow-up items._
 _Playtest confirmed by Frank (2026-08-30), `entity_logic_demo`'s "respawning gem" demo — see

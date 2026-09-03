@@ -1,7 +1,7 @@
 # Feature: Campfire with Fire and Smoke Particles
 
 _Status: Done_
-_Planned at: `27f097d` (2026-05-16)_
+_Planned at: `b8e6f87` (2026-05-16)_
 
 ## What
 

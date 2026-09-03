@@ -1,7 +1,7 @@
 # Feature: World-space Icon Stat Bar (`WorldStatBarStyle::Icon`)
 
 _Status: Done_
-_Planned at: `d80e73b` (2026-07-17)_
+_Planned at: `039ee00` (2026-07-17)_
 
 **Code review note (2026-07-18):** alignment-reviewer, system-architect, debug-detective,
 ux-gamedesigner-reviewer, and wasm-perf-reviewer all ran in parallel post-implementation. No

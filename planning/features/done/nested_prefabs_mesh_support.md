@@ -1,7 +1,7 @@
 # Feature: Nested Prefabs — Mesh Support
 
 _Status: Done_
-_Planned at: `a173f8d` (2026-05-01)_
+_Planned at: `e26a883` (2026-05-01)_
 
 ## What
 

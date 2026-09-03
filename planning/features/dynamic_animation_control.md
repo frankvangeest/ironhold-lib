@@ -1,7 +1,7 @@
 # Feature: Dynamic animation control (seek + freeze on `PlayAnimationOn`)
 
 _Status: Done_
-_Planned at: `237e548` (2026-08-26)_
+_Planned at: `4943e7f` (2026-08-26)_
 
 > **Branched from `integration`, not `main`** (deviation from the usual `feature/{slug}` convention
 > in root `CLAUDE.md`): the corpse-fix half of this plan edits `zombie_corpse`/`snake_corpse`/

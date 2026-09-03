@@ -1,7 +1,7 @@
 # Feature: CLI validate hardening (batch: scene-path check + merchant cross-validation)
 
 _Status: Done_
-_Planned at: `e5bed27` (2026-08-30)_
+_Planned at: `06022a8` (2026-08-30)_
 _Reviewed by alignment-reviewer, system-architect, debug-detective, ux-gamedesigner-reviewer
 (2026-08-30) — all four independently converged on the same two real gaps (missing
 `ToggleOverlay` coverage, silent missing-`items_path` case); findings folded in below. See
@@ -67,7 +67,7 @@ both are trivial, mechanical, and touch the same file/pattern:
 Both are exactly the class of mistake `validate` already catches for every other reference field
 (prefab keys, effect keys, audio keys, modifier keys) — these two are just gaps in that otherwise-
 consistent coverage, not new categories of check. Item 1 was reported by an external downstream
-project consuming the WASM build (`planning/backlog.md` ▸ Bugs, `5932784`); item 2 has been Queued
+project consuming the WASM build (`planning/backlog.md` ▸ Bugs, `ea72d72`); item 2 has been Queued
 since before this session.
 
 ## Approach

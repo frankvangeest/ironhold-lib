@@ -1,7 +1,7 @@
 # Feature: Typed Primitive Shape Field
 
 _Status: Draft_
-_Planned at: `992f0f1` (2026-06-02)_
+_Planned at: `5ac086d` (2026-06-02)_
 
 > **Implementation note:** This feature and [Consistent RON enum casing](consistent_ron_enum_casing.md) both touch `PrefabDef` and require a `PREFAB_CATALOG_SCHEMA_VERSION` bump. Implement and commit them together in a single migration.
 

@@ -1,7 +1,7 @@
 # Feature: Split-Screen — Remaining Single-Camera Assumption Sites
 
 _Status: Done — all 4 phases shipped._
-_Planned at: `4848727` (2026-07-11)_
+_Planned at: `7cb222a` (2026-07-11)_
 _Plan review (2026-07-11): system-architect + ux-gamedesigner-reviewer, verdict Ready. Findings
 below are incorporated; Frank resolved the two open decisions (Phase 4 perf gating, Phase 4
 dual-spawn-site scope) the same day._
@@ -17,10 +17,10 @@ in.
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | `particle_renderer.rs` billboard orientation | Done | `aa81cbb` (2026-07-12) |
-| 2 | `targeting.rs` viewport-aware click-to-select | Done | `1c3b910` (2026-07-12) |
-| 3 | `nameplate_visibility_system` distance-culling | Done | `d00c5f7` (2026-07-12) |
-| 4 | `WorldLabelRank` extended to stat labels / world stat bars | Done | `ee3fdf8` (2026-07-13) |
+| 1 | `particle_renderer.rs` billboard orientation | Done | `4eb5295` (2026-07-12) |
+| 2 | `targeting.rs` viewport-aware click-to-select | Done | `940dbf8` (2026-07-12) |
+| 3 | `nameplate_visibility_system` distance-culling | Done | `42441f6` (2026-07-12) |
+| 4 | `WorldLabelRank` extended to stat labels / world stat bars | Done | `db63402` (2026-07-13) |
 
 ## What
 
@@ -31,16 +31,16 @@ written) and explicitly left "not touched" by
 room-name / entity labels) via `world_label_screen_pos_system`:
 
 1. ~~`particle_renderer.rs:303` (`rebuild_pool_meshes_system`) — billboard orientation basis
-   vectors.~~ **Fixed in Phase 1 (`aa81cbb`).**
+   vectors.~~ **Fixed in Phase 1 (`4eb5295`).**
 2. ~~`targeting.rs:122` (`click_select_system`) — click-to-select nearest-entity search.~~
-   **Fixed in Phase 2 (`1c3b910`).**
+   **Fixed in Phase 2 (`940dbf8`).**
 3. ~~`nameplate_visibility_system` (`nameplate.rs:212`) — distance-culling, `camera_q.single()`.~~
-   **Fixed in Phase 3 (`d00c5f7`).**
+   **Fixed in Phase 3 (`42441f6`).**
 4. ~~`WorldLabelRank`'s multi-viewport duplication only covers `scene_loader.rs`'s `world_labels:`
    and `label:` (`EntityLabelDef`) spawn loops. Stat labels, world stat bars (Ascii + Pixel),
    damage popups, and nameplate anchors are still single-instance (implicit rank 0), so they don't
    duplicate across two simultaneously-visible split viewports the way room-name labels now do.~~
-   **Fixed for `stat_label`/`Ascii`-style `world_stat_bar` in Phase 4 (`ee3fdf8`).** Pixel-style
+   **Fixed for `stat_label`/`Ascii`-style `world_stat_bar` in Phase 4 (`db63402`).** Pixel-style
    bars, damage popups, and nameplate anchors remain single-instance (deferred, see Not in scope).
 
 ## Why
@@ -144,7 +144,7 @@ demo-project addition before it can be play-tested at all.
 
 ## Approach
 
-**Phase 1 — particle billboard orientation. DONE (`aa81cbb`).** Changed `camera_q` in
+**Phase 1 — particle billboard orientation. DONE (`4eb5295`).** Changed `camera_q` in
 `rebuild_pool_meshes_system` to `Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>),
 With<Camera3d>>`, filtered `camera.is_active`, and picked the highest-priority active camera via
 `.min_by_key(camera_priority_key)` (the new shared comparator, added to `capabilities/camera.rs` and
@@ -156,7 +156,7 @@ angles, particles still only billboard correctly toward the one picked camera �
 per-viewport-correct billboarding would require duplicating particle meshes per viewport, out of
 scope (see Not in scope).
 
-**Phase 2 — `targeting.rs` viewport-aware click-to-select. DONE (`1c3b910`).** Changed
+**Phase 2 — `targeting.rs` viewport-aware click-to-select. DONE (`940dbf8`).** Changed
 `click_select_system`'s `cameras` query to `Query<(Entity, &Camera, &GlobalTransform,
 Option<&SplitViewportSlot>), With<Camera3d>>`; before the nearest-entity search, filters to
 `is_active` cameras whose `logical_viewport_rect()` contains the cursor position, then picks via
@@ -168,7 +168,7 @@ camera's viewport covers (e.g. a dead grid quadrant) now does nothing, where the
 used to fall through to "clicked empty space" and clear `CurrentTarget`; invisible in ordinary
 single-camera scenes.
 
-**Phase 3 — `nameplate_visibility_system` (store-and-read). DONE (`d00c5f7`).** Added
+**Phase 3 — `nameplate_visibility_system` (store-and-read). DONE (`42441f6`).** Added
 `NameplateCameraDistance(Option<f32>)`, a new component attached to every nameplate anchor at spawn
 time. `world_label_screen_pos_system` (which already selects one active, containment-tested camera
 per `WorldLabel` each frame) now also stashes that camera's distance onto this component whenever
@@ -191,7 +191,7 @@ normal `max_distance` scales. Acceptance criteria updated to state explicitly: b
 anchors remain single-instance (Phase 4 does not extend to them), an entity's nameplate shows in
 **at most one** viewport in split-screen — a real, accepted limitation, not a bug.
 
-**Phase 4 — stat label / world stat bar duplication. DONE (`ee3fdf8`).** Added `WorldLabelRank(rank
+**Phase 4 — stat label / world stat bar duplication. DONE (`db63402`).** Added `WorldLabelRank(rank
 as u8)` + `Visibility::Hidden` (for `rank > 0`) to **both** the scene-loader's `pending_stat_labels` /
 `WorldStatBarStyle::Ascii` spawn loops **and** `drain_dynamic_stat_ui_system`'s equivalent spawns,
 spawning `MAX_SPLIT_PLAYERS` siblings exactly like the `world_labels:`/`label:` fix — but **only
@@ -297,14 +297,14 @@ every portal).
 - [x] Phase 1: `rebuild_pool_meshes_system` — `is_active`-filtered, deterministically-ordered camera
       selection for billboard basis vectors (extract shared sort comparator here); regression test
       for the non-split single-camera case; `local_coop_demo` particle-effect playtest addition —
-      `aa81cbb`. 3 new tests in `particle_tests.rs` (2-camera split priority, single-camera
+      `4eb5295`. 3 new tests in `particle_tests.rs` (2-camera split priority, single-camera
       regression, zero-camera world-axis fallback), all passing; full `ironhold_core` test suite
       (16 binaries) + `cargo check -p ironhold_cli` green; alignment-reviewer (ALIGNED),
       system-architect (ready to merge), debug-detective (no bugs found), wasm-perf-reviewer (OK,
       negligible cost) all clean. WASM dev build clean. Playtest confirmed by Frank.
 - [x] Phase 2: `click_select_system` — viewport-aware active-camera selection by cursor position
       (reused Phase 1's comparator directly); `local_coop_demo` `click_target_test` playtest
-      addition — `1c3b910`. 3 new tests in `local_coop_tests.rs` (left-viewport click resolves
+      addition — `940dbf8`. 3 new tests in `local_coop_tests.rs` (left-viewport click resolves
       correctly even when the right camera spawns first — proving it's not iteration-order
       dependent, right-viewport click resolves correctly, single-camera regression), all passing;
       full `ironhold_core` test suite (16 binaries, including a `ron_lint` fix for a `Some(...)`
@@ -316,7 +316,7 @@ every portal).
       `NameplateCameraDistance` component for anchor `WorldLabel`s; `nameplate_visibility_system`
       reads it instead of reselecting; dropped `.single()` entirely; `local_coop_demo` nameplate-
       enable playtest addition (room3 `show_nameplates`/`faction_filter: All` +
-      `click_target_test`'s `nameplate: true` override) — `d00c5f7`. 2 new full-pipeline tests in
+      `click_target_test`'s `nameplate: true` override) — `42441f6`. 2 new full-pipeline tests in
       `local_coop_tests.rs` (split-camera agreement — proves the stashed distance matches the
       LEFT camera's pick, not the right camera's, when only the left camera's viewport actually
       shows the point; off-viewport → hidden regardless of raw distance) plus all 8 existing
@@ -333,7 +333,7 @@ every portal).
       `WorldStatBarStyle::Ascii` spawn loops, gated on the scene being split-screen (and on
       `player_configs.len() >= 2`, per the debug-detective fix); identical treatment for
       `drain_dynamic_stat_ui_system`'s stat-label/Ascii-bar spawns; `local_coop_demo` stat widget
-      playtest addition (scene-placed + dynamically-spawned) — `ee3fdf8`. 5 new tests in
+      playtest addition (scene-placed + dynamically-spawned) — `db63402`. 5 new tests in
       `local_coop_tests.rs` (split-screen duplication via full scene load, non-split regression,
       single-player-with-split-config regression) and `spawn_tests.rs` (dynamic-path duplication
       via `ActiveSplitScreen`, dynamic-path duplication via `DynamicSplitConfig` alone while

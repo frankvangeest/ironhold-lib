@@ -1,7 +1,7 @@
 # Feature: Player nameplate visibility — Player marker + own-nameplate toggle
 
 _Status: Done_
-_Planned at: `48889f1` (2026-07-03)_
+_Planned at: `c4b3af3` (2026-07-03)_
 
 ## Phases
 

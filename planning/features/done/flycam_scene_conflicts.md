@@ -1,7 +1,7 @@
 # Feature: Flycam scene conflicts — duplicate flycam tags + player/flycam priority
 
 _Status: Done_
-_Planned at: `76a1729` (2026-08-17)_
+_Planned at: `607234a` (2026-08-17)_
 _Revised after plan review (system-architect + ux-gamedesigner-reviewer), 2026-08-17 — see "Plan review changes" below._
 _Shipped 2026-08-19 — playtest confirmed by Frank, no console errors. See `planning/backlog.md`'s matching entry for the post-implementation-review summary._
 

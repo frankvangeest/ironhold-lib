@@ -1,7 +1,7 @@
 # Feature: Terrain Snap
 
 _Status: Ready_
-_Planned at: `91cd464` (2026-04-27)_
+_Planned at: `7dee9ac` (2026-04-27)_
 
 ## What
 A `snap_to_terrain: true` flag on any scene entity makes its authored Y coordinate a

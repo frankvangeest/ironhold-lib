@@ -1,8 +1,8 @@
 # Feature: NPC aggro-on-hit — Investigating state + kiting
 
 _Status: Active_
-_Planned at: `6bb3f2f` (2026-06-19)_
-_Architect-reviewed at: `22260da` (2026-06-19)_
+_Planned at: `f80aa97` (2026-06-19) — hash updated after the 2026-09-03 `pkg/` history purge; the original citation, `6bb3f2f`, was a pkg-only rebuild commit fully pruned during that purge, so this points to its parent instead (same code state)_
+_Architect-reviewed at: `eb01091` (2026-06-19)_
 _Phase 2 planned at: see `git rev-parse --short HEAD` at commit time (2026-06-19)_
 
 ## What

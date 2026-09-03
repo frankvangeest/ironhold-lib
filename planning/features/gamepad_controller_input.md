@@ -1,7 +1,7 @@
 # Feature: General Gamepad/Controller Input
 
 _Status: Done (shipped 2026-07-20)_
-_Planned at: `77a6dc9` (2026-07-19)_
+_Planned at: `5bbcaf5` (2026-07-19)_
 
 **Plan-review note (2026-07-19):** **system-architect** returned Needs-more-design-work, resolved
 as follows: (1) **Major** — `interactable_system` uses `player_query.single()` (`interactable.rs:
@@ -38,7 +38,7 @@ gamepad is not, yet); (d) two stale `docs/20_data_formats.md` passages identifie
 the sibling plan's own amendment renaming it from `keyboard_look_speed`).
 
 **Amendment (2026-07-20):** the `interactable_system` `player_query.single()` bug from point (1)
-above is now fixed (`fix/interactable-multiplayer`, `847695b`) — rewritten as a per-player loop
+above is now fixed (`fix/interactable-multiplayer`, `4ff3d31`) — rewritten as a per-player loop
 mirroring `tab_targeting_system`'s shape, same as this plan already anticipated as the eventual
 fix. Since gamepad-interact was always meant to fold into `interactable_system`'s existing keyboard
 boolean (not a separate mechanism), the single-player-only scoping below is now lifted: gamepad
@@ -121,7 +121,7 @@ second, separately-gated block) — this half of the fix works correctly in loca
 **`interactable.rs` (`interactable_system`) — now per-player, same as `tab_targeting_system`.**
 This system used to call `player_query.single()` and early-return for *all* players the moment a
 scene had 2+ `CharacterController`s — a pre-existing bug, fixed independently
-(`fix/interactable-multiplayer`, `847695b`, 2026-07-20) as a per-player loop, exactly mirroring
+(`fix/interactable-multiplayer`, `4ff3d31`, 2026-07-20) as a per-player loop, exactly mirroring
 `tab_targeting_system`'s shape. This feature folds a gamepad check into the existing per-player
 keyboard boolean (same combining shape as `tab_targeting_system`'s own gamepad-target-next fold
 below), so gamepad-interact works in every scene interact already works in today — including local
@@ -169,7 +169,7 @@ backlog item that reuses this feature's `parse_gamepad_button` helper and RON-fi
 
 ## Tasks
 - [x] **Hard dependency**: `per_player_camera_look_controls.md` merged to `integration`
-      (`01c4da3`, 2026-07-19) — this feature reuses its `OrbitCamera.look_speed`/`pitch`/
+      (`22913c8`, 2026-07-19) — this feature reuses its `OrbitCamera.look_speed`/`pitch`/
       `min_pitch`/`max_pitch` fields and its pinned pitch-direction test pattern; rebase onto it
 - [x] `InputMap`: add `gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next: String`
       (defaults matching today's hardcoded values) and `gamepad_deadzone: f32` (default `0.15`)
@@ -183,7 +183,7 @@ backlog item that reuses this feature's `parse_gamepad_button` helper and RON-fi
 - [x] `targeting.rs`: fold a gamepad-target-next check into `tab_targeting_system`'s existing
       per-player boolean (works in local co-op — this system is already per-player)
 - [x] ~~File a new `planning/backlog.md` ▸ Bugs entry~~ — done and fixed independently
-      (`fix/interactable-multiplayer`, `847695b`, 2026-07-20), ahead of this feature's
+      (`fix/interactable-multiplayer`, `4ff3d31`, 2026-07-20), ahead of this feature's
       implementation; `interactable_system` is now per-player.
 - [x] `interactable.rs`: fold a gamepad-interact check into `interactable_system`'s existing
       per-player keyboard boolean (same combining shape as `tab_targeting_system`'s

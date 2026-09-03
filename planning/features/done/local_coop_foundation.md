@@ -1,17 +1,17 @@
 # Feature: Local Co-op Foundation (2-player, shared camera, view-box clamp)
 
 _Status: Done_
-_Planned at: `c624c7b` (2026-07-03)_
+_Planned at: `ff2f33e` (2026-07-03)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `da81799` (2026-07-05) |
-| Stage 2 | Portal/teleport action (moves both players together) | Done | `8181ccd` (2026-07-05) |
-| Stage 3 | Vertical split-screen scene | Done | `b59a3e7` (2026-07-05) |
-| Stage 4 | Horizontal split-screen scene | Done | `b5844c7` (2026-07-06) |
-| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Done | `02d7ccb` (2026-07-06) |
+| Stage 1 | Two-player schema + shared framing camera + view-box clamp (this doc) | Done | `28562fa` (2026-07-05) |
+| Stage 2 | Portal/teleport action (moves both players together) | Done | `1dfc8e2` (2026-07-05) |
+| Stage 3 | Vertical split-screen scene | Done | `0b95dba` (2026-07-05) |
+| Stage 4 | Horizontal split-screen scene | Done | `0a6d231` (2026-07-06) |
+| Stage 5 | Dynamic split-screen scene (viewport follows player positions) | Done | `c8775db` (2026-07-06) |
 
 A fifth split style (diagonal) was scoped out during design discussion — Bevy's `Camera.viewport`
 is rectangle-only, so a true diagonal cut needs a custom stencil/shader mask, which is untested
@@ -287,7 +287,7 @@ mechanics.
 - [x] Play-test checklist: walk player 1 through the portal alone → both players land in room2;
       walk back through the return portal → both land in room1 at their original spawn positions.
       Confirmed by Frank; also surfaced and fixed a real UI label-overlap bug (see commit
-      `8181ccd`) not anticipated by the plan — the fixed-size `Label` box wraps/overflows
+      `1dfc8e2`) not anticipated by the plan — the fixed-size `Label` box wraps/overflows
       instead of clipping, and stacking two of them without accounting for that overlapped.
 - [x] Re-confirmed "no Rust changes" — implementation only touched `assets/projects/local_coop_demo/`
       RON files, a new test file, and this doc; `cargo check -p ironhold_cli` clean. No Rust/schema
@@ -595,7 +595,7 @@ here since Horizontal is still exactly 2 slots.
       `ActionQueue` bypass)
 - [x] Architecture review — ALIGNED, no concerns (implementation matches the plan exactly; the
       zero-change claim for `entity_spawner.rs`/`ActiveSplitScreen`/`SplitViewportSlot` verified
-      against the actual diff, confirmed unchanged since Stage 3's `b59a3e7`)
+      against the actual diff, confirmed unchanged since Stage 3's `0b95dba`)
 - [x] wasm-perf-reviewer — OK, no regressions (58 MB release size unchanged)
 - [x] `docs/20_data_formats.md` + `crates/ironhold_core/src/CLAUDE.md`: documented the `Horizontal`
       variant (audited by data-format-doc-writer — no gaps found beyond the first-pass edit)
@@ -697,7 +697,7 @@ of a static scene author's choice.
   players' starting distance (computed once at load, same formula the runtime system uses every
   frame after), and **(b)** a `Camera.order` on the party camera distinct from the split cameras'
   `0`/`1` (e.g. `2`) — cheap insurance against reintroducing the exact camera-order-ambiguity bug
-  Stage 3 fixed in `b59a3e7`, in case any frame ever has more than one camera active at once.
+  Stage 3 fixed in `0b95dba`, in case any frame ever has more than one camera active at once.
 - **New resource `DynamicSplitConfig(Option<DynamicSplitDef>)`**, mirroring `ActiveSplitScreen`'s
   populate-at-load/clear-on-`LoadScene` lifecycle, holding the thresholds for the runtime system to
   read every frame.

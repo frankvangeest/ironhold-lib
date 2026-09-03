@@ -2,8 +2,8 @@
 
 _Status: In Progress (v1 Done, v2 Revised after plan-review — recommend a confirmation pass before
 implementation)_
-_Planned at: `a59815c` (2026-07-19)_
-_v2 drafted at: `1fcef14` (2026-07-31); revised after plan-review at `2026-08-01` (see the
+_Planned at: `cfde248` (2026-07-19)_
+_v2 drafted at: `39a204f` (2026-07-31); revised after plan-review at `2026-08-01` (see the
 "Revision" note in Approach — both system-architect and ux-gamedesigner-reviewer independently
 found the seat/slot conflation bug; system-architect additionally resolved the trigger-mechanism
 open question and found the executor param-budget/queued-join-renumbering gaps; ux-gamedesigner-

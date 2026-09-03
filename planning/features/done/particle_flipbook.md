@@ -1,8 +1,8 @@
 # Feature: Particle System v2 — 8. Flipbook / Sprite Sheet Animation
 
 _Status: **Active**_
-_Planned at: `2cc61ca` (2026-05-19)_
-_Activated at: `942e96d` (2026-05-30)_
+_Planned at: `ff085be` (2026-05-19)_
+_Activated at: `723ffe3` (2026-05-30)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What

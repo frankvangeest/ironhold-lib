@@ -1,10 +1,10 @@
 # Feature: Monster Drop Pickups
 
 _Status: Draft_
-_Planned at: `7e9eb47` (2026-06-15)_
+_Planned at: `31a2ddc` (2026-06-15)_
 
 > **Update (2026-08-30): `Action::Spawn.at_entity` already shipped**, via
-> `planning/features/done/monster_corpse_loot.md` v2 (`55072fc`, 2026-08-26) — a different feature
+> `planning/features/done/monster_corpse_loot.md` v2 (`ec3cb5e`, 2026-08-26) — a different feature
 > landed it first. It matches this plan's own design almost exactly (same field name/semantics,
 > `SpawnRegistry` → `GlobalTransform` resolution, precedence over `position`/`spawn_point`), with
 > two differences worth knowing before resuming this plan: it resolves the *full* transform

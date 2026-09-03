@@ -1,7 +1,7 @@
 # Feature: Player Stat Widgets (stat_label / world_stat_bar for players)
 
 _Status: Done_
-_Planned at: `6e38aa1` (2026-07-17)_
+_Planned at: `872c89d` (2026-07-17)_
 
 **Plan-review note (2026-07-17):** system-architect — Ready, fit confirmed against actual source
 (Part A duplication verified line-accurate; caught that `spawn_scene_v2` is already at Bevy's

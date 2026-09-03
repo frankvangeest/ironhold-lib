@@ -1,7 +1,7 @@
 # Feature: Quest System
 
 _Status: Draft_
-_Planned at: `6adb6bf` (2026-06-02)_
+_Planned at: `e9a421e` (2026-06-02)_
 _Soft deps: Inventory (Collect objectives), Dialogue (accept/turn-in flow), Stat templates (stat rewards — shipped)_
 
 ## Phases

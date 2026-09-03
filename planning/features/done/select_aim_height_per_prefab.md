@@ -1,7 +1,7 @@
 # Feature: Per-prefab `select_aim_height` for click targeting
 
 _Status: Active_
-_Planned at: `7468fb8` (2026-06-18)_
+_Planned at: `9455db6` (2026-06-18)_
 
 ## What
 

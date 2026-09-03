@@ -1,7 +1,7 @@
 # Feature: Game Stats — Phase 1: Core Stat Model
 
 _Status: Draft_
-_Planned at: `1f63f4d` (2026-05-04)_
+_Planned at: `fb97158` (2026-05-04) — hash updated after the 2026-09-03 `pkg/` history purge; the original citation, `1f63f4d`, was a pkg-only rebuild commit fully pruned during that purge, so this points to its parent instead (same code state)_
 
 ## What
 

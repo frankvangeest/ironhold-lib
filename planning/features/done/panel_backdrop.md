@@ -1,7 +1,7 @@
 # Feature: Inventory / shop / container input blocking
 
 _Status: In Progress_
-_Planned at: `bd810c3` (2026-06-28)_
+_Planned at: `c750a62` (2026-06-28)_
 
 ## What
 

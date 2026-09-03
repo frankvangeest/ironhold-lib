@@ -1,7 +1,7 @@
 # Feature: Status Effect Icon Display
 
 _Status: Draft_
-_Planned at: `5f72600` (2026-05-31)_
+_Planned at: `bb3af0d` (2026-05-31)_
 
 ## Phases
 

@@ -1,7 +1,7 @@
 # Feature: Unify prefab feature application across all spawn paths
 
 _Status: Ready_
-_Planned at: `6440b29` (2026-06-28)_
+_Planned at: `10a7d47` (2026-06-28)_
 
 ## What
 

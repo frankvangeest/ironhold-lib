@@ -1,10 +1,10 @@
 # Feature: Flycam model-never-renders warning
 
 _Status: Done_
-_Planned at: `1124de0` (2026-08-19)_
+_Planned at: `4d20c3c` (2026-08-19)_
 _Revised after plan review (system-architect + ux-gamedesigner-reviewer), 2026-08-19 — see "Plan review changes" below._
 _Shipped 2026-08-19 — playtest confirmed by Frank, no console errors. See `planning/backlog.md`'s matching entry for the post-implementation-review summary._
-_Branched from `integration` (`1124de0`), not `main`, because this builds directly on `flycam_scene_conflicts.md`'s spectator-mode code, which had not yet been promoted to `main`._
+_Branched from `integration` (`4d20c3c`), not `main`, because this builds directly on `flycam_scene_conflicts.md`'s spectator-mode code, which had not yet been promoted to `main`._
 
 ## What
 A `tags: ["flycam"]` prefab's `model:` (and `children:`) fields are documented as ignored (by

@@ -1,7 +1,7 @@
 # Feature: Nestable flexbox `Group` UI node
 
 _Status: Draft (revised after 2 parallel plan reviews)_
-_Planned at: `101bf03` (2026-08-28)_
+_Planned at: `8baeac7` (2026-08-28)_
 
 ## What
 

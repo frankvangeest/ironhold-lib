@@ -1,8 +1,8 @@
 # Feature: Local Co-op 4-Way Split-Screen Scene
 
 _Status: Done_
-_Planned at: `c575139` (2026-07-06)_
-_Shipped at: `2a5e425` (2026-07-07)_
+_Planned at: `ac90078` (2026-07-06)_
+_Shipped at: `dca09ef` (2026-07-07)_
 
 ## What
 

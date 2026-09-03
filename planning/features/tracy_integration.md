@@ -1,7 +1,7 @@
 # Feature: Tracy CPU Profiling Integration
 
 _Status: Ready_
-_Planned at: `91cd464` (2026-04-27)_
+_Planned at: `7dee9ac` (2026-04-27)_
 
 ## What
 Enable Bevy's built-in Tracy profiler support on native builds via an optional Cargo

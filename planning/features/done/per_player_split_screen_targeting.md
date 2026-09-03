@@ -1,7 +1,7 @@
 # Feature: Per-Player Independent Targeting for Split-Screen
 
 _Status: Done (Phase 1 + Phase 2 both shipped)_
-_Planned at: `34a957f` (2026-07-13)_
+_Planned at: `f275996` (2026-07-13)_
 _Plan review (2026-07-13): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work. Both reviewers independently flagged the same core contradiction (see Approach) and
 converged on the same resolution; their findings are incorporated below. Frank resolved the
@@ -35,14 +35,14 @@ popup only ever rendered in the single highest-priority active split viewport re
 player's action triggered it — fixed by extending the same `WorldLabelRank` duplication mechanism
 `stat_label`/`world_stat_bar` already use to both actions, gated on split-screen exactly like
 those. Playtest re-confirmed by Frank after the fix (popup now correctly duplicates per visible
-viewport), no console errors — `b48bc00`._
+viewport), no console errors — `928fc58`._
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Done | `e677921` (2026-07-13) |
-| 2 | Per-player action-bar ability execution against each player's own target | Done | `b48bc00` (2026-07-17) |
+| 1 | Per-player target **selection & display** — `PlayerTarget` component, tab/click resolve to the acting player only, per-player target indicator/HUD display | Done | `04c1785` (2026-07-13) |
+| 2 | Per-player action-bar ability execution against each player's own target | Done | `928fc58` (2026-07-17) |
 
 Phase 2 is scoped separately (see "Not in scope") because the action bar has its own,
 pre-existing single-player limitation unrelated to targeting — see Research findings.
@@ -234,7 +234,7 @@ see "Not in scope" below — a `rules.ron` rule overriding a slot's intent still
 via the interpreter against the primary player only.)
 
 **Hard dependency: `planning/features/done/action_bar_custom_hotkeys.md` — shipped 2026-07-16
-(`8df3cfc`), no longer blocking.** Action bars previously shared one hardcoded `DIGIT_KEYS` table
+(`6305237`), no longer blocking.** Action bars previously shared one hardcoded `DIGIT_KEYS` table
 (`1`-`9`, `i`) — two players sharing one keyboard couldn't have two independent action bars without
 colliding on the same physical keys (the exact class of problem `target_next` hit before Phase 1
 gave each player prefab its own key). Now any `InputMap::parse_key()`-recognised key name can be
@@ -386,7 +386,7 @@ playtest checklist.
       players present) + new `target_hud:`-driven per-viewport HUD readout; existing global
       `target_display`/`target_name`/`target_id` `GameVariables` blanked whenever 2+ players
       present; `local_coop_demo` playtest addition (distinct `target_next` keys per player —
-      `KeyT`/`KeyM`, not the browser-intercepted `"Tab"` default) — `e677921`. 2 code-review-driven
+      `KeyT`/`KeyM`, not the browser-intercepted `"Tab"` default) — `04c1785`. 2 code-review-driven
       fixes: `Action::SetTarget`/`ClearTarget` now mirror into the primary player's `PlayerTarget`
       (previously only wrote `CurrentTarget`, silently breaking the ring for that action path); a
       runtime `warn!` fires when 2+ players share `player_index: 0` (both would be treated as
@@ -416,7 +416,7 @@ playtest checklist.
       vs. the camera chain, the duplicate-`player_index` footgun) and 1 wasm-perf-reviewer nit
       (`target_hud_update_system`'s uncached `format!`)
 - [x] WASM dev build + playtest checklist — clean, playtest confirmed by Frank, no console errors
-- [x] Phase 2: ship `action_bar_custom_hotkeys.md` first — shipped 2026-07-16 (`8df3cfc`), see the
+- [x] Phase 2: ship `action_bar_custom_hotkeys.md` first — shipped 2026-07-16 (`6305237`), see the
       "Hard dependency" note in Approach for what it delivered and what Phase 2 still owes it
       (cross-bar duplicate-key check, fire-first loop restructuring)
 - [x] Phase 2: `ActionBarDef.owner_player: Option<u32>` schema field (`#[serde(default)]`), copied
@@ -460,7 +460,7 @@ playtest checklist.
 
 **Phase 2 (resolved 2026-07-16 — plan moves to Active):**
 - ~~Sequencing of `action_bar_custom_hotkeys.md`~~ — **resolved: shipped first, on its own branch,
-  2026-07-16 (`8df3cfc`)**, per Frank's confirmation. Phase 2 now branches off the updated `main`.
+  2026-07-16 (`6305237`)**, per Frank's confirmation. Phase 2 now branches off the updated `main`.
 - ~~Shared vs. per-player stats/resources~~ — **resolved: confirmed acceptable as a documented
   interim limitation, not a blocker.** `LoadedStats` is touched by 13 files across the codebase
   (stat bars/HUD, dialogue conditions, inventory costs, stat radar, `ModifyStat` action executor —

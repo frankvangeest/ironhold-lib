@@ -1,7 +1,7 @@
 # Feature: Skill Action Bar
 
 _Status: Draft_
-_Planned at: `5bfd752` (2026-05-31)_
+_Planned at: `b544cff` (2026-05-31)_
 
 ---
 

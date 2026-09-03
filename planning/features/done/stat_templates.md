@@ -1,7 +1,7 @@
 # Feature: Stat Templates — Per-Prefab Instance Stats
 
 _Status: Implemented_
-_Planned at: `270ff7e` (2026-05-05)_
+_Planned at: `8c54a86` (2026-05-05)_
 
 ## What
 

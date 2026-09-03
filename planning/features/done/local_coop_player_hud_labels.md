@@ -1,19 +1,19 @@
 # Feature: Local Co-op Split-Screen Player HUD Labels
 
 _Status: Done_
-_Planned at: `69189c9` (2026-07-07)_
-_Shipped at: `b034a53` (2026-07-08)_
+_Planned at: `ef55f87` (2026-07-07)_
+_Shipped at: `c84d878` (2026-07-08)_
 
 ## Playtest findings (2026-07-08)
 
 - Dev and release builds both confirmed: P1-P4 corner labels render correctly top-right in
   room3/room4/room6, hide/show correctly across room5's dynamic split, no regressions.
 - Post-implementation review (alignment-reviewer + wasm-perf-reviewer, both run on commit
-  `af6727f`): alignment ALIGNED (two non-blocking warnings — stale `PlayerIndex` doc comments,
-  fixed by `b034a53`; no RON opt-out, deliberately out of scope per this plan's "Not in scope"
+  `6c3fa0f`): alignment ALIGNED (two non-blocking warnings — stale `PlayerIndex` doc comments,
+  fixed by `c84d878`; no RON opt-out, deliberately out of scope per this plan's "Not in scope"
   section). wasm-perf found one real issue — `split_viewport_player_label_update_system` wrote
   `Node.left`/`top` unconditionally every frame, forcing a full UI relayout on every split-screen
-  frame; fixed in `b034a53` by guarding the write like the adjacent `Visibility` write.
+  frame; fixed in `c84d878` by guarding the write like the adjacent `Visibility` write.
 - Separately discovered (not part of this feature): the pre-existing portal room-name labels
   (`WorldLabel`/`EntityLabelDef`, added earlier this session) render mis-positioned in every
   split-screen room because `world_label_screen_pos_system` assumes exactly one `Camera3d`. This
@@ -157,7 +157,7 @@ every GLB player entity, but no system has read it until now.
       tag
 - [x] `split_viewport_player_label_update_system`, `.after(split_screen_viewport_system)` in
       `lib.rs`'s `.chain()` — updates position (top-right anchored) + visibility every frame.
-      Guarded against unconditional change-detection writes (`b034a53`, wasm-perf follow-up).
+      Guarded against unconditional change-detection writes (`c84d878`, wasm-perf follow-up).
 - [x] One-line comment at the spawn site documenting the "UI targets the full-window `Camera2d`,
       not per-viewport space" dependency (per architecture review), so a future `Camera2d`/
       `IsDefaultUiCamera` refactor doesn't silently break this
@@ -177,15 +177,15 @@ every GLB player entity, but no system has read it until now.
       label color is a fixed engine palette, independent of and NOT synced to a player's
       `material:` tint. `crates/ironhold_core/src/CLAUDE.md` gets the same two notes plus the
       `Added<SplitViewportSlot>`/`LinkedPlayerLabel` pattern summary.
-- [x] Full review gate: alignment (ALIGNED, `af6727f`/`b034a53` — confirmed zero-RON-surface is
+- [x] Full review gate: alignment (ALIGNED, `6c3fa0f`/`c84d878` — confirmed zero-RON-surface is
       correct; stale `PlayerIndex` doc comments fixed), architecture (reviewed at plan stage,
       implementation matches), wasm-perf (found and fixed an unguarded `Node` write causing
-      per-frame UI relayout on split-screen scenes, `b034a53`)
+      per-frame UI relayout on split-screen scenes, `c84d878`)
 - [x] WASM dev + release build, playtest checklist (confirm labels appear top-right in `room3`/
       `room4`/`room6` without colliding with any room's title label; correctly hide/show across
       `room5`'s dynamic merge/split; legible against each room's ground tone), Frank confirmation.
-      Confirmed twice — once for the initial feature (`af6727f`) and once for the wasm-perf
-      follow-up fix (`b034a53`).
+      Confirmed twice — once for the initial feature (`6c3fa0f`) and once for the wasm-perf
+      follow-up fix (`c84d878`).
 
 ## Open questions
 

@@ -1,7 +1,7 @@
 # Feature: Particle Effect Spawning
 
 _Status: Draft_
-_Planned at: `98ca5d0` (2026-05-16)_
+_Planned at: `8447ee4` (2026-05-16)_
 
 ## What
 

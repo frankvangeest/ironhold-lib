@@ -1,7 +1,7 @@
 # Feature: Multiplayer Networking (Three Forms)
 
 _Status: Draft_
-_Planned at: `9f1b459` (2026-05-31)_
+_Planned at: `6905b71` (2026-05-31)_
 
 ---
 

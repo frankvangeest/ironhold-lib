@@ -1,7 +1,7 @@
 # Feature: Diagnostics HUD
 
 _Status: Ready_
-_Planned at: `91cd464` (2026-04-27)_
+_Planned at: `7dee9ac` (2026-04-27)_
 
 ## What
 A toggleable on-screen overlay that shows real-time engine statistics: FPS, frame time,

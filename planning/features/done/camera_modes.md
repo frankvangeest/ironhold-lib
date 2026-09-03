@@ -35,7 +35,7 @@ overclaiming parity with `SetCameraMode`'s party-scene reject guard, `camera_ble
 having no v2 content) logged to `planning/claude_suggestions.md` ▸ Camera rather than fixed in this
 pass. Full test suite (19 new `camera_modes_tests.rs` + 5 CLI fixture tests, plus the full
 `local_coop_tests`/`npc_tests`/`ron_lint`/`ron_validation` suites) green; real-hardware playtest
-confirmed by Frank, including confirmation of the live-caught fix — `ff92fa8` (2026-08-10). Two
+confirmed by Frank, including confirmation of the live-caught fix — `0e91545` (2026-08-10). Two
 pre-existing, unrelated issues surfaced during playtest (scroll-wheel zoom snapping straight to
 min/max radius; nameplate/stat-bar spacing off at zoom extremes) and were logged to
 `planning/backlog.md`'s `## Bugs` section instead, since neither is caused by or specific to this
@@ -69,8 +69,8 @@ designer-facing doc gaps (the `PrefabDef` component field index table doesn't li
 updated to mention `camera_mode`; a stale example pointer at room10); `ironhold_cli` has zero
 camera-aware validation rules (nested-split-in-Orbit, `camera:`+`camera_mode:` both present,
 `look_at_entity` referencing a non-existent id)._
-_Planned at: `ece80c1` (2026-05-05)_
-_Updated for local-coop/split-screen compatibility: `1fcef14` (2026-07-31); revised again after
+_Planned at: `48fbc17` (2026-05-05)_
+_Updated for local-coop/split-screen compatibility: `39a204f` (2026-07-31); revised again after
 plan-review at `2026-08-01` — 4 blocking questions resolved (see "Local co-op / split-screen
 compatibility"): `ActiveCameraMode` as a per-camera component vs. a resource (the plan's own
 internal contradiction), the authored-vs-runtime type split, a new `CameraTargets` component for
@@ -92,15 +92,15 @@ additionally flagged that the v1 migration story (only `3rd_person_game_demo`, a
 leaves the new `split:`-as-sibling-field syntax with zero shipped co-op examples; one
 `local_coop_demo` room pair is now added to the v1 migration task. Both reviews confirmed no other
 drift since 2026-08-01 — the four original Blockers' resolutions all still hold against current
-source, and `player_model_source_unification` v2 (`7340eaf`, merged since the last revision) touched
+source, and `player_model_source_unification` v2 (`2807844`, merged since the last revision) touched
 no camera code._
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Camera mode unification — `ActiveCameraMode` component, backward-compat mapping | Done | `8bcecb5` (2026-08-07) |
-| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Done | `ff92fa8` (2026-08-10) |
+| v1 | Camera mode unification — `ActiveCameraMode` component, backward-compat mapping | Done | `3433034` (2026-08-07) |
+| v2 | New modes (`Follow`, `Fixed`, `FirstPerson`) + `SetCameraMode` + transitions | Done | `0e91545` (2026-08-10) |
 
 ## What
 
@@ -356,7 +356,7 @@ incorrectly claimed this system doesn't query `OrbitCamera`; it does, and its do
 behavior for a *targetless* camera, e.g. `PartyOrbitCamera`, changes once Party folds into the same
 component**), `split_viewport_player_label_spawn_system`, `target_hud_update_system`,
 `dynamic_split_screen_system` (separation distance), `SceneStateParams::orbit_cameras`
-(`CameraShake`'s query), and — added by the 2026-08-07 confirmation pass, since `f4cca59`
+(`CameraShake`'s query), and — added by the 2026-08-07 confirmation pass, since `9630ae4`
 (2026-08-05) deleted `OrbitCamera.gamepad_index` and made `camera_orbit_system` itself resolve the
 owning player via `orbit.target` for gamepad binding (`camera.rs:135`, `bound_q.get(orbit.target)`)
 — `camera_orbit_system` (the gamepad-lookup half of the orbit system, not just the five systems
@@ -717,7 +717,7 @@ When a player character is spawned at runtime via `Action::Spawn` (e.g. from a c
 ## Implementation notes
 
 ### CameraShake coupling
-`Action::CameraShake` (shipped `b8723ec` 2026-06-19) inserts a `CameraShakeState` component onto `OrbitCamera` entities; `camera_shake_system` filters `With<OrbitCamera>`. **Shipped as planned, v1** (`ironhold_core::CLAUDE.md`'s "Fixed" note): `scene_state.orbit_cameras` and `camera_shake_system` both now filter `Or<(With<OrbitCameraMode>, With<PartyCameraMode>)>` — the "shared marker" approach anticipated here, not a separate `ActiveOrbitCamera` tag.
+`Action::CameraShake` (shipped `38bb186` 2026-06-19) inserts a `CameraShakeState` component onto `OrbitCamera` entities; `camera_shake_system` filters `With<OrbitCamera>`. **Shipped as planned, v1** (`ironhold_core::CLAUDE.md`'s "Fixed" note): `scene_state.orbit_cameras` and `camera_shake_system` both now filter `Or<(With<OrbitCameraMode>, With<PartyCameraMode>)>` — the "shared marker" approach anticipated here, not a separate `ActiveOrbitCamera` tag.
 
 ---
 

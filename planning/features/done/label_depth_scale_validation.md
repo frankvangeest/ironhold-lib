@@ -1,9 +1,9 @@
 # Feature: `ironhold_cli validate` coverage for `label_depth_scale`
 
 _Status: Done_
-_Planned at: `aae875a` (2026-08-16)_
-_Plan-reviewed at: `68ae660` (2026-08-30) — system-architect + ux-gamedesigner-reviewer, both addressed below_
-_Completed: `034b40c` (2026-08-31) — implementation + 5-agent post-implementation review round, all
+_Planned at: `15327a3` (2026-08-16)_
+_Plan-reviewed at: `365881d` (2026-08-30) — system-architect + ux-gamedesigner-reviewer, both addressed below_
+_Completed: `56ed12b` (2026-08-31) — implementation + 5-agent post-implementation review round, all
 findings fixed in the same commit; playtest confirmed by Frank. See `planning/backlog.md`'s Done
 entry for the full summary._
 

@@ -1,7 +1,7 @@
 # Feature: Split `integration_tests.rs` into domain files
 
 _Status: Done_
-_Planned at: `98c64cd` (2026-07-02)_
+_Planned at: `e788b74` (2026-07-02)_
 
 ## What
 
@@ -14,7 +14,7 @@ its own test binary, matching the existing convention already used by `audio_tes
 
 ## Why
 
-Promoted from `planning/claude_suggestions.md` (originally observed at `c07c1e0` 2026-05-27,
+Promoted from `planning/claude_suggestions.md` (originally observed at `9492ebf` 2026-05-27,
 when the file was 2447 lines / 69 tests). By 2026-07-02 it had nearly doubled to 104 tests —
 past the point where a related test could be found without searching. Every new feature's tests
 defaulted into this one file by inertia; splitting it now (rather than waiting further) stops

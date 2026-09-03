@@ -1,9 +1,9 @@
 # Feature: Particle System v2 — 4. Dynamic Effect Lights
 
 _Status: Done_
-_Planned at: `2cc61ca` (2026-05-19)_
-_Reviewed at: `a16bd98` (2026-05-23) — goal-alignment pass; two clarifications added below_
-_Shipped at: `87abc13` (2026-05-23)_
+_Planned at: `ff085be` (2026-05-19)_
+_Reviewed at: `f46d462` (2026-05-23) — goal-alignment pass; two clarifications added below_
+_Shipped at: `266f6c1` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What

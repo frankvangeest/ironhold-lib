@@ -1,7 +1,7 @@
 # Feature: Scene Preloading
 
 _Status: Ready_
-_Planned at: `91cd464` (2026-04-27)_
+_Planned at: `7dee9ac` (2026-04-27)_
 
 ## What
 `Action::PreloadScene(path)` already exists and issues an asset handle in the background.

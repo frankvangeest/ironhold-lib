@@ -1,7 +1,7 @@
 # Feature: Gamepad-Routed Action-Bar Slots
 
 _Status: Done (shipped 2026-07-31)_
-_Planned at: `6c1a726` (2026-07-19)_
+_Planned at: `e9e4c87` (2026-07-19)_
 
 **Hard dependency: `gamepad_controller_input.md` must merge first.** This plan reuses that
 feature's `InputMap::parse_gamepad_button` helper and the `resolve_gamepad(sorted_slice, index)`

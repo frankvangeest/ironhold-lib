@@ -1,7 +1,7 @@
 # Feature: Stylized Foliage (Anime / Ghibli-style Trees)
 
 _Status: Draft_
-_Planned at: `a3b7f4d` (2026-06-02)_
+_Planned at: `9b57e75` (2026-06-02)_
 _Investigation: `planning/investigations/ghibli-anime-style-tree-generation.md`_
 
 ---

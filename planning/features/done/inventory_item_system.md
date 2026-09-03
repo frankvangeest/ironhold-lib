@@ -1,7 +1,7 @@
 # Feature: Inventory & Item System
 
 _Status: Active — v1 scope note: `MerchantDef.buy_price`/`sell_price`/`currency_stat` are display-only; buy/sell transactions (stat deduction + item transfer) are planned for v1.1._
-_Planned at: `6adb6bf` (2026-06-02)_
+_Planned at: `e9a421e` (2026-06-02)_
 
 ---
 

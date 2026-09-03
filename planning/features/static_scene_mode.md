@@ -1,7 +1,7 @@
 # Feature: Static Scene Mode
 
 _Status: Queued_
-_Planned at: `d945ea9` (2026-06-18)_
+_Planned at: `9ff431b` (2026-06-18)_
 
 ## What
 

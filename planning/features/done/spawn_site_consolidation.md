@@ -1,7 +1,7 @@
 # Feature: Consolidate entity-spawn component insertion
 
 _Status: DONE (shipped 2026-06-08) — D1–D5 all accepted as recommended_
-_Planned at: `661ecd1` (2026-06-08)_
+_Planned at: `b2da47d` (2026-06-08)_
 
 ---
 
@@ -27,15 +27,15 @@ Replace the ~7 independent entity-spawn sites' hand-rolled component-insertion l
 
 The spawn sites have drifted apart, and the divergence has already caused real, hard-to-diagnose bugs:
 
-- **GLB player** had no `SpeedMultiplier` → `player_movement_system`'s query silently skipped it → WASD/Space dead for every GLB-model player (fixed in `34bc77d`).
-- **GLB scene actors** had no `SpawnId`/registry entry → couldn't be targeted, despawned, or decaled by id (fixed in `34bc77d`).
+- **GLB player** had no `SpeedMultiplier` → `player_movement_system`'s query silently skipped it → WASD/Space dead for every GLB-model player (fixed in `4e692db`).
+- **GLB scene actors** had no `SpawnId`/registry entry → couldn't be targeted, despawned, or decaled by id (fixed in `4e692db`).
 - **GLB player** still has no `SpawnId`/`PrefabKey`/registry entry (the primitive player does).
 - **Dynamic spawns** have no `PrefabKey` (id-only targeting display) and no `LevelEntity` (possible cross-scene leak).
 - **Foliage root** has no `PrefabKey`.
 
 Each fix this session was a one-line patch to one site — the underlying problem is that there is no single place that defines "what every spawned entity gets." A shared helper makes the "works for primitive, silently broken for GLB" footgun structurally impossible: add a field once, every site gets it.
 
-## Current state — inventory (at `661ecd1`)
+## Current state — inventory (at `b2da47d`)
 
 | Spawn site (file:line) | `SpawnId` | `PrefabKey` | registry | `LevelEntity` | markers | notes |
 |---|---|---|---|---|---|---|

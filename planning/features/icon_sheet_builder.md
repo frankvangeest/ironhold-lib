@@ -1,7 +1,7 @@
 # Feature: Icon Sheet Builder
 
 _Status: Draft_
-_Planned at: `a6acab8` (2026-06-22)_
+_Planned at: `de7a659` (2026-06-22)_
 
 ## What
 A build-time Python tool (`tools/icon_sheet/build.py`) that takes a folder of individual

@@ -1,7 +1,7 @@
 # Feature: Per-Player Keyboard Camera Look Controls
 
 _Status: Done_
-_Planned at: `be0a3ea` (2026-07-19)_
+_Planned at: `3dc2451` (2026-07-19)_
 
 **Shipped (2026-07-19):** implemented on `feature/camera-look-controls`. All 5 reviews
 (alignment, system-architect, debug-detective, ux-gamedesigner-reviewer, wasm-perf-reviewer) came

@@ -1,6 +1,6 @@
 # Investigation: RPG Event Taxonomy — Alignment with ironhold
 
-_Investigated at `f66f7b2` (2026-06-23)_
+_Investigated at `4c7d2eb` (2026-06-23)_
 _Source: `RPG_Event_Taxonomy.xlsx` (93 events, 16 categories)_
 
 ## Summary

@@ -1,7 +1,7 @@
 # Feature: LOD — Pre-baked Mesh Swap
 
 _Status: Draft_
-_Planned at: `4c47cc6` (2026-06-02)_
+_Planned at: `32df2ec` (2026-06-02)_
 
 ---
 

@@ -1,8 +1,8 @@
 # Feature: Particle System v2 — 3. Bloom / Post-Processing in Scene RON
 
 _Status: Blocked — see constraint below_
-_Planned at: `2cc61ca` (2026-05-19)_
-_Blocked at: `a16bd98` (2026-05-23)_
+_Planned at: `ff085be` (2026-05-19)_
+_Blocked at: `f46d462` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## Blocking constraint — HDR is mandatory

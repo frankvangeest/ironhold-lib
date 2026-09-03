@@ -1,7 +1,7 @@
 # Feature: World-space Textured Stat Bar (`WorldStatBarStyle::Textured`)
 
 _Status: Done_
-_Planned at: `7168ccc` (2026-07-17)_
+_Planned at: `74a7981` (2026-07-17)_
 
 ## What
 A fourth `world_stat_bar` style — `Textured` — rendering a stat as a **continuous** textured fill
@@ -21,7 +21,7 @@ same continuous-fill update mechanism, just a 9-sliced textured `Sprite` in plac
 
 ## Why
 `world_stat_bar` now has three production-relevant looks in flight: `Pixel` (flat solid fill,
-production-quality, split-screen-complete), `Icon` (discrete pips/hearts, shipped `672d003`), and `Ascii`
+production-quality, split-screen-complete), `Icon` (discrete pips/hearts, shipped `a3183a9`), and `Ascii`
 (prototyping-only, slated for eventual retirement). None of them let a designer ship an
 **art-directed** continuous bar — the single most common shippable HUD element in the genre this
 engine targets (action/RPG floating enemy health bars, boss bars, player overhead health). Today a
@@ -225,7 +225,7 @@ world_stat_bar: (
 - Extend `spawn_world_stat_bar_widget`'s `match def.style` with a `Textured` arm.
 
 **`StatWidgetSpawnCtx` already has what this needs — no further extension required.** `world_icon_
-stat_bar.md` (shipped, `672d003`) already added `asset_server: Option<&'a AssetServer>` and
+stat_bar.md` (shipped, `a3183a9`) already added `asset_server: Option<&'a AssetServer>` and
 `asset_catalog: Option<&'a AssetCatalog>` to `StatWidgetSpawnCtx` for exactly this purpose (the
 "coordinate with Icon, do it once" note in the original draft is now resolved — `Icon` landed
 first and paid that cost). `Textured` resolves **one** catalog key (`texture_sheet` →
@@ -236,7 +236,7 @@ handling: `warn!` once and skip the bar (never fabricate a `shared/...` path —
 shader/asset-fallback rule in `crates/ironhold_core/src/CLAUDE.md`).
 
 ### Split-screen duplication — built in from day one
-Identical to `pixel_world_stat_bar_split_screen_duplication.md` (shipped, `0257c83`) and planned
+Identical to `pixel_world_stat_bar_split_screen_duplication.md` (shipped, `f48daa1`) and planned
 for `Icon`: the `Textured` arm wraps its construction in the same `for rank in 0..ranks` loop
 (`ranks` already computed from `ctx.is_split_screen`). Per rank: one anchor (`WorldLabel` +
 `WorldLabelRank(rank)` + `Visibility::Hidden` for rank > 0) with two `Sprite` children (empty +
@@ -291,7 +291,7 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
       `texture_sheet` catalog key (not in the original task list — added post-review, see Code
       review note below).
 - [x] `StatWidgetSpawnCtx` — **no extension needed.** `asset_server`/`asset_catalog` already exist
-      on the ctx (added by `world_icon_stat_bar.md`, shipped `672d003`); the `Textured` arm reuses
+      on the ctx (added by `world_icon_stat_bar.md`, shipped `a3183a9`); the `Textured` arm reuses
       them as-is. Met.
 - [x] Register `world_textured_bar_update_system` alongside `world_pixel_bar_update_system` in
       `lib.rs`. Met.
@@ -335,7 +335,7 @@ avoid a merge collision on `spawn_world_stat_bar_widget` — not a hard technica
       "corners stay undistorted" claim) — see Code review note below.
 - [x] WASM dev build + `python test_web.py` — confirmed the standard 2D sprite pipeline compiles/
       warms without a first-draw stall on the player's textured bar in `3rd_person_game_demo`.
-      `Icon` already shipped and proved this same sprite pipeline in the same project (`672d003`);
+      `Icon` already shipped and proved this same sprite pipeline in the same project (`a3183a9`);
       wasm-perf-reviewer additionally confirmed a *sliced* `Sprite` renders through the identical
       `SpritePipeline` as a plain/atlas `Sprite` (9-slicing is CPU-side geometry expansion, not a
       distinct pipeline variant) — no new pipeline risk at all. Met — playtest confirmed by Frank,

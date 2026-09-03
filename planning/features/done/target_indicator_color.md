@@ -1,7 +1,7 @@
 # Feature: Target Indicator Color by Category and Per-Prefab Override
 
 _Status: Ready_
-_Planned at: `78f8c27` (2026-06-18)_
+_Planned at: `1d67762` (2026-06-18)_
 
 ## What
 

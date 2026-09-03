@@ -1,9 +1,9 @@
 # Feature: Particle System v2 — 5. Extended Particle Behaviours
 
 _Status: Done_
-_Planned at: `2cc61ca` (2026-05-19)_
-_Reviewed at: `a16bd98` (2026-05-23) — approach rewritten for CPU pool renderer_
-_Shipped at: `b6dc0f9` (2026-05-23)_
+_Planned at: `ff085be` (2026-05-19)_
+_Reviewed at: `f46d462` (2026-05-23) — approach rewritten for CPU pool renderer_
+_Shipped at: `0474d28` (2026-05-23)_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What

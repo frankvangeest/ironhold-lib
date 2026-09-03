@@ -1,7 +1,7 @@
 # Feature: Cursor Grab Icon for Draggable Windows
 
 _Status: Draft_
-_Planned at: `a6acab8` (2026-06-22)_
+_Planned at: `de7a659` (2026-06-22)_
 
 ## What
 Change the OS/browser cursor to a grab hand (`CursorIcon::Grab` or equivalent) when the player

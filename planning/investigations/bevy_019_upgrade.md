@@ -1,6 +1,6 @@
 # Investigation: Bevy 0.19 Upgrade Feasibility
 
-_Investigated at `a612895` (2026-06-23)_
+_Investigated at `5d7261d` (2026-06-23)_
 
 ## Verdict
 

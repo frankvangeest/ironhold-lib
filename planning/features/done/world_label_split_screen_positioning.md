@@ -3,7 +3,7 @@
 _Status: Done_
 _Architecture review: PASS (2026-07-08), re-confirmed after amendment (2026-07-10) — sound
 camera-selection algorithm, acceptable scope boundary, no crate/WASM concerns._
-_Planned at: `9b94255` (2026-07-08)_
+_Planned at: `71e50ba` (2026-07-08)_
 _Shipped at: (pending commit, 2026-07-10)_
 
 ## Playtest findings (2026-07-10)

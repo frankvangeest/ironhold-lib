@@ -1,7 +1,7 @@
 # Feature: Gamepad-Triggered Hot Join
 
 _Status: Done (shipped 2026-07-31)_
-_Planned at: `f60bd33` (2026-07-29)_
+_Planned at: `abeff13` (2026-07-29)_
 
 **Plan-review note (2026-07-29):** both reviewers returned Needs-more-design-work on the first
 draft. **system-architect** found two blocking issues with the original `PendingJoinGamepad(

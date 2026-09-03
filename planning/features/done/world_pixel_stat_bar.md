@@ -1,7 +1,7 @@
 # Feature: World-space stat bar — Pixel style
 
 _Status: Ready_
-_Planned at: `2015a1e` (2026-05-15)_
+_Planned at: `6e002a4` (2026-05-15)_
 
 ## What
 

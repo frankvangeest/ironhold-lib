@@ -1,7 +1,7 @@
 # Feature: Toon / Cel Shading (3-tone, 4-tone, 5-tone)
 
 _Status: Icebox_
-_Planned at: `b384785` (2026-04-29)_
+_Planned at: `fd4dc01` (2026-04-29)_
 
 ## What
 

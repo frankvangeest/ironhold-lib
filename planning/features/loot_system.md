@@ -1,11 +1,11 @@
 # Feature: Loot System
 
 _Status: Draft_
-_Planned at: `6adb6bf` (2026-06-02)_
+_Planned at: `e9a421e` (2026-06-02)_
 _Hard dep: Inventory & item system_
 _Soft deps: Quest system (Collect objective auto-advance), Equipment system (equippable drops)_
 _`at_entity` field on `Action::Spawn` — **already shipped**, via `planning/features/done/monster_corpse_loot.md`
-v2 (`55072fc`, 2026-08-26), not `monster_drop_pickups` as originally planned. The `RollLootTable`
+v2 (`ec3cb5e`, 2026-08-26), not `monster_drop_pickups` as originally planned. The `RollLootTable`
 executor below should use `at_entity` directly (see `docs/20_data_formats.md`/
 `crates/ironhold_core/src/CLAUDE.md` for its exact semantics — it resolves the full transform,
 not just position, and warns-and-skips rather than silently no-op-ing when unresolvable with no

@@ -1,7 +1,7 @@
 # Feature: AoE Ground Targeting
 
 _Status: Draft_
-_Planned at: `2f19309` (2026-05-31)_
+_Planned at: `925952d` (2026-05-31)_
 _Hard dep: Skill action bar (`planning/features/skill_action_bar.md`)_
 
 ---

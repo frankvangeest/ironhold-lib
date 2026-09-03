@@ -1,7 +1,7 @@
 # Feature: Per-Viewport-Only Target Ring Visibility
 
 _Status: Done (shipped 2026-07-31)_
-_Planned at: `af55a1b` (2026-07-19)_
+_Planned at: `99ca8e7` (2026-07-19)_
 
 **Plan-review note (2026-07-19):** All three reviewers (system-architect, ux-gamedesigner-reviewer,
 wasm-perf-reviewer) independently caught the same critical defect in the first draft: leaving the

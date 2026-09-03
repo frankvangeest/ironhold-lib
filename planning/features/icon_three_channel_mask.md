@@ -1,7 +1,7 @@
 # Feature: Three-Channel Icon Masking
 
 _Status: Draft_
-_Planned at: `0f8560b` (2026-06-22)_
+_Planned at: `1932139` (2026-06-22)_
 
 ## What
 

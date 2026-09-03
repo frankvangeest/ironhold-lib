@@ -1,7 +1,7 @@
 # Feature: NPC dead-state fix + configurable respawn origin
 
 _Status: Active_
-_Planned at: `be229b7` (2026-06-17)_
+_Planned at: `836a1d4` (2026-06-17)_
 
 ## What
 

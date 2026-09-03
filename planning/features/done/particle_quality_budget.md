@@ -1,9 +1,9 @@
 # Feature: Particle System v2 — 7. Quality Tiers & Particle Budget
 
 _Status: Active_
-_Planned at: `2cc61ca` (2026-05-19)_
-_Reviewed at: `a16bd98` (2026-05-23) — terminology and resource-persistence note added_
-_Verified at: `fa7d4bc` (2026-05-27) — open questions resolved, gap in From impl and budget tracking clarified_
+_Planned at: `ff085be` (2026-05-19)_
+_Reviewed at: `f46d462` (2026-05-23) — terminology and resource-persistence note added_
+_Verified at: `c501523` (2026-05-27) — open questions resolved, gap in From impl and budget tracking clarified_
 _Part of: see `planning/features/particle_system_v2.md` for the full v2 overview_
 
 ## What

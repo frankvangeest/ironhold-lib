@@ -1,6 +1,6 @@
 # Multi-Source Animations (Animation Packs + Shared-Rig Mesh Variants)
 
-Planned at: `423d5a7` (2026-06-08)
+Planned at: `6eb221f` (2026-06-08)
 
 ---
 

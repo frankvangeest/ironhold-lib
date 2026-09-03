@@ -1,7 +1,7 @@
 # Feature: Entity Logic (FSM v1)
 
 _Status: Done_
-_Planned at: `e957e9f` (2026-04-29)_
+_Planned at: `c161879` (2026-04-29)_
 
 ## What
 

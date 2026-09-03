@@ -1,7 +1,7 @@
 # Feature: Group System — Tier 1 (Factions, Teams, Parties)
 
 _Status: Draft_
-_Planned at: `af1b004` (2026-06-02)_
+_Planned at: `fcc53aa` (2026-06-02)_
 
 ---
 

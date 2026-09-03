@@ -1,8 +1,8 @@
 # Feature: Player Model Source Unification ("multiplayer with 1")
 
 _Status: In Progress (v1 Done 2026-07-19, v2 Done 2026-08-07, v3 Queued)_
-_Planned at: `6e38aa1` (2026-07-17)_
-_v2 fleshed out at: `1fcef14` (2026-07-31) — moved back from `features/done/` per the multi-phase
+_Planned at: `872c89d` (2026-07-17)_
+_v2 fleshed out at: `39a204f` (2026-07-31) — moved back from `features/done/` per the multi-phase
 convention in `planning/CLAUDE.md` (only the final phase's completion moves a multi-phase file to
 `done/`; v1 alone shipping was not that). v2 revised after plan-review at `2026-08-01`: system-
 architect found the prefab-strategy gap (retrofitting either room7 or an under-specified existing
@@ -14,7 +14,7 @@ demo's docs/animation-gap/room-chain requirements._
 **Confirmation pass (2026-08-06, system-architect + ux-gamedesigner-reviewer, ahead of cutting the
 `feature/{slug}` branch).** Both reviewers confirmed the 2026-08-01 findings were correctly folded
 in, but independently caught the same new drift: `per_viewport_target_ring_visibility.md` shipped
-*after* the 2026-08-01 pass (`95d68a9`, 2026-07-31) and introduced `SplitScreenDef.own_viewport_only`
+*after* the 2026-08-01 pass (`b17aba8`, 2026-07-31) and introduced `SplitScreenDef.own_viewport_only`
 — which `player_p1_split` (this plan's original GLB-half prefab choice) deliberately does **not**
 set (`prefabs.ron:1149-1153` says so explicitly), while v2's own acceptance criteria ("a ring
 appears on *their* target only... P2's own `target_hud` updates while P1's does not") describe
@@ -49,7 +49,7 @@ contents) while incorporating both reviews, ahead of cutting the `feature/{slug}
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | `PlayerModelSource` enum — collapse the primitive/capsule player path into `spawn_player_entity_core`, scoped to the immediate scene-load path | Done | 2026-07-19 |
-| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Done | `7340eaf` (2026-08-07) |
+| v2 | Fuller `local_coop_demo` demonstration (mixed primitive + GLB) + `Friction` reconciliation | Done | `2807844` (2026-08-07) |
 | v3 | Resource promotion so primitive players also work via terrain-deferred spawn and character-select dynamic spawn | Queued | — |
 
 ## What

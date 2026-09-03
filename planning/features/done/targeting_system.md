@@ -1,7 +1,7 @@
 # Feature: Targeting System (Click-to-Select + Tab Targeting)
 
 _Status: DONE (shipped 2026-06-08)_
-_Planned at: `7fde6ea` (2026-06-02)_
+_Planned at: `52cfa02` (2026-06-02)_
 
 > **Implemented-as note (deviations from this plan):**
 > - **Click selection is screen-space proximity** (`camera.world_to_viewport`, nearest entity within ~70px), **not** `bevy::picking` mesh raycast. Mesh picking raycasts bind-pose geometry and misses animated/skinned GLB characters, so it was abandoned mid-implementation.

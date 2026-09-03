@@ -153,7 +153,7 @@ lifetime (despawn themselves, or are reached via `{target}`).
 
 **`{self}` resolves inside a dialogue choice's `Spawn.id`/`Spawn.spawn_point`, same as every other
 action field.** `capabilities/dialogue.rs`'s `substitute_self_in_action` has an `Action::Spawn` arm
-(added alongside `monster_corpse_loot.md` v2's `at_entity` work, `55072fc`) that substitutes `{self}`
+(added alongside `monster_corpse_loot.md` v2's `at_entity` work, `ec3cb5e`) that substitutes `{self}`
 into `id`/`spawn_point` exactly like `rewrite_self`/`rewrite_target`/`action_needs_target` do
 elsewhere. `{new_id}` also resolves correctly there regardless, since it's resolved later, at the
 executor.

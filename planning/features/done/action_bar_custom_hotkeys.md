@@ -1,7 +1,7 @@
 # Feature: Action Bar Custom Hotkeys
 
 _Status: Done_
-_Planned at: `a6acab8` (2026-06-22)_
+_Planned at: `de7a659` (2026-06-22)_
 _Plan review (2026-07-15): system-architect + ux-gamedesigner-reviewer, verdict Needs-more-design-
 work on both passes. system-architect caught a real, shippable regression: the Migration
 section's claim that `parse_key("i")` "accepts the lowercase letter form" is false —
@@ -23,7 +23,7 @@ neutral-to-positive frame-time impact, no concerns). All findings addressed or l
 `ironhold_core` test suite (16 binaries) + `ironhold_cli` test suite green. WASM dev build clean.
 Playtest confirmed by Frank in `3rd_person_game_demo` — existing `1`-`9`/`i` slots unaffected, new
 `KeyE` "Taunt" slot works (including monster aggro, added after Frank's playtest feedback that the
-demo slot should actually deal damage). No console warnings about keys — `8df3cfc`._
+demo slot should actually deal damage). No console warnings about keys — `6305237`._
 
 ## What
 Make action-bar slot hotkeys fully designer-configurable from RON. Today a slot can only be

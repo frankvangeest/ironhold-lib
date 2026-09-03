@@ -1,7 +1,7 @@
 # Feature: CLI `validate` cross-checks UI trigger reachability
 
 _Status: Ready_
-_Planned at: `3570198` (2026-07-02)_
+_Planned at: `74c63a5` (2026-07-02)_
 
 ## What
 
@@ -26,7 +26,7 @@ equivalent class of mistake for prefab/effect/audio/decal/modifier keys — this
 gap for the UI→logic wiring path, which today has zero cross-file coverage (confirmed:
 `validate.rs` has no reference to `UiNodeDef`, `Button`, or `IconButton` anywhere).
 
-Observed at `517afe7` (2026-06-28), logged in `planning/claude_suggestions.md`; re-verified
+Observed at `4f9ae82` (2026-06-28), logged in `planning/claude_suggestions.md`; re-verified
 still-unaddressed on 2026-07-02 (`strip_prefix("ui.")` call sites and the absence of any
 button-aware check in `validate.rs` both confirmed against current `main`).
 

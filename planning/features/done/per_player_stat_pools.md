@@ -1,7 +1,7 @@
 # Feature: Per-Player Stat Pools (Action-Bar Costs)
 
 _Status: Done_
-_Planned at: `612111e` (2026-07-17)_
+_Planned at: `48293f1` (2026-07-17)_
 _Plan review (2026-07-17): system-architect (Ready — every specific claim verified against real
 code; flagged one Major correctness footgun, folded into Approach/Tasks below) +
 ux-gamedesigner-reviewer (Needs-minor-design-work — no rework, just scoping: resolve the warning
@@ -20,7 +20,7 @@ wasm-perf-reviewer (found and fixed a real per-frame `String` allocation in
 `action_bar_visual_system` — `resolve_cost_source` now returns `(f32, bool)` instead of
 `(f32, Option<String>)`, building the dot-routed key only at the input-gated deduct site). Full
 test suite + `cargo check -p ironhold_cli` green after every fix. Playtest confirmed by Frank in
-`local_coop_demo` room3, no console errors — `ebb1cd0` (2026-07-17)._
+`local_coop_demo` room3, no console errors — `3d27e0e` (2026-07-17)._
 
 ## What
 Split-screen players who each own an `ActionBar` with a `cost:`-gated slot (mana, stamina, etc.)

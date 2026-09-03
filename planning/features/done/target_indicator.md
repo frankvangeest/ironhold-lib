@@ -1,7 +1,7 @@
 # Feature: Selected Target Indicator (Ground Decal)
 
 _Status: Ready_
-_Planned at: `0f86e07` (2026-06-17)_
+_Planned at: `0f79cc8` (2026-06-17)_
 
 ## What
 

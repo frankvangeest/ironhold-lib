@@ -1,7 +1,7 @@
 # Feature: Gamepad Player-Binding Hardening
 
 _Status: Done — shipped `2026-08-05`, real-hardware playtest confirmed by Frank_
-_Planned at: `1fcef14` (2026-07-31)_
+_Planned at: `39a204f` (2026-07-31)_
 _Revised at: `2026-08-01` (system-architect verified the Bevy claim against `bevy_gilrs` too, not
 just `bevy_input`, and found the platform-dependent identity caveat, the cross-time double-bind
 race, the `camera_orbit_system`/`OrbitCamera.gamepad_index` second-source-of-truth bug, and the

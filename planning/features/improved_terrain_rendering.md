@@ -1,7 +1,7 @@
 # Feature: Improved Terrain Rendering
 
 _Status: Draft_
-_Planned at: `e2b096b` (2026-06-15)_
+_Planned at: `77495c8` (2026-06-15)_
 
 ## Phases
 

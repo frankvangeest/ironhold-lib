@@ -1,7 +1,7 @@
 # Feature: Embed capability shaders & fix hardcoded shared asset paths
 
 _Status: Ready_
-_Planned at: `a28f972` (2026-06-17)_
+_Planned at: `d33e410` (2026-06-17)_
 
 ## What
 
