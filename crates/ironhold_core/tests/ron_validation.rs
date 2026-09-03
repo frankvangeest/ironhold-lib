@@ -2276,6 +2276,27 @@ fn test_action_set_stat_parses() {
 }
 
 #[test]
+fn test_action_unknown_field_is_error() {
+    use ironhold_core::schema::actions::Action;
+    // Typo: "start_at_fracton" instead of "start_at_fraction" — must be a hard parse error,
+    // not a silent no-op (deny_unknown_fields).
+    let ron_str = r#"PlayAnimationOn(target: "{self}", clip: "death", start_at_fracton: 1.0)"#;
+    let result: Result<Action, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo'd Action field must be rejected (deny_unknown_fields)");
+}
+
+#[test]
+fn test_action_play_animation_on_with_valid_fields_still_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true)"#;
+    let action: Action = from_str(ron_str).expect("correctly-spelled fields should still parse");
+    assert!(matches!(
+        action,
+        Action::PlayAnimationOn { start_at_fraction: Some(f), freeze: true, .. } if f == 1.0
+    ));
+}
+
+#[test]
 fn test_project_config_stats_path_parses() {
     let ron_str = r#"
         (

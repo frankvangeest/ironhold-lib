@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum Action {
     LoadScene(String),
     Quit,

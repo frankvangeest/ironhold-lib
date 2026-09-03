@@ -3771,6 +3771,11 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 
 **Available actions:**
 
+Every `Action` variant rejects unknown fields at parse time (`#[serde(deny_unknown_fields)]`) — a
+typo'd field name (e.g. `start_at_fracton` instead of `start_at_fraction`) is a hard RON parse
+error, not a silently-dropped no-op. This applies wherever `Action`s are authored: `rules.ron`,
+`state_machine.ron`, `.behavior.ron` files, and dialogue choices' `do_actions` alike.
+
 | Action | Description |
 |--------|-------------|
 | `LoadScene("path")` | Load a `.scene.ron` file relative to the project root. `ironhold_cli validate` checks this path exists on disk (same for `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay` below, and for the project's own `initial_scene`) |
