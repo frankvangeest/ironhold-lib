@@ -85,6 +85,7 @@ impl ActiveDialogue {
 pub fn dialogue_tick_system(
     mut active: ResMut<ActiveDialogue>,
     dialogue_assets: Res<Assets<DialogueDef>>,
+    asset_server: Res<AssetServer>,
     mut action_queue: ResMut<ActionQueue>,
     mut ui_events: MessageReader<UiEvent>,
     mut game_events: MessageReader<GameEvent>,
@@ -134,7 +135,23 @@ pub fn dialogue_tick_system(
 
     // ── Get the current dialogue definition ───────────────────────────────────
     let handle = match active.handle.clone() { Some(h) => h, None => return };
-    let def = match dialogue_assets.get(&handle) { Some(d) => d, None => return };
+    if dialogue_assets.get(&handle).is_none() {
+        if let bevy::asset::LoadState::Failed(e) = asset_server.load_state(&handle) {
+            let path = asset_server.get_path(&handle)
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "<unknown>".to_string());
+            error!(
+                "Dialogue failed to load: {} — {} — closing dialogue for \"{}\"",
+                path, e, active.npc_id
+            );
+            for (mut vis, _) in &mut panel_q {
+                *vis = Visibility::Hidden;
+            }
+            active.clear();
+        }
+        return;
+    }
+    let def = dialogue_assets.get(&handle).expect("checked Some above");
 
     // ── Choice click handling (takes priority over auto-advance) ──────────────
     if let Some(choice_idx) = choice_clicks.first().copied() {

@@ -553,9 +553,21 @@ pub fn resolve_pending_behaviors_system(
     mut commands: Commands,
     pending: Query<(Entity, &PendingBehavior, &SpawnId)>,
     state_machines: Res<Assets<crate::schema::project::StateMachineAsset>>,
+    asset_server: Res<AssetServer>,
     mut action_queue: ResMut<ActionQueue>,
 ) {
     for (entity, pending_behavior, spawn_id) in &pending {
+        if let bevy::asset::LoadState::Failed(e) = asset_server.load_state(&pending_behavior.0) {
+            let path = asset_server.get_path(&pending_behavior.0)
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "<unknown>".to_string());
+            error!(
+                "Behavior failed to load for spawn id \"{}\": {} — {} — this entity will never run its behavior",
+                spawn_id.0, path, e
+            );
+            commands.entity(entity).remove::<PendingBehavior>();
+            continue;
+        }
         if let Some(fsm) = state_machines.get(&pending_behavior.0) {
             let initial = fsm.initial_state.clone();
             commands
