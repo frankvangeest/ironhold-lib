@@ -41,13 +41,11 @@ errors `flycam_model_never_renders` / `flycam_player_tag_conflict`, both prefab-
 `source_file: "prefabs/prefabs.ron"`. Helpers `PrefabDef::is_flycam()/is_player()/
 flycam_ignored_fields()` live in `schema/catalog.rs`.
 
-**Known remaining gap (flag on any future flycam/primitive review):** `flycam_ignored_fields()`
-checks only `model` and `children`. A `kind: Primitive` flycam authoring a body via `shape:` +
-`primitive:` (the *normal* way to give a Primitive prefab a body — `model: ""` is the convention
-there, so the model check never trips) is still silently discarded with **no warn and no validate
-error**, and docs ~1882 naming only `model`/`children` implies `shape`/`primitive` are honoured.
-Verified 2026-08-19: no shipped flycam prefab sets `shape`/`primitive`, so extending the check is
-zero-false-positive against `validate_projects`.
+**CLOSED:** `flycam_ignored_fields()` (`schema/catalog.rs`) now also checks `shape`/`primitive` —
+a `kind: Primitive` flycam authoring a body via `shape:` + `primitive:` is caught alongside
+`model`/`children`, and `docs/20_data_formats.md`'s flycam intro sentence now explicitly lists
+"`model`, `shape`/`primitive`, or `children`" as the ignored body-defining fields. Do not re-flag
+this gap.
 
 Note `model:` is a required non-Option field, so `model: ""` is the shipped convention in every
 flycam prefab (terrain_demo, custom_materials, foliage_demo `"explorer"`, camera_modes

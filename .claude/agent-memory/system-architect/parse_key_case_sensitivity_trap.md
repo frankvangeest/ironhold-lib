@@ -11,9 +11,8 @@ metadata:
 lowercase `(KeyCode::KeyI, "i")` entry and `3rd_person_game_demo`'s inventory slot ships
 `key: "i"`, so migrating off `DIGIT_KEYS` to `parse_key` would silently kill that slot.
 
-**Status (as of the `action_bar_custom_hotkeys` review):** FIXED on branch
-`feature/action-bar-custom-hotkeys` (not yet verified on `main` — grep `parse_key` in
-`schema/player.rs` before relying). The fix adds a normalization pass at the top of `parse_key`:
+**Status:** FIXED and CONFIRMED on `main`/current tree — `parse_key` in `schema/player.rs` carries
+the normalization pass described below (verified directly in source). The fix adds a normalization pass at the top of `parse_key`:
 a **single** lowercase ASCII letter (`s.len() == 1 && is_ascii_lowercase`) is upper-cased before
 the match; multi-character names (`"escape"`, `"keyq"`, `"f2"`) stay case-sensitive and still
 return `None` if not authored in canonical form. So `parse_key("i")`/`("q")` now resolve;

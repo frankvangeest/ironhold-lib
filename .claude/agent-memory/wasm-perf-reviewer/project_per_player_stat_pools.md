@@ -7,9 +7,15 @@ metadata:
 
 Per-player stat pools (feature/per-player-stat-pools, reviewed 2026-07-17). Touches `capabilities/action_bar.rs`, `capabilities/stats.rs`, `runtime/scene_manager/entity_spawner.rs`. Zero new deps, no WASM-incompatible API (format!/HashMap/String only).
 
-**resolve_cost_source (action_bar.rs ~L238)** returns `(f32, Option<String>)` where the `Option<String>` is the dot-routed per-player deduct key `format!("{spawn_id}.{stat}")`, built only when the acting player's own `StatMap` contains the stat (per-player pool hit); `None` on global `LoadedStats` fallback.
-
-**The per-frame allocation to watch:** `action_bar_visual_system` (runs every frame, gated `run_if(any_action_slots)`) calls `resolve_cost_source(...).0 >= c.amount` per cost-slot and DISCARDS the `.1` key String. So for every action-bar slot whose cost draws from a per-player pool, it allocates and immediately drops a short `format!` String every frame. Bounded (single-digit slots × short strings) but avoidable, and it violates this codebase's established "per-frame system, zero idle allocation" convention for the action_bar systems (see [[intent-event-layer]]). Clean fix: change `resolve_cost_source` to return `(f32, bool)` (bool = per-player-pool used) preserving single-source-of-truth for the pool decision, and build the `format!` key only at the input_system deduct call site (which is already input-gated). Recommended before commit or log as a claude_suggestion.
+**resolve_cost_source (action_bar.rs ~L287)** returns `(f32, bool)` — the bool flags whether the
+value came from the acting player's own per-player `StatMap` (pool hit) vs. the global
+`LoadedStats` fallback. **Fixed:** this used to return `(f32, Option<String>)`, building a
+throwaway `format!("{spawn_id}.{stat}")` deduct-key String per cost-slot per-frame in
+`action_bar_visual_system` even though that system only ever read `.0` and discarded the key. The
+`(f32, bool)` signature closes that — no `format!` call happens in the visual system's per-frame
+path at all now; the deduct key (if needed) is built only at the input_system call site, which is
+already input-gated. Verified current (2026-09-03): `resolve_cost_source` signature at
+`capabilities/action_bar.rs` ~L287-291 matches this exactly.
 
 **Not concerns:** `action_bar_visual_system`'s new `players.iter().find(owns_slot(...))` per cost-slot is negligible — ≤4 players (MAX_SPLIT_PLAYERS), Copy `PlayerIndex(u32)` predicate, no alloc. `action_bar_input_system`'s added `Option<&StatMap>` query column + cost resolution are all inside the `just_pressed` fired-slot branch (input cadence, not per-frame); archetype state cached so the extra query column is ~free on idle. `build_stat_map_from_templates` is spawn-time only.
 

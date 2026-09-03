@@ -9,10 +9,10 @@ metadata:
 
 Cost profile on web:
 - Per-tick work scales with NPC count. find_nearest_visible_player snapshots player positions into a `Vec` once per tick (small, players count) — acceptable.
-- LocomotionState write is change-detection-guarded: `if loco.moving != moving`, `if loco.running != running`. Good. BUT `loco.is_grounded = true` is written UNCONDITIONALLY every tick — marks the component Changed every FixedUpdate tick even when nothing moved.
+- LocomotionState write is change-detection-guarded on all three fields: `if loco.moving != moving`, `if loco.running != running`, and (fixed since original review) `if !loco.is_grounded { loco.is_grounded = true; }` (npc.rs ~L503). No field marks the component Changed unless its value actually flips.
 
-**Why is_grounded matters:** `animation_resolver_system` (animation_resolver.rs, Update) queries `&LocomotionState` (read-only, no `Changed<>` filter), so an over-firing change flag does NOT currently re-run extra work there — animation_resolver iterates all policy entities every frame regardless. So the unconditional write is cheap *today* but is a latent footgun if anyone adds `Changed<LocomotionState>` filtering. Fix is trivial: `if loco.is_grounded != true { loco.is_grounded = true; }`.
+**Why is_grounded mattered:** `animation_resolver_system` (animation_resolver.rs, Update) queries `&LocomotionState` (read-only, no `Changed<>` filter) and iterates all policy entities every frame regardless, so an over-firing change flag on `is_grounded` was never a live cost — but it was still a latent footgun if anyone later added `Changed<LocomotionState>` filtering there. That gap is closed now that all three fields are guarded; no action needed. Verified current (2026-09-03) at `capabilities/npc.rs` ~L503.
 
-**How to apply:** When reviewing LocomotionState writers, enforce the change-detection guard on ALL three fields, not just two. Cross-schedule (FixedUpdate writer / Update reader) means FixedUpdate may run 0 or N times per render frame — never gate animation on write frequency.
+**How to apply:** When reviewing LocomotionState writers, enforce the change-detection guard on ALL fields written, not just some. Cross-schedule (FixedUpdate writer / Update reader) means FixedUpdate may run 0 or N times per render frame — never gate animation on write frequency.
 
 Related: [[dynamic-labels-system]] for the change-detection-discipline pattern this project enforces.

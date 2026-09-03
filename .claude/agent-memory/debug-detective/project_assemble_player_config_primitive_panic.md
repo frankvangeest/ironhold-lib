@@ -29,5 +29,8 @@ player_model_source_unification v1 (2026-07-19); pre-feature this same prefab sp
 `assemble_player_config` has 2 callers (scene_loader + action_executor) and only one supplies the
 primitive ctx. Any latent panic here won't be caught by `cargo test` (no test drives Action::Spawn
 on a primitive-model-bearing player prefab) nor by `ironhold_cli validate` (its new check only
-covers primitive-player + terrain, not primitive-player + Action::Spawn). Related:
-[[stat_display_changedetection_asmut]] is another "guard defeated by a subtler path" case.
+covers primitive-player + terrain, not primitive-player + Action::Spawn). The sibling
+"guard defeated by a subtler path" case this used to link to
+(`project_stat_display_changedetection_asmut.md`, `world_icon_bar_update_system`'s `.as_mut()`
+defeating change detection) is now FIXED (reads via `.as_ref()` first) and that memory file was
+deleted.

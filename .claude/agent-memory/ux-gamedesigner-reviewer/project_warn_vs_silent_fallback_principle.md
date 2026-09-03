@@ -30,10 +30,13 @@ Precedents that stay SILENT (legitimate common choice):
 - A player prefab declaring NO `stat_templates` at all (ordinary global-pool fallback).
 
 Known GAP where the principle says warn but nothing does (flag on any gamepad/action-bar review):
-- `ActionSlotDef.gamepad_key` set while the owning player has **no** `InputMap.gamepad_index` —
-  the binding is silently inert (`resolve_gamepad(None)` → `None`); no warn, no validate error, undocumented.
 - `gamepad_key` colliding with the owning player's own `gamepad_jump`/`run`/`interact`/`target_next`
   (all four default to South/East/West/North) — one press does both; entirely unchecked.
+
+CLOSED: `ActionSlotDef.gamepad_key` set while the owning player has no `InputMap.gamepad_index` is
+now a hard `ironhold_cli validate` error (`gamepad_key_without_gamepad_index`, `validate.rs` ~769)
+— matches the WARN precedent below rather than being a silent-fallback gap. Do not re-cite it as
+undocumented/unchecked.
 
 - Flycam prefab with non-empty `model`/`children`, and dual `tags: ["player","flycam"]`
   (scene_loader.rs `is_flycam` branch, shipped 2026-08-19) — paired cli

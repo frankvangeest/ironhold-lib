@@ -51,9 +51,9 @@ conventions that are enforced only by copy-paste, never written down anywhere a 
 - **No room sets `show_player_nameplate`** — only `show_nameplates: true` (NPC/prop-facing). So
   every player prefab's authored `display_name` ("Player 1", "Player 2 (primitive)") is invisible
   in-game, and rooms rely on hint text to identify players instead.
-- **Screenshot baselines are incomplete** — `screenshot_baselines/scenes/` has main, room2-5, room7
-  only (no room6/8/9/10). Only `local_coop_demo_main.png` is referenced by `index.html`, so this is
-  cosmetic, but don't assume a new room gets a baseline.
+- **Screenshot baselines now cover main + room2-10** — only room11 is missing. Only
+  `local_coop_demo_main.png` is referenced by `index.html`, so this is cosmetic, but don't assume a
+  new room gets a baseline automatically.
 
 **How to apply:** when reviewing a new `local_coop_demo` room, check (1) the previous room's hints
 were updated *and* the new exit line sits adjacent to `room_hint`, not several rungs away, (2) every

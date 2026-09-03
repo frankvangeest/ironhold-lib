@@ -24,6 +24,9 @@ entire child subtree.
 
 **How to apply:** When reviewing any new per-frame write in this system (or a sibling like
 `damage_popup_system`), the guard is the house convention — a new unguarded write is a regression, not a
-new idea. Watch for the `.as_mut()`-before-compare mistake that silently defeats the guard
-([[stat-display-changedetection-asmut]]). Related: [[webgpu-preprocessing-warning]],
+new idea. Watch for the `.as_mut()`-before-compare mistake that can silently defeat this kind of guard —
+`world_icon_bar_update_system` (`stat_display.rs`) had exactly this bug (calling `sprite.texture_atlas.
+as_mut()` before the comparison, forcing `DerefMut` unconditionally) but it's now FIXED (reads via
+`.as_ref()` first; the memory file that used to document this, `project_stat_display_changedetection_
+asmut.md`, was deleted as stale). Related: [[webgpu-preprocessing-warning]],
 [[label-depth-scale-three-mechanisms]].

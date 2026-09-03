@@ -25,6 +25,22 @@ In Bevy 0.18 (DefaultPlugins, bevy_ui picking backend on), UI `Node` entities ar
 
 **Why:** GlobalZIndex alone only resolves draw order / pick priority where nodes overlap; it does not extend the panel's pickable area.
 
-2. World-space targeting (`capabilities/targeting.rs` `click_select_system`) reads `mouse.just_pressed(Left)` directly via `Res<ButtonInput<MouseButton>>` and projects entities with `world_to_viewport`. It does NOT go through bevy_picking/UI at all, so NO amount of UI z-index or blocker node will stop it. It needs an explicit `if inventory_ui.panel_open { return; }` guard, mirroring [[collectible.rs / interactable.rs already do this]].
+2. World-space targeting (`capabilities/targeting.rs` `click_select_system`) reads `mouse.just_pressed(Left)` directly via `Res<ButtonInput<MouseButton>>` and projects entities with `world_to_viewport`. It does NOT go through bevy_picking/UI at all, so NO amount of UI z-index or blocker node will stop it on its own. It needs an explicit guard against a click that a UI panel already consumed — see below for how that guard actually works today.
 
-**How to apply:** `LoadedInventoryUi.panel_open` (inventory.rs) is the canonical "any panel open" flag, set in action_executor.rs. collectible_system and interactable_system already early-return on it; targeting's `click_select_system` is the one that was missed.
+**FIXED, via a different mechanism than originally prescribed.** `click_select_system` does not
+gate on a `panel_open` resource flag. Instead it takes `ui_interactions: Query<&Interaction>` and
+early-returns when `ui_interactions.iter().any(|i| *i == Interaction::Pressed)` (targeting.rs
+~line 187/196). This works because every panel root carries `FocusPolicy::Block` + `Interaction`
+(see [[project_focuspolicy_block_required]]) — `ui_focus_system` sets that root's (or its child
+button's) `Interaction` to `Pressed` for any click landing inside the panel's rect, so this check
+transitively covers "a click was consumed by any open UI panel or button" without needing a
+separate per-panel `panel_open` resource at all. A click outside every panel's rect leaves all
+`Interaction`s un-`Pressed` and falls through to world targeting normally.
+
+**How to apply:** if a new UI panel/blocker needs to also block world-space targeting, giving it
+`FocusPolicy::Block` (so it participates in `ui_focus_system`'s `Interaction` resolution) is
+sufficient — no additional wiring in targeting.rs is needed. `LoadedInventoryUi.panels_open` (a
+u8 refcount, not a bool) still exists and still gates `collectible_system`/`interactable_system`
+(a resource-refcount check, not the `Interaction`-query check `click_select_system` uses) — the
+two mechanisms are not unified, so don't assume one implies the other is also guarded. See
+[[project_panels_open_refcount_leak]] for a real bug in that refcount's own bookkeeping.

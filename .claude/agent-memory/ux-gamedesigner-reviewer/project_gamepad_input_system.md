@@ -1,6 +1,6 @@
 ---
 name: gamepad-input-system
-description: Gamepad/controller InputMap + *_gamepad_bindings fields, keyboard-additive truth, bind-once-then-lock seed model, unclaimed-pad-only footgun, camera-yaw parity gap, canonical demo examples
+description: Gamepad/controller InputMap + *_gamepad_bindings fields, keyboard-additive truth, bind-once-then-lock seed model, unclaimed-pad-only footgun, camera-yaw parity gap, canonical demo examples; duplicate_gamepad_index check is shipped AND documented
 metadata:
   type: project
 ---
@@ -56,13 +56,14 @@ mirroring `global_key_bindings`/`scene_key_bindings`. Shipped in feature/gamepad
   `*_grid` variants have no such hint), `local_coop_demo/scenes/room8.scene.ron`
   (`scene_gamepad_bindings`).
 - `ironhold validate` warns on unrecognised button names in both bindings maps (implemented).
-- **The duplicate-`gamepad_index` check now SHIPPED** (scene-load `warn!` +
+- **The duplicate-`gamepad_index` check SHIPPED** (scene-load `warn!` +
   `ironhold_cli validate` hard error, `error_type: "duplicate_gamepad_index"`). Same message both
   places: "entities X and Y both use gamepad_index: N — one physical controller would drive both
   characters at once. Give each player a different gamepad_index. Deliberately sharing one
   controller between two characters is not supported." Correctly scoped per-scene, per the note
-  below. **Not documented in `docs/` anywhere** as of 2026-08-01 — `docs/60_contributing.md`'s
-  "Checks performed" list and `docs/20_data_formats.md`'s `InputMap` section both omit it.
+  below. **CLOSED — now documented in both places**: `docs/20_data_formats.md` (~2188, "How a
+  controller gets assigned to a player") and `docs/60_contributing.md` (~245, "Checks performed"
+  list). Do not re-flag as undocumented.
 - **Any new "duplicate/conflicting `gamepad_index`" check must be scoped to a scene's instantiated
   players, never the prefab catalog.** `local_coop_demo/prefabs/prefabs.ron` legitimately has
   `player_p1_split` and `player_p1_split_ring` BOTH on `gamepad_index: 0` (and the p2 pair both on

@@ -5,6 +5,18 @@ metadata:
   type: project
 ---
 
+> **Staleness note (added during memory-maintenance audit):** this file is a large accreting
+> history of player-spawn-path work. Cross-checked against `crates/ironhold_core/src/CLAUDE.md`'s
+> "Player-construction sites" section (the current authoritative summary) — the substance/narrative
+> arc here still tracks correctly (four sites → helper unification → `player_model_source_unification`
+> v1/v2 → hot-join as a fifth site → per-player stat pools/widgets), but most of the inline
+> `file.rs:LINE` citations scattered through the early entries have drifted from the current source
+> and were not individually re-verified line-by-line in this pass. Treat line numbers here as
+> approximate/historical, not authoritative — re-grep the named function/symbol rather than trusting
+> a cited line number. This file is a reasonable candidate for consolidation into a shorter, current-
+> state-only summary (mirroring `CLAUDE.md`'s section) the next time it's touched; not attempted here
+> since the underlying claims are still substantively correct.
+
 There are FOUR player-entity construction sites that MUST be kept in sync. Any feature that changes player spawning (local co-op, character select, respawn, possession) must account for all four or players diverge silently. See [[scene-prefab-boundary]] and [[core-architectural-decisions]].
 
 **The sites (verified 2026-07-03):**

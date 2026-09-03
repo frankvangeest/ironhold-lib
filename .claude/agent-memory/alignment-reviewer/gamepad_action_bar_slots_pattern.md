@@ -33,11 +33,17 @@ double-binds jump+ability on one press. Contrast the keyboard discipline in
 `local_coop_demo/room3.scene.ron` (G/L chosen explicitly disjoint from movement/jump/run/
 target_next). Prefer `"DPadUp"`/`"RightTrigger"` in any new example. Re-flag on any touch.
 
-**Validation gap (same family):** a slot declaring `gamepad_key` whose owning player prefab has no
-`inputs.gamepad_index` is a silent no-op (`resolve_gamepad` returns `None` on `index: None` — never
-falls back to "any connected pad"). Only prose comments guard it, even though both `scene_loader`
-and `validate.rs` already do exactly this kind of owner_player→prefab cross-check for `cost:` →
-`stat_templates`.
+**Validation gap — CLOSED as of this update.** A slot declaring `gamepad_key` whose owning player
+prefab has no `inputs.gamepad_index` is still a silent no-op at the mechanism level (the current
+`BoundGamepad`/`gamepad_bind_system` model — see `gamepad_binding_pattern.md` — never falls back
+to "any connected pad"; `resolve_gamepad`, the function this note originally cited, was deleted
+during that hardening pass). But the diagnostic gap is closed: `scene_loader.rs`'s
+`warn_gamepad_key_without_gamepad_index` (runtime `warn!`, called from the same site as the other
+scene-load checks) and `ironhold_cli validate`'s matching `gamepad_key_without_gamepad_index`
+error now both do exactly the owner_player→prefab cross-check this note was asking for — the same
+`unwrap_or(0)` "None/Some(0) both mean the primary player" normalization
+`warn_missing_player_stat_templates` uses. No longer a silent, undiagnosed no-op; re-flag only if
+a future refactor removes either check.
 
 **Accepted, documented limitations (do not re-flag as blockers):** `key` stays required, so every
 gamepad-routed slot also has a live keyboard binding any keyboard can fire (`owner_player` has

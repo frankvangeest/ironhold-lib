@@ -39,11 +39,13 @@ same class as the `format!`/`collect()` patterns flagged elsewhere.
 **`QueryFilter::predicate` first use in the engine.** `player.rs` (and
 `tests/prop_ground_veto_tests.rs`) are the only `.predicate(` call sites. It is `Option<&dyn Fn>`,
 stack-only, no boxing, no new parry monomorphization — only bevy_rapier's `new_scoped` predicate
-arm becomes live. Sub-KB size impact. Note it is currently attached **unconditionally**, including
-on the first (always-executed) iteration when the exclusion list is empty, so every ground cast now
-pays a `&dyn Fn` indirect call + `entity_from_collider` user_data decode per broad-phase candidate.
-Negligible (~a handful of candidates per cast) but a one-line `if !excluded.is_empty()` guard would
-remove it from the 100% path.
+arm becomes live. Sub-KB size impact. **Fixed:** it is now attached only when
+`!excluded_this_tick.is_empty()` (player.rs ~L395-396) — the 100% path (open ground, or any
+solid prop/wall not already excluded this tick, i.e. the first, always-executed iteration) skips
+the predicate entirely, so no `&dyn Fn` indirect call or `entity_from_collider` decode is paid on
+the common path. Only retry iterations (already the rarer, vetoed branch) pay it. Verified current
+(2026-09-03) at `capabilities/player.rs` ~L390-396, with an inline comment matching this reasoning
+nearly verbatim.
 
 **Amplification factor to remember for any FixedUpdate physics work:** Bevy's `Time<Fixed>` catches
 up after a browser hitch (default `max_delta` 0.25 s → up to ~16 ticks in one rendered frame at the

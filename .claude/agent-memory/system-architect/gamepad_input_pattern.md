@@ -18,7 +18,22 @@ Gamepad/controller input became fully RON-configurable in `feature/gamepad-contr
 
 **Spawn-time vs live resolution split:** live per-frame values (analog stick, button `just_pressed`) need `Query<&Gamepad>`; only `gamepad_deadzone` is still pre-resolved onto `OrbitCamera` at spawn. Button-name parsing is done live each frame off the CharacterController's InputMap (not pre-resolved) — consistent with the keyboard path, negligible cost.
 
-**Camera pitch:** right-stick-Y is non-inverted (positive stick → pitch toward max_pitch), matching this codebase's LeftStickY-drives-forward convention. Reuses `OrbitCamera.look_speed` (shared with keyboard look_up/down). Direction pinned by a real direction-asserting test.
+**Camera pitch:** right-stick-Y is non-inverted (positive stick → pitch toward max_pitch), matching this codebase's LeftStickY-drives-forward convention. Reuses `OrbitState.look_speed` (shared with keyboard look_up/down; `OrbitCamera` no longer exists as a component — see the camera_modes v1/v2 terminology note below). Direction pinned by a real direction-asserting test.
+
+**Terminology note (post `camera_modes` v1/v2 unification, current tree):** `OrbitCamera`/
+`PartyOrbitCamera` no longer exist as components. Camera state is now a single
+`ActiveCameraMode` enum component (`Orbit(OrbitState)` / `Party(PartyState)` / `Fixed(FixedState)`
+/ `Follow(FollowState)` / `FirstPerson(FirstPersonState)` / `Flycam(FlycamState)`), with
+zero-sized marker components (`OrbitCameraMode`, `PartyCameraMode`, etc.) alongside it purely so
+other systems can query by kind. `CameraTargets(Vec<Entity>)` replaced both
+`OrbitCamera.target: Entity` and `PartyOrbitCamera.targets: Vec<Entity>`. Read the rest of this
+file's `OrbitCamera`/`PartyOrbitCamera` references as `ActiveCameraMode::Orbit(OrbitState)` /
+`ActiveCameraMode::Party(PartyState)` + the matching marker respectively — the underlying facts
+(BoundGamepad bind-once model, the disjoint `bound_q: Query<&BoundGamepad>` lookup via
+`CameraTargets`, the deleted `resolve_gamepad`/`OrbitCamera.gamepad_index`) are unaffected by this
+rename and remain accurate as described below; only the type names are stale. See
+`crates/ironhold_core/src/CLAUDE.md`'s "`Action::SetCameraMode` / `camera_modes:` registry" section
+for the full v2 design.
 
 **WASM:** safe — no plugin added, relies on DefaultPlugins' GamepadPlugin (browser Gamepad API works); no threading/native calls.
 

@@ -38,22 +38,24 @@ is the press-time event (~184). Leaving the original text below for history:
 - Suppression is all-or-nothing per slot: "handled" = "at least one rule matched," and multiple rule
   sources (global + entity FSM) can each contribute actions to one intent. Document this for designers.
 
-**Two durable action-bar facts relevant to per-player / split-screen (verified 2026-07-15):**
-- **`action_bar_input_system` fires at most ONE slot per frame**: it does
-  `DIGIT_KEYS.iter().find(just_pressed)` then `return` (action_bar.rs ~118-122) — no outer loop over
-  slots. Fine for single-player, but two split-screen players pressing in the same 16ms frame drops
-  one input. Any per-player action-bar work MUST restructure this to a per-slot loop, not just swap
-  the target lookup.
-- **Intent suppression is keyed on slot_key alone, player id is discarded.** `action_bar_input_system`
-  emits `intent.slot.{key}:{player_id}` but `intent_slot_key()` (message_interpreter.rs ~83) splits on
-  `:` and keeps only the key, so `HandledIntentSlots: HashSet<String>` and `PendingIntentActions`/
-  `CooldownMap: HashMap<String,_>` are all scene-wide slot-key-only. This is the concrete reason
-  composite `(player, slot_key)` keying is more than a one-liner — it touches the interpreter's
-  intent-extraction + suppression path, not just the maps. Two bars sharing a slot key → shared
-  cooldown + ambiguous fire + cross-player suppression. The per-player-targeting Phase 2 plan works
-  around this by requiring disjoint keys across bars (relying on action_bar_custom_hotkeys) rather
-  than fixing the keying. Cost cost gate reads the single global `LoadedStats` resource, never the
-  per-entity `StatMap` component — per-player resource pools are unbuilt.
+**Two durable action-bar facts relevant to per-player / split-screen (verified 2026-07-15, BOTH FIXED as of `per_player_split_screen_targeting.md` Phase 2 / `per_player_stat_pools.md`):**
+- **`action_bar_input_system` no longer fires at most one slot per frame.** It was rewritten from a
+  single `DIGIT_KEYS.iter().find(just_pressed)` + `return` to a loop over **every** slot whose
+  resolved key is `just_pressed` this frame — each iteration resolves its own acting player via
+  `owns_slot(owner_player, player_index)` and that player's own `PlayerTarget` for `{target}`
+  substitution. Two split-screen players pressing in the same frame no longer drops one input. See
+  `crates/ironhold_core/src/CLAUDE.md`'s "Per-player action bars (Phase 2)" section.
+- **Intent suppression is still keyed on slot_key alone (unchanged, correctly so per the design
+  note below), but the cost gate is no longer global-only.** `HandledIntentSlots`/
+  `PendingIntentActions`/`CooldownMap` remain scene-wide `HashMap<String,_>`/`HashSet<String>` —
+  two bars sharing a slot key still share cooldown/suppression, guarded by a scene-load `warn!`
+  (`warn_cross_bar_duplicate_keys`) plus an `ironhold_cli validate` error (`cross_bar_duplicate_key`)
+  rather than by fixing the keying (a deliberate, documented scope boundary, not a gap). **The
+  `cost:`/`SlotCost` check/deduct IS now per-player**: `resolve_cost_source` (`action_bar.rs`)
+  resolves against the acting player's own `StatMap` first (populated from
+  `PlayerConfig.stat_templates`), falling back to the single shared `LoadedStats` resource only
+  when that player's prefab declares no matching `stat_templates` entry. See
+  `docs/20_data_formats.md`'s `SlotCost` section and `planning/features/per_player_stat_pools.md`.
 
 **How to apply (recommended direction, verified 2026-06-25):**
 - Fix is "route action bar through interpreter," NOT "rebuild event system." Pipeline shape is right.

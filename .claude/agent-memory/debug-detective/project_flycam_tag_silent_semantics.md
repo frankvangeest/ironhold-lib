@@ -30,4 +30,6 @@ contains a single GLB entity, so flycam+GLB has no screenshot-baseline coverage 
 
 **How to apply:** when a flycam bug is reported, check these three silent paths before suspecting
 rendering; and treat "the demo projects prove it works" as unavailable for flycam+GLB.
-Related: [[project_camera_mode_switch_spawn_only_state]], [[project_camera_mode_dual_source]].
+Related: [[project_camera_mode_switch_spawn_only_state]]. The camera_mode-vs-legacy-camera
+dual-source bug this used to also link to (`project_camera_mode_dual_source.md`) is now FIXED
+and that memory file was deleted.

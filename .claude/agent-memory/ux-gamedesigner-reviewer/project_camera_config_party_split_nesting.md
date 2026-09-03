@@ -1,57 +1,45 @@
 ---
 name: camera-config-party-split-nesting
-description: party:/split: are nested INSIDE components.camera; flycam is TAG-driven not field-driven; the real docs/20 camera surface spans ~1814-2557 (not the 2023-2350 camera_modes.md still claims)
+description: party:/split: now live as sibling fields of components.camera (the migration this memory predicted has shipped); flycam is TAG-driven not field-driven; doc-surface list and local_coop_demo migration constraints below still apply
 metadata:
   type: project
 ---
 
-`components.camera` (`CameraConfig`, ~15 flat fields) is the biggest single RON component block a
-designer hand-writes, and the two local-co-op switches `party:` (`PartyZoomDef`) and `split:`
-(`SplitScreenDef`, itself nesting `dynamic:` = `DynamicSplitDef` and the flat `own_viewport_only`)
-live **inside** it, read from the **first** `"player"`-tagged scene entity only.
+**UPDATED — the predicted fix shipped.** `party:`/`split:` are no longer nested inside
+`components.camera` (`CameraConfig`). `PrefabComponents` (`schema/player.rs`) now carries them as
+sibling fields — `pub split: Option<SplitScreenDef>` / `pub party: Option<PartyZoomDef>` — resolved
+from the new sibling location first, falling back to the legacy nested `camera.split`/`camera.party`
+for backward compat (both still only meaningful on the *first* `"player"`-tagged scene entity). See
+[[camera-mode-reachability-matrix]] for confirmation that this sibling resolution actually reaches
+the split/party/dynamic camera spawn paths (it does, as of the v1 post-implementation fix).
 
 **Flycam is selected by TAG, not by a field.** `tags: ["flycam"]` spawns the fly camera; the
-`components.flycam:` (`FlyCamDef`) block is entirely optional tuning. Verified 2026-08-07: of the
-3 shipped flycam projects, only `foliage_demo` authors a `flycam:` block — `custom_materials` and
-`terrain_demo` are tag-only with engine defaults. Any camera-refactor backward-compat rule phrased
-as "detect the old `camera:`/`flycam:` **fields**" therefore breaks 2 of 3 projects; detection must
-key on the **tags** (`"flycam"` / `"player"`), with the config blocks optional.
+`components.flycam:` (`FlyCamDef`) block is entirely optional tuning. Any camera-refactor
+backward-compat rule phrased as "detect the old `camera:`/`flycam:` **fields**" breaks projects that
+are tag-only with engine defaults (verified historically true of `custom_materials`/`terrain_demo`);
+detection must key on **tags** (`"flycam"` / `"player"`), with the config blocks optional.
 
-**Why this matters for any camera refactor:** `planning/features/camera_modes.md` proposes replacing
-`camera: (...)` with `camera_mode: Orbit(...)`. Blocker 4 (resolved 2026-08-01) moves `split:`
-(carrying `own_viewport_only` inside it) to a **sibling** field of `camera_mode:` under
-`components:`; `party:` becomes a `Party` *variant*. The pre-existing party/split mutual-exclusivity
-(both set → warn, `split` wins) is explicitly preserved; `split.dynamic`'s internally-managed merged
-camera uses the `Party` variant under the hood, which is not a designer-authored contradiction.
+**Docs surface to update** whenever this area changes (verify current line numbers before citing —
+these drift): `### Special tag: "flycam"`, `### Special tag: "player"`, `#### How a controller gets
+assigned to a player`, `CameraConfig` field table, `### Shared party camera`, `### Split-screen
+camera`, `#### Per-viewport target ring visibility (own_viewport_only)`, `### Dynamic split-screen`,
+`### Grid split-screen`, `### Local co-op hot join` — all in `docs/20_data_formats.md`. Also check
+`docs/STATUS.md`, `docs/10_architecture.md`, `docs/00_overview.md` for stale camera-surface summaries.
 
-**Docs surface to update (verified 2026-08-07 — the plan's "~lines 2023-2350" is stale):**
-`### Special tag: "flycam"` 1814 · `### Special tag: "player"` 1886 · `#### How a controller gets
-assigned to a player` 1927 · `CameraConfig` field table 2067 · `### Shared party camera` 2125 ·
-`### Split-screen camera` 2192 · `#### Per-viewport target ring visibility (own_viewport_only)` 2282
-· `### Dynamic split-screen` 2364 · `### Grid split-screen` 2451 · `### Local co-op hot join` 2558.
-Also stale-on-ship outside docs/20: `docs/STATUS.md` lines ~52/54 ("Data-configured via
-`player.camera`", "spawned via `"flycam"` tag"), `docs/10_architecture.md:13`, `docs/00_overview.md:52`.
+**Migration-example constraint (local_coop_demo):** rooms have room-exclusive player prefab pairs
+(safe to migrate one in isolation) vs. shared pairs (migrating one changes 2 rooms, e.g.
+`player_p1`/`_p2` = main+room2 party, `player_p*_grid` = room6+room8, `player_p1_split_ring` =
+room9+room10). Check which shape a new example exercises before treating it as proof the sibling
+fields work everywhere — `local_coop_demo` room11 (v2) is the confirmed working `camera_mode:
+Orbit((...))` + sibling `split:` example on a 2-player scene.
 
-**Migration-example constraint (local_coop_demo, verified 2026-08-07):** 10 rooms, 16 `camera:`
-blocks. Room-exclusive player prefab pairs (safe to migrate one in isolation): room3
-(`player_p1_split`/`_p2_split`), **room4** (`player_p1_split_h`/`_p2_split_h` — simplest, best
-candidate), room5 (`_dynamic`), room7 (`_primitive`, but that's a do-not-retrofit regression
-baseline). Shared pairs (migrating one changes 2 rooms): `player_p1`/`_p2` = main+room2 (party),
-`player_p*_grid` = room6+room8, `player_p1_split_ring` = room9+room10.
-`3rd_person_game_demo` has exactly 3 plain `camera:` blocks (`player_warrior`, `player_male`,
-`player_female`), no co-op — but 2 of them spawn via `Action::Spawn` character-select, so migrating
-it also exercises the runtime-spawn camera path, not just the scene-load one.
-
-**Agreed targeting recommendation (plan-review 2026-08-01):** per-camera actions in a multi-camera
-scene should take an optional `owner_player: u32` (the established per-player field name — see
+**Targeting recommendation:** per-camera actions in a multi-camera scene take an optional
+`owner_player: u32` (the established per-player field name — see
 [[player-index-owner-player-wiring]]), **not** a viewport/slot index. Omitted = applies to *all*
-active cameras; `owner_player` on a party-mode scene or an unjoined hot-join slot should warn, not
-silently no-op (see [[warn-vs-silent-fallback-principle]]).
+active cameras (except a shared Party camera, which can't round-trip to `"default"`).
 
 **How to apply:** when reviewing camera schema changes, check that (a) `party`/`split`'s authoring
-location is stated explicitly, (b) the "first player entity wins" rule survives the move, (c) the
-full doc surface above is on the update list (not just the `CameraConfig` table), (d) hot-join
-(`join_prefab_keys`, see [[hot-join-input-prefab-coupling]]) has a defined camera-mode answer, and
-(e) any new co-op-shaped syntax gets at least one shipped example in `local_coop_demo` — otherwise
-the new form exists only in docs (see [[local-coop-demo-room-conventions]],
-[[primitive-player-fields]]).
+location (sibling field, with legacy nested fallback) is stated explicitly, (b) the "first player
+entity wins" rule survives the move, (c) the full doc surface above is on the update list, (d)
+hot-join (`join_prefab_keys`, see [[hot-join-input-prefab-coupling]]) has a defined camera-mode
+answer, and (e) any new co-op-shaped syntax gets at least one shipped example in `local_coop_demo`.

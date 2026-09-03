@@ -79,18 +79,22 @@ floor underneath. Two instances:
   Don't reach for `CollisionGroups` instead: nothing in the schema or engine uses collision/solver
   groups today, and moving a physics invariant into designer-authored membership bits turns a
   mis-authored group into "player never grounded".
-- **Solid geometry** (still unfixed as of 2026-08-23): a prop/wall whose side face reaches the
-  lifted cast ball's centre height (`feet + collider_radius + 0.01`) vetoes the floor when the
-  player is pressed against it. Needs real contact, not proximity, so the window is narrow — but
-  it is a **regression vs pre-gate behaviour**, and it is not cosmetic: after coyote expires,
-  `raw_grounded == false` sends `can_jump` down the airborne branch, which is `false` for every
-  shipped project (double jump defaults off) ⇒ **jump silently dies while pressed against a wall**.
-  Ready-made repro: `local_coop_demo`'s portal frame posts (`0.30 × 2.80 × 0.30` cuboids).
-  Cheapest candidate fix (no extra query): `ShapeCastHitDetails.witness1` is already computed and
-  is **world space** for `cast_shape` (rapier3d-0.31 `pipeline/query_pipeline.rs:~496` states
-  witness/normal 1 are world-space) — only apply the walkability veto when the contact point is
-  at/below the feet. Fallback: one bounded `exclude_collider` re-cast. The "read the full contact
-  manifold" fix in `claude_suggestions.md` is the general answer but much larger.
+- **Solid geometry — FIXED.** `ground_cast()` (`capabilities/player.rs`) now re-queries in a
+  bounded loop (`MAX_GROUND_CAST_CANDIDATES = 4`), excluding via `QueryFilter::predicate` any hit
+  that is **both** not underfoot **and** not walkable, until an accepted candidate is found or the
+  candidates for that tick are exhausted — this is exactly the "bounded `exclude_collider` re-cast"
+  fallback this section proposed, and it landed as the actual fix rather than the cheaper
+  witness1-based short-circuit also considered here. "Underfoot" uses the same `witness1`
+  world-space contact point this section traces, at or below `feet_pos.y + collider_radius * 0.5`.
+  Both conditions (not-underfoot AND not-walkable) are required before exclusion — a first version
+  that rejected on "not underfoot" alone was caught in review because it imposed a hidden 60°
+  walkable-slope ceiling independent of `max_walkable_slope_deg` (see the "Underfoot-contact test
+  geometry" note above for why `k=0.5` ⇒ 60°). Repro test:
+  `crates/ironhold_core/tests/prop_ground_veto_tests.rs::solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against`
+  (and its `_on_trimesh_terrain` sibling). A known, distinct, still-open residual gap remains
+  (tracked in `planning/backlog.md` ▸ Bugs, not this note's subject): `QueryFilter::predicate`
+  excludes by whole `Entity`, so a wall that's part of the *same collider entity* as the walkable
+  floor beneath it (a compound-collider prop) still excludes both together.
 
 **`witness1` world-space chain — fully traced 2026-09-01, don't re-derive.** Verified end to end
 against the vendored crates for the *filtered* call path `player.rs` actually uses:

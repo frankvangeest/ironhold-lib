@@ -20,6 +20,16 @@ this never-actually-verified state.
 a new scene, do not accept a green `test_web.py` as verification. Either generate the baseline
 first (`python test_web.py --update-baseline <scene>` / `--update-baselines`) and re-run so the
 diff+console-error path actually executes, or require a manual playtest. Also relevant when
-`--skip-build` is used against a stale `pkg/`. Related:
-[[project_webgpu_headless_black_screen]] (the WebGPU build can't screenshot at all in this sandbox,
-which is how a black baseline gets committed in the first place).
+`--skip-build` is used against a stale `pkg/`.
+
+**Note on the dangling `project_webgpu_headless_black_screen` link this file used to carry:**
+that memory file doesn't exist. The closest match, [[project_browser_pixel_probe_recipe]],
+documents a real but **distinct** headless-rendering pitfall — headless Chromium on this machine
+has no WebGPU adapter at all, so a `--features webgpu` build screenshotted headless renders a
+blank/black canvas — but it does NOT explain this file's core mechanism. `test_web.py`'s own
+`wasm-pack build` call (no `--features webgpu` flag) always builds the WebGL2-fallback backend,
+which doesn't hit that no-adapter problem, so a baseline `test_web.py` auto-creates is not
+generally a black screen for that reason. If a genuinely black/broken baseline is ever suspected
+here, verify the *actual* rendered pixels with `project_browser_pixel_probe_recipe`'s
+`--real-gpu`/non-headless recipe before assuming either cause — do not assume the WebGPU-adapter
+issue explains it without checking, since the build backends differ.

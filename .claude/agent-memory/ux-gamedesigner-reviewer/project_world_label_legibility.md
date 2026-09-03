@@ -60,12 +60,14 @@ a row of side-by-side captions is legible — none of them documented in `docs/2
   `tracked_vis == Hidden` early-return), but `docs/20_data_formats.md` line ~3738 and `STATUS.md`
   only claim "stat bar, stat label" auto-hide. Doc understates it.
 
-**Doc gap:** `docs/20_data_formats.md` has **no field table for `EntityLabelDef` or
-`WorldLabelDef`** — only the "Label depth scaling" section (~356–432). `text`, `offset`
-(default `(0,7,0)`, badly wrong for character-scale scenes), `font_size` (18), `color` are
-undocumented, and nothing warns about horizontal collision between neighbouring captions or the
-no-wrap behaviour. No shipped project sets `font_size` on an entity `label:` (only on
-`world_labels:`), so that path is schema-supported but untested in assets.
+**CLOSED — field table gap fixed.** `docs/20_data_formats.md` (~380-403) now has a real field table
+shared by `EntityLabelDef`/`WorldLabelDef` (`text`, `translation`/`offset`, `font_size`, `color`,
+`depth_scale`), including the `offset` default `(0,7,0)` and the note that it's "tuned for wide
+open-world signage, not character-scale entities". Do not re-flag the missing-table complaint. Still
+true and not covered by that table: nothing warns about horizontal collision between neighbouring
+captions or the no-wrap behaviour (those are mechanical facts below, not schema-table material), and
+no shipped project sets `font_size` on an entity `label:` (only on `world_labels:`), so that path
+remains schema-supported but untested in assets.
 
 **How to apply:** on any new side-by-side gallery/diorama demo review, run the overlap arithmetic
 above at H≈600 before accepting the layout, check `label_depth_scale` is present with

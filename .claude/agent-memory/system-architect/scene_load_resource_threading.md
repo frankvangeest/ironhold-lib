@@ -41,4 +41,4 @@ function parameter instead of a resource read. Do flag any code comment that jus
 read with frame separation — reword it to the atomicity argument, since the frame-separation claim
 invites someone to "fix" the wrong thing later.
 
-Related: [[split-screen-and-shared-mouse]], [[render-layers-reserved-scheme]].
+Related: [[render-layers-reserved-scheme]].

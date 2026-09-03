@@ -22,10 +22,10 @@ Four required touchpoints:
 4. Document in `docs/20_data_formats.md` (actions table), `docs/30_runtime_events_and_logic.md` (appendix), and `docs/STATUS.md` (Engine ABI)
 
 Entity-targeted actions (those that reference a spawn ID) need two additional touchpoints:
-5. `rewrite_self()` AND `rewrite_target()` in `message_interpreter.rs` — must handle `{self}`/`{target}` substitution in any field that holds a spawn ID
+5. `rewrite_self()` AND `rewrite_target()` in `crates/ironhold_core/src/runtime/scene_manager/message_interpreter.rs` — must handle `{self}`/`{target}` substitution in any field that holds a spawn ID
 6. `crates/ironhold_core/src/CLAUDE.md` — add to the `{self}` targets list
 
-**Recurring anti-pattern — substitution-enumeration trap:** `rewrite_self()` and `rewrite_target()` in `message_interpreter.rs` are explicit `match` over Action variants ending in `other => other`. Any new entity-targeted action that is NOT added to both match arms silently passes through with literal `"{self}"`/`"{target}"` strings — so it works from global rules.ron but is unreachable from behavior files and dialogue choices, with no compile error and no warning. Observed concretely in the inventory system (AddItem/RemoveItem/TransferItem/OpenShop all omitted). ALWAYS check both functions when reviewing a new entity-targeted action.
+**Recurring anti-pattern — substitution-enumeration trap:** `rewrite_self()` and `rewrite_target()` in `message_interpreter.rs` (`runtime/scene_manager/message_interpreter.rs`) are explicit `match` over Action variants ending in `other => other`. Any new entity-targeted action that is NOT added to both match arms silently passes through with literal `"{self}"`/`"{target}"` strings — so it works from global rules.ron but is unreachable from behavior files and dialogue choices, with no compile error and no warning. Previously observed concretely in the inventory system (AddItem/RemoveItem/TransferItem/OpenShop were all omitted) — this has since been fixed; all four are now handled in both match arms (confirmed in `crates/ironhold_core/src/CLAUDE.md`'s `{self}` targets list). ALWAYS check both functions when reviewing a new entity-targeted action — the trap itself (silent pass-through, no warning) is still real even though the specific inventory-action instance of it was fixed.
 
 ## Rules.ron vs state_machine.ron
 

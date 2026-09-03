@@ -33,12 +33,17 @@ everything the per-frame system can't recompute.**
 **Second footgun — `SceneStateParams::all_cameras` requires `&AuthoredCameraMode`**
 (scene_manager/mod.rs:627), so any camera spawn site that forgets to insert it is invisible to
 `SetCameraMode` with **zero diagnostic** (empty `targets` vec → the `for` loop just doesn't run;
-there is no "no cameras matched" warn). At review, 5 of 6 sites inserted it
+there is no "no cameras matched" warn). **RESOLVED — the flycam gap this note originally flagged is
+now fixed.** At the time of this review, 5 of 6 sites inserted it
 (`spawn_active_camera_for_player`'s 6 arms, `spawn_orbit_camera_for_player` @1179 covering
 split/party/hot-join, `spawn_party_orbit_camera` @camera.rs:332 with a synthesized `Party` value);
-the **scene_loader.rs flycam-tag camera spawn (~line 829)** did not — so `SetCameraMode` is a
-totally silent no-op in every `tags: ["flycam"]` scene. Grep `AuthoredCameraMode` and compare
-against `Camera3d::default()` spawn sites on any camera change.
+the `scene_loader.rs` flycam-tag camera spawn did not. It now does (scene_loader.rs ~line 875) —
+the insertion carries an inline comment citing this exact finding ("found in camera_modes.md v2's
+post-implementation review; every other camera-spawn site already has this"), confirming the fix
+and its provenance. `SetCameraMode` is no longer a silent no-op in `tags: ["flycam"]` scenes. Grep
+`AuthoredCameraMode` and compare against `Camera3d::default()` spawn sites on any *future* camera
+change — the general footgun (a new spawn site forgetting the insert, with zero diagnostic) still
+applies to any site not covered above.
 
 **Registry-vs-prefab validation asymmetry (drift to re-check every time):** the runtime warn
 (`warn_camera_modes_registry`, scene_loader.rs:1324) and the CLI (`validate.rs` ~652-724) agree on

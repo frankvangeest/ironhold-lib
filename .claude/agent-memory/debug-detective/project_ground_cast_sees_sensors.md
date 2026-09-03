@@ -55,9 +55,25 @@ feature. No shipped project authors a sensor floor (the only `sensor: true` in `
 **How to apply:** any new physics query in this codebase needs an explicit sensor decision. When
 a grounding/collision bug appears "only near props", check the prop's `trigger_zone` radius
 first — the prop's *solid* collider only vetoes if the player is actually touching it AND the
-collider reaches above the cast ball's centre (feet + `collider_radius` + 0.01); that solid-wall
-case is still unfixed and is pinned as an intentional limitation by
-`solid_prop_taller_than_cast_ball_centre_still_vetoes_when_pressed_against`.
+collider reaches above the cast ball's centre (feet + `collider_radius` + 0.01).
+
+**UPDATE — the solid-wall veto case is now FIXED too, not an intentional limitation.** The test
+was renamed from `..._still_vetoes_when_pressed_against` to
+`solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against` (plus an
+`_on_trimesh_terrain` sibling), and both now assert the fix, not the limitation. The fix is
+`ground_cast()`'s bounded re-query loop (`capabilities/player.rs`, `MAX_GROUND_CAST_CANDIDATES =
+4`): a hit that is **both** not underfoot (contact point above `feet_pos.y + collider_radius *
+0.5`) **and** not walkable is excluded via `QueryFilter::predicate` and the cast re-queries for
+the next-nearest candidate, instead of accepting whatever the single nearest hit was. Requiring
+**both** conditions (not "not underfoot" alone) is load-bearing — an earlier version that excluded
+on non-underfoot alone was caught by system-architect review before landing, since it silently
+imposed a hidden ~60° walkable-slope ceiling independent of `max_walkable_slope_deg`. See
+`crates/ironhold_core/src/CLAUDE.md`'s "The ground shape-cast must exclude sensors..." section for
+the full writeup, including the one remaining known gap: `QueryFilter::predicate` excludes by
+whole `Entity`, so a wall that's part of the *same* compound-collider entity as the walkable floor
+beneath it still reproduces the original full-jump-lock symptom (tracked in
+`planning/backlog.md` ▸ Bugs, not fixed by this loop).
+
 `player_slope_jump_tests.rs` can never catch this class — every case there spawns exactly one
 ground collider and the player, nothing else. `QueryFilter` is a plain `Copy` value built fresh at
 each of its only two call sites (`player.rs:328`, `npc.rs:144`) — nothing is cached or shared, and

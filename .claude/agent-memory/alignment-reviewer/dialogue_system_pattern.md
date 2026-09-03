@@ -13,7 +13,21 @@ Dialogue system (added ~2026-06, hash near cd1d321). Schema: `schema/dialogue.rs
 
 **Auto-wire purity gap (WARNING, not blocking):** the `entity.interacted:{id}`→`StartDialogue` auto-wire is hardcoded in the capability. A designer cannot intercept/condition/replace it from RON — e.g. "only start dialogue if quest_active" is impossible without a Rust change, because the capability fires StartDialogue unconditionally before any rule sees the event. The event IS still emitted (interactable_system emits it), so a designer could *also* react to `entity.interacted:{id}` in rules.ron, but they cannot *suppress* the auto-start. Acceptable as a convenience default; flag if asked to make dialogue-start conditional.
 
-**`{self}` substitution is INTERNAL to the capability, not via rewrite_self:** node `speaker`/`body`/choice `label` do `.replace("{self}", &npc_id)` inside dialogue_tick_system (lines 212-213, 257). This is fine because dialogue text is not an entity-targeted Action field. BUT the choice `do_actions` are pushed RAW (line 153-155, `action.clone()`) — they do NOT get `{self}`/`{target}` rewritten because they bypass the interpreter's rewrite_self/rewrite_target. So a choice action `Despawn("{self}")` will push the literal `"{self}"` and fail at the executor registry lookup. This is a real designer-reachability gap for the entity-targeted-action checklist: choice do_actions cannot use `{self}`/`{target}`. Either route choice do_actions through a rewrite pass (substituting npc_id for {self}, CurrentTarget for {target}) or document that choice actions must use literal spawn IDs.
+**`{self}` substitution is INTERNAL to the capability, not via rewrite_self — but this is now
+RESOLVED for `{self}`, still an open gap for `{target}`.** Node `speaker`/`body`/choice `label`
+still do `.replace("{self}", &npc_id)` inline (dialogue.rs, node-render block). Choice
+`do_actions` are no longer pushed raw: `dialogue_tick_system` now calls
+`substitute_self_in_action(action.clone(), &npc_id)` (dialogue.rs ~line 147) before pushing each
+choice action to `ActionQueue`. `substitute_self_in_action` (~line 303) mirrors the interpreter's
+`rewrite_self` for the same set of entity-targeted fields (`Despawn`, `SetDespawnTimer`,
+`ResetToSpawn`, `Spawn.id`/`.spawn_point`, and the rest of the entity-targeted-action checklist —
+see `crates/ironhold_core/src/CLAUDE.md`'s dialogue section for the authoritative list), so
+`Despawn("{self}")` in a choice's `do_actions` now resolves correctly instead of pushing the
+literal string. **`{target}` substitution is still NOT wired for choice `do_actions`** — grep
+confirms no `rewrite_target`/`CurrentTarget`/`{target}` handling anywhere in `dialogue.rs`; only
+`{self}` is substituted. A choice action referencing `{target}` (e.g. `Despawn("{target}")`) will
+still push the literal `"{target}"` and fail at the executor's registry lookup. If reviewing a new
+dialogue feature, flag any `{target}` use in `do_actions` as unsupported until this is added.
 
 **Dead field (WARNING):** `DialogueNodeDef.portrait: Option<String>` is documented as an asset-catalog texture key but is NEVER read anywhere in src (grep: only the schema decl + doc). A designer who sets it gets silent no-op. Either wire it through LoadedAssetCatalog into the panel or mark it clearly as reserved/not-yet-implemented in the doc comment.
 

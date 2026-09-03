@@ -1,59 +1,48 @@
 ---
 name: Docs lag the action schema
-description: Designer-facing docs (20_data_formats.md actions table, 30_runtime_events_and_logic.md Appendix, STATUS.md ABI list) are consistently not updated when new Action variants are added to schema/actions.rs
+description: Designer-facing docs (20_data_formats.md actions table, 30_runtime_events_and_logic.md Appendix, STATUS.md ABI list, 60_contributing.md validate checks list) are consistently not updated when new Action variants/fields land in schema/actions.rs — check 5 surfaces, not just 1
 type: project
 ---
 
 When new `Action` variants — **or new optional fields on an existing variant** — land in
-`crates/ironhold_core/src/schema/actions.rs`, five doc surfaces are consistently missed:
+`crates/ironhold_core/src/schema/actions.rs`, five doc surfaces need checking. Surface 1 usually
+gets updated; the other four consistently lag:
 
-1. `docs/20_data_formats.md` — the "Available actions" table (~line 3700, under
-   `## logic/rules.ron — LogicRulesAsset`). **This one usually DOES get updated** — it's the other
-   four that lag.
-2. `docs/30_runtime_events_and_logic.md` — the "Implementation snapshot" action bullets (~line 47-60),
-   the `#### Animation/audio actions` / `## Action model` category lists (~line 167-173), AND the
-   `### Actions ✅` appendix (~line 297-303)
-3. `docs/STATUS.md` — the `Engine ABI` actions list at ~line 103
-4. `docs/STATUS.md` — the `### Capabilities` table row for the affected area (e.g. the
-   "Animation playback" row, ~line 53, still reads only "Data-configured via `player.animations`")
-5. `docs/60_contributing.md` — the `validate <project_dir>` ▸ **"Checks performed"** list
-   (~line 236) and its `--strict` counterpart (~line 251), whenever the change also adds an
-   `ironhold_cli validate` error. House style there: name the `error_type` string in backticks and
-   cross-link to the relevant docs/20 section.
-
-**Confirmed instance (2026-08-26, `feature/dynamic-animation-control`):** `PlayAnimationOn` gained
-`start_at_fraction` + `freeze`. Surface 1 was updated well; surfaces 2, 3, 4 and 5 were all missed
-(docs/30 still says `PlayAnimationOn { target, clip }`, and `PlayAnimationOn` is *entirely absent*
-from both docs/30 category lists; STATUS.md still says
-`Action::PlayAnimationOn { target: String, clip: String }`; docs/60 has no
-`animation_start_at_fraction_out_of_range` line). Same shape as the older list below — new fields
-on an existing action lag exactly like new actions do.
-
-**Confirmed instance (2026-08-30, `feature/cli-validate-hardening`):** two new `validate` checks
-(scene-path existence; merchant `currency_stat`/`item_key`) updated docs/20 and docs/30 well but
-**surface 5 was missed entirely** — `docs/60_contributing.md` ▸ "Checks performed" (~line 236) still
-lists neither. The feature plan's own Docs task line only named docs/20 and docs/30, so the omission
-was baked in at plan time. Note docs/60's list is *also* already missing the older
-`join_prefab_keys` checks. Treat surface 5 as the single most-missed one for validate changes.
-See [[validate-coverage-gaps]].
+1. `docs/20_data_formats.md` — the "Available actions" table (under `## logic/rules.ron —
+   LogicRulesAsset`). **This one usually DOES get updated.**
+2. `docs/30_runtime_events_and_logic.md` — the "Implementation snapshot" action bullets, the
+   `#### Animation/audio actions` / `## Action model` category lists, AND the `### Actions ✅`
+   appendix.
+3. `docs/STATUS.md` — the `Engine ABI` actions list.
+4. `docs/STATUS.md` — the `### Capabilities` table row for the affected area (e.g. an "Animation
+   playback" row still reading a stale one-line summary after the real feature shipped).
+5. `docs/60_contributing.md` — the `validate <project_dir>` ▸ **"Checks performed"** list and its
+   `--strict` counterpart, whenever the change also adds an `ironhold_cli validate` error. House
+   style there: name the `error_type` string in backticks and cross-link to the relevant docs/20
+   section. This is empirically the single most-missed surface for `validate`-adding changes — the
+   feature plan's own Docs task line often only names docs/20 and docs/30, baking the omission in
+   at plan time. See [[validate-coverage-gaps]].
 
 There is an explicit reminder in `30_runtime_events_and_logic.md` at the end of the appendix:
 > "New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example."
 
-This is regularly ignored. Confirmed missing for: `ModifyStat`, `SetStat`, `ApplyModifier`, `RemoveModifier`, `ShowDamagePopup`, `SetEntityVisible`, `EmitEventAfterDelay`, `LoadSceneOverlay`, `UnloadOverlay`, `ToggleOverlay`, `PlayAnimationOn`, `EmitEvent`, `ShowFloatingText`.
+This is regularly ignored in practice, historically for both new Action variants (e.g.
+`ShowFloatingText`, `PlayAnimationOn` gaining new optional fields) and new schema surfaces more
+broadly: `PrefabDef` fields (e.g. `stat_label`/`world_stat_bar`, `NpcDef.collider_radius`/
+`collider_height`), and entire new prefab `kind`s (e.g. `Foliage` shipping with zero
+`docs/20_data_formats.md` entries). **Contrast:** schema *fields* and *events* tend to get
+documented correctly even when new struct-variant *actions* get missed — the lag is
+action-table-specific, not feature-wide. Also watch for accuracy drift, not just omission: a
+documented action can describe stale behavior (e.g. singular-camera language after a feature made
+it apply to multiple cameras in a split-screen scene) when the underlying mechanism changes without
+a doc pass.
 
-`ShowFloatingText` (struct variant: `entity` + `text`, schema at actions.rs ~line 133) is the worst-case version of this pattern: it is the *visible payoff* in the 3rd_person_game_demo targeting demo (`rules.ron` `target.changed` rule → `ShowFloatingText(entity: "{target}", text: "Selected!")`) yet has ZERO occurrences anywhere in docs/. A designer sees the effect in WASM and cannot find the action.
+**Why:** the schema is the source of truth (Rust); designers only see the docs. A new Action that
+exists only in Rust + an example RON file is essentially un-discoverable for a designer building a
+new project from scratch.
 
-**Contrast (done right):** the targeting *fields* shipped with this same feature were documented correctly — `click_selectable`/`targetable` in the PrefabDef table (20_data_formats.md ~1051-1052), `target_next`/`target_range` in the InputMap table (~1147-1148), and all `target.*` events in 30_runtime_events_and_logic.md (~111-116). So the lag is action-table-specific, not feature-wide: schema FIELDS and EVENTS get documented, new struct-variant ACTIONS get missed.
-
-Per-entity `PrefabDef` fields are also missed: `stat_label` and `world_stat_bar` are in the schema and used in `primitive_world/prefabs/prefabs.ron` (attack_dummy) but absent from the `PrefabDef fields` table at line 606 of `20_data_formats.md`.
-
-`NpcDef` collider fields are missed too: `collider_radius` / `collider_height` (schema in catalog.rs ~line 1078/1082, optional `Option<f32>`, humanoid defaults 0.35 m / 1.6 m for sizing non-humanoid GLB NPCs) are absent from the `NpcDef` fields table in `20_data_formats.md` (table at ~line 1268, ends at `angular_damping`). Note the file already has `collider_radius`/`collider_height` rows for the PLAYER/movement block (~line 1218, defaults 0.4/1.8) — same field names, different block, different defaults; do not confuse the two when reviewing. The `NpcDef` table uses a `None (effective value)` default-column convention (see `fov_degrees` row) — new optional NPC rows should follow it.
-
-New prefab KINDS are missed too: `kind: Foliage` (with `FoliageDef`/`FoliageClustersDef`/`FoliageMaterialDef`, schema in catalog.rs ~line 11-92) landed in foliage_demo with ZERO entries in `docs/20_data_formats.md` — no Foliage section, and the PrefabDef `kind` row (~line 956) still lists only `Actor`/`Prop`/`Primitive`. The `foliage` field is also absent from the PrefabDef fields table. Designer cannot author foliage from docs alone.
-
-`CameraShake` is documented but **inaccurately**: the actions table row (20_data_formats.md ~line 3280) says it shakes "the active orbit camera" (singular) and only warns about flycam scenes. Reality (per `crates/ironhold_core/src/CLAUDE.md`'s "Known limitation" note): it fires on *both* cameras in a `split:` scene and silently no-ops entirely in a `party:` scene. The split/party caveat lives only in the developer CLAUDE.md, never reached designer docs. See [[camera-config-party-split-nesting]].
-
-**Why:** the schema is the source of truth (Rust); designers only see the docs. A new Action that exists only in Rust + an example RON file is essentially un-discoverable for a designer building a new project from scratch.
-
-**How to apply:** when reviewing any new Action variant or `PrefabDef` field, always check the three doc surfaces above and flag missing entries as blockers. Also flag missing entries on the `{self}` substitution list in `crates/ironhold_core/src/CLAUDE.md` (developer-side, not designer-side, but the project-internal reference for what `{self}` does).
+**How to apply:** when reviewing any new Action variant, new optional field on an existing Action,
+or new `PrefabDef`/prefab-`kind` schema surface, check all 5 doc surfaces above (not just docs/20)
+and flag missing entries as blockers. Also flag missing entries on the `{self}` substitution list
+in `crates/ironhold_core/src/CLAUDE.md` (developer-side, not designer-side, but the project-internal
+reference for what `{self}` does).

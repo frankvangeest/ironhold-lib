@@ -1,6 +1,6 @@
 ---
 name: animation-policy-doc-gaps
-description: AnimationPolicy has no top-level field table in docs/20; clips-alias looping semantics undocumented; historical record of which gaps closed when (PlayAnimationOn row, clip resolution order, animation_sources)
+description: AnimationPolicy has no top-level field table in docs/20; clips-alias looping semantics undocumented; historical record of which gaps closed when (PlayAnimationOn row, clip resolution order, animation_sources, un-freeze)
 metadata:
   type: project
 ---
@@ -15,6 +15,11 @@ Section: `docs/20_data_formats.md` ▸ `## prefabs/animation/*.ron — Animation
    clip, `start_at_fraction`, `freeze` all described.
 3. Clip-vs-id resolution IS now documented (~line 3590): **override `id` → `clips:` alias → raw
    glTF clip name**, in that order. Cite this instead of flagging it as unknown.
+4. **How to UN-freeze a frozen clip is now documented** (~line 3714): re-issue `PlayAnimationOn`
+   with an explicit `start_at_fraction` and `freeze: false` — `freeze: false` alone, with no
+   fraction, does NOT restart playback on its own if the clip is already current (the resolver
+   only replays on a genuine clip change or an explicit seek). Also documented: an override's own
+   `duration: Some(_)` timer still auto-expires regardless of `freeze`.
 
 **STILL OPEN:**
 - **There is no top-level `AnimationPolicy` field table anywhere in docs/.** `default_transition_ms`,
@@ -27,9 +32,6 @@ Section: `docs/20_data_formats.md` ▸ `## prefabs/animation/*.ron — Animation
   `looping: bool`. `dynamic_animation_control`'s third example asserts a `clips:` alias
   ("walk") keeps looping after a mid-clip seek — that behaviour is asserted in RON and in a
   scene label but stated nowhere in docs/. Flag as "needs verification" on any animation work.
-- **How to UN-freeze a frozen clip is undocumented.** `PlayAnimationOn(..., freeze: true)` has no
-  documented inverse. Whether a later `PlayAnimationOn` with `freeze: false` (or a different
-  clip) resumes/replaces it is not stated and has no shipped example.
 
 **Reserved override IDs** `jump_enter`/`jump_exit` are fired automatically for every player
 prefab; a locomotion-only policy still needs both or you get per-jump WARN spam. Smallest working

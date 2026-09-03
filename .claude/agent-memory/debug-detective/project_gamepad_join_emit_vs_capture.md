@@ -24,5 +24,8 @@ side-channel resource, check that the *message* count is capped too, not just th
 Tests that assert only the side-channel resource (e.g.
 `test_two_gamepads_pressed_same_frame_captures_only_lowest_sorted_index`) pass while the
 user-visible outcome is wrong — assert the outcome (player count / emitted message count), not the
-carrier. Related: [[project_gamepad_index_routing]] (a shared `gamepad_index` makes two players
-fire from one press — the concrete harm when a fallback index collides).
+carrier. The shared-`gamepad_index` double-fire hazard this used to link to
+(`project_gamepad_index_routing.md`) is now closed: the positional `resolve_gamepad` lookup was
+removed and replaced by `BoundGamepad`/`gamepad_bind_system`'s `claimed: HashSet<Entity>`
+invariant (see `crates/ironhold_core/src/CLAUDE.md`'s "Gamepad routing" section), and that memory
+file was deleted.

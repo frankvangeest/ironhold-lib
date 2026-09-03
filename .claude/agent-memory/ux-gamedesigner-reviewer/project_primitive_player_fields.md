@@ -22,10 +22,13 @@ player", each with a runtime warning rather than silence):** `scene.terrain: Som
 GLB/`Actor` only). Only a prefab placed directly in a scene's `entities:` list spawns a primitive
 player. (The hot-join gap I previously flagged as undocumented was closed in the v2 change.)
 
-**Open ambiguity, worth re-checking every time:** whether a top-level `material:` override recurses
-into `children:`. See [[material-override-vs-children]] — room10's composed body is the first shipped
-prefab anywhere to combine the two, and neither docs/20's `material` row nor its `ChildPrimitiveDef`
-table states the precedence.
+**CLOSED — precedence resolved.** A top-level `material:` override DOES recurse into every mesh
+under the player, `children:` included, flattening them to one uniform tone — now stated explicitly
+in docs/20's `PrefabDef` fields list (~2116, the `material` bullet). room10's
+`player_p2_primitive_split_ring` (first shipped prefab to combine `material:` and `children:`, or
+rather to deliberately NOT combine them once the flattening was understood) carries a comment
+explaining the same thing. Prefer per-child `primitive.color`/`roughness`/`metallic` over a
+top-level `material:` on any composed body.
 
 **Also unstated:** child `offset` values in a composed player body are absolute magic numbers, not
 derived from `primitive.radius`/`height`. Change the capsule's `height` and the head/shoulders stay

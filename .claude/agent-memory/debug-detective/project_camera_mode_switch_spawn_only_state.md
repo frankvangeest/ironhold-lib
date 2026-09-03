@@ -29,5 +29,7 @@ system. The same audit applies to `AuthoredCameraMode` coverage — a camera spa
 it (e.g. `scene_loader.rs`'s scene-level Flycam) drops out of the `all_cameras` query entirely and
 the action no-ops with no warning at all.
 
-Related: [[project_renderlayers_reserved_scheme]] (same "spawn-time-only insertion" fragility class),
-[[project_camera_mode_dual_source]].
+Related: [[project_renderlayers_reserved_scheme]] (same "spawn-time-only insertion" fragility class).
+The sibling camera_mode-vs-legacy-camera dual-source bug this used to also link to
+(`project_camera_mode_dual_source.md`) is now FIXED (`resolve_orbit_config_for_multiplayer` in
+`entity_spawner.rs` checks `pc.camera_mode` first) and that memory file was deleted.

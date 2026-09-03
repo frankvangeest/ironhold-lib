@@ -1,39 +1,22 @@
 ---
 name: per-player-targeting-gating
-description: Per-player targeting's ring-tint + target-var-blanking trigger on CharacterController count>=2, NOT split-screen; party mode is a doc dead-end
+description: The party-mode target_hud dead-end is now documented in docs/20 (~591-593); remaining live footgun is target_next defaulting to "Tab", which browsers intercept in WASM builds
 metadata:
   type: project
 ---
 
-Per-player split-screen targeting (Phase 1, `per_player_split_screen_targeting.md`) has THREE
-behaviors with TWO different triggers — the docs conflate them:
+**CLOSED:** the docs used to describe the ring-tint/target-var-blanking behavior as happening "once
+split-screen is active" without mentioning it also fires in party-mode 2-player scenes (where
+`target_hud:` produces no readout at all — a dead end). `docs/20_data_formats.md` (~591-593) now
+states this explicitly: the legacy `target_display`/`target_name`/`target_id` vars go blank
+whenever 2+ players are present "including party mode", and separately warns that `target_hud:`
+only works for split-screen scenes — "a party-mode 2-player scene has no `SplitViewportSlot` camera
+for `target_hud:` to attach to, so it gets no readout at all today (blank legacy vars, no
+replacement) — a known Phase 1 gap, not yet built." Do not re-flag this conflation as undocumented.
 
-- **Ring per-player tinting** and **`target_display`/`target_name`/`target_id` blanking**: gated on
-  `player_count >= 2` where count = number of `CharacterController` entities
-  (`targeting.rs` `is_multiplayer = ... .count() >= 2`). This fires in **party-mode** 2-player
-  scenes too, not just split-screen. Confirmed in code 2026-07-13.
-- **Per-viewport `target_hud:` readout**: only spawns per `SplitViewportSlot` camera — so party
-  mode and single-player get NOTHING.
-
-**Why this matters:** docs (`20_data_formats.md` "Per-player split-screen targeting") describe the
-blanking/tinting as happening "once split-screen is active", and cross-reference tells a designer
-whose `target_display` Label went blank to "use `target_hud:` instead". In a **party-mode** 2-player
-scene the Label blanks but `target_hud` produces no readout — a dead-end the docs don't warn about.
-
-**How to apply:** when reviewing changes to this area, check the docs distinguish "2+ players
-present" (count-based: tint + blank) from "real split viewport present" (target_hud). Flag any
-copy that ties the count-based behaviors to "split-screen" specifically.
-
-**Third, separate axis added 2026-07-29** — `SplitScreenDef.own_viewport_only: bool` (default
-`false`, on the first player's `camera.split`) gates *where* a ring renders (own viewport vs. every
-viewport). It is **independent of the tint**: tinting stays gated on player count, so a ring is
-still `PLAYER_LABEL_COLORS`-tinted (and per-target `indicator_color`/`indicator_category` still
-ignored) even when it's the only ring that player can see. Documented at docs/20_data_formats.md
-"Per-viewport target ring visibility (`own_viewport_only`)"; canonical example `local_coop_demo`
-`room9` (room3 keeps demonstrating the all-viewports default). Known doc gap: the `dynamic`-split
-**merged** state shows all rings again regardless of the field, which is neither in that section
-nor in the `DynamicSplitDef` section. See [[split-switch-prefab-duplication]].
-
-Related recurring trap: `target_next` default is `"Tab"`, which browsers intercept for focus nav in
-WASM builds (documented at the InputMap table, line ~1683). Any playtest-aid player prefab using
+**Still open — recurring trap:** `target_next` default is `"Tab"`, which browsers intercept for
+focus nav in WASM builds (documented at the InputMap table). Any playtest-aid player prefab using
 `target_next: "Tab"` will appear to have broken targeting in the web build — prefer `"KeyT"` etc.
+
+**How to apply:** when reviewing a new project/scene that authors `target_next`, check it isn't left
+at the `"Tab"` default before a web playtest.

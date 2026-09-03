@@ -23,14 +23,18 @@ names in core. Camera/inputs/movement/animation_policy all read from the prefab'
 5. `PlayerConfig` schema (schema/player.rs) — spawn_id/prefab_key default empty for RON use
 6. tag_spawned_entity called inside spawn_player_entity (SpawnId/PrefabKey/registry)
 
-**FOOTGUN — duplicated PlayerConfig assembly.** The PlayerConfig is built in TWO places
-that must stay byte-identical:
-- `scene_loader.rs` ~line 685 (scene-placed `tags:["player"]` entity)
-- `action_executor.rs` ~line 148 (dynamic Action::Spawn)
-Both use `prefab.components.camera/inputs/movement` + `prefab.animation_policy`. If a new
-PlayerConfig field is added, BOTH sites need it or scene-placed vs dynamic players diverge
-silently. Candidate for a shared `assemble_player_config(prefab, model_path, pos, id, key)`
-helper — not yet extracted (note for future review/suggestion).
+**RESOLVED — duplicated PlayerConfig assembly.** The old footgun (PlayerConfig built
+independently in `scene_loader.rs` and `action_executor.rs`, which had to be kept byte-identical
+by hand) is fixed: both sites now call a single shared `assemble_player_config(prefab, prefab_key,
+spawn_id, model_path, initial_position, player_nameplate_enabled)` helper in `entity_spawner.rs`
+(`pub(crate)`, ~line 1719). `scene_loader.rs`'s scene-placed collector (~line 351/733) and
+`action_executor.rs`'s dynamic `Action::Spawn`/`Action::JoinPlayer` arms all route through it, so a
+new `PlayerConfig` field only needs adding inside `assemble_player_config` itself, not at every
+call site. See "Player-construction sites" in `crates/ironhold_core/src/CLAUDE.md` for the full,
+current up-to-five-site inventory (adds a terrain-deferred path and hot-join on top of the two
+sites this note originally tracked) — what still needs checking against multiple sites is only
+whether a *new* field is forwarded correctly through `assemble_player_config`'s two call sites, not
+whether the assembly logic itself has diverged.
 
 **Tonemapping divergence risk:** dynamic spawn reads `ActiveTonemapping` resource (current
 scene). The terrain-deferred player path (`spawn_player_when_terrain_ready`) reads
@@ -47,9 +51,13 @@ routes a player to a specific gamepad (first gamepad consumer in ironhold_core �
 Gamepad API path). New `PartyOrbitCamera` (targets: Vec<Entity>) + `CameraConfig.party:
 PartyZoomDef{zoom_margin}`; the party block (not the raw 2+ player count) should be the
 explicit RON switch — warn at load if 2+ players and no party. `GameSceneV2.max_view_box:
-Option<(f32,f32,f32,f32)>` = clamp on when present, absent = off. When adding `player_index`,
-it MUST be set at BOTH assembly sites (footgun below) or Action::Spawn players collide on
-index 0.
+Option<(f32,f32,f32,f32)>` = clamp on when present, absent = off. `player_index` now only needs
+setting inside `assemble_player_config` (see the RESOLVED note above) rather than at two
+independently-maintained assembly sites — the old "must be set at both sites or players collide
+on index 0" risk no longer applies now that both call sites share one helper. NOTE: the
+gamepad-routing description in this paragraph (`InputMap.gamepad_index` as a live "nth connected
+gamepad" lookup) is superseded — see `gamepad_binding_pattern.md` for the current
+`BoundGamepad`/`gamepad_bind_system` seed-then-lock model.
 
 **Designer reachability confirmed:** preview-only prefabs (no player tag, no camera/inputs)
 used on character-select screens avoid spawning stray cameras/controllers — correct pattern.

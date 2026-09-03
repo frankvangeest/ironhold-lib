@@ -142,9 +142,17 @@ Local co-op (same-machine 2-player) extends the player-spawn pipeline. See
 **Designer reachability — all genuinely RON-authorable:**
 - `PrefabDef.player_index: u32` (schema/catalog.rs) — authored per player prefab.
 - `PlayerConfig.player_index` (schema/player.rs) — forwarded via `assemble_player_config`.
-- `InputMap.gamepad_index: Option<usize>` (schema/player.rs) — authored in `components.inputs`;
-  `input_translator_system` (runtime/input.rs) sorts connected `Gamepad` entities by
-  `entity.index()` and picks the nth. NOT a hardware slot — "nth connected this session".
+- `InputMap.gamepad_index: Option<usize>` (schema/player.rs) — authored in `components.inputs`.
+  STALE-CLAIM CORRECTION (this bullet described the old, deleted `resolve_gamepad` mechanism —
+  confirmed gone, no matches in `crates/ironhold_core/src`): `gamepad_index` is no longer a live
+  positional lookup. It is a **one-time seed**, resolved once by `gamepad_bind_system`
+  (`runtime/input.rs`, `FixedUpdate`, before `input_translator_system`) into a
+  `BoundGamepad(Option<Entity>)` component that is then the sole source of truth every gamepad
+  consumer reads (`input_translator_system`, `tab_targeting_system`, `interactable_system`,
+  `action_bar_input_system`, `camera_orbit_system`). Once bound, a player stays locked to that
+  specific gamepad `Entity` for its lifetime regardless of later connect/disconnect churn from
+  other pads — see `gamepad_binding_pattern.md` for the full seed-then-lock model, the
+  `claimed`-set cross-player invariant, and the stale-doc-comment sweep this change required.
 - `CameraConfig.party: Option<PartyZoomDef{zoom_margin, allow_manual_zoom}>` — the SOLE explicit
   switch for the shared camera. Read from the FIRST player-tagged scene entity only; later
   players' `camera`/`party` fields are ignored. Scene `entities:` order matters for co-op.

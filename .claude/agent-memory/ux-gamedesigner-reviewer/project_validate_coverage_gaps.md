@@ -9,13 +9,17 @@ metadata:
 the same name and the same failure mode are routinely left unchecked** — and the docs note added
 alongside each new check never says the check is scoped to only one of them.
 
-Known asymmetries (verified 2026-08-30, `feature/cli-validate-hardening`):
+Known asymmetries (verified against current `validate.rs`):
 
 | Checked | Unchecked sibling |
 |---|---|
-| `Action::LoadScene` / `LoadSceneOverlay` / `PreloadScene` path exists | `Action::ToggleOverlay(String)` — also a project-relative scene path; used twice in shipped `primitive_world/logic/state_machine.ron` |
 | `MerchantDef.currency_stat` in `stats.ron` | `ItemDef.currency_stat` in `items.ron` (e.g. `gold_coin`) |
 | `MerchantDef.stock[].item_key` in `items.ron` | `InventoryContainerDef.initial_items[].item_key` (chest_01/chest_02 in 3rd_person_game_demo) |
+
+**CLOSED:** `Action::ToggleOverlay(String)` is now checked in the same match arm as `LoadScene` /
+`LoadSceneOverlay` / `PreloadScene` (`validate.rs` ~242: `Action::LoadScene(path) |
+Action::LoadSceneOverlay(path) | Action::PreloadScene(path) | Action::ToggleOverlay(path) => {...}`)
+— no longer an unchecked sibling. Do not re-flag it.
 
 Also: the merchant checks **silently skip entirely** when `ProjectConfig.items_path` is unset or
 `stats/stats.ron` is absent. Copying `merchant_vendor` into a new project without setting

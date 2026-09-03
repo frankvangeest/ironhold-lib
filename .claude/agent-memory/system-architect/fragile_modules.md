@@ -14,7 +14,7 @@ Key invariant: all child-spawning goes through `spawn_primitive_children` — do
 ### `children:` on a PLAYER prefab — two silent interactions (verified 2026-08-06)
 `player_model_source_unification.md` v2 shipped the first player prefab anywhere in the repo that uses `children:` (`local_coop_demo`'s `player_p2_primitive_split_ring`). Two non-obvious couplings, neither warned about, both easy to reach by copy-pasting that prefab:
 1. **A top-level `material:` on the prefab flattens every child's colour.** `apply_material_overrides` (`runtime/material_factory.rs:198-201`) collects **all** `Mesh3d` descendants of the root and overwrites each one's `MeshMaterial3d`. So `material: "tint_steel"` + per-child `primitive: (color: ...)` = one uniform colour, and the prefab's own `primitive.metallic`/`roughness` become dead too. Per-child colour only survives if the root has NO `material:` (children then keep their own `primitive.color` or their own `material:` key). Applies to composite non-player prefabs identically — it just never mattered before because no shipped prefab combined the two.
-2. **A child with `primitive.physics: true` silently extends the player's collider.** `scene_loader.rs:~2955` inserts the child's collider on the child entity, and bevy_rapier attaches descendant colliders to the nearest ancestor `RigidBody` — the player's Dynamic body. The accompanying `commands.entity(parent).insert(RigidBody::Fixed)` is harmlessly overwritten because `spawn_player_entity_core`'s shared `RigidBody::Dynamic` insert is queued LATER in the same command buffer — which is exactly why the failure is silent instead of loud. Contradicts the docs' claim that a primitive player's capsule comes "entirely from `primitive.radius`/`height`, unaffected by `children`".
+2. **A child with `primitive.physics: true` silently extends the player's collider.** `scene_loader.rs:~3280` inserts the child's collider on the child entity, and bevy_rapier attaches descendant colliders to the nearest ancestor `RigidBody` — the player's Dynamic body. The accompanying `commands.entity(parent).insert(RigidBody::Fixed)` is harmlessly overwritten because `spawn_player_entity_core`'s shared `RigidBody::Dynamic` insert is queued LATER in the same command buffer — which is exactly why the failure is silent instead of loud. Contradicts the docs' claim that a primitive player's capsule comes "entirely from `primitive.radius`/`height`, unaffected by `children`".
 
 ## Spawn-site metadata divergence — RESOLVED for the universal set (`tag_spawned_entity`)
 
@@ -26,17 +26,32 @@ Verification rule when reviewing: grep `SpawnId\(|PrefabKey\(|\.entities\.insert
 
 Harmless residual: composite parent (`scene_loader.rs` ~248), GLB player (`entity_spawner.rs` ~323), and every GLB parent (`model_spawner.rs` ~35) still spawn with an inline `LevelEntity` that the helper then re-inserts. Idempotent ZST double-insert — no bug, mild doc smell. Leave `model_spawner.rs` (shared infra used beyond the 7 sites).
 
-## Sibling divergence — conditional prefab-feature application (STILL LIVE, same bug class)
+## Sibling divergence — RESOLVED via `attach_prefab_features` (entity_spawner.rs ~42-103)
 
-NOT covered by `tag_spawned_entity` (correctly out of its scope — it owns universal metadata, not conditional features). The *conditional, prefab-driven* components — `interactable`, `trigger_zone`, `behavior`/`PendingBehavior`, `stat_templates`/`StatMap`, plus primitive-only `motion` and `npc` — are still applied by **independent match arms in two paths**:
+The conditional, prefab-driven components — `behavior`/`PendingBehavior`, `interactable`, `dialogue`,
+`inventory`, `stat_templates`/`StatMap`, and `trigger_zone` — are now applied by a single shared
+`attach_prefab_features(commands, entity, prefab, project_root, asset_server, entity_id,
+stat_overrides, prefab_key)` function, called from all three spawn paths that can carry a
+`&PrefabDef`: `spawn_prefab_instance` (GLB actor/prop, foliage trunk, dynamic `Action::Spawn`) and
+both Primitive branches in `scene_loader.rs` (single-mesh at ~line 470, composite/GLB-else-branch
+at ~line 689). This closes the old sibling-divergence bug class for those six fields — a new
+capability field added inside `attach_prefab_features` propagates to every caller automatically.
 
-1. `spawn_prefab_instance` (`entity_spawner.rs` ~53-74, ~126) — used by GLB actor/prop, foliage trunk, dynamic `Action::Spawn`. Has `&PrefabDef`.
-2. Single-mesh primitive branch (`scene_loader.rs` ~583-627) — applies its own `interactable`/`trigger_zone`/`behavior`/`stat_templates`/`motion`/`npc`.
+**Still NOT covered by `attach_prefab_features`** (deliberately out of its scope, or not yet
+folded in) — primitive-only `motion` and `npc`, which the primitive path applies itself since
+`spawn_prefab_instance`'s GLB callers have no equivalent use for them. When reviewing a new
+conditional `PrefabDef` feature field, check first whether it belongs inside
+`attach_prefab_features` (most capability fields should); only `motion`/`npc` remain a legitimate
+per-path exception.
 
-Same silent-drift failure mode as the old metadata divergence, one abstraction level down (e.g. `spawn_prefab_instance` reads `interactable.hint_text`; the primitive path must keep that in sync — currently does). When reviewing ANY new conditional `PrefabDef` feature field, grep across both files. Candidate fix: `apply_prefab_features(ec, prefab, project_root, asset_server)` shared by both — but needs design (primitive path reads `motion`/`npc` the GLB path doesn't), so feature note not inline fix.
-
-### DOUBLE-INSERTION trap on the GLB else-branch (observed 2026-06, working-tree change)
-The GLB actor/prop else-branch in `scene_loader.rs` (~693) **calls `spawn_prefab_instance`** (which already inserts `PendingBehavior`/`Interactable`/`TriggerZone`/`StatMap`) and historically only added `label`. A working-tree change re-inserted behavior/interactable/trigger_zone/stat_templates inline on the same `parent` — duplicating what `spawn_prefab_instance` does. Result: TriggerZone collider/Sensor inserted twice (last-write-wins, harmless-ish but wasteful), StatMap built twice. The ONLY things the GLB else-branch legitimately needs beyond `spawn_prefab_instance` are: `stat_overrides` application (spawn_prefab_instance can't — no `entity_def`), `stat_label`, `world_stat_bar`, and `motion` (none of which spawn_prefab_instance handles). Lesson when reviewing this branch: anything `spawn_prefab_instance` already does must NOT be re-added at the call site — only the entity_def-derived and label/bar/motion extras belong there. The clean fix is to push `stat_overrides` (a `&HashMap<String,f32>` arg, default empty) into `spawn_prefab_instance` so the StatMap is built once, and have it also handle `motion`/`stat_label`/`world_stat_bar` — collapsing the 3-way duplication to one site.
+### DOUBLE-INSERTION trap — RESOLVED
+The former GLB-else-branch double-insertion (re-adding behavior/interactable/trigger_zone/stat_templates
+inline on top of what `spawn_prefab_instance` already did) is no longer reachable: both the
+GLB else-branch and the single-mesh primitive branch now call the same `attach_prefab_features`
+exactly once each, so there is only one insertion site for these fields regardless of path. If a
+future edit reintroduces a manual `commands.entity(entity).insert(Interactable{...})` (etc.) next
+to a `spawn_prefab_instance`/`attach_prefab_features` call, that is the double-insertion pattern
+recurring — flag it.
 
 ## EffectDef / LayerDef sync (`capabilities/particles.rs` or similar)
 
@@ -67,9 +82,9 @@ Collider trap for procedural-XZ phase: if positions live only in the vertex shad
 
 `TerrainMaterial.uv_scale: Vec4` is documented in THREE doc sites as "only .x used; padded for alignment." Any repurposing of `.yzw` (e.g. packing terrain world-extent for fragment UV derivation) must update all three or future readers assume they're dead.
 
-## Spawn queue (`runtime/scene_manager/action_executor.rs`)
+## Spawn queue (`runtime/scene_manager/entity_spawner.rs`)
 
-`Action::Spawn` does not call `spawn_prefab_instance` inline. It pushes to `PendingEntitySpawns`; `drain_spawn_queue_system` processes at most `SPAWNS_PER_FRAME = 2` per frame. This caps WebGPU pipeline-compile stalls on WASM. Do not change this cap without testing large wave spawns in a WASM build.
+`Action::Spawn` (in `action_executor.rs`) does not call `spawn_prefab_instance` inline. It pushes to `PendingEntitySpawns`; `drain_spawn_queue_system` (now in `entity_spawner.rs`, not `action_executor.rs`) processes at most `SPAWNS_PER_FRAME = 2` per frame. This caps WebGPU pipeline-compile stalls on WASM. Do not change this cap without testing large wave spawns in a WASM build.
 
 ## `spawn_scene_v2` is at the 16-param SystemParam ceiling (`runtime/scene_manager/scene_loader.rs` ~L43)
 

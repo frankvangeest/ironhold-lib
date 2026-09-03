@@ -32,7 +32,7 @@ Designer-reachability test: a designer can put the action in `rules.ron` on `sce
 The particle catalog has `#[serde(deny_unknown_fields)]` on both `EffectDef` and `LayerDef`. ANY new field added to either MUST satisfy all of:
 
 1. `#[serde(default)]` on the field — required so existing `assets.ron` files keep parsing.
-2. If the field exists on BOTH structs (e.g. `quality`, `priority` are EffectDef-only here, but most particle fields are duplicated), it must be propagated in `From<&EffectDef> for LayerDef` — see `[[recurring_anti_patterns]]` particle entry. Forgetting this silently kills the entire effects catalog because `deny_unknown_fields` rejects the parse.
+2. If the field exists on BOTH structs (e.g. `quality`, `priority` are EffectDef-only here, but most particle fields are duplicated), it must be propagated in `From<&EffectDef> for LayerDef`. Forgetting this silently kills the entire effects catalog because `deny_unknown_fields` rejects the parse.
 3. If the runtime consumes the field via a fallback (e.g. `scaled_count` falls back to global multiplier when `quality_override` is `None`), the doc-comment should state the fallback in the SAME terms the runtime uses, so designers can predict behaviour without reading Rust.
 
 The 2026-05-27 review confirmed all three were satisfied for `quality`/`priority`. The `From<&EffectDef> for LayerDef` propagation is the most fragile of the three because the compiler does not flag the omission.

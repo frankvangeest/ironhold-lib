@@ -25,15 +25,14 @@ already iterates entity × view, so there is no new pass, no GPU state, no pipel
 identical behavior on WebGPU and WebGL2, no binary-size impact. Don't treat a `RenderLayers`
 addition as a perf risk; the risk is always *visibility semantics*, never cost.
 
-**The scheme has no single owning module.** `MAX_SPLIT_PLAYERS`/`PLAYER_LABEL_COLORS` live in
-`capabilities/camera.rs`, `TargetRingVisibilityMode` lives in `runtime/scene_manager/mod.rs`, and
-the mapping `1 + player_index % MAX_SPLIT_PLAYERS` is written out longhand at three sites
-(entity_spawner's dynamic loop, `spawn_split_camera_for_player`, `target_indicator_system`) with the
-party union as a hardcoded `&[0,1,2,3,4]` literal in `camera.rs`. Raising `MAX_SPLIT_PLAYERS` past 4
-silently desyncs the party union — the merged view loses the extra players' rings, the exact defect
-plan review caught for the componentless-party-camera draft. Recommended fix (raised, not yet
-applied): `ring_layer_for_player()` + `all_ring_layers()` helpers next to `MAX_SPLIT_PLAYERS` in
-camera.rs.
+**The "no single owning module" gap is FIXED.** `MAX_SPLIT_PLAYERS`/`PLAYER_LABEL_COLORS` still live
+in `capabilities/camera.rs` and `TargetRingVisibilityMode` still lives in `runtime/scene_manager/mod.rs`,
+but the recommended `ring_layer_for_player(player_index)` / `all_ring_layers()` helpers now exist in
+`capabilities/camera.rs` and are the sole owners of the `1 + player_index % MAX_SPLIT_PLAYERS`
+arithmetic — every insertion site (`entity_spawner.rs`'s dynamic split loop, `spawn_split_camera_for_player`,
+`target_indicator.rs`) calls one of the two instead of re-deriving the formula by hand (confirmed via
+`crates/ironhold_core/src/CLAUDE.md`'s "Per-viewport ring visibility" section). Raising
+`MAX_SPLIT_PLAYERS` can no longer silently desync the party union, since `all_ring_layers()` is the
+single source both the party camera and every other call site read.
 
-Related: [[split-screen-and-shared-mouse]], [[camera-architecture]],
-[[render-only-reactive-capabilities]], [[scene-load-resource-threading]].
+Related: [[camera-architecture]], [[render-only-reactive-capabilities]], [[scene-load-resource-threading]].

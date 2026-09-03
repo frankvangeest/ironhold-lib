@@ -29,12 +29,13 @@ and pays those archetype moves per frame. All demo bindings today are edge-trigg
 (`ui.button_pressed` from `scene_key_bindings`), so it is not a live regression — but the guard is
 the cheap defense if this ever regresses.
 
-**Reachability gap found during review:** the standalone flycam-tagged camera spawned in
-`scene_loader.rs` (~line 828) has `ActiveCameraMode` but NOT `AuthoredCameraMode`. `SceneStateParams
-::all_cameras` requires `&AuthoredCameraMode`, so that camera never matches — `SetCameraMode` with
-`owner_player` omitted in a flycam-only scene resolves to an empty target `Vec` and the handler
-loops zero times **with no `warn!` at all**. Every player-camera spawn path (orbit/split/party/
-follow/first-person/fixed) does insert it.
+**Reachability gap — fixed.** The standalone flycam-tagged camera spawned in `scene_loader.rs`
+(~L871-877) now inserts `AuthoredCameraMode` alongside `ActiveCameraMode`, matching every other
+player-camera spawn path (orbit/split/party/follow/first-person/fixed). `SceneStateParams
+::all_cameras` requires `&AuthoredCameraMode`, so before this fix it never matched the flycam and
+`SetCameraMode` with `owner_player` omitted in a flycam-only scene silently resolved to an empty
+target `Vec` with no `warn!`. Verified current (2026-09-03): the flycam spawn's inline comment at
+that call site explicitly cites this finding as the reason for the insert.
 
 `SceneStateParams::transforms` was narrowed to `Without<ActiveCameraMode>` to avoid a B0001 conflict
 with the new `all_cameras` read of `&Transform`. Its only consumer is `Action::ResetToSpawn` (NPCs

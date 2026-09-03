@@ -28,27 +28,40 @@ source, not inferred — re-verify if the winit version moves):
   field for the whole frame and its own doc admits the accumulation is incorrect if the unit
   changes mid-frame. A per-event `match e.unit` helper is strictly better.
 
-**The deeper design bug: the scroll wheel is a discrete impulse, but `camera.rs` multiplies it by
+**SHIPPED as `normalized_wheel_delta` (`capabilities/camera.rs`) — the proposed fix landed close
+to as designed.** It reads every buffered `MouseWheel` event this frame, drops non-finite deltas
+(NaN/±inf, which would otherwise permanently poison `OrbitState.radius`/`PartyState.manual_zoom_offset`
+via `f32::clamp`'s NaN pass-through), and per event: a `Line` delta is clamped to ±1.0; a `Pixel`
+delta is divided by `SCROLL_PIXELS_PER_LINE = 100.0` (the de facto Chrome/Edge px-per-notch
+convention) then ALSO clamped to ±1.0 — so a full notch at any DPI counts as at most one notch,
+while a genuinely fine-grained sub-notch trackpad swipe stays proportionate. The summed per-frame
+result is further bounded by `MAX_WHEEL_NOTCHES_PER_FRAME = 3.0`, the frame-hitch backstop this
+section originally called for (documented in-code as covering `Time<Virtual>::max_delta`'s 250ms
+cap). Both `camera_orbit_system` and `party_camera_follow_system` call it identically. **Not
+changed**: the deeper "discrete impulse scaled by `time.delta_secs()`" framing below — the shipped
+fix normalizes *units*, not the impulse-vs-continuous semantic; re-check whether that's still
+multiplied by `delta_secs()` before relying on the zoom-speed-slider guidance below.
+
+**The deeper design bug (unresolved as of the above): the scroll wheel is a discrete impulse, but `camera.rs` multiplies it by
 `time.delta_secs()`** (`orbit.radius -= zoom_delta * orbit.zoom_speed * time.delta_secs()`, same
 shape in the `party.manual_zoom_offset` line). That makes zoom-per-notch frame-rate dependent, and
 Bevy's `Time<Virtual>` only caps `max_delta` at **250 ms** (`bevy_time/src/virt.rs:85`) — 15x a
 60 fps frame. So even after unit normalization, one notch during a WASM frame hitch can still jump
-most of `min_radius..max_radius`. The units-correct model is an impulse
+most of `min_radius..max_radius` (mitigated but not eliminated by the shipped
+`MAX_WHEEL_NOTCHES_PER_FRAME` cap above). The units-correct model is an impulse
 (`radius -= notches * zoom_step`), but that reinterprets the authored `CameraConfig.zoom_speed`
 values in every project (~1/60 rescale) — a designer-visible semantic change to an existing schema
 field, so it needs its own feature file, not a silent bugfix. Do this **before** shipping the
 backlogged designer/player-facing zoom-speed slider, or the slider will feel non-deterministic.
 
-**Two robust, cheap guards that are unit-, DPI- and framerate-agnostic:** divide `Pixel` deltas by
-`Window.scale_factor()` (PrimaryWindow query — WASM-safe) to get back to CSS pixels, and clamp the
-**per-frame summed** notch total (e.g. ±3.0) rather than only per-event. A per-event-only clamp
-does not bound a fast trackpad flick (many `Pixel` events in one frame) at all.
-
 There are exactly **two** `MouseWheel` consumers in the whole workspace, both in
 `capabilities/camera.rs` (`camera_orbit_system`, `party_camera_follow_system`) — no UI/inventory
-scroll consumer exists yet. Wheel normalization has no owning module; `runtime/input.rs` is the
-natural home (it already owns key/gamepad binding resolution) if a third consumer appears.
+scroll consumer exists yet. Wheel normalization now lives in `camera.rs` itself
+(`normalized_wheel_delta`); `runtime/input.rs` remains the natural home to promote it to if a third
+consumer appears outside camera.rs.
 
-See [[camera-architecture]] for the surrounding camera-system structure and
-[[split-screen-and-shared-mouse]] for why `zoom_delta` is read once *above* the camera loop
-(shared-mouse coupling — unrelated to unit normalization, but the same lines of code).
+See [[camera-architecture]] for the surrounding camera-system structure. `zoom_delta` is read once
+*above* the camera loop (shared-mouse coupling across split cameras — unrelated to unit
+normalization, but the same lines of code); see `crates/ironhold_core/src/CLAUDE.md`'s local
+co-op section for the current shared-mouse-delta design (`zoom_speed: 0.0` / `orbit_button: "None"`
+per split camera).

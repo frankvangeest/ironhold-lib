@@ -1,6 +1,6 @@
 ---
 name: jump-rearm-coupling
-description: Jump re-arm depends on the ground-check sphere-cast clearing; couples MovementConfig jump height, collider_radius/primitive.radius and ground_cast_length into one undocumented invariant
+description: Jump re-arm depends on the ground-check sphere-cast clearing; couples MovementConfig jump height, collider_radius/primitive.radius and ground_cast_length into one invariant — now documented as a callout in docs/20 (~2293-2295)
 metadata:
   type: project
 ---
@@ -15,14 +15,17 @@ inflated `ground_cast_length` is another.
 Designer-authorable fields entangled in this one invariant: `jump` (JumpConfig), `double_jump`,
 `collider_radius` / `primitive.radius`, `collider_height`, `ground_cast_length`.
 
-Doc state (checked 2026-08-19, HEAD 48edf00):
-- `docs/20_data_formats.md` MovementConfig table (~2212-2231) documents each field in isolation.
-  Nothing states that jumps re-arm on a landing edge, and the effective-reach formula appears nowhere.
-- The `ground_cast_length` row actively advises "increase for uneven terrain or fast vertical
-  movement" — which enlarges the false-positive window and makes the lock more likely, not less.
-- `docs/STATUS.md:51` still lists only `walk_speed, run_speed, rot_speed, jump, double_jump,
-  collider_radius, collider_height` — stale, missing `double_jump_height, idle_drag, linear_damping,
-  angular_damping, ground_cast_length`.
+**CLOSED — the re-arm formula is now documented.** `docs/20_data_formats.md`'s MovementConfig
+section (~2293-2295) has a blockquote: "A jump must clear `collider_radius + ground_cast_length`,
+or it re-arms on a delay instead of instantly" — explains the sphere-cast mechanic, the apex-vs-reach
+relationship, and the internal delayed-fallback re-arm. Do not re-flag this as undocumented.
+
+Still-open doc gap: the `ground_cast_length` row still advises "increase for uneven terrain or fast
+vertical movement" without a cross-reference back to the invariant blockquote — a designer reading
+only the field table (not the later callout) can still enlarge the false-positive window. Verify
+`docs/STATUS.md`'s MovementConfig field list is current before citing it (was stale as of
+2026-08-19, missing `double_jump_height, idle_drag, linear_damping, angular_damping,
+ground_cast_length`).
 
 Designer-visible side effects of any change to grounded state:
 - `loco.is_grounded == false` selects the `base.jump_loop` clip; the landing edge also pushes the
