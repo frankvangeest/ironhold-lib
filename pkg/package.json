@@ -1,0 +1,26 @@
+{
+  "name": "ironhold_web",
+  "type": "module",
+  "collaborators": [
+    "Frank van Geest"
+  ],
+  "description": "The runtime web build of Ironhold",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/frankvangeest/ironhold-lib"
+  },
+  "files": [
+    "ironhold_web_bg.wasm",
+    "ironhold_web.js",
+    "ironhold_web.d.ts",
+    "LICENSE-APACHE.txt",
+    "LICENSE-MIT.txt"
+  ],
+  "main": "ironhold_web.js",
+  "types": "ironhold_web.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
