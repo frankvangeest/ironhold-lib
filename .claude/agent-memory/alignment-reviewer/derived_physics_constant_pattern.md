@@ -1,6 +1,6 @@
 ---
 name: derived-physics-constant-pattern
-description: uphill_jump_lock (v2 grace / v3 slope limit / v4 coyote time / v5 sensor exclusion / v6 prop ground veto) — the three-tier derive-vs-expose-vs-invariant rule for physics values, the single CharacterController construction site, the can_jump branch-exclusivity footgun, and the stale-escape-hatch-doc pattern in docs/20
+description: uphill_jump_lock (v2 grace / v3 slope limit / v4 coyote time / v5 sensor exclusion / v6 prop ground veto / v7 wall friction) — the derive-vs-expose-vs-invariant-vs-conditional tiers for physics values, the single CharacterController construction site, the can_jump branch-exclusivity footgun, and the recurring stale-doc + missing-test-registry pattern
 metadata:
   type: project
 ---
@@ -87,6 +87,38 @@ Two things this pass got wrong that are worth checking on every future ground-ca
   can be dropped entirely by one non-underfoot contact. The fix therefore only covers separate prop
   entities, not terrain-integrated cliffs — the "known limitation" text should be rewritten to this
   residual case rather than deleted.
+
+**v7 (`feature/wall-friction`, reviewed 2026-09-03) — a *fourth* tier: the same constant, applied
+conditionally.** `PLAYER_IDLE_FRICTION = 0.15` (`capabilities/player.rs` ~52, `pub(crate)`) is now
+the shared source of truth for the spawn-time `Friction` in `entity_spawner.rs::spawn_player_entity_core`
+(~1110) *and* a per-tick sync in `player_movement_system` (~608-613):
+`if raw_grounded && !loco.moving { PLAYER_IDLE_FRICTION } else { 0.0 }`. Reusable reasoning for
+"should this gate be RON-authorable?" — **no**, when the alternative branch is a *bug* rather than a
+style: a velocity-driven controller that re-writes `linvel.x/z` every tick must never expose itself
+to solver Coulomb friction while commanding motion (a wall's 3D tangent plane includes vertical), and
+Unity/Unreal/Godot/Quake all either never expose character motion to solver friction or apply ground
+friction only. Same tier as "a Sensor is never floor". Do not re-litigate.
+- **No RON friction field exists anywhere** — grepped `src/schema/` and `assets/projects/**`:
+  zero hits. So the player's `Min` combine rule makes the fix undefeatable by designer-authored
+  surfaces (a prop with no `Friction` gets Rapier's default 0.5/`Average`; `Min` outranks `Average`
+  → effective μ = the player's 0.0). A fix that had instead required `friction: 0` on wall prefabs
+  would have been the blocking shape. Icebox item "RON-authorable collider friction" is the tracked
+  future promotion — when it lands, the constant's home should move to `schema/catalog.rs` as a
+  `default_*` fn (like `default_coyote_time_secs`), not stay in `capabilities/`.
+- **The three designer-facing 0.15 doc claims all went stale in the same pass** (the recurring
+  pattern from v6, now confirmed twice): `docs/20_data_formats.md` `idle_drag` row (~2282, "fixed at
+  `0.15` for every player") and `max_walkable_slope_deg` row (~2286, "any actual sliding is an
+  incidental side effect of the player's fixed `Friction` (`0.15`)" — now literally false while
+  moving), plus `crates/ironhold_core/src/CLAUDE.md`'s v2 friction paragraph (~1114-1127). Check all
+  three on any future friction change.
+- **Test-registry omission recurred a third time**: a new `tests/*.rs` file was absent from both the
+  root `CLAUDE.md` test-loop list (~87) and the `tests/CLAUDE.md` table. `uphill_jump_lock.md` ~611
+  records the same omission for `prop_ground_veto_tests.rs`. Always check both registries for a new
+  test file.
+- **`local_coop_tests.rs` ~6542-6553 asserts `(0, 0.15), (1, 0.15)`** on real-spawn-path players.
+  It only still passes because that harness never runs `player_movement_system`; it is now an
+  assertion about the *spawn-time* value, not the carried one. Any future harness change that adds
+  the movement system flips it to 0.0 for an airborne/moving player.
 
 **Open gaps at v4 review (non-blocking, flag if still present):**
 - **`coyote_time_secs` has no validation twin** while its sibling `max_walkable_slope_deg` got

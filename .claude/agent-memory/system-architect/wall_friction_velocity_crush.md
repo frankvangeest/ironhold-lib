@@ -86,3 +86,59 @@ moving platforms, or one-way platforms — not this bug.
 player complaint ("jump doesn't work next to a wall") via different mechanisms. The veto fix makes
 the jump *fire*; this bug then eats it. Anyone playtesting the veto fix against wall geometry will
 conclude it failed unless told.
+
+---
+
+## Fix landed on `feature/wall-friction` (reviewed 2026-09-03) — the two facts that make it work
+
+Verified against the *landed* code, because either of these being false would have made the whole
+conditional-`Friction` fix a silent no-op on an already-established wall contact:
+
+1. **A mutated `Friction` reaches the solver in the same frame, before the step.**
+   `apply_collider_user_changes` (`bevy_rapier3d-0.33.0/src/plugin/systems/collider.rs:226-232`,
+   `Query<..., Changed<Friction>>` → `co.set_friction`) is in `RapierBevyComponentApply` ⊂
+   `PhysicsSet::SyncBackend`, which is `.chain()`ed *before* `PhysicsSet::StepSimulation`
+   (`plugin/plugin.rs` ~145-180). So a `FixedUpdate` write lands with zero latency.
+2. **Rapier recombines friction from the collider material every step, not at manifold creation.**
+   `CoefficientCombineRule::combine(co1.material.friction, ...)` sits inside the per-step contact
+   computation (`rapier3d-0.31.0/src/geometry/narrow_phase.rs:970`), so flipping μ mid-contact
+   takes effect immediately — no need for the contact to break and re-form.
+
+Also confirmed: the player body **never sleeps** (movement writes `velocity.linvel.xz` through
+`Mut` unconditionally every tick, including the idle `*= idle_drag` branch, so `Changed<Velocity>`
+re-wakes it), which removes the "sleeping body ignores the new material" worry entirely.
+
+**`CharacterController` is constructed at exactly one src site** (`entity_spawner.rs` ~1065, the
+player). NPC spawn sites never attach it — so a per-tick `Friction` write from
+`player_movement_system` structurally cannot reach the NPCs' deliberate `0.0`. Good invariant to
+re-check if a `Player` marker is ever introduced (see [[player_marker_gap]]).
+
+## The idle-slope-creep drift test is confound-prone — closed form for sizing it
+
+Any test comparing downhill drift with-vs-without idle friction on a slope θ has a clean answer:
+
+    drift_with_friction / drift_without  =  1 − μ/tan(θ)          (μ = 0.15)
+
+`idle_drag` and `linear_damping` **cancel out** of the ratio (steady-state creep velocity is
+`v* = a_eff·dt·d/(1 − idle_drag·d)`, linear in `a_eff`), so the ratio depends only on θ and μ.
+At the 20° slope used in `tests/wall_friction_tests.rs` that is **0.588** — friction reduces creep
+by only ~41%, and below `arctan(0.15) ≈ 8.5°` friction holds the player outright (ratio → 0).
+**Consequence: a `< 0.5` threshold at 20° is unsatisfiable by the real mechanism** — if such an
+assertion passes, something else is supplying the margin.
+
+**The confound to watch for:** building the "broken" counterfactual by *skipping
+`player_movement_system` entirely* also removes `idle_drag` (the `*= 0.8`/tick in the no-input
+branch), which dominates creep far more than friction does. Measured/modelled at 20°, 200 ticks:
+fixed ≈ 0.46 m, system-skipped ≈ **10.4 m** (idle_drag absent → creep runs away to ~5.3 m/s), a
+~11× margin that has nothing to do with friction. Such a test passes just as comfortably with the
+friction block deleted. The harness *can* isolate it properly: `TimeUpdateStrategy::ManualDuration(
+Duration::ZERO)` means `FixedUpdate` never runs, so `run_system_once` is the sole invocation of
+`player_movement_system` and a test fully controls the interleaving — zero the coefficient
+*between* the `run_system_once` call and `app.update()` and the solver sees 0.0 with `idle_drag`
+still applied identically.
+
+**Prefer a direct state-table assertion** on `Friction.coefficient` over the four
+(`raw_grounded` × `loco.moving`) combinations. It tests the actual contract, is immune to
+physics-tuning drift, and is the only cheap way to cover the `raw_grounded` half of the gate —
+every Move-holding or grounded scenario reads identically whether or not `raw_grounded` is in the
+condition.
