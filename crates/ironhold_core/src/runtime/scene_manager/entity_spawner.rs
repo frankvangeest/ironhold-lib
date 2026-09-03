@@ -1101,16 +1101,13 @@ fn spawn_player_entity_core(
         // Low, non-zero friction (not the primitive-only path's old 0.0) — `Min` still keeps a
         // capsule from catching hard on cube/step edges, but 0.0 let a real hillside playtest
         // (`player_model_source_unification.md` v2, `quick_scene`) show a visible, permanent
-        // downhill creep for an idle player: movement writes `velocity.linvel` directly each
-        // tick, so friction was never doing much *while moving*, but an idle body on a slope has
-        // nothing but `idle_drag` (`MovementConfig`) opposing gravity's tangential component, and
-        // `idle_drag` only bounds that creep asymptotically — it can't zero it, and pushing it low
-        // enough to matter also cancels horizontal air momentum right after releasing input
-        // mid-jump (same multiply runs in `capabilities/player.rs` with no grounded gate). `0.15`
-        // is a real, if modest, static-friction coefficient the physics solver applies against
-        // gravity directly, confirmed via playtest to hold a slope without noticeably reintroducing
-        // edge-catching (`Min` still discounts to whichever surface's coefficient is lower).
-        Friction { coefficient: 0.15, combine_rule: CoefficientCombineRule::Min },
+        // downhill creep for an idle player: an idle body on a slope has nothing but `idle_drag`
+        // (`MovementConfig`) opposing gravity's tangential component, and `idle_drag` only bounds
+        // that creep asymptotically — it can't zero it. This is only the *initial* value — see
+        // `capabilities::player::PLAYER_IDLE_FRICTION`'s doc comment (the shared source of truth
+        // for this number) for why `player_movement_system` overwrites this every tick to `0.0`
+        // whenever the player is moving or airborne, restoring it only while grounded and idle.
+        Friction { coefficient: crate::capabilities::player::PLAYER_IDLE_FRICTION, combine_rule: CoefficientCombineRule::Min },
     ));
 
     // Standard metadata (SpawnId/PrefabKey/LevelEntity/registry) via the shared helper, so

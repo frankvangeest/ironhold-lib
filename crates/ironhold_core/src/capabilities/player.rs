@@ -26,6 +26,44 @@ fn ground_sensor_reach(controller: &CharacterController) -> f32 {
     controller.collider_radius + controller.ground_cast_length
 }
 
+/// The player's `Friction` coefficient while grounded and idle — a real, if modest, static-friction
+/// value the physics solver applies against gravity directly, confirmed via playtest to hold a
+/// slope without noticeably reintroducing edge-catching (`Min` still discounts to whichever
+/// surface's coefficient is lower). Not a `MovementConfig` field — a fixed engine constant (see
+/// `planning/backlog.md`'s Icebox "RON-authorable collider friction" item for why this isn't
+/// per-prefab-authorable yet). Single source of truth for both the spawn-time initial value
+/// (`entity_spawner.rs::spawn_player_entity_core`) and `player_movement_system`'s per-tick toggle
+/// below, so the two can never drift to different numbers.
+///
+/// **Only ever applied while grounded and idle — see `player_movement_system`'s per-tick `Friction`
+/// write.** Solver (Coulomb) friction at a *wall* contact resists motion across its full tangent
+/// plane, which in 3D includes vertical — so a nonzero coefficient here, while the player commands
+/// horizontal movement into a wall every tick (an impulse-sized correction, not a force), crushes
+/// vertical velocity by `μ × approach_speed` per physics tick — up to several g of "braking",
+/// independent of mass or frame rate. This was a real, severe bug (see `planning/backlog.md`'s
+/// former "wall friction crushes vertical velocity" entry): a jump held into a wall lost ~83% of
+/// its height, and the same mechanism let a falling player "hang" against a wall at ~1/5 free-fall
+/// rate merely by holding movement into it, no jump needed. This constant's coefficient is
+/// deliberately only ever synced onto the live `Friction` component while `raw_grounded && !moving`
+/// — every NPC spawn site already uses `0.0` unconditionally (immune to this class of bug by
+/// construction) and this project's own `docs/20_data_formats.md`/`CLAUDE.md` note this coefficient
+/// "was never doing much *while moving*" to begin with, so gating it off while moving/airborne
+/// removes nothing the field was ever relied on for.
+///
+/// If/when the Icebox "RON-authorable collider friction" item lands, this constant's home should
+/// move to `schema/catalog.rs` as a `default_idle_friction()` fn alongside `default_coyote_time_
+/// secs()` (making it CLI/`query`-reachable, matching that module's existing default-value
+/// convention) rather than staying `pub(crate)` here — at that point also widen the exact-`!=`
+/// comparison this constant's consumer uses (see `player_movement_system`) to something authored-
+/// value-aware, since a designer-chosen coefficient isn't guaranteed to be one of exactly two
+/// literals anymore.
+///
+/// `player_movement_system` is the sole owner of the player's live `Friction.coefficient` — it
+/// overwrites it every tick based on grounded/moving state. Do not write it from any other system
+/// (e.g. a future ice-surface/sticky-boots capability); such a write would just be silently
+/// clobbered on the next tick.
+pub const PLAYER_IDLE_FRICTION: f32 = 0.15;
+
 /// Derives the jump air-grace window (in `FixedUpdate` ticks) for a jump fired at `velocity` — the
 /// minimum time to force a `jumps_used` reset to wait for, so that a steep-enough slope (whose
 /// ground-check never truthfully reports "ungrounded", see `planning/features/
@@ -399,6 +437,7 @@ pub fn player_movement_system(
         &mut Velocity,
         &mut AnimationRequests,
         &SpeedMultiplier,
+        Option<&mut Friction>,
     )>,
     rapier_context: Option<ReadRapierContext>,
     mut game_events: MessageWriter<GameEvent>,
@@ -411,7 +450,7 @@ pub fn player_movement_system(
     // Try to get the rapier context, but don't panic if it's missing (e.g. in headless tests)
     let rapier_context = rapier_context.as_ref().and_then(|rc| rc.single().ok());
 
-    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests, speed_mul) in &mut query {
+    for (entity, mut transform, global_transform, mut controller, mut loco, mut velocity, mut requests, speed_mul, friction) in &mut query {
         let mut move_vec = Vec3::ZERO;
         let mut rotation = 0.0;
         let mut jumping = false;
@@ -559,6 +598,37 @@ pub fn player_movement_system(
             velocity.linvel.z *= controller.idle_drag;
             loco.moving = false;
             loco.running = false;
+        }
+
+        // Only carry a nonzero `Friction` coefficient while grounded and idle — see
+        // `PLAYER_IDLE_FRICTION`'s doc comment for why: solver friction at a *wall* contact
+        // resists motion across its full tangent plane (including vertical), so a nonzero
+        // coefficient here while the player commands movement into a wall every tick crushes
+        // vertical velocity by `μ × approach_speed` per physics tick — independent of mass or
+        // frame rate, and reachable while merely falling into a wall, no jump required. Gated on
+        // `raw_grounded`, not the coyote-buffered `loco.is_grounded` — the buffer exists to smooth
+        // animation *feel*, not to decide a physically load-bearing property like this. Change-
+        // detection-guarded (only write when the value actually differs) so this doesn't mark
+        // `Friction` changed — and re-sync the collider material via bevy_rapier's
+        // `Changed<Friction>` hook — every single tick regardless of state. Exact `!=`, not an
+        // epsilon: both sides are always one of exactly two literals (`PLAYER_IDLE_FRICTION` or
+        // `0.0`), written only by this line and by `spawn_player_entity_core`'s identical-constant
+        // initial value, so exact float equality is reproducible here. An epsilon would be a latent
+        // footgun once collider friction becomes RON-authorable (an Icebox backlog item) — an
+        // authored coefficient smaller than the epsilon would never register as "different from
+        // zero" and this fix would silently stop applying for that project.
+        // `Option`, not a hard requirement: several test fixtures (and any future headless/
+        // no-physics-material caller) construct a `CharacterController` entity without a
+        // `Friction` component at all — a hard `&mut Friction` in this query would silently drop
+        // those entities out of the *entire* system (all of movement, not just this sync), the
+        // same "required component" trap already documented for `PlayerTarget`/`BoundGamepad`
+        // elsewhere in this file. Every real player-construction site (`spawn_player_entity_core`)
+        // does insert one, so production players are unaffected either way.
+        if let Some(mut friction) = friction {
+            let target_friction = if raw_grounded && !loco.moving { PLAYER_IDLE_FRICTION } else { 0.0 };
+            if friction.coefficient != target_friction {
+                friction.coefficient = target_friction;
+            }
         }
 
         // Jump logic — grounded first jump, or double jump in air.

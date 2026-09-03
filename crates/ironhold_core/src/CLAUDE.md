@@ -1126,6 +1126,23 @@ secondary tuning knob, not the primary defense. No separate friction field was a
 `MovementConfig` — `0.15` is a fixed engine constant, not per-prefab-authorable (logged to
 `planning/backlog.md`'s Icebox as a possible future physics-material field).
 
+**Made conditional in the wall-friction velocity-crush fix:** the `0.15` coefficient above is no
+longer applied unconditionally — `player_movement_system` now syncs `Friction.coefficient` to
+`PLAYER_IDLE_FRICTION` (`capabilities/player.rs`, the same `0.15`, now a single named constant
+shared with `spawn_player_entity_core`'s initial value) only while `raw_grounded && !loco.moving`,
+and to `0.0` otherwise. Root cause: Rapier's Coulomb friction at a *wall* contact resists motion
+across its full tangent plane, which in 3D includes vertical — and since movement writes
+`velocity.linvel.x/z` every tick (an impulse-sized command, not a force), the friction impulse per
+physics step scaled with the player's full commanded approach speed into the wall, independent of
+mass or frame rate. This crushed jump height by up to ~83% when a jump was held into a wall, and
+let a merely-falling player "hang" against a wall at ~1/5 free-fall rate purely from holding
+movement into it — no jump required. The fix does not change the idle-grounded case described
+above at all (same `0.15`, same `Min` combine rule, same slope-holding behavior) — it only stops
+that coefficient from ever being live while the player is moving or airborne, which is exactly the
+case the paragraph above already notes friction "was never doing much" in anyway. See
+`crates/ironhold_core/tests/wall_friction_tests.rs` and `planning/backlog.md`'s former "Moving into
+a wall while airborne crushes vertical velocity via Coulomb friction" entry.
+
 ### Local co-op: shared camera, split-screen, gamepad routing, view-box clamp
 
 **`ActiveCameraMode::Party`** (`capabilities/camera.rs`) is a sibling to `ActiveCameraMode::Orbit`, not a

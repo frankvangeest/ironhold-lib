@@ -22,7 +22,7 @@ use ironhold_core::schema::{AppState, ProjectConfig, ProjectConfigHandle, GameSc
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind, ModelCatalogEntry, PrefabComponents, StatLabelDef, WorldStatBarDef, WorldStatBarStyle, MovementConfig};
 use ironhold_core::schema::player::{CameraConfig, PartyZoomDef, SplitScreenDef, SplitOrientation, DynamicSplitDef, InputMap, PlayerModelSource, PlayerConfig};
 use ironhold_core::schema::camera::CameraModeDef;
-use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, BoundGamepad, player_view_box_clamp_system};
+use ironhold_core::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget, BoundGamepad, player_view_box_clamp_system, PLAYER_IDLE_FRICTION};
 use ironhold_core::capabilities::camera::{
     ActiveCameraMode, CameraTargets, OrbitCameraMode, PartyCameraMode, party_camera_follow_system,
     SplitViewportSlot, split_screen_viewport_system, dynamic_split_screen_system, parse_orbit_button,
@@ -6533,23 +6533,54 @@ fn test_mixed_glb_and_primitive_players_get_distinct_index_independent_stat_maps
         "GLB and primitive players must each get an independent StatMap, regardless of model source"
     );
 
-    // player_model_source_unification.md v2's Friction reconciliation: both players must now
-    // carry the same low-friction collider (previously primitive-only, and previously 0.0 —
-    // raised to 0.15 after a real hillside playtest on quick_scene showed visible downhill creep
-    // at 0.0). Asserted per PlayerIndex, not just a world-wide count — a count alone would pass
-    // identically for two primitive players and wouldn't actually pin that the *GLB* player
+    // player_model_source_unification.md v2's Friction reconciliation: both players must carry
+    // the SAME Friction coefficient regardless of model source (previously primitive-only, so a
+    // GLB player sat at Rapier's default 0.5/`Average` while a primitive player got its own
+    // 0.0/`Min`). Asserted per PlayerIndex, not just a world-wide count — a count alone would
+    // pass identically for two primitive players and wouldn't actually pin that the *GLB* player
     // (index 0) gained it.
+    //
+    // Not asserting a specific hardcoded value (originally `0.15` for both): `load_two_player_
+    // scene`'s three plain `app.update()` calls don't pin `TimeUpdateStrategy` to zero the way
+    // the dedicated physics-behavior test files do, so `player_movement_system` (registered in
+    // `FixedUpdate` by `GamePlugin`) can genuinely fire during scene load — confirmed empirically:
+    // this assertion failed with `[(0, 0.0), (1, 0.0)]` once the wall-friction velocity-crush fix
+    // made the coefficient state-dependent, because the freshly-spawned players hadn't yet
+    // registered as grounded by that point. The value is real physics state, not a fixed spawn
+    // constant, once `player_movement_system` has had a chance to run at all — so this asserts
+    // model-source *parity* (the actual bug this test was written for) and that the shared value
+    // is one `player_movement_system` could legitimately have produced, rather than pinning
+    // exactly which of the two it happens to be at this specific tick.
     let mut friction_by_index: Vec<(u32, f32)> = {
         let mut q = app.world_mut().query::<(&PlayerIndex, &Friction)>();
         q.iter(app.world()).map(|(idx, f)| (idx.0, f.coefficient)).collect()
     };
     friction_by_index.sort_by_key(|(idx, _)| *idx);
+    // Explicit length check before indexing below: a player entity missing `Friction` entirely
+    // (the exact regression this test was originally written to catch — a GLB player once shipped
+    // with none at all, see the comment above) would silently drop out of the `(&PlayerIndex,
+    // &Friction)` query rather than produce a clean value mismatch, since `Option<&mut Friction>`
+    // in `player_movement_system`'s own query (added by the wall-friction velocity-crush fix)
+    // means a missing `Friction` no longer excludes the entity from *that* system either —
+    // debug-detective review finding: the absent-component fallback the `Option` allows is
+    // Rapier's own default (0.5/`Average`), worse than this fix's `0.0`, and undiagnosable at
+    // runtime, so a regression here is exactly the failure mode worth a clear test message for.
     assert_eq!(
-        friction_by_index,
-        vec![(0, 0.15), (1, 0.15)],
-        "both the GLB player (index 0) and the primitive player (index 1) must carry the same \
-         0.15-coefficient Friction component after v2 — previously only the primitive player had \
-         any Friction at all, at 0.0"
+        friction_by_index.len(), 2,
+        "both players must have a Friction component at all — one missing it entirely would \
+         silently drop out of this query: {friction_by_index:?}"
+    );
+    assert_eq!(
+        friction_by_index[0].1, friction_by_index[1].1,
+        "the GLB player (index 0) and the primitive player (index 1) must carry the SAME Friction \
+         coefficient, regardless of model source — previously only the primitive player had any \
+         Friction at all: {friction_by_index:?}"
+    );
+    assert!(
+        friction_by_index[0].1 == PLAYER_IDLE_FRICTION || friction_by_index[0].1 == 0.0,
+        "Friction coefficient must be one of the two values `player_movement_system` ever sets \
+         (`PLAYER_IDLE_FRICTION` while grounded-and-idle, `0.0` otherwise): got {:?}",
+        friction_by_index[0].1
     );
     let combine_rules_ok = {
         let mut q = app.world_mut().query::<&Friction>();
