@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-`Action::CameraShake(duration_secs, intensity)` (added ~2026-06-19, plan `b8723ec`) has a re-trigger
+`Action::CameraShake(duration_secs, intensity)` (added ~2026-06-19, plan `38bb186`) has a re-trigger
 semantics discrepancy across designer-facing artifacts:
 
 - `docs/20_data_formats.md` Actions table row: "Re-triggering while a shake is active restarts it with the new parameters."

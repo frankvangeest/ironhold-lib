@@ -6,7 +6,9 @@ metadata:
 ---
 
 Four load-bearing facts about the spawn/despawn/container lifecycle that keep resurfacing in
-design reviews (verified 2026-08-24, `452e2e2`-era):
+design reviews (verified 2026-08-24, `f9849ca`-era — hash updated after the 2026-09-03 `pkg/`
+history purge; the original citation, `452e2e2`, was a pkg-only rebuild commit fully pruned during
+that purge, so this points to its parent instead, the actual code state at that same point in time):
 
 1. **`Action::Spawn` captures its `Transform` at action-execution time**, into
    `QueuedSpawn.transform` (`runtime/scene_manager/mod.rs`), and `drain_spawn_queue_system`
