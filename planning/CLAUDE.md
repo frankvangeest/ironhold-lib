@@ -63,6 +63,21 @@ Planned at: <short commit hash> (<YYYY-MM-DD>)
 
 Run `git rev-parse --short HEAD` to get the hash. This creates a stable reference — use `git log <hash>..HEAD` later to see what changed between design and implementation.
 
+⚠️ **Hash citations are guaranteed accurate only as of the current `integration`/`main` tip.** A
+`git filter-repo` history purge on 2026-09-03 (to remove old `pkg/` WASM build blobs bloating
+`.git`) rewrote the hash of essentially every commit in the project's history — every citation at
+the tip was remapped to match afterward (see commit `8e38d13`), but that remap only touched the
+*current* working tree, not the file contents frozen inside every historical commit snapshot. If
+you check out any commit before `8e38d13`, the `.md` files there still contain whatever hash
+citations were written at that point in the *original*, pre-purge history — these are now orphaned
+and will not resolve against the current repo. Always resolve citations from the current tip
+(`git log <hash>..HEAD`), never from inside an old checkout.
+
+If you do need to look up a pre-purge hash (e.g. a citation found inside an old checkout, or in an
+external reference like a chat log or PR comment written before 2026-09-03), the full pre-purge
+history — original hashes intact — is preserved at
+`https://github.com/frankvangeest/ironhold-lib-backup-20260903-pre-history-purge.git`.
+
 ---
 
 ## investigations/ — debug journals
