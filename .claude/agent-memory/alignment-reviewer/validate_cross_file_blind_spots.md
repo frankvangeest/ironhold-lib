@@ -43,6 +43,13 @@ coverage drifts field-by-field rather than being enforced by the compiler.
    `query actions`/`query events` stay dialogue-blind and now disagree with `validate` about "all
    the project's actions" (`docs/60_contributing.md:309` enumerates the three old sources).
 
+5. **There are now THREE parallel logic-file walkers**, not two: `validate::collect_actions`,
+   `utils::collect_handled_events` (added by `feature/ui_trigger_reachability_check`), and
+   `query::collect_logic`. `collect_handled_events` additionally re-reads the files from disk even
+   though `do_validate` already has them parsed — so a `rules.ron` parse error yields zero handlers
+   and buries the real error under one bogus `unreachable_trigger` per button. See
+   [[ui-trigger-reachability-pattern]].
+
 **THE false-positive class for any new string-key check: `{self}`/`{target}`/`{new_id}` substitution.**
 Established reviewing `feature/spawn_point_reference_check` (2026-09-04). Before adding a
 `contains_key`-style check on a designer-authored string, grep `message_interpreter.rs::rewrite_self`

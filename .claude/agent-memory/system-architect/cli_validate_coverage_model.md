@@ -61,7 +61,14 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `query.rs::collect_logic` globs `scenes` and `behaviors` but **not** `dialogues`, so after the
    fix above `validate` walks dialogue `do_actions` while `query actions`/`query events` still
    don't. Whenever a new `Action` authoring surface is added, both collectors need it — they are
-   two independent enumerations of the same surface set with no shared helper.
+   two independent enumerations of the same surface set with no shared helper. As of
+   `feature/ui_trigger_reachability_check` (2026-09-04) there is a **third**:
+   `utils::collect_handled_events`, an independent re-walk of the same logic files for the *event*
+   half. A seam that would serve both without changing `query events`' output shape does exist and
+   was not taken: an inherent `StateMachineAsset` method yielding
+   `(event: &str, do_actions: &[Action], is_transition: bool)` covers `query.rs`'s `EventRecord`
+   exactly and validate's needs by projection — no index-zip required. See
+   [[ui-trigger-source-enumeration]] for the re-parse hazard that placement introduced.
 
 5. **The standing `cargo test -p ironhold_cli` gate covers only 9 of the 15 project dirs.**
    `crates/ironhold_cli/tests/validate_projects.rs` hardcodes one `#[test]` per project and is

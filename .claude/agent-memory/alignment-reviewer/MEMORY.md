@@ -42,3 +42,4 @@
 - [validate.rs cross-file blind spots](validate_cross_file_blind_spots.md) — hardcoded stats.ron path, try_parse silent-None, convention-glob vs reference-driven coverage, open dialogue path/jump_to gaps
 - [Schema strictness hardening](schema_strictness_hardening_pattern.md) — reviewing deny_unknown_fields/stricter-parse: table of the 5 Action-bearing RON surfaces and how each parse failure actually reaches the designer
 - [Stale feature base-branch hazard](stale_feature_base_branch_hazard.md) — branches cut from `main` miss `integration`'s schema fields; new test struct literals merge cleanly then fail to compile
+- [UI trigger reachability map](ui_trigger_reachability_pattern.md) — the 4 `UiEvent::ButtonPressed` emit sites / 4 readers; what `check_ui_trigger_reachability` covers vs. the gamepad-binding + hardcoded-panel-trigger gaps

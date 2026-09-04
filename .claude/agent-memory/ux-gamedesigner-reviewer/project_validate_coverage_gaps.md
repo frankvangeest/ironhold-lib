@@ -15,6 +15,7 @@ Known asymmetries (verified against current `validate.rs`):
 |---|---|
 | `MerchantDef.currency_stat` in `stats.ron` | `ItemDef.currency_stat` in `items.ron` (e.g. `gold_coin`) |
 | `MerchantDef.stock[].item_key` in `items.ron` | `InventoryContainerDef.initial_items[].item_key` (chest_01/chest_02 in 3rd_person_game_demo) |
+| `global_key_bindings`/`scene_key_bindings` trigger reachability (`unreachable_trigger`) | `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` — same `ui.button_pressed:{trigger}` event, only their *button name* is validated, not the trigger. See [[ui-trigger-wiring]] |
 
 **CLOSED:** `Action::ToggleOverlay(String)` is now checked in the same match arm as `LoadScene` /
 `LoadSceneOverlay` / `PreloadScene` (`validate.rs` ~242: `Action::LoadScene(path) |
