@@ -241,9 +241,10 @@ references without starting the engine.
 - Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
 - Behavior file paths on `PrefabDef` exist on disk
 - Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`)
-- A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
+- A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (whenever an item catalog is loaded — see "A configured catalog path..." above) — see "MerchantDef fields" in `docs/20_data_formats.md`
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 - A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
+- A configured catalog path (`asset_catalog` / `prefab_catalog` / `stats_path` / `items_path` in `.project.ron`) exists on disk. All four are read from their configured location, not assumed at the `assets.ron`/`prefabs/prefabs.ron`/`stats/stats.ron`/`items/items.ron` convention path — relocate any of them and `validate` follows along. When a field is left unset, `validate` falls back to checking the convention-path file if one happens to exist (unlike the runtime, which loads nothing at all in that case) so a project with no `.project.ron`, or one that simply omits a field, still gets checked rather than silently skipped.
 
 ```bash
 ironhold validate assets/projects/particles_demo/

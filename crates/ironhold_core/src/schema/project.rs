@@ -182,8 +182,15 @@ pub struct ProjectConfig {
     pub project_id: Option<String>,
     #[serde(default)]
     pub display_name: Option<String>,
+
+    /// Path to an `assets.ron` file defining this project's asset catalog (models, effects,
+    /// audio, decals, materials, textures). No convention-path fallback: if unset, no asset
+    /// catalog loads for this project at all. Example: `"assets.ron"`.
     #[serde(default)]
     pub asset_catalog: Option<String>,
+    /// Path to a `prefabs/prefabs.ron` file defining this project's prefab catalog. No
+    /// convention-path fallback: if unset, no prefab catalog loads for this project at all.
+    /// Example: `"prefabs/prefabs.ron"`.
     #[serde(default)]
     pub prefab_catalog: Option<String>,
 
