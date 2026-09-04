@@ -1,0 +1,14 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "scene.ready:main",
+            do_actions: [
+                AddItem(entity: "player", item_key: "typo_add_item"),
+                RemoveItem(entity: "player", item_key: "typo_remove_item"),
+                TransferItem(from: "player", to: "chest_01", item_key: "typo_transfer_item"),
+                BuyItem("typo_buy_item"),
+            ],
+        ),
+    ],
+)

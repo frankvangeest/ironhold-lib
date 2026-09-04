@@ -243,6 +243,7 @@ references without starting the engine.
 - `dialogues/*.dialogue.ron` files are parsed the same as `rules.ron`/`state_machine.ron`/`behaviors/*.behavior.ron`, and their `do_actions` participate in every check below just like a rule's; dialogue path references (`PrefabDef.dialogue`, `Action::StartDialogue`'s `dialogue_path`) exist on disk (`missing_file`)
 - Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`)
 - A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
+- Item keys in `AddItem` / `RemoveItem` / `TransferItem` / `BuyItem` actions, and a prefab's `inventory.initial_items[].item_key`, exist in `items.ron`; an `ItemDef`'s own `currency_stat` exists in `stats.ron` (all when the project sets `items_path`)
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 - A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
 - `camera_modes:` registry entries (reserved `"default"` key, `Party(...)` unreachable via `SetCameraMode`, `Fixed.look_at_entity` existence) and `Action::SetCameraMode`'s `mode` exist in some scene's `camera_modes` registry

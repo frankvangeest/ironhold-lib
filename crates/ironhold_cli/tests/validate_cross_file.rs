@@ -146,6 +146,43 @@ fn missing_merchant_item_key_exits_1() {
 }
 
 #[test]
+fn missing_action_item_key_exits_1() {
+    let (code, stdout) = validate("bad_action_item_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    for typo in [
+        "typo_add_item",
+        "typo_remove_item",
+        "typo_transfer_item",
+        "typo_buy_item",
+    ] {
+        assert!(
+            stdout.contains(typo) && stdout.contains("not found in items.ron"),
+            "expected missing item_key {typo:?} in output:\n{stdout}"
+        );
+    }
+}
+
+#[test]
+fn missing_inventory_item_key_exits_1() {
+    let (code, stdout) = validate("bad_inventory_item_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("typo_chest_item") && stdout.contains("not found in items.ron"),
+        "expected the missing inventory item_key in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_item_currency_stat_exits_1() {
+    let (code, stdout) = validate("bad_item_currency_stat");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("currency_stat \"silver\"") && stdout.contains("not found in stats.ron"),
+        "expected the missing item currency_stat in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn missing_behavior_file_exits_1() {
     let (code, stdout) = validate("bad_behavior_file");
     assert_eq!(code, 1, "expected exit 1, got {code}");
