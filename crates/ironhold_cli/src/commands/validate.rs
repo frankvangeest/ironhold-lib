@@ -5,7 +5,7 @@ use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind};
 use ironhold_core::schema::items::ItemCatalog;
 use ironhold_core::schema::project::LogicRulesAsset;
-use ironhold_core::schema::scene_v2::GameSceneV2;
+use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::dialogue::DialogueDef;
@@ -1061,6 +1061,183 @@ fn cross_file_checks(
     errors
 }
 
+// ── UI trigger reachability ───────────────────────────────────────────────────
+
+/// Every event string any rule/transition/binding in the project's logic matches against —
+/// `rules.ron`'s `on:`, `state_machine.ron`'s in-state `on:`/`transitions[].on`/`global_on:`,
+/// and the same three fields in every behavior file. Takes the same already-parsed
+/// `rules`/`state_machine`/`behaviors` `do_validate` builds for `collect_actions` above, rather
+/// than re-reading the files from disk — a malformed logic file then degrades exactly like every
+/// other check in this module (an incomplete `handled` set alongside the file's own already-
+/// reported parse error), instead of `check_ui_trigger_reachability` silently swallowing that
+/// same parse error a second time and fabricating an `unreachable_trigger` report against every
+/// button in the project on top of the real error.
+fn collect_handled_events(
+    rules: Option<&LogicRulesAsset>,
+    state_machine: Option<&StateMachineAsset>,
+    behaviors: &[(String, StateMachineAsset)],
+) -> HashSet<String> {
+    let mut events = HashSet::new();
+
+    if let Some(rules) = rules {
+        for rule in &rules.rules {
+            events.insert(rule.on.clone());
+        }
+    }
+    if let Some(fsm) = state_machine {
+        collect_fsm_events(fsm, &mut events);
+    }
+    for (_, fsm) in behaviors {
+        collect_fsm_events(fsm, &mut events);
+    }
+
+    events
+}
+
+fn collect_fsm_events(fsm: &StateMachineAsset, events: &mut HashSet<String>) {
+    for state in &fsm.states {
+        for binding in &state.on {
+            events.insert(binding.event.clone());
+        }
+    }
+    for t in &fsm.transitions {
+        events.insert(t.on.clone());
+    }
+    for binding in &fsm.global_on {
+        events.insert(binding.event.clone());
+    }
+}
+
+/// For every scene `Button`/`IconButton`, every `global_key_bindings`/`scene_key_bindings` entry,
+/// and every `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` entry, derive
+/// the `ui.button_pressed:{trigger}` event it fires at runtime
+/// (`scene_manager/scene_loader.rs`'s `strip_prefix("ui.")` derivation for buttons; every binding
+/// map's value is used as the trigger directly, no `ui.` stripping — see `ProjectConfig.
+/// global_key_bindings`'s doc comment) and confirm at least one rule/transition/binding anywhere
+/// in the project's logic actually matches it. A mismatch means the button/binding is live and
+/// fires a `UiEvent` that is matched against zero rules and silently dropped — "I clicked the
+/// button and nothing happened" (or "I pressed the key/gamepad button and nothing happened"),
+/// with no other symptom. Not gated behind `--strict`: this is "referenced but never resolves,"
+/// the same severity class as every other missing-key check above, not an orphan-detection
+/// question.
+///
+/// Deliberately not extended to dialogue choice buttons (`dialogue_choice:{n}`) — those are
+/// spawned dynamically by `dialogue.rs` from `DialogueChoiceDef`, never appear as a `UiNodeDef`
+/// in scene RON, and are matched directly by `dialogue_tick_system`, not through
+/// `rules.ron`/`state_machine.ron`. Nothing here walks `scene.ui` for them, so there is no
+/// false-positive risk from that surface.
+///
+/// **Known latent gap, no shipped project hits it today:** an entity `.behavior.ron`'s event
+/// pattern can contain a `{self}` token, substituted against the owning entity's spawn id at
+/// match time (`message_interpreter.rs`) — `collect_handled_events` stores the raw,
+/// pre-substitution literal, so a behavior authored as `on: "ui.button_pressed:{self}_open"`
+/// would never string-match a button's already-concrete derived event and would be wrongly
+/// reported as unreachable. No shipped behavior file currently handles a `ui.button_pressed:*`
+/// event, so this is theoretical; if one ever does, this check will need `{self}`-aware matching.
+fn check_ui_trigger_reachability(
+    project_dir: &Path,
+    project_config: Option<&ProjectConfig>,
+    scenes: &[(String, GameSceneV2)],
+    rules: Option<&LogicRulesAsset>,
+    state_machine: Option<&StateMachineAsset>,
+    behaviors: &[(String, StateMachineAsset)],
+    logic_files_parsed_cleanly: bool,
+) -> Vec<CrossFileError> {
+    // A malformed rules.ron/state_machine.ron/behavior file already reports its own parse error
+    // in the per-file results above. Treating that file's "nothing parsed" state as "this project
+    // handles nothing" would flood every button/binding in the project with a derived
+    // `unreachable_trigger` report piled on top of the one real root cause. Skip entirely until
+    // the parse error is fixed rather than fabricate a wave of secondary noise.
+    if !logic_files_parsed_cleanly {
+        return Vec::new();
+    }
+
+    let mut errors = Vec::new();
+    let handled = collect_handled_events(rules, state_machine, behaviors);
+
+    // `verb`/`consequence` phrase the message correctly for each trigger source — a key/gamepad
+    // binding is never "clicked," and saying so is actively misleading (a designer debugging a
+    // broken Escape binding would go looking for a nonexistent button).
+    let check = |errors: &mut Vec<CrossFileError>,
+                 source: &str,
+                 describe: String,
+                 trigger: &str,
+                 verb: &str,
+                 consequence: &str| {
+        if trigger.is_empty() {
+            errors.push(CrossFileError {
+                source_file: source.to_string(),
+                message: format!("{describe} has no action configured — {consequence}"),
+                error_type: "unreachable_trigger",
+            });
+            return;
+        }
+        let event = format!("ui.button_pressed:{trigger}");
+        if !handled.contains(&event) {
+            errors.push(CrossFileError {
+                source_file: source.to_string(),
+                message: format!(
+                    "{describe} fires {event:?} {verb}, but no rule/transition/binding in \
+                     rules.ron, state_machine.ron, or a behavior file handles it — {consequence}"
+                ),
+                error_type: "unreachable_trigger",
+            });
+        }
+    };
+
+    if let Some(config) = project_config {
+        let source = find_project_ron(project_dir).unwrap_or_default();
+        for (key, trigger) in &config.global_key_bindings {
+            check(
+                &mut errors, &source, format!("global_key_bindings[{key:?}]"), trigger,
+                "when the key is pressed", "pressing this key will do nothing",
+            );
+        }
+        for (button, trigger) in &config.global_unclaimed_gamepad_bindings {
+            check(
+                &mut errors, &source, format!("global_unclaimed_gamepad_bindings[{button:?}]"), trigger,
+                "when the gamepad button is pressed", "pressing it will do nothing",
+            );
+        }
+    }
+
+    for (scene_path, scene) in scenes {
+        for (key, trigger) in &scene.scene_key_bindings {
+            check(
+                &mut errors, scene_path, format!("scene_key_bindings[{key:?}]"), trigger,
+                "when the key is pressed", "pressing this key will do nothing",
+            );
+        }
+        for (button, trigger) in &scene.scene_unclaimed_gamepad_bindings {
+            check(
+                &mut errors, scene_path, format!("scene_unclaimed_gamepad_bindings[{button:?}]"), trigger,
+                "when the gamepad button is pressed", "pressing it will do nothing",
+            );
+        }
+        for node in &scene.ui {
+            match node {
+                UiNodeDef::Button(btn) => {
+                    let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action);
+                    check(
+                        &mut errors, scene_path, format!("Button {:?}", btn.id), trigger,
+                        "when clicked", "clicking it will do nothing",
+                    );
+                }
+                UiNodeDef::IconButton(btn) => {
+                    let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action);
+                    check(
+                        &mut errors, scene_path, format!("IconButton {:?}", btn.id), trigger,
+                        "when clicked", "clicking it will do nothing",
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    errors
+}
+
 // ── Strict (orphan) checks ────────────────────────────────────────────────────
 
 fn strict_checks(
@@ -1459,7 +1636,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &dialogues,
     );
 
-    let cross_errors = cross_file_checks(
+    let mut cross_errors = cross_file_checks(
         project_dir,
         project_config.as_ref(),
         asset_catalog.as_ref(),
@@ -1469,6 +1646,23 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &scenes,
         &all_actions,
     );
+    let logic_files_parsed_cleanly = file_results
+        .iter()
+        .filter(|r| {
+            r.rel_path == "logic/rules.ron"
+                || r.rel_path == "logic/state_machine.ron"
+                || r.rel_path.starts_with("behaviors/")
+        })
+        .all(|r| r.is_ok());
+    cross_errors.extend(check_ui_trigger_reachability(
+        project_dir,
+        project_config.as_ref(),
+        &scenes,
+        rules.as_ref(),
+        state_machine.as_ref(),
+        &behaviors,
+        logic_files_parsed_cleanly,
+    ));
 
     let strict_warnings = if strict {
         strict_checks(asset_catalog.as_ref(), prefab_catalog.as_ref(), &scenes, &all_actions)

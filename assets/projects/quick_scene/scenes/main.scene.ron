@@ -82,10 +82,13 @@
   ],
 
   ui: [
+    // Deliberately the simplest possible button: Log + PlaySound only, no gameplay effect --
+    // the minimal example of "action: must have a matching rule below, or the click is silently
+    // dropped" (see ironhold_cli validate's unreachable_trigger check).
     Button((
-      id: "pause_button",
-      text: "Pause",
-      action: "ui.pause",
+      id: "ping_button",
+      text: "Ping",
+      action: "ui.ping",
       position: (20.0, 20.0),
       size: (200.0, 40.0),
     )),

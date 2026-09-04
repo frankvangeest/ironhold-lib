@@ -1,0 +1,30 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    scene_key_bindings: {
+        "KeyP": "pause_toggle",
+    },
+    scene_unclaimed_gamepad_bindings: {
+        "Start": "scene_join",
+    },
+    ui: [
+        Button((
+            id: "mute_button",
+            text: "Mute",
+            action: "toggle_mute",
+        )),
+        Button((
+            id: "start_button",
+            text: "Start",
+            action: "ui.start_game",
+        )),
+        IconButton((
+            id: "settings_icon",
+            action: "ui.open_settings",
+            icon_on: "icon_on",
+            icon_off: "icon_off",
+            bind: "settings_open",
+        )),
+    ],
+)

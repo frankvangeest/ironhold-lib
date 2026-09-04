@@ -108,8 +108,8 @@ Entry point for a project. References all other files.
 | `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow; use instead of `rules_path`) |
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
-| `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`) |
-| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
+| `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` |
+| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. Fires `ui.button_pressed:<trigger>` (value used as-is, same as `global_key_bindings`); covered by `ironhold_cli validate`'s `unreachable_trigger` check. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
@@ -176,8 +176,8 @@ File extension must be `.scene.ron`.
 | `entities` | `Vec<SceneEntityDef>` | Prefab instances to spawn |
 | `ui` | `Vec<UiNodeDef>` | UI elements (buttons, labels, rects) to show in this scene |
 | `ui_panel` | `Option<UiPanelDef>` | When set, UI elements are laid out in a centered panel box instead of absolute positioning |
-| `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings`. Cleared on each scene load. |
-| `scene_unclaimed_gamepad_bindings` | `Map<String, String>` | Per-scene gamepad button overrides; same format and same unclaimed-pad-only behavior as `global_unclaimed_gamepad_bindings`. Overlays per-key on top of the project base — a key present here replaces just that entry, every other project-level binding still applies (same merge rule as `scene_key_bindings`). Cleared and rebuilt on each scene load. |
+| `scene_key_bindings` | `Map<String, String>` | Per-scene key overrides; same format as `global_key_bindings` (value used as-is, no `ui.` prefix). Cleared on each scene load. Also covered by `ironhold_cli validate`'s `unreachable_trigger` check. |
+| `scene_unclaimed_gamepad_bindings` | `Map<String, String>` | Per-scene gamepad button overrides; same format and same unclaimed-pad-only behavior as `global_unclaimed_gamepad_bindings`. Overlays per-key on top of the project base — a key present here replaces just that entry, every other project-level binding still applies (same merge rule as `scene_key_bindings`). Cleared and rebuilt on each scene load. Also covered by `ironhold_cli validate`'s `unreachable_trigger` check. |
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab — all four styles, `Ascii`/`Pixel`/`Icon`/`Textured`), and nameplates (`show_nameplates`/`show_player_nameplate`), have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). Tune `reference_distance` to the scene's actual camera-to-widget distance range, not just `Orbit`/`Party`'s `min_radius`/`max_radius` — entities can sit elsewhere in the scene than the camera's own orbit target, so their real distance from the camera can exceed the radius range. A `reference_distance` well outside that real range means the `(reference_distance / distance)` ratio never drops below 1.0, so scaling silently never engages — `ironhold_cli validate --strict` and a scene-load `warn!` both flag this, see [Label depth scaling](#label-depth-scaling-labeldepthscaledef) below for the full field reference, tuning guidance, and validation coverage. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
@@ -828,7 +828,7 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
 | `text` | `String` | required | Button label text |
-| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`) |
+| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`). You must also author a rule/transition/binding matching `ui.button_pressed:<trigger>` in `rules.ron`/`state_machine.ron`/a behavior file — a button with no matching handler renders and is clickable but does nothing; `ironhold_cli validate` reports this as `unreachable_trigger` |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
@@ -846,7 +846,7 @@ An icon-only button that swaps between two catalog textures depending on a bound
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
-| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.toggle_mute"` → `"toggle_mute"`) |
+| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.toggle_mute"` → `"toggle_mute"`). Same `unreachable_trigger` requirement as `Button`'s `action:` above |
 | `icon_on` | `String` | required | Asset catalog texture key shown when `bind` resolves to `"true"` |
 | `icon_off` | `String` | required | Asset catalog texture key shown when `bind` resolves to anything else, including when the key is missing from `GameVariables` |
 | `bind` | `String` | required | `GameVariables` key holding `"true"`/`"false"`. Re-checked every frame. |
