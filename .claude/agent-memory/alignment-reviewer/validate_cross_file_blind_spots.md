@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — source_file-literal vs configurable-path rule, hardcoded stats.ron path, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
+description: Structural blind spots in ironhold_cli validate.rs — the 4 configurable catalog paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
 metadata:
   type: project
 ---
@@ -19,21 +19,29 @@ coverage drifts field-by-field rather than being enforced by the compiler.
 
 **How to apply — the four recurring blind spots:**
 
-1. **`do_validate` hardcodes `"stats/stats.ron"`** while `ProjectConfig.stats_path` is a real
-   configurable `Option<String>` (schema/project.rs:~225). Any project with a custom `stats_path`
-   gets `stat_catalog == None` → *every* stat-keyed check silently skips. `items_path` is loaded
-   correctly from `ProjectConfig` — that is the pattern to copy, not the stats one. Latent only:
-   all shipped projects use the convention path.
+1. ~~**`do_validate` hardcodes `"stats/stats.ron"`**~~ **CLOSED** by
+   `feature/configurable_catalog_paths` (2026-09-04). Scope was wider than the backlog title:
+   **FOUR** `ProjectConfig` fields are configurable catalog paths treated identically by
+   `project_loader.rs:65-86` (`asset_catalog`, `prefab_catalog`, `stats_path`, `items_path` —
+   each `.map()`'d into one `asset_server.load()`, **no convention fallback: unset ⇒ the runtime
+   loads nothing at all for that catalog**). All four now go through one generic
+   `load_configured_catalog<T>(project_dir, field, convention_path, field_name, results)`.
+   Semantics: field set ⇒ that exact path, and configured-but-missing is a **hard error**
+   (`"{field_name} in .project.ron does not exist on disk"`); field unset ⇒ falls back to the
+   convention path via tolerant `try_parse`. That fallback is a **deliberate CLI-only divergence**
+   from runtime "load nothing" (dropping it broke ~30/65 fixtures that omit `.project.ron`), and
+   it is inert for shipped content — verified 2026-09-04 that every one of the 13 projects with a
+   convention-path catalog file on disk also declares it. **The residual false negative to
+   remember: unset field + convention file present on disk ⇒ validate passes but the runtime boots
+   with an empty catalog.** A `--strict` "file exists but field unset" warning would close it
+   without touching any fixture.
 2. **`try_parse` returns `None` for a missing file with no `FileResult` pushed** (validate.rs:90-100).
    So `items_path: Some("items/itmes.ron")` (typo) → catalog `None` → the check it gates is silently
    skipped *and* no `missing_file` error is reported. Any new configurable-path catalog inherits this.
-3. **Scene-path actions are covered piecemeal.** `LoadScene`/`LoadSceneOverlay`/`PreloadScene` are
-   checked on disk; **`ToggleOverlay(String)` is also a scene path and is not** (actively used in
-   `primitive_world/logic/state_machine.ron:48-49`), and **`ProjectConfig.initial_scene` is never
-   checked at all** — the single most load-bearing designer-authored scene path in a project.
-   `project_dir.join(path)` is the correct disk check: `resolve_project_path` (scene_manager/mod.rs:734)
-   is literally `format!("{project_root}/{path}")`, and no shipped RON interpolates `{var}` into a
-   scene path, so no false-positive risk.
+3. ~~**Scene-path actions are covered piecemeal**~~ **CLOSED**: `ToggleOverlay` is now in the
+   scene-path arm and `ProjectConfig.initial_scene` has its own check (validate.rs:~454). The disk
+   check is `project_dir.join(path).exists()`, matching `resolve_project_path`
+   (scene_manager/mod.rs:734 = `format!("{project_root}/{path}")`).
 4. ~~**`collect_actions` skips dialogue files.**~~ **CLOSED** by `feature/cli-validate-dialogues`
    (2026-09-04): `do_validate` now globs `dialogues/*.dialogue.ron` + `parse_file::<DialogueDef>`,
    and `collect_actions` takes a 4th `dialogues: &[(String, DialogueDef)]` param walking
@@ -133,13 +141,22 @@ verified false-positive-free: `rewrite_self`/`rewrite_target` (message_interpret
 `.replace`d — and `dialogue.rs::substitute_self_in_action` has no item-action arm at all. `BuyItem`'s
 `String` is the *item key* (`OpenShop`'s is the merchant id — don't confuse them).
 
-**`source_file` literals must match how the file is actually located.** New rule from the same
-review: `"prefabs/prefabs.ron"` / `"assets.ron"` / `"stats/stats.ron"` are hardcoded convention paths
-in `do_validate`, so those literals are honest. **`items.ron` is NOT** — it is loaded exclusively from
-`ProjectConfig.items_path`, which is `"items/items.ron"` in every shipped project and fixture. A check
-emitting `source_file: "items.ron"` prints (validate.rs:~1525 `"{source_file}: {message}"`) a path that
-exists nowhere. Use `project_config.and_then(|c| c.items_path.clone())` — `project_config` is already a
-`cross_file_checks` param. Applies to any future configurable-path catalog.
+**`source_file` literals must match how the file is actually located.** As of
+`feature/configurable_catalog_paths` **all four catalogs are relocatable, so every hardcoded catalog
+literal in this file is now potentially a lie** — the old "these literals are honest because the
+path is hardcoded" justification is dead. Still outstanding after that feature: **11×
+`source_file: "prefabs/prefabs.ron"` + 3× `source_file: "assets.ron"`** (the `--strict` unused-*
+warnings), plus **12× message-body `"not found in prefabs.ron/assets.ron/stats.ron/items.ron"`**.
+A project that relocates its catalog now gets a correct exit-1 pointing at a path that doesn't
+exist in that project. Structural fix: make `load_configured_catalog` return
+`Option<(String, T)>` (resolved rel path + value) and thread the path into
+`cross_file_checks`/`strict_checks` as `source_file`. Note the resolved path is also the honest
+value for checks whose `source_file` is currently `find_project_ron(project_dir)`.
+
+**`find_project_ron` picks the *first* `*.project.ron` in `read_dir` order** and
+`assets/projects/integration_tests/` has three (`integration_tests`, `test_terrain`,
+`test_start_menu`). Pre-existing, but catalog resolution now depends on that arbitrary pick — inert
+only because all three declare identical `asset_catalog`/`prefab_catalog` values.
 
 **Runtime failure mode for a bad `item_key` is quieter than "no-op":** `inventory::add_to_slots`
 (inventory.rs:167-177) falls back to `max_stack = 99` on a catalog miss with **no warn**, so the item

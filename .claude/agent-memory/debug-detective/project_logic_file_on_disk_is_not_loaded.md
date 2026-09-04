@@ -31,4 +31,13 @@ positives; direction 3 gives silent false negatives.
 **How to apply:** when adding or reviewing a `validate.rs` check that consults rules/FSM
 content, resolve the paths from `ProjectConfig` (falling back to the convention path only when
 unset) and union in `config.rules` — do not read `logic/rules.ron` unconditionally. Related:
-[[validate-reference-checks-token-blind]].
+[[validate-reference-checks-token-blind]], [[validate-hardcoded-source-file-literals]].
+
+**Update 2026-09-04 (`feature/configurable_catalog_paths`):** the sibling gap for the four
+*catalog* fields (`asset_catalog`/`prefab_catalog`/`stats_path`/`items_path`) is now fixed by
+`validate.rs`'s `load_configured_catalog()` helper — configured path honored exactly, missing
+configured path is a hard error, convention-path fallback when unset. That helper is the pattern
+to reuse, but it was **not** extended to `rules_path`/`state_machine_path`/`model_fixes_path`:
+those three field names still appear **zero** times in `validate.rs`, which keeps reading the
+hardcoded convention paths. So the asymmetry is now sharp — a missing *catalog* path exits 1,
+a missing *logic* path is completely silent.

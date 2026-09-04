@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); hardcoded stats/prefab paths diverge from ProjectConfig's; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not
 metadata:
   type: project
 ---
@@ -22,14 +22,30 @@ described as "a warning, not an error" therefore belongs in `strict_checks`, not
 
 Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold_cli/src/commands/validate.rs`:
 
-1. **Hardcoded vs configured catalog paths.** `do_validate` loads `prefabs/prefabs.ron` and
-   `stats/stats.ron` as hardcoded convention paths, but `ProjectConfig` exposes `prefab_catalog`
-   and `stats_path` as configurable (and `items_path`, which the merchant check *does* resolve via
-   config). Every shipped project happens to use the conventional paths, so this is latent, not
-   live. A project that relocates stats.ron loses all stat checks with no warning.
+1. **Hardcoded vs configured catalog paths — FIXED in `validate.rs`, still live in `query.rs`/`stats.rs`.**
+   `feature/configurable_catalog_paths` (2026-09-04) added
+   `load_configured_catalog<T>(project_dir, field, convention_path, field_name, results)` to
+   `validate.rs`; all four configurable catalogs (`asset_catalog`, `prefab_catalog`, `stats_path`,
+   `items_path` — `project_loader.rs` treats all four identically) now resolve through it.
    `resolve_project_path()` (scene_manager/mod.rs) is a plain `format!("{root}/{path}")`, so the
    CLI's `project_dir.join(path)` is a faithful mirror of runtime resolution — no shared-asset
    special-casing to worry about.
+   **Two things the fix deliberately did *not* do, both worth re-raising if they bite:**
+   (a) the helper is private to `validate.rs`, so `query.rs` (3 sites) and `stats.rs` (2 sites)
+   still hardcode `"prefabs/prefabs.ron"`/`"assets.ron"` — `query prefabs` on a relocated-catalog
+   project hard-errors "prefabs/prefabs.ron not found". The helper belongs in `commands/utils.rs`
+   next to `silent_parse`/`glob_dir`.
+   (b) when a field is *unset*, validate falls back to the convention path rather than mirroring
+   the runtime's "load nothing at all". This was forced by ~46 of 63 CLI fixtures having a
+   convention catalog and no `.project.ron` at all. It is inert for shipped content today
+   (verified: every convention-path `assets.ron`/`prefabs.ron`/`stats.ron`/`items.ron` under
+   `assets/projects/` is declared by its project) but it structurally *masks the likeliest
+   authoring error in this area*: add `stats/stats.ron` (or `items/items.ron`), forget the
+   `stats_path`/`items_path` line, and the CLI happily cross-checks a catalog the runtime never
+   loads. `docs/20_data_formats.md` states the runtime semantics explicitly ("omitting it means no
+   stat system for that project"), so the divergence is documented-against. The cheap mitigation
+   is a `StrictWarning` when the field is unset *and* the convention file exists — fixture-safe
+   because `--strict` isn't the default gate.
 
 2. **Scene-path existence coverage is partial.** Four `Action` variants carry a project-relative
    `.scene.ron` path: `LoadScene`, `LoadSceneOverlay`, `PreloadScene`, `ToggleOverlay`. Plus
@@ -37,12 +53,14 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `cross_file_checks`'s `_ => {}` catch-all silently.
 
 3. **`source_file` is always a hardcoded literal**: `"prefabs/prefabs.ron"` (~12 sites),
-   `"assets.ron"` (3), `"items.ron"` (1). The first two match the actual hardcoded load paths, so
-   they only read wrong if a project relocates `prefab_catalog`. `"items.ron"` is different and
-   worse: the items file is loaded from the **configurable** `ProjectConfig.items_path`, which is
-   `"items/items.ron"` in every project and fixture that has one — so that literal points at a path
-   that exists nowhere, in both the human output and the `--json` `"source"` field. The resolved
-   path *is* known at the `do_validate` call site; it just isn't plumbed into `cross_file_checks`.
+   `"assets.ron"` (3), `"items.ron"` (1). `"items.ron"` points at a path that exists nowhere (the
+   real convention path is `items/items.ron`), in both the human output and the `--json`
+   `"source"` field. The resolved path *is* known at the `do_validate` call site; it just isn't
+   plumbed into `cross_file_checks`. **This got worse, not better, once relocation actually
+   works** (see item 1): before, a relocated `prefab_catalog` was silently never loaded, so the
+   literal was never printed for it; now the catalog *is* loaded and every error it produces is
+   attributed to a `prefabs/prefabs.ron` that doesn't exist on that project's disk. Plumbing the
+   four resolved paths out of `load_configured_catalog` into `cross_file_checks` is the fix.
 
 3b. **Item-key/currency-stat reference coverage is complete as of
    `feature/item_key_reference_check` (2026-09-04).** All four item-key-bearing `Action` variants
@@ -96,6 +114,16 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    "manual sweep of all 14 projects validated clean" claim is real but **not reproducible at
    feature-branch speed** — adding the missing one-liners to `validate_projects.rs` is the cheap fix
    any reviewer should recommend when a change's safety argument rests on such a sweep.
+
+6. **`find_project_ron` picks the *first* `*.project.ron` in `read_dir` order** and
+   `assets/projects/integration_tests/` holds three (`integration_tests`, `test_start_menu`,
+   `test_terrain`). This was near-harmless while catalogs were hardcoded — it only affected
+   `items_path`. After `feature/configurable_catalog_paths` it decides **all four** catalog paths,
+   so validate's view of that directory is now `read_dir`-order-dependent where the runtime's is
+   explicit (`--project`/test harness names one config by hand). All three currently declare the
+   same `assets.ron`/`prefabs/prefabs.ron`, so it's latent; it stops being latent the moment one
+   of them relocates a catalog. Multi-config project dirs arguably want validate to iterate every
+   `*.project.ron` rather than pick one.
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.

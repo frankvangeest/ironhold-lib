@@ -39,7 +39,7 @@
 - [Diagnostic-only feature pattern](diagnostic_only_feature_pattern.md) — runtime-warn + CLI-error twin; prefab-catalog vs per-scene scoping rule; PrefabDef tag helpers moved to schema/ for CLI reach
 - [UI text node font_size + clip](ui_text_node_font_size_clip_pattern.md) — one shared Label/Button spawn site; implicit_some vs `Some(` in tests; f32+default_fn convention; shipped scenes that rely on overflow bleed; 4% baseline threshold hides UI regressions
 - [`{new_id}` substitution token](new_id_token_pattern.md) — third RON token, executor-side (so it works from dialogue where `{self}` doesn't); "unaddressable id" constraint; docs/30 has 2 missed sites
-- [validate.rs cross-file blind spots](validate_cross_file_blind_spots.md) — source_file-literal vs configurable-path rule, {self}-token false positives, stats_path/try_parse + dialogue gaps
+- [validate.rs cross-file blind spots](validate_cross_file_blind_spots.md) — 4 configurable catalog paths + fallback divergence, source_file-literal rule, {self}-token false positives, dialogue gaps
 - [Schema strictness hardening](schema_strictness_hardening_pattern.md) — reviewing deny_unknown_fields/stricter-parse: table of the 5 Action-bearing RON surfaces and how each parse failure actually reaches the designer
 - [Stale feature base-branch hazard](stale_feature_base_branch_hazard.md) — branches cut from `main` miss `integration`'s schema fields; new test struct literals merge cleanly then fail to compile
 - [UI trigger reachability map](ui_trigger_reachability_pattern.md) — the 4 `UiEvent::ButtonPressed` emit sites / 4 readers; what `check_ui_trigger_reachability` covers vs. the gamepad-binding + hardcoded-panel-trigger gaps
