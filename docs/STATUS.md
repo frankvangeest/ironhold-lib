@@ -41,7 +41,7 @@ _Last updated: 2026‑05‑18_
 | Area                                  | Status | Notes |
 |---------------------------------------|:------:|-------|
 | Top‑level `schema_version` required   |   ✅   | Project: v1/v2/v3 accepted; Scene: v2. |
-| Deny unknown fields                   |   ✅   | Strict serde on top‑level assets. |
+| Deny unknown fields                   |   ✅   | Strict serde on top‑level assets and every `Action`/FSM/rule/dialogue variant. |
 | Asset regression tests                |   ✅   | Scans `assets/**/*.ron` for schema compliance. |
 | Schema migrations/diagnostics         |   ⛔   | Planned. |
 

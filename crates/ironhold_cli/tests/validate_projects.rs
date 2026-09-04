@@ -40,3 +40,8 @@ fn validate(name: &str) {
 /// `gamepad_index` check is scoped per-scene (each scene's own `entities:` list), not
 /// per-catalog. Must still validate clean.
 #[test] fn validate_local_coop_demo()      { validate("local_coop_demo"); }
+#[test] fn validate_camera_modes()             { validate("camera_modes"); }
+#[test] fn validate_dynamic_animation_control() { validate("dynamic_animation_control"); }
+#[test] fn validate_foliage_demo()             { validate("foliage_demo"); }
+#[test] fn validate_stats_demo()               { validate("stats_demo"); }
+#[test] fn validate_blank_project()            { validate("blank_project"); }

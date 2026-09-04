@@ -2276,6 +2276,67 @@ fn test_action_set_stat_parses() {
 }
 
 #[test]
+fn test_action_unknown_field_is_error() {
+    use ironhold_core::schema::actions::Action;
+    // Typo: "start_at_fracton" instead of "start_at_fraction" — must be a hard parse error,
+    // not a silent no-op (deny_unknown_fields).
+    let ron_str = r#"PlayAnimationOn(target: "{self}", clip: "death", start_at_fracton: 1.0)"#;
+    let result: Result<Action, _> = from_str(ron_str);
+    let err = result.expect_err("typo'd Action field must be rejected (deny_unknown_fields)");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Unexpected field") && msg.contains("start_at_fracton"),
+        "error should name the unexpected field, got: {msg}"
+    );
+}
+
+#[test]
+fn test_action_play_animation_on_with_valid_fields_still_parses() {
+    use ironhold_core::schema::actions::Action;
+    let ron_str = r#"PlayAnimationOn(target: "{self}", clip: "death", start_at_fraction: 1.0, freeze: true)"#;
+    let action: Action = from_str(ron_str).expect("correctly-spelled fields should still parse");
+    assert!(matches!(
+        action,
+        Action::PlayAnimationOn { start_at_fraction: Some(f), freeze: true, .. } if f == 1.0
+    ));
+}
+
+#[test]
+fn test_fsm_state_unknown_field_is_error() {
+    use ironhold_core::schema::project::StateMachineAsset;
+    // Typo: "entry_action" (missing the 's') — same silent-drop failure class Action itself was
+    // just hardened against, one container level up (debug-detective finding, 2026-09-04).
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "idle",
+            states: [
+                (name: "idle", entry_action: [Log("hi")]),
+            ],
+            transitions: [],
+        )
+    "#;
+    let result: Result<StateMachineAsset, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo'd FsmState field must be rejected (deny_unknown_fields)");
+}
+
+#[test]
+fn test_logic_rule_unknown_field_is_error() {
+    use ironhold_core::schema::project::LogicRulesAsset;
+    // Typo: "whn" instead of "when" — silently made a state-guarded rule fire in every state.
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            rules: [
+                (on: "e", whn: "hp_low", do_actions: [Log("hi")]),
+            ],
+        )
+    "#;
+    let result: Result<LogicRulesAsset, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo'd LogicRule field must be rejected (deny_unknown_fields)");
+}
+
+#[test]
 fn test_project_config_stats_path_parses() {
     let ron_str = r#"
         (

@@ -3771,6 +3771,29 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 
 **Available actions:**
 
+**Typos in action fields are now hard errors.** Every `Action` rejects field names it doesn't
+recognise. Writing `start_at_fracton` instead of `start_at_fraction` no longer silently does
+nothing — it stops the **whole file** from loading. One typo in `logic/rules.ron` means *every*
+rule in that file stops firing; one typo in a `.behavior.ron` means that entity never runs its
+behavior at all. This applies wherever `Action`s are authored: `rules.ron`, `state_machine.ron`,
+`.behavior.ron` files, dialogue choices' `do_actions`, `scenes/*.scene.ron` UI button and
+action-bar slot `do_actions`, and `prefabs/prefabs.ron`. If a project suddenly "loses all its
+logic" after an edit, check this first.
+
+Open the browser console (F12) — the message names the file, the line, the action, and the fields
+that action actually accepts:
+
+```
+Failed to load asset 'projects/my_game/logic/rules.ron' with asset loader
+'...ImplicitRonLoader<LogicRulesAsset>': RON parse error: 34:41: Unexpected field
+named `start_at_fracton` in `PlayAnimationOn`, expected one of `target`, `clip`,
+`start_at_fraction`, or `freeze` instead
+```
+
+To catch these before you run the game, use `ironhold validate <project_dir>` or
+`ironhold watch <project_dir>` (see `docs/60_contributing.md`) — same message, same line and
+column.
+
 | Action | Description |
 |--------|-------------|
 | `LoadScene("path")` | Load a `.scene.ron` file relative to the project root. `ironhold_cli validate` checks this path exists on disk (same for `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay` below, and for the project's own `initial_scene`) |

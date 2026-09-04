@@ -153,8 +153,11 @@ pub fn check_project_loaded(
         if let Some(h) = &pending.model_fixes {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(_) => {
-                    warn!("model_fixes failed to load — proceeding without it");
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    error!("model_fixes failed to load: {} — {} — proceeding without it", path, e);
                 }
                 _ => { return; }
             }
@@ -162,8 +165,11 @@ pub fn check_project_loaded(
         if let Some(h) = &pending.rules {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(_) => {
-                    warn!("rules failed to load — proceeding without it");
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    error!("rules failed to load: {} — {} — proceeding without it (every rule in this file is now inactive)", path, e);
                 }
                 _ => { return; }
             }
@@ -171,8 +177,11 @@ pub fn check_project_loaded(
         if let Some(h) = &pending.state_machine {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(_) => {
-                    warn!("state machine failed to load — proceeding without it");
+                bevy::asset::LoadState::Failed(e) => {
+                    let path = asset_server.get_path(h)
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    error!("state machine failed to load: {} — {} — proceeding without it (every state transition in this file is now inactive)", path, e);
                 }
                 _ => { return; }
             }

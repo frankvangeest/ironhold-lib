@@ -39,6 +39,18 @@ If you push actions directly from Rust, the behaviour is locked in code. You can
 3. Add `#[derive(Deserialize)]` — it's already derived on `Action`; just ensure serde can deserialize the inner types.
 4. Document the new action in this file if it has non-obvious semantics.
 
+`Action` carries `#[serde(deny_unknown_fields)]` — two consequences for a new struct variant:
+- **No `#[serde(flatten)]`** on any field (incompatible with `deny_unknown_fields`); if you need
+  shared fields across variants, duplicate them rather than flattening a shared struct in.
+- **Renaming or removing a field on an existing variant is now a hard break** for every project's
+  RON authoring that field, not a silent default — bump `schema_version` and document the
+  migration (see "Schema evolution" in `docs/20_data_formats.md`) rather than renaming in place.
+
+The same attribute is on every FSM/rules container `Action` lives inside (`LogicRulesAsset`,
+`LogicRule`, `StateMachineAsset`, `FsmState`, `FsmTransition`, `FsmEventBinding`) and on the
+dialogue schema (`DialogueDef`, `DialogueNodeDef`, `DialogueChoiceDef`, `DialogueCondition`) — a
+typo anywhere in that chain is a parse error, not a silently-empty action list.
+
 ### RON action syntax — struct vs tuple variants
 
 The RON syntax for an action depends on how its variant is declared in `schema/actions.rs`:

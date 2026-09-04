@@ -6,6 +6,7 @@ pub const DIALOGUE_SCHEMA_VERSION: u32 = 1;
 
 /// A loaded `.dialogue.ron` asset. Contains an ordered list of conversation nodes.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct DialogueDef {
     pub schema_version: u32,
     pub nodes: Vec<DialogueNodeDef>,
@@ -57,6 +58,7 @@ pub struct DialogueChoiceDef {
 /// v1 conditions evaluated when filtering which choices to display.
 /// Quest conditions are deferred until the quest system ships.
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub enum DialogueCondition {
     /// Choice visible only when `GameVariables[key] == value`.
     HasVariable { key: String, value: String },

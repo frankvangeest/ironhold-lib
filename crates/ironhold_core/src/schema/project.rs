@@ -38,6 +38,7 @@ impl ModelFixesAsset {
 
 /// A standalone `.ron` asset that holds the logic rules for a project (schema v2).
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct LogicRulesAsset {
     pub schema_version: u32,
     pub rules: Vec<LogicRule>,
@@ -64,6 +65,7 @@ impl LogicRulesAsset {
 /// Replaces `logic/rules.ron` for projects that use the FSM authoring workflow.
 /// Referenced via `state_machine_path` in the project config.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct StateMachineAsset {
     pub schema_version: u32,
     /// The logic state the machine starts in before any transitions fire.
@@ -124,6 +126,7 @@ impl StateMachineAsset {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FsmState {
     pub name: String,
     /// Actions queued automatically when entering this state.
@@ -138,6 +141,7 @@ pub struct FsmState {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FsmTransition {
     /// Source state name. Omit (or `None`) to match any current state.
     #[serde(default)]
@@ -149,6 +153,7 @@ pub struct FsmTransition {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FsmEventBinding {
     pub event: String,
     pub do_actions: Vec<Action>,
@@ -307,6 +312,7 @@ fn default_popup_damage_color() -> (f32, f32, f32, f32) { (0.95, 0.25, 0.20, 1.0
 fn default_popup_heal_color() -> (f32, f32, f32, f32) { (0.20, 0.90, 0.20, 1.0) }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct LogicRule {
     pub on: String,
     /// Optional logic-state guard. When set, the rule only fires while the interpreter
