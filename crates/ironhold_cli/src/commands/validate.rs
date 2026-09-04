@@ -101,6 +101,49 @@ fn try_parse<T: serde::de::DeserializeOwned>(
     parse_file(&full, rel_path, results)
 }
 
+/// Resolves a project catalog whose path comes from an optional `ProjectConfig` field --
+/// `asset_catalog`, `prefab_catalog`, `stats_path`, `items_path` are all treated identically by
+/// the runtime's `project_loader.rs` (each just `.map()`'d into an asset load; no convention-path
+/// fallback if unset -- an unset field means the runtime loads nothing at all for that catalog).
+///
+/// `validate` deliberately does NOT mirror that "nothing at all" runtime behavior when the field
+/// is unset: it falls back to `convention_path` instead, via the same tolerant `try_parse` every
+/// other convention-path file in this module already uses (silently `None` if that file doesn't
+/// exist either -- e.g. every project without a stat system). This keeps every project-config-less
+/// or field-less fixture/project validating exactly as before this catalog became configurable
+/// (confirmed: no shipped project or existing test fixture has a stray, undeclared catalog file
+/// sitting at a convention path it doesn't use, so the fallback is inert for existing content)
+/// while still closing the actual reported gap: an explicitly *configured* path is honored exactly,
+/// and a configured-but-missing path is a hard error (unlike a merely-absent convention-path file),
+/// since the runtime unconditionally tries to load whatever's configured. `try_parse` alone can't
+/// express that last distinction -- it silently returns `None` for a missing file with no
+/// `FileResult` pushed at all, since it's designed for "this convention path might not apply to
+/// this project," not "this configured path should exist."
+///
+/// A `--strict` warning (`unset_catalog_path_with_convention_file`, in `strict_checks`) reports the
+/// one case this fallback deliberately leaves otherwise-silent: a real project with a convention-path
+/// file on disk but no matching field set, which validates clean here while the runtime loads
+/// nothing for it at all.
+fn load_configured_catalog<T: serde::de::DeserializeOwned>(
+    project_dir: &Path,
+    field: Option<&str>,
+    convention_path: &str,
+    field_name: &str,
+    results: &mut Vec<FileResult>,
+) -> Option<T> {
+    let Some(path) = field else {
+        return try_parse(project_dir, convention_path, results);
+    };
+    if !project_dir.join(path).is_file() {
+        results.push(FileResult {
+            rel_path: path.to_string(),
+            errors: vec![format!("{field_name} in .project.ron does not exist on disk")],
+        });
+        return None;
+    }
+    try_parse(project_dir, path, results)
+}
+
 // ── File discovery ────────────────────────────────────────────────────────────
 
 fn find_project_ron(project_dir: &Path) -> Option<String> {
@@ -1313,12 +1356,45 @@ fn check_ui_trigger_reachability(
 // ── Strict (orphan) checks ────────────────────────────────────────────────────
 
 fn strict_checks(
+    project_dir: &Path,
+    project_config: Option<&ProjectConfig>,
     asset_catalog: Option<&AssetCatalog>,
     prefab_catalog: Option<&PrefabCatalog>,
     scenes: &[(String, GameSceneV2)],
     actions: &[(String, Action)],
 ) -> Vec<StrictWarning> {
     let mut warnings: Vec<StrictWarning> = Vec::new();
+
+    // `load_configured_catalog` falls back to checking a catalog's convention-path file whenever
+    // its ProjectConfig field is unset (see that function's doc comment for why) -- deliberately
+    // diverging from the runtime, which loads nothing at all for an unset field. That divergence
+    // is silent by design at the always-on error level (it exists specifically so a project with
+    // no config, or a fixture, still gets checked), but it's a real, reportable authoring mistake
+    // when it happens in a REAL project: a convention-path file left on disk without its matching
+    // field set validates clean here while the runtime silently loads an empty/absent catalog.
+    // Only fires when a .project.ron actually exists — a config-less project (every check above
+    // this comment already treats that as the normal, expected fixture/bootstrap shape, not a
+    // mistake) would otherwise light this up on every one of its convention-path files.
+    if let Some(config) = project_config {
+        for (field, convention_path, field_name) in [
+            (config.asset_catalog.as_deref(), "assets.ron", "asset_catalog"),
+            (config.prefab_catalog.as_deref(), "prefabs/prefabs.ron", "prefab_catalog"),
+            (config.stats_path.as_deref(), "stats/stats.ron", "stats_path"),
+            (config.items_path.as_deref(), "items/items.ron", "items_path"),
+        ] {
+            if field.is_none() && project_dir.join(convention_path).is_file() {
+                warnings.push(StrictWarning {
+                    source_file: find_project_ron(project_dir).unwrap_or_default(),
+                    message: format!(
+                        "{convention_path} exists but {field_name} is not set in .project.ron — \
+                         the runtime will not load it, even though this validate run just checked \
+                         it via the convention-path fallback"
+                    ),
+                    kind: "unset_catalog_path_with_convention_file",
+                });
+            }
+        }
+    }
 
     // Collect every key that appears on the "usage" side.
     let mut used_prefabs: HashSet<&str> = HashSet::new();
@@ -1638,35 +1714,44 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let project_config: Option<ProjectConfig> = find_project_ron(project_dir)
         .and_then(|name| try_parse(project_dir, &name, &mut file_results));
 
-    let asset_catalog: Option<AssetCatalog> =
-        try_parse(project_dir, "assets.ron", &mut file_results);
+    // asset_catalog/prefab_catalog/stats_path/items_path are all ProjectConfig-configured paths
+    // (see load_configured_catalog's doc comment) -- every shipped project happens to set the
+    // first two to the "assets.ron"/"prefabs/prefabs.ron" convention path, which is why hardcoding
+    // those two literals here never surfaced as a bug: a project that relocates either (or omits
+    // it, same as a project legitimately omitting stats_path/items_path today) would previously
+    // have silently lost every check depending on that catalog, exactly the items_path gap this
+    // helper was originally written to close.
+    let asset_catalog: Option<AssetCatalog> = load_configured_catalog(
+        project_dir,
+        project_config.as_ref().and_then(|c| c.asset_catalog.as_deref()),
+        "assets.ron",
+        "asset_catalog",
+        &mut file_results,
+    );
 
-    let prefab_catalog: Option<PrefabCatalog> =
-        try_parse(project_dir, "prefabs/prefabs.ron", &mut file_results);
+    let prefab_catalog: Option<PrefabCatalog> = load_configured_catalog(
+        project_dir,
+        project_config.as_ref().and_then(|c| c.prefab_catalog.as_deref()),
+        "prefabs/prefabs.ron",
+        "prefab_catalog",
+        &mut file_results,
+    );
 
-    let stat_catalog: Option<StatCatalog> =
-        try_parse(project_dir, "stats/stats.ron", &mut file_results);
+    let stat_catalog: Option<StatCatalog> = load_configured_catalog(
+        project_dir,
+        project_config.as_ref().and_then(|c| c.stats_path.as_deref()),
+        "stats/stats.ron",
+        "stats_path",
+        &mut file_results,
+    );
 
-    // Unlike stats.ron (fixed convention path), items.ron's path is configurable via
-    // ProjectConfig.items_path -- None means this project has no item catalog at all, which is
-    // valid (not every project needs items), not a missing-file error. But an *authored* path
-    // that doesn't resolve is a real mistake (the runtime's project_loader.rs unconditionally
-    // tries to load it) -- try_parse alone would silently return None for a missing file with no
-    // FileResult pushed at all, since it's designed for "this convention path might not apply to
-    // this project," not "this configured path should exist."
-    let item_catalog: Option<ItemCatalog> = project_config
-        .as_ref()
-        .and_then(|c| c.items_path.as_deref())
-        .and_then(|path| {
-            if !project_dir.join(path).exists() {
-                file_results.push(FileResult {
-                    rel_path: path.to_string(),
-                    errors: vec!["items_path in .project.ron does not exist on disk".to_string()],
-                });
-                return None;
-            }
-            try_parse(project_dir, path, &mut file_results)
-        });
+    let item_catalog: Option<ItemCatalog> = load_configured_catalog(
+        project_dir,
+        project_config.as_ref().and_then(|c| c.items_path.as_deref()),
+        "items/items.ron",
+        "items_path",
+        &mut file_results,
+    );
 
     let mut scenes: Vec<(String, GameSceneV2)> = Vec::new();
     for path in glob_dir(project_dir, "scenes", ".scene.ron") {
@@ -1737,7 +1822,14 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     ));
 
     let strict_warnings = if strict {
-        strict_checks(asset_catalog.as_ref(), prefab_catalog.as_ref(), &scenes, &all_actions)
+        strict_checks(
+            project_dir,
+            project_config.as_ref(),
+            asset_catalog.as_ref(),
+            prefab_catalog.as_ref(),
+            &scenes,
+            &all_actions,
+        )
     } else {
         Vec::new()
     };

@@ -102,8 +102,8 @@ Entry point for a project. References all other files.
 | `initial_scene` | `String` | ✅ | Path to starting scene, relative to project root |
 | `project_id` | `Option<String>` | v2+ | Machine-readable identifier |
 | `display_name` | `Option<String>` | v2+ | Human-readable name |
-| `asset_catalog` | `Option<String>` | v2+ | Path to `assets.ron` |
-| `prefab_catalog` | `Option<String>` | v2+ | Path to `prefabs/prefabs.ron` |
+| `asset_catalog` | `Option<String>` | v2+ | Path to an `assets.ron` file. When absent, no asset catalog loads for this project at all — no models/effects/audio/decals are resolvable. `ironhold_cli validate` reads this field, not the `assets.ron` convention path, so relocating it is honored (falls back to checking the convention path only when this field itself is unset). |
+| `prefab_catalog` | `Option<String>` | v2+ | Path to a `prefabs/prefabs.ron` file. When absent, no prefab catalog loads for this project at all. Same `ironhold_cli validate` behavior as `asset_catalog` above. |
 | `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` (rules workflow) |
 | `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow; use instead of `rules_path`) |
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
@@ -111,8 +111,8 @@ Entry point for a project. References all other files.
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` |
 | `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. Fires `ui.button_pressed:<trigger>` (value used as-is, same as `global_key_bindings`); covered by `ironhold_cli validate`'s `unreachable_trigger` check. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
-| `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. |
-| `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. |
+| `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. `ironhold_cli validate` reads this field, not the `stats/stats.ron` convention path (falls back to checking the convention path only when this field itself is unset). |
+| `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. `ironhold_cli validate` reads this field the same way — see `asset_catalog` above. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
@@ -4555,8 +4555,9 @@ The slot count label in `InventoryPanel` and `ContainerPanel` now shows `"N/MAX"
 | `currency_stat` | `String` | `"gold"` | Global stat key used as currency for `Action::BuyItem` (deducted on purchase — see the scope note below; selling is not yet implemented). Defaults to `"gold"` when omitted, so `ironhold_cli validate`'s cross-check against `stats.ron` uses `"gold"` too if this field isn't authored |
 
 `ironhold_cli validate` cross-checks `currency_stat` against `stats.ron` and every `ShopEntry.item_key`
-against `items.ron` (when the project sets `items_path`) — a typo in either previously only surfaced
-as a runtime no-op the first time a player opened the shop.
+against `items.ron` (whenever an item catalog is loaded — the project's configured `items_path`, or
+the `items/items.ron` convention path when `items_path` itself is unset) — a typo in either previously
+only surfaced as a runtime no-op the first time a player opened the shop.
 
 **`ShopEntry` fields:**
 

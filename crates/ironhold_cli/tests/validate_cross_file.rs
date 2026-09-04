@@ -126,6 +126,67 @@ fn missing_items_path_target_exits_1() {
 }
 
 #[test]
+fn missing_prefab_catalog_path_exits_1() {
+    let (code, stdout) = validate("bad_prefab_catalog_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("prefab_catalog") && stdout.contains("does not exist on disk"),
+        "expected a diagnostic for the missing prefab_catalog target in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_asset_catalog_path_exits_1() {
+    let (code, stdout) = validate("bad_asset_catalog_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("asset_catalog") && stdout.contains("does not exist on disk"),
+        "expected a diagnostic for the missing asset_catalog target in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_stats_path_target_exits_1() {
+    let (code, stdout) = validate("bad_stats_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("stats_path") && stdout.contains("does not exist on disk"),
+        "expected a diagnostic for the missing stats_path target in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn relocated_prefab_catalog_is_actually_checked_exits_1() {
+    // Proves prefab_catalog's configured path is what gets read, not the "prefabs/prefabs.ron"
+    // convention path (which doesn't exist at all in this fixture) -- if the relocated catalog
+    // were silently skipped instead of loaded, this scene's bad prefab reference would go
+    // undetected and the run would incorrectly exit 0.
+    let (code, stdout) = validate("relocated_prefab_catalog");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("typo_prefab_key"),
+        "expected the missing prefab key from the relocated catalog in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn unset_prefab_catalog_with_convention_file_present_is_clean_without_strict_but_warns_with_strict() {
+    // A real .project.ron exists but never sets prefab_catalog, while prefabs/prefabs.ron sits on
+    // disk anyway -- validate's convention-path fallback checks it clean (matching every other
+    // convention-path check in this file), but --strict should flag the divergence from the
+    // runtime, which loads nothing at all for an unset field.
+    let (code, _stdout) = validate("strict_unset_prefab_catalog");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}");
+
+    let (strict_code, strict_stdout) = validate_strict("strict_unset_prefab_catalog");
+    assert_eq!(strict_code, 1, "expected exit 1 under --strict, got {strict_code}");
+    assert!(
+        strict_stdout.contains("prefab_catalog") && strict_stdout.contains("prefabs/prefabs.ron"),
+        "expected the unset-catalog-path warning in output:\n{strict_stdout}"
+    );
+}
+
+#[test]
 fn missing_merchant_currency_stat_exits_1() {
     let (code, stdout) = validate("bad_merchant_currency_stat");
     assert_eq!(code, 1, "expected exit 1, got {code}");
