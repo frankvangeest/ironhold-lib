@@ -623,6 +623,33 @@ fn camera_mode_valid_registry_and_reference_exits_0() {
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
 
+// ── Action::Spawn spawn_point reference (planning/backlog.md) ──────────────────
+
+#[test]
+fn bad_spawn_point_exits_1() {
+    let (code, stdout) = validate("bad_spawn_point");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("typo_spawn"),
+        "expected 'typo_spawn' in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn valid_spawn_point_exits_0() {
+    let (code, stdout) = validate("valid_spawn_point");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// `spawn_point` is `{self}`/`{target}`-substituted at interpret time (message_interpreter.rs,
+/// dialogue.rs) — a templated value like `"{self}_spawn"`, used to share one behavior rule across
+/// several named spawn points, is not the literal runtime key and must not be checked as one.
+#[test]
+fn spawn_point_self_substitution_no_false_positive_exits_0() {
+    let (code, stdout) = validate("spawn_point_self_substitution");
+    assert_eq!(code, 0, "expected exit 0 (templated spawn_point), got {code}:\n{stdout}");
+}
+
 // ── label_depth_scale (planning/features/label_depth_scale_validation.md) ─────
 
 /// `min_scale` above 1.0 pins every depth-scaled widget in the scene forever — a hard error,

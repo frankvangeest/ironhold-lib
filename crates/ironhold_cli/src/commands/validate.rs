@@ -214,6 +214,9 @@ fn cross_file_checks(
                     }
                 }
             }
+            // See also: Action::Spawn's `spawn_point` reference check further below, in its own
+            // loop over `actions` (grouped with the other scene-scoped "union across all scenes"
+            // checks rather than here, since it needs `scenes`, not a catalog).
             Action::Spawn { prefab, .. } => {
                 if let Some(c) = prefab_catalog {
                     if !c.prefabs.contains_key(prefab) {
@@ -973,6 +976,43 @@ fn cross_file_checks(
                     "SetCameraMode: mode {:?} is not \"default\" and not found in any scene's \
                      camera_modes registry — this will silently warn+no-op at runtime",
                     mode
+                ),
+                error_type: "missing_reference",
+            });
+        }
+    }
+
+    // `Action::Spawn`'s `spawn_point` must match a key in SOME scene's `spawn_points` map. Same
+    // weaker-than-project-scoped caveat as the `SetCameraMode` check above: rules.ron/
+    // state_machine.ron actions are project-scoped but `spawn_points` is scene-scoped, so "defined
+    // in scene A, fired only while scene B is active" isn't caught — still catches the dominant
+    // failure, a typo'd spawn_point name, which today only warns and falls back to the world
+    // origin at runtime (`action_executor.rs`). `at_entity` is deliberately not checked here — it
+    // needs harder reachability reasoning about which entities exist when the action fires (and,
+    // like `spawn_point` itself, is `{self}`/`{target}`-substituted, so a literal check on it
+    // would have the same false-positive problem this check guards against below) and stays
+    // deferred; see `planning/backlog.md`'s "CLI validate: no reference check for `Action::Spawn`'s
+    // `spawn_point`".
+    for (source, action) in actions {
+        let Action::Spawn { spawn_point: Some(spawn_point), .. } = action else { continue };
+        // `spawn_point` is substituted at interpret time for `{self}`/`{target}` tokens
+        // (message_interpreter.rs, dialogue.rs) — see the supported-fields list in
+        // `crates/ironhold_core/src/CLAUDE.md`. The authored string here is pre-substitution, so a
+        // templated value (e.g. `"{self}_spawn"`, used to share one behavior rule across several
+        // named spawn points) is not the literal key that will be looked up at runtime; skip it
+        // rather than false-positive on a legal pattern.
+        if spawn_point.contains('{') {
+            continue;
+        }
+        let found_in_any_scene =
+            scenes.iter().any(|(_, scene)| scene.spawn_points.contains_key(spawn_point));
+        if !found_in_any_scene {
+            errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!(
+                    "Spawn: spawn_point {:?} not found in any scene's spawn_points map — this \
+                     will silently warn and fall back to the world origin at runtime",
+                    spawn_point
                 ),
                 error_type: "missing_reference",
             });
