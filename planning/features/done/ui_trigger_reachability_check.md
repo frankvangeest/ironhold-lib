@@ -2,6 +2,7 @@
 
 _Status: Done_
 _Planned at: `74c63a5` (2026-07-02)_
+_Completed: `93a5fcf` (2026-09-04)_
 
 ## Plan re-verification (2026-09-04, `2fd73c0`)
 
