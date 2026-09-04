@@ -53,6 +53,24 @@ sibling `gamepad_key_without_gamepad_index` is documented inline in the `gamepad
 (~line 1001); `duplicate_gamepad_index` shipped undocumented at first review, then documented in the
 same post-review pass. A hard validate error with no doc reference is a designer dead end.
 
+**`duplicate_gamepad_index` now also covers `scene.join_prefab_keys`** (reviewed 2026-09-04,
+`feature/duplicate_gamepad_index_join_prefabs`, ALIGNED): one per-scene `seen: HashMap<usize,
+String>` shared by the `scene.entities` loop and a following `join_prefab_keys` loop that reports a
+synthetic `"join_prefab_keys[{slot}]"` id. Real collision path — a *keyboard*-triggered join
+resolves `InputMap.gamepad_index` through the same `gamepad_bind_system` seed as a scene player
+(only a *gamepad*-triggered join bypasses it via `PlayerConfig.bound_gamepad`). No false positive in
+`local_coop_demo`: `room8.scene.ron` is the only `join_prefab_keys` user and none of the four
+`player_p*_grid` prefabs author `gamepad_index` (P1's is commented out). **No legitimate sharing
+exists** — there is no `LeavePlayer` action in v1 and `ActiveSplitSlotCount` only increments, so
+every reachable slot is a simultaneously-live player.
+**Known, accepted reachability blindness shared by ALL three `join_prefab_keys` validate checks**
+(`missing_reference`, `unsupported_join_prefab`, now `duplicate_gamepad_index`): they flag every
+non-`None` entry, including slots that can never spawn — index < the scene's player-tagged entity
+count (`next_slot` starts at that count), index >= `MAX_SPLIT_PLAYERS` (4), or any non-`Grid`-split
+scene (where `join_prefab_keys` is never read at all). A designer authoring a full 4-slot table in a
+2-scene-player room gets a hard exit-1 for an impossible collision. Fix if it ever bites: gate the
+loop on those three conditions in one place.
+
 **Accepted non-RON constants here:** `GAMEPAD_DIAGNOSTIC_WARN_SECS = 3.0` (log-only diagnostic
 threshold, same class as `SPAWNS_PER_FRAME`). **Known accepted RON gap** (explicit in the plan's
 "out of scope"): "pending" and "bound-but-disconnected" are now well-defined engine states whose

@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots
 metadata:
   type: project
 ---
@@ -124,6 +124,22 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    same `assets.ron`/`prefabs/prefabs.ron`, so it's latent; it stops being latent the moment one
    of them relocates a catalog. Multi-config project dirs arguably want validate to iterate every
    `*.project.ron` rather than pick one.
+
+7. **`join_prefab_keys` is now a second "scene-reachable player prefab" surface, and unioning it
+   with `scene.entities` has one non-obvious false-positive edge.** Three checks now scan it
+   (`unsupported_join_prefab` player-tag/GLB-only guards; `label_depth_scale`'s
+   `widen_prefab_if_player` union; `duplicate_gamepad_index`, extended 2026-09-04). But at runtime
+   `Action::JoinPlayer` computes `next_slot = ActiveSplitSlotCount + queued_hot_joins`
+   (`action_executor.rs`~1683), so **slots already occupied by `entities:`-placed players are never
+   joined into** — `scene_v2.rs`'s doc tells authors to write `None` there. A union check that
+   treats every non-`None` slot as co-instantiable therefore hard-errors on a *dead* low-slot entry
+   (e.g. `join_prefab_keys[0]` naming the same prefab as the scene-placed P1, both with
+   `gamepad_index: 0`). Latent today (no shipped join prefab authors a `gamepad_index`; only
+   `local_coop_demo/room8` uses the field at all, slots 2/3). Widening is the safe direction for
+   `label_depth_scale` (a `--strict` band) but not for a hard `CrossFileError`. If it ever bites,
+   the runtime-faithful fix is to skip slots whose index is below the count of player-tagged scene
+   entities — and a *separate* "dead join slot" diagnostic is the better authoring signal anyway.
+   Note also: hot-join is Grid-split-only at runtime; none of the three checks gate on that.
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.
