@@ -266,6 +266,20 @@ fn cross_file_checks(
                     }
                 }
             }
+            Action::AddItem { item_key, .. }
+            | Action::RemoveItem { item_key, .. }
+            | Action::TransferItem { item_key, .. }
+            | Action::BuyItem(item_key) => {
+                if let Some(c) = item_catalog {
+                    if !c.items.contains_key(item_key) {
+                        errors.push(CrossFileError {
+                            source_file: source.clone(),
+                            message: format!("item_key {:?} not found in items.ron", item_key),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
             Action::PlayAnimationOn { start_at_fraction: Some(fraction), .. } => {
                 if !(0.0..=1.0).contains(fraction) {
                     errors.push(CrossFileError {
@@ -358,6 +372,64 @@ fn cross_file_checks(
                             error_type: "missing_reference",
                         });
                     }
+                }
+            }
+        }
+    }
+
+    // A prefab's `inventory.initial_items[].item_key` is only read at spawn time -- a typo there
+    // doesn't drop the item, it silently creates a stack with no catalog entry (entity_spawner.rs
+    // passes None for the catalog, so add_to_slots falls back to max_stack: 99 and the panel
+    // renders it at icon_index 0 of the default sheet): a phantom, wrong-icon slot instead of a
+    // design-time error. Same failure shape as the merchant stock check above.
+    if let Some(catalog) = prefab_catalog {
+        if let Some(items) = item_catalog {
+            for (prefab_key, prefab) in &catalog.prefabs {
+                let Some(inventory) = &prefab.inventory else { continue };
+                for entry in &inventory.initial_items {
+                    if !items.items.contains_key(&entry.item_key) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message: format!(
+                                "prefab {:?}: inventory initial_items item_key {:?} not found in \
+                                 items.ron",
+                                prefab_key, entry.item_key
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // `ItemDef.currency_stat` (set when looting an item should add to a global stat, e.g. a coin
+    // pickup, instead of occupying an inventory slot) is only read the moment that item is
+    // looted -- a typo doesn't stop the item from being consumed, it just loses the currency gain
+    // (action_executor.rs does warn! at runtime, but only there, and only after the item is
+    // already gone). Same failure shape as the merchant currency_stat check above, catching it at
+    // design time instead.
+    if let Some(items) = item_catalog {
+        if let Some(stats) = stat_catalog {
+            // items.ron's path is configurable via ProjectConfig.items_path (unlike stats.ron's
+            // fixed convention path) -- pointing this diagnostic at a literal "items.ron" would
+            // send the designer to a path that doesn't exist in every shipped project (they all
+            // use "items/items.ron"). Fall back to the literal only in the unreachable case where
+            // an item_catalog exists without items_path having been set.
+            let items_source = project_config
+                .and_then(|c| c.items_path.clone())
+                .unwrap_or_else(|| "items.ron".to_string());
+            for (item_key, item) in &items.items {
+                let Some(currency_stat) = &item.currency_stat else { continue };
+                if !stats.stats.contains_key(currency_stat) {
+                    errors.push(CrossFileError {
+                        source_file: items_source.clone(),
+                        message: format!(
+                            "item {:?}: currency_stat {:?} not found in stats.ron",
+                            item_key, currency_stat
+                        ),
+                        error_type: "missing_reference",
+                    });
                 }
             }
         }

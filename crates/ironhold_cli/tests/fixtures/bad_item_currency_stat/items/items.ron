@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    items: {
+        "silver_coin": ( display_name: "Silver Coin", currency_stat: "silver" ),
+    },
+)

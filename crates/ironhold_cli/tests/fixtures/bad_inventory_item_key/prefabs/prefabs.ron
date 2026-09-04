@@ -1,0 +1,13 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "chest": (
+            kind: Prop,
+            inventory: (
+                initial_items: [
+                    ( item_key: "typo_chest_item" ),
+                ],
+            ),
+        ),
+    },
+)

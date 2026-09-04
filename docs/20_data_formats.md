@@ -4494,7 +4494,7 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | `max_stack` | `u32` | `99` | Maximum count per stack when `stackable: true` |
 | `weight` | `f32` | `1.0` | Weight in game units (for future encumbrance mechanics) |
 | `tags` | `Vec<String>` | `[]` | Arbitrary designer tags (e.g. `["consumable", "quest"]`) |
-| `currency_stat` | `Option<String>` | `None` | When set, looting this item adds its count to the named global stat instead of occupying an inventory slot. Use for currency (e.g. `"gold"`). |
+| `currency_stat` | `Option<String>` | `None` | When set, looting this item adds its count to the named global stat instead of occupying an inventory slot. Use for currency (e.g. `"gold"`). `ironhold_cli validate` cross-checks this against `stats.ron` (when the project sets `items_path`). |
 
 **`InventoryContainerDef` fields (on `PrefabDef.inventory`):**
 
@@ -4507,7 +4507,7 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `item_key` | `String` | ✅ | Key of the item from `items.ron` |
+| `item_key` | `String` | ✅ | Key of the item from `items.ron`. `ironhold_cli validate` cross-checks this exists (when the project sets `items_path`). |
 | `count` | `u32` | `1` | How many to place |
 
 ```ron
