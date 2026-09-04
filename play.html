@@ -219,6 +219,40 @@
     <div id="debug-state" style="display:none"></div>
 
     <script>
+        // ─── Bevy log-level bridge ────────────────────────────────────────────
+        // Bevy's wasm log layer (tracing-wasm 0.2.1) declares ONLY console.log
+        // bindings — log1/log2/log3/log4, all `js_name = log`. There is no
+        // console.error or console.warn binding anywhere in that crate, so every
+        // level (TRACE..ERROR) reaches DevTools as a console.log, differing only
+        // by a `%c` CSS colour string. Consequences: the DevTools error badge
+        // stays at 0, and filtering the console by "Errors" or "Warnings" — the
+        // first thing you do when hunting a failure — hides Bevy's own error!/
+        // warn! output completely.
+        //
+        // Root-caused 2026-09-04: a RON parse failure in logic/rules.ron logged a
+        // correct `error!` from project_loader.rs plus bevy_asset's own
+        // "Failed to load asset" error, and both were reported as invisible
+        // because they were buried among ~40 INFO lines and excluded by the
+        // console's error filter.
+        //
+        // Re-dispatch those lines to the matching console method so severity
+        // filters, the error badge, and stack grouping all work again. Must run
+        // before ./pkg/ironhold_web.js is imported (module scripts are deferred,
+        // so this classic script always wins the race).
+        (function () {
+            const rawLog = console.log.bind(console);
+            console.log = function (...args) {
+                const first = args[0];
+                if (typeof first === 'string') {
+                    if (first.startsWith('%cERROR')) { console.error(...args); return; }
+                    if (first.startsWith('%cWARN')) { console.warn(...args); return; }
+                }
+                rawLog(...args);
+            };
+        })();
+    </script>
+
+    <script>
         (function () {
             const params = new URLSearchParams(window.location.search);
 
