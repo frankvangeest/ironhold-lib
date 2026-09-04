@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — hardcoded stats.ron path, try_parse silent-None, convention-glob vs reference-driven file discovery, and the open dialogue path/jump_to/stat_key gaps left after dialogue parsing landed
+description: Structural blind spots in ironhold_cli validate.rs — hardcoded stats.ron path, try_parse silent-None, convention-glob vs reference-driven discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
 metadata:
   type: project
 ---
@@ -43,6 +43,33 @@ coverage drifts field-by-field rather than being enforced by the compiler.
    `query actions`/`query events` stay dialogue-blind and now disagree with `validate` about "all
    the project's actions" (`docs/60_contributing.md:309` enumerates the three old sources).
 
+**THE false-positive class for any new string-key check: `{self}`/`{target}`/`{new_id}` substitution.**
+Established reviewing `feature/spawn_point_reference_check` (2026-09-04). Before adding a
+`contains_key`-style check on a designer-authored string, grep `message_interpreter.rs::rewrite_self`
+/`rewrite_target` and `dialogue.rs::substitute_self_in_action` for that field — if the field is
+`.replace("{self}", ..)`d there, the check must skip values containing `{`, or it will reject a
+*working* project. Behavior FSMs and dialogue `do_actions` are both in `collect_actions`, and both
+are exactly where `{self}` interpolation is used. Concrete live example: `Action::Spawn.spawn_point`
+is `{self}`-substituted, and `3rd_person_game_demo` already names its points `zombie_01_spawn` /
+`snake_01_spawn` — i.e. one behavior rule with `spawn_point: "{self}_spawn"` would collapse its 6
+near-identical respawn transitions and then fail `validate`. Only one check in the file handles this
+today (`stat_label`/`world_stat_bar`, via `strip_prefix("{self}.")`, validate.rs:~855) — copy that
+posture. A false positive is worse than a miss here: a designer with no Rust knowledge cannot
+suppress a `validate` error.
+
+**Every new check must be added to the `docs/60_contributing.md` "Checks performed" /
+"`--strict` flag" bullet lists (~lines 236-262).** That is the only designer-facing enumeration of
+what `validate` catches, and it is otherwise well maintained (label_depth_scale, gamepad_index,
+merchant, slope/coyote all present) — but the `Action::SetCameraMode` mode check is already missing
+from it, so don't take "the neighbouring check didn't do it" as precedent.
+
+**Sibling gap noted 2026-09-04: `Action::JoinPlayer`'s `spawn_points["player_{next_slot+1}_start"]`
+is unchecked** (action_executor.rs:~1753) and its miss path is *even quieter* than
+`Action::Spawn.spawn_point`'s — no `warn!` at all, just a silent fall back to the primary player's
+position + `1.5 * next_slot` on X. Fully derivable at design time and genuinely scene-scoped (not
+union): for each index `i` where `scene.join_prefab_keys[i].is_some()`, require
+`scene.spawn_points["player_{i+1}_start"]`.
+
 **Coverage model to keep in mind — convention-glob vs. reference-driven.** `do_validate` discovers
 logic files by *convention* (`glob_dir(dir, subdir, suffix)`, non-recursive), but the runtime
 resolves whatever project-relative path the designer authored, through a loader registered for
@@ -77,6 +104,14 @@ runtime resolves the key. `MerchantDef.currency_stat` reads `scene_state.loaded_
 (action_executor.rs:~1372) = the global stats.ron catalog, **not** a per-player `StatMap` — so
 `stat_catalog.stats.contains_key` is right. Had it been player-scoped, checking stats.ron would
 false-positive against `stat_templates`-only stats (cf. [[per-player-stat-pools-pattern]]).
+
+**"Union across all scenes" is now an established, twice-used scoping tier** (`SetCameraMode.mode`,
+and `Action::Spawn.spawn_point` as of `feature/spawn_point_reference_check`): rules.ron /
+state_machine.ron / behaviors are project-scoped but `camera_modes`/`spawn_points` are scene-scoped,
+so "defined in scene A, fired only while scene B is active" is a deliberate false negative. Accept
+it, but require the tradeoff be stated in a code comment at the loop, as both do. True per-scene
+reachability needs `LoadScene`-graph reasoning and stays deferred — same bucket as
+`Action::Spawn.at_entity` (which additionally needs live-entity reasoning).
 
 **Scoping:** merchant checks are prefab-catalog-scoped (`source_file: "prefabs/prefabs.ron"`,
 iterating `catalog.prefabs`) because `MerchantDef` is a prefab-local condition — same rule as
