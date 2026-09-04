@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — hardcoded stats.ron path, try_parse silent-None, convention-glob vs reference-driven discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
+description: Structural blind spots in ironhold_cli validate.rs — source_file-literal vs configurable-path rule, hardcoded stats.ron path, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
 metadata:
   type: project
 ---
@@ -125,7 +125,27 @@ iterating `catalog.prefabs`) because `MerchantDef` is a prefab-local condition �
 [[diagnostic-only-feature-pattern]]. Note `MerchantDef` lives at `PrefabDef.merchant`, not
 `PrefabDef.components.merchant`.
 
-**Sibling gap left open:** `ItemDef.currency_stat: Option<String>` (schema/items.rs:66) is a second
-designer-authored global stat key, unchecked, whose runtime twin is a bare
-`warn!("TakeAllFromContainer: currency_stat {:?} not found in stats")` (action_executor.rs:~1485) —
-the exact runtime-warn-without-CLI-twin shape this file exists to close.
+~~**Sibling gap left open:** `ItemDef.currency_stat`~~ **CLOSED** by
+`feature/item_key_reference_check` (2026-09-04), together with the `Action::AddItem`/`RemoveItem`/
+`TransferItem`/`BuyItem` `item_key` arm and `PrefabDef.inventory.initial_items[].item_key`. All three
+verified false-positive-free: `rewrite_self`/`rewrite_target` (message_interpreter.rs:275-285,
+331-341) destructure and move `item_key` through **untouched** — only `entity`/`from`/`to` are
+`.replace`d — and `dialogue.rs::substitute_self_in_action` has no item-action arm at all. `BuyItem`'s
+`String` is the *item key* (`OpenShop`'s is the merchant id — don't confuse them).
+
+**`source_file` literals must match how the file is actually located.** New rule from the same
+review: `"prefabs/prefabs.ron"` / `"assets.ron"` / `"stats/stats.ron"` are hardcoded convention paths
+in `do_validate`, so those literals are honest. **`items.ron` is NOT** — it is loaded exclusively from
+`ProjectConfig.items_path`, which is `"items/items.ron"` in every shipped project and fixture. A check
+emitting `source_file: "items.ron"` prints (validate.rs:~1525 `"{source_file}: {message}"`) a path that
+exists nowhere. Use `project_config.and_then(|c| c.items_path.clone())` — `project_config` is already a
+`cross_file_checks` param. Applies to any future configurable-path catalog.
+
+**Runtime failure mode for a bad `item_key` is quieter than "no-op":** `inventory::add_to_slots`
+(inventory.rs:167-177) falls back to `max_stack = 99` on a catalog miss with **no warn**, so the item
+lands in the inventory as an unnamed, icon-less stack. Cite this when justifying design-time strictness.
+
+**Positive-path coverage for item checks already exists via the `validate_projects` smoke test:**
+`3rd_person_game_demo` has 4 `BuyItem`s (state_machine.ron:157-160), `ItemDef.currency_stat: "gold"`
+(items/items.ron:42), and 5 prefabs with `inventory.initial_items` — so those three arms have a real
+no-false-positive gate. `AddItem`/`RemoveItem`/`TransferItem` in logic files are fixture-only.

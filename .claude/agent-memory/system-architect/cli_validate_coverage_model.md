@@ -36,9 +36,27 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `ProjectConfig.initial_scene`. Any of these not covered by an existence check fall through
    `cross_file_checks`'s `_ => {}` catch-all silently.
 
-3. **`source_file` for prefab-catalog-derived errors is the hardcoded string
-   `"prefabs/prefabs.ron"`** at ~10 sites — consistent, but it will read wrong the day a project
-   uses a different `prefab_catalog` path.
+3. **`source_file` is always a hardcoded literal**: `"prefabs/prefabs.ron"` (~12 sites),
+   `"assets.ron"` (3), `"items.ron"` (1). The first two match the actual hardcoded load paths, so
+   they only read wrong if a project relocates `prefab_catalog`. `"items.ron"` is different and
+   worse: the items file is loaded from the **configurable** `ProjectConfig.items_path`, which is
+   `"items/items.ron"` in every project and fixture that has one — so that literal points at a path
+   that exists nowhere, in both the human output and the `--json` `"source"` field. The resolved
+   path *is* known at the `do_validate` call site; it just isn't plumbed into `cross_file_checks`.
+
+3b. **Item-key/currency-stat reference coverage is complete as of
+   `feature/item_key_reference_check` (2026-09-04).** All four item-key-bearing `Action` variants
+   (`AddItem`/`RemoveItem`/`TransferItem`/`BuyItem`, schema/actions.rs:364-404 — no others exist,
+   and no condition type references item keys), both `Deserialize` structs with an `item_key`
+   (`ShopEntry`, `InitialItemEntry`), and both `currency_stat` fields (`MerchantDef`, `ItemDef`)
+   are now checked. Hard-error severity is safe here because `item_key` is never a `{self}`/
+   `{target}` substitution target (`message_interpreter::rewrite_self` rewrites only entity fields).
+   Worth knowing when judging the value of these checks: an unknown item key is **not** rejected at
+   runtime — `capabilities/inventory.rs::add_to_slots` creates the stack unconditionally
+   (`max_stack` falls back to 99) and the panel renders it at `icon_index` 0 of the default sheet,
+   so a typo yields a phantom slot with the wrong icon. `entity_spawner.rs`'s `initial_items` path
+   additionally passes `None` for the catalog, so prefab starting items ignore `stackable`/
+   `max_stack` entirely (separate latent bug).
 
 4. **Dialogue coverage: the parse half landed, the *referential* half did not.**
    `feature/cli-validate-dialogues` (2026-09-04) added `glob_dir("dialogues", ".dialogue.ron")` +
