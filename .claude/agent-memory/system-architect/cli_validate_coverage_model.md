@@ -40,6 +40,24 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `"prefabs/prefabs.ron"`** at ~10 sites — consistent, but it will read wrong the day a project
    uses a different `prefab_catalog` path.
 
+4. **`.dialogue.ron` is never parsed by `validate` at all** (confirmed 2026-09-04): `do_validate`
+   parses the project config, `assets.ron`, `prefabs/prefabs.ron`, `stats/stats.ron`,
+   `glob_dir("scenes", ".scene.ron")`, `logic/rules.ron`, `logic/state_machine.ron`,
+   `glob_dir("behaviors", ".behavior.ron")`, and `overrides/model_fixes.ron` — no dialogue glob.
+   `DialogueChoiceDef.do_actions` is therefore an `Action` authoring surface with **no design-time
+   parse gate whatsoever**, and no `ironhold_core` test touches dialogue either. Latent rather than
+   live today only because the single shipped dialogue file
+   (`3rd_person_game_demo/dialogues/npc_intro.dialogue.ron`) contains zero `do_actions`.
+
+5. **The standing `cargo test -p ironhold_cli` gate covers only 9 of the 15 project dirs.**
+   `crates/ironhold_cli/tests/validate_projects.rs` hardcodes one `#[test]` per project and is
+   missing `camera_modes`, `dynamic_animation_control`, `foliage_demo`, `stats_demo`,
+   `blank_project`, and `integration_tests`. `test_web.py`'s `PROJECTS` list (14, everything but
+   `integration_tests`) is the only broad gate, and it only runs on `integration` batches. So a
+   "manual sweep of all 14 projects validated clean" claim is real but **not reproducible at
+   feature-branch speed** — adding the missing one-liners to `validate_projects.rs` is the cheap fix
+   any reviewer should recommend when a change's safety argument rests on such a sweep.
+
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.
 
