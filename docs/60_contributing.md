@@ -244,6 +244,8 @@ references without starting the engine.
 - A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 - A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
+- `camera_modes:` registry entries (reserved `"default"` key, `Party(...)` unreachable via `SetCameraMode`, `Fixed.look_at_entity` existence) and `Action::SetCameraMode`'s `mode` exist in some scene's `camera_modes` registry
+- `Action::Spawn`'s `spawn_point` exists in some scene's `spawn_points` map (`missing_reference`) — a typo silently falls back to the world origin at runtime; a `{self}`/`{target}`-templated value (e.g. `"{self}_spawn"`) is skipped, since it is resolved before this check would see it
 
 ```bash
 ironhold validate assets/projects/particles_demo/

@@ -1,0 +1,11 @@
+(
+    schema_version: 1,
+    initial_state: "idle",
+    states: [
+        (
+            name: "idle",
+            entry_actions: [ Spawn(prefab: "npc", id: "{self}", spawn_point: "{self}_spawn") ],
+        ),
+    ],
+    transitions: [],
+)
