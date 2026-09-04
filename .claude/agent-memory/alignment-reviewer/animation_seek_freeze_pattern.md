@@ -29,10 +29,11 @@ field on `AnimationRequest`/`ActiveOverride`/`AnimationController`.
    `{ .. }` → no change needed. All 5 real sites reconstruct with named fields and no `..`, so an
    omission is a **compile error, not a silent break** — unusually safe for this action family.
 6. `ironhold_cli/src/commands/validate.rs` — range check as `error_type:
-   "animation_start_at_fraction_out_of_range"`. NOTE: `collect_actions` there covers
-   rules.ron + state_machine.ron + `behaviors/*.behavior.ron` only — **dialogue `do_actions` are
-   NOT walked**, so no action-level validate check applies to dialogue files. Pre-existing gap;
-   re-flag whenever a new action-level validate check lands.
+   "animation_start_at_fraction_out_of_range"`. NOTE (updated 2026-09-04): `collect_actions` there
+   now also walks `dialogues/*.dialogue.ron` `nodes[].choices[].do_actions`, so every action-level
+   validate check reaches dialogue files too. `query.rs::collect_logic` (the separate walker behind
+   `query actions`/`query events`) still does **not** — see
+   [[validate-cross-file-blind-spots]].
 
 ## Designer footguns introduced by this feature
 

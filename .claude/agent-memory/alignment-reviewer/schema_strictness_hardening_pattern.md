@@ -23,7 +23,7 @@ inconsistent per file type.
 | `logic/state_machine.ron` | same arm, a few lines below | same weak shape | covered |
 | `scenes/*.scene.ron` (`ActionSlotDef.do_actions`) | `spawn_scene_v2` `params.scenes.get(...)` never `Some` | none — stuck in `AppState::LoadingScene` forever | covered (`parse_file::<GameSceneV2>`) |
 | `behaviors/*.behavior.ron` | `message_interpreter.rs` `let Some(fsm) = state_machines.get(..) else { continue }` | none — entity is simply inert | covered (`parse_file::<StateMachineAsset>`) |
-| `dialogues/*.dialogue.ron` (`DialogueChoiceDef.do_actions`) | `dialogue.rs` `dialogue_assets.get(&handle) { None => return }` | none — panel never opens | **NOT covered — `do_validate` never globs `dialogues/`** |
+| `dialogues/*.dialogue.ron` (`DialogueChoiceDef.do_actions`) | `dialogue.rs` `dialogue_assets.get(&handle) { None => return }` | none — panel never opens | covered as of 2026-09-04 (`feature/cli-validate-dialogues`) |
 
 Two structural takeaways to reuse:
 
@@ -31,12 +31,12 @@ Two structural takeaways to reuse:
    `asset_server.get_path(h)` + `error!("... {} — {} — proceeding with ...", path, e)`. The
    rules / state_machine / model_fixes arms are the stale `Failed(_)` + bare `warn!` shape and
    should be brought up to it whenever a change makes those files more likely to fail.
-2. **Dialogue files are the standing blind spot** — the only Action-bearing surface with neither
-   CLI coverage nor a runtime message. Any future strictness change to `Action`, `DialogueNodeDef`,
-   or `DialogueChoiceDef` should add `glob_dir(project_dir, "dialogues", ".dialogue.ron")` to
-   `do_validate` first. Extends [[validate-cross-file-blind-spots]] blind spot #4 (which covers
-   `collect_actions` skipping dialogues) — the file is not even *parsed*, so it is a parse gap, not
-   just a cross-check gap.
+2. ~~**Dialogue files are the standing blind spot**~~ — closed 2026-09-04: `do_validate` globs
+   `dialogues/*.dialogue.ron` and `collect_actions` walks `nodes[].choices[].do_actions`. Dialogue
+   is still the surface with **no runtime message at all** on parse failure, so the CLI is now the
+   *only* diagnostic for it — which makes the remaining dialogue path/reference gaps listed in
+   [[validate-cross-file-blind-spots]] (StartDialogue path, PrefabDef.dialogue, jump_to,
+   StatAtLeast.stat_key) load-bearing rather than nice-to-have.
 
 **Verdict calibration:** a pure `deny_unknown_fields` add is ALIGNED on the reachability axis by
 construction. Downgrade to NEEDS WORK only when the newly-failing file type has a weak diagnostic

@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs cross_file_checks — hardcoded stats.ron path, try_parse silent-None, ToggleOverlay/initial_scene uncovered scene paths, collect_actions missing dialogue files
+description: Structural blind spots in ironhold_cli validate.rs — hardcoded stats.ron path, try_parse silent-None, convention-glob vs reference-driven file discovery, and the open dialogue path/jump_to/stat_key gaps left after dialogue parsing landed
 metadata:
   type: project
 ---
@@ -34,9 +34,43 @@ coverage drifts field-by-field rather than being enforced by the compiler.
    `project_dir.join(path)` is the correct disk check: `resolve_project_path` (scene_manager/mod.rs:734)
    is literally `format!("{project_root}/{path}")`, and no shipped RON interpolates `{var}` into a
    scene path, so no false-positive risk.
-4. **`collect_actions` only walks `logic/rules.ron`, `logic/state_machine.ron`, `behaviors/*.behavior.ron`.**
-   `DialogueChoice.do_actions` (`schema/dialogue.rs:49`, `dialogues/*.dialogue.ron`) is *not*
-   collected, so no per-action check applies there. Affects every arm in the match, not just new ones.
+4. ~~**`collect_actions` skips dialogue files.**~~ **CLOSED** by `feature/cli-validate-dialogues`
+   (2026-09-04): `do_validate` now globs `dialogues/*.dialogue.ron` + `parse_file::<DialogueDef>`,
+   and `collect_actions` takes a 4th `dialogues: &[(String, DialogueDef)]` param walking
+   `nodes[].choices[].do_actions`. Parse parity with the runtime is genuine — both sides use
+   IMPLICIT_SOME (`utils::ron_from_str` vs `ImplicitRonPlugin`). **But `query.rs::collect_logic` is a
+   second, parallel walker (rules + state_machine + behaviors only) that was NOT extended** — so
+   `query actions`/`query events` stay dialogue-blind and now disagree with `validate` about "all
+   the project's actions" (`docs/60_contributing.md:309` enumerates the three old sources).
+
+**Coverage model to keep in mind — convention-glob vs. reference-driven.** `do_validate` discovers
+logic files by *convention* (`glob_dir(dir, subdir, suffix)`, non-recursive), but the runtime
+resolves whatever project-relative path the designer authored, through a loader registered for
+plain `&["ron"]`. So `dialogue: "conversations/npc.ron"` (or `behavior:` likewise) loads fine at
+runtime and is never parse-checked, and a nested `dialogues/act1/x.dialogue.ron` is missed too.
+Driving the parse pass off the *union* of the glob and the referenced paths
+(`PrefabDef.dialogue`/`.behavior`, `Action::StartDialogue.dialogue_path`) would close this class.
+
+**Open dialogue-adjacent gaps as of 2026-09-04** (all cheap, all now unblocked since the parsed
+`DialogueDef`s are in hand):
+- **`Action::StartDialogue { dialogue_path }` has no on-disk check** despite being the same
+  project-relative-path shape as the `LoadScene|LoadSceneOverlay|PreloadScene|ToggleOverlay` arm
+  (`resolve_project_path` = `format!("{root}/{path}")`, so `project_dir.join(path).exists()` is
+  right). Runtime failure is *total silence* — `dialogue_assets.get() => None => return`, panel
+  never opens, no message.
+- **`PrefabDef.dialogue` has no on-disk check** even though `PrefabDef.behavior` does, ~6 lines
+  above it in the same prefab loop. This is the auto-wire path (`DialoguePath` +
+  `entity.interacted:{id}`), i.e. the dominant way dialogues are actually reached.
+- **`jump_to` is not cross-checked against `nodes[].id`** (exclude the reserved `"__end__"`).
+  Runtime `warn!`s and *closes the conversation mid-flow* — a visible, confusing failure, and the
+  textbook runtime-warn/CLI-error twin. Duplicate node `id`s are also unenforced despite the
+  "Must be unique" doc comment (`position()` = first wins, later node unreachable).
+- **`DialogueCondition::StatAtLeast.stat_key` is unchecked** — identical shape to the
+  `MerchantDef.currency_stat` check already in this file, resolving against the same global
+  `LoadedStats`/stats.ron catalog; a typo silently hides that choice forever with no warn.
+- **No shipped project exercises the dialogue half of `collect_actions`** —
+  `3rd_person_game_demo/dialogues/npc_intro.dialogue.ron` has zero `do_actions`, so it's
+  fixture-only coverage.
 
 **Correct-lookup verification (the one substantive thing to actually check):** trace where the
 runtime resolves the key. `MerchantDef.currency_stat` reads `scene_state.loaded_stats.0`

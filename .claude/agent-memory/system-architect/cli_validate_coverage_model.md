@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); hardcoded stats/prefab paths diverge from ProjectConfig's; scene-path coverage is partial
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); hardcoded stats/prefab paths diverge from ProjectConfig's; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not
 metadata:
   type: project
 ---
@@ -40,14 +40,28 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `"prefabs/prefabs.ron"`** at ~10 sites — consistent, but it will read wrong the day a project
    uses a different `prefab_catalog` path.
 
-4. **`.dialogue.ron` is never parsed by `validate` at all** (confirmed 2026-09-04): `do_validate`
-   parses the project config, `assets.ron`, `prefabs/prefabs.ron`, `stats/stats.ron`,
-   `glob_dir("scenes", ".scene.ron")`, `logic/rules.ron`, `logic/state_machine.ron`,
-   `glob_dir("behaviors", ".behavior.ron")`, and `overrides/model_fixes.ron` — no dialogue glob.
-   `DialogueChoiceDef.do_actions` is therefore an `Action` authoring surface with **no design-time
-   parse gate whatsoever**, and no `ironhold_core` test touches dialogue either. Latent rather than
-   live today only because the single shipped dialogue file
-   (`3rd_person_game_demo/dialogues/npc_intro.dialogue.ron`) contains zero `do_actions`.
+4. **Dialogue coverage: the parse half landed, the *referential* half did not.**
+   `feature/cli-validate-dialogues` (2026-09-04) added `glob_dir("dialogues", ".dialogue.ron")` +
+   `parse_file::<DialogueDef>` to `do_validate` and extended `collect_actions` to walk
+   `nodes[].choices[].do_actions` — so `collect_actions` now covers **all five** `Action`-bearing
+   schema surfaces (grep `Vec<Action>` in `schema/`: dialogue.rs:49, project.rs:131/134/154/316),
+   and no `Action` variant nests another `Action`, so no recursion is needed. What is still
+   missing: **no existence check on `PrefabDef.dialogue`** (contrast `def.behavior`, checked at
+   `validate.rs`~821 with the `bad_behavior_file` fixture) and **no arm for
+   `Action::StartDialogue { dialogue_path }`** in `cross_file_checks` (falls through `_ => {}`).
+   Runtime failure mode for a typo'd path is bad: `action_executor.rs`~1135 sets `ActiveDialogue`
+   active and `asset_server.load()`s a handle that never resolves — panel opens and never
+   closes, no ironhold-side `warn!`. Also unchecked despite dialogues now being parsed: `jump_to`
+   node-id validity (which *does* have a runtime `warn!` at `capabilities/dialogue.rs`~165 — a
+   textbook [[cli-runtime-mirror-check-pairs]] gap, and the only check that would flag anything in
+   shipped content, since `npc_intro.dialogue.ron` has 8 `jump_to`s and zero `do_actions`),
+   duplicate node ids, `portrait` texture-catalog key, and `DialogueCondition::StatAtLeast.stat_key`.
+
+4b. **`query.rs` and `validate.rs` disagree on what "all the project's actions" means.**
+   `query.rs::collect_logic` globs `scenes` and `behaviors` but **not** `dialogues`, so after the
+   fix above `validate` walks dialogue `do_actions` while `query actions`/`query events` still
+   don't. Whenever a new `Action` authoring surface is added, both collectors need it — they are
+   two independent enumerations of the same surface set with no shared helper.
 
 5. **The standing `cargo test -p ironhold_cli` gate covers only 9 of the 15 project dirs.**
    `crates/ironhold_cli/tests/validate_projects.rs` hardcodes one `#[test]` per project and is
