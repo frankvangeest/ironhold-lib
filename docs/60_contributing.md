@@ -110,7 +110,7 @@ cargo test -p ironhold_cli --test validate_cross_file  # cross-file reference er
 
 **`validate_projects.rs`** — one test per example project under `assets/projects/`. Verifies `ironhold validate` exits `0` for every shipped project. Add a new test here whenever a new project is added.
 
-**`validate_cross_file.rs`** — targeted tests for each cross-file reference check: missing effect key, missing audio key, missing prefab in scene, missing prefab in `Spawn` action, missing behavior file, and parse error. Each test asserts both the exit code (`1`) and that the offending key name appears in stdout.
+**`validate_cross_file.rs`** — targeted tests for each cross-file reference check: missing effect key, missing audio key, missing prefab in scene, missing prefab in `Spawn` action, missing behavior file, missing dialogue file (both `PrefabDef.dialogue` and `Action::StartDialogue`), a dialogue `do_actions` reference error, a dialogue parse error, and parse error. Each test asserts both the exit code (`1`) and that the offending key name appears in stdout.
 
 Fixtures live in `crates/ironhold_cli/tests/fixtures/`. Each fixture contains only the minimum files to trigger its specific error. Do not pad them — lean fixtures stay readable and fail fast when the validate logic changes.
 
@@ -240,6 +240,7 @@ references without starting the engine.
 - Prefab keys in scene entity defs and `Spawn` / `PreloadPrefab` actions exist in `prefabs.ron`
 - Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
 - Behavior file paths on `PrefabDef` exist on disk
+- `dialogues/*.dialogue.ron` files are parsed the same as `rules.ron`/`state_machine.ron`/`behaviors/*.behavior.ron`, and their `do_actions` participate in every check below just like a rule's; dialogue path references (`PrefabDef.dialogue`, `Action::StartDialogue`'s `dialogue_path`) exist on disk (`missing_file`)
 - Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`)
 - A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`

@@ -156,6 +156,64 @@ fn missing_behavior_file_exits_1() {
 }
 
 #[test]
+fn dialogue_parse_error_exits_1() {
+    // ironhold_cli validate never parsed dialogues/*.dialogue.ron at all before this fix — a
+    // typo'd field (here: jump_to0 instead of jump_to) produced zero diagnostic. Confirms the
+    // file is now actually deserialized, not just cross-checked.
+    let (code, stdout) = validate("bad_dialogue_parse");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken.dialogue.ron"),
+        "expected 'broken.dialogue.ron' in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("jump_to0"),
+        "expected the unexpected field name in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn dialogue_do_actions_missing_effect_key_exits_1() {
+    // collect_actions previously skipped dialogue do_actions entirely for cross-file checks.
+    // Confirms a dialogue choice's action is now walked the same as a rule's, with the source
+    // label correctly pointing at the dialogue file (not silently defaulting to some other path).
+    let (code, stdout) = validate("bad_dialogue_action_reference");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("missing_effect"),
+        "expected 'missing_effect' in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("dialogues/npc.dialogue.ron"),
+        "expected the error to be attributed to the dialogue file, not some other source:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_prefab_dialogue_path_exits_1() {
+    // PrefabDef.dialogue had no existence check while its structural twin PrefabDef.behavior
+    // did — same silent-failure class this whole feature exists to close.
+    let (code, stdout) = validate("bad_dialogue_prefab_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("does_not_exist.dialogue.ron"),
+        "expected the missing dialogue path in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_start_dialogue_action_path_exits_1() {
+    // Action::StartDialogue.dialogue_path had no existence check while LoadScene/
+    // LoadSceneOverlay/PreloadScene/ToggleOverlay did.
+    let (code, stdout) = validate("bad_dialogue_action_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("does_not_exist.dialogue.ron"),
+        "expected the missing StartDialogue path in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn missing_foliage_leaf_texture_exits_1() {
     let (code, stdout) = validate("bad_foliage_texture");
     assert_eq!(code, 1, "expected exit 1, got {code}");

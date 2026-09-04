@@ -57,6 +57,7 @@ assets/projects/{name}/
   prefabs/prefabs.ron         ← PrefabCatalog (named entity templates)
   prefabs/animation/*.ron     ← AnimationPolicy per character type
   behaviors/*.behavior.ron    ← per-entity FSM behavior files (optional)
+  dialogues/*.dialogue.ron    ← DialogueDef   (NPC conversation trees, optional)
   scenes/*.scene.ron          ← GameSceneV2   (one file per scene)
   logic/rules.ron             ← LogicRulesAsset (event → action rules)
   overrides/model_fixes.ron   ← ModelFixesAsset (per-asset transform corrections)

@@ -1,0 +1,16 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "Hi",
+            choices: [
+                (
+                    label: "Bye",
+                    do_actions: [ SpawnEffect(key: "missing_effect") ],
+                ),
+            ],
+        ),
+    ],
+)
