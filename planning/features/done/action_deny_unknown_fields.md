@@ -1,7 +1,8 @@
 # Feature: `Action` enum `#[serde(deny_unknown_fields)]`
 
-_Status: In Progress_
+_Status: Done_
 _Planned at: `cbe2f2a` (2026-09-03)_
+_Completed: `3677859` (2026-09-04)_
 
 ## What
 
