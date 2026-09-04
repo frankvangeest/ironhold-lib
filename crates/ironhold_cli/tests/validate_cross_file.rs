@@ -306,6 +306,22 @@ fn duplicate_gamepad_index_same_scene_exits_1() {
     );
 }
 
+#[test]
+fn duplicate_gamepad_index_join_prefab_exits_1() {
+    // A scene-placed player and a join_prefab_keys hot-join slot sharing a gamepad_index --
+    // a hot-joined player's seed is read from its prefab exactly like a scene-placed player's,
+    // so this collides too, even though no scene entity directly authors it.
+    let (code, stdout) = validate("duplicate_gamepad_index_join_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("player_01")
+            && stdout.contains("join_prefab_keys[1]")
+            && stdout.contains("gamepad_index"),
+        "expected the scene entity id, the join_prefab_keys slot, and a mention of gamepad_index \
+         in output:\n{stdout}"
+    );
+}
+
 /// `player_stat_widgets.md` Part C: a `stat_label`/`world_stat_bar` keyed `"{self}.<stat>"` with
 /// no matching `stat_templates` entry on that SAME prefab used to render empty forever with no
 /// diagnostic — this cross-file check (and its scene-load `warn!` counterpart) catches it.

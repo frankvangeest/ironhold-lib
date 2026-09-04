@@ -773,22 +773,28 @@ fn cross_file_checks(
         }
     }
 
-    // Two or more player-tagged prefabs **instantiated in the same scene's `entities:` list**
-    // authoring the same non-`None` `gamepad_index` — one physical controller would drive both
-    // characters at once. Deliberately scoped to each scene's instantiated players, not the raw
-    // prefab catalog: `local_coop_demo`'s catalog legitimately reuses `gamepad_index` values
-    // across different rooms' player variants (never co-instantiated), which a catalog-wide check
-    // would false-positive on. Mirrors the runtime `warn!` in `scene_loader.rs`'s
-    // `warn_duplicate_gamepad_index`. See `planning/features/gamepad_player_binding_hardening.md`.
+    // Two or more player-tagged prefabs **instantiated in the same scene's `entities:` list, or
+    // reachable via that scene's `join_prefab_keys` hot-join slots** authoring the same non-`None`
+    // `gamepad_index` — one physical controller would drive both characters at once, whether both
+    // are scene-placed, both are hot-join slots, or one of each (a hot-joined player's
+    // `gamepad_index` seed is read from its prefab exactly like a scene-placed player's, unless a
+    // gamepad-triggered join instead captures the triggering pad directly — see "Gamepad-triggered
+    // hot join" in `crates/ironhold_core/src/CLAUDE.md` — so a keyboard-triggered join can still
+    // collide with an already-bound scene player via this same seed). Deliberately scoped to each
+    // scene's instantiated/reachable players, not the raw prefab catalog: `local_coop_demo`'s
+    // catalog legitimately reuses `gamepad_index` values across different rooms' player variants
+    // (never co-instantiated), which a catalog-wide check would false-positive on. Mirrors the
+    // runtime `warn!` in `scene_loader.rs`'s `warn_duplicate_gamepad_index`. See
+    // `planning/features/gamepad_player_binding_hardening.md`.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
-            let mut seen: std::collections::HashMap<usize, &str> = std::collections::HashMap::new();
+            let mut seen: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
             for entity_def in &scene.entities {
                 let Some(prefab) = catalog.prefabs.get(&entity_def.prefab) else { continue };
                 if !prefab.components.tags.iter().any(|t| t == "player") { continue }
                 let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
                 else { continue };
-                if let Some(other_id) = seen.insert(seed, &entity_def.id) {
+                if let Some(other_id) = seen.insert(seed, entity_def.id.clone()) {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
@@ -797,6 +803,27 @@ fn cross_file_checks(
                              different gamepad_index. Deliberately sharing one controller between \
                              two characters is not supported",
                             other_id, entity_def.id, seed
+                        ),
+                        error_type: "duplicate_gamepad_index",
+                    });
+                }
+            }
+            for (slot, entry) in scene.join_prefab_keys.iter().enumerate() {
+                let Some(prefab_key) = entry else { continue };
+                let Some(prefab) = catalog.prefabs.get(prefab_key) else { continue };
+                if !prefab.components.tags.iter().any(|t| t == "player") { continue }
+                let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
+                else { continue };
+                let this_id = format!("join_prefab_keys[{slot}]");
+                if let Some(other_id) = seen.insert(seed, this_id.clone()) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "{:?} and {:?} both use gamepad_index: {} — one physical controller \
+                             would drive both characters at once. Give each player a different \
+                             gamepad_index. Deliberately sharing one controller between two \
+                             characters is not supported",
+                            other_id, this_id, seed
                         ),
                         error_type: "duplicate_gamepad_index",
                     });

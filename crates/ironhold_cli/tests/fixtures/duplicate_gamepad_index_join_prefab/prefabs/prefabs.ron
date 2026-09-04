@@ -1,0 +1,43 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player_1": (
+            kind: Primitive,
+            shape: Capsule3d,
+            player_index: 0,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "KeyW",
+                    backward: "KeyS",
+                    left: "KeyA",
+                    right: "KeyD",
+                    strafe_left: "KeyQ",
+                    strafe_right: "KeyE",
+                    jump: "Space",
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+        "test_player_join": (
+            kind: Primitive,
+            shape: Capsule3d,
+            player_index: 1,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "ArrowUp",
+                    backward: "ArrowDown",
+                    left: "ArrowLeft",
+                    right: "ArrowRight",
+                    strafe_left: "ArrowLeft",
+                    strafe_right: "ArrowRight",
+                    jump: "Enter",
+                    // Deliberately the same seed as test_player_1 -- a hot-joined player reads
+                    // this seed exactly like a scene-placed player, so this collides too.
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+    },
+)
