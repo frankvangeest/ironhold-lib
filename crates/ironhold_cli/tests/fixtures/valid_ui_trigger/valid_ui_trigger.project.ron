@@ -1,0 +1,10 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    global_key_bindings: {
+        "Escape": "menu_toggle",
+    },
+    global_unclaimed_gamepad_bindings: {
+        "South": "join",
+    },
+)

@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    scene_key_bindings: {
+        "KeyP": "pause_toggle",
+    },
+    scene_unclaimed_gamepad_bindings: {
+        "Start": "scene_join",
+    },
+)

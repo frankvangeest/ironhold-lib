@@ -14,6 +14,10 @@
             do_actions: [ Log("Quit Triggered"), PlaySound(key: "click"), Quit ],
         ),
         (
+            on: "ui.button_pressed:ping",
+            do_actions: [ Log("Ping Triggered"), PlaySound(key: "click") ],
+        ),
+        (
             on: "ui.button_pressed:test_actions",
             do_actions: [ Log("Test Action Triggered"), PlaySound(key: "click"), Spawn(prefab: "chest_02") ],
         ),

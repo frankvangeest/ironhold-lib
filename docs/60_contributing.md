@@ -244,6 +244,7 @@ references without starting the engine.
 - A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
 - Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
 - A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
+- Every scene `Button`/`IconButton`, every `global_key_bindings`/`scene_key_bindings` entry, and every `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` entry's derived `ui.button_pressed:{trigger}` event is actually handled by some rule/transition/binding in `rules.ron`, `state_machine.ron`, or a `behaviors/*.behavior.ron` file (`unreachable_trigger`) — otherwise the button/binding is live but its press is silently dropped ("I clicked the button and nothing happened"). Skipped entirely (not fabricated) whenever `rules.ron`/`state_machine.ron`/a behavior file itself failed to parse — see that file's own reported parse error first. Not yet extended to the five engine-hardcoded panel triggers (`close_inventory`/`close_shop`/`close_container`/`take_all_from_container`/`buy_item:{item_key}`) — see `planning/backlog.md`
 
 ```bash
 ironhold validate assets/projects/particles_demo/

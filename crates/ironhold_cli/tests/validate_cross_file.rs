@@ -742,3 +742,82 @@ fn label_depth_scale_default_camera_config_fallback_strict_exits_1() {
         "expected the reference_distance value in output:\n{stdout}"
     );
 }
+
+// ── UI trigger reachability ───────────────────────────────────────────────────
+
+#[test]
+fn bad_ui_trigger_button_exits_1() {
+    let (code, stdout) = validate("bad_ui_trigger_button");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("mute_button") && stdout.contains("ui.button_pressed:toggle_mute"),
+        "expected the mismatched Button's id and derived event in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("settings_icon") && stdout.contains("ui.button_pressed:open_settings"),
+        "expected the mismatched IconButton's id and derived event in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn bad_ui_trigger_key_binding_exits_1() {
+    let (code, stdout) = validate("bad_ui_trigger_key_binding");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("global_key_bindings") && stdout.contains("ui.button_pressed:menu_toggle"),
+        "expected the mismatched global_key_bindings entry and derived event in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("scene_key_bindings") && stdout.contains("ui.button_pressed:pause_toggle"),
+        "expected the mismatched scene_key_bindings entry and derived event in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("global_unclaimed_gamepad_bindings")
+            && stdout.contains("ui.button_pressed:join"),
+        "expected the mismatched global_unclaimed_gamepad_bindings entry and derived event in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("scene_unclaimed_gamepad_bindings")
+            && stdout.contains("ui.button_pressed:scene_join"),
+        "expected the mismatched scene_unclaimed_gamepad_bindings entry and derived event in output:\n{stdout}"
+    );
+    // A key binding or gamepad binding is never "clicked" — the message must not claim it is.
+    assert!(
+        !stdout.contains("on click"),
+        "key/gamepad binding mismatches must not use button-click phrasing:\n{stdout}"
+    );
+}
+
+/// A malformed `logic/rules.ron` must not cascade into a wave of `unreachable_trigger` errors on
+/// top of the real parse error — the UI trigger reachability check is skipped entirely whenever
+/// any logic file failed to parse, since "nothing parsed" cannot be distinguished from "nothing
+/// is handled" without fabricating noise.
+#[test]
+fn bad_rules_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
+    let (code, stdout) = validate("bad_rules_parse_no_cascade");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("Expected comma"),
+        "expected the rules.ron parse error reported in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("unreachable_trigger") && !stdout.contains("wired_button"),
+        "a rules.ron parse error must not also produce unreachable_trigger noise for its \
+         (would-be-correctly-wired) button:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Cross-file checks") && stdout.contains(" OK"),
+        "expected cross-file checks to report clean (check skipped, not fabricated) in output:\n{stdout}"
+    );
+}
+
+/// Every trigger source (`Button`, `IconButton`, `global_key_bindings`, `scene_key_bindings`,
+/// `global_unclaimed_gamepad_bindings`, `scene_unclaimed_gamepad_bindings`) and every
+/// event-handling source (`rules.ron`, a `state_machine.ron` in-state `on:`, its `transitions`,
+/// its `global_on:`, and a `behaviors/*.behavior.ron` file) wired correctly — must not
+/// false-positive.
+#[test]
+fn valid_ui_trigger_exits_0() {
+    let (code, stdout) = validate("valid_ui_trigger");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}

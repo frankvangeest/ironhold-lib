@@ -1,0 +1,19 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Button((
+            id: "mute_button",
+            text: "Mute",
+            action: "toggle_mute",
+        )),
+        IconButton((
+            id: "settings_icon",
+            action: "ui.open_settings",
+            icon_on: "icon_on",
+            icon_off: "icon_off",
+            bind: "settings_open",
+        )),
+    ],
+)

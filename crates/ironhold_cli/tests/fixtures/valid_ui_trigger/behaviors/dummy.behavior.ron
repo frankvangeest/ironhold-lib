@@ -1,0 +1,14 @@
+(
+    schema_version: 1,
+    initial_state: "idle",
+    states: [
+        (
+            name: "idle",
+            on: [
+                (event: "ui.button_pressed:pause_toggle", do_actions: []),
+                (event: "ui.button_pressed:scene_join", do_actions: []),
+            ],
+        ),
+    ],
+    transitions: [],
+)

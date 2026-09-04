@@ -1,0 +1,13 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:toggle_mute",
+            do_actions: [],
+        ),
+        (
+            on: "ui.button_pressed:join",
+            do_actions: [],
+        ),
+    ],
+)
