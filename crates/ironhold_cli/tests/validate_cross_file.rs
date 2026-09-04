@@ -314,11 +314,11 @@ fn duplicate_gamepad_index_join_prefab_exits_1() {
     let (code, stdout) = validate("duplicate_gamepad_index_join_prefab");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        stdout.contains("player_01")
+        stdout.contains("\"player_01\"")
             && stdout.contains("join_prefab_keys[1]")
-            && stdout.contains("gamepad_index"),
-        "expected the scene entity id, the join_prefab_keys slot, and a mention of gamepad_index \
-         in output:\n{stdout}"
+            && stdout.contains("both use gamepad_index"),
+        "expected the specific duplicate_gamepad_index collision between the scene entity and the \
+         join_prefab_keys slot in output:\n{stdout}"
     );
 }
 

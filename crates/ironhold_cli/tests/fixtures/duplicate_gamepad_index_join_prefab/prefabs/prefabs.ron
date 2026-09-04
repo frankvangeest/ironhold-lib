@@ -20,8 +20,8 @@
             ),
         ),
         "test_player_join": (
-            kind: Primitive,
-            shape: Capsule3d,
+            kind: Actor,
+            model: "dummy.glb",
             player_index: 1,
             components: (
                 tags: ["player"],

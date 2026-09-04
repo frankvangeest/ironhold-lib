@@ -11,8 +11,6 @@
 
 ## Active
 
-- [ ] **Duplicate-`gamepad_index` `ironhold_cli validate` check doesn't cover `join_prefab_keys`** _(promoted from `claude_suggestions.md`, originally observed during `gamepad_player_binding_hardening.md`'s post-implementation review, debug-detective, 2026-08-01; re-confirmed the check at `validate.rs:783-806` still only iterates `scene.entities`, never `scene.join_prefab_keys`, 2026-09-04)_ — a join-prefab authoring a `gamepad_index` that collides with a scene-authored player produces no design-time diagnostic; the collision only surfaces at runtime, 3 seconds after a gamepad join, via `gamepad_bind_system`'s "already bound to another player" warn. Latent today (no shipped `join_prefab_keys` prefab authors a `gamepad_index`) but the CLI already has a `join_prefab_keys` validation loop (`validate.rs:374-401`, tags/kind checks) the duplicate check could extend into cheaply.
-
 ---
 
 ## Bugs

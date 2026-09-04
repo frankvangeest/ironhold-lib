@@ -2183,10 +2183,14 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 > doesn't repeat. If this happens, restart the scene (see above) with every controller already
 > connected and pressed once, in player order.
 >
-> **Two players in the same scene must not author the same `gamepad_index`.** One physical
-> controller would then drive both characters — flagged both as a scene-load warning and an
-> `ironhold_cli validate` error (`duplicate_gamepad_index`), so this is caught long before a
-> playtest. Give each player their own value.
+> **Two players must not author the same `gamepad_index`, whether both are placed in the scene's
+> `entities:` list, both are `join_prefab_keys` hot-join slots, or one of each.** One physical
+> controller would then drive both characters. Scene-placed players get both a scene-load warning
+> and an `ironhold_cli validate` error (`duplicate_gamepad_index`); a `join_prefab_keys` collision
+> is caught by `ironhold_cli validate` only — the scene-load warning only scans players already
+> instantiated at load time, before any hot-join can happen — so a WASM-only designer with no CLI
+> access won't see it until `gamepad_bind_system`'s runtime "already bound to another player"
+> warning fires a few seconds after the join. Give each player their own value.
 >
 > **Troubleshooting: `gamepad_index: 0` set but the controller does nothing.** On some Windows +
 > Chrome/Edge + controller combinations (confirmed with an Xbox 360 controller), one physical

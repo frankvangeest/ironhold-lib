@@ -784,50 +784,43 @@ fn cross_file_checks(
     // scene's instantiated/reachable players, not the raw prefab catalog: `local_coop_demo`'s
     // catalog legitimately reuses `gamepad_index` values across different rooms' player variants
     // (never co-instantiated), which a catalog-wide check would false-positive on. Mirrors the
-    // runtime `warn!` in `scene_loader.rs`'s `warn_duplicate_gamepad_index`. See
+    // runtime `warn!` in `scene_loader.rs`'s `warn_duplicate_gamepad_index` only for the
+    // `entities:` half — that warning only scans players already instantiated at scene-load time,
+    // so it cannot see a `join_prefab_keys` collision at all; this check is the only design-time
+    // (or any-time) signal for that case until the join spawn path itself. See
     // `planning/features/gamepad_player_binding_hardening.md`.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
             let mut seen: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
-            for entity_def in &scene.entities {
-                let Some(prefab) = catalog.prefabs.get(&entity_def.prefab) else { continue };
-                if !prefab.components.tags.iter().any(|t| t == "player") { continue }
+            let mut check_seed = |id: String, prefab_key: &str, errors: &mut Vec<CrossFileError>| {
+                let Some(prefab) = catalog.prefabs.get(prefab_key) else { return };
+                if !prefab.components.tags.iter().any(|t| t == "player") { return }
                 let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
-                else { continue };
-                if let Some(other_id) = seen.insert(seed, entity_def.id.clone()) {
+                else { return };
+                if let Some(other_id) = seen.insert(seed, id.clone()) {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
-                            "entities {:?} and {:?} both use gamepad_index: {} — one physical \
+                            "players {:?} and {:?} both use gamepad_index: {} — one physical \
                              controller would drive both characters at once. Give each player a \
                              different gamepad_index. Deliberately sharing one controller between \
                              two characters is not supported",
-                            other_id, entity_def.id, seed
+                            other_id, id, seed
                         ),
                         error_type: "duplicate_gamepad_index",
                     });
                 }
+            };
+            for entity_def in &scene.entities {
+                check_seed(entity_def.id.clone(), &entity_def.prefab, &mut errors);
             }
             for (slot, entry) in scene.join_prefab_keys.iter().enumerate() {
                 let Some(prefab_key) = entry else { continue };
-                let Some(prefab) = catalog.prefabs.get(prefab_key) else { continue };
-                if !prefab.components.tags.iter().any(|t| t == "player") { continue }
-                let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
-                else { continue };
-                let this_id = format!("join_prefab_keys[{slot}]");
-                if let Some(other_id) = seen.insert(seed, this_id.clone()) {
-                    errors.push(CrossFileError {
-                        source_file: scene_path.clone(),
-                        message: format!(
-                            "{:?} and {:?} both use gamepad_index: {} — one physical controller \
-                             would drive both characters at once. Give each player a different \
-                             gamepad_index. Deliberately sharing one controller between two \
-                             characters is not supported",
-                            other_id, this_id, seed
-                        ),
-                        error_type: "duplicate_gamepad_index",
-                    });
-                }
+                check_seed(
+                    format!("join_prefab_keys[{slot}] (prefab {prefab_key:?})"),
+                    prefab_key,
+                    &mut errors,
+                );
             }
         }
     }

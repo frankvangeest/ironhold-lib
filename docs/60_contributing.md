@@ -242,7 +242,7 @@ references without starting the engine.
 - Behavior file paths on `PrefabDef` exist on disk
 - Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`)
 - A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (when the project sets `items_path`) — see "MerchantDef fields" in `docs/20_data_formats.md`
-- Two players instantiated in the same scene author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`
+- Two players instantiated in the same scene — or reachable via that scene's `join_prefab_keys` hot-join slots — author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`. The `join_prefab_keys` half of this check has no scene-load `warn!` counterpart (the runtime warning only scans scene-instantiated players at load time, before any hot-join can happen) — this is the only design-time signal for that case.
 - A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
 
 ```bash
