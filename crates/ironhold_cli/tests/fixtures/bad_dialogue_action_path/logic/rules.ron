@@ -1,0 +1,9 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "entity.interacted:npc",
+            do_actions: [ StartDialogue(npc_id: "npc", dialogue_path: "dialogues/does_not_exist.dialogue.ron") ],
+        ),
+    ],
+)

@@ -8,6 +8,7 @@ use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
+use ironhold_core::schema::dialogue::DialogueDef;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 use ironhold_core::runtime::scene_manager::entity_spawner::default_camera_config;
 
@@ -116,6 +117,7 @@ fn collect_actions(
     rules: Option<(&str, &LogicRulesAsset)>,
     state_machine: Option<(&str, &StateMachineAsset)>,
     behaviors: &[(String, StateMachineAsset)],
+    dialogues: &[(String, DialogueDef)],
 ) -> Vec<(String, Action)> {
     let mut out = Vec::new();
 
@@ -134,6 +136,15 @@ fn collect_actions(
     for (path, behavior) in behaviors {
         for action in fsm_actions(behavior) {
             out.push((path.clone(), action));
+        }
+    }
+    for (path, dialogue) in dialogues {
+        for node in &dialogue.nodes {
+            for choice in &node.choices {
+                for action in &choice.do_actions {
+                    out.push((path.clone(), action.clone()));
+                }
+            }
         }
     }
     out
@@ -247,6 +258,19 @@ fn cross_file_checks(
                             "scene path {:?} not found on disk (paths are relative to the \
                              project folder, e.g. \"scenes/main.scene.ron\")",
                             path
+                        ),
+                        error_type: "missing_file",
+                    });
+                }
+            }
+            Action::StartDialogue { dialogue_path, .. } => {
+                if !project_dir.join(dialogue_path).exists() {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!(
+                            "dialogue path {:?} not found on disk (paths are relative to the \
+                             project folder, e.g. \"dialogues/npc_intro.dialogue.ron\")",
+                            dialogue_path
                         ),
                         error_type: "missing_file",
                     });
@@ -820,6 +844,19 @@ fn cross_file_checks(
                 }
             }
 
+            if let Some(dialogue_path) = &def.dialogue {
+                if !project_dir.join(dialogue_path).exists() {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: dialogue {:?} not found on disk",
+                            key, dialogue_path
+                        ),
+                        error_type: "missing_file",
+                    });
+                }
+            }
+
             if def.kind == PrefabKind::Foliage {
                 if let Some(foliage) = &def.foliage {
                     if let Some(ac) = asset_catalog {
@@ -1364,6 +1401,14 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         }
     }
 
+    let mut dialogues: Vec<(String, DialogueDef)> = Vec::new();
+    for path in glob_dir(project_dir, "dialogues", ".dialogue.ron") {
+        let r = rel(project_dir, &path);
+        if let Some(d) = parse_file::<DialogueDef>(&path, &r, &mut file_results) {
+            dialogues.push((r, d));
+        }
+    }
+
     let _model_fixes: Option<ModelFixesAsset> =
         try_parse(project_dir, "overrides/model_fixes.ron", &mut file_results);
 
@@ -1371,6 +1416,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         rules.as_ref().map(|r| ("logic/rules.ron", r)),
         state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
         &behaviors,
+        &dialogues,
     );
 
     let cross_errors = cross_file_checks(

@@ -1,0 +1,10 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "npc": (
+            kind: Prop,
+            model: "",
+            dialogue: "dialogues/does_not_exist.dialogue.ron",
+        ),
+    },
+)
