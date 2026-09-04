@@ -1662,7 +1662,11 @@ fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &
 /// scoped to this scene's **instantiated** players, not the raw prefab catalog —
 /// `local_coop_demo`'s catalog already contains legitimate catalog-level duplicates (different
 /// rooms' player variants, never co-instantiated) that a catalog-wide check would false-positive
-/// on. Mirrored by a matching hard error in `ironhold_cli`'s `validate` command. See
+/// on. Mirrored by a matching hard error in `ironhold_cli`'s `validate` command for this same
+/// instantiated-`entities:` case — `validate` additionally covers a `join_prefab_keys` hot-join
+/// slot colliding with a scene-placed player or another slot, which this scene-load warning does
+/// NOT cover (it only scans players already instantiated at load time, before any hot-join can
+/// happen) — that case is design-time-checkable-only until a runtime signal for it exists. See
 /// `planning/features/gamepad_player_binding_hardening.md`.
 fn warn_duplicate_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
     let mut seen: HashMap<usize, &str> = HashMap::new();
