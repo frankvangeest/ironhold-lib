@@ -116,6 +116,50 @@ fn missing_initial_scene_exits_1() {
 }
 
 #[test]
+fn wrong_case_scene_path_exits_1() {
+    // Real file on disk is scenes/main.scene.ron; the LoadScene action authors "Main" (capital M).
+    // Path::exists() is case-insensitive on NTFS so this would otherwise validate clean while
+    // 404ing over HTTP in the actual WASM/browser build.
+    let (code, stdout) = validate("bad_scene_path_case");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("resolves on disk to") && stdout.contains("main.scene.ron"),
+        "expected the case-mismatch message naming the real on-disk casing:\n{stdout}"
+    );
+}
+
+#[test]
+fn backslash_scene_path_exits_1() {
+    // Path::join accepts `\` on Windows, so a backslash-separated authored path resolves locally
+    // even though the WASM/browser build only understands `/`.
+    let (code, stdout) = validate("bad_scene_path_backslash");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("backslash") && stdout.contains("forward slashes"),
+        "expected the backslash-separator message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn matching_case_scene_path_exits_0() {
+    let (code, stdout) = validate("valid_scene_path_case_matches");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+#[test]
+fn wrong_case_configured_catalog_path_exits_1() {
+    // Real file on disk is data/subdir/my_prefabs.ron; prefab_catalog authors "Subdir" (capital
+    // S) in .project.ron. Exercises the load_configured_catalog call site specifically, not the
+    // action/scene-path sites the other three tests above cover.
+    let (code, stdout) = validate("bad_prefab_catalog_path_case");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("resolves on disk to") && stdout.contains("subdir/my_prefabs.ron"),
+        "expected the case-mismatch message naming the real on-disk casing:\n{stdout}"
+    );
+}
+
+#[test]
 fn missing_items_path_target_exits_1() {
     let (code, stdout) = validate("bad_items_path");
     assert_eq!(code, 1, "expected exit 1, got {code}");

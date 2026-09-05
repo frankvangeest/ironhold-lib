@@ -184,7 +184,51 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
         });
         return None;
     }
+    if let Some(problem) = path_case_mismatch(project_dir, path) {
+        results.push(FileResult {
+            rel_path: path.to_string(),
+            errors: vec![format!("{field_name} {problem}")],
+        });
+        return None;
+    }
     try_parse(project_dir, path, results)
+}
+
+/// Checks whether `authored_path` (relative to `project_dir`) resolves to the exact same path a
+/// browser's case-sensitive HTTP file server would see. `Path::exists()`/`Path::join` are both
+/// case-insensitive and separator-tolerant on Windows/NTFS, so an authored path with wrong case
+/// or a backslash separator (e.g. `"Scenes\\Main.scene.ron"`) silently validates clean here while
+/// 404ing in the actual WASM/browser build. Returns `Some(problem)` describing the mismatch, or
+/// `None` if the path matches exactly or doesn't exist at all -- the caller's own
+/// `exists()`/`is_file()` check already reports the latter case, so callers should only invoke
+/// this after that check has passed.
+fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String> {
+    if authored_path.contains('\\') {
+        return Some(
+            "uses a backslash (`\\`) path separator -- author with forward slashes (`/`) only; \
+             Windows resolves either locally, but the WASM/browser build serves assets over HTTP, \
+             which only understands `/`"
+                .to_string(),
+        );
+    }
+    let mut current_dir = project_dir.to_path_buf();
+    let mut real_components: Vec<String> = Vec::new();
+    for component in authored_path.split('/') {
+        let real_name = std::fs::read_dir(&current_dir)
+            .ok()?
+            .flatten()
+            .find(|entry| entry.file_name().to_string_lossy().eq_ignore_ascii_case(component))
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())?;
+        current_dir.push(&real_name);
+        real_components.push(real_name);
+    }
+    let real_path = real_components.join("/");
+    (real_path != authored_path).then(|| {
+        format!(
+            "resolves on disk to {real_path:?}, not the authored casing {authored_path:?} -- the \
+             WASM/browser build serves assets over a case-sensitive HTTP path and will 404"
+        )
+    })
 }
 
 // ── File discovery ────────────────────────────────────────────────────────────
@@ -345,6 +389,12 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         ),
                         error_type: "missing_file",
                     });
+                } else if let Some(problem) = path_case_mismatch(project_dir, path) {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!("scene path {:?} {}", path, problem),
+                        error_type: "path_case_mismatch",
+                    });
                 }
             }
             Action::StartDialogue { dialogue_path, .. } => {
@@ -357,6 +407,12 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                             dialogue_path
                         ),
                         error_type: "missing_file",
+                    });
+                } else if let Some(problem) = path_case_mismatch(project_dir, dialogue_path) {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!("dialogue path {:?} {}", dialogue_path, problem),
+                        error_type: "path_case_mismatch",
                     });
                 }
             }
@@ -603,6 +659,12 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     config.initial_scene
                 ),
                 error_type: "missing_file",
+            });
+        } else if let Some(problem) = path_case_mismatch(project_dir, &config.initial_scene) {
+            errors.push(CrossFileError {
+                source_file: find_project_ron(project_dir).unwrap_or_default(),
+                message: format!("initial_scene {:?} {}", config.initial_scene, problem),
+                error_type: "path_case_mismatch",
             });
         }
     }
@@ -1017,6 +1079,12 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         ),
                         error_type: "missing_file",
                     });
+                } else if let Some(problem) = path_case_mismatch(project_dir, behavior_path) {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!("prefab {:?}: behavior {:?} {}", key, behavior_path, problem),
+                        error_type: "path_case_mismatch",
+                    });
                 }
             }
 
@@ -1029,6 +1097,12 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                             key, dialogue_path
                         ),
                         error_type: "missing_file",
+                    });
+                } else if let Some(problem) = path_case_mismatch(project_dir, dialogue_path) {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!("prefab {:?}: dialogue {:?} {}", key, dialogue_path, problem),
+                        error_type: "path_case_mismatch",
                     });
                 }
             }
