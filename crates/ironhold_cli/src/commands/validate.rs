@@ -48,6 +48,44 @@ struct ValidationRun {
     all_valid: bool,
 }
 
+/// Everything `do_validate` parses for one project, bundled once and passed by (cheap, `Copy`)
+/// value to `cross_file_checks`/`check_ui_trigger_reachability`/`strict_checks` instead of each
+/// taking its own hand-picked subset of parameters. Grew organically, one field at a time, across
+/// three unrelated features (`cli_validate_hardening.md`, `orphan_rule_check`,
+/// `unreachable_trigger_panel_buttons`) until `strict_checks` alone reached 10 parameters —
+/// this struct is that accumulated signature, named and collected in one place instead of
+/// threaded positionally through every call site. `rules`/`state_machine` carry their source path
+/// alongside the parsed asset (the richest form any consumer needs — `strict_checks` uses both
+/// halves; `check_ui_trigger_reachability` only needs the parsed asset and discards the path
+/// itself, right after destructuring). Not every consumer uses every field — that's expected for
+/// a shared context struct, not a code smell to fix.
+#[derive(Clone, Copy)]
+struct LoadedProject<'a> {
+    project_dir: &'a Path,
+    project_config: Option<&'a ProjectConfig>,
+    asset_catalog: Option<&'a AssetCatalog>,
+    prefab_catalog: Option<&'a PrefabCatalog>,
+    stat_catalog: Option<&'a StatCatalog>,
+    item_catalog: Option<&'a ItemCatalog>,
+    scenes: &'a [(String, GameSceneV2)],
+    actions: &'a [(String, Action)],
+    rules: Option<(&'a str, &'a LogicRulesAsset)>,
+    state_machine: Option<(&'a str, &'a StateMachineAsset)>,
+    behaviors: &'a [(String, StateMachineAsset)],
+    /// `true` iff `logic/rules.ron`/`logic/state_machine.ron`/every `behaviors/*.behavior.ron`
+    /// parsed without error. Gates `check_ui_trigger_reachability` and (combined with
+    /// `scenes_parsed_cleanly`) `strict_checks`'s `orphan_rule` check — both skip entirely rather
+    /// than fabricate a wave of secondary noise once a source file's rules/transitions/bindings
+    /// are entirely absent from the data they compare against.
+    logic_files_parsed_cleanly: bool,
+    /// `true` iff every `scenes/*.scene.ron` parsed without error. Only `strict_checks`'s
+    /// `orphan_rule` check needs this half — a malformed scene silently drops its buttons from
+    /// the reachable-trigger set, which could make an otherwise-live rule look orphaned; the
+    /// forward `unreachable_trigger` check has no equivalent exposure (a dropped scene just
+    /// contributes no buttons to check, not a false positive), so it doesn't gate on this.
+    scenes_parsed_cleanly: bool,
+}
+
 // ── Public result type (used by watch) ───────────────────────────────────────
 
 pub struct ValidateResult {
@@ -210,16 +248,11 @@ fn fsm_actions(fsm: &StateMachineAsset) -> Vec<Action> {
 
 // ── Cross-file checks ─────────────────────────────────────────────────────────
 
-fn cross_file_checks(
-    project_dir: &Path,
-    project_config: Option<&ProjectConfig>,
-    asset_catalog: Option<&AssetCatalog>,
-    prefab_catalog: Option<&PrefabCatalog>,
-    stat_catalog: Option<&StatCatalog>,
-    item_catalog: Option<&ItemCatalog>,
-    scenes: &[(String, GameSceneV2)],
-    actions: &[(String, Action)],
-) -> Vec<CrossFileError> {
+fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
+    let LoadedProject {
+        project_dir, project_config, asset_catalog, prefab_catalog, stat_catalog, item_catalog,
+        scenes, actions, ..
+    } = project;
     let mut errors = Vec::new();
 
     for (source, action) in actions {
@@ -1274,17 +1307,15 @@ fn collect_fsm_events(fsm: &StateMachineAsset, events: &mut HashSet<String>) {
 /// reverse-direction `orphan_rule` check's data source) — keep both in sync if a new UI trigger
 /// site type is ever added here. The `{self}`/`dialogue_choice:` false-positive exclusions above
 /// are also handled there, in `check_orphan_event`.
-fn check_ui_trigger_reachability(
-    project_dir: &Path,
-    project_config: Option<&ProjectConfig>,
-    scenes: &[(String, GameSceneV2)],
-    prefab_catalog: Option<&PrefabCatalog>,
-    actions: &[(String, Action)],
-    rules: Option<&LogicRulesAsset>,
-    state_machine: Option<&StateMachineAsset>,
-    behaviors: &[(String, StateMachineAsset)],
-    logic_files_parsed_cleanly: bool,
-) -> Vec<CrossFileError> {
+fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> {
+    let LoadedProject {
+        project_dir, project_config, scenes, prefab_catalog, actions, rules, state_machine,
+        behaviors, logic_files_parsed_cleanly, ..
+    } = project;
+    // collect_handled_events/the checks below only need the parsed asset, not its source path.
+    let rules = rules.map(|(_, r)| r);
+    let state_machine = state_machine.map(|(_, s)| s);
+
     // A malformed rules.ron/state_machine.ron/behavior file already reports its own parse error
     // in the per-file results above. Treating that file's "nothing parsed" state as "this project
     // handles nothing" would flood every button/binding in the project with a derived
@@ -1641,18 +1672,13 @@ fn check_orphan_event(
 
 // ── Strict (orphan) checks ────────────────────────────────────────────────────
 
-fn strict_checks(
-    project_dir: &Path,
-    project_config: Option<&ProjectConfig>,
-    asset_catalog: Option<&AssetCatalog>,
-    prefab_catalog: Option<&PrefabCatalog>,
-    scenes: &[(String, GameSceneV2)],
-    actions: &[(String, Action)],
-    rules: Option<(&str, &LogicRulesAsset)>,
-    state_machine: Option<(&str, &StateMachineAsset)>,
-    behaviors: &[(String, StateMachineAsset)],
-    orphan_rule_prereqs_clean: bool,
-) -> Vec<StrictWarning> {
+fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
+    let LoadedProject {
+        project_dir, project_config, asset_catalog, prefab_catalog, scenes, actions, rules,
+        state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
+        ..
+    } = project;
+    let orphan_rule_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
     let mut warnings: Vec<StrictWarning> = Vec::new();
 
     // `load_configured_catalog` falls back to checking a catalog's convention-path file whenever
@@ -2097,16 +2123,6 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &dialogues,
     );
 
-    let mut cross_errors = cross_file_checks(
-        project_dir,
-        project_config.as_ref(),
-        asset_catalog.as_ref(),
-        prefab_catalog.as_ref(),
-        stat_catalog.as_ref(),
-        item_catalog.as_ref(),
-        &scenes,
-        &all_actions,
-    );
     let logic_files_parsed_cleanly = file_results
         .iter()
         .filter(|r| {
@@ -2119,34 +2135,27 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         .iter()
         .filter(|r| r.rel_path.starts_with("scenes/"))
         .all(|r| r.is_ok());
-    cross_errors.extend(check_ui_trigger_reachability(
-        project_dir,
-        project_config.as_ref(),
-        &scenes,
-        prefab_catalog.as_ref(),
-        &all_actions,
-        rules.as_ref(),
-        state_machine.as_ref(),
-        &behaviors,
-        logic_files_parsed_cleanly,
-    ));
 
-    let strict_warnings = if strict {
-        strict_checks(
-            project_dir,
-            project_config.as_ref(),
-            asset_catalog.as_ref(),
-            prefab_catalog.as_ref(),
-            &scenes,
-            &all_actions,
-            rules.as_ref().map(|r| ("logic/rules.ron", r)),
-            state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
-            &behaviors,
-            logic_files_parsed_cleanly && scenes_parsed_cleanly,
-        )
-    } else {
-        Vec::new()
+    let project = LoadedProject {
+        project_dir,
+        project_config: project_config.as_ref(),
+        asset_catalog: asset_catalog.as_ref(),
+        prefab_catalog: prefab_catalog.as_ref(),
+        stat_catalog: stat_catalog.as_ref(),
+        item_catalog: item_catalog.as_ref(),
+        scenes: &scenes,
+        actions: &all_actions,
+        rules: rules.as_ref().map(|r| ("logic/rules.ron", r)),
+        state_machine: state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
+        behaviors: &behaviors,
+        logic_files_parsed_cleanly,
+        scenes_parsed_cleanly,
     };
+
+    let mut cross_errors = cross_file_checks(project);
+    cross_errors.extend(check_ui_trigger_reachability(project));
+
+    let strict_warnings = if strict { strict_checks(project) } else { Vec::new() };
 
     let all_valid = file_results.iter().all(|r| r.is_ok())
         && cross_errors.is_empty()
