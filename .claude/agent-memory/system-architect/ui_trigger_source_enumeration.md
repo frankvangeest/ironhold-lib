@@ -1,6 +1,6 @@
 ---
 name: ui-trigger-source-enumeration
-description: The complete set of things that emit UiEvent::ButtonPressed (6 authored sources + 6 engine-generated triggers), and the re-parse-vs-already-parsed divergence class introduced by validate.rs's UI-trigger-reachability check
+description: The complete set of things that emit UiEvent::ButtonPressed (6 authored sources + 6 engine-generated triggers), why forward (unreachable_trigger) and reverse (orphan_rule) reachability checks have opposite failure-mode polarity, and the re-parse-vs-already-parsed divergence class
 metadata:
   type: project
 ---
@@ -19,17 +19,32 @@ claiming to cover "every UI trigger" must enumerate all six:
 6. `GameSceneV2.scene_unclaimed_gamepad_bindings` — overlays (5) per-key; **live in shipped
    content**: `local_coop_demo/scenes/room8.scene.ron` has `{"South": "join"}`
 
-`feature/ui_trigger_reachability_check` (2026-09-04) covers 1-4 only; 5-6 were consciously left out
-of scope (noted in the plan's re-verification section), so a typo'd gamepad-join trigger is still
-unguarded.
+**Correction (verified 2026-09-05 against `check_ui_trigger_reachability`):** all **six** authored
+sources are covered by the shipped forward check — the earlier "5-6 consciously out of scope" note
+is stale; both `global_unclaimed_gamepad_bindings` and `scene_unclaimed_gamepad_bindings` are
+iterated.
 
-**Engine-generated triggers never appear in scene RON** and must NOT be scanned for (no
-false-positive risk, but also no coverage): `dialogue_choice:{n}` (`capabilities/dialogue.rs` ~263,
-consumed directly by `dialogue_tick_system`, *not* via rules), `close_inventory`, `close_shop`,
-`close_container`, `take_all_from_container` (`scene_loader.rs` ~2358/2534/2662/2760),
-`buy_item:{item_key}` (`action_executor.rs` ~1439). The last five *do* go through
-rules/FSM matching, so a project that spawns those panels but has no rule for `close_inventory`
-has a real dead button that nothing statically checks.
+**Engine-generated triggers never appear in scene RON**: `dialogue_choice:{n}`
+(`capabilities/dialogue.rs` ~280, spawned as a real `UiAction::Trigger` button so it *does* reach
+`message_interpreter` and *can* be matched by a designer rule — it is merely also consumed by
+`dialogue_tick_system`), `close_inventory`, `close_shop`, `close_container`,
+`take_all_from_container` (`scene_loader.rs` ~2362/2538/2666/2764), `buy_item:{item_key}`
+(`action_executor.rs` ~1439). The five panel ones are enumerated by
+`collect_reachable_ui_triggers` (reverse check, gated on `InventoryPanel`/`ShopPanel`/
+`ContainerPanel` presence + `MerchantDef.stock[]`); `dialogue_choice:{n}` is **not** enumerated
+anywhere. The forward check covers none of the six.
+
+**The load-bearing asymmetry: forward and reverse checks have opposite failure-mode polarity over
+the *same* enumeration.** `unreachable_trigger` (forward) asks "does this button's event resolve to
+a rule"; `orphan_rule` (reverse, `feature/orphan_rule_check` 2026-09-05) asks "does this rule's
+`on:` resolve to some button". An **under-approximation of the reachable-trigger set is a benign
+false-negative forward, but a harmful false-positive reverse** — it reports correct, live content
+as dead. This is why the five panel triggers were harmless to omit forward but had to be added
+before the reverse check could ship (it flagged `3rd_person_game_demo`'s real close/buy rules).
+Every remaining forward-direction "no false-positive risk, so out of scope" note must be
+re-evaluated when copied into a reverse check: `dialogue_choice:{n}` and `{self}` substitution both
+flip to false-positive sources. Cheap guard for the substitution class: skip any event containing
+`{` in the reverse check.
 
 **Event *handling* is exactly four schema fields, all in `schema/project.rs`:** `LogicRule.on`
 (:311), `StateDef.on[].event` via `FsmEventBinding.event` (:137/:153), `FsmTransition.on` (:146).
@@ -57,4 +72,12 @@ enumerating it, and each new validate check re-derives its own view of the logic
 
 **How to apply:** when reviewing anything touching UI triggers or key/gamepad bindings, check the
 six-source list above for completeness; when reviewing any new `validate.rs` check, confirm it
-consumes `do_validate`'s parsed values rather than re-reading from `project_dir`.
+consumes `do_validate`'s parsed values rather than re-reading from `project_dir`; and for any
+reverse/orphan-direction check, confirm every "safe to omit" exclusion inherited from the forward
+check was re-justified rather than copied.
+
+**Accidental drift guard worth preserving:** the `valid_ui_trigger` fixture exercises all six
+authored sources, so `valid_ui_trigger_strict_exits_0` fails if `collect_reachable_ui_triggers`
+ever *loses* a site type — this is what makes the deliberate duplication between
+`collect_reachable_ui_triggers` and `check_ui_trigger_reachability` tolerable. Adding a *seventh*
+site type still diverges silently.
