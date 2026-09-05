@@ -1373,6 +1373,166 @@ fn check_ui_trigger_reachability(
     errors
 }
 
+/// Every `ui.button_pressed:{trigger}` event derivable from this project's buttons/key/gamepad
+/// bindings, unioned across all scenes — mirrors `check_ui_trigger_reachability`'s own site
+/// enumeration exactly (global/scene key bindings, global/scene unclaimed gamepad bindings,
+/// scene `Button`/`IconButton` nodes); keep both in sync if a new UI trigger site type is ever
+/// added. Feeds `check_orphan_ui_rules` below — the same "same two data sets" backing both
+/// directions of the reachability question (forward: does a button/binding's fire resolve to a
+/// handled rule; reverse: does a rule's `on:` resolve to some button/binding that can fire it).
+///
+/// Also includes the five engine-hardcoded panel triggers (`close_inventory`/`close_shop`/
+/// `close_container`/`take_all_from_container`/`buy_item:{item_key}`, `scene_loader.rs`'s
+/// panel-spawn sites and `action_executor.rs`'s per-`MerchantDef.stock[]` entry) — a designer
+/// never authors these as a `Button.action` string, they're emitted internally whenever a
+/// panel's own built-in close/buy button is clicked, so they'd otherwise false-positive as
+/// orphaned every time `check_orphan_ui_rules` sees the (correct, live) state-machine rule that
+/// handles one — confirmed against `3rd_person_game_demo`'s real `ShopPanel`/`InventoryPanel`/
+/// `ContainerPanel` usage before this was added. The *forward* direction (`unreachable_trigger`)
+/// still doesn't cover these five — see `planning/backlog.md`'s "doesn't cover the five
+/// engine-hardcoded panel triggers" entry, deliberately left open, out of scope here.
+fn collect_reachable_ui_triggers(
+    project_config: Option<&ProjectConfig>,
+    scenes: &[(String, GameSceneV2)],
+    prefab_catalog: Option<&PrefabCatalog>,
+) -> HashSet<String> {
+    let mut reachable = HashSet::new();
+    let mut insert = |trigger: &str| {
+        if !trigger.is_empty() {
+            reachable.insert(format!("ui.button_pressed:{trigger}"));
+        }
+    };
+
+    if let Some(config) = project_config {
+        for trigger in config.global_key_bindings.values() {
+            insert(trigger);
+        }
+        for trigger in config.global_unclaimed_gamepad_bindings.values() {
+            insert(trigger);
+        }
+    }
+    for (_, scene) in scenes {
+        for trigger in scene.scene_key_bindings.values() {
+            insert(trigger);
+        }
+        for trigger in scene.scene_unclaimed_gamepad_bindings.values() {
+            insert(trigger);
+        }
+        for node in &scene.ui {
+            match node {
+                UiNodeDef::Button(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
+                UiNodeDef::IconButton(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
+                UiNodeDef::InventoryPanel(_) => insert("close_inventory"),
+                UiNodeDef::ShopPanel(_) => {
+                    insert("close_shop");
+                    if let Some(catalog) = prefab_catalog {
+                        for prefab in catalog.prefabs.values() {
+                            if let Some(merchant) = &prefab.merchant {
+                                for entry in &merchant.stock {
+                                    insert(&format!("buy_item:{}", entry.item_key));
+                                }
+                            }
+                        }
+                    }
+                }
+                UiNodeDef::ContainerPanel(_) => {
+                    insert("close_container");
+                    insert("take_all_from_container");
+                }
+                _ => {}
+            }
+        }
+    }
+    reachable
+}
+
+/// `--strict` reverse of `check_ui_trigger_reachability` above: a rule/transition/binding whose
+/// `on:`/`event:` matches the `ui.button_pressed:{trigger}` shape but no button/key/gamepad
+/// binding anywhere in the project can ever produce that exact trigger — dead code left over from
+/// a scene rewrite (a renamed/removed button, a rule nobody wired up). Only ever inspects
+/// `ui.button_pressed:*`-shaped strings; every other event shape (`scene.ready:*`,
+/// `entity.entered:*`, a custom `EmitEvent` name, dialogue events, etc.) has no button/binding
+/// origin at all and is out of scope for this check, not merely unreachable-by-this-analysis.
+/// Same "union across all scenes, not project-scoped" approximation as `collect_reachable_ui_triggers`,
+/// and the same scene-parse-failure blind spot already accepted for `SetCameraMode`/`spawn_point`
+/// elsewhere in this file (a scene that fails to parse silently drops its buttons from the
+/// reachable set, which could make an otherwise-live rule look orphaned) — not fixed here, see
+/// `planning/claude_suggestions.md`.
+fn check_orphan_ui_rules(
+    reachable: &HashSet<String>,
+    rules: Option<(&str, &LogicRulesAsset)>,
+    state_machine: Option<(&str, &StateMachineAsset)>,
+    behaviors: &[(String, StateMachineAsset)],
+) -> Vec<StrictWarning> {
+    let mut warnings = Vec::new();
+    if let Some((src, r)) = rules {
+        for rule in &r.rules {
+            check_orphan_event(&mut warnings, reachable, src, format!("rule handling {:?}", rule.on), &rule.on);
+        }
+    }
+    if let Some((src, fsm)) = state_machine {
+        check_fsm_orphans(&mut warnings, reachable, src, fsm);
+    }
+    for (path, fsm) in behaviors {
+        check_fsm_orphans(&mut warnings, reachable, path, fsm);
+    }
+    warnings
+}
+
+fn check_fsm_orphans(
+    warnings: &mut Vec<StrictWarning>,
+    reachable: &HashSet<String>,
+    source: &str,
+    fsm: &StateMachineAsset,
+) {
+    for state in &fsm.states {
+        for binding in &state.on {
+            check_orphan_event(
+                warnings, reachable, source,
+                format!("state {:?}'s on: binding for {:?}", state.name, binding.event),
+                &binding.event,
+            );
+        }
+    }
+    for t in &fsm.transitions {
+        check_orphan_event(
+            warnings, reachable, source,
+            format!("transition to {:?} on {:?}", t.to, t.on),
+            &t.on,
+        );
+    }
+    for binding in &fsm.global_on {
+        check_orphan_event(
+            warnings, reachable, source,
+            format!("global_on binding for {:?}", binding.event),
+            &binding.event,
+        );
+    }
+}
+
+fn check_orphan_event(
+    warnings: &mut Vec<StrictWarning>,
+    reachable: &HashSet<String>,
+    source: &str,
+    describe: String,
+    event: &str,
+) {
+    if !event.starts_with("ui.button_pressed:") {
+        return;
+    }
+    if reachable.contains(event) {
+        return;
+    }
+    warnings.push(StrictWarning {
+        source_file: source.to_string(),
+        message: format!(
+            "{describe} — no button/key/gamepad binding anywhere in the project can ever fire \
+             {event:?}. Dead code, or a stale event name left over from a rename/removal."
+        ),
+        kind: "orphan_rule",
+    });
+}
+
 // ── Strict (orphan) checks ────────────────────────────────────────────────────
 
 fn strict_checks(
@@ -1382,6 +1542,10 @@ fn strict_checks(
     prefab_catalog: Option<&PrefabCatalog>,
     scenes: &[(String, GameSceneV2)],
     actions: &[(String, Action)],
+    rules: Option<(&str, &LogicRulesAsset)>,
+    state_machine: Option<(&str, &StateMachineAsset)>,
+    behaviors: &[(String, StateMachineAsset)],
+    logic_files_parsed_cleanly: bool,
 ) -> Vec<StrictWarning> {
     let mut warnings: Vec<StrictWarning> = Vec::new();
 
@@ -1717,6 +1881,15 @@ fn strict_checks(
         }
     }
 
+    // Same parse-failure protection as `check_ui_trigger_reachability` above: a malformed
+    // rules.ron/state_machine.ron/behavior file already reports its own parse error, and would
+    // otherwise flood this check with a wave of secondary noise once its rules/transitions/
+    // bindings are entirely absent from the two data sets below.
+    if logic_files_parsed_cleanly {
+        let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
+        warnings.extend(check_orphan_ui_rules(&reachable, rules, state_machine, behaviors));
+    }
+
     warnings
 }
 
@@ -1849,6 +2022,10 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
             prefab_catalog.as_ref(),
             &scenes,
             &all_actions,
+            rules.as_ref().map(|r| ("logic/rules.ron", r)),
+            state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
+            &behaviors,
+            logic_files_parsed_cleanly,
         )
     } else {
         Vec::new()

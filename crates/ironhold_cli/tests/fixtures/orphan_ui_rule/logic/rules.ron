@@ -1,0 +1,9 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "ui.button_pressed:truly_orphaned",
+            do_actions: [],
+        ),
+    ],
+)

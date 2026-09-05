@@ -6,20 +6,12 @@
             do_actions: [ PreloadPrefab("enemy_orc_melee") ],
         ),
         (
-            on: "ui.button_pressed:start_game",
-            do_actions: [ Log("LoadScene Triggered"), PlaySound(key: "click"), LoadScene("scenes/main.scene.ron") ],
-        ),
-        (
             on: "ui.button_pressed:quit",
             do_actions: [ Log("Quit Triggered"), PlaySound(key: "click"), Quit ],
         ),
         (
             on: "ui.button_pressed:ping",
             do_actions: [ Log("Ping Triggered"), PlaySound(key: "click") ],
-        ),
-        (
-            on: "ui.button_pressed:test_actions",
-            do_actions: [ Log("Test Action Triggered"), PlaySound(key: "click"), Spawn(prefab: "chest_02") ],
         ),
         (
             on: "ui.button_pressed:dance",

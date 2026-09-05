@@ -1020,3 +1020,39 @@ fn valid_ui_trigger_exits_0() {
     let (code, stdout) = validate("valid_ui_trigger");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
+
+/// The reverse direction of `valid_ui_trigger_exits_0`: this fixture's every rule/transition/
+/// binding is matched to exactly one button/binding, so `--strict`'s new `orphan_rule` check must
+/// not false-positive on any of them either.
+#[test]
+fn valid_ui_trigger_strict_exits_0() {
+    let (code, stdout) = validate_strict("valid_ui_trigger");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}
+
+#[test]
+fn orphan_ui_rule_strict_exits_1() {
+    // A rule handling ui.button_pressed:truly_orphaned with no button/binding anywhere in the
+    // project -- dead code, only reported under --strict (same severity class as unused_prefab).
+    let (code, stdout) = validate("orphan_ui_rule");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+
+    let (strict_code, strict_stdout) = validate_strict("orphan_ui_rule");
+    assert_eq!(strict_code, 1, "expected exit 1 under --strict, got {strict_code}");
+    assert!(
+        strict_stdout.contains("ui.button_pressed:truly_orphaned")
+            && strict_stdout.contains("no button/key/gamepad binding"),
+        "expected the orphan_rule warning for the unreachable rule in output:\n{strict_stdout}"
+    );
+}
+
+/// The five engine-hardcoded panel triggers (`close_inventory`/`close_shop`/`close_container`/
+/// `take_all_from_container`/`buy_item:{item_key}`) are never authored as a scene `Button.action`
+/// string -- they're emitted internally by `InventoryPanel`/`ShopPanel`/`ContainerPanel` widgets.
+/// A rule correctly handling one of these must NOT be flagged as orphaned just because no scene
+/// button authors that exact string.
+#[test]
+fn valid_panel_triggers_no_orphan_strict_exits_0() {
+    let (code, stdout) = validate_strict("valid_panel_triggers_no_orphan");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}

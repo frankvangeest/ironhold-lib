@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    rules: [
+        ( on: "ui.button_pressed:close_inventory", do_actions: [] ),
+        ( on: "ui.button_pressed:close_shop", do_actions: [] ),
+        ( on: "ui.button_pressed:buy_item:sword", do_actions: [] ),
+        ( on: "ui.button_pressed:close_container", do_actions: [] ),
+        ( on: "ui.button_pressed:take_all_from_container", do_actions: [] ),
+    ],
+)

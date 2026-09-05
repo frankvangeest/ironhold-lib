@@ -1,0 +1,14 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "shopkeeper": (
+            kind: Prop,
+            merchant: (
+                currency_stat: "gold",
+                stock: [
+                    ( item_key: "sword", buy_price: 10, sell_price: 5 ),
+                ],
+            ),
+        ),
+    },
+)

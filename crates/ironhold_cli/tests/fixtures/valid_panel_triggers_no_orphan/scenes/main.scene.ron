@@ -1,0 +1,25 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "shopkeeper_01",
+            prefab: "shopkeeper",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        InventoryPanel((
+            id: "inventory_panel",
+            position: (0.0, 0.0),
+        )),
+        ShopPanel((
+            id: "shop_panel",
+            position: (0.0, 0.0),
+        )),
+        ContainerPanel((
+            id: "container_panel",
+            position: (0.0, 0.0),
+        )),
+    ],
+)
