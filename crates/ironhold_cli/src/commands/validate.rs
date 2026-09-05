@@ -55,10 +55,15 @@ struct ValidationRun {
 /// `unreachable_trigger_panel_buttons`) until `strict_checks` alone reached 10 parameters —
 /// this struct is that accumulated signature, named and collected in one place instead of
 /// threaded positionally through every call site. `rules`/`state_machine` carry their source path
+/// (currently always the hardcoded literal `"logic/rules.ron"`/`"logic/state_machine.ron"` — not
+/// yet resolved from `ProjectConfig.rules_path`/`state_machine_path`, a separate open gap)
 /// alongside the parsed asset (the richest form any consumer needs — `strict_checks` uses both
 /// halves; `check_ui_trigger_reachability` only needs the parsed asset and discards the path
 /// itself, right after destructuring). Not every consumer uses every field — that's expected for
 /// a shared context struct, not a code smell to fix.
+///
+/// `Copy` is sound only because every field is a shared borrow or `bool`; if a future field ever
+/// needs to accumulate results (e.g. an owned `Vec` or a `&mut`), this derive has to go.
 #[derive(Clone, Copy)]
 struct LoadedProject<'a> {
     project_dir: &'a Path,
