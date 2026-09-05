@@ -42,11 +42,27 @@ shipped project:
   `scene_unclaimed_gamepad_bindings: {"South": "join"}` → `rules.ron:58`.
 - **UPDATE 2026-09-05:** the unclaimed-gamepad gap is now CLOSED — the forward check covers all 4
   emit sites.
-- **The 5 hardcoded panel triggers are not checked**, and they are the *higher*-value catch: the
-  designer never types the trigger string, so there's nothing to grep for. Derivable at design
-  time from the presence of `UiNodeDef::InventoryPanel`/`ShopPanel`/`ContainerPanel` in a scene and
-  from `MerchantDef.stock[].item_key` for `buy_item:*`. `3rd_person_game_demo/logic/
-  state_machine.ron:150-172` is the reference wiring.
+- ~~**The 5 hardcoded panel triggers are not checked**~~ **CLOSED 2026-09-05** by
+  `feature/unreachable_trigger_panel_buttons` (verdict ALIGNED): three new `scene.ui` match arms in
+  `check_ui_trigger_reachability` (+ a threaded `prefab_catalog` param), mirroring
+  `collect_reachable_ui_triggers`'s derivation. **Both directions now cover all 4 emit sites + all 5
+  panel triggers.** `3rd_person_game_demo/logic/state_machine.ron:150-172` is the reference wiring
+  (state-scoped `on:`, not `global_on`), and it is the *only* shipped project with any panel node or
+  any `merchant:` prefab — so the whole panel-check surface has exactly one live project gate.
+
+**Directional asymmetry of the `buy_item:` whole-catalog scoping (verified, don't re-litigate):**
+both directions union `MerchantDef.stock[]` across the *entire* prefab catalog, gated only on some
+scene having a `ShopPanel` (which merchant populates a given panel is a runtime `OpenShop` decision,
+not statically knowable). Over-broad is the *safe* direction for `orphan_rule` (fewer warnings) and
+the *strict* direction for `unreachable_trigger` (more errors). A typo'd rule (`buy_item:sord` for
+an item that exists in another merchant's stock) is masked in the reverse direction but **caught by
+the forward one** — the real `buy_item:sword` is left unhandled → exit 1. The pair only both-miss
+when the designer has the typo'd rule *and* a correct rule for the same item (leftover dead rule).
+Two residual nits, neither shipped-visible today (1 merchant, 1 panel scene): the forward check
+**does not dedup** (`HashSet` in the reverse vs. a raw `push` in the forward), so the same item_key
+in two merchants' stock emits two byte-identical errors; and `catalog.prefabs` is a `HashMap`, so
+`buy_item:*` error *ordering* is nondeterministic run-to-run (pre-existing class — the merchant
+`currency_stat`/`item_key` checks already iterate it).
 
 **The reverse direction shipped as `feature/orphan_rule_check` (2026-09-05, `--strict` kind
 `orphan_rule`, verdict ALIGNED):** `collect_reachable_ui_triggers` (union across scenes) +
@@ -72,10 +88,16 @@ check's noise source is a **scene** parse failure (`do_validate:~1952` silently 
 scene from `scenes`, shrinking the reachable set), not a logic one — a logic parse failure yields
 *zero* rules and therefore zero orphan warnings. Gate direction is per-check; don't copy it blindly.
 
-**Drift risk to watch:** the `strip_prefix("ui.")` one-liner now exists twice (scene_loader.rs:1739
-/1765 and validate.rs:1042/1046). The codebase's established fix for exactly this is to hoist a
-predicate into `schema/` so both crates share it (`PrefabDef::is_flycam()` precedent, see
-[[diagnostic-only-feature-pattern]]) — e.g. `impl ButtonDef { pub fn trigger(&self) -> &str }`.
+**Drift risk to watch (now worse):** the `strip_prefix("ui.")` one-liner exists twice, and as of
+2026-09-05 each of the five panel trigger literals exists **three** times — once in the engine
+(`scene_loader.rs:2362/2538/2666/2764`, `action_executor.rs:1439`) and once in *each* of the two
+`validate.rs` functions. All five are unconditional string literals at spawn (no schema field gates
+a panel's close/take-all button — re-verified 2026-09-05), so the CLI's derivation is faithful, but
+nothing but the paired doc comments keeps the three copies aligned. The codebase's established fix
+is to hoist into `schema/` so both crates share it (`PrefabDef::is_flycam()` precedent, see
+[[diagnostic-only-feature-pattern]]) — `pub const PANEL_TRIGGER_CLOSE_SHOP: &str = ...` for the
+literals, plus a shared `fn merchant_buy_triggers(catalog) -> Vec<String>` for the one piece of
+*derivation* (the catalog walk) that both validate functions duplicate.
 
 **Structural note:** `collect_handled_events` (`cli/commands/utils.rs`) re-reads and re-parses
 rules/state_machine/behaviors from disk even though `do_validate` already has all three parsed in
