@@ -1269,6 +1269,11 @@ fn collect_fsm_events(fsm: &StateMachineAsset, events: &mut HashSet<String>) {
 /// would never string-match a button's already-concrete derived event and would be wrongly
 /// reported as unreachable. No shipped behavior file currently handles a `ui.button_pressed:*`
 /// event, so this is theoretical; if one ever does, this check will need `{self}`-aware matching.
+///
+/// This function's own site enumeration is mirrored by `collect_reachable_ui_triggers` below (the
+/// reverse-direction `orphan_rule` check's data source) — keep both in sync if a new UI trigger
+/// site type is ever added here. The `{self}`/`dialogue_choice:` false-positive exclusions above
+/// are also handled there, in `check_orphan_event`.
 fn check_ui_trigger_reachability(
     project_dir: &Path,
     project_config: Option<&ProjectConfig>,
@@ -1520,6 +1525,22 @@ fn check_orphan_event(
     if !event.starts_with("ui.button_pressed:") {
         return;
     }
+    // `dialogue_choice:{n}` is a sixth engine-emitted UiAction::Trigger source (dialogue.rs's
+    // choice buttons), spawned dynamically and never appearing as a UiNodeDef in scene RON --
+    // `collect_reachable_ui_triggers` has no way to enumerate it (there's no fixed set of choice
+    // indices; a dialogue can have any number of nodes/choices), so a rule correctly handling one
+    // would otherwise always look orphaned. Skip rather than false-positive on a working project.
+    if event.starts_with("ui.button_pressed:dialogue_choice:") {
+        return;
+    }
+    // Same false-positive class every other string-key check in this file already guards against
+    // (e.g. stat_label's "{self}." skip): a behavior file's on:/event: pattern can contain a
+    // `{self}` token, substituted against the owning entity's spawn id at match time
+    // (message_interpreter.rs) -- the raw, pre-substitution literal stored here would never
+    // string-match the button's already-concrete derived event.
+    if event.contains('{') {
+        return;
+    }
     if reachable.contains(event) {
         return;
     }
@@ -1545,7 +1566,7 @@ fn strict_checks(
     rules: Option<(&str, &LogicRulesAsset)>,
     state_machine: Option<(&str, &StateMachineAsset)>,
     behaviors: &[(String, StateMachineAsset)],
-    logic_files_parsed_cleanly: bool,
+    orphan_rule_prereqs_clean: bool,
 ) -> Vec<StrictWarning> {
     let mut warnings: Vec<StrictWarning> = Vec::new();
 
@@ -1881,11 +1902,16 @@ fn strict_checks(
         }
     }
 
-    // Same parse-failure protection as `check_ui_trigger_reachability` above: a malformed
-    // rules.ron/state_machine.ron/behavior file already reports its own parse error, and would
-    // otherwise flood this check with a wave of secondary noise once its rules/transitions/
-    // bindings are entirely absent from the two data sets below.
-    if logic_files_parsed_cleanly {
+    // Parse-failure protection, both directions: a malformed rules.ron/state_machine.ron/behavior
+    // file already reports its own parse error, and would flood this check with secondary noise
+    // once its rules/transitions/bindings are entirely absent from the two data sets below (same
+    // reasoning as `check_ui_trigger_reachability`'s own gate). But unlike that forward check, an
+    // unparseable SCENE is an equally real risk here: `do_validate` silently drops any scene that
+    // fails to parse from the `scenes` list, shrinking `collect_reachable_ui_triggers`'s reachable
+    // set -- so a live rule handling that scene's own (now-invisible) button could be wrongly
+    // flagged orphaned. `orphan_rule_prereqs_clean` is true only when BOTH logic files and every
+    // scene parsed cleanly.
+    if orphan_rule_prereqs_clean {
         let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
         warnings.extend(check_orphan_ui_rules(&reachable, rules, state_machine, behaviors));
     }
@@ -2004,6 +2030,10 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
                 || r.rel_path.starts_with("behaviors/")
         })
         .all(|r| r.is_ok());
+    let scenes_parsed_cleanly = file_results
+        .iter()
+        .filter(|r| r.rel_path.starts_with("scenes/"))
+        .all(|r| r.is_ok());
     cross_errors.extend(check_ui_trigger_reachability(
         project_dir,
         project_config.as_ref(),
@@ -2025,7 +2055,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
             rules.as_ref().map(|r| ("logic/rules.ron", r)),
             state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
             &behaviors,
-            logic_files_parsed_cleanly,
+            logic_files_parsed_cleanly && scenes_parsed_cleanly,
         )
     } else {
         Vec::new()

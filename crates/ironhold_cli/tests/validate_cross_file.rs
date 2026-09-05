@@ -1023,7 +1023,12 @@ fn valid_ui_trigger_exits_0() {
 
 /// The reverse direction of `valid_ui_trigger_exits_0`: this fixture's every rule/transition/
 /// binding is matched to exactly one button/binding, so `--strict`'s new `orphan_rule` check must
-/// not false-positive on any of them either.
+/// not false-positive on any of them either. Doubles as a drift guard for
+/// `collect_reachable_ui_triggers` (the orphan check's data source, deliberately a separate
+/// function from `check_ui_trigger_reachability` rather than a refactor of it) — the fixture
+/// exercises all six trigger-source shapes (global/scene key bindings, global/scene unclaimed
+/// gamepad bindings, `Button`, `IconButton`), so losing coverage of any one of them here would
+/// fail this test, not just silently diverge from the forward check.
 #[test]
 fn valid_ui_trigger_strict_exits_0() {
     let (code, stdout) = validate_strict("valid_ui_trigger");
@@ -1055,4 +1060,23 @@ fn orphan_ui_rule_strict_exits_1() {
 fn valid_panel_triggers_no_orphan_strict_exits_0() {
     let (code, stdout) = validate_strict("valid_panel_triggers_no_orphan");
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}
+
+/// A malformed scene must not cascade into a bogus `orphan_rule` warning for the rule that would
+/// otherwise be reachable via that scene's own (now-unparseable) button -- the orphan check is
+/// skipped entirely whenever any scene failed to parse, mirroring `check_ui_trigger_reachability`'s
+/// existing logic-file parse-failure protection but for the opposite data set.
+#[test]
+fn bad_scene_parse_does_not_cascade_into_orphan_rule_strict_exits_1() {
+    let (code, stdout) = validate_strict("bad_scene_parse_no_orphan_cascade");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("Expected comma"),
+        "expected the scene parse error reported in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("Strict checks") && !stdout.contains("wired_trigger"),
+        "a scene parse error must not also produce a bogus orphan_rule report for the \
+         (would-be-correctly-wired) rule:\n{stdout}"
+    );
 }

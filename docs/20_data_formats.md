@@ -4057,6 +4057,8 @@ Used when `state_machine_path` is set in the project config (schema v3). Replace
 
 Execution order on transition: `exit_actions` of old state → state change → `entry_actions` of new state.
 
+A `ui.button_pressed:{trigger}`-shaped `on:`/`event:` (in `rules.ron`'s `LogicRule.on`, an `FsmState.on[].event`, an `FsmTransition.on`, or `global_on[].event` — including inside a `behaviors/*.behavior.ron` file) that no button, key binding, or gamepad binding anywhere in the project can ever fire is reported by `ironhold_cli validate --strict` as `orphan_rule` — the reverse of `unreachable_trigger`.
+
 ---
 
 ## `stats.ron` — StatCatalog ✅
