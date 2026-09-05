@@ -1,5 +1,6 @@
 # Memory Index
 
+- [TargetingPlugin's 3 PlayerTarget writers are unordered](project_targeting_systems_unordered_ambiguity.md) — plain unchained tuple, no ordering vs action_bar/interpreter; single-core affinity (40/40 fail) is the decisive probe for executor-order flakes
 - ["flycam" tag's three silent drops](project_flycam_tag_silent_semantics.md) — tag discards the prefab's own GLB model, last flycam entity wins, player beats flycam — all warn-free; Prop vs Actor has zero runtime divergence (verified from pixels)
 - [Browser pixel-probe recipe](project_browser_pixel_probe_recipe.md) — committed pkg/ + serve.py renders RON edits with no rebuild, but headless Chromium has NO WebGPU adapter here (fake "blank screen"); use headless=False + --enable-unsafe-webgpu
 - [Test harness latches keyboard just_pressed](project_test_harness_just_pressed_latch.md) — setup_test_app omits InputPlugin so just_pressed never clears; release() alone doesn't help, need clear_just_pressed; silently makes multi-update keyboard tests vacuous (gamepads unaffected)
