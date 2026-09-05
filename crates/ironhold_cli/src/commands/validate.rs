@@ -1278,6 +1278,7 @@ fn check_ui_trigger_reachability(
     project_dir: &Path,
     project_config: Option<&ProjectConfig>,
     scenes: &[(String, GameSceneV2)],
+    prefab_catalog: Option<&PrefabCatalog>,
     rules: Option<&LogicRulesAsset>,
     state_machine: Option<&StateMachineAsset>,
     behaviors: &[(String, StateMachineAsset)],
@@ -1370,6 +1371,55 @@ fn check_ui_trigger_reachability(
                         "when clicked", "clicking it will do nothing",
                     );
                 }
+                // The five engine-hardcoded panel triggers (scene_loader.rs's panel-spawn sites,
+                // action_executor.rs's per-MerchantDef.stock[] entry) are UiAction::Trigger
+                // strings a designer never types as a Button.action -- they're emitted internally
+                // by the panel's own built-in close/buy button. A project that adds one of these
+                // panels and forgets the matching rule ships a panel whose close/buy button is
+                // silently dead -- worse than the authored-button case above, since there's no
+                // action: string in the designer's own RON to spot the mistake from. Mirrors
+                // collect_reachable_ui_triggers's identical panel-presence-gated derivation
+                // (the reverse check's data source) -- keep both in sync.
+                UiNodeDef::InventoryPanel(panel) => {
+                    check(
+                        &mut errors, scene_path, format!("InventoryPanel {:?}", panel.id), "close_inventory",
+                        "when its close button is clicked", "clicking it will do nothing",
+                    );
+                }
+                UiNodeDef::ShopPanel(panel) => {
+                    check(
+                        &mut errors, scene_path, format!("ShopPanel {:?}", panel.id), "close_shop",
+                        "when its close button is clicked", "clicking it will do nothing",
+                    );
+                    // Scoped to the whole prefab catalog, not just merchants placed in this scene:
+                    // ShopPanel is a single generic widget populated at runtime by whichever
+                    // entity's Action::OpenShop names it, so which merchant's stock actually shows
+                    // here isn't statically knowable -- same union-across-the-catalog
+                    // approximation collect_reachable_ui_triggers already uses.
+                    if let Some(catalog) = prefab_catalog {
+                        for prefab in catalog.prefabs.values() {
+                            let Some(merchant) = &prefab.merchant else { continue };
+                            for entry in &merchant.stock {
+                                check(
+                                    &mut errors, scene_path,
+                                    format!("ShopPanel {:?}'s buy button for item_key {:?}", panel.id, entry.item_key),
+                                    &format!("buy_item:{}", entry.item_key),
+                                    "when clicked", "buying it will do nothing",
+                                );
+                            }
+                        }
+                    }
+                }
+                UiNodeDef::ContainerPanel(panel) => {
+                    check(
+                        &mut errors, scene_path, format!("ContainerPanel {:?}", panel.id), "close_container",
+                        "when its close button is clicked", "clicking it will do nothing",
+                    );
+                    check(
+                        &mut errors, scene_path, format!("ContainerPanel {:?}", panel.id), "take_all_from_container",
+                        "when its take-all button is clicked", "clicking it will do nothing",
+                    );
+                }
                 _ => {}
             }
         }
@@ -1393,9 +1443,9 @@ fn check_ui_trigger_reachability(
 /// panel's own built-in close/buy button is clicked, so they'd otherwise false-positive as
 /// orphaned every time `check_orphan_ui_rules` sees the (correct, live) state-machine rule that
 /// handles one — confirmed against `3rd_person_game_demo`'s real `ShopPanel`/`InventoryPanel`/
-/// `ContainerPanel` usage before this was added. The *forward* direction (`unreachable_trigger`)
-/// still doesn't cover these five — see `planning/backlog.md`'s "doesn't cover the five
-/// engine-hardcoded panel triggers" entry, deliberately left open, out of scope here.
+/// `ContainerPanel` usage before this was added. The *forward* direction
+/// (`check_ui_trigger_reachability`'s own panel match arms, above) now also covers these five,
+/// checking the opposite question: does a scene with one of these panels have a matching rule?
 fn collect_reachable_ui_triggers(
     project_config: Option<&ProjectConfig>,
     scenes: &[(String, GameSceneV2)],
@@ -2038,6 +2088,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         project_dir,
         project_config.as_ref(),
         &scenes,
+        prefab_catalog.as_ref(),
         rules.as_ref(),
         state_machine.as_ref(),
         &behaviors,

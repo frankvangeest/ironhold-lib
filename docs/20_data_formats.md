@@ -1335,7 +1335,7 @@ DialoguePanel((
 
 #### `InventoryPanel((...))` ✅
 
-A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`.
+A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `rules.ron`/`state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`).
 
 When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon_index` (from `items.ron`); a small count label (`x3`) appears in the corner for stacks greater than 1.
 
@@ -1374,7 +1374,7 @@ InventoryPanel((
 
 A scrollable list of merchant stock entries. Always positioned absolutely. Hidden by default; shown by `OpenShop(merchant_id)` and hidden by `CloseShop`. Stock is repopulated from the merchant's `MerchantDef` every time `OpenShop` fires. Requires `items_path` to be set in `project.ron`.
 
-> **v1 scope note:** The shop panel is display-only. It shows item names, prices, and stock counts but does not yet process buy/sell transactions.
+> **v1 scope note:** `Action::BuyItem` is fully implemented — it checks stock, deducts `buy_price` from the player's `currency_stat`, adds the item to the player's inventory, and emits `item.bought:{item_key}`. **Selling is still not implemented** — `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet. See "MerchantDef fields" below.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1393,11 +1393,11 @@ ShopPanel((
 )),
 ```
 
-> **Close button**: the ShopPanel now spawns its own close button as an embedded child (header row). No standalone `Button` is needed alongside the panel. The button fires `ui.button_pressed:close_shop` → `CloseShop`.
+> **Close button**: the ShopPanel now spawns its own close button as an embedded child (header row). No standalone `Button` is needed alongside the panel. The button fires `ui.button_pressed:close_shop` → `CloseShop`. `ironhold_cli validate` cross-checks `close_shop`, and `buy_item:{item_key}` for every merchant prefab's `stock[].item_key`, against `rules.ron`/`state_machine.ron`/behavior files whenever a `ShopPanel` is present in a scene (`unreachable_trigger`) — see "MerchantDef fields" above for the reference wiring.
 
 #### `ContainerPanel((...))` ✅
 
-A slot grid that displays a container entity's `Inventory` (chest, crate, etc.). Always positioned absolutely. Hidden by default; shown by `OpenContainer(entity_id)` and hidden by `CloseContainer`. Includes an embedded close button and a "Take All" button. Requires `items_path` to be set in `project.ron`.
+A slot grid that displays a container entity's `Inventory` (chest, crate, etc.). Always positioned absolutely. Hidden by default; shown by `OpenContainer(entity_id)` and hidden by `CloseContainer`. Includes an embedded close button and a "Take All" button. Requires `items_path` to be set in `project.ron`. The close button fires `ui.button_pressed:close_container`, the take-all button fires `ui.button_pressed:take_all_from_container` — `ironhold_cli validate` cross-checks both against `rules.ron`/`state_machine.ron`/behavior files whenever a `ContainerPanel` is present in a scene (`unreachable_trigger`).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

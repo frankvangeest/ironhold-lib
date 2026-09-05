@@ -1000,7 +1000,7 @@ fn bad_rules_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
         "expected the rules.ron parse error reported in output:\n{stdout}"
     );
     assert!(
-        !stdout.contains("unreachable_trigger") && !stdout.contains("wired_button"),
+        !stdout.contains("wired_button"),
         "a rules.ron parse error must not also produce unreachable_trigger noise for its \
          (would-be-correctly-wired) button:\n{stdout}"
     );
@@ -1060,6 +1060,46 @@ fn orphan_ui_rule_strict_exits_1() {
 fn valid_panel_triggers_no_orphan_strict_exits_0() {
     let (code, stdout) = validate_strict("valid_panel_triggers_no_orphan");
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}
+
+/// The same fixture also proves the *forward* direction: a scene with `InventoryPanel`/
+/// `ShopPanel`/`ContainerPanel`, each correctly wired to a matching rule, must not false-positive
+/// as `unreachable_trigger` either.
+#[test]
+fn valid_panel_triggers_no_orphan_exits_0() {
+    let (code, stdout) = validate("valid_panel_triggers_no_orphan");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// A scene with `InventoryPanel`/`ShopPanel`/`ContainerPanel` but no matching rule for any of
+/// their five built-in triggers -- these panels' own close/buy buttons will silently do nothing.
+/// Worse than the authored-button case: there's no `action:` string in the designer's own RON to
+/// spot the mistake from, only the panel's mere presence.
+#[test]
+fn bad_panel_trigger_unreachable_exits_1() {
+    let (code, stdout) = validate("bad_panel_trigger_unreachable");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("InventoryPanel") && stdout.contains("ui.button_pressed:close_inventory"),
+        "expected the unreachable InventoryPanel close trigger in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ShopPanel") && stdout.contains("ui.button_pressed:close_shop"),
+        "expected the unreachable ShopPanel close trigger in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("buy_item:sword") && stdout.contains("ui.button_pressed:buy_item:sword"),
+        "expected the unreachable ShopPanel buy trigger (derived from the merchant's stock) in \
+         output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ContainerPanel") && stdout.contains("ui.button_pressed:close_container"),
+        "expected the unreachable ContainerPanel close trigger in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ui.button_pressed:take_all_from_container"),
+        "expected the unreachable ContainerPanel take-all trigger in output:\n{stdout}"
+    );
 }
 
 /// A malformed scene must not cascade into a bogus `orphan_rule` warning for the rule that would
