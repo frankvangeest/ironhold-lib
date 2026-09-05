@@ -1000,7 +1000,7 @@ fn bad_rules_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
         "expected the rules.ron parse error reported in output:\n{stdout}"
     );
     assert!(
-        !stdout.contains("wired_button"),
+        !stdout.contains("wired_button") && !stdout.contains("but no rule/transition/binding"),
         "a rules.ron parse error must not also produce unreachable_trigger noise for its \
          (would-be-correctly-wired) button:\n{stdout}"
     );

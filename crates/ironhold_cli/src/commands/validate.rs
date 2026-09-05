@@ -1279,6 +1279,7 @@ fn check_ui_trigger_reachability(
     project_config: Option<&ProjectConfig>,
     scenes: &[(String, GameSceneV2)],
     prefab_catalog: Option<&PrefabCatalog>,
+    actions: &[(String, Action)],
     rules: Option<&LogicRulesAsset>,
     state_machine: Option<&StateMachineAsset>,
     behaviors: &[(String, StateMachineAsset)],
@@ -1295,6 +1296,29 @@ fn check_ui_trigger_reachability(
 
     let mut errors = Vec::new();
     let handled = collect_handled_events(rules, state_machine, behaviors);
+
+    // Which prefab keys are actually placed/spawnable anywhere in this project -- mirrors
+    // strict_checks's own `used_prefabs` computation (scene entities, join_prefab_keys hot-join
+    // slots, and Action::Spawn). Used below to scope the ShopPanel buy_item derivation to
+    // merchants that could actually be opened, not every merchant in the whole catalog: unlike
+    // collect_reachable_ui_triggers (where over-approximating only ever suppresses a --strict
+    // orphan warning, a false negative), over-approximating here would fabricate a hard
+    // unreachable_trigger error for a merchant prefab nobody has placed yet -- a real, disruptive
+    // false positive at error severity, not just a suppressed warning.
+    let mut used_prefabs: HashSet<&str> = HashSet::new();
+    for (_, scene) in scenes {
+        for entity in &scene.entities {
+            used_prefabs.insert(&entity.prefab);
+        }
+        for entry in scene.join_prefab_keys.iter().flatten() {
+            used_prefabs.insert(entry);
+        }
+    }
+    for (_, action) in actions {
+        if let Action::Spawn { prefab, .. } = action {
+            used_prefabs.insert(prefab);
+        }
+    }
 
     // `verb`/`consequence` phrase the message correctly for each trigger source — a key/gamepad
     // binding is never "clicked," and saying so is actively misleading (a designer debugging a
@@ -1391,22 +1415,32 @@ fn check_ui_trigger_reachability(
                         &mut errors, scene_path, format!("ShopPanel {:?}", panel.id), "close_shop",
                         "when its close button is clicked", "clicking it will do nothing",
                     );
-                    // Scoped to the whole prefab catalog, not just merchants placed in this scene:
+                    // Scoped to every PLACED merchant in the project (any scene entity,
+                    // join_prefab_keys slot, or Action::Spawn), not the whole prefab catalog:
                     // ShopPanel is a single generic widget populated at runtime by whichever
                     // entity's Action::OpenShop names it, so which merchant's stock actually shows
-                    // here isn't statically knowable -- same union-across-the-catalog
-                    // approximation collect_reachable_ui_triggers already uses.
+                    // here isn't statically knowable, and unioning across every placed merchant is
+                    // the safe over-approximation for a hard error (unlike
+                    // collect_reachable_ui_triggers's whole-catalog union, which only ever
+                    // suppresses a --strict warning -- reusing that same width here would
+                    // fabricate a hard error for a merchant prefab nobody has placed yet).
+                    // Deduplicated via a sorted set (not the raw per-stock-entry loop) so two
+                    // merchants stocking the same item_key -- or the same merchant listing it
+                    // twice -- produce one error, not a byte-identical repeat, and so the report
+                    // order is deterministic rather than following HashMap iteration order.
                     if let Some(catalog) = prefab_catalog {
-                        for prefab in catalog.prefabs.values() {
-                            let Some(merchant) = &prefab.merchant else { continue };
-                            for entry in &merchant.stock {
-                                check(
-                                    &mut errors, scene_path,
-                                    format!("ShopPanel {:?}'s buy button for item_key {:?}", panel.id, entry.item_key),
-                                    &format!("buy_item:{}", entry.item_key),
-                                    "when clicked", "buying it will do nothing",
-                                );
-                            }
+                        let item_keys: std::collections::BTreeSet<&str> = catalog.prefabs.iter()
+                            .filter(|(key, _)| used_prefabs.contains(key.as_str()))
+                            .filter_map(|(_, p)| p.merchant.as_ref())
+                            .flat_map(|m| m.stock.iter().map(|e| e.item_key.as_str()))
+                            .collect();
+                        for item_key in item_keys {
+                            check(
+                                &mut errors, scene_path,
+                                format!("ShopPanel {:?}'s buy button for item_key {:?}", panel.id, item_key),
+                                &format!("buy_item:{item_key}"),
+                                "when clicked", "buying it will do nothing",
+                            );
                         }
                     }
                 }
@@ -1431,10 +1465,11 @@ fn check_ui_trigger_reachability(
 /// Every `ui.button_pressed:{trigger}` event derivable from this project's buttons/key/gamepad
 /// bindings, unioned across all scenes — mirrors `check_ui_trigger_reachability`'s own site
 /// enumeration exactly (global/scene key bindings, global/scene unclaimed gamepad bindings,
-/// scene `Button`/`IconButton` nodes); keep both in sync if a new UI trigger site type is ever
-/// added. Feeds `check_orphan_ui_rules` below — the same "same two data sets" backing both
-/// directions of the reachability question (forward: does a button/binding's fire resolve to a
-/// handled rule; reverse: does a rule's `on:` resolve to some button/binding that can fire it).
+/// scene `Button`/`IconButton` nodes, and its `InventoryPanel`/`ShopPanel`/`ContainerPanel` match
+/// arms below); keep both in sync if a new UI trigger site type is ever added. Feeds
+/// `check_orphan_ui_rules` below — the same "same two data sets" backing both directions of the
+/// reachability question (forward: does a button/binding's fire resolve to a handled rule;
+/// reverse: does a rule's `on:` resolve to some button/binding that can fire it).
 ///
 /// Also includes the five engine-hardcoded panel triggers (`close_inventory`/`close_shop`/
 /// `close_container`/`take_all_from_container`/`buy_item:{item_key}`, `scene_loader.rs`'s
@@ -2089,6 +2124,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         project_config.as_ref(),
         &scenes,
         prefab_catalog.as_ref(),
+        &all_actions,
         rules.as_ref(),
         state_machine.as_ref(),
         &behaviors,
