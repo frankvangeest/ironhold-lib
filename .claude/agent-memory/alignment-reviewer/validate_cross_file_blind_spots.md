@@ -17,6 +17,16 @@ runtime actually resolves against, and is the coverage complete?"
 **Why:** every check in this file is a hand-written match arm or hand-written catalog walk, so
 coverage drifts field-by-field rather than being enforced by the compiler.
 
+**Context plumbing is now `struct LoadedProject<'a>`** (`feature/loaded_project_refactor`,
+2026-09-05): `cross_file_checks`/`check_ui_trigger_reachability`/`strict_checks` each take one
+`Copy` struct and destructure it with `..` into the same local names their bodies always used, so
+adding a new *input* to a check is now one struct field + one name in that check's destructure
+(no 3-signature/positional-call-site churn). Practical consequence for review: the structural fix
+for the `source_file`-literal lie below (thread each catalog's resolved path in) went from
+"+4 params × 3 signatures" to a couple of lines — stop treating it as expensive. Only genuinely
+swappable pair in the struct literal is `logic_files_parsed_cleanly`/`scenes_parsed_cleanly`
+(both `bool`); every other field has a distinct type, so a mis-assignment can't compile.
+
 **How to apply — the four recurring blind spots:**
 
 1. ~~**`do_validate` hardcodes `"stats/stats.ron"`**~~ **CLOSED** by

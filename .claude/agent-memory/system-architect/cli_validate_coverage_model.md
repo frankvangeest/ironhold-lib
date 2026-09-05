@@ -12,13 +12,26 @@ silently vanish — validate exits 0 and reports nothing.
 
 **There are exactly two severity tiers, and no mid-tier "warning" in the default run.**
 `CrossFileError` (pushed in `cross_file_checks`) is *always* a hard error → exit 1. The only softer
-signal is `StrictWarning`, produced by `strict_checks(asset_catalog, prefab_catalog, scenes,
-actions)` and surfaced **only** under `--strict` (still exit 1 when present). Any proposed check
-described as "a warning, not an error" therefore belongs in `strict_checks`, not as a
-`CrossFileError` push — plan docs routinely get this backwards. `strict_checks` already receives
-`scenes` + `prefab_catalog`, so heuristic scene↔player-prefab checks fit there with no plumbing;
-`jump_cannot_clear_ground_sensor` / `negative_coyote_time_secs` are the precedent (both are
-`--strict` warnings even though `crates/ironhold_core/src/CLAUDE.md` calls them "errors").
+signal is `StrictWarning`, produced by `strict_checks` and surfaced **only** under `--strict`
+(still exit 1 when present). Any proposed check described as "a warning, not an error" therefore
+belongs in `strict_checks`, not as a `CrossFileError` push — plan docs routinely get this
+backwards. `jump_cannot_clear_ground_sensor` / `negative_coyote_time_secs` are the precedent (both
+are `--strict` warnings even though `crates/ironhold_core/src/CLAUDE.md` calls them "errors").
+
+**Plumbing is a solved problem as of `feature/loaded_project_refactor` (2026-09-05).** All three
+of `cross_file_checks` / `check_ui_trigger_reachability` / `strict_checks` now take a single
+`project: LoadedProject` (a private `#[derive(Clone, Copy)] struct LoadedProject<'a>` in
+`validate.rs`, ~13 fields of `&`/`Option<&>`/`&[]`/`bool`, built once in `do_validate`), and each
+destructures with a trailing `..`. Practical consequence when scoping any *future* check: "which
+params does it already receive?" is no longer a design question — every one of them sees
+`project_dir`, all four catalogs, `scenes`, `actions`, `rules`/`state_machine` (as
+`Option<(source_path, &asset)>`), `behaviors`, and both parse-cleanliness bools for free, and
+adding a new field costs one line at the struct + one at construction with **zero** consumer
+churn (the `..` absorbs it). So never propose "…but that would need plumbing" as a cost against a
+check in this file again; do still note that `..` means a newly added field silently reaches no
+consumer until one destructures it. Note also `dialogues` is parsed by `do_validate` but is
+deliberately *not* a struct field yet — the first of items 4's dialogue referential checks to land
+should add it rather than take a parameter.
 
 Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold_cli/src/commands/validate.rs`:
 
