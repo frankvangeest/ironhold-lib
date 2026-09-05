@@ -185,11 +185,15 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
         return None;
     }
     if let Some(problem) = path_case_mismatch(project_dir, path) {
+        // Unlike the missing-file case above, this file exists and parses fine on this machine —
+        // only the reference's casing is wrong. Report the problem but still parse it, so a
+        // mis-cased catalog path doesn't also silently disable every downstream check that
+        // depends on this catalog having loaded (a designer who fixes the casing shouldn't then
+        // be ambushed by a fresh wave of unrelated errors that were there all along).
         results.push(FileResult {
             rel_path: path.to_string(),
             errors: vec![format!("{field_name} {problem}")],
         });
-        return None;
     }
     try_parse(project_dir, path, results)
 }
@@ -202,22 +206,37 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
 /// `None` if the path matches exactly or doesn't exist at all -- the caller's own
 /// `exists()`/`is_file()` check already reports the latter case, so callers should only invoke
 /// this after that check has passed.
+/// Known non-coverage (deliberately left silent, i.e. treated as "no problem", rather than risking
+/// a false positive): a `.`/`..`/empty path segment (e.g. `"scenes/../scenes/main.scene.ron"`,
+/// `"scenes//main.scene.ron"`) bails out of the walk below via `?` before ever reaching the
+/// mismatch comparison; no shipped project or fixture authors paths this way. Case-folding for the
+/// exact-match fallback uses `str::to_lowercase` (full Unicode), but the *authored* string is
+/// compared byte-for-byte, so a non-ASCII filename that differs only in Unicode normalization form
+/// (NFC vs NFD, e.g. on a macOS volume) could still slip through as a false negative.
 fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String> {
     if authored_path.contains('\\') {
         return Some(
-            "uses a backslash (`\\`) path separator -- author with forward slashes (`/`) only; \
-             Windows resolves either locally, but the WASM/browser build serves assets over HTTP, \
-             which only understands `/`"
+            "uses a backslash (`\\`) path separator — author with forward slashes (`/`) only; \
+             Windows resolves either locally, but the web build serves assets over HTTP, which \
+             only understands `/`"
                 .to_string(),
         );
     }
     let mut current_dir = project_dir.to_path_buf();
     let mut real_components: Vec<String> = Vec::new();
     for component in authored_path.split('/') {
-        let real_name = std::fs::read_dir(&current_dir)
-            .ok()?
-            .flatten()
-            .find(|entry| entry.file_name().to_string_lossy().eq_ignore_ascii_case(component))
+        let entries: Vec<_> = std::fs::read_dir(&current_dir).ok()?.flatten().collect();
+        // Prefer a byte-exact match so a project that legitimately has both `Main.scene.ron` and
+        // `main.scene.ron` on a case-sensitive filesystem never has its correct reference flagged
+        // just because a case-insensitively-equal sibling also exists.
+        let real_name = entries
+            .iter()
+            .find(|entry| entry.file_name().to_string_lossy() == component)
+            .or_else(|| {
+                entries.iter().find(|entry| {
+                    entry.file_name().to_string_lossy().to_lowercase() == component.to_lowercase()
+                })
+            })
             .map(|entry| entry.file_name().to_string_lossy().into_owned())?;
         current_dir.push(&real_name);
         real_components.push(real_name);
@@ -225,8 +244,9 @@ fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String>
     let real_path = real_components.join("/");
     (real_path != authored_path).then(|| {
         format!(
-            "resolves on disk to {real_path:?}, not the authored casing {authored_path:?} -- the \
-             WASM/browser build serves assets over a case-sensitive HTTP path and will 404"
+            "resolves on disk to {real_path:?} instead — the web build serves assets over a \
+             case-sensitive HTTP path and will 404 on this casing; either rename the reference to \
+             match, or rename the file on disk"
         )
     })
 }

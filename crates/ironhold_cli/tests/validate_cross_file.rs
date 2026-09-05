@@ -119,24 +119,32 @@ fn missing_initial_scene_exits_1() {
 fn wrong_case_scene_path_exits_1() {
     // Real file on disk is scenes/main.scene.ron; the LoadScene action authors "Main" (capital M).
     // Path::exists() is case-insensitive on NTFS so this would otherwise validate clean while
-    // 404ing over HTTP in the actual WASM/browser build.
+    // 404ing over HTTP in the actual WASM/browser build. On a case-sensitive filesystem (Linux/
+    // macOS/WSL/a per-directory case-sensitive NTFS dir) `exists()` itself fails for the wrong
+    // case, so this falls through to the pre-existing "not found on disk" message instead — still
+    // exit 1, just not proof of the new check specifically. Accept either.
     let (code, stdout) = validate("bad_scene_path_case");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        stdout.contains("resolves on disk to") && stdout.contains("main.scene.ron"),
-        "expected the case-mismatch message naming the real on-disk casing:\n{stdout}"
+        (stdout.contains("resolves on disk to") && stdout.contains("main.scene.ron"))
+            || stdout.contains("not found on disk"),
+        "expected the case-mismatch or missing-file message in output:\n{stdout}"
     );
 }
 
 #[test]
 fn backslash_scene_path_exits_1() {
     // Path::join accepts `\` on Windows, so a backslash-separated authored path resolves locally
-    // even though the WASM/browser build only understands `/`.
+    // even though the WASM/browser build only understands `/`. On a case-sensitive/Unix-like
+    // filesystem `\` is a literal filename character, so this falls through to the pre-existing
+    // "not found on disk" message instead — still exit 1, just not proof of the new check
+    // specifically. Accept either.
     let (code, stdout) = validate("bad_scene_path_backslash");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        stdout.contains("backslash") && stdout.contains("forward slashes"),
-        "expected the backslash-separator message in output:\n{stdout}"
+        (stdout.contains("backslash") && stdout.contains("forward slashes"))
+            || stdout.contains("not found on disk"),
+        "expected the backslash-separator or missing-file message in output:\n{stdout}"
     );
 }
 
@@ -150,12 +158,29 @@ fn matching_case_scene_path_exits_0() {
 fn wrong_case_configured_catalog_path_exits_1() {
     // Real file on disk is data/subdir/my_prefabs.ron; prefab_catalog authors "Subdir" (capital
     // S) in .project.ron. Exercises the load_configured_catalog call site specifically, not the
-    // action/scene-path sites the other three tests above cover.
+    // action/scene-path sites the other three tests above cover. See the case-sensitive-filesystem
+    // caveat on wrong_case_scene_path_exits_1 above — same fallback applies here.
     let (code, stdout) = validate("bad_prefab_catalog_path_case");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        stdout.contains("resolves on disk to") && stdout.contains("subdir/my_prefabs.ron"),
-        "expected the case-mismatch message naming the real on-disk casing:\n{stdout}"
+        (stdout.contains("resolves on disk to") && stdout.contains("subdir/my_prefabs.ron"))
+            || stdout.contains("does not exist on disk"),
+        "expected the case-mismatch or missing-path message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn wrong_case_configured_catalog_path_still_parses_and_checks_downstream() {
+    // Regression guard: a case-mismatched (but locally readable) configured catalog path must
+    // still be parsed, not just reported and dropped — otherwise every check that depends on the
+    // catalog having loaded (here, the scene's typo'd prefab key) silently vanishes until the
+    // designer fixes the casing, ambushing them with a fresh wave of unrelated errors afterward.
+    let (_, stdout) = validate("bad_prefab_catalog_path_case");
+    assert!(
+        stdout.contains("typo_prefab_key_not_in_catalog")
+            && stdout.contains("not found in prefabs.ron"),
+        "expected the scene's missing_prefab error to still fire despite the catalog-path case \
+         mismatch:\n{stdout}"
     );
 }
 
