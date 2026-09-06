@@ -155,6 +155,43 @@ fn matching_case_scene_path_exits_0() {
 }
 
 #[test]
+fn scene_outside_convention_dir_is_parsed_and_cross_checked_exits_1() {
+    // A scene path referenced by a LoadScene action but living outside scenes/ used to be
+    // existence-checked only -- its contents (here, an entity referencing a nonexistent prefab)
+    // were never parsed or cross-checked at all. do_validate now folds any such path into the
+    // same scenes list a conventionally-placed scene participates in.
+    let (code, stdout) = validate("scene_outside_convention_dir_validated");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("levels/custom.scene.ron")
+            && stdout.contains("missing_prefab_outside_convention")
+            && stdout.contains("not found in prefabs.ron"),
+        "expected a missing_prefab error attributed to the out-of-convention scene:\n{stdout}"
+    );
+}
+
+#[test]
+fn initial_scene_outside_convention_dir_is_parsed_and_cross_checked_exits_1() {
+    // Same gap, but via ProjectConfig.initial_scene rather than a LoadScene action.
+    let (code, stdout) = validate("initial_scene_outside_convention_dir_validated");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("boot/main.scene.ron")
+            && stdout.contains("missing_prefab_via_initial_scene")
+            && stdout.contains("not found in prefabs.ron"),
+        "expected a missing_prefab error attributed to the out-of-convention initial_scene:\n{stdout}"
+    );
+}
+
+#[test]
+fn valid_scene_outside_convention_dir_exits_0() {
+    // Positive control: a well-formed scene living outside scenes/, reached via a LoadScene
+    // action, should not trip anything just by being discovered and parsed.
+    let (code, stdout) = validate("valid_scene_outside_convention_dir");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+#[test]
 fn wrong_case_configured_catalog_path_exits_1() {
     // Real file on disk is data/subdir/my_prefabs.ron; prefab_catalog authors "Subdir" (capital
     // S) in .project.ron. Exercises the load_configured_catalog call site specifically, not the

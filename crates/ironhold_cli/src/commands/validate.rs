@@ -2369,6 +2369,42 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &dialogues,
     );
 
+    // A scene path authored outside the `scenes/` convention (`Action::LoadScene`/
+    // `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, or `ProjectConfig.initial_scene`) was
+    // previously only existence/case-checked, never parsed -- so its contents (entities, ui,
+    // camera_modes, spawn_points, ...) were invisible to every cross-file check that walks
+    // `scenes`. Parse and fold in any such path here too, so it participates exactly like a
+    // conventionally-placed scene from this point on. A path that doesn't exist is silently
+    // skipped (`try_parse`'s own contract) -- the existing exists()-check in `cross_file_checks`
+    // already reports that separately; a `{self}`/`{target}`-templated path (e.g. a hypothetical
+    // future dynamic scene reference) is likewise never a real file and skips the same way. In
+    // every shipped project today `initial_scene`/every `LoadScene`-family path already lives
+    // under `scenes/` and was already parsed by the glob above, so this whole block is inert.
+    let already_parsed_scenes: HashSet<&str> = scenes.iter().map(|(p, _)| p.as_str()).collect();
+    let mut extra_scene_paths: Vec<&str> = Vec::new();
+    if let Some(config) = &project_config {
+        if !already_parsed_scenes.contains(config.initial_scene.as_str()) {
+            extra_scene_paths.push(&config.initial_scene);
+        }
+    }
+    for (_, action) in &all_actions {
+        if let Action::LoadScene(path)
+        | Action::LoadSceneOverlay(path)
+        | Action::PreloadScene(path)
+        | Action::ToggleOverlay(path) = action
+        {
+            if !already_parsed_scenes.contains(path.as_str()) && !extra_scene_paths.contains(&path.as_str()) {
+                extra_scene_paths.push(path);
+            }
+        }
+    }
+    let extra_scene_paths: Vec<String> = extra_scene_paths.into_iter().map(String::from).collect();
+    for path in &extra_scene_paths {
+        if let Some(scene) = try_parse::<GameSceneV2>(project_dir, path, &mut file_results) {
+            scenes.push((path.clone(), scene));
+        }
+    }
+
     let logic_files_parsed_cleanly = file_results
         .iter()
         .filter(|r| {
@@ -2377,9 +2413,10 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
                 || r.rel_path.starts_with("behaviors/")
         })
         .all(|r| r.is_ok());
+    let extra_scene_path_set: HashSet<&str> = extra_scene_paths.iter().map(String::as_str).collect();
     let scenes_parsed_cleanly = file_results
         .iter()
-        .filter(|r| r.rel_path.starts_with("scenes/"))
+        .filter(|r| r.rel_path.starts_with("scenes/") || extra_scene_path_set.contains(r.rel_path.as_str()))
         .all(|r| r.is_ok());
 
     let project = LoadedProject {
