@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    name: "main",
+    camera_modes: {
+        "aerial": Orbit((
+            offset: (0.0, 2.5, 8.0),
+            look_at_offset: (0.0, 1.0, 0.0),
+            zoom_speed: 8.0,
+            orbit_speed: 0.4,
+            min_radius: 3.0,
+            max_radius: 18.0,
+            party: (zoom_margin: 4.0),
+        )),
+    },
+)

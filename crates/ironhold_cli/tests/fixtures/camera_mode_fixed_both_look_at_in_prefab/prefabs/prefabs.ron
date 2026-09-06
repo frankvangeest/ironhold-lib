@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "bad_fixed_camera_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                camera_mode: Fixed((
+                    position: (0.0, 5.0, 0.0),
+                    look_at: (0.0, 0.0, 0.0),
+                    look_at_entity: "target_01",
+                )),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

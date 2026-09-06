@@ -251,6 +251,53 @@ fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String>
     })
 }
 
+/// Structural authoring-mistake checks for one `CameraModeDef`, shared between prefab-authored
+/// `camera_mode:` and a scene's `camera_modes:` registry entries -- both silently parse fine and
+/// only warn at runtime today (`entity_spawner.rs`'s spawn-time match arms), with no
+/// `ironhold_cli validate` counterpart. `context` names where this mode came from (e.g.
+/// `"prefab \"goblin\": camera_mode"` or `"camera_modes: preset \"aerial\""`) so the message reads
+/// naturally without the caller having to repeat this function's own wording; callers attach
+/// their own `source_file`. Returns `(message, error_type)` pairs, not full `CrossFileError`s --
+/// registry entries and prefab entries use different `source_file` values, and the registry
+/// caller has its own additional checks (reserved key, `Party` rejection, `look_at_entity`
+/// existence) that need scene context this function deliberately doesn't take.
+fn validate_camera_mode_def(mode: &CameraModeDef, context: &str) -> Vec<(String, &'static str)> {
+    let mut problems = Vec::new();
+    if let CameraModeDef::Orbit(cfg) = mode {
+        if cfg.split.is_some() || cfg.party.is_some() {
+            problems.push((
+                format!(
+                    "{context}: `split`/`party` authored INSIDE `camera_mode: Orbit(...)` are \
+                     never read and have no effect — they must be siblings of `camera_mode`, \
+                     e.g. `components: (camera_mode: Orbit(...), split: (...))`"
+                ),
+                "camera_mode_nested_split_party",
+            ));
+        }
+    }
+    if let CameraModeDef::Fixed(fx) = mode {
+        if fx.look_at.is_some() && fx.look_at_entity.is_some() {
+            problems.push((
+                format!(
+                    "{context}: `Fixed(...)` has both `look_at` and `look_at_entity` set — \
+                     `look_at_entity` wins (re-resolved every frame); remove one"
+                ),
+                "camera_mode_fixed_ambiguous_look_at",
+            ));
+        } else if fx.look_at.is_none() && fx.look_at_entity.is_none() {
+            problems.push((
+                format!(
+                    "{context}: `Fixed(...)` has neither `look_at` nor `look_at_entity` set — \
+                     the camera will sit at `position` with no rotation applied (facing -Z) and \
+                     never turn to look at anything"
+                ),
+                "camera_mode_fixed_missing_look_at",
+            ));
+        }
+    }
+    problems
+}
+
 // ── File discovery ────────────────────────────────────────────────────────────
 
 fn find_project_ron(project_dir: &Path) -> Option<String> {
@@ -1127,6 +1174,18 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 }
             }
 
+            if let Some(mode) = &def.components.camera_mode {
+                for (message, error_type) in
+                    validate_camera_mode_def(mode, &format!("prefab {key:?}: camera_mode"))
+                {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message,
+                        error_type,
+                    });
+                }
+            }
+
             if def.kind == PrefabKind::Foliage {
                 if let Some(foliage) = &def.foliage {
                     if let Some(ac) = asset_catalog {
@@ -1221,6 +1280,11 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         });
                     }
                 }
+            }
+            for (message, error_type) in
+                validate_camera_mode_def(mode, &format!("camera_modes: preset {key:?}"))
+            {
+                errors.push(CrossFileError { source_file: scene_path.clone(), message, error_type });
             }
         }
     }

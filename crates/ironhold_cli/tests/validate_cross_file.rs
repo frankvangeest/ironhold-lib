@@ -806,6 +806,59 @@ fn camera_mode_valid_registry_and_reference_exits_0() {
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
 
+#[test]
+fn camera_mode_nested_split_in_prefab_exits_1() {
+    // `split:` authored INSIDE `camera_mode: Orbit(...)` (instead of as a sibling of camera_mode
+    // under `components:`) parses fine but is never read — only a runtime warn! before this check.
+    let (code, stdout) = validate("camera_mode_nested_split_in_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("never read and have no effect") && stdout.contains("bad_split_player"),
+        "expected the nested split/party message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_nested_party_in_registry_exits_1() {
+    // Same authoring mistake as the prefab case above, but inside a scene's `camera_modes:`
+    // registry entry -- proves the shared helper fires from both call sites, and that `party:`
+    // (not just `split:`) is caught.
+    let (code, stdout) = validate("camera_mode_nested_party_in_registry");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("never read and have no effect") && stdout.contains("\"aerial\""),
+        "expected the nested split/party message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_fixed_both_look_at_in_prefab_exits_1() {
+    let (code, stdout) = validate("camera_mode_fixed_both_look_at_in_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("has both `look_at` and `look_at_entity` set"),
+        "expected the ambiguous-look-at message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_fixed_neither_look_at_in_prefab_exits_1() {
+    let (code, stdout) = validate("camera_mode_fixed_neither_look_at_in_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("has neither `look_at` nor `look_at_entity` set"),
+        "expected the missing-look-at message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn camera_mode_valid_prefab_camera_mode_exits_0() {
+    // Positive control: split as a proper sibling of camera_mode, and a Fixed camera with exactly
+    // one of look_at/look_at_entity set -- neither should trip the new prefab-level checks.
+    let (code, stdout) = validate("camera_mode_valid_prefab_camera_mode");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
 // ── Action::Spawn spawn_point reference (planning/backlog.md) ──────────────────
 
 #[test]
