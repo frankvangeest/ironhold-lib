@@ -1259,6 +1259,64 @@ fn valid_ui_trigger_strict_exits_0() {
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
 }
 
+// ── Configurable rules_path/state_machine_path (planning/backlog.md) ───────────
+
+#[test]
+fn state_machine_only_project_ignores_dead_rules_ron() {
+    // Real bug this closes (found live against 3rd_person_game_demo/terrain_demo): a project
+    // setting only state_machine_path must NOT have its unrelated, runtime-dead logic/rules.ron
+    // silently counted as live. A Spawn action in that dead file references a nonexistent prefab
+    // -- if it were wrongly discovered, this would be a hard missing_prefab error.
+    let (code, stdout) = validate("state_machine_only_ignores_dead_rules_ron");
+    assert_eq!(code, 0, "expected exit 0 (dead rules.ron must be ignored), got {code}:\n{stdout}");
+    assert!(
+        !stdout.contains("missing_prefab_in_a_dead_rules_file"),
+        "expected the dead rules.ron file to never be parsed or cross-checked:\n{stdout}"
+    );
+}
+
+#[test]
+fn rules_path_custom_filename_is_discovered_exits_1() {
+    // The other direction of the same bug: a custom rules_path filename (not the
+    // "logic/rules.ron" convention) must still be discovered and cross-checked.
+    let (code, stdout) = validate("rules_path_custom_filename_is_discovered");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("missing_prefab_in_custom_named_rules_file"),
+        "expected the custom-named rules file's own missing_prefab error in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn inline_rules_are_discovered_exits_1() {
+    // Inline V1 ProjectConfig.rules (no rules_path, no logic/ dir at all) must be cross-checked
+    // exactly like an external rules.ron would be.
+    let (code, stdout) = validate("inline_rules_are_discovered");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("missing_prefab_in_inline_rules"),
+        "expected the inline rule's own missing_prefab error in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_configured_rules_path_and_state_machine_path_exits_1() {
+    // A configured-but-missing rules_path/state_machine_path is a hard error, matching the
+    // existing load_configured_catalog precedent for the four catalog paths.
+    let (code, stdout) = validate("bad_rules_path_and_state_machine_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("logic/does_not_exist.ron")
+            && stdout.contains("rules_path in .project.ron does not exist on disk"),
+        "expected the missing rules_path error in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("logic/also_missing.ron")
+            && stdout.contains("state_machine_path in .project.ron does not exist on disk"),
+        "expected the missing state_machine_path error in output:\n{stdout}"
+    );
+}
+
 #[test]
 fn orphan_ui_rule_strict_exits_1() {
     // A rule handling ui.button_pressed:truly_orphaned with no button/binding anywhere in the

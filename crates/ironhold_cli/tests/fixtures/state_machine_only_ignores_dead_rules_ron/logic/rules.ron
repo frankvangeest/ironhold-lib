@@ -1,0 +1,9 @@
+(
+    schema_version: 2,
+    rules: [
+        (
+            on: "scene.ready:main",
+            do_actions: [ Spawn(prefab: "missing_prefab_in_a_dead_rules_file") ],
+        ),
+    ],
+)

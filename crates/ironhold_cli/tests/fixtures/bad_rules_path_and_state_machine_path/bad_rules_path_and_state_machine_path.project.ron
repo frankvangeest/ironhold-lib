@@ -1,0 +1,6 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    rules_path: "logic/does_not_exist.ron",
+    state_machine_path: "logic/also_missing.ron",
+)

@@ -1,6 +1,5 @@
 (
     schema_version: 3,
     initial_scene: "scenes/main.scene.ron",
-    rules_path: "logic/rules.ron",
-    items_path: "items/items.ron",
+    state_machine_path: "logic/state_machine.ron",
 )

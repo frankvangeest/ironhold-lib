@@ -1,6 +1,8 @@
 (
     schema_version: 3,
     initial_scene: "scenes/main.scene.ron",
+    rules_path: "logic/rules.ron",
+    state_machine_path: "logic/state_machine.ron",
     global_key_bindings: {
         "Escape": "menu_toggle",
     },

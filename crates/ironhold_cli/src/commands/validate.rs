@@ -55,9 +55,11 @@ struct ValidationRun {
 /// `unreachable_trigger_panel_buttons`) until `strict_checks` alone reached 10 parameters —
 /// this struct is that accumulated signature, named and collected in one place instead of
 /// threaded positionally through every call site. `rules`/`state_machine` carry their source path
-/// (currently always the hardcoded literal `"logic/rules.ron"`/`"logic/state_machine.ron"` — not
-/// yet resolved from `ProjectConfig.rules_path`/`state_machine_path`, a separate open gap)
-/// alongside the parsed asset (the richest form any consumer needs — `strict_checks` uses both
+/// (resolved by `resolve_logic_files` from `ProjectConfig.rules_path`/`state_machine_path` --
+/// falling back to the `"logic/rules.ron"`/`"logic/state_machine.ron"` convention paths only when
+/// there's no `.project.ron` at all, and to inline `ProjectConfig.rules` for an unset `rules_path`
+/// specifically -- see that function's own doc comment) alongside the parsed asset (the richest
+/// form any consumer needs — `strict_checks` uses both
 /// halves; `check_ui_trigger_reachability` only needs the parsed asset and discards the path
 /// itself, right after destructuring). Not every consumer uses every field — that's expected for
 /// a shared context struct, not a code smell to fix.
@@ -419,6 +421,101 @@ fn discover_extra_scenes(
         }
     }
     attempted_this_pass.into_iter().collect()
+}
+
+/// Resolved `rules.ron`/`state_machine.ron` content plus the rel_path each half should be
+/// attributed to (for `source_file`/`error_type` messages and the `logic_files_parsed_cleanly`
+/// filter) -- see `resolve_logic_files`'s doc comment for why the source path isn't always a
+/// literal `"logic/rules.ron"`/`"logic/state_machine.ron"` anymore.
+struct ResolvedLogicFiles {
+    rules: Option<LogicRulesAsset>,
+    rules_source: String,
+    state_machine: Option<StateMachineAsset>,
+    state_machine_source: String,
+}
+
+/// Mirrors the runtime's actual resolution (`project_loader.rs::check_project_loaded`) instead of
+/// the two hardcoded convention-path literals this function used to always parse: once a
+/// `.project.ron` exists, `rules_path`/`state_machine_path` are the ONLY source for their half --
+/// an unset `rules_path` falls back to the inline V1 `ProjectConfig.rules` (the runtime never
+/// looks at `"logic/rules.ron"` on disk in that case, even if the file exists), and an unset
+/// `state_machine_path` means no state machine at all, full stop. Getting this wrong is exactly
+/// how a project that sets only `state_machine_path` (e.g. `3rd_person_game_demo`, `terrain_demo`)
+/// previously had its unrelated, dead-at-runtime `logic/rules.ron` silently counted as live by
+/// every cross-file check.
+///
+/// The one deliberate divergence from the runtime, matching the existing
+/// `load_configured_catalog` precedent: when there's no `.project.ron` at all, still fall back to
+/// checking the convention-path files -- there's no config to consult, so there's no "wrong
+/// field" to get out of sync with, and refusing to look would silently stop checking logic
+/// entirely for every fixture/project that predates configurable paths.
+///
+/// A configured-but-missing path is a hard error, pushed directly rather than via `try_parse`
+/// (which silently returns `None` for a missing file -- correct for a convention-path guess, but
+/// this is a `.project.ron`-authored field the runtime unconditionally tries to load).
+fn resolve_logic_files(
+    project_dir: &Path,
+    project_config: Option<&ProjectConfig>,
+    file_results: &mut Vec<FileResult>,
+) -> ResolvedLogicFiles {
+    // Shared by every "a .project.ron field names this file explicitly" case below: honor it
+    // exactly, hard error if it doesn't resolve (the runtime unconditionally tries to load
+    // whatever's configured, unlike a convention-path guess that might legitimately not apply).
+    fn parse_configured<T: serde::de::DeserializeOwned>(
+        project_dir: &Path,
+        path: &str,
+        field_name: &str,
+        file_results: &mut Vec<FileResult>,
+    ) -> Option<T> {
+        if !project_dir.join(path).is_file() {
+            file_results.push(FileResult {
+                rel_path: path.to_string(),
+                errors: vec![format!("{field_name} in .project.ron does not exist on disk")],
+            });
+            return None;
+        }
+        try_parse::<T>(project_dir, path, file_results)
+    }
+
+    let Some(config) = project_config else {
+        // No .project.ron at all -- nothing to divide by field, fall back to both convention
+        // paths exactly like this function always did (needed for every fixture/project that
+        // predates configurable paths).
+        return ResolvedLogicFiles {
+            rules: try_parse::<LogicRulesAsset>(project_dir, "logic/rules.ron", file_results),
+            rules_source: "logic/rules.ron".to_string(),
+            state_machine: try_parse::<StateMachineAsset>(
+                project_dir, "logic/state_machine.ron", file_results,
+            ),
+            state_machine_source: "logic/state_machine.ron".to_string(),
+        };
+    };
+
+    let (rules, rules_source) = match config.rules_path.as_deref() {
+        Some(path) => (
+            parse_configured::<LogicRulesAsset>(project_dir, path, "rules_path", file_results),
+            path.to_string(),
+        ),
+        // No convention-path fallback here on purpose -- the runtime's own fallback for an unset
+        // rules_path is the inline V1 field, never a guess at "logic/rules.ron" existing on disk.
+        None => {
+            let rules = (!config.rules.is_empty())
+                .then(|| LogicRulesAsset { schema_version: 2, rules: config.rules.clone() });
+            (rules, find_project_ron(project_dir).unwrap_or_default())
+        }
+    };
+
+    let (state_machine, state_machine_source) = match config.state_machine_path.as_deref() {
+        Some(path) => (
+            parse_configured::<StateMachineAsset>(project_dir, path, "state_machine_path", file_results),
+            path.to_string(),
+        ),
+        // No inline V1 equivalent exists for the state machine -- an unset state_machine_path
+        // means no state machine at all, matching the runtime exactly.
+        None => (None, find_project_ron(project_dir).unwrap_or_default()),
+    };
+
+    ResolvedLogicFiles { rules, rules_source, state_machine, state_machine_source }
 }
 
 // ── Action collection ─────────────────────────────────────────────────────────
@@ -2417,11 +2514,8 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         }
     }
 
-    let rules: Option<LogicRulesAsset> =
-        try_parse(project_dir, "logic/rules.ron", &mut file_results);
-
-    let state_machine: Option<StateMachineAsset> =
-        try_parse(project_dir, "logic/state_machine.ron", &mut file_results);
+    let ResolvedLogicFiles { rules, rules_source, state_machine, state_machine_source } =
+        resolve_logic_files(project_dir, project_config.as_ref(), &mut file_results);
 
     let mut behaviors: Vec<(String, StateMachineAsset)> = Vec::new();
     for path in glob_dir(project_dir, "behaviors", ".behavior.ron") {
@@ -2443,8 +2537,8 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         try_parse(project_dir, "overrides/model_fixes.ron", &mut file_results);
 
     let all_actions = collect_actions(
-        rules.as_ref().map(|r| ("logic/rules.ron", r)),
-        state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
+        rules.as_ref().map(|r| (rules_source.as_str(), r)),
+        state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         &behaviors,
         &dialogues,
     );
@@ -2460,8 +2554,8 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let logic_files_parsed_cleanly = file_results
         .iter()
         .filter(|r| {
-            r.rel_path == "logic/rules.ron"
-                || r.rel_path == "logic/state_machine.ron"
+            r.rel_path == rules_source
+                || r.rel_path == state_machine_source
                 || r.rel_path.starts_with("behaviors/")
         })
         .all(|r| r.is_ok());
@@ -2480,8 +2574,8 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         item_catalog: item_catalog.as_ref(),
         scenes: &scenes,
         actions: &all_actions,
-        rules: rules.as_ref().map(|r| ("logic/rules.ron", r)),
-        state_machine: state_machine.as_ref().map(|s| ("logic/state_machine.ron", s)),
+        rules: rules.as_ref().map(|r| (rules_source.as_str(), r)),
+        state_machine: state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         behaviors: &behaviors,
         logic_files_parsed_cleanly,
         scenes_parsed_cleanly,

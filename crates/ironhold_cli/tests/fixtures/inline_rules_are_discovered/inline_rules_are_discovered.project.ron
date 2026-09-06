@@ -1,0 +1,10 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    rules: [
+        (
+            on: "scene.ready:main",
+            do_actions: [ Spawn(prefab: "missing_prefab_in_inline_rules") ],
+        ),
+    ],
+)
