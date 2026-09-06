@@ -251,51 +251,84 @@ fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String>
     })
 }
 
-/// Structural authoring-mistake checks for one `CameraModeDef`, shared between prefab-authored
-/// `camera_mode:` and a scene's `camera_modes:` registry entries -- both silently parse fine and
-/// only warn at runtime today (`entity_spawner.rs`'s spawn-time match arms), with no
-/// `ironhold_cli validate` counterpart. `context` names where this mode came from (e.g.
-/// `"prefab \"goblin\": camera_mode"` or `"camera_modes: preset \"aerial\""`) so the message reads
-/// naturally without the caller having to repeat this function's own wording; callers attach
-/// their own `source_file`. Returns `(message, error_type)` pairs, not full `CrossFileError`s --
-/// registry entries and prefab entries use different `source_file` values, and the registry
-/// caller has its own additional checks (reserved key, `Party` rejection, `look_at_entity`
-/// existence) that need scene context this function deliberately doesn't take.
-fn validate_camera_mode_def(mode: &CameraModeDef, context: &str) -> Vec<(String, &'static str)> {
-    let mut problems = Vec::new();
-    if let CameraModeDef::Orbit(cfg) = mode {
-        if cfg.split.is_some() || cfg.party.is_some() {
-            problems.push((
-                format!(
-                    "{context}: `split`/`party` authored INSIDE `camera_mode: Orbit(...)` are \
-                     never read and have no effect — they must be siblings of `camera_mode`, \
-                     e.g. `components: (camera_mode: Orbit(...), split: (...))`"
-                ),
-                "camera_mode_nested_split_party",
-            ));
-        }
+/// `split`/`party` authored INSIDE a `camera_mode: Orbit(...)` payload (instead of as siblings of
+/// `camera_mode` under `components:`) parse fine but are never read (`entity_spawner.rs`'s
+/// spawn-time match arm) -- a hard error, since there is no legitimate reason to author them
+/// there and no fallback makes it work anyway. Shared between prefab-authored `camera_mode:` and
+/// a scene's `camera_modes:` registry entries; `registry` selects which remedy is actually
+/// authorable at the call site -- a registry entry has no `components:` block and cannot author
+/// `split`/`party` in any form, so its remedy is "delete them," not "move them."
+///
+/// **Known non-coverage, deliberately not fixed here:** `split`/`party` only exist as fields on
+/// `CameraConfig` (the `Orbit` payload); `Follow`/`FirstPerson`/`Fixed`/`Flycam`'s own payload
+/// structs have no such fields and none of the five carry `#[serde(deny_unknown_fields)]`, so the
+/// identical mistake authored inside any of those four variants is silently dropped by serde
+/// *before* this function -- or any other post-parse check -- ever sees it. Closing that requires
+/// a schema-level decision (adding `deny_unknown_fields` to four more structs, a breaking change
+/// for any project currently relying on the silent drop), not a validate.rs addition; logged to
+/// `planning/claude_suggestions.md` rather than attempted here.
+fn camera_mode_nested_split_party_problem(
+    mode: &CameraModeDef,
+    context: &str,
+    registry: bool,
+) -> Option<(String, &'static str)> {
+    let CameraModeDef::Orbit(cfg) = mode else { return None };
+    if cfg.split.is_none() && cfg.party.is_none() {
+        return None;
     }
-    if let CameraModeDef::Fixed(fx) = mode {
-        if fx.look_at.is_some() && fx.look_at_entity.is_some() {
-            problems.push((
-                format!(
-                    "{context}: `Fixed(...)` has both `look_at` and `look_at_entity` set — \
-                     `look_at_entity` wins (re-resolved every frame); remove one"
-                ),
-                "camera_mode_fixed_ambiguous_look_at",
-            ));
-        } else if fx.look_at.is_none() && fx.look_at_entity.is_none() {
-            problems.push((
-                format!(
-                    "{context}: `Fixed(...)` has neither `look_at` nor `look_at_entity` set — \
-                     the camera will sit at `position` with no rotation applied (facing -Z) and \
-                     never turn to look at anything"
-                ),
-                "camera_mode_fixed_missing_look_at",
-            ));
-        }
+    let remedy = if registry {
+        "delete them -- `split`/`party` are authored on a player prefab's `components:` block, \
+         never inside a `camera_modes:` registry preset, which has no such concept at all"
+    } else {
+        "they must be siblings of `camera_mode`, e.g. \
+         `components: (camera_mode: Orbit(...), split: (...))`"
+    };
+    Some((
+        format!(
+            "{context}: `split`/`party` authored INSIDE `camera_mode: Orbit(...)` are never read \
+             and have no effect — {remedy}"
+        ),
+        "camera_mode_nested_split_party",
+    ))
+}
+
+/// A `Fixed(...)` camera mode with both `look_at`/`look_at_entity` set, or neither, only warned
+/// at runtime for prefab-authored `camera_mode:` (`entity_spawner.rs`'s spawn-time match arm) --
+/// no `ironhold_cli validate` counterpart at either the prefab or the `camera_modes:` registry
+/// level. `--strict`-gated, not a hard error: both shapes are *working*, not broken --
+/// `fixed_camera_system` (`capabilities/camera.rs`) resolves `look_at_entity` when it's live and
+/// falls back to `look_at` otherwise (a legitimate "track this entity, or this static point if it
+/// isn't around" pattern), and a `Fixed` camera with neither field set simply holds whatever
+/// rotation it already has -- identity rotation if freshly spawned into this mode, or its
+/// previous rotation if reached via `SetCameraMode` (deliberately not claiming a single fixed
+/// facing here, since that differs between the two paths and an earlier draft of this message
+/// was found to be wrong on the registry path). Shared between both call sites since the
+/// condition and message don't otherwise depend on where the mode came from.
+fn camera_mode_fixed_look_at_problem(mode: &CameraModeDef, context: &str) -> Option<(String, &'static str)> {
+    let CameraModeDef::Fixed(fx) = mode else { return None };
+    if fx.look_at.is_some() && fx.look_at_entity.is_some() {
+        Some((
+            format!(
+                "{context}: `Fixed(...)` has both `look_at` and `look_at_entity` set — \
+                 `look_at_entity` wins whenever it resolves to a live entity, falling back to \
+                 `look_at` otherwise; this is fine if that fallback is intentional, otherwise \
+                 remove whichever field you don't want used"
+            ),
+            "camera_mode_fixed_ambiguous_look_at",
+        ))
+    } else if fx.look_at.is_none() && fx.look_at_entity.is_none() {
+        Some((
+            format!(
+                "{context}: `Fixed(...)` has neither `look_at` nor `look_at_entity` set — the \
+                 camera never turns to look at anything; it just holds whatever rotation it \
+                 already has (identity rotation if freshly spawned into this mode, its prior \
+                 rotation if switched into it via SetCameraMode)"
+            ),
+            "camera_mode_fixed_missing_look_at",
+        ))
+    } else {
+        None
     }
-    problems
 }
 
 // ── File discovery ────────────────────────────────────────────────────────────
@@ -1174,15 +1207,25 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 }
             }
 
-            if let Some(mode) = &def.components.camera_mode {
-                for (message, error_type) in
-                    validate_camera_mode_def(mode, &format!("prefab {key:?}: camera_mode"))
-                {
-                    errors.push(CrossFileError {
-                        source_file: "prefabs/prefabs.ron".to_string(),
-                        message,
-                        error_type,
-                    });
+            // `components.camera_mode` is only ever read for a player-tagged prefab
+            // (`assemble_player_config`, `entity_spawner.rs`) -- gating here avoids a misleading
+            // "the camera will..." diagnostic on a prefab whose `camera_mode` the runtime never
+            // consumes at all (an untagged prop, or a `tags: ["flycam"]` prefab, whose non-Flycam
+            // `camera_mode` is silently discarded and replaced wholesale by `scene_loader.rs` --
+            // a real, different mistake this check isn't meant to describe).
+            if def.components.tags.iter().any(|t| t == "player") {
+                if let Some(mode) = &def.components.camera_mode {
+                    if let Some((message, error_type)) = camera_mode_nested_split_party_problem(
+                        mode,
+                        &format!("prefab {key:?}: camera_mode"),
+                        false,
+                    ) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message,
+                            error_type,
+                        });
+                    }
                 }
             }
 
@@ -1281,9 +1324,11 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     }
                 }
             }
-            for (message, error_type) in
-                validate_camera_mode_def(mode, &format!("camera_modes: preset {key:?}"))
-            {
+            if let Some((message, error_type)) = camera_mode_nested_split_party_problem(
+                mode,
+                &format!("camera_modes: preset {key:?}"),
+                true,
+            ) {
                 errors.push(CrossFileError { source_file: scene_path.clone(), message, error_type });
             }
         }
@@ -1871,6 +1916,44 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                     ),
                     kind: "unset_catalog_path_with_convention_file",
                 });
+            }
+        }
+    }
+
+    // A `Fixed(...)` camera_mode with both look_at/look_at_entity set, or neither, is working
+    // (not broken) either way -- see `camera_mode_fixed_look_at_problem`'s doc comment -- so this
+    // is `--strict` advisory, unlike the always-on `camera_mode_nested_split_party` check in
+    // `cross_file_checks`. Same player-tagged gate as that check, for the same reason (the
+    // runtime never reads `camera_mode` on an untagged or flycam-tagged prefab).
+    if let Some(catalog) = prefab_catalog {
+        let mut keys: Vec<&String> = catalog.prefabs.keys().collect();
+        keys.sort();
+        for key in keys {
+            let def = &catalog.prefabs[key];
+            if !def.components.tags.iter().any(|t| t == "player") {
+                continue;
+            }
+            let Some(mode) = &def.components.camera_mode else { continue };
+            if let Some((message, kind)) =
+                camera_mode_fixed_look_at_problem(mode, &format!("prefab {key:?}: camera_mode"))
+            {
+                warnings.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message,
+                    kind,
+                });
+            }
+        }
+    }
+    for (scene_path, scene) in scenes {
+        let mut keys: Vec<&String> = scene.camera_modes.keys().collect();
+        keys.sort();
+        for key in keys {
+            let mode = &scene.camera_modes[key];
+            if let Some((message, kind)) =
+                camera_mode_fixed_look_at_problem(mode, &format!("camera_modes: preset {key:?}"))
+            {
+                warnings.push(StrictWarning { source_file: scene_path.clone(), message, kind });
             }
         }
     }

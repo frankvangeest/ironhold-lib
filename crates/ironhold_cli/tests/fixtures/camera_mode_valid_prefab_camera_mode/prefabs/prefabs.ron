@@ -23,6 +23,7 @@
         "good_fixed_camera_prop": (
             kind: Primitive,
             components: (
+                tags: ["player"],
                 camera_mode: Fixed((
                     position: (0.0, 5.0, 0.0),
                     look_at: (0.0, 0.0, 0.0),

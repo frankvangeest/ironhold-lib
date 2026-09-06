@@ -832,9 +832,13 @@ fn camera_mode_nested_party_in_registry_exits_1() {
 }
 
 #[test]
-fn camera_mode_fixed_both_look_at_in_prefab_exits_1() {
+fn camera_mode_fixed_both_look_at_in_prefab_strict_exits_1() {
+    // A Fixed camera with both look_at/look_at_entity set is working (look_at_entity wins when it
+    // resolves, look_at otherwise), not broken -- --strict advisory, not a hard error.
     let (code, stdout) = validate("camera_mode_fixed_both_look_at_in_prefab");
-    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = validate_strict("camera_mode_fixed_both_look_at_in_prefab");
+    assert_eq!(code, 1, "expected exit 1 with --strict, got {code}");
     assert!(
         stdout.contains("has both `look_at` and `look_at_entity` set"),
         "expected the ambiguous-look-at message in output:\n{stdout}"
@@ -842,9 +846,11 @@ fn camera_mode_fixed_both_look_at_in_prefab_exits_1() {
 }
 
 #[test]
-fn camera_mode_fixed_neither_look_at_in_prefab_exits_1() {
+fn camera_mode_fixed_neither_look_at_in_prefab_strict_exits_1() {
     let (code, stdout) = validate("camera_mode_fixed_neither_look_at_in_prefab");
-    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = validate_strict("camera_mode_fixed_neither_look_at_in_prefab");
+    assert_eq!(code, 1, "expected exit 1 with --strict, got {code}");
     assert!(
         stdout.contains("has neither `look_at` nor `look_at_entity` set"),
         "expected the missing-look-at message in output:\n{stdout}"
@@ -857,6 +863,15 @@ fn camera_mode_valid_prefab_camera_mode_exits_0() {
     // one of look_at/look_at_entity set -- neither should trip the new prefab-level checks.
     let (code, stdout) = validate("camera_mode_valid_prefab_camera_mode");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+    // --strict on this fixture is expected to warn about unrelated pre-existing checks (both
+    // prefabs are unplaced, and the tagging needed to exercise the player-only gate above also
+    // pulls in the unrelated jump-apex-vs-ground-sensor check) -- only assert the two new
+    // camera_mode_fixed_* checks specifically stay silent, not that --strict is fully clean.
+    let (_, stdout) = validate_strict("camera_mode_valid_prefab_camera_mode");
+    assert!(
+        !stdout.contains("has both `look_at`") && !stdout.contains("has neither `look_at`"),
+        "expected no Fixed look_at --strict warning on a well-formed camera_mode:\n{stdout}"
+    );
 }
 
 // ── Action::Spawn spawn_point reference (planning/backlog.md) ──────────────────
