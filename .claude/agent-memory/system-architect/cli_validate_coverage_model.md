@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
 metadata:
   type: project
 ---
@@ -60,10 +60,25 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    is a `StrictWarning` when the field is unset *and* the convention file exists — fixture-safe
    because `--strict` isn't the default gate.
 
-2. **Scene-path existence coverage is partial.** Four `Action` variants carry a project-relative
-   `.scene.ron` path: `LoadScene`, `LoadSceneOverlay`, `PreloadScene`, `ToggleOverlay`. Plus
-   `ProjectConfig.initial_scene`. Any of these not covered by an existence check fall through
-   `cross_file_checks`'s `_ => {}` catch-all silently.
+2. **Scene-path coverage: existence check complete; the *parse/cross-check* half landed
+   2026-09-06 (`a29436d`, `feature/scene_path_validity`) with two duplication edges.** Four
+   `Action` variants carry a project-relative `.scene.ron` path: `LoadScene`, `LoadSceneOverlay`,
+   `PreloadScene`, `ToggleOverlay`. Plus `ProjectConfig.initial_scene`. `do_validate` now, right
+   after `all_actions`, collects any of those five paths **not already in the `scenes/`-globbed
+   set** into `extra_scene_paths`, `try_parse`s each, and folds successes into the same `scenes`
+   vec every downstream check walks (`scenes_parsed_cleanly` widened to match).
+   **The covered-set is derived from `scenes` (successfully-parsed only), not from `file_results`
+   (everything attempted)** — so a `scenes/x.scene.ron` that FAILS to parse and is also
+   `LoadScene`-referenced gets re-parsed and its parse error reported **twice** (`parse_file`
+   pushes a `FileResult` unconditionally; nothing dedups `file_results` before human/`--json`
+   output or `file_count`). Second edge: the set membership is **byte-exact**, so on Windows a
+   case- or backslash-variant reference (`LoadScene("scenes/Main.scene.ron")` vs on-disk
+   `scenes/main.scene.ron`) resolves through NTFS and parses the *same file* a second time under
+   the authored spelling — a duplicate `(path, scene)` entry in `scenes` means **every per-scene
+   check emits its diagnostics twice**. Both are live against the existing `bad_scene_path_case`
+   / `bad_scene_path_backslash` fixtures today; those fixtures' scenes are empty
+   (`(schema_version: 2)`) so the tests stay green. Fix direction: build the covered-set from
+   `file_results` rel_paths, and skip discovery for any path `path_case_mismatch` already flagged.
 
 3. **`source_file` is always a hardcoded literal**: `"prefabs/prefabs.ron"` (~12 sites),
    `"assets.ron"` (3), `"items.ron"` (1). `"items.ron"` points at a path that exists nowhere (the
@@ -92,9 +107,19 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
 4. **Dialogue coverage: the parse half landed, the *referential* half did not.**
    `feature/cli-validate-dialogues` (2026-09-04) added `glob_dir("dialogues", ".dialogue.ron")` +
    `parse_file::<DialogueDef>` to `do_validate` and extended `collect_actions` to walk
-   `nodes[].choices[].do_actions` — so `collect_actions` now covers **all five** `Action`-bearing
-   schema surfaces (grep `Vec<Action>` in `schema/`: dialogue.rs:49, project.rs:131/134/154/316),
-   and no `Action` variant nests another `Action`, so no recursion is needed. What is still
+   `nodes[].choices[].do_actions`. **CORRECTION (2026-09-06): "all five surfaces" was wrong —
+   there are SIX, and the sixth is unwalked.** `ActionSlotDef.do_actions` (action-bar skill slots,
+   `schema/scene_v2.rs`~1054) is declared `Vec<crate::schema::actions::Action>` — fully qualified —
+   so the `grep "Vec<Action>"` that produced the five-surface list **structurally cannot see it**.
+   Use `grep -rn "actions::Action"` instead. `collect_actions` never walks `scenes` at all, so
+   every path/key/reference authored inside an action-bar slot is invisible to *every* check in
+   this file (reproduced live by debug-detective 2026-09-05: a nonexistent `LoadScene` path inside
+   a slot's `do_actions` validates clean at exit 0; logged in `claude_suggestions.md` ▸ CLI). Two
+   consequences: (a) 6 shipped scenes author slot `do_actions` today, none with a
+   `LoadScene`-family action, so it is latent; (b) fixing it makes item 2's scene discovery
+   **circular** — `collect_actions` would need `scenes`, while scene discovery reads `all_actions`
+   — turning today's correct-by-construction single pass into a required fixpoint loop.
+   No `Action` variant nests another `Action`, so no *within-action* recursion is needed. What is still
    missing: **no existence check on `PrefabDef.dialogue`** (contrast `def.behavior`, checked at
    `validate.rs`~821 with the `bad_behavior_file` fixture) and **no arm for
    `Action::StartDialogue { dialogue_path }`** in `cross_file_checks` (falls through `_ => {}`).

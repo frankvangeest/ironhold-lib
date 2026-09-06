@@ -119,6 +119,42 @@ plain `&["ron"]`. So `dialogue: "conversations/npc.ron"` (or `behavior:` likewis
 runtime and is never parse-checked, and a nested `dialogues/act1/x.dialogue.ron` is missed too.
 Driving the parse pass off the *union* of the glob and the referenced paths
 (`PrefabDef.dialogue`/`.behavior`, `Action::StartDialogue.dialogue_path`) would close this class.
+**`feature/scene_path_validity` (2026-09-06) applied exactly that union pattern for scenes** — the
+reference template to copy for `behavior`/`dialogue`/`animation_policy` next. Three things that
+review established and any repeat of the pattern must get right:
+- **Dedup the union against `file_results`' rel_paths, NOT against the successfully-parsed vec.**
+  The scenes version deduped against `scenes` (successes only), so a *broken* `scenes/x.scene.ron`
+  that is also the `initial_scene` gets re-`try_parse`d and pushes a **second identical FileResult** —
+  the designer sees the same parse error twice and `N files checked` double-counts. Same root cause
+  makes a typo'd `ToggleOverlay("logic/rules.ron")` push a GameSceneV2 parse error under
+  `rel_path == "logic/rules.ron"`, which flips `logic_files_parsed_cleanly` false and silently
+  disables `check_ui_trigger_reachability` + `orphan_rule` while blaming a valid file. One fix for
+  both. (Borrow note: the extra-path list must be re-owned into `Vec<String>` before pushing into
+  the vec it deduped against — that's why the `.map(String::from)` line exists.)
+- **Discovery is single-pass, not transitive**, and runs right after `all_actions` — a folded-in
+  file's own actions are never collected, so an out-of-convention file reachable only from another
+  out-of-convention file is missed.
+- Verified there is **no `"scenes/"` prefix assumption anywhere downstream** — `rel_path` is only
+  ever used as a `source_file` message string; validate never derives a scene-name event
+  (`scene.ready:{stem}`) from it. Folding into the shared `scenes` vec really does give all ~15
+  scene-walking checks the new file for free.
+
+**`collect_actions` still misses TWO live Action sources** (so *every* action-driven check —
+scene-path existence, item/effect/prefab keys, `spawn_point`, `{new_id}` — is blind to them):
+`GameSceneV2`'s `ActionBarDef.slots[].do_actions` (scene_v2.rs:1054, scene-authored) and
+`ProjectConfig.rules[].do_actions` (the V1 inline-rules field, project.rs:170/329 — still honored
+at project_loader.rs:111 & 252 whenever `rules_path` is unset). Fixing `collect_actions` is the
+single highest-leverage change in this file. Confirmed complete, though: the only scene-path-bearing
+`Action` variants are `LoadScene`/`LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, and
+`initial_scene` is the only scene path on `ProjectConfig` (`GameSceneV2` has none).
+
+**Scene paths are NOT `{self}`/`{target}`-substituted** — `rewrite_self`/`rewrite_target` have no
+`LoadScene`-family arm, so a templated scene path is broken end-to-end at runtime *and* already a
+hard exit-1 `missing_file` today. Don't add a `{`-skip guard there (unlike `spawn_point`); if a code
+comment calls templated scene paths a "hypothetical future" form, that's misleading on both counts.
+
+**`query scenes` (query.rs:326) and `stats` (stats.rs:83) still glob only `scenes/`** — whenever
+validate's coverage goes reference-driven, those two stay convention-only and disagree with it.
 
 **Open dialogue-adjacent gaps as of 2026-09-04** (all cheap, all now unblocked since the parsed
 `DialogueDef`s are in hand):
