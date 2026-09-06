@@ -1,10 +1,10 @@
 (
     schema_version: 2,
-    name: "custom",
+    name: "thing",
     entities: [
         (
             id: "obj_01",
-            prefab: "real_prefab",
+            prefab: "missing_prefab_in_a_different_project_entirely",
             transform: (translation: (0.0, 0.0, 0.0)),
         ),
     ],

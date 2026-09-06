@@ -341,6 +341,86 @@ fn find_project_ron(project_dir: &Path) -> Option<String> {
         .find(|name| name.ends_with(".project.ron"))
 }
 
+/// A scene path authored outside the `scenes/` convention (`Action::LoadScene`/
+/// `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, or `ProjectConfig.initial_scene`) was
+/// previously only existence/case-checked, never parsed -- so its contents (entities, ui,
+/// camera_modes, spawn_points, ...) were invisible to every cross-file check that walks `scenes`.
+/// Parses and folds in any such path, so it participates exactly like a conventionally-placed
+/// scene from this point on. Returns the rel_paths actually attempted (whether or not the parse
+/// succeeded), for the caller's `scenes_parsed_cleanly` computation.
+///
+/// Every candidate is filtered before it ever reaches `try_parse`, since this is the first place
+/// in this file that hands a *designer-authored* string (rather than a hardcoded convention path)
+/// to a parse-then-record helper, and each of the following was reproduced as a real bug during
+/// review before this filtering was added:
+/// - empty, or containing a `.`/`..`/empty path segment -- `project_dir.join("")` is the project
+///   root itself, and `..` can walk outside it entirely, reading and cross-checking a *different*
+///   project's file and attributing its errors to this one. Declining to discover these mirrors
+///   `path_case_mismatch`'s own documented non-coverage of the same shapes -- silently missing a
+///   mistake here is far safer than acting on an attacker-shaped path.
+/// - already present in `file_results` (i.e. *any* file this run already attempted to parse as
+///   something else, successfully or not -- a catalog, `logic/rules.ron`, a behavior, whatever
+///   the `scenes/` glob already covered) -- otherwise a `LoadScene` typo'd onto an existing
+///   non-scene file (e.g. `LoadScene("prefabs/prefabs.ron")`) would be re-parsed as a `GameSceneV2`,
+///   fail, and report a perfectly valid file as broken; worse, that spurious `FileResult` would
+///   also cascade into `scenes_parsed_cleanly` going false and silently disabling the `orphan_rule`
+///   `--strict` check. Comparing against `file_results` (not just `scenes`, which holds only
+///   *successful* scene parses) also closes the same duplicate-report risk for a genuinely broken
+///   `scenes/*.scene.ron` that's also referenced by an action -- without this it would be parsed
+///   and reported twice for one mistake.
+/// - flagged by `path_case_mismatch` -- that's already reported as its own error; also attempting
+///   to parse under the wrong spelling would additionally duplicate the real file's diagnostics
+///   under a second, mis-cased name.
+/// - not `is_file()` (covers "doesn't exist" *and* "is a directory") -- `try_parse` only guards
+///   `exists()`, which is true for a directory too and previously produced a confusing raw IO
+///   error ("Access is denied") instead of a clean skip. A missing path is still reported
+///   separately by the existing action/`initial_scene` exists()-check in `cross_file_checks`.
+fn discover_extra_scenes(
+    project_dir: &Path,
+    initial_scene: Option<&str>,
+    actions: &[(String, Action)],
+    scenes: &mut Vec<(String, GameSceneV2)>,
+    file_results: &mut Vec<FileResult>,
+) -> Vec<String> {
+    let is_unsafe_shape =
+        |path: &str| path.is_empty() || path.split('/').any(|c| c.is_empty() || c == "." || c == "..");
+
+    let mut candidates: Vec<&str> = Vec::new();
+    if let Some(path) = initial_scene {
+        candidates.push(path);
+    }
+    for (_, action) in actions {
+        if let Action::LoadScene(path)
+        | Action::LoadSceneOverlay(path)
+        | Action::PreloadScene(path)
+        | Action::ToggleOverlay(path) = action
+        {
+            candidates.push(path);
+        }
+    }
+
+    let already_attempted: HashSet<String> = file_results.iter().map(|r| r.rel_path.clone()).collect();
+    let mut attempted_this_pass: HashSet<String> = HashSet::new();
+    for path in candidates {
+        if is_unsafe_shape(path) {
+            continue;
+        }
+        if already_attempted.contains(path) || !attempted_this_pass.insert(path.to_string()) {
+            continue;
+        }
+        if !project_dir.join(path).is_file() {
+            continue;
+        }
+        if path_case_mismatch(project_dir, path).is_some() {
+            continue;
+        }
+        if let Some(scene) = try_parse::<GameSceneV2>(project_dir, path, file_results) {
+            scenes.push((path.to_string(), scene));
+        }
+    }
+    attempted_this_pass.into_iter().collect()
+}
+
 // ── Action collection ─────────────────────────────────────────────────────────
 
 fn collect_actions(
@@ -2369,41 +2449,13 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &dialogues,
     );
 
-    // A scene path authored outside the `scenes/` convention (`Action::LoadScene`/
-    // `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, or `ProjectConfig.initial_scene`) was
-    // previously only existence/case-checked, never parsed -- so its contents (entities, ui,
-    // camera_modes, spawn_points, ...) were invisible to every cross-file check that walks
-    // `scenes`. Parse and fold in any such path here too, so it participates exactly like a
-    // conventionally-placed scene from this point on. A path that doesn't exist is silently
-    // skipped (`try_parse`'s own contract) -- the existing exists()-check in `cross_file_checks`
-    // already reports that separately; a `{self}`/`{target}`-templated path (e.g. a hypothetical
-    // future dynamic scene reference) is likewise never a real file and skips the same way. In
-    // every shipped project today `initial_scene`/every `LoadScene`-family path already lives
-    // under `scenes/` and was already parsed by the glob above, so this whole block is inert.
-    let already_parsed_scenes: HashSet<&str> = scenes.iter().map(|(p, _)| p.as_str()).collect();
-    let mut extra_scene_paths: Vec<&str> = Vec::new();
-    if let Some(config) = &project_config {
-        if !already_parsed_scenes.contains(config.initial_scene.as_str()) {
-            extra_scene_paths.push(&config.initial_scene);
-        }
-    }
-    for (_, action) in &all_actions {
-        if let Action::LoadScene(path)
-        | Action::LoadSceneOverlay(path)
-        | Action::PreloadScene(path)
-        | Action::ToggleOverlay(path) = action
-        {
-            if !already_parsed_scenes.contains(path.as_str()) && !extra_scene_paths.contains(&path.as_str()) {
-                extra_scene_paths.push(path);
-            }
-        }
-    }
-    let extra_scene_paths: Vec<String> = extra_scene_paths.into_iter().map(String::from).collect();
-    for path in &extra_scene_paths {
-        if let Some(scene) = try_parse::<GameSceneV2>(project_dir, path, &mut file_results) {
-            scenes.push((path.clone(), scene));
-        }
-    }
+    let extra_scene_paths = discover_extra_scenes(
+        project_dir,
+        project_config.as_ref().map(|c| c.initial_scene.as_str()),
+        &all_actions,
+        &mut scenes,
+        &mut file_results,
+    );
 
     let logic_files_parsed_cleanly = file_results
         .iter()

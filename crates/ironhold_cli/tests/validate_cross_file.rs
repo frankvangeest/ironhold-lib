@@ -186,9 +186,59 @@ fn initial_scene_outside_convention_dir_is_parsed_and_cross_checked_exits_1() {
 #[test]
 fn valid_scene_outside_convention_dir_exits_0() {
     // Positive control: a well-formed scene living outside scenes/, reached via a LoadScene
-    // action, should not trip anything just by being discovered and parsed.
+    // action, should not trip anything just by being discovered and parsed -- carries a real
+    // entity referencing a real prefab so the cross-check actually runs (rather than a fixture
+    // with nothing for the parse-and-check step to exercise either way).
     let (code, stdout) = validate("valid_scene_outside_convention_dir");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+#[test]
+fn broken_initial_scene_is_not_double_reported() {
+    // Regression guard: a malformed scenes/main.scene.ron that's ALSO the project's
+    // initial_scene must be reported once, not twice -- discovery must not re-discover (and
+    // re-parse-fail) a path the scenes/ glob already attempted, whether or not that attempt
+    // succeeded.
+    let (code, stdout) = validate("broken_initial_scene_not_double_reported");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    let occurrences = stdout.matches("scenes/main.scene.ron").count();
+    assert_eq!(
+        occurrences, 1,
+        "expected scenes/main.scene.ron to appear exactly once, got {occurrences}:\n{stdout}"
+    );
+}
+
+#[test]
+fn initial_scene_case_variant_is_not_double_parsed() {
+    // Regression guard: initial_scene: "Scenes/main.scene.ron" (wrong case) referencing the same
+    // real scenes/main.scene.ron the glob already parsed must not ALSO be parsed a second time
+    // under the mis-cased spelling -- that would duplicate every one of that scene's cross-file
+    // errors. The case mismatch itself is still reported (by the pre-existing path_case_mismatch
+    // check), just not compounded by a duplicate parse.
+    let (code, stdout) = validate("initial_scene_case_variant_not_double_parsed");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    let occurrences = stdout.matches("missing_prefab_case_variant").count();
+    assert_eq!(
+        occurrences, 1,
+        "expected the missing-prefab error to appear exactly once, got {occurrences}:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("resolves on disk to"),
+        "expected the pre-existing path_case_mismatch error to still fire:\n{stdout}"
+    );
+}
+
+#[test]
+fn load_scene_path_traversal_is_rejected() {
+    // Regression guard: a LoadScene path containing a `..` segment must never be parsed as a
+    // scene of THIS project -- doing so would read and cross-check a file outside project_dir
+    // (here, a sibling fixture directory) and attribute its errors to this one.
+    let (code, stdout) = validate("load_scene_path_traversal_rejected");
+    assert_eq!(code, 0, "expected exit 0 (traversal must not be followed), got {code}:\n{stdout}");
+    assert!(
+        !stdout.contains("missing_prefab_in_a_different_project_entirely"),
+        "expected the sibling fixture's content to never be read or cross-checked:\n{stdout}"
+    );
 }
 
 #[test]
