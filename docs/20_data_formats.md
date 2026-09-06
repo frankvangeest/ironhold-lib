@@ -2557,7 +2557,11 @@ the player's own mouse/keyboard visibly perturbing the destination camera mid-tr
 present in *some* scene's `camera_modes` (project-scoped rules vs. scene-scoped registries, so a
 rule that only makes sense while a *different* scene is loaded isn't caught — the dominant real
 mistake, a typo'd key, is), and checks a `Fixed` preset's `look_at_entity` against that same
-scene's `entities:` list.
+scene's `entities:` list. Also checked, on both a player prefab's `camera_mode:` and every
+`camera_modes:` registry entry: `split`/`party` authored INSIDE an `Orbit(...)` payload instead of
+as siblings of `camera_mode` (always a hard error — silently never read either way), and a `Fixed`
+mode with both `look_at`/`look_at_entity` set or neither (`--strict` only — both are a working
+fallback/hold-current-rotation behavior, not broken config).
 
 **Worked examples:** `entity_logic_demo/scenes/main.scene.ron` (single-player — press C/V to
 round-trip through a `"birdseye"` `Fixed` preset and back to `"default"`) and
