@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "obj_01",
+            prefab: "typo_prefab_key_should_still_be_caught",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+)

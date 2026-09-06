@@ -176,9 +176,37 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
     field_name: &str,
     results: &mut Vec<FileResult>,
 ) -> Option<T> {
-    let Some(path) = field else {
-        return try_parse(project_dir, convention_path, results);
-    };
+    match field {
+        Some(path) => parse_configured_path(project_dir, path, field_name, results),
+        None => try_parse(project_dir, convention_path, results),
+    }
+}
+
+/// Parses an explicitly-configured `.project.ron` path -- the shared "explicit path is
+/// authoritative" contract every configurable-path field in this file uses (`asset_catalog`,
+/// `prefab_catalog`, `stats_path`, `items_path`, `rules_path`, `state_machine_path`, ...):
+/// - A configured-but-missing path is a hard error, unlike a merely-absent convention-path file --
+///   the runtime unconditionally tries to load whatever's configured, so `try_parse`'s silent
+///   `None`-on-missing (designed for "this convention path might not apply to this project") is
+///   the wrong contract here.
+/// - A case/separator mismatch is reported but still parsed, not treated as missing -- a mis-cased
+///   reference shouldn't also silently disable every downstream check that depends on this file
+///   having loaded (a designer who fixes the casing shouldn't then be ambushed by a fresh wave of
+///   unrelated errors that were there all along).
+/// - A path already attempted by an earlier step this same run (any `rel_path` already in
+///   `results`, regardless of what it was parsed as) is not re-parsed under a different type --
+///   without this, e.g. a `rules_path` typo'd onto `prefabs/prefabs.ron` would be re-parsed as a
+///   `LogicRulesAsset`, fail, and report a perfectly valid file as broken (found live during
+///   `configurable_logic_paths.md`'s review).
+fn parse_configured_path<T: serde::de::DeserializeOwned>(
+    project_dir: &Path,
+    path: &str,
+    field_name: &str,
+    results: &mut Vec<FileResult>,
+) -> Option<T> {
+    if results.iter().any(|r| r.rel_path == path) {
+        return None;
+    }
     if !project_dir.join(path).is_file() {
         results.push(FileResult {
             rel_path: path.to_string(),
@@ -187,11 +215,6 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
         return None;
     }
     if let Some(problem) = path_case_mismatch(project_dir, path) {
-        // Unlike the missing-file case above, this file exists and parses fine on this machine —
-        // only the reference's casing is wrong. Report the problem but still parse it, so a
-        // mis-cased catalog path doesn't also silently disable every downstream check that
-        // depends on this catalog having loaded (a designer who fixes the casing shouldn't then
-        // be ambushed by a fresh wave of unrelated errors that were there all along).
         results.push(FileResult {
             rel_path: path.to_string(),
             errors: vec![format!("{field_name} {problem}")],
@@ -426,7 +449,12 @@ fn discover_extra_scenes(
 /// Resolved `rules.ron`/`state_machine.ron` content plus the rel_path each half should be
 /// attributed to (for `source_file`/`error_type` messages and the `logic_files_parsed_cleanly`
 /// filter) -- see `resolve_logic_files`'s doc comment for why the source path isn't always a
-/// literal `"logic/rules.ron"`/`"logic/state_machine.ron"` anymore.
+/// literal `"logic/rules.ron"`/`"logic/state_machine.ron"` anymore. The `*_source` strings are
+/// filter keys for `logic_files_parsed_cleanly`, not attributions of a real asset -- both are
+/// still populated (to the project.ron's own name) even when the matching `Option` is `None`
+/// (an unset field with no inline rules, or an unset `state_machine_path`), so do not "simplify"
+/// this into `Option<(String, Asset)>` pairs: the filter specifically needs to see a project.ron
+/// whose *configured* path failed to parse, which requires the source to outlive a failed parse.
 struct ResolvedLogicFiles {
     rules: Option<LogicRulesAsset>,
     rules_source: String,
@@ -444,39 +472,28 @@ struct ResolvedLogicFiles {
 /// previously had its unrelated, dead-at-runtime `logic/rules.ron` silently counted as live by
 /// every cross-file check.
 ///
-/// The one deliberate divergence from the runtime, matching the existing
-/// `load_configured_catalog` precedent: when there's no `.project.ron` at all, still fall back to
-/// checking the convention-path files -- there's no config to consult, so there's no "wrong
-/// field" to get out of sync with, and refusing to look would silently stop checking logic
-/// entirely for every fixture/project that predates configurable paths.
+/// Two deliberate divergences from the runtime:
+/// - When there's no *parseable* `.project.ron` (either none exists, or the one that does failed
+///   to parse -- `project_config` is `None` either way), still fall back to checking the
+///   convention-path files, matching the existing `load_configured_catalog` precedent -- there's
+///   no config to consult, so there's no "wrong field" to get out of sync with, and refusing to
+///   look would silently stop checking logic entirely for every fixture/project that predates
+///   configurable paths.
+/// - A configured path containing a `..` segment IS followed (unlike `discover_extra_scenes`,
+///   which refuses to discover one) -- this is intentional, not an oversight: `rules_path`/
+///   `state_machine_path` are exactly-one-hardcoded-field values the runtime resolves with the
+///   identical plain `format!("{root}/{path}")` (`resolve_project_path`), so following it here
+///   is runtime-faithful, whereas `discover_extra_scenes`'s candidates are arbitrary
+///   designer-authored strings from inside action bodies, a materially different trust boundary.
 ///
-/// A configured-but-missing path is a hard error, pushed directly rather than via `try_parse`
-/// (which silently returns `None` for a missing file -- correct for a convention-path guess, but
-/// this is a `.project.ron`-authored field the runtime unconditionally tries to load).
+/// A configured-but-missing path is a hard error (see `parse_configured_path`), not `try_parse`'s
+/// silent `None` -- correct for a convention-path guess, but this is a `.project.ron`-authored
+/// field the runtime unconditionally tries to load.
 fn resolve_logic_files(
     project_dir: &Path,
     project_config: Option<&ProjectConfig>,
     file_results: &mut Vec<FileResult>,
 ) -> ResolvedLogicFiles {
-    // Shared by every "a .project.ron field names this file explicitly" case below: honor it
-    // exactly, hard error if it doesn't resolve (the runtime unconditionally tries to load
-    // whatever's configured, unlike a convention-path guess that might legitimately not apply).
-    fn parse_configured<T: serde::de::DeserializeOwned>(
-        project_dir: &Path,
-        path: &str,
-        field_name: &str,
-        file_results: &mut Vec<FileResult>,
-    ) -> Option<T> {
-        if !project_dir.join(path).is_file() {
-            file_results.push(FileResult {
-                rel_path: path.to_string(),
-                errors: vec![format!("{field_name} in .project.ron does not exist on disk")],
-            });
-            return None;
-        }
-        try_parse::<T>(project_dir, path, file_results)
-    }
-
     let Some(config) = project_config else {
         // No .project.ron at all -- nothing to divide by field, fall back to both convention
         // paths exactly like this function always did (needed for every fixture/project that
@@ -493,11 +510,16 @@ fn resolve_logic_files(
 
     let (rules, rules_source) = match config.rules_path.as_deref() {
         Some(path) => (
-            parse_configured::<LogicRulesAsset>(project_dir, path, "rules_path", file_results),
+            parse_configured_path::<LogicRulesAsset>(project_dir, path, "rules_path", file_results),
             path.to_string(),
         ),
         // No convention-path fallback here on purpose -- the runtime's own fallback for an unset
         // rules_path is the inline V1 field, never a guess at "logic/rules.ron" existing on disk.
+        // The source string is a filter key for logic_files_parsed_cleanly, not an attribution --
+        // it's populated (to the project.ron's own name) even when `rules` ends up `None`, same as
+        // the state_machine arm below, so a project.ron that fails to parse (routing to the
+        // no-.project.ron branch above instead) is the only way either half comes up genuinely
+        // sourceless.
         None => {
             let rules = (!config.rules.is_empty())
                 .then(|| LogicRulesAsset { schema_version: 2, rules: config.rules.clone() });
@@ -507,7 +529,9 @@ fn resolve_logic_files(
 
     let (state_machine, state_machine_source) = match config.state_machine_path.as_deref() {
         Some(path) => (
-            parse_configured::<StateMachineAsset>(project_dir, path, "state_machine_path", file_results),
+            parse_configured_path::<StateMachineAsset>(
+                project_dir, path, "state_machine_path", file_results,
+            ),
             path.to_string(),
         ),
         // No inline V1 equivalent exists for the state machine -- an unset state_machine_path
@@ -2082,6 +2106,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
             (config.prefab_catalog.as_deref(), "prefabs/prefabs.ron", "prefab_catalog"),
             (config.stats_path.as_deref(), "stats/stats.ron", "stats_path"),
             (config.items_path.as_deref(), "items/items.ron", "items_path"),
+            (config.model_fixes_path.as_deref(), "overrides/model_fixes.ron", "model_fixes_path"),
         ] {
             if field.is_none() && project_dir.join(convention_path).is_file() {
                 warnings.push(StrictWarning {
@@ -2092,6 +2117,36 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                          it via the convention-path fallback"
                     ),
                     kind: "unset_catalog_path_with_convention_file",
+                });
+            }
+        }
+    }
+
+    // Unlike the catalog paths above, `rules_path`/`state_machine_path` have NO convention-path
+    // fallback at all once a `.project.ron` exists (`resolve_logic_files`) -- a
+    // `logic/rules.ron`/`logic/state_machine.ron` left on disk with its matching field unset is
+    // not just unloaded by the runtime, it's not even parsed or cross-checked by THIS validate
+    // run either (unlike the catalog case, whose message can truthfully say "checked via the
+    // convention-path fallback"). Without this warning such a file gets zero signal from any
+    // tool: this is exactly what happened to `3rd_person_game_demo`/`terrain_demo`'s dead
+    // `logic/rules.ron` files when `resolve_logic_files` closed the false-orphan-warning bug they
+    // used to (incorrectly) surface via `orphan_rule` -- that was a real bug fix, but it also
+    // silently deleted the only signal pointing at those files, which this restores correctly.
+    if let Some(config) = project_config {
+        for (field, convention_path, field_name) in [
+            (config.rules_path.as_deref(), "logic/rules.ron", "rules_path"),
+            (config.state_machine_path.as_deref(), "logic/state_machine.ron", "state_machine_path"),
+        ] {
+            if field.is_none() && project_dir.join(convention_path).is_file() {
+                warnings.push(StrictWarning {
+                    source_file: find_project_ron(project_dir).unwrap_or_default(),
+                    message: format!(
+                        "{convention_path} exists but {field_name} is not set in .project.ron — \
+                         the runtime never loads it, and this validate run never parsed or \
+                         cross-checked it either; delete the file if it's leftover, or set \
+                         {field_name} if it's meant to be live"
+                    ),
+                    kind: "unset_logic_path_with_convention_file",
                 });
             }
         }
@@ -2533,8 +2588,13 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         }
     }
 
-    let _model_fixes: Option<ModelFixesAsset> =
-        try_parse(project_dir, "overrides/model_fixes.ron", &mut file_results);
+    let _model_fixes: Option<ModelFixesAsset> = load_configured_catalog(
+        project_dir,
+        project_config.as_ref().and_then(|c| c.model_fixes_path.as_deref()),
+        "overrides/model_fixes.ron",
+        "model_fixes_path",
+        &mut file_results,
+    );
 
     let all_actions = collect_actions(
         rules.as_ref().map(|r| (rules_source.as_str(), r)),

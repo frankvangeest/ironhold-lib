@@ -1,0 +1,5 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    rules_path: "Logic/Rules.ron",
+)

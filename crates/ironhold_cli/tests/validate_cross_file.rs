@@ -1318,6 +1318,55 @@ fn missing_configured_rules_path_and_state_machine_path_exits_1() {
 }
 
 #[test]
+fn rules_path_case_mismatch_exits_1() {
+    // rules_path is a designer-authored path like any other -- it must get the same
+    // path_case_mismatch coverage every other configurable path in this file has.
+    let (code, stdout) = validate("rules_path_case_mismatch");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        (stdout.contains("resolves on disk to") && stdout.contains("logic/rules.ron"))
+            || stdout.contains("does not exist on disk"),
+        "expected the case-mismatch or missing-path message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn rules_path_pointed_at_wrong_file_type_does_not_corrupt_that_files_own_report() {
+    // Regression guard: a rules_path typo'd onto an existing, valid, different-type file (here,
+    // prefabs/prefabs.ron, itself also configured as prefab_catalog) must not be re-parsed as a
+    // LogicRulesAsset and reported as broken -- that file already has its own, correct FileResult
+    // from loading it as a catalog. The scene's own unrelated missing_prefab error must still
+    // fire, proving the catalog itself loaded fine despite the rules_path collision attempt.
+    let (code, stdout) = validate("rules_path_pointed_at_wrong_file_type");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert_eq!(
+        stdout.matches("prefabs/prefabs.ron").count(),
+        1,
+        "expected prefabs/prefabs.ron to appear exactly once, not re-parsed under a second type:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("typo_prefab_key_should_still_be_caught"),
+        "expected the scene's own missing_prefab error to still fire:\n{stdout}"
+    );
+}
+
+#[test]
+fn unset_rules_path_with_convention_file_strict_exits_1() {
+    // A project setting only state_machine_path, with a logic/rules.ron still sitting on disk,
+    // must get a --strict signal that the file is dead and unchecked -- otherwise resolve_logic_
+    // files correctly ignoring it (see the dead-rules-ron test above) leaves the file with zero
+    // diagnostic coverage from any tool at all.
+    let (code, stdout) = validate("unset_rules_path_with_convention_file");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = validate_strict("unset_rules_path_with_convention_file");
+    assert_eq!(code, 1, "expected exit 1 with --strict, got {code}");
+    assert!(
+        stdout.contains("logic/rules.ron exists but rules_path is not set"),
+        "expected the unset_logic_path_with_convention_file warning in output:\n{stdout}"
+    );
+}
+
+#[test]
 fn orphan_ui_rule_strict_exits_1() {
     // A rule handling ui.button_pressed:truly_orphaned with no button/binding anywhere in the
     // project -- dead code, only reported under --strict (same severity class as unused_prefab).

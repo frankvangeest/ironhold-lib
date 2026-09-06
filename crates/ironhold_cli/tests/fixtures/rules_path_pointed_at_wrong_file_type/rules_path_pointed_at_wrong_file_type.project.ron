@@ -1,0 +1,6 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    rules_path: "prefabs/prefabs.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+)

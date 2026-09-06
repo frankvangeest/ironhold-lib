@@ -104,9 +104,9 @@ Entry point for a project. References all other files.
 | `display_name` | `Option<String>` | v2+ | Human-readable name |
 | `asset_catalog` | `Option<String>` | v2+ | Path to an `assets.ron` file. When absent, no asset catalog loads for this project at all — no models/effects/audio/decals are resolvable. `ironhold_cli validate` reads this field, not the `assets.ron` convention path, so relocating it is honored (falls back to checking the convention path only when this field itself is unset). |
 | `prefab_catalog` | `Option<String>` | v2+ | Path to a `prefabs/prefabs.ron` file. When absent, no prefab catalog loads for this project at all. Same `ironhold_cli validate` behavior as `asset_catalog` above. |
-| `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` (rules workflow) |
-| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow; use instead of `rules_path`) |
-| `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron` |
+| `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` (rules workflow). When absent, inline `rules:` is used instead — **not** the `logic/rules.ron` convention path, even if that file exists on disk. `ironhold_cli validate` reads this field the same way the runtime does (no convention-path fallback once a `.project.ron` exists — falls back only when there's no project config at all). |
+| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow). Both `rules_path` and `state_machine_path` can be set together — despite an inaccurate runtime warning suggesting otherwise, both are fully loaded and live regardless of the other. `ironhold_cli validate` reads this field the same way as `rules_path` above — see "Checks performed" in `docs/60_contributing.md`. |
+| `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron`. `ironhold_cli validate` reads this field, not the convention path — see `asset_catalog` above. |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` |
 | `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. Fires `ui.button_pressed:<trigger>` (value used as-is, same as `global_key_bindings`); covered by `ironhold_cli validate`'s `unreachable_trigger` check. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
@@ -4030,7 +4030,7 @@ This is expected and normal — nearly every character model in `shared/models/c
 
 ## `logic/state_machine.ron` — StateMachineAsset ✅
 
-Used when `state_machine_path` is set in the project config (schema v3). Replaces `rules.ron` for FSM-based projects. See `docs/30_runtime_events_and_logic.md` for detailed FSM semantics.
+Used when `state_machine_path` is set in the project config (schema v3), for FSM-based projects. Despite the "v2 vs v3 workflow" framing, `rules_path` is not disabled by setting this — both load and run independently if both are set. See `docs/30_runtime_events_and_logic.md` for detailed FSM semantics.
 
 **Top-level fields:**
 
