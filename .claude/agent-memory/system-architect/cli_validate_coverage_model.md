@@ -119,14 +119,13 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    exactly and validate's needs by projection — no index-zip required. See
    [[ui-trigger-source-enumeration]] for the re-parse hazard that placement introduced.
 
-5. **The standing `cargo test -p ironhold_cli` gate covers only 9 of the 15 project dirs.**
-   `crates/ironhold_cli/tests/validate_projects.rs` hardcodes one `#[test]` per project and is
-   missing `camera_modes`, `dynamic_animation_control`, `foliage_demo`, `stats_demo`,
-   `blank_project`, and `integration_tests`. `test_web.py`'s `PROJECTS` list (14, everything but
-   `integration_tests`) is the only broad gate, and it only runs on `integration` batches. So a
-   "manual sweep of all 14 projects validated clean" claim is real but **not reproducible at
-   feature-branch speed** — adding the missing one-liners to `validate_projects.rs` is the cheap fix
-   any reviewer should recommend when a change's safety argument rests on such a sweep.
+5. **The standing `cargo test -p ironhold_cli` gate is now broad — this old gap is CLOSED.**
+   `crates/ironhold_cli/tests/validate_projects.rs` hardcodes one `#[test]` per project and, as of
+   `3677859` (2026-09-04), has **14** covering every shipped project including `camera_modes`,
+   `dynamic_animation_control`, `foliage_demo`, `stats_demo`, and `blank_project`. Only
+   `integration_tests/` (a 3-`*.project.ron` fixture dir, see item 6) is excluded. So "all shipped
+   projects validate clean" **is** reproducible at feature-branch speed now — a reviewer should ask
+   whether a new project was added without its one-liner, not assume the sweep is unverifiable.
 
 6. **`find_project_ron` picks the *first* `*.project.ron` in `read_dir` order** and
    `assets/projects/integration_tests/` holds three (`integration_tests`, `test_start_menu`,

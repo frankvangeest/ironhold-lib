@@ -86,7 +86,24 @@ suppress a `validate` error.
 "`--strict` flag" bullet lists (~lines 236-262).** That is the only designer-facing enumeration of
 what `validate` catches, and it is otherwise well maintained (label_depth_scale, gamepad_index,
 merchant, slope/coyote all present) — but the `Action::SetCameraMode` mode check is already missing
-from it, so don't take "the neighbouring check didn't do it" as precedent.
+from it, so don't take "the neighbouring check didn't do it" as precedent. **This is the single most
+frequently missed step — recurred again in `feature/camera_mode_validation` (2026-09-06): two new
+checks + a whole new prefab-level `camera_mode` surface shipped with line 249 untouched, and
+`docs/20_data_formats.md`'s own per-feature "**Validation:**" paragraph (there is one per feature
+area, e.g. camera_modes @~2556) left stale too. Check BOTH lists, not just 60_contributing.**
+
+**Design question to ask of any check that mirrors an existing runtime `warn!`: is the warn itself
+over-strict relative to the code?** Promoting a `warn!` to an exit-1 error raises the cost of a
+false positive — a designer cannot suppress a `validate` error. Concrete case
+(`feature/camera_mode_validation`): `FixedCameraDef`'s doc says "exactly one of
+`look_at`/`look_at_entity`", but `fixed_camera_system` implements `look_at_entity ... .or(look_at)`,
+a real working fallback. Read the *system*, not just the warn text, before mirroring.
+
+**A helper shared across two call sites needs per-call-site remedy text, not just a per-call-site
+`context` prefix.** Same feature: the nested-`split`/`party` message prescribes
+`components: (camera_mode: ..., split: (...))`, which is meaningless for the `camera_modes:`
+registry call site (no `components:` block exists there). Prefix-only parameterisation makes the
+*subject* right and leaves the *remedy* wrong.
 
 **Sibling gap noted 2026-09-04: `Action::JoinPlayer`'s `spawn_points["player_{next_slot+1}_start"]`
 is unchecked** (action_executor.rs:~1753) and its miss path is *even quieter* than
