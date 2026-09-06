@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots
+description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; scene-path coverage is partial; dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
 metadata:
   type: project
 ---
@@ -153,6 +153,29 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    the runtime-faithful fix is to skip slots whose index is below the count of player-tagged scene
    entities — and a *separate* "dead join slot" diagnostic is the better authoring signal anyway.
    Note also: hot-join is Grid-split-only at runtime; none of the three checks gate on that.
+
+8. **Path-reference checks are case/separator-blind by default, and the 2026-09-05 fix covers only
+   6 of the path surfaces.** `feature/path_case_check` added `path_case_mismatch(project_dir,
+   authored_path) -> Option<String>` (a per-component case-insensitive `read_dir` walk +
+   a backslash short-circuit) behind an `else if` after each existing `exists()`/`is_file()` check:
+   the `LoadScene` family, `StartDialogue.dialogue_path`, `initial_scene`, `PrefabDef.behavior`,
+   `PrefabDef.dialogue`, and `load_configured_catalog`. **What is still case-blind:**
+   (a) every `assets.ron` model/texture/audio/shader path — validate never existence-checks these
+   at all; the only gate is `tools/asset_checker/check.py`, which uses `resolved.exists()` (also
+   case-insensitive on Windows) and `.resolve()` for orphan matching (case-normalizing), so the
+   *largest* 404 surface in the WASM build is unguarded by both tools. Note these resolve against
+   the **assets root**, not `project_dir`, so reusing the helper needs a `root` param, not
+   `project_dir`.
+   (b) `EnvironmentMapConfig.diffuse_path`/`specular_path` (`scene_loader.rs`~2869 raw
+   `asset_server.load(p)`) — no CLI check of any kind.
+   (c) `rules_path`/`state_machine_path`/`model_fixes_path` — never resolved by validate at all
+   (item 4b / the standing backlog item), so they get neither existence nor case checking.
+   **Two structural facts worth remembering:** the case half of the check is a **no-op on a
+   case-sensitive filesystem** (the caller's `exists()` fails first and reports `missing_file`),
+   which makes the `bad_scene_path_case` / `bad_scene_path_backslash` /
+   `bad_prefab_catalog_path_case` fixtures' *message-text* assertions Windows-only — they fail on
+   Linux/CI. And the backslash arm is a pure string check gated behind `exists()`, so it is
+   unreachable on exactly the platforms whose semantics it emulates.
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.

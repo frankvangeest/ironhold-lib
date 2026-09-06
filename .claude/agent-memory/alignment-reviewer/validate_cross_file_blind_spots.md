@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — the 4 configurable catalog paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, and open dialogue/JoinPlayer gaps
+description: Structural blind spots in ironhold_cli validate.rs — the 4 configurable catalog paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, the full inventory of RON-authored disk paths (which are checked vs not), and open dialogue/JoinPlayer gaps
 metadata:
   type: project
 ---
@@ -171,6 +171,53 @@ only because all three declare identical `asset_catalog`/`prefab_catalog` values
 **Runtime failure mode for a bad `item_key` is quieter than "no-op":** `inventory::add_to_slots`
 (inventory.rs:167-177) falls back to `max_stack = 99` on a catalog miss with **no warn**, so the item
 lands in the inventory as an unnamed, icon-less stack. Cite this when justifying design-time strictness.
+
+**Inventory of RON-authored disk paths (established during `feature/path_case_check`, 2026-09-05).**
+Only **6** call sites in validate.rs do an on-disk check, and `path_case_mismatch` now covers all 6
+(`LoadScene|LoadSceneOverlay|PreloadScene|ToggleOverlay`, `StartDialogue.dialogue_path`,
+`ProjectConfig.initial_scene`, `PrefabDef.behavior`, `PrefabDef.dialogue`,
+`load_configured_catalog`). The other `exists()/is_file()` hits in the file are convention-path
+literals (`try_parse`, the `--strict` unset-catalog check) or the CLI arg — correctly out of scope.
+**But "every RON-authored disk-path reference" is a much bigger set than "every site that already
+had an exists() check", and the rest are unchecked entirely** (no existence check, hence no case
+check either):
+- `PrefabDef.animation_policy` — project-relative (`"prefabs/animation/x.ron"`), resolved by
+  `resolve_project_path` in entity_spawner.rs:182, sits **3 lines from the `behavior`/`dialogue`
+  checks in the same prefab loop**. Failure mode is severe: the entity is spawned
+  `Visibility::Hidden` pending the policy load, so a 404 = invisible-then-unanimated character.
+  Same field on `PlayerConfig` (schema/player.rs:55, scene-authored).
+- `ProjectConfig.rules_path` / `state_machine_path` / `model_fixes_path` — configurable, but
+  validate still uses the hardcoded `"logic/rules.ron"`/`"logic/state_machine.ron"` literals
+  (acknowledged at validate.rs:57-59). A relocated/mis-cased `rules_path` = zero logic in the browser.
+- **assets-root-relative** (different base dir — `assets/`, not `project_dir`): every
+  `AssetCatalog` entry `path` (models/textures/audio/effects/decals, schema/catalog.rs:602/608),
+  `MaterialDef.shader` (the one designer-authored shader path), `TerrainConfigV2.heightmap`/
+  `.splatmap`, `EnvironmentMapConfig.diffuse_path`/`.specular_path`. validate checks none of these;
+  `tools/asset_checker/check.py` checks existence with Python `Path.exists()`, which is **equally
+  case-blind on Windows** — so the largest population of HTTP-served paths still has the bug.
+  `path_case_mismatch(base, rel)` already takes its base dir as a param, so extending it is cheap.
+
+**`path_case_mismatch` false-positive class to remember: duplicate case-variant siblings.** The walk
+does `read_dir(..).find(|e| e.file_name().eq_ignore_ascii_case(component))` — **first match in
+arbitrary `read_dir` order, not exact-match-preferred**. On a case-sensitive FS where both
+`Main.scene.ron` and `main.scene.ron` exist, an exactly-correct authored path can be reported as a
+mismatch. One-line fix (prefer an exact match before falling back to the case-insensitive one).
+Conservative in the other direction by luck: `eq_ignore_ascii_case` doesn't fold non-ASCII, and `.`/
+`..`/leading-`/`/empty components make `find` return `None` ⇒ silent skip, never a false error.
+
+**The check is a no-op on a case-sensitive FS** (its `else` branch is only reached after `exists()`
+passed, which on Linux means the path already matched byte-exactly). Two consequences: the 3
+message-asserting fixture tests (`wrong_case_scene_path_exits_1`, `backslash_scene_path_exits_1`,
+`wrong_case_configured_catalog_path_exits_1`) assert Windows/macOS-only message text and would fail
+on Linux (they'd get `missing_file` instead); and the highest-value Linux/macOS improvement is the
+reverse — run the case walk **inside** the `missing_file` branch to append "did you mean {real}?",
+which would also converge the messages across platforms and make those tests portable.
+
+**`load_configured_catalog` returns `None` on a case mismatch**, so the catalog isn't parsed and
+every downstream check that depends on it silently vanishes (fix the case → re-run → fresh wave of
+unrelated errors). The file is readable; continuing to `try_parse` after recording the error would
+be strictly better. Also: that site pushes a `FileResult` string, so it is the **1 of 6 sites with
+no `error_type: "path_case_mismatch"`** — a `--json` consumer grepping that type misses catalog paths.
 
 **Positive-path coverage for item checks already exists via the `validate_projects` smoke test:**
 `3rd_person_game_demo` has 4 `BuyItem`s (state_machine.ron:157-160), `ItemDef.currency_stat: "gold"`
