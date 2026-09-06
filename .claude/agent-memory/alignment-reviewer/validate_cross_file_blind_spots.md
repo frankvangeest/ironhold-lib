@@ -155,6 +155,37 @@ comment calls templated scene paths a "hypothetical future" form, that's mislead
 
 **`query scenes` (query.rs:326) and `stats` (stats.rs:83) still glob only `scenes/`** — whenever
 validate's coverage goes reference-driven, those two stay convention-only and disagree with it.
+As of `feature/configurable_logic_paths` this is no longer hypothetical: `query rules`/`actions`/
+`events` (query.rs:437-438, 646, 663) and `stats` (stats.rs:96,100) still `silent_parse` the two
+hardcoded logic convention paths, so `ironhold query rules assets/projects/3rd_person_game_demo`
+(the exact command documented at 60_contributing.md:302) lists that project's runtime-dead
+`logic/rules.ron` as live while `validate` no longer sees it at all.
+
+**SIX configured paths now, not four.** `feature/configurable_logic_paths` (2026-09-06) added
+`resolve_logic_files` + `ResolvedLogicFiles { rules, rules_source, state_machine,
+state_machine_source }` (validate.rs:~430-519), mirroring `project_loader.rs::check_project_loaded`
+exactly: `.project.ron` present ⇒ `rules_path`/`state_machine_path` are the ONLY source for their
+half (unset `rules_path` ⇒ synthesize a `LogicRulesAsset` from inline V1 `config.rules`, attributed
+to the project.ron's own filename; unset `state_machine_path` ⇒ `None`, no fallback); no
+`.project.ron` ⇒ both convention paths, the same deliberate divergence `load_configured_catalog`
+already makes. Two things a repeat of this pattern must get right, both missed here:
+- **`parse_configured` (the new helper) skips the `path_case_mismatch` step that
+  `load_configured_catalog` (validate.rs:189-199) performs.** So a mis-cased
+  `rules_path: "Logic/rules.ron"` validates clean on Windows and 404s in the browser = zero logic.
+  60_contributing.md:254 still says "the four configured catalog paths" — it's six now, two uncovered.
+- **`strict_checks`'s `unset_catalog_path_with_convention_file` array (validate.rs:~2080-2085) was
+  not extended.** `3rd_person_game_demo`/`terrain_demo` each ship a now-invisible dead
+  `logic/rules.ron`; before the change they at least got (wrong) `orphan_rule` warnings pointing at
+  them. Adding the two fields needs *different* message text than the catalog one (that message
+  ends "...even though this validate run just checked it via the convention-path fallback" — for
+  logic paths validate did NOT check it).
+
+**Source-path attribution is display-only, verified safe.** No check in validate.rs branches on a
+logic file's source string; the only structural uses are `r.rel_path == rules_source` in
+`logic_files_parsed_cleanly` and `source_file` message strings, and the only path-shaped predicates
+are `starts_with("behaviors/")`/`starts_with("scenes/")`. So attributing inline `config.rules` to
+the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and the synthesized
+`schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).
 
 **Open dialogue-adjacent gaps as of 2026-09-04** (all cheap, all now unblocked since the parsed
 `DialogueDef`s are in hand):
@@ -239,9 +270,14 @@ check either):
   checks in the same prefab loop**. Failure mode is severe: the entity is spawned
   `Visibility::Hidden` pending the policy load, so a 404 = invisible-then-unanimated character.
   Same field on `PlayerConfig` (schema/player.rs:55, scene-authored).
-- `ProjectConfig.rules_path` / `state_machine_path` / `model_fixes_path` — configurable, but
-  validate still uses the hardcoded `"logic/rules.ron"`/`"logic/state_machine.ron"` literals
-  (acknowledged at validate.rs:57-59). A relocated/mis-cased `rules_path` = zero logic in the browser.
+- ~~`ProjectConfig.rules_path` / `state_machine_path`~~ **CLOSED** by
+  `feature/configurable_logic_paths` (2026-09-06) — see the "SIX configured paths" section below.
+  **`model_fixes_path` is the one still hardcoded** (`try_parse(project_dir,
+  "overrides/model_fixes.ron")`, validate.rs:~2536, assigned to `_model_fixes` and consumed by no
+  check — only its parse `FileResult` matters). 8 shipped projects set it, all at the convention
+  path. Two live inconsistencies: a relocated `model_fixes_path` is never parse-checked, and a
+  *dead* `overrides/model_fixes.ron` (field unset) can still exit-1 on a file the runtime never
+  loads. Fix is one call: route it through `load_configured_catalog` + add it to the strict array.
 - **assets-root-relative** (different base dir — `assets/`, not `project_dir`): every
   `AssetCatalog` entry `path` (models/textures/audio/effects/decals, schema/catalog.rs:602/608),
   `MaterialDef.shader` (the one designer-authored shader path), `TerrainConfigV2.heightmap`/

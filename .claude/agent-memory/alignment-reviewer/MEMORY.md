@@ -42,4 +42,5 @@
 - [validate.rs cross-file blind spots](validate_cross_file_blind_spots.md) — 4 configurable catalog paths + fallback divergence, source_file-literal rule, {self}-token false positives, dialogue gaps, LoadedProject struct, full RON disk-path inventory + path_case_mismatch traps
 - [Schema strictness hardening](schema_strictness_hardening_pattern.md) — reviewing deny_unknown_fields/stricter-parse: table of the 5 Action-bearing RON surfaces and how each parse failure actually reaches the designer
 - [Stale feature base-branch hazard](stale_feature_base_branch_hazard.md) — branches cut from `main` miss `integration`'s schema fields; new test struct literals merge cleanly then fail to compile
+- [rules_path vs state_machine_path coexistence](rules_vs_state_machine_coexistence.md) — both are independently live; the runtime warn + docs + backlog all falsely claim FSM replaces rules.ron
 - [UI trigger reachability map](ui_trigger_reachability_pattern.md) — 4 `UiEvent::ButtonPressed` emit sites + 5 panel triggers, both directions now covered; 3x literal duplication; buy_item scoping rationale

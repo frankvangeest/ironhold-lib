@@ -69,6 +69,19 @@ counterpart at all**. Note also `prefab.components.camera_mode` has a **third** 
 `tags: ["flycam"]` prefabs (`scene_loader.rs`~273) — so "camera_mode on a prefab" is not
 synonymous with "player prefab".
 
+**A runtime `warn!` can also just be FALSE — check the code, not the message.**
+`project_loader.rs`~59-64 warns "rules.ron is NOT loaded when `state_machine_path` is present"
+(shipped as a "silent failure diagnostic", `1e0ebbb`). It isn't true: `rules_handle` is built
+unconditionally from `rules_path` (~49), `LoadedRules` is set from it (~249-254), and
+`message_interpreter_system` + `fsm_interpreter_system` are both registered unconditionally in
+`lib.rs`~257-258 with no cross-gating — **both are live when both paths are set**.
+`docs/20_data_formats.md`~108 ("use instead of `rules_path`") repeats the same never-implemented
+intent. `feature/configurable_logic_paths` (`f82de0e`) is the first thing to encode the real
+semantics: `resolve_logic_files` treats both halves as live, and the `valid_ui_trigger` fixture now
+sets both paths and asserts exit 0 under `--strict`. So the CLI matches the code and contradicts
+the message. Either fix the runtime to match its own warning or delete the warning; don't "fix"
+the CLI to match it.
+
 **Why:** these pairs are cheap to add and land often, so the same mistakes recur; all of them
 are invisible in a green test run.
 

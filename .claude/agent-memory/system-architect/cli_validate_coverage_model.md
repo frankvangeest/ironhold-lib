@@ -43,12 +43,36 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `resolve_project_path()` (scene_manager/mod.rs) is a plain `format!("{root}/{path}")`, so the
    CLI's `project_dir.join(path)` is a faithful mirror of runtime resolution — no shared-asset
    special-casing to worry about.
-   **Two things the fix deliberately did *not* do, both worth re-raising if they bite:**
-   (a) the helper is private to `validate.rs`, so `query.rs` (3 sites) and `stats.rs` (2 sites)
-   still hardcode `"prefabs/prefabs.ron"`/`"assets.ron"` — `query prefabs` on a relocated-catalog
-   project hard-errors "prefabs/prefabs.ron not found". The helper belongs in `commands/utils.rs`
-   next to `silent_parse`/`glob_dir`.
-   (b) when a field is *unset*, validate falls back to the convention path rather than mirroring
+   **`rules_path`/`state_machine_path` got the same treatment 2026-09-06 (`f82de0e`,
+   `feature/configurable_logic_paths`)**: new `resolve_logic_files(project_dir, project_config,
+   file_results) -> ResolvedLogicFiles` (4 fields: asset + source-path per half) replaces the two
+   hardcoded `try_parse` literals. Runtime-faithful (`project_loader.rs` 49-64/249-254): explicit
+   path wins (hard error if missing), unset `rules_path` → synthesize `LogicRulesAsset` from inline
+   `ProjectConfig.rules`, unset `state_machine_path` → `None`; convention-path fallback only when
+   there's no *parseable* `.project.ron`. **The 4-field (not `Option<(String, T)>`) shape is
+   load-bearing and undocumented**: the source path must survive a *failed* parse, or
+   `logic_files_parsed_cleanly` can't match the `FileResult` — "simplifying" it flips that bool
+   true on a malformed configured rules file and un-gates `check_ui_trigger_reachability` +
+   `orphan_rule`. Side effect worth knowing: inline `ProjectConfig.rules` now reaches
+   `collect_actions` *before* `discover_extra_scenes`, so a `LoadScene` inside an inline rule now
+   participates in out-of-convention scene discovery. `model_fixes_path` is the **last** unresolved
+   configured path (`validate.rs`~2536, still literal `"overrides/model_fixes.ron"` bound to
+   `_model_fixes` — parse-coverage only).
+   **Three things these fixes deliberately did *not* do, all worth re-raising if they bite:**
+   (a) the helpers are private to `validate.rs`, so `query.rs` (3 catalog + **6 logic** sites) and
+   `stats.rs` (2 + **2**) still hardcode `"prefabs/prefabs.ron"`/`"assets.ron"`/
+   `"logic/rules.ron"`/`"logic/state_machine.ron"` — `query prefabs` on a relocated-catalog project
+   hard-errors "prefabs/prefabs.ron not found", and `query rules 3rd_person_game_demo` prints a
+   rules file the engine never loads and `validate` no longer parses. Three commands, three answers.
+   The helpers belong in `commands/utils.rs` next to `silent_parse`/`glob_dir`.
+   (c) `parse_configured` (nested inside `resolve_logic_files`) is `load_configured_catalog`'s
+   `Some(path)` arm **minus the `path_case_mismatch` call** — so `rules_path: "Logic/Rules.ron"`
+   still validates clean on Windows and 404s in the browser. This is precisely the "7th path field
+   picks up the existence half and forgets the case half" failure predicted in
+   `claude_suggestions.md`~414. Hoisting `parse_configured` to module level *with* the case block
+   lets `load_configured_catalog` become a 4-line `match` over it — closes the duplication its own
+   review deferred and the case gap in one move.
+   (b) when a *catalog* field is unset, validate falls back to the convention path rather than mirroring
    the runtime's "load nothing at all". This was forced by ~46 of 63 CLI fixtures having a
    convention catalog and no `.project.ron` at all. It is inert for shipped content today
    (verified: every convention-path `assets.ron`/`prefabs.ron`/`stats.ron`/`items.ron` under
@@ -58,7 +82,15 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    loads. `docs/20_data_formats.md` states the runtime semantics explicitly ("omitting it means no
    stat system for that project"), so the divergence is documented-against. The cheap mitigation
    is a `StrictWarning` when the field is unset *and* the convention file exists — fixture-safe
-   because `--strict` isn't the default gate.
+   because `--strict` isn't the default gate. **Shipped as `unset_catalog_path_with_convention_file`
+   for the four catalogs only.** The logic half (`f82de0e`) shipped *no* such warning, and its
+   fallback is narrower (only when there's no `.project.ron`), so a declared project with an
+   undeclared `logic/rules.ron` on disk is now parsed by **nothing in the whole toolchain** —
+   validate skips it, `ron_lint` is a text scan not a parse, `ron_validation` tests hand-written
+   literals. Live on exactly two shipped projects: `3rd_person_game_demo`, `terrain_demo` (both set
+   only `state_machine_path` yet ship a dead `logic/rules.ron`); a RON syntax error in either is
+   now invisible. An `unset_logic_path_with_convention_file` strict warning is the symmetric fix
+   and would name those two.
 
 2. **Scene-path coverage: existence check complete; the *parse/cross-check* half landed
    2026-09-06 (`a29436d`, `feature/scene_path_validity`) with two duplication edges.** Four
