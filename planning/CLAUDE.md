@@ -78,6 +78,15 @@ external reference like a chat log or PR comment written before 2026-09-03), the
 history — original hashes intact — is preserved at
 `https://github.com/frankvangeest/ironhold-lib-backup-20260903-pre-history-purge.git`.
 
+**Going forward (as of 2026-09-07): this class of problem is prevented at the source, not just
+documented after the fact.** The root `CLAUDE.md`'s Code change workflow (step 14) now requires
+every `pkg/` commit on `integration` to be its own isolated commit, never combined with any code,
+docs, or planning change — and no planning markdown may ever cite a `pkg/` commit's hash, only the
+nearest code/docs-only commit. Since a `pkg/`-only commit by construction can no longer contain the
+`.md` edit that would cite it, a future cleanup of stale `pkg/` build commits (squash, rebase, or
+another `filter-repo` purge) should never again require remapping citations across the whole repo
+the way the 2026-09-03 purge above did.
+
 ---
 
 ## investigations/ — debug journals
