@@ -1,0 +1,15 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "I've — seen things",
+            choices: [
+                (
+                    label: "Bye",
+                ),
+            ],
+        ),
+    ],
+)

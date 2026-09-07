@@ -1,0 +1,27 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "coop_player_a": (
+            kind: Primitive,
+            player_index: 4294967295,
+            components: (
+                tags: ["player"],
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+        "coop_player_b": (
+            kind: Primitive,
+            player_index: 4294967295,
+            components: (
+                tags: ["player"],
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

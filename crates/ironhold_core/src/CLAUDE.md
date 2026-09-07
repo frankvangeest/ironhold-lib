@@ -810,7 +810,12 @@ anti-flicker fix). `MovementConfig.coyote_time_secs` (default `0.1`s) is a real 
 tuning field, unlike `jump_air_grace` — see Q2 in the feature plan for why `jump_air_grace` is
 deliberately *not* authorable while this is. `0.0`/negative both disable the buffer (negative is
 flagged by `warn_negative_coyote_time_secs` + `ironhold_cli validate --strict`'s
-`negative_coyote_time_secs`, since it's more likely a typo than an intentional "off").
+`negative_coyote_time_secs`, since it's more likely a typo than an intentional "off"). A value
+*too large* relative to the time the ground sensor actually reports "ungrounded" during the jump
+(narrower than the raw ballistic airtime `2 * jump_velocity / GRAVITY` — the sensor keeps reading
+"grounded" for as long as height is at or below `collider_radius + ground_cast_length`, both on
+the way up and down) has no load-time `warn!` counterpart, but is caught by `ironhold_cli validate
+--strict`'s `coyote_time_exceeds_jump_airtime`.
 
 **`can_jump`'s two branches read different grounded signals on purpose — this is not the same
 mistake as feeding the buffer into the `jumps_used` reset, but it looks similar enough that three
@@ -1491,6 +1496,14 @@ across different rooms' player variants that are never co-instantiated. Largely 
 runtime by `gamepad_bind_system`'s `claimed` invariant above (the second player just stays
 pending, never silently dual-controls), so this check is now purely explanatory/early-warning
 rather than the only thing standing between a designer and broken dual-control.
+
+A sibling `player_index` collision (`ironhold_cli validate --strict`'s `duplicate_player_index`)
+is scoped to `entities:` only, unlike the gamepad check above — deliberately *not* extended to
+`join_prefab_keys`: `Action::JoinPlayer` (`action_executor.rs`) unconditionally overwrites a
+hot-joined player's `player_index` with the runtime-computed join slot, so a join prefab's own
+authored value is dead data and checking it there would false-positive on the ordinary pattern of
+reusing one prefab (or two prefabs sharing a `player_index`) across multiple join slots — unlike
+`gamepad_index`, which the join path genuinely does read from the prefab.
 
 **Gamepad-triggered hot join** (`gamepad_hot_join.md`) adds a second, *global* gamepad-binding
 surface alongside the per-player `InputMap.gamepad_*` fields above — `ProjectGamepadBindings`/

@@ -75,6 +75,7 @@ struct LoadedProject<'a> {
     stat_catalog: Option<&'a StatCatalog>,
     item_catalog: Option<&'a ItemCatalog>,
     scenes: &'a [(String, GameSceneV2)],
+    dialogues: &'a [(String, DialogueDef)],
     actions: &'a [(String, Action)],
     rules: Option<(&'a str, &'a LogicRulesAsset)>,
     state_machine: Option<(&'a str, &'a StateMachineAsset)>,
@@ -353,6 +354,63 @@ fn camera_mode_fixed_look_at_problem(mode: &CameraModeDef, context: &str) -> Opt
         ))
     } else {
         None
+    }
+}
+
+/// A subset of non-ASCII characters common enough in pasted-in text to warrant a specific,
+/// actionable name in the diagnostic, rather than the generic "non-ASCII character" fallback --
+/// dash-like characters (the originally-reported em-dash tofu-box incident) plus the curly quotes
+/// and ellipsis a word processor's "smart punctuation" autocorrect is most likely to introduce.
+/// Not an exhaustive allowlist: `find_unrenderable_char` below flags every non-ASCII character,
+/// named or not (debug-detective finding, `cli_validate_small_wins` review, 2026-09-07: the
+/// embedded UI font, `FiraMono-subset.ttf`, was confirmed via its cmap to cover ONLY
+/// U+0020..U+007E -- so a dash-only allowlist missed real shipped tofu strings using `·`/`→`/`×`/
+/// `°`, e.g. `particles_demo`'s `"Campfire ×4"` and `effect_mayhem_demo`'s
+/// `"Walk in → full-sphere burst"`).
+const NAMED_NON_ASCII_CHARS: &[(char, &str)] = &[
+    ('\u{2010}', "hyphen"),
+    ('\u{2011}', "non-breaking hyphen"),
+    ('\u{2013}', "en dash"),
+    ('\u{2014}', "em dash"),
+    ('\u{2015}', "horizontal bar"),
+    ('\u{2212}', "minus sign"),
+    ('\u{FF0D}', "fullwidth hyphen-minus"),
+    ('\u{2018}', "left single quote"),
+    ('\u{2019}', "right single quote"),
+    ('\u{201C}', "left double quote"),
+    ('\u{201D}', "right double quote"),
+    ('\u{2026}', "ellipsis"),
+    ('\u{00A0}', "non-breaking space"),
+];
+
+/// Returns the first character in `text` the embedded UI font has no glyph for (any non-ASCII
+/// character -- the font's cmap covers only U+0020..U+007E, see `NAMED_NON_ASCII_CHARS`'s doc
+/// comment), along with a human-readable name: a specific one from `NAMED_NON_ASCII_CHARS` for the
+/// common cases, or a generic fallback for anything else.
+fn find_unrenderable_char(text: &str) -> Option<(char, &'static str)> {
+    let ch = text.chars().find(|c| !c.is_ascii())?;
+    let name = NAMED_NON_ASCII_CHARS.iter()
+        .find(|(named, _)| *named == ch)
+        .map_or("non-ASCII character", |(_, name)| name);
+    Some((ch, name))
+}
+
+/// Keep-first-on-collision: like `HashMap::insert`, but the FIRST value inserted for a key wins
+/// and is what's returned on a later collision, instead of the immediately-preceding one --
+/// matching the runtime's own `seen.get()`-then-insert-only-when-absent pattern, so a 3rd+
+/// colliding entry cites the SAME first-seen entry as its partner the runtime console does
+/// (system-architect + debug-detective finding, `gamepad_action_bar_slots.md` review).
+fn first_seen<K: std::hash::Hash + Eq, V: Clone>(
+    seen: &mut std::collections::HashMap<K, V>,
+    key: K,
+    value: V,
+) -> Option<V> {
+    match seen.entry(key) {
+        std::collections::hash_map::Entry::Occupied(e) => Some(e.get().clone()),
+        std::collections::hash_map::Entry::Vacant(e) => {
+            e.insert(value);
+            None
+        }
     }
 }
 
@@ -802,7 +860,10 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // otherwise only surfaces as a runtime no-op the first time someone actually tries to trade.
     // Catches it here instead, mirroring every other key-lookup check in this file.
     if let Some(catalog) = prefab_catalog {
-        for (prefab_key, prefab) in &catalog.prefabs {
+        let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+        prefab_keys.sort();
+        for prefab_key in prefab_keys {
+            let prefab = &catalog.prefabs[prefab_key];
             let Some(merchant) = &prefab.merchant else { continue };
             if let Some(stats) = stat_catalog {
                 if !stats.stats.contains_key(&merchant.currency_stat) {
@@ -849,7 +910,10 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // design-time error. Same failure shape as the merchant stock check above.
     if let Some(catalog) = prefab_catalog {
         if let Some(items) = item_catalog {
-            for (prefab_key, prefab) in &catalog.prefabs {
+            let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+            prefab_keys.sort();
+            for prefab_key in prefab_keys {
+                let prefab = &catalog.prefabs[prefab_key];
                 let Some(inventory) = &prefab.inventory else { continue };
                 for entry in &inventory.initial_items {
                     if !items.items.contains_key(&entry.item_key) {
@@ -884,7 +948,10 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             let items_source = project_config
                 .and_then(|c| c.items_path.clone())
                 .unwrap_or_else(|| "items.ron".to_string());
-            for (item_key, item) in &items.items {
+            let mut item_keys: Vec<&String> = items.items.keys().collect();
+            item_keys.sort();
+            for item_key in item_keys {
+                let item = &items.items[item_key];
                 let Some(currency_stat) = &item.currency_stat else { continue };
                 if !stats.stats.contains_key(currency_stat) {
                     errors.push(CrossFileError {
@@ -921,7 +988,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     });
                     continue;
                 };
-                if !prefab.components.tags.iter().any(|t| t == "player") {
+                if !prefab.is_player() {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
@@ -1014,7 +1081,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             for entity in &scene.entities {
                 let Some(prefab) = catalog.prefabs.get(&entity.prefab) else { continue };
                 if prefab.kind == PrefabKind::Primitive
-                    && prefab.components.tags.iter().any(|t| t == "player")
+                    && prefab.is_player()
                 {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
@@ -1145,7 +1212,8 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         error_type: "invalid_key",
                     }),
                     Some(kc) => {
-                        if let Some((prev_node_index, prev_bar, prev_key)) = seen.insert(kc, (node_index, &bar.id, &slot.key)) {
+                        let prev = first_seen(&mut seen, kc, (node_index, &bar.id, &slot.key));
+                        if let Some((prev_node_index, prev_bar, prev_key)) = prev {
                             if prev_node_index == node_index {
                                 errors.push(CrossFileError {
                                     source_file: scene_path.clone(),
@@ -1224,7 +1292,8 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         error_type: "invalid_gamepad_key",
                     }),
                     Some(btn) => {
-                        if let Some((prev_bar, prev_key)) = seen_gamepad.insert((owner_player, btn), (&bar.id, &slot.key)) {
+                        let prev = first_seen(&mut seen_gamepad, (owner_player, btn), (&bar.id, &slot.key));
+                        if let Some((prev_bar, prev_key)) = prev {
                             errors.push(CrossFileError {
                                 source_file: scene_path.clone(),
                                 message: format!(
@@ -1258,7 +1327,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 let owner_player = bar.owner_player.unwrap_or(0);
                 let player_prefab = scene.entities.iter()
                     .filter_map(|e| catalog.prefabs.get(&e.prefab))
-                    .find(|p| p.player_index == owner_player && p.components.tags.iter().any(|t| t == "player"));
+                    .find(|p| p.player_index == owner_player && p.is_player());
                 let Some(prefab) = player_prefab else { continue };
                 if prefab.stat_templates.is_empty() { continue; }
                 for slot in &bar.slots {
@@ -1294,7 +1363,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 let owner_player = bar.owner_player.unwrap_or(0);
                 let player_prefab = scene.entities.iter()
                     .filter_map(|e| catalog.prefabs.get(&e.prefab))
-                    .find(|p| p.player_index == owner_player && p.components.tags.iter().any(|t| t == "player"));
+                    .find(|p| p.player_index == owner_player && p.is_player());
                 let Some(prefab) = player_prefab else { continue };
                 let has_gamepad_index = prefab.components.inputs.as_ref()
                     .is_some_and(|i| i.gamepad_index.is_some());
@@ -1337,10 +1406,11 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             let mut seen: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
             let mut check_seed = |id: String, prefab_key: &str, errors: &mut Vec<CrossFileError>| {
                 let Some(prefab) = catalog.prefabs.get(prefab_key) else { return };
-                if !prefab.components.tags.iter().any(|t| t == "player") { return }
+                if !prefab.is_player() { return }
                 let Some(seed) = prefab.components.inputs.as_ref().and_then(|i| i.gamepad_index)
                 else { return };
-                if let Some(other_id) = seen.insert(seed, id.clone()) {
+                let prev = first_seen(&mut seen, seed, id.clone());
+                if let Some(other_id) = prev {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
@@ -1369,7 +1439,13 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     }
 
     if let Some(catalog) = prefab_catalog {
-        for (key, def) in &catalog.prefabs {
+        // Sorted, not the HashMap's arbitrary iteration order -- so error output (and any
+        // snapshot/regression test asserting on it) is stable across runs instead of depending on
+        // hash-seed-driven ordering.
+        let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+        prefab_keys.sort();
+        for key in prefab_keys {
+            let def = &catalog.prefabs[key];
             if let Some(behavior_path) = &def.behavior {
                 if !project_dir.join(behavior_path).exists() {
                     errors.push(CrossFileError {
@@ -1414,7 +1490,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             // consumes at all (an untagged prop, or a `tags: ["flycam"]` prefab, whose non-Flycam
             // `camera_mode` is silently discarded and replaced wholesale by `scene_loader.rs` --
             // a real, different mistake this check isn't meant to describe).
-            if def.components.tags.iter().any(|t| t == "player") {
+            if def.is_player() {
                 if let Some(mode) = &def.components.camera_mode {
                     if let Some((message, error_type)) = camera_mode_nested_split_party_problem(
                         mode,
@@ -2083,8 +2159,8 @@ fn check_orphan_event(
 
 fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     let LoadedProject {
-        project_dir, project_config, asset_catalog, prefab_catalog, scenes, actions, rules,
-        state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
+        project_dir, project_config, asset_catalog, prefab_catalog, scenes, dialogues, actions,
+        rules, state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
         ..
     } = project;
     let orphan_rule_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
@@ -2162,7 +2238,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         keys.sort();
         for key in keys {
             let def = &catalog.prefabs[key];
-            if !def.components.tags.iter().any(|t| t == "player") {
+            if !def.is_player() {
                 continue;
             }
             let Some(mode) = &def.components.camera_mode else { continue };
@@ -2250,7 +2326,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         keys.sort();
         for key in keys {
             let def = &catalog.prefabs[key];
-            if !def.components.tags.iter().any(|t| t == "player") { continue }
+            if !def.is_player() { continue }
             let player_height = if def.kind == PrefabKind::Primitive {
                 def.primitive.as_ref().and_then(|p| p.height).unwrap_or(1.8)
             } else {
@@ -2270,7 +2346,8 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                     Some(JumpConfig::RelativeToHeight { percent }) => player_height * percent / 100.0,
                 }
             };
-            let mut checks = vec![("jump", resolve_height(def.components.movement.jump.as_ref()))];
+            let jump_apex = resolve_height(def.components.movement.jump.as_ref());
+            let mut checks = vec![("jump", jump_apex)];
             if def.components.movement.double_jump {
                 checks.push(("double_jump_height", resolve_height(def.components.movement.double_jump_height.as_ref())));
             }
@@ -2321,25 +2398,203 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
 
             // Unlike `max_walkable_slope_deg`, `coyote_time_secs` has no invalid range that breaks
             // grounding outright — any non-negative value just makes the debounce buffer bigger or
-            // smaller (it does have a practical, jump-height-dependent upper bound where a large
-            // enough value can mask an entire jump's animation, but that's not checked here — see
-            // `planning/claude_suggestions.md`). A negative value is the one case worth flagging
-            // unconditionally: it silently launders to a zero-tick buffer (same as `0.0`) rather
-            // than doing anything with the negative value, which is far more likely a sign-flip
-            // typo than an intentional way to spell "disabled".
+            // smaller. It does have a practical, jump-height-dependent upper bound where a large
+            // enough value can mask an entire jump's animation — checked separately below. A
+            // negative value (or NaN, which `coyote_ticks()`'s `f32::max` clamp also silently
+            // launders to `0.0`) is the one case worth flagging unconditionally here: it silently
+            // launders to a zero-tick buffer (same as `0.0`) rather than doing anything with the
+            // value, which is far more likely a sign-flip typo than an intentional way to spell
+            // "disabled". `!(coyote_time_secs >= 0.0)`, not `coyote_time_secs < 0.0`: the latter is
+            // false for NaN, silently missing it (debug-detective finding).
             let coyote_time_secs = def.components.movement.coyote_time_secs;
-            if coyote_time_secs < 0.0 {
+            if !(coyote_time_secs >= 0.0) {
                 warnings.push(StrictWarning {
                     source_file: "prefabs/prefabs.ron".to_string(),
                     message: format!(
-                        "prefab {:?}: `coyote_time_secs` is {:.3}, which is negative — this \
-                         silently disables the coyote-time buffer entirely (same as `0.0`) rather \
-                         than doing anything with the negative value. If you meant to disable it, \
+                        "prefab {:?}: `coyote_time_secs` is {:.3}, which is negative (or NaN) — \
+                         this silently disables the coyote-time buffer entirely (same as `0.0`) \
+                         rather than doing anything with the value. If you meant to disable it, \
                          use `0.0` instead",
                         key, coyote_time_secs
                     ),
                     kind: "negative_coyote_time_secs",
                 });
+            }
+
+            // `coyote_time_secs` also has a real, jump-height-dependent upper bound: once it's
+            // large enough relative to the time the ground sensor actually reports "ungrounded"
+            // during the jump, the buffer can mask that whole window, suppressing the airborne
+            // animation and `jump_exit` clip entirely. That window is NOT simply the jump's own
+            // airtime (`2 * jump_velocity / GRAVITY`, the ballistic time from launch to landing at
+            // ground level) -- the sensor keeps reporting "grounded" (per the sibling
+            // `jump_cannot_clear_ground_sensor` check above) for as long as the player's height is
+            // at or below `reach`, both on the way up and the way down, which shrinks the real
+            // ungrounded window relative to the naive airtime formula by up to ~35% at realistic
+            // apex/reach ratios (debug-detective finding, `cli_validate_small_wins` review, using
+            // the same kinematic derivation with `(jump_apex - reach)` as the effective height
+            // instead of `jump_apex`). `GRAVITY` itself is `pub(crate)` inside `ironhold_core`
+            // (deliberately, so `capabilities/player.rs`'s jump-grace window and
+            // `scene_loader.rs`'s velocity resolution can't drift apart) and not reachable from
+            // this crate, so it's mirrored here as a plain constant — keep this in sync with
+            // `scene_manager/scene_loader.rs::GRAVITY` if that ever changes. Guarded on
+            // `jump_apex > reach`, not just `jump_apex > 0.0`: a non-positive/NaN apex, or one
+            // that doesn't clear `reach` at all, is already flagged by the
+            // `jump_cannot_clear_ground_sensor` check above on its own (clearer) terms — this
+            // check would otherwise compare against a meaningless or double-reported window.
+            const GRAVITY: f32 = 9.81;
+            if jump_apex > reach {
+                let effective_height = jump_apex - reach;
+                let velocity_above_reach = (2.0 * GRAVITY * effective_height).sqrt();
+                let airtime = 2.0 * velocity_above_reach / GRAVITY;
+                // `!(coyote_time_secs <= airtime)`, not `coyote_time_secs > airtime`: the latter
+                // is false for a NaN `coyote_time_secs`, silently missing it (debug-detective
+                // finding, same reasoning as the negative-value check above).
+                if !(coyote_time_secs <= airtime) {
+                    warnings.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: `coyote_time_secs` is {:.3}s, longer than the {:.3}s \
+                             this player's ground sensor actually reports \"ungrounded\" during a \
+                             `jump` (jump apex {:.2}m, ground-check reach {:.2}m) — the \
+                             coyote-time buffer can mask that whole window, suppressing the \
+                             airborne animation and jump_exit clip. Lower `coyote_time_secs` \
+                             below that, or raise `jump` (this check compares against `jump` \
+                             specifically, not `double_jump_height`)",
+                            key, coyote_time_secs, airtime, jump_apex, reach
+                        ),
+                        kind: "coyote_time_exceeds_jump_airtime",
+                    });
+                }
+            }
+        }
+    }
+
+    // The embedded UI font has no glyph for any non-ASCII character at all (its cmap covers only
+    // U+0020..U+007E) -- such a character renders as a tofu box rather than the intended
+    // punctuation/letter. `--strict`-only: the rest of the text otherwise displays correctly,
+    // just missing one glyph, so this is an authoring-hygiene lint rather than a load-time
+    // regression. See `find_unrenderable_char`'s doc comment for the originating incident and the
+    // cmap-enumeration finding behind this check's actual (non-dash-only) scope.
+    for (scene_path, scene) in scenes {
+        let check_text = |kind: &str, id: &str, text: &str, warnings: &mut Vec<StrictWarning>| {
+            let Some((ch, name)) = find_unrenderable_char(text) else { return };
+            let article = if matches!(name.chars().next(), Some('a' | 'e' | 'i' | 'o' | 'u')) {
+                "an"
+            } else {
+                "a"
+            };
+            warnings.push(StrictWarning {
+                source_file: scene_path.clone(),
+                message: format!(
+                    "{kind} {id:?}: `text` contains {article} {name} ({ch:?}, U+{:04X}) — the \
+                     embedded UI font has no glyph for it and renders a tofu box instead. \
+                     Replace it with plain ASCII",
+                    ch as u32
+                ),
+                kind: "non_ascii_char_in_text",
+            });
+        };
+        for node in &scene.ui {
+            let (kind, id, text) = match node {
+                UiNodeDef::Label(l) => ("Label", l.id.as_str(), l.text.as_str()),
+                UiNodeDef::Button(b) => ("Button", b.id.as_str(), b.text.as_str()),
+                _ => continue,
+            };
+            check_text(kind, id, text, &mut warnings);
+        }
+        for entity in &scene.entities {
+            let Some(label) = &entity.label else { continue };
+            check_text("EntityLabel", &entity.id, &label.text, &mut warnings);
+        }
+        for wl in &scene.world_labels {
+            check_text("WorldLabel", &wl.id, &wl.text, &mut warnings);
+        }
+    }
+
+    // Same non-ASCII-glyph-coverage check as above, extended to dialogue prose -- the
+    // highest-risk text surface for this lint, since `speaker`/`body`/choice `label` are free-form
+    // narrative text a designer is far more likely to paste from a word processor (curly quotes,
+    // em-dashes) than a short UI label (debug-detective finding, `cli_validate_small_wins` review).
+    for (dialogue_path, dialogue) in dialogues {
+        let check_dialogue_text = |kind: &str, id: &str, text: &str, warnings: &mut Vec<StrictWarning>| {
+            let Some((ch, name)) = find_unrenderable_char(text) else { return };
+            let article = if matches!(name.chars().next(), Some('a' | 'e' | 'i' | 'o' | 'u')) {
+                "an"
+            } else {
+                "a"
+            };
+            warnings.push(StrictWarning {
+                source_file: dialogue_path.clone(),
+                message: format!(
+                    "{kind} {id:?}: `text` contains {article} {name} ({ch:?}, U+{:04X}) — the \
+                     embedded UI font has no glyph for it and renders a tofu box instead. \
+                     Replace it with plain ASCII",
+                    ch as u32
+                ),
+                kind: "non_ascii_char_in_text",
+            });
+        };
+        for node in &dialogue.nodes {
+            check_dialogue_text("DialogueNode.speaker", &node.id, &node.speaker, &mut warnings);
+            check_dialogue_text("DialogueNode.body", &node.id, &node.body, &mut warnings);
+            for (i, choice) in node.choices.iter().enumerate() {
+                check_dialogue_text(
+                    "DialogueChoice.label",
+                    &format!("{}[{i}]", node.id),
+                    &choice.label,
+                    &mut warnings,
+                );
+            }
+        }
+    }
+
+    // Two or more player-tagged prefabs instantiated in the same scene's `entities:` list sharing
+    // the same `player_index` -- including the common case where both simply omit it, since it
+    // defaults to `0` -- will show the identical "P{n}" HUD label/color, and collide on the same
+    // reserved target-indicator ring `RenderLayers` slot under `own_viewport_only`
+    // (`ring_layer_for_player`, `capabilities/camera.rs`). Two runtime `warn!`s already exist for
+    // parts of this (`entity_spawner.rs::spawn_players_and_camera`: one for 2+ players sharing
+    // `player_index: 0` specifically, one for the `own_viewport_only` ring-layer collision), but
+    // this is the first design-time signal, and the only one covering a non-zero duplicate pair.
+    // `--strict`-only: nothing crashes, matching this project's severity convention for a
+    // cosmetic-but-confusing HUD/ring collision rather than a load failure (and matching those
+    // runtime `warn!`s' own severity).
+    //
+    // Deliberately `entities:`-only, unlike the sibling `duplicate_gamepad_index` check above:
+    // `Action::JoinPlayer` (`action_executor.rs`) unconditionally overwrites a hot-joined player's
+    // `player_index` with the runtime-computed join slot (`player_config.player_index =
+    // next_slot`) -- the join prefab's own authored `player_index` is never actually used, unlike
+    // `gamepad_index`, which the join path genuinely does read from the prefab (except when a
+    // gamepad-triggered join captures the pad directly). Checking `join_prefab_keys` here would
+    // false-positive on the natural, working authoring pattern of reusing one prefab (or two
+    // prefabs sharing a `player_index`) across multiple join slots (alignment-reviewer finding).
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut seen: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+            for entity_def in &scene.entities {
+                let Some(prefab) = catalog.prefabs.get(&entity_def.prefab) else { continue };
+                if !prefab.is_player() { continue }
+                let index = prefab.player_index;
+                let id = entity_def.id.clone();
+                let prev = first_seen(&mut seen, index, id.clone());
+                if let Some(other_id) = prev {
+                    warnings.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "players {:?} and {:?} both have player_index: {} — they will show \
+                             the identical \"P{}\" HUD label/color, and (under \
+                             `SplitScreenDef.own_viewport_only`) collide on the same \
+                             target-indicator ring layer. Assign each player a unique \
+                             player_index (it defaults to 0 when omitted)",
+                            // `saturating_add`, not `+1`: player_index is designer-authored and
+                            // unbounded (u32::MAX is a valid, if absurd, RON value) -- a plain
+                            // `+1` panics on overflow in a debug build and wraps to a wrong
+                            // number in a release one (debug-detective finding).
+                            other_id, id, index, index.saturating_add(1)
+                        ),
+                        kind: "duplicate_player_index",
+                    });
+                }
             }
         }
     }
@@ -2375,7 +2630,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         if let (Some(catalog), false) = (prefab_catalog, has_flycam) {
             let mut widen_prefab_if_player = |prefab_key: &str| {
                 let Some(prefab) = catalog.prefabs.get(prefab_key) else { return };
-                if !prefab.components.tags.iter().any(|t| t == "player") { return }
+                if !prefab.is_player() { return }
                 match &prefab.components.camera_mode {
                     Some(mode) => widen(mode.radius_range()),
                     None => {
@@ -2633,6 +2888,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         stat_catalog: stat_catalog.as_ref(),
         item_catalog: item_catalog.as_ref(),
         scenes: &scenes,
+        dialogues: &dialogues,
         actions: &all_actions,
         rules: rules.as_ref().map(|r| (rules_source.as_str(), r)),
         state_machine: state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),

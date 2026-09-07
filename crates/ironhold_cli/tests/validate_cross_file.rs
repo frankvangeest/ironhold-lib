@@ -409,6 +409,24 @@ fn missing_behavior_file_exits_1() {
     );
 }
 
+/// The prefab-catalog loop (behavior/camera_mode/foliage/stat-widget checks) iterates sorted
+/// keys, not the `HashMap`'s arbitrary iteration order — otherwise error output would depend on
+/// hash-seed-driven ordering instead of being stable across runs. 3 prefabs authored out of
+/// alphabetical order, all with a missing `behavior` file, must always be reported in
+/// alphabetical key order (`aaa_ghost`, then `mmm_ghost`, then `zzz_ghost`).
+#[test]
+fn prefab_catalog_errors_are_sorted_by_key_exits_1() {
+    let (code, stdout) = validate("sorted_prefab_catalog_errors");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    let aaa = stdout.find("aaa_ghost").expect("expected 'aaa_ghost' in output");
+    let mmm = stdout.find("mmm_ghost").expect("expected 'mmm_ghost' in output");
+    let zzz = stdout.find("zzz_ghost").expect("expected 'zzz_ghost' in output");
+    assert!(
+        aaa < mmm && mmm < zzz,
+        "expected errors in alphabetical key order (aaa, mmm, zzz), got positions {aaa}, {mmm}, {zzz}:\n{stdout}"
+    );
+}
+
 #[test]
 fn dialogue_parse_error_exits_1() {
     // ironhold_cli validate never parsed dialogues/*.dialogue.ron at all before this fix — a
@@ -531,6 +549,29 @@ fn cross_bar_duplicate_action_bar_key_exits_1() {
     );
 }
 
+/// Regression test for the keep-first-on-collision fix (`gamepad_action_bar_slots.md` review,
+/// system-architect + debug-detective): with 3+ bars sharing a key, every collision must cite the
+/// SAME first-seen bar (`bar_p1`) as its partner, matching the runtime `warn!`'s
+/// `seen.get()`-then-insert-only-when-absent behavior — not the immediately-preceding bar, which
+/// is what an overwrite-on-insert implementation would report for the 3rd collision.
+#[test]
+fn cross_bar_duplicate_action_bar_key_three_way_keeps_first_exits_1() {
+    let (code, stdout) = validate("cross_bar_duplicate_action_bar_key_three_way");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("ActionBar \"bar_p1\" slot \"KeyQ\" and ActionBar \"bar_p2\" slot \"KeyQ\""),
+        "expected bar_p2's collision to cite first-seen bar_p1 in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ActionBar \"bar_p1\" slot \"KeyQ\" and ActionBar \"bar_p3\" slot \"KeyQ\""),
+        "expected bar_p3's collision to ALSO cite first-seen bar_p1 (not bar_p2) in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("ActionBar \"bar_p2\" slot \"KeyQ\" and ActionBar \"bar_p3\""),
+        "bar_p3's collision must not cite bar_p2 -- that would be the old overwrite-on-insert bug:\n{stdout}"
+    );
+}
+
 /// `gamepad_action_bar_slots.md`: an unrecognised `gamepad_key` name is a distinct check from the
 /// keyboard `key` check above — same shape, different field.
 #[test]
@@ -632,6 +673,73 @@ fn duplicate_gamepad_index_join_prefab_exits_1() {
         "expected the specific duplicate_gamepad_index collision between the scene entity and the \
          join_prefab_keys slot in output:\n{stdout}"
     );
+}
+
+/// Regression test for the keep-first-on-collision fix, `duplicate_gamepad_index`'s own site: 3
+/// players sharing `gamepad_index: 0` must all be cited against the SAME first-seen player
+/// (`player_01`), not the immediately-preceding one.
+#[test]
+fn duplicate_gamepad_index_three_way_keeps_first_exits_1() {
+    let (code, stdout) = validate("duplicate_gamepad_index_three_way");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("\"player_01\" and \"player_02\""),
+        "expected player_02's collision to cite first-seen player_01 in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"player_01\" and \"player_03\""),
+        "expected player_03's collision to ALSO cite first-seen player_01 (not player_02) in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("\"player_02\" and \"player_03\""),
+        "player_03's collision must not cite player_02 -- that would be the old overwrite-on-insert bug:\n{stdout}"
+    );
+}
+
+/// Two player-tagged prefabs instantiated in the same scene both omit `player_index`, which
+/// defaults to `0` — they'd show the identical "P1" HUD label/color (player_index is 0-based
+/// internally, but the HUD label itself is 1-based, hence the `+1` in the message) and be
+/// indistinguishable in local co-op. Same collision-detection shape as `duplicate_gamepad_index`,
+/// but for `player_index` instead of `gamepad_index` — and `--strict`-only, unlike that sibling
+/// check: nothing crashes, matching the runtime's own `warn!` severity for this case.
+#[test]
+fn duplicate_player_index_same_scene_without_strict_exits_0() {
+    let (code, _) = validate("duplicate_player_index_same_scene");
+    assert_eq!(code, 0, "duplicate player_index without --strict should exit 0");
+}
+
+#[test]
+fn duplicate_player_index_same_scene_strict_exits_1() {
+    let (code, stdout) = validate_strict("duplicate_player_index_same_scene");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("player_01") && stdout.contains("player_02")
+            && stdout.contains("player_index") && stdout.contains("\"P1\""),
+        "expected both colliding entity ids, a mention of player_index, and the 1-based HUD \
+         label in output:\n{stdout}"
+    );
+}
+
+/// Regression test (debug-detective finding): `player_index: u32::MAX` on both colliding players
+/// must not crash the validator when formatting the 1-based HUD label (`index + 1` would panic
+/// on overflow in a debug build and silently wrap to a wrong number in a release one) — the fix
+/// uses `saturating_add(1)` instead.
+#[test]
+fn duplicate_player_index_u32_max_does_not_panic_strict_exits_1() {
+    let (code, stdout) = validate_strict("duplicate_player_index_u32_max");
+    assert_eq!(code, 1, "expected exit 1 (not a panic/exit 2), got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("player_index: 4294967295"),
+        "expected the offending player_index value in output:\n{stdout}"
+    );
+}
+
+/// Same shape as above but each prefab explicitly sets a distinct `player_index` — must not be
+/// flagged, proving the check is genuinely about the collision, not about `player_index` itself.
+#[test]
+fn distinct_player_index_same_scene_strict_exits_0() {
+    let (code, stdout) = validate_strict("distinct_player_index_same_scene");
+    assert_eq!(code, 0, "expected exit 0 (distinct indices, no collision), got {code}:\n{stdout}");
 }
 
 /// `player_stat_widgets.md` Part C: a `stat_label`/`world_stat_bar` keyed `"{self}.<stat>"` with
@@ -786,6 +894,28 @@ fn negative_coyote_time_secs_strict_exits_1() {
     assert!(
         stdout.contains("bad_coyote_player") && stdout.contains("negative"),
         "expected the offending prefab key and the negative-value message in output:\n{stdout}"
+    );
+}
+
+// ── coyote_time_secs upper bound (soft, --strict only) ─────────────────────────
+//
+// Unlike the negative case above, this flags a coyote_time_secs value disproportionate to the
+// prefab's own resolved jump airtime (`2 * jump_velocity / GRAVITY`) -- large enough to mask the
+// entire jump/fall. See `planning/claude_suggestions.md`'s entry on this, verified empirically
+// during `uphill_jump_lock.md`'s sensor-veto fix review.
+#[test]
+fn coyote_time_exceeds_jump_airtime_without_strict_exits_0() {
+    let (code, _) = validate("bad_coyote_time_upper_bound");
+    assert_eq!(code, 0, "coyote_time_secs exceeding jump airtime without --strict should exit 0");
+}
+
+#[test]
+fn coyote_time_exceeds_jump_airtime_strict_exits_1() {
+    let (code, stdout) = validate_strict("bad_coyote_time_upper_bound");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("coyote_upper_player") && stdout.contains("actually reports \"ungrounded\" during a `jump`"),
+        "expected the offending prefab key and the airtime message in output:\n{stdout}"
     );
 }
 
@@ -1450,4 +1580,61 @@ fn bad_scene_parse_does_not_cascade_into_orphan_rule_strict_exits_1() {
         "a scene parse error must not also produce a bogus orphan_rule report for the \
          (would-be-correctly-wired) rule:\n{stdout}"
     );
+}
+
+// ── Non-ASCII character in `text:` (soft, --strict only) ────────────────────────
+//
+// The embedded UI font has no glyph for ANY non-ASCII character (its cmap covers only
+// U+0020..U+007E, per debug-detective's `cli_validate_small_wins` review) -- it renders as a
+// tofu box instead. `--strict`-only: the rest of the text still displays correctly, so this is
+// an authoring-hygiene lint, not a load-time regression.
+#[test]
+fn non_ascii_dash_in_label_without_strict_exits_0() {
+    let (code, _) = validate("non_ascii_dash_in_label");
+    assert_eq!(code, 0, "em-dash in a Label's text without --strict should exit 0");
+}
+
+#[test]
+fn non_ascii_dash_in_label_strict_exits_1() {
+    let (code, stdout) = validate_strict("non_ascii_dash_in_label");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("tofu_label") && stdout.contains("em dash") && stdout.contains("U+2014"),
+        "expected the offending label id and the em-dash message in output:\n{stdout}"
+    );
+}
+
+/// Regression test (debug-detective finding): the check must not be a dash-only allowlist -- the
+/// embedded font has zero non-ASCII glyph coverage at all, so an unrelated non-ASCII character
+/// like `×` (multiplication sign, no friendly name in `NAMED_NON_ASCII_CHARS`) must also be
+/// flagged, with the generic "non-ASCII character" fallback name.
+#[test]
+fn non_ascii_non_dash_char_in_label_strict_exits_1() {
+    let (code, stdout) = validate_strict("non_ascii_non_dash_char_in_label");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("multiply_label") && stdout.contains("non-ASCII character") && stdout.contains("U+00D7"),
+        "expected the offending label id and the generic-fallback message in output:\n{stdout}"
+    );
+}
+
+/// Regression test (debug-detective finding): the check must also cover dialogue prose
+/// (`speaker`/`body`/choice `label`), not just short UI labels -- narrative text is the highest-
+/// risk surface for a pasted-in em-dash or curly quote.
+#[test]
+fn non_ascii_char_in_dialogue_body_strict_exits_1() {
+    let (code, stdout) = validate_strict("non_ascii_char_in_dialogue");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("DialogueNode.body") && stdout.contains("em dash") && stdout.contains("U+2014"),
+        "expected the dialogue node kind and the em-dash message in output:\n{stdout}"
+    );
+}
+
+/// An ASCII hyphen must not be flagged — proving the check is genuinely about non-ASCII dash
+/// characters, not hyphens/dashes in general.
+#[test]
+fn ascii_hyphen_in_label_strict_exits_0() {
+    let (code, stdout) = validate_strict("ascii_hyphen_in_label");
+    assert_eq!(code, 0, "expected exit 0 (ASCII hyphen, no false positive), got {code}:\n{stdout}");
 }

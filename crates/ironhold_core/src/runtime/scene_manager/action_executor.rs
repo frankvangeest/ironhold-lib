@@ -125,7 +125,7 @@ pub fn action_executor_system(
                 // finding, player_model_source_unification.md). Dynamic (character-select) spawn
                 // of a primitive-bodied player is v3-deferred, regardless of what `model` is set to.
                 if prefab_def.kind == crate::schema::catalog::PrefabKind::Primitive
-                    && prefab_def.components.tags.iter().any(|t| t == "player")
+                    && prefab_def.is_player()
                 {
                     warn!(
                         "Action::Spawn: primitive-shaped player prefab '{}' can't be spawned \
@@ -263,7 +263,7 @@ pub fn action_executor_system(
                 // Detect player-tagged prefabs and assemble a PlayerConfig so the drain
                 // system calls spawn_player_entity (camera + controller) instead of the
                 // normal spawn_prefab_instance path.
-                let player_config = if prefab_def.components.tags.contains(&"player".to_string()) {
+                let player_config = if prefab_def.is_player() {
                     Some(assemble_player_config(
                         &prefab_def,
                         &prefab,
@@ -1715,7 +1715,7 @@ pub fn action_executor_system(
                 // `PlayerModelSource::Primitive`, and panic in `spawn_player_entity_core` — the
                 // hot-join drain branch always passes `None` for `PrimitivePlayerCtx` (GLB-only
                 // in v1, debug-detective finding, see local_coop_hot_join_leave.md).
-                if !prefab_def.components.tags.iter().any(|t| t == "player") {
+                if !prefab_def.is_player() {
                     warn!(
                         "Action::JoinPlayer: join prefab '{}' has no `tags: [\"player\"]` — \
                          refusing to hot-join a non-player prefab. Fix join_prefab_keys to \

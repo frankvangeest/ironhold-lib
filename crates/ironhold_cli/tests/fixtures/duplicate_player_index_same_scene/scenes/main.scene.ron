@@ -1,0 +1,16 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "player_01",
+            prefab: "coop_player_a",
+            transform: (translation: (-2.0, 0.0, 0.0)),
+        ),
+        (
+            id: "player_02",
+            prefab: "coop_player_b",
+            transform: (translation: (2.0, 0.0, 0.0)),
+        ),
+    ],
+)

@@ -1,0 +1,21 @@
+(
+    schema_version: 1,
+    prefabs: {
+        "coyote_upper_player": (
+            kind: Primitive,
+            components: (
+                tags: ["player"],
+                movement: (
+                    jump: Fixed(height: 3.0),
+                    // Well above this jump's own airtime (~1.56s at height 3.0) -- the
+                    // coyote-time buffer would mask the entire jump/fall.
+                    coyote_time_secs: 2.0,
+                ),
+            ),
+            primitive: (
+                radius: 0.4,
+                height: 1.8,
+            ),
+        ),
+    },
+)

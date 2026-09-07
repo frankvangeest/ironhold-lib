@@ -1672,7 +1672,18 @@ fn warn_duplicate_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerCon
     let mut seen: HashMap<usize, &str> = HashMap::new();
     for player_config in player_configs {
         let Some(seed) = player_config.inputs.gamepad_index else { continue };
-        if let Some(other_spawn_id) = seen.insert(seed, player_config.spawn_id.as_str()) {
+        // Keep-first-on-collision (`entry()`, not `insert()`) -- so a 3rd+ colliding player cites
+        // the SAME first-seen player as their partner, matching `ironhold_cli validate`'s
+        // identical fix (debug-detective finding, `cli_validate_small_wins` review: this warn!
+        // was still overwrite-on-insert, diverging from the CLI side's own claimed parity).
+        let other_spawn_id = match seen.entry(seed) {
+            std::collections::hash_map::Entry::Occupied(e) => Some(*e.get()),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(player_config.spawn_id.as_str());
+                None
+            }
+        };
+        if let Some(other_spawn_id) = other_spawn_id {
             warn!(
                 "Scene '{}': players '{}' and '{}' both use gamepad_index: {} — one physical \
                  controller would drive both characters at once. Give each player a different \
@@ -3023,10 +3034,14 @@ pub(super) fn warn_invalid_walkable_slope_limit(spawn_id: &str, max_walkable_slo
 /// Unlike `max_walkable_slope_deg`, `coyote_time_secs` has no invalid *range* that breaks
 /// grounding outright — any non-negative value just makes the debounce buffer bigger or smaller
 /// (see `MovementConfig::coyote_time_secs`'s doc comment). It does have a practical upper bound,
-/// though not a fixed one: a value large enough relative to a jump's own airtime (roughly
-/// `2 * jump_velocity / GRAVITY`) can mask the entire jump/fall, suppressing the airborne animation
-/// and `jump_exit` clip — this is jump-height-dependent, so it isn't checked here (no shipped
-/// project is anywhere near it at the 0.1s default; see `planning/claude_suggestions.md`). A
+/// though not a fixed one: a value large enough relative to the time the ground sensor actually
+/// reports "ungrounded" during the jump (narrower than the raw ballistic airtime
+/// `2 * jump_velocity / GRAVITY`, since the sensor keeps reading "grounded" for as long as height
+/// is at or below `collider_radius + ground_cast_length`) can mask the entire jump/fall,
+/// suppressing the airborne animation and `jump_exit` clip — this is jump-height-dependent, so it
+/// isn't checked here at load time (no shipped project is anywhere near it at the 0.1s default);
+/// `ironhold_cli validate --strict` (`coyote_time_exceeds_jump_airtime`) checks it at design time
+/// instead, with no runtime `warn!` counterpart. A
 /// negative value is the one case worth flagging unconditionally: it silently launders to a
 /// zero-tick buffer (`coyote_ticks()`'s `f32::max` clamp in `capabilities/player.rs`), which is
 /// very likely not what a designer typing a negative number intended — most plausibly a sign-flip

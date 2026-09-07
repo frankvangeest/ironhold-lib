@@ -1,0 +1,24 @@
+(
+    schema_version: 1,
+    prefabs: {
+        // Deliberately authored out of alphabetical order -- a `HashMap`'s iteration order is
+        // randomized per-process, so if the prefab-catalog loop ever regresses back to iterating
+        // `catalog.prefabs` directly (instead of over sorted keys), this fixture's 3 errors would
+        // come back in an unpredictable order across runs instead of always alphabetically.
+        "zzz_ghost": (
+            kind: Prop,
+            model: "",
+            behavior: "behaviors/zzz_ghost.behavior.ron",
+        ),
+        "aaa_ghost": (
+            kind: Prop,
+            model: "",
+            behavior: "behaviors/aaa_ghost.behavior.ron",
+        ),
+        "mmm_ghost": (
+            kind: Prop,
+            model: "",
+            behavior: "behaviors/mmm_ghost.behavior.ron",
+        ),
+    },
+)

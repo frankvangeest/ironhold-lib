@@ -340,7 +340,7 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
         .map(|c| {
             c.prefabs
                 .iter()
-                .filter(|(_, def)| def.components.tags.contains(&"player".to_string()))
+                .filter(|(_, def)| def.is_player())
                 .map(|(k, _)| k.clone())
                 .collect()
         })

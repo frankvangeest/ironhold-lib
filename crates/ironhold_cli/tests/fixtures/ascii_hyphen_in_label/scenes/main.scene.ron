@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Label((
+            id: "clean_label",
+            text: "WASD - Move",
+        )),
+    ],
+)

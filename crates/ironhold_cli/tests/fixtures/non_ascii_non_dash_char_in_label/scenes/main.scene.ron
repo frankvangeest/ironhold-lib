@@ -1,0 +1,11 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Label((
+            id: "multiply_label",
+            text: "Campfire ×4",
+        )),
+    ],
+)

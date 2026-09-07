@@ -1,0 +1,60 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player_1": (
+            kind: Primitive,
+            shape: Capsule3d,
+            player_index: 0,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "KeyW",
+                    backward: "KeyS",
+                    left: "KeyA",
+                    right: "KeyD",
+                    strafe_left: "KeyQ",
+                    strafe_right: "KeyE",
+                    jump: "Space",
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+        "test_player_2": (
+            kind: Primitive,
+            shape: Capsule3d,
+            player_index: 1,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "ArrowUp",
+                    backward: "ArrowDown",
+                    left: "ArrowLeft",
+                    right: "ArrowRight",
+                    strafe_left: "ArrowLeft",
+                    strafe_right: "ArrowRight",
+                    jump: "Enter",
+                    // Same seed as test_player_1 and test_player_3 -- 3-way collision.
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+        "test_player_3": (
+            kind: Primitive,
+            shape: Capsule3d,
+            player_index: 2,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    forward: "KeyI",
+                    backward: "KeyK",
+                    left: "KeyJ",
+                    right: "KeyL",
+                    strafe_left: "KeyJ",
+                    strafe_right: "KeyL",
+                    jump: "KeyU",
+                    gamepad_index: 0,
+                ),
+            ),
+        ),
+    },
+)

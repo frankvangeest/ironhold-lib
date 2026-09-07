@@ -3,6 +3,7 @@
     prefabs: {
         "tight_orbit_player": (
             kind: Primitive,
+            player_index: 0,
             components: (
                 tags: ["player"],
                 camera_mode: Orbit((
@@ -21,6 +22,7 @@
         ),
         "wide_orbit_player": (
             kind: Primitive,
+            player_index: 1,
             components: (
                 tags: ["player"],
                 camera_mode: Orbit((
