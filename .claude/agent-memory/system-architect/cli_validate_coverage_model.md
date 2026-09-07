@@ -210,6 +210,25 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    entities — and a *separate* "dead join slot" diagnostic is the better authoring signal anyway.
    Note also: hot-join is Grid-split-only at runtime; none of the three checks gate on that.
 
+   **`player_index` is the sharper instance of this trap (found 2026-09-07,
+   `feature/cli_validate_small_wins`'s `duplicate_player_index`): for a join slot the field isn't
+   merely *maybe* dead, it is ALWAYS dead.** `action_executor.rs`~1775 does
+   `player_config.player_index = next_slot;` unconditionally after `assemble_player_config`, and
+   the slot itself is picked as `join_prefab_keys[next_slot]` — so a join prefab's authored
+   `player_index` can never collide with anything, two slots can legitimately name the *same*
+   prefab, and a remedy of "assign each player a unique player_index" is unfollowable there.
+   Contrast `gamepad_index`, whose seed genuinely does still flow through the join path (only
+   `bound_gamepad` is overridden, and only on a *gamepad*-triggered join) — which is why copying
+   `duplicate_gamepad_index`'s scoping comment verbatim onto a `player_index` check is wrong.
+   Before reusing a scoping rationale from a sibling check, verify the field survives the path.
+
+   **The canonical "placed/spawnable prefab" union in this file is THREE surfaces, not two**
+   (`validate.rs`~1845's `used_prefabs`): `scene.entities` + `join_prefab_keys` + `Action::Spawn`.
+   `duplicate_player_index` shipped with 2 of 3, and picked the one where the field is dead while
+   omitting the one (`Action::Spawn` → `assemble_player_config` at ~266, never overwritten) where
+   it is live. That comment block is also the file's own statement of the severity rule for
+   over-approximation: widen freely for a `StrictWarning`, never for a hard `CrossFileError`.
+
 8. **Path-reference checks are case/separator-blind by default, and the 2026-09-05 fix covers only
    6 of the path surfaces.** `feature/path_case_check` added `path_case_mismatch(project_dir,
    authored_path) -> Option<String>` (a per-component case-insensitive `read_dir` walk +
@@ -232,6 +251,24 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `bad_prefab_catalog_path_case` fixtures' *message-text* assertions Windows-only — they fail on
    Linux/CI. And the backslash arm is a pure string check gated behind `exists()`, so it is
    unreachable on exactly the platforms whose semantics it emulates.
+
+9. **No test ever runs `validate --strict` over `assets/projects/`, so every `StrictWarning` kind
+   is unenforced against this repo's own content.** `crates/ironhold_cli/tests/validate_projects.rs`
+   contains no `--strict` invocation at all (verified 2026-09-07); the only `--strict` coverage is
+   per-fixture in `validate_cross_file.rs`. A blanket strict smoke test isn't viable either — the
+   shipped projects would trip `unused_prefab`/`unused_effect`/`unused_audio`/`unused_decal`
+   orphan warnings by design. Consequence: an authoring-hygiene lint added to `strict_checks`
+   (e.g. `non_ascii_dash_in_text`) can never *keep* the repo's own RON clean; it only helps a
+   designer who manually runs `--strict`. If a lint needs real enforcement here, the working home
+   is a targeted `crates/ironhold_core/tests/ron_lint.rs` assertion over the parsed scenes, not
+   a strict-mode smoke test.
+
+10. **Three map loops in `cross_file_checks` still iterate a `HashMap` unsorted** (as of
+   `feature/cli_validate_small_wins`, which sorted only the behavior/dialogue/camera_mode/foliage/
+   stat-widget loop): the merchant `currency_stat`/`stock` loop (~822), the inventory
+   `initial_items` loop (~869), and the `items.items` loop (~904). All three emit hard errors, so
+   report order is hash-seed-dependent whenever a project has 2+ offenders. Any "the loop now
+   sorts, unlike every other loop in the file" claim in planning notes is inaccurate.
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.

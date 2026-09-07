@@ -82,6 +82,33 @@ sets both paths and asserts exit 0 under `--strict`. So the CLI matches the code
 the message. Either fix the runtime to match its own warning or delete the warning; don't "fix"
 the CLI to match it.
 
+**Mirror-vs-import: the deciding question is whether the CLI's *inputs* differ in shape, not
+whether the core item is `pub`.** `validate.rs` has both precedents and they are not
+interchangeable. Mirroring is right for `discover_extra_scenes`/`resolve_logic_files` — the CLI
+walks the filesystem where the runtime consumes Bevy asset handles, so the two genuinely can't
+share code. Importing is right when it's the *same pure function of the same data*:
+`validate.rs`~13 already does `use ironhold_core::runtime::scene_manager::entity_spawner::
+default_camera_config;`, which was `pub`-ified for exactly this. A bare physical constant is the
+purest case of the latter. Instance (2026-09-07, `feature/cli_validate_small_wins`'s
+`coyote_time_exceeds_jump_airtime`): `GRAVITY = 9.81` re-declared as a function-local `const`
+inside `validate.rs` with a "keep in sync" comment, justified on the grounds that
+`scene_loader.rs`~2948's copy is deliberately `pub(crate)`. That rationale is a non-sequitur —
+the `pub(crate)` note exists to make `player.rs` and `scene_loader.rs` share one constant, and
+widening to `pub` cannot cause the drift it guards against. Note the CLI also already duplicates
+`resolve_jump_velocity`'s `sqrt(2gh)`, the `JumpConfig` height resolution, and the `1.8` default
+player height — so the real fix is a pure `schema/`-homed jump-math helper, not four separate
+mirrors. Silent-drift risk is genuinely low for 9.81; the cheap tripwire is an `ironhold_core`
+test asserting the constant's value and naming the CLI mirror in its message.
+
+**Also check that the new check's SEVERITY matches what its docs claim.** Same batch:
+`duplicate_player_index` is documented in `docs/20_data_formats.md`~2774 (and described in the
+feature plan) as `ironhold_cli validate --strict`, but is implemented as a `CrossFileError`
+(unconditional exit 1). Its runtime counterpart (`entity_spawner.rs`~706, the `player_index: 0`
+duplicate) is only a `warn!`. "CLI hard error where the runtime warns" has precedent
+(`duplicate_gamepad_index`), so either answer is defensible — but the docs, the plan, and the code
+must agree, and the escalation should be a stated decision rather than an artifact of which
+function the code was pasted into.
+
 **Why:** these pairs are cheap to add and land often, so the same mistakes recur; all of them
 are invisible in a green test run.
 

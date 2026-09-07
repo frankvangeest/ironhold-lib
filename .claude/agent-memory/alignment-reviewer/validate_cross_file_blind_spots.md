@@ -82,12 +82,60 @@ today (`stat_label`/`world_stat_bar`, via `strip_prefix("{self}.")`, validate.rs
 posture. A false positive is worse than a miss here: a designer with no Rust knowledge cannot
 suppress a `validate` error.
 
+**SECOND false-positive class, established `feature/cli_validate_small_wins` (2026-09-07): a field
+the *runtime overwrites* after reading the prefab.** Before copying the now-standard
+"scene `entities:` + `join_prefab_keys`" scoping template (`duplicate_gamepad_index` is the
+original), check whether the JoinPlayer executor keeps the authored value for THAT field.
+`gamepad_index` is genuinely read from the join prefab (only a *gamepad*-triggered join bypasses it,
+via `PendingJoinGamepad`), but `player_index` is unconditionally clobbered —
+`action_executor.rs:~1775 player_config.player_index = next_slot;` — so the `join_prefab_keys` half
+of a `duplicate_player_index`-shaped check flags working content (same join prefab in two slots, or
+a scene-placed player prefab reused as a join prefab). Only `local_coop_demo/room8` authors
+`join_prefab_keys` at all, and it happens to use two distinct prefabs, so this class of false
+positive won't be caught by the `validate_projects` smoke test.
+
+**Check WHICH vec the push goes into against what the docs claim.** Same feature shipped
+`duplicate_player_index` into `cross_file_checks` (→ `errors`, unconditional exit 1) while
+`docs/20_data_formats.md` advertised it as `validate --strict`. `cross_file_checks` +
+`check_ui_trigger_reachability` always run; only `strict_checks` is gated on the flag
+(validate.rs:~2820-2823). Severity is invisible at the push site — the only tell is which function
+you're inside — so read the enclosing `fn`, not the comment above the check.
+
+**Runtime-warn parity for `player_index` specifically: there is NO general duplicate-`player_index`
+warn.** `scene_loader.rs` only has `warn_duplicate_gamepad_index`; the player_index warn lives in
+`spawn_players_and_camera` and fires **only when `own_viewport_only == true`**, and on a
+`% MAX_SPLIT_PLAYERS` collision (so 0-vs-4 counts, which an equality-only CLI check misses). The
+HUD label is `format!("P{}", player_index.0 + 1)` (camera.rs:~813) — a message that prints
+`"P{index}"` is off by one. `MAX_SPLIT_PLAYERS` is fully `pub` in `capabilities::camera` and
+`capabilities` is a `pub mod`, so "the CLI can only reach `schema::`" is a convention, not a
+constraint — relevant whenever a check wants an engine constant (`GRAVITY` is the exception: real
+`pub(crate)` in `runtime::scene_manager::scene_loader`, so it gets *mirrored* in validate.rs with a
+keep-in-sync comment and no test guarding the two; the clean fix is moving it + `JumpConfig`'s
+height resolution into `schema/catalog.rs`, which would also de-duplicate validate.rs's own
+`resolve_height` copy).
+
+**Deterministic-order sweep is still incomplete.** As of 2026-09-07 the two prefab loops at
+validate.rs:~1093/~1475 sort, but three error-emitting `HashMap` walks do not: merchant
+`currency_stat` (~822), merchant `stock[].item_key` (~869), and the `camera_modes:` registry
+(~1591) — the last is the odd one, since its own `--strict` twin (~2287) does sort.
+
+**Font-glyph lints (`non_ascii_dash_in_text`) must enumerate text surfaces by hand.** The lint
+walks parsed values (so the ~860 em-dashes in RON *comments* correctly don't fire) but covers only
+scene `ui:` `Label`/`Button`, entity `label:`, and `world_labels:`. Uncovered designer-authored
+strings that render through the same embedded font: `DialogueNodeDef.speaker`/`.body` +
+`ChoiceDef.label` (dialogue.rs:22/29/44 — prose, the highest-risk surface, and `LoadedProject`
+already carries the parsed dialogues), `ItemDef.display_name` (items.rs:37), `PrefabDef.display_name`
+(catalog.rs:858), `ActionSlotDef.label` (scene_v2.rs:1066). No font-family field exists anywhere in
+`schema/`, so such a lint cannot false-positive against a project supplying its own font.
+
 **Every new check must be added to the `docs/60_contributing.md` "Checks performed" /
 "`--strict` flag" bullet lists (~lines 236-262).** That is the only designer-facing enumeration of
 what `validate` catches, and it is otherwise well maintained (label_depth_scale, gamepad_index,
 merchant, slope/coyote all present) — but the `Action::SetCameraMode` mode check is already missing
 from it, so don't take "the neighbouring check didn't do it" as precedent. **This is the single most
-frequently missed step — recurred again in `feature/camera_mode_validation` (2026-09-06): two new
+frequently missed step — recurred AGAIN in `feature/cli_validate_small_wins` (2026-09-07): three
+new checks, `docs/20_data_formats.md` updated in three places, `60_contributing.md` untouched.
+Also recurred in `feature/camera_mode_validation` (2026-09-06): two new
 checks + a whole new prefab-level `camera_mode` surface shipped with line 249 untouched, and
 `docs/20_data_formats.md`'s own per-feature "**Validation:**" paragraph (there is one per feature
 area, e.g. camera_modes @~2556) left stale too. Check BOTH lists, not just 60_contributing.**
