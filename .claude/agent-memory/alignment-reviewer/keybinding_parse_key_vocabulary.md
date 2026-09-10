@@ -13,6 +13,13 @@ metadata:
 
 **Gamepad sibling (added by `gamepad_controller_input.md`, reviewed 2026-07-20):** `InputMap::parse_gamepad_button(&str) -> Option<GamepadButton>` (`schema/player.rs`) is the gamepad-button analogue of `parse_key` — fixed enumerated match over South/East/North/West/LeftTrigger/LeftTrigger2/RightTrigger/RightTrigger2/Select/Start/LeftThumb/RightThumb/DPad{Up,Down,Left,Right}. Field-name lookup helper `InputMap::gamepad_button("jump"|"run"|"interact"|"target_next")` mirrors `key()`. The 5 RON fields are `gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next: String` + `gamepad_deadzone: f32`, all `#[serde(default=..)]` = old hardcoded values (South/East/West/North/0.15), so no-authoring = byte-identical to pre-feature. NOTE the validation asymmetry: gamepad button names ARE runtime-warned (loop in `assemble_player_config`, entity_spawner.rs ~1136, covers all callers) — but the player-`InputMap` *keyboard* fields (forward/jump/target_next/look_*) are NOT CLI-validated NOR runtime-warned (silent no-op via `key()`). So gamepad buttons get *better* validation than sibling keyboard fields. CLI `validate.rs` only parse_key-checks action-bar slot keys + scene_key_bindings, NOT any player-InputMap field (keyboard or gamepad) — so the missing CLI gamepad-button check is consistent with existing InputMap treatment, not a new gap. Stick *axes* (LeftStickX/Y move, RightStickX turn, RightStickY camera-pitch) are hardcoded/non-remappable — accepted convention, deadzone is the only data-driven analog knob.
 
+**All `InputMap` fields are serde-defaulted as of 2026-09-10** (`feature/input_map_defaults` gave
+`forward`/`backward`/`left`/`right`/`strafe_left`/`strafe_right`/`jump` defaults matching
+`entity_spawner.rs::default_input_map()`'s WASD/Space scheme), so a partial `inputs:` block —
+e.g. `inputs: (gamepad_index: 0)` — parses. The struct still has no `deny_unknown_fields`, which
+combined with the missing key-name validation above means a typo'd InputMap *field name* is now
+completely silent; see [[serde-default-loosening-pattern]].
+
 **Dual runtime-warn + CLI-validate-error pattern** (good pattern to confirm, not flag): RON key mistakes are surfaced two ways —
 - Runtime (`scene_loader.rs`): lenient `warn!` only; an unparseable/duplicate slot key degrades gracefully (`resolved_key: None` -> slot never fires), the game still runs.
 - CLI (`ironhold_cli validate.rs`): strict — pushes a `CrossFileError` (`error_type: "invalid_key"`/`"duplicate_key"`), exit code 1, so a designer catches it before shipping rather than missing a browser-console warning.
