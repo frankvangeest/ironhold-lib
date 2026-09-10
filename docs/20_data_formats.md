@@ -1462,6 +1462,14 @@ ui_panel: (
 
 Named registry of all assets available to prefabs and scenes.
 
+> **Every `path:` field here (and every raw file path elsewhere in this schema — `MaterialDef`'s
+> texture/shader/splatmap fields, `ProjectConfig.global_environment`'s IBL paths, a scene's
+> `terrain.heightmap`/`.splatmap`/`.material_paths`) is relative to the `assets/` folder itself,
+> not the project folder — and must use forward slashes and the file's exact on-disk casing.**
+> `ironhold_cli validate` checks both (`missing_file`/`path_case_mismatch`); a wrong-cased path
+> can validate clean on a local Windows/macOS machine while 404ing over the case-sensitive HTTP
+> path a real WASM/browser build serves assets from.
+
 ```ron
 (
   models: {

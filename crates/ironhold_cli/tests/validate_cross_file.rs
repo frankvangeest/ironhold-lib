@@ -31,6 +31,21 @@ fn validate_strict(fixture_name: &str) -> (i32, String) {
     (out.status.code().unwrap_or(-1), stdout)
 }
 
+/// Invokes `ironhold validate .` with the process's own working directory set to the fixture --
+/// the single most common real invocation shape (`cd` into a project, then `validate .`), and
+/// the one that regressed `find_assets_root`'s first draft (a relative `.` has no resolvable
+/// second `.parent()` at all, so the checks silently never ran). See
+/// `asset_root_paths_checked_from_relative_dot_invocation_exits_1` below.
+fn validate_relative_dot(fixture_name: &str) -> (i32, String) {
+    let out = ironhold()
+        .args(["validate", "."])
+        .current_dir(fixture(fixture_name))
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run ironhold: {e}"));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    (out.status.code().unwrap_or(-1), stdout)
+}
+
 // ── Valid project ─────────────────────────────────────────────────────────────
 
 #[test]
@@ -1637,4 +1652,206 @@ fn non_ascii_char_in_dialogue_body_strict_exits_1() {
 fn ascii_hyphen_in_label_strict_exits_0() {
     let (code, stdout) = validate_strict("ascii_hyphen_in_label");
     assert_eq!(code, 0, "expected exit 0 (ASCII hyphen, no false positive), got {code}:\n{stdout}");
+}
+
+// ── AssetCatalog / material / terrain path existence + case checks ─────────────
+//
+// Previously, every `AssetCatalog` entry (model/texture/audio/decal), `MaterialDef`'s own nested
+// texture/shader/splatmap paths, `ProjectConfig.global_environment`'s IBL paths, and
+// `GameSceneV2.terrain`'s heightmap/splatmap/material_paths were only ever key-existence checked
+// (does an action's `key:` resolve to a catalog entry) — never checked for whether the entry's
+// own underlying file path actually exists on disk, let alone with correct case. These fixtures
+// deliberately live at `tests/fixtures/assets/projects/{case}` (not a bare
+// `tests/fixtures/{case}`) since these checks are resolved against a shared "assets root" —
+// the nearest ancestor of `project_dir` literally named `assets` (`find_assets_root`) —
+// `tests/fixtures/assets/` plays that role here, exactly matching the real
+// `assets/projects/{name}/` + `assets/shared/` convention every shipped project uses.
+#[test]
+fn valid_asset_paths_exits_0() {
+    let (code, stdout) = validate("assets/projects/valid_asset_paths");
+    assert_eq!(code, 0, "expected exit 0 (every path resolves), got {code}:\n{stdout}");
+}
+
+#[test]
+fn missing_asset_catalog_model_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_model_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("model \"hero\"") && stdout.contains("not found on disk"),
+        "expected the offending model key and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// Regression test (system-architect/debug-detective finding): `find_assets_root`'s first draft
+/// used `project_dir.parent().parent()` on the raw, uncanonicalized CLI argument -- so the single
+/// most common real invocation shape, `cd`-ing into a project and running `ironhold validate .`,
+/// had no resolvable second parent at all and silently skipped every asset-path check (a
+/// genuinely broken texture path validated clean). Reproduces that exact invocation shape against
+/// the same broken fixture the plain (absolute-path) test above uses.
+#[test]
+fn asset_root_paths_checked_from_relative_dot_invocation_exits_1() {
+    let (code, stdout) = validate_relative_dot("assets/projects/bad_model_missing");
+    assert_eq!(
+        code, 1,
+        "expected exit 1 even when invoked as `validate .` from inside the project, got {code}:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("model \"hero\"") && stdout.contains("not found on disk"),
+        "expected the offending model key and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// Also proves the GLB `#Scene0` sub-asset fragment doesn't accidentally mask a real
+/// missing-file error — the fixture's `path:` carries one, and the base file genuinely doesn't
+/// exist.
+#[test]
+fn missing_asset_catalog_model_path_reports_full_authored_path_with_fragment() {
+    let (code, stdout) = validate("assets/projects/bad_model_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("nonexistent_hero.glb#Scene0"),
+        "expected the full authored path, fragment included, in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn wrong_case_asset_catalog_model_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_model_case");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("model \"hero\"") && stdout.contains("resolves on disk to"),
+        "expected the offending model key and case-mismatch message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_asset_catalog_texture_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_texture_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("texture \"hero_diffuse\"") && stdout.contains("not found on disk"),
+        "expected the offending texture key and missing-file message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_asset_catalog_audio_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_audio_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("audio \"click\"") && stdout.contains("not found on disk"),
+        "expected the offending audio key and missing-file message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_asset_catalog_decal_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_decal_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("decal \"ring\"") && stdout.contains("not found on disk"),
+        "expected the offending decal key and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// `MaterialDef`'s `MaterialKind::Standard` texture fields are raw `asset_server.load()` paths
+/// (`material_factory.rs`), not `AssetCatalog.textures` keys — unlike e.g.
+/// `FoliageMaterialDef.leaf_texture`, which genuinely is a catalog key and is correctly left
+/// unchecked by this feature.
+#[test]
+fn missing_standard_material_texture_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_material_standard");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("material \"mat_standard\".base_color_texture") && stdout.contains("not found on disk"),
+        "expected the offending material key/field and missing-file message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_terrain_material_splatmap_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_material_terrain");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("material \"mat_terrain\".splatmap") && stdout.contains("not found on disk"),
+        "expected the offending material key/field and missing-file message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn missing_custom_material_shader_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_material_custom");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("material \"mat_custom\".shader") && stdout.contains("not found on disk"),
+        "expected the offending material key/field and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// `ProjectConfig.global_environment`'s IBL paths — project-scoped, not catalog-scoped, but the
+/// identical raw-path shape.
+#[test]
+fn missing_global_environment_diffuse_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_global_environment");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("global_environment.diffuse_path") && stdout.contains("not found on disk"),
+        "expected the offending field and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// `GameSceneV2.terrain`'s heightmap/splatmap/material_paths — scene-scoped, same raw-path shape
+/// again.
+#[test]
+fn missing_scene_terrain_heightmap_path_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_scene_terrain");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("terrain.heightmap") && stdout.contains("not found on disk"),
+        "expected the offending field and missing-file message in output:\n{stdout}"
+    );
+}
+
+/// A bare `tests/fixtures/{name}/` fixture (no `assets/projects/{name}/` + `assets/shared/`
+/// nesting) must not trip any of the new checks at all — `find_assets_root` correctly returns
+/// `None` rather than guessing wrong and resolving paths against some unrelated directory.
+/// Reuses an existing fixture with a real `assets.ron` model entry.
+#[test]
+fn asset_catalog_path_checks_are_skipped_for_bare_fixtures_exits_0() {
+    let (code, stdout) = validate("valid_project");
+    assert_eq!(code, 0, "expected exit 0 (checks skipped, not fabricated), got {code}:\n{stdout}");
+}
+
+/// Regression test (debug-detective finding): `find_assets_root` matching on directory NAME
+/// alone ("nearest ancestor literally named `assets`") fabricates a false assets root -- and
+/// therefore false `missing_file` errors -- for a project living anywhere under a directory that
+/// merely happens to be named `assets` for an unrelated reason. This fixture's `project_dir` is
+/// `.../assets_name_without_corroboration/assets/decoy_project` -- its `assets`-named ancestor is
+/// real, but has no `projects/`/`shared/` child, so `find_assets_root` must still return `None`
+/// (checks skipped) despite the name matching, rather than fabricating an error against the
+/// unrelated `shared/audio/click.wav` reference this fixture deliberately can't resolve.
+#[test]
+fn assets_named_ancestor_without_corroboration_is_not_treated_as_assets_root_exits_0() {
+    let (code, stdout) = validate("assets_name_without_corroboration/assets/decoy_project");
+    assert_eq!(
+        code, 0,
+        "an `assets`-named ancestor with no projects/shared child must not be treated as the \
+         assets root, got {code}:\n{stdout}"
+    );
+}
+
+/// Regression test (debug-detective finding): an absolute authored path (e.g. pasted from a
+/// file-browser "copy path" on the author's own machine) must be rejected explicitly, not
+/// silently joined -- `Path::join` with an absolute RHS discards the LHS entirely, so
+/// `assets_root.join(absolute_path)` would resolve to whatever file genuinely exists at that
+/// absolute path on the machine running `validate`, producing a perfect false negative: valid
+/// only there, never over the actual asset-relative path a real build serves from.
+#[test]
+fn absolute_asset_catalog_path_is_rejected_exits_1() {
+    let (code, stdout) = validate("assets/projects/bad_absolute_path");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("model \"hero\"") && stdout.contains("is an absolute path"),
+        "expected the offending model key and absolute-path message in output:\n{stdout}"
+    );
 }

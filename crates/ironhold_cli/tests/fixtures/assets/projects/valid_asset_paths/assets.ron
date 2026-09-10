@@ -1,0 +1,38 @@
+(
+    schema_version: 1,
+    models: {
+        "hero": (path: "shared/models/hero.glb"),
+    },
+    textures: {
+        "hero_diffuse": "shared/textures/hero_diffuse.png",
+    },
+    audio: {
+        "click": (path: "shared/audio/click.wav"),
+    },
+    decals: {
+        "ring": "shared/decals/ring.png",
+    },
+    materials: {
+        "mat_standard": (
+            kind: Standard((
+                base_color_texture: "shared/textures/hero_diffuse.png",
+            )),
+        ),
+        "mat_terrain": (
+            kind: Terrain((
+                splatmap: "shared/terrain/splatmap.png",
+                layers: [
+                    "shared/terrain/heightmap.png",
+                ],
+            )),
+        ),
+        "mat_custom": (
+            kind: Custom((
+                shader: "shared/materials/custom_shader.wgsl",
+                textures: {
+                    "texture_0": "shared/textures/hero_diffuse.png",
+                },
+            )),
+        ),
+    },
+)

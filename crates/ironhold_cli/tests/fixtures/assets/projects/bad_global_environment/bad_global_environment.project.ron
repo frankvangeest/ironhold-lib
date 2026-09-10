@@ -1,0 +1,7 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    global_environment: (
+        diffuse_path: "shared/terrain/nonexistent_env_diffuse.ktx2",
+    ),
+)

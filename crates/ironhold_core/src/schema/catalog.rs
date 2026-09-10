@@ -127,6 +127,12 @@ pub enum PrimitiveShapeKind {
 /// Maximum `particle_count` allowed in any `EffectDef`. Validated at catalog load time.
 pub const MAX_PARTICLES_PER_EFFECT: u32 = 256;
 
+/// `models`/`textures`/`audio`/`decals` values (plus `MaterialDef`'s own nested texture/shader/
+/// splatmap fields) are raw asset-relative file paths, not keys into any other map — and are
+/// existence/case-checked by `ironhold_cli`'s `check_asset_root_paths` (`commands/validate.rs`).
+/// If a future field here is ALSO a raw path (rather than a designer-facing key resolved
+/// elsewhere, like `EffectDef.sprite`), it needs a matching addition there too — nothing enforces
+/// this automatically.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct AssetCatalog {
     pub schema_version: u32,

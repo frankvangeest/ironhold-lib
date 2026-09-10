@@ -1,0 +1,13 @@
+(
+    schema_version: 1,
+    materials: {
+        "mat_terrain": (
+            kind: Terrain((
+                splatmap: "shared/terrain/nonexistent_splatmap.png",
+                layers: [
+                    "shared/terrain/heightmap.png",
+                ],
+            )),
+        ),
+    },
+)
