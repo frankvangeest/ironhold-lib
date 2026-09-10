@@ -3,6 +3,7 @@ use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, St
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::stats::StatCatalog;
+use ironhold_core::schema::player::InputMap;
 use ron::extensions::Extensions;
 
 /// Deserialize a RON string with `implicit_some` enabled — matches runtime loader behaviour.
@@ -4415,4 +4416,139 @@ fn test_scene_no_target_indicator_defaults_to_none() {
     "#;
     let scene: GameSceneV2 = from_str(ron_str).expect("bare scene must parse");
     assert!(scene.target_indicator.is_none(), "omitting target_indicator must default to None");
+}
+
+// InputMap tests — `forward`/`backward`/`left`/`right`/`strafe_left`/`strafe_right`/`jump` used
+// to be the only 7 fields on `InputMap` with no `#[serde(default)]`, unlike every other field on
+// the struct — so a partial `inputs:` block authored only to set e.g. `gamepad_index` hard-failed
+// RON parsing with a confusing "missing field `forward`" error instead of falling back to
+// WASD/Space like every other omitted field does. `InputMap::default()` (`schema/player.rs`) is
+// built from these same per-field default fns, so there is no separate hand-maintained copy for
+// these defaults to drift against.
+
+#[test]
+fn test_input_map_empty_defaults_to_wasd_space() {
+    let ron_str = "()";
+    let inputs: InputMap = from_str(ron_str).expect("a fully-empty inputs: block must parse");
+    assert_eq!(inputs.forward, "KeyW");
+    assert_eq!(inputs.backward, "KeyS");
+    assert_eq!(inputs.left, "KeyA");
+    assert_eq!(inputs.right, "KeyD");
+    assert_eq!(inputs.strafe_left, "KeyQ");
+    assert_eq!(inputs.strafe_right, "KeyE");
+    assert_eq!(inputs.jump, "Space");
+}
+
+/// The bug's own real-world repro: a designer authoring `inputs: (gamepad_index: 0)` purely to
+/// set a controller seed, without repeating every keyboard binding just to satisfy the parser.
+#[test]
+fn test_input_map_partial_gamepad_only_still_parses() {
+    let ron_str = "(gamepad_index: 0)";
+    let inputs: InputMap = from_str(ron_str)
+        .expect("a partial inputs: block authoring only gamepad_index must parse, not hard-fail");
+    assert_eq!(inputs.gamepad_index, Some(0));
+    // Every omitted keyboard field must fall back to the same WASD/Space scheme
+    // `InputMap::default()` uses for a fully-omitted `inputs:` block.
+    assert_eq!(inputs.forward, "KeyW");
+    assert_eq!(inputs.backward, "KeyS");
+    assert_eq!(inputs.left, "KeyA");
+    assert_eq!(inputs.right, "KeyD");
+    assert_eq!(inputs.strafe_left, "KeyQ");
+    assert_eq!(inputs.strafe_right, "KeyE");
+    assert_eq!(inputs.jump, "Space");
+}
+
+/// `impl Default for InputMap`'s 18 fn-backed fields structurally can't drift from their
+/// `#[serde(default = ...)]` counterparts (both call the same fn) -- but its 4 hand-written
+/// `None` literals (`gamepad_index`, `look_left`/`right`/`up`/`down`) are matched against bare
+/// `#[serde(default)]` only by convention, not by construction. If a future field ever gained a
+/// `Some(...)`-returning default fn without `impl Default` being updated to match, this is the
+/// one test that would catch it (debug-detective finding, `input_map_defaults` review).
+/// `InputMap` derives no `PartialEq`, so this is field-by-field rather than one `assert_eq!`.
+#[test]
+fn test_input_map_default_impl_matches_fully_empty_ron() {
+    let from_ron: InputMap = from_str("()").expect("a fully-empty inputs: block must parse");
+    let from_default = InputMap::default();
+    assert_eq!(from_ron.forward, from_default.forward);
+    assert_eq!(from_ron.backward, from_default.backward);
+    assert_eq!(from_ron.left, from_default.left);
+    assert_eq!(from_ron.right, from_default.right);
+    assert_eq!(from_ron.strafe_left, from_default.strafe_left);
+    assert_eq!(from_ron.strafe_right, from_default.strafe_right);
+    assert_eq!(from_ron.jump, from_default.jump);
+    assert_eq!(from_ron.run, from_default.run);
+    assert_eq!(from_ron.interact, from_default.interact);
+    assert_eq!(from_ron.strafe_mouse_button, from_default.strafe_mouse_button);
+    assert_eq!(from_ron.target_next, from_default.target_next);
+    assert_eq!(from_ron.target_range, from_default.target_range);
+    assert_eq!(from_ron.gamepad_index, from_default.gamepad_index);
+    assert_eq!(from_ron.gamepad_jump, from_default.gamepad_jump);
+    assert_eq!(from_ron.gamepad_run, from_default.gamepad_run);
+    assert_eq!(from_ron.gamepad_interact, from_default.gamepad_interact);
+    assert_eq!(from_ron.gamepad_target_next, from_default.gamepad_target_next);
+    assert_eq!(from_ron.gamepad_deadzone, from_default.gamepad_deadzone);
+    assert_eq!(from_ron.look_left, from_default.look_left);
+    assert_eq!(from_ron.look_right, from_default.look_right);
+    assert_eq!(from_ron.look_up, from_default.look_up);
+    assert_eq!(from_ron.look_down, from_default.look_down);
+}
+
+/// Explicitly-authored keyboard fields must still override the default, proving this is a real
+/// default (only applied when the field is absent), not a hardcoded post-parse overwrite.
+#[test]
+fn test_input_map_explicit_keys_override_defaults() {
+    let ron_str = r#"(forward: "ArrowUp", jump: "Enter")"#;
+    let inputs: InputMap = from_str(ron_str).expect("must parse");
+    assert_eq!(inputs.forward, "ArrowUp");
+    assert_eq!(inputs.jump, "Enter");
+    // Untouched fields still default.
+    assert_eq!(inputs.backward, "KeyS");
+    assert_eq!(inputs.left, "KeyA");
+}
+
+/// `InputMap` now carries `#[serde(deny_unknown_fields)]` -- added alongside the 7 new per-field
+/// defaults, since defaulting a field also silently drops a typo'd version of it (e.g.
+/// `frward: "KeyT"` used to hard-fail as "missing field `forward`"; post-fix it would otherwise
+/// have silently parsed with `forward` at its WASD default and the typo'd key going nowhere).
+/// This is the same `deny_unknown_fields` convention `InputMap`'s own container,
+/// `PrefabComponents`, already uses (`schema/catalog.rs`) -- it does not propagate into a nested
+/// struct on its own, so `InputMap` needs its own attribute (debug-detective finding).
+#[test]
+fn test_input_map_rejects_unknown_field() {
+    let ron_str = r#"(frward: "ArrowUp")"#;
+    let result: Result<InputMap, _> = from_str(ron_str);
+    assert!(result.is_err(), "a typo'd field name must be a parse error, not silently dropped");
+}
+
+/// The bug's real designer-facing path, not just `InputMap` standalone: a partial `inputs:`
+/// block authored on a real player prefab, behind `PrefabComponents`'s own
+/// `#[serde(deny_unknown_fields)]`. Models `entity_logic_demo/prefabs/prefabs.ron`'s own
+/// gamepad-controller-input playtest aid, which authors exactly this shape.
+#[test]
+fn test_prefab_catalog_partial_inputs_block_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "player": (
+                    kind: Primitive,
+                    model: "",
+                    shape: Capsule3d,
+                    components: (
+                        tags: ["player"],
+                        inputs: (
+                            gamepad_index: 0,
+                        ),
+                    ),
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = from_str(ron_str)
+        .expect("a player prefab with a partial inputs: block must parse");
+    let inputs = catalog.prefabs["player"].components.inputs.as_ref()
+        .expect("inputs must be Some");
+    assert_eq!(inputs.gamepad_index, Some(0));
+    assert_eq!(inputs.forward, "KeyW");
+    assert_eq!(inputs.jump, "Space");
 }
