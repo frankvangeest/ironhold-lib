@@ -43,17 +43,10 @@
         // camera, buttons below use genre-convention defaults (Xbox naming; see
         // docs/20_data_formats.md for the PlayStation equivalents). Movement/jump/run/interact/
         // target-cycle all work with just `gamepad_index` set; the gamepad_* fields below are
-        // shown for reference and already match their defaults. `forward`/`backward`/etc. must
-        // still be spelled out here — authoring any `inputs:` block at all replaces the whole
-        // default, and those keyboard fields (unlike the gamepad ones) have no serde default.
+        // shown for reference and already match their defaults, as does the omitted keyboard
+        // half (WASD/Space) — every `InputMap` field has a `#[serde(default)]` now, so a partial
+        // `inputs:` block like this one is a fully-supported authoring pattern, not a workaround.
         inputs: (
-          forward:      "KeyW",
-          backward:     "KeyS",
-          left:         "KeyA",
-          right:        "KeyD",
-          strafe_left:  "KeyQ",
-          strafe_right: "KeyE",
-          jump:         "Space",
           gamepad_index: 0,
           gamepad_jump: "South",
           gamepad_run: "East",

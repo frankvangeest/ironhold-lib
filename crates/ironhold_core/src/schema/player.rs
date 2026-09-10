@@ -260,13 +260,28 @@ fn default_initial_pitch() -> f32 { 0.5 }
 fn default_look_speed() -> f32 { 2.0 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct InputMap {
+    /// Default: `"KeyW"`.
+    #[serde(default = "default_forward_key")]
     pub forward: String,
+    /// Default: `"KeyS"`.
+    #[serde(default = "default_backward_key")]
     pub backward: String,
+    /// Default: `"KeyA"`.
+    #[serde(default = "default_left_key")]
     pub left: String,
+    /// Default: `"KeyD"`.
+    #[serde(default = "default_right_key")]
     pub right: String,
+    /// Default: `"KeyQ"`.
+    #[serde(default = "default_strafe_left_key")]
     pub strafe_left: String,
+    /// Default: `"KeyE"`.
+    #[serde(default = "default_strafe_right_key")]
     pub strafe_right: String,
+    /// Default: `"Space"`.
+    #[serde(default = "default_jump_key")]
     pub jump: String,
     #[serde(default = "default_run_key")]
     pub run: String,
@@ -331,6 +346,55 @@ pub struct InputMap {
     #[serde(default)]
     pub look_down: Option<String>,
 }
+
+// Hand-written, not `#[derive(Default)]`: a derived `Default` would silently give every
+// `String` field an EMPTY string (`InputMap::parse_key("")` matches no arm, leaving that
+// binding entirely unbound with no warning) rather than the real WASD/Space scheme -- strictly
+// worse than the RON parse error this type's `#[serde(default = ...)]` attributes exist to
+// avoid. Every field below calls the exact same fn its own `#[serde(default = ...)]` attribute
+// does, so this and the per-field RON defaults can never drift apart. Same convention as
+// `FlyCamDef`/`MovementConfig` (`schema/catalog.rs`).
+impl Default for InputMap {
+    fn default() -> Self {
+        Self {
+            forward: default_forward_key(),
+            backward: default_backward_key(),
+            left: default_left_key(),
+            right: default_right_key(),
+            strafe_left: default_strafe_left_key(),
+            strafe_right: default_strafe_right_key(),
+            jump: default_jump_key(),
+            run: default_run_key(),
+            interact: default_interact_key(),
+            strafe_mouse_button: default_strafe_mouse_button(),
+            target_next: default_target_next_key(),
+            target_range: default_target_range(),
+            gamepad_index: None,
+            gamepad_jump: default_gamepad_jump(),
+            gamepad_run: default_gamepad_run(),
+            gamepad_interact: default_gamepad_interact(),
+            gamepad_target_next: default_gamepad_target_next(),
+            gamepad_deadzone: default_gamepad_deadzone(),
+            look_left: None,
+            look_right: None,
+            look_up: None,
+            look_down: None,
+        }
+    }
+}
+
+// `InputMap::default()` (below) is built from these same fns, so "what a fully-omitted `inputs:`
+// block resolves to" and "what a single omitted field within a partially-authored `inputs:` block
+// resolves to" are structurally the same values, not two hand-maintained copies that could drift
+// -- a designer authoring only `inputs: (gamepad_index: 0)` gets the identical WASD/Space bindings
+// a designer who omits `inputs:` entirely gets. Same convention as `FlyCamDef`/`MovementConfig`.
+fn default_forward_key() -> String { "KeyW".to_string() }
+fn default_backward_key() -> String { "KeyS".to_string() }
+fn default_left_key() -> String { "KeyA".to_string() }
+fn default_right_key() -> String { "KeyD".to_string() }
+fn default_strafe_left_key() -> String { "KeyQ".to_string() }
+fn default_strafe_right_key() -> String { "KeyE".to_string() }
+fn default_jump_key() -> String { "Space".to_string() }
 
 fn default_run_key() -> String {
     "ShiftLeft".to_string()

@@ -1689,33 +1689,6 @@ pub fn default_camera_config() -> CameraConfig {
     }
 }
 
-pub(crate) fn default_input_map() -> InputMap {
-    InputMap {
-        forward: "KeyW".to_string(),
-        backward: "KeyS".to_string(),
-        left: "KeyA".to_string(),
-        right: "KeyD".to_string(),
-        strafe_left: "KeyQ".to_string(),
-        strafe_right: "KeyE".to_string(),
-        jump: "Space".to_string(),
-        run: "ShiftLeft".to_string(),
-        interact: "KeyF".to_string(),
-        strafe_mouse_button: Some("Left".to_string()),
-        target_next: "Tab".to_string(),
-        target_range: 30.0,
-        gamepad_index: None,
-        look_left: None,
-        look_right: None,
-        look_up: None,
-        look_down: None,
-        gamepad_jump: "South".to_string(),
-        gamepad_run: "East".to_string(),
-        gamepad_interact: "West".to_string(),
-        gamepad_target_next: "North".to_string(),
-        gamepad_deadzone: 0.15,
-    }
-}
-
 /// Builds a `PlayerConfig` from a `tags: ["player"]` prefab. Single source of truth for the
 /// sites that assemble one by hand: the scene-load GLB/primitive collector (`scene_loader.rs`)
 /// and the dynamic `Action::Spawn` character-select path (`action_executor.rs`, GLB only — see
@@ -1752,7 +1725,7 @@ pub(crate) fn assemble_player_config(
         }
         PlayerModelSource::Glb(model_path.unwrap_or_default())
     };
-    let inputs = prefab.components.inputs.clone().unwrap_or_else(default_input_map);
+    let inputs = prefab.components.inputs.clone().unwrap_or_default();
     for (field, name) in [
         ("gamepad_jump", &inputs.gamepad_jump),
         ("gamepad_run", &inputs.gamepad_run),

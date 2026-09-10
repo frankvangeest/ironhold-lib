@@ -2129,7 +2129,7 @@ Both player model sources now get the same collider `Friction` (`combine_rule: M
 
 See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`prefabs/prefabs.ron`) and `scenes/room7.scene.ron` for a minimal working example — two bare-capsule primitive-shaped players in one split-screen scene, each with its own tint, mana pool, and overhead bar (mana there is decorative; nothing spends it, so both bars stay full). For a **mixed** pairing — one GLB player and one composed-multi-part-body primitive player side by side, sharing per-player targeting, a live spendable action-bar mana pool, and own-viewport-only target rings — see `scenes/room10.scene.ron` and its `player_p2_primitive_split_ring` prefab.
 
-**`InputMap` fields** (`components.inputs` — omit the entire block to use WASD defaults):
+**`InputMap` fields** (`components.inputs`, all optional — omit individual fields or the entire block to use WASD/Space defaults):
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
