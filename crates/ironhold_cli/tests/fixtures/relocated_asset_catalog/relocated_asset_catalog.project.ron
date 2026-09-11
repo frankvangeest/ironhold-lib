@@ -1,0 +1,5 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    asset_catalog: "data/subdir/my_assets.ron",
+)

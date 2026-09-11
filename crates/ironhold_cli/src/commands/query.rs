@@ -8,7 +8,7 @@ use ironhold_core::schema::project::{LogicRulesAsset, StateMachineAsset};
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::Action;
 
-use super::utils::{glob_dir, rel, ron_from_str, silent_parse};
+use super::utils::{glob_dir, rel, resolve_catalog_paths, ron_from_str, silent_parse};
 use crate::output::OutputMode;
 
 // ── CLI surface ───────────────────────────────────────────────────────────────
@@ -115,10 +115,20 @@ fn query_prefabs(
     filter: Option<&str>,
     mode: &OutputMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let catalog: PrefabCatalog =
-        silent_parse(project_dir, "prefabs/prefabs.ron").ok_or_else(|| {
-            format!("prefabs/prefabs.ron not found or could not be parsed in {}", project_dir.display())
-        })?;
+    let path = resolve_catalog_paths(project_dir).prefab_catalog;
+    let catalog: PrefabCatalog = silent_parse(project_dir, &path).ok_or_else(|| {
+        format!("{path} not found or could not be parsed in {}", project_dir.display())
+    })?;
+    // Neither `PrefabCatalog` nor `AssetCatalog` carries `deny_unknown_fields`, and every field
+    // but `schema_version` is `#[serde(default)]` -- so a `prefab_catalog`/`asset_catalog` field
+    // accidentally pointed at some OTHER parseable RON file (a scene, a different catalog)
+    // deserializes into a valid-looking but entirely EMPTY catalog rather than failing to parse
+    // at all. Before `resolve_catalog_paths` existed this was moot (the hardcoded literal was
+    // always the real file); now that a misconfigured field is reachable, `query`/`stats` must
+    // catch it explicitly or they report a misconfigured project as an empty one -- worse than
+    // before this fix, since the old hardcoded path would have still found the real file
+    // (debug-detective finding, `feature/cli_query_stats_paths`'s review, 2026-09-11).
+    catalog.validate().map_err(|e| format!("{path}: {e}"))?;
 
     let (filter_key, filter_val) = parse_filter(filter)?;
 
@@ -220,10 +230,13 @@ fn query_effects(
     filter: Option<&str>,
     mode: &OutputMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let catalog: AssetCatalog =
-        silent_parse(project_dir, "assets.ron").ok_or_else(|| {
-            format!("assets.ron not found or could not be parsed in {}", project_dir.display())
-        })?;
+    let path = resolve_catalog_paths(project_dir).asset_catalog;
+    let catalog: AssetCatalog = silent_parse(project_dir, &path).ok_or_else(|| {
+        format!("{path} not found or could not be parsed in {}", project_dir.display())
+    })?;
+    // See `query_prefabs`'s identical check above -- a misconfigured `asset_catalog` field
+    // parses cleanly into an empty catalog otherwise.
+    catalog.validate().map_err(|e| format!("{path}: {e}"))?;
 
     let (filter_key, filter_val) = parse_filter(filter)?;
 
@@ -334,7 +347,15 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
         return Ok(());
     }
 
-    let prefab_catalog: Option<PrefabCatalog> = silent_parse(project_dir, "prefabs/prefabs.ron");
+    let prefab_path = resolve_catalog_paths(project_dir).prefab_catalog;
+    let prefab_catalog: Option<PrefabCatalog> = silent_parse(project_dir, &prefab_path)
+        .filter(|c: &PrefabCatalog| match c.validate() {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("Warning: {prefab_path} failed validation ({e}), treating as absent for player detection");
+                false
+            }
+        });
     let player_prefab_keys: HashSet<String> = prefab_catalog
         .as_ref()
         .map(|c| {

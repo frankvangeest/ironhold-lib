@@ -225,7 +225,7 @@ particles_demo
   Project:   11 RON files, 87.6 KB on disk
 ```
 
-The `--json` flag emits a structured object with all the same fields plus `total_bytes`.
+The `--json` flag emits a structured object with all the same fields plus `total_bytes`. `Prefabs`/`Catalog` counts respect a relocated `prefab_catalog`/`asset_catalog` (`.project.ron` fields), same resolution `query prefabs`/`query effects` use — a project that relocates a catalog gets accurate counts here, not silent zeros.
 
 ### `validate <project_dir>`
 
@@ -324,9 +324,9 @@ ironhold --json query actions  assets/projects/3rd_person_game_demo/
 ironhold --json query events   assets/projects/particles_demo/
 ```
 
-**`query prefabs`** — lists all entries from `prefabs/prefabs.ron`. Human output shows kind, model, tags, npc/trigger_zone/interactable flags, and behavior path. Supports `--filter kind=actor|prop|primitive`, `--filter tag=<value>`, `--filter behavior=true|false`, `--filter npc=true`. Use `--keys-only` to get one key per line for piping.
+**`query prefabs`** — lists all entries from the project's prefab catalog: `prefabs/prefabs.ron` by convention, or `ProjectConfig.prefab_catalog`'s path when the project relocates it (same resolution `validate`/`stats` use). Human output shows kind, model, tags, npc/trigger_zone/interactable flags, and behavior path. Supports `--filter kind=actor|prop|primitive`, `--filter tag=<value>`, `--filter behavior=true|false`, `--filter npc=true`. Use `--keys-only` to get one key per line for piping.
 
-**`query effects`** — lists all entries from `assets.ron → effects`. Human output shows particle count or layer count, lifetime, additive flag, sprite flag, light flag, and non-default priority. Supports `--filter additive=true`, `--filter priority=Player|Npc|Ambient`, `--filter layers=true`, `--filter sprite=true`.
+**`query effects`** — lists all `effects` entries from the project's asset catalog: `assets.ron` by convention, or `ProjectConfig.asset_catalog`'s path when relocated. Human output shows particle count or layer count, lifetime, additive flag, sprite flag, light flag, and non-default priority. Supports `--filter additive=true`, `--filter priority=Player|Npc|Ambient`, `--filter layers=true`, `--filter sprite=true`.
 
 **`query scenes`** — lists all `*.scene.ron` files. Output shows name, entity count, UI element count, `player:true` (if any entity's prefab has the `player` tag), and `overlay` (scenes with only UI and no world entities or terrain).
 
