@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "hero": (
+            kind: Prop,
+            model: "",
+            animation_policy: "prefabs/animation/does_not_exist.ron",
+        ),
+    },
+)

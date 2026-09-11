@@ -3,6 +3,7 @@
     prefabs: {
         "tight_orbit_player": (
             kind: Primitive,
+            shape: Cuboid,
             player_index: 0,
             components: (
                 tags: ["player"],
@@ -22,6 +23,7 @@
         ),
         "wide_orbit_player": (
             kind: Primitive,
+            shape: Cuboid,
             player_index: 1,
             components: (
                 tags: ["player"],

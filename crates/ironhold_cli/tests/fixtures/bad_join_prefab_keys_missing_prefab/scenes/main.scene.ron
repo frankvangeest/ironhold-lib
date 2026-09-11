@@ -1,0 +1,6 @@
+(
+    schema_version: 2,
+    name: "main",
+    join_prefab_keys: [None, "typo_prefab"],
+    ui: [],
+)

@@ -1,0 +1,13 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "coop_player_e": (
+            kind: Actor,
+            model: "dummy.glb",
+            player_index: 4,
+            components: (
+                tags: ["player"],
+            ),
+        ),
+    },
+)

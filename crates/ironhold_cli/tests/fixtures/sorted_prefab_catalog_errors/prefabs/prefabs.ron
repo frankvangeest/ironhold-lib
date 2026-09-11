@@ -1,5 +1,5 @@
 (
-    schema_version: 1,
+    schema_version: 2,
     prefabs: {
         // Deliberately authored out of alphabetical order -- a `HashMap`'s iteration order is
         // randomized per-process, so if the prefab-catalog loop ever regresses back to iterating

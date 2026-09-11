@@ -1,0 +1,9 @@
+(
+    schema_version: 2,
+    name: "main",
+    join_prefab_keys: [None, "coop_player_b"],
+    spawn_points: {
+        "player_1_start": (0.0, 0.0, 0.0),
+    },
+    ui: [],
+)

@@ -1,9 +1,10 @@
 (
-    schema_version: 1,
+    schema_version: 2,
     prefabs: {
         "npc": (
             kind: Primitive,
-            model: "Cuboid",
+            model: "",
+            shape: Cuboid,
         ),
     },
 )

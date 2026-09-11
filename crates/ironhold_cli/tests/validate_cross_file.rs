@@ -1855,3 +1855,184 @@ fn absolute_asset_catalog_path_is_rejected_exits_1() {
         "expected the offending model key and absolute-path message in output:\n{stdout}"
     );
 }
+
+// ── Batch: 6 more silent-failure gap closures (cli_validate_gap_closures) ─────
+
+/// `PrefabDef.animation_policy` is resolved the same way as `behavior`/`dialogue`
+/// (project-relative, `entity_spawner.rs`'s `resolve_project_path`) but was previously checked by
+/// nothing at all -- a 404 here leaves the entity permanently `Visibility::Hidden`.
+#[test]
+fn missing_animation_policy_path_exits_1() {
+    let (code, stdout) = validate("bad_animation_policy_missing");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("animation_policy") && stdout.contains("not found on disk"),
+        "expected the missing animation_policy path in output:\n{stdout}"
+    );
+}
+
+/// A `jump_to` naming no node in its own dialogue (and not the reserved `"__end__"`) only ever
+/// surfaced at runtime as a `warn!` that silently closes the dialogue mid-conversation.
+#[test]
+fn dialogue_jump_to_unresolved_target_exits_1() {
+    let (code, stdout) = validate("bad_dialogue_jump_to_target");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("does_not_exist") && stdout.contains("jump_to"),
+        "expected the unresolved jump_to target in output:\n{stdout}"
+    );
+}
+
+/// A duplicate `DialogueNode.id` within one file made the second node permanently unreachable by
+/// jump (`dialogue.rs`'s `nodes.iter().position(...)` only ever matches the first), with zero
+/// diagnostic anywhere before this check existed.
+#[test]
+fn dialogue_duplicate_node_id_exits_1() {
+    let (code, stdout) = validate("bad_dialogue_duplicate_node_id");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("duplicate DialogueNode id") && stdout.contains("\"start\""),
+        "expected the duplicate node id in output:\n{stdout}"
+    );
+}
+
+/// `jump_to: "__end__"` (close the dialogue) and a `jump_to` naming a real sibling node must both
+/// be accepted without a false positive -- this is the positive control for the check above.
+#[test]
+fn valid_dialogue_jump_to_end_and_sibling_exits_0() {
+    let (code, stdout) = validate("valid_dialogue_jump_to_end");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// `DialogueCondition::StatAtLeast { stat_key }` is the same unchecked global-stats reference
+/// shape as the merchant `currency_stat`/`ApplyModifier`/`RemoveModifier` checks -- a typo
+/// silently hides the choice forever with no runtime message at all.
+#[test]
+fn dialogue_stat_at_least_unresolved_stat_key_exits_1() {
+    let (code, stdout) = validate("bad_dialogue_stat_at_least");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("strenght") && stdout.contains("not found in stats.ron"),
+        "expected the misspelled stat_key in output:\n{stdout}"
+    );
+}
+
+/// `Action::JoinPlayer` derives `player_{slot + 1}_start` from the scene's own `join_prefab_keys`
+/// slot index and looks it up in the SAME scene's `spawn_points`, with no runtime `warn!` at all
+/// on a miss -- it silently falls back to spawning next to the primary player instead.
+#[test]
+fn join_player_missing_spawn_point_exits_1() {
+    let (code, stdout) = validate("bad_join_player_spawn_point");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("player_2_start") && stdout.contains("join_prefab_keys[1]"),
+        "expected the missing player_2_start spawn point in output:\n{stdout}"
+    );
+}
+
+/// Positive control for the check above -- a `join_prefab_keys` slot with a matching
+/// `player_{N}_start` spawn point must not false-positive.
+#[test]
+fn valid_join_player_spawn_point_exits_0() {
+    let (code, stdout) = validate("valid_join_player_spawn_point");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// Debug-detective finding: a `join_prefab_keys` slot at or beyond `MAX_SPLIT_PLAYERS` can never
+/// actually be hot-joined into (the executor bails on `next_slot >= MAX_SPLIT_PLAYERS` before
+/// ever reading the slot), so it must be reported as its own `unreachable_join_slot` mistake --
+/// NOT as a missing `player_5_start` spawn point, which would be a false positive telling a
+/// designer to add a spawn point that would still do nothing.
+#[test]
+fn join_prefab_keys_slot_beyond_max_split_players_exits_1() {
+    let (code, stdout) = validate("bad_join_prefab_keys_beyond_max_split_players");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("join_prefab_keys[4]") && stdout.contains("beyond MAX_SPLIT_PLAYERS"),
+        "expected the unreachable-slot message in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("player_5_start"),
+        "must not also demand a spawn point for a slot that can never be reached:\n{stdout}"
+    );
+}
+
+/// Debug-detective finding: a `join_prefab_keys` entry whose prefab key doesn't exist at all
+/// can never be hot-joined into either (the executor `continue`s before ever deriving a spawn
+/// point), so the pre-existing `missing_reference` error must be the ONLY error -- not paired
+/// with a second, false `no spawn_points entry` complaint about a slot nobody could reach anyway.
+#[test]
+fn join_prefab_keys_missing_prefab_does_not_also_demand_spawn_point_exits_1() {
+    let (code, stdout) = validate("bad_join_prefab_keys_missing_prefab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("typo_prefab") && stdout.contains("not found in prefabs.ron"),
+        "expected the missing-prefab error in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("spawn_points entry"),
+        "must not also demand a spawn point for a slot whose prefab doesn't even exist:\n{stdout}"
+    );
+}
+
+/// `ItemDef.icon_sheet` is an `AssetCatalog.textures` key sitting in the same loop the
+/// pre-existing `currency_stat` check already uses, but was never itself cross-checked.
+#[test]
+fn item_icon_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_item_icon_sheet");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("potion_icons") && stdout.contains("not found in assets.ron's textures"),
+        "expected the missing icon_sheet texture key in output:\n{stdout}"
+    );
+}
+
+/// `AssetCatalog::validate()` was never called by `ironhold_cli` at all -- its own schema-level
+/// invariants (e.g. rejecting an empty model path) were runtime-only. This fixture has no
+/// `assets`-named ancestor with a `projects`/`shared` child, so `check_asset_root_paths` itself
+/// is inert here (deliberately isolating this test to the newly-wired `.validate()` call alone).
+#[test]
+fn asset_catalog_validate_invariant_exits_1() {
+    let (code, stdout) = validate("bad_asset_catalog_invariant");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken") && stdout.contains("empty path"),
+        "expected the AssetCatalog::validate() invariant message in output:\n{stdout}"
+    );
+}
+
+/// Same as above for `PrefabCatalog::validate()` -- a `kind: Foliage` prefab missing its
+/// `foliage` block is a real schema invariant that was runtime-only before this batch.
+#[test]
+fn prefab_catalog_validate_invariant_exits_1() {
+    let (code, stdout) = validate("bad_prefab_catalog_invariant");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken_bush") && stdout.contains("no `foliage` block"),
+        "expected the PrefabCatalog::validate() invariant message in output:\n{stdout}"
+    );
+}
+
+/// System-architect finding: `AssetCatalog`/`PrefabCatalog` were only 2 of the 4 catalog types
+/// `project_loader.rs` calls `.validate()` on at runtime -- `StatCatalog` and `ItemCatalog` have
+/// real invariants too (`min > max`, `max_stack: 0`) and were left runtime-only. Completing the
+/// set here.
+#[test]
+fn stat_catalog_validate_invariant_exits_1() {
+    let (code, stdout) = validate("bad_stat_catalog_invariant");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken") && stdout.contains("min (10) > max (5)"),
+        "expected the StatCatalog::validate() invariant message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn item_catalog_validate_invariant_exits_1() {
+    let (code, stdout) = validate("bad_item_catalog_invariant");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("broken") && stdout.contains("max_stack must be at least 1"),
+        "expected the ItemCatalog::validate() invariant message in output:\n{stdout}"
+    );
+}

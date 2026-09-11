@@ -1,0 +1,15 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "First",
+        ),
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "Second, unreachable by jump_to",
+        ),
+    ],
+)

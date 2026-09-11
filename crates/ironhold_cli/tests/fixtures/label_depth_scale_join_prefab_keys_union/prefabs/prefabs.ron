@@ -3,6 +3,7 @@
     prefabs: {
         "coop_variant_player": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Orbit((

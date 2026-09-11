@@ -1923,7 +1923,7 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `model` | `String` | Key into `AssetCatalog.models` for `Actor`/`Prop`. Must be `""` (empty) for `Primitive` and `Foliage` — use `shape` or `foliage.trunk` instead. |
 | `shape` | `Option<PrimitiveShapeKind>` | Required for `Primitive` prefabs. Write the bare variant: `Cuboid`, `Sphere`, etc. (`implicit_some` is active; no `Some()` wrapper needed). Omit for `Actor`/`Prop`/`Foliage`. See [Primitive shapes](#primitive-shapes-) below. |
 | `foliage` | `Option<FoliageDef>` | Required for `Foliage` prefabs. Defines the trunk model, cluster distribution, and leaf card material. See [kind: Foliage](#kind-foliage-) below. |
-| `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root |
+| `animation_policy` | `Option<String>` | Path to `.ron` animation policy, relative to project root. `ironhold_cli validate` checks it exists on disk with the exact on-disk case — a 404 here leaves the entity permanently hidden (`Visibility::Hidden`, spawned pending the policy load that then never completes). |
 | `material` | `Option<String>` | Key into `AssetCatalog.materials` to override the model's material |
 | `components.tags` | `Vec<String>` | Runtime-meaningful tags: `"player"` and `"flycam"` affect spawning; others are design-time only |
 | `components.movement` | `MovementConfig` | Movement tuning for player prefabs. See [Special tag: `"player"`](#special-tag-player-) below. |
@@ -3066,7 +3066,9 @@ explicit `None`) is a no-op with a `warn!` — nothing crashes, but nothing join
    so this is a fresh live consumer of that naming convention, not a pre-tested one; get the
    `+ 1` offset wrong and a joiner silently lands on an existing player's position instead of
    their own. Falls back to the primary player's current position + a small
-   `(1.5 * slot, 0, 0)` offset if that spawn point isn't defined.
+   `(1.5 * slot, 0, 0)` offset if that spawn point isn't defined. `ironhold_cli validate` checks
+   this at design time for every reachable `join_prefab_keys` slot — a missing `player_{N}_start`
+   is a hard error, not just a runtime fallback discovered during a playtest.
 5. **Overrides `PlayerIndex` to `next_slot`**, regardless of whatever `player_index` the joined
    prefab itself declares. A prefab reused as a join target for a different slot in a different
    scene (e.g. `player_p3_grid`'s baked `player_index: 2`) always gets the slot's index at join
@@ -3889,7 +3891,7 @@ Reference from a `PrefabDef` via the `dialogue` field (project-relative path); p
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `id` | `String` | required | Stable node identifier used as a `jump_to` target. Must be unique within this file. |
+| `id` | `String` | required | Stable node identifier used as a `jump_to` target. Must be unique within this file — `ironhold_cli validate` enforces this (`duplicate_node_id`); a duplicate is otherwise silently unreachable by jump. |
 | `speaker` | `String` | required | Display name shown in the speaker label. `{self}` is replaced with the NPC's spawn ID. |
 | `portrait` | `Option<String>` | `None` | Reserved — parsed and stored but not yet rendered in v1. |
 | `body` | `String` | required | Dialogue body text shown to the player. `{self}` is replaced with the NPC's spawn ID. |
@@ -3903,7 +3905,7 @@ Reference from a `PrefabDef` via the `dialogue` field (project-relative path); p
 | `label` | `String` | required | Button text shown to the player. `{self}` is replaced with the NPC's spawn ID. |
 | `condition` | `Option<DialogueCondition>` | `None` | Choice is hidden if the condition evaluates to false. |
 | `do_actions` | `Vec<Action>` | `[]` | Actions queued when this choice is selected. `{self}` is substituted with the NPC's spawn ID before each action is pushed. |
-| `jump_to` | `Option<String>` | `None` | Node `id` to jump to after `do_actions` fire. `None` = advance to the next node. `"__end__"` = close the dialogue. |
+| `jump_to` | `Option<String>` | `None` | Node `id` to jump to after `do_actions` fire. `None` = advance to the next node. `"__end__"` = close the dialogue. `ironhold_cli validate` checks a set `jump_to` names a real node (or `"__end__"`) — otherwise the dialogue silently closes when this choice is picked. |
 
 **`DialogueCondition` variants:**
 
@@ -3911,7 +3913,7 @@ Reference from a `PrefabDef` via the `dialogue` field (project-relative path); p
 |---|---|
 | `HasVariable { key, value }` | Choice visible only when `GameVariables[key] == value`. |
 | `VariableGte { key, min }` | Choice visible only when `GameVariables[key]` parses as `i32` and is `>= min`. |
-| `StatAtLeast { stat_key, min }` | Choice visible only when the named global stat's effective value is `>= min`. |
+| `StatAtLeast { stat_key, min }` | Choice visible only when the named global stat's effective value is `>= min`. `stat_key` must exist in `stats.ron` — `ironhold_cli validate` checks this; a typo silently hides the choice forever with no runtime message. |
 
 **Pipeline events emitted:**
 
@@ -4543,7 +4545,7 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `display_name` | `String` | ✅ | Human-readable name shown in tooltip / shop panel |
-| `icon_sheet` | `Option<String>` | `null` | Catalog texture key for the icon atlas this item's icon is on. Overrides the panel's `icon_sheet` default. Omit if the item is on the panel's default sheet. All sheets must share the panel's `icon_cols/rows/cell_size`. |
+| `icon_sheet` | `Option<String>` | `null` | Catalog texture key for the icon atlas this item's icon is on. Overrides the panel's `icon_sheet` default. Omit if the item is on the panel's default sheet. All sheets must share the panel's `icon_cols/rows/cell_size`. `ironhold_cli validate` checks the key exists in `assets.ron`'s `textures`. |
 | `icon_index` | `u32` | `0` | Zero-based index into the icon atlas (row-major: `col + row * icon_cols`) |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. See the tint note in the Action Bar section above |
 | `stackable` | `bool` | `true` | Whether multiple units stack in a single slot |
