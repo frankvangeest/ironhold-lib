@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — the 4 configurable catalog paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, the full inventory of RON-authored disk paths (which are checked vs not), and open dialogue/JoinPlayer gaps
+description: Structural blind spots in ironhold_cli validate.rs — the 6 configured paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, the RON-authored-disk-path and texture-key inventories, and the 8 schema/ validate() methods (2 wired, 3 dead)
 metadata:
   type: project
 ---
@@ -153,8 +153,8 @@ a real working fallback. Read the *system*, not just the warn text, before mirro
 registry call site (no `components:` block exists there). Prefix-only parameterisation makes the
 *subject* right and leaves the *remedy* wrong.
 
-**Sibling gap noted 2026-09-04: `Action::JoinPlayer`'s `spawn_points["player_{next_slot+1}_start"]`
-is unchecked** (action_executor.rs:~1753) and its miss path is *even quieter* than
+~~**Sibling gap noted 2026-09-04: `Action::JoinPlayer`'s `spawn_points["player_{next_slot+1}_start"]`
+is unchecked**~~ **CLOSED** 2026-09-11 (action_executor.rs:~1753) — its miss path was *even quieter* than
 `Action::Spawn.spawn_point`'s — no `warn!` at all, just a silent fall back to the primary player's
 position + `1.5 * next_slot` on X. Fully derivable at design time and genuinely scene-scoped (not
 union): for each index `i` where `scene.join_prefab_keys[i].is_some()`, require
@@ -235,6 +235,61 @@ are `starts_with("behaviors/")`/`starts_with("scenes/")`. So attributing inline 
 the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and the synthesized
 `schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).
 
+**`schema/` `validate()` methods are a separate coverage axis from validate.rs's hand-written checks.**
+There are **8** of them; `feature/cli_validate_gap_closures` (2026-09-11) wired the first 2 into
+`cross_file_checks` (`AssetCatalog`, `PrefabCatalog`, `source_file` = hardcoded literals). Still
+runtime-only (called at `project_loader.rs:319`/`:342`, not by the CLI): `StatCatalog`,
+`ItemCatalog`. Called **nowhere in either crate** (dead code): `GameSceneV2::validate()`,
+`LogicRulesAsset::validate()`, `ModelFixesAsset::validate()`. Also runtime-only: `ProjectConfig`
+(`:41`), `StateMachineAsset` (`:260`). Three things to check whenever another one gets wired:
+- **They are fail-fast over a `HashMap`** (`return Err` on first problem), so exactly one violation
+  surfaces per catalog per run and *which* one is nondeterministic — the opposite posture from every
+  hand-written check here. Any fixture with >1 violation is flaky; the two added in that batch are
+  single-entry deliberately.
+- **`AssetCatalog::validate()`'s empty-`models[].path`/`decals[]` arms are now DOUBLE-reported**,
+  since `check_asset_catalog_path` already flags `""` via `is_file()` (with a misleading
+  "relative to the asset root" remedy). The new fixture hides this by having no `assets`-named
+  ancestor. The wiring's unique value is the `schema_version` + `EffectDef` particle/flipbook
+  invariants only.
+- **`GameSceneV2::validate()` is the highest-value unwired one**: duplicate scene entity `id`,
+  duplicate UI element `id`, duplicate `world_labels[].id` — i.e. it generalises the
+  dialogue-specific duplicate-`id` check that batch hand-wrote.
+Runtime severity for the wired pair is `error!`-and-continue (degraded), CLI is exit 1 — the normal
+design-time-stricter posture. But note the CLI's convention-path fallback means an *unset*
+`asset_catalog`/`prefab_catalog` field + a stale catalog on disk now exits 1 on schema invariants in
+a file the runtime never loads (new instance of the documented `load_configured_catalog` divergence).
+
+**Texture-key checks are still per-field, not a family.** After `feature/cli_validate_gap_closures`
+the checked `AssetCatalog.textures` key consumers are: `FoliageMaterialDef.leaf_texture`
+(validate.rs:~1758) and `ItemDef.icon_sheet` (~1090). Unchecked, all the same
+`asset_catalog.textures.get(key)` lookup with a silently-blank miss path:
+`InventoryPanelDef.icon_sheet` (scene_loader.rs:2288/2303 — the *default* sheet, higher blast radius
+than `ItemDef`'s per-item override), `ActionBarDef.icon_sheet`, `ActionSlotDef.icon`,
+`TargetIndicatorDef.texture`, and `world_stat_bar`'s `Icon.icon_sheet`/`Textured.texture_sheet`.
+
+**Dialogue/JoinPlayer/animation_policy gaps: CLOSED by `feature/cli_validate_gap_closures`
+(2026-09-11)** — `PrefabDef.animation_policy` (existence + `path_case_mismatch`, third arm of the
+same prefab loop as `behavior`/`dialogue`), duplicate `DialogueNode.id` + unresolved `jump_to`
+(excluding `"__end__"`), `DialogueCondition::StatAtLeast.stat_key`, `ItemDef.icon_sheet`, and
+`Action::JoinPlayer`'s `player_{slot+1}_start`. Verification facts worth reusing:
+- `jump_to` is **not** substituted anywhere (`dialogue.rs:166` matches the literal id; only
+  `do_actions` go through `substitute_self_in_action`) — so no `{`-skip guard is needed, unlike
+  `spawn_point`.
+- `StatAtLeast` resolves against global `LoadedStats` (`dialogue.rs:382-385`,
+  `map_or(false, ..)` ⇒ choice permanently hidden on a miss), so `stat_catalog.stats.contains_key`
+  is the right lookup — same as `MerchantDef.currency_stat`.
+- `ItemDef.icon_sheet` really is a `textures` key (`scene_loader.rs:2303` builds
+  `LoadedInventoryUi.icon_atlases` keyed by catalog key), not a path.
+- The JoinPlayer index mapping is exactly right: `join_prefab_keys[next_slot]` is 0-based and
+  `spawn_points["player_{next_slot + 1}_start"]` is 1-based (`action_executor.rs:1749-1753`), and
+  both live on one `GameSceneV2` ⇒ genuinely scene-scoped, no union approximation. Accepted narrow
+  over-coverage: a `Some(..)` entry in a slot below the scene's initial player count can never be
+  hot-joined, so the demanded spawn point is unused — same over-coverage the pre-existing
+  player-tagged/GLB-only `join_prefab_keys` check already has.
+- `PlayerConfig.animation_policy` needs **no** separate check: it is runtime-assembled from the
+  prefab by `assemble_player_config`, never RON-authored (the only `animation_policy` hits outside
+  `prefabs.ron` in all 15 shipped projects are RON *comments*).
+
 **Open dialogue-adjacent gaps as of 2026-09-04** (all cheap, all now unblocked since the parsed
 `DialogueDef`s are in hand):
 - **`Action::StartDialogue { dialogue_path }` has no on-disk check** despite being the same
@@ -245,13 +300,8 @@ the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and 
 - **`PrefabDef.dialogue` has no on-disk check** even though `PrefabDef.behavior` does, ~6 lines
   above it in the same prefab loop. This is the auto-wire path (`DialoguePath` +
   `entity.interacted:{id}`), i.e. the dominant way dialogues are actually reached.
-- **`jump_to` is not cross-checked against `nodes[].id`** (exclude the reserved `"__end__"`).
-  Runtime `warn!`s and *closes the conversation mid-flow* — a visible, confusing failure, and the
-  textbook runtime-warn/CLI-error twin. Duplicate node `id`s are also unenforced despite the
-  "Must be unique" doc comment (`position()` = first wins, later node unreachable).
-- **`DialogueCondition::StatAtLeast.stat_key` is unchecked** — identical shape to the
-  `MerchantDef.currency_stat` check already in this file, resolving against the same global
-  `LoadedStats`/stats.ron catalog; a typo silently hides that choice forever with no warn.
+- ~~`jump_to` / duplicate node `id` / `StatAtLeast.stat_key`~~ **CLOSED** 2026-09-11 — see the
+  `feature/cli_validate_gap_closures` section above.
 - **No shipped project exercises the dialogue half of `collect_actions`** —
   `3rd_person_game_demo/dialogues/npc_intro.dialogue.ron` has zero `do_actions`, so it's
   fixture-only coverage.
@@ -313,11 +363,10 @@ literals (`try_parse`, the `--strict` unset-catalog check) or the CLI arg — co
 **But "every RON-authored disk-path reference" is a much bigger set than "every site that already
 had an exists() check", and the rest are unchecked entirely** (no existence check, hence no case
 check either):
-- `PrefabDef.animation_policy` — project-relative (`"prefabs/animation/x.ron"`), resolved by
-  `resolve_project_path` in entity_spawner.rs:182, sits **3 lines from the `behavior`/`dialogue`
-  checks in the same prefab loop**. Failure mode is severe: the entity is spawned
-  `Visibility::Hidden` pending the policy load, so a 404 = invisible-then-unanimated character.
-  Same field on `PlayerConfig` (schema/player.rs:55, scene-authored).
+- ~~`PrefabDef.animation_policy`~~ **CLOSED** 2026-09-11 — it is now the third arm of the same
+  prefab loop as `behavior`/`dialogue`, so there are **7** on-disk check sites with
+  `path_case_mismatch`, not 6. (`PlayerConfig.animation_policy`, schema/player.rs:55, needs no
+  check — runtime-assembled from the prefab, never RON-authored.)
 - ~~`ProjectConfig.rules_path` / `state_machine_path`~~ **CLOSED** by
   `feature/configurable_logic_paths` (2026-09-06) — see the "SIX configured paths" section below.
   **`model_fixes_path` is the one still hardcoded** (`try_parse(project_dir,

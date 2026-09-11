@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
+description: ironhold_cli validate silently skips checks when a catalog is absent; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue referential checks now landed (query.rs's collector still hasn't); FOUR join_prefab_keys checks now ship without modelling the Grid-split-only/dead-low-slot reachability rules; schema types' own validate() is a second validation layer the CLI wires only 2 of 8 of, all fail-fast over a HashMap; wiring one surfaces mass fixture drift; docs/60_contributing.md's checks list is the de-facto contract and gets missed
 metadata:
   type: project
 ---
@@ -29,9 +29,10 @@ params does it already receive?" is no longer a design question — every one of
 adding a new field costs one line at the struct + one at construction with **zero** consumer
 churn (the `..` absorbs it). So never propose "…but that would need plumbing" as a cost against a
 check in this file again; do still note that `..` means a newly added field silently reaches no
-consumer until one destructures it. Note also `dialogues` is parsed by `do_validate` but is
-deliberately *not* a struct field yet — the first of items 4's dialogue referential checks to land
-should add it rather than take a parameter.
+consumer until one destructures it. `dialogues: &'a [(String, DialogueDef)]` **is** a field now
+(added ahead of any consumer, so for a while it was the live example of the `..`-absorbs-an-
+unconsumed-field hazard); `feature/cli_validate_gap_closures` (2026-09-11) became its first
+consumer by adding `dialogues` to `cross_file_checks`'s destructure and nothing else.
 
 Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold_cli/src/commands/validate.rs`:
 
@@ -162,6 +163,15 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    textbook [[cli-runtime-mirror-check-pairs]] gap, and the only check that would flag anything in
    shipped content, since `npc_intro.dialogue.ron` has 8 `jump_to`s and zero `do_actions`),
    duplicate node ids, `portrait` texture-catalog key, and `DialogueCondition::StatAtLeast.stat_key`.
+   **UPDATE (2026-09-11, `feature/cli_validate_gap_closures`): the referential half landed** — one
+   loop over `dialogues` now checks duplicate `DialogueNode.id`, `jump_to` target validity
+   (`"__end__"` is the *only* reserved value, `capabilities/dialogue.rs`:167), and
+   `DialogueCondition::StatAtLeast.stat_key` against `stat_catalog`. `StatAtLeast` is the only
+   stat-referencing variant (`HasVariable`/`VariableGte` target `GameVariables`, correctly left
+   alone). These are the file's only checks whose `source_file` is a **real per-file path**
+   (`dialogue_path`) instead of a hardcoded literal — a good precedent to cite against item 3.
+   Still open: `DialogueNodeDef.portrait` (schema calls it "reserved for a future NPC portrait, not
+   yet rendered", so a typo has no symptom at all today).
 
 4b. **`query.rs` and `validate.rs` disagree on what "all the project's actions" means.**
    `query.rs::collect_logic` globs `scenes` and `behaviors` but **not** `dialogues`, so after the
@@ -208,7 +218,21 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `label_depth_scale` (a `--strict` band) but not for a hard `CrossFileError`. If it ever bites,
    the runtime-faithful fix is to skip slots whose index is below the count of player-tagged scene
    entities — and a *separate* "dead join slot" diagnostic is the better authoring signal anyway.
-   Note also: hot-join is Grid-split-only at runtime; none of the three checks gate on that.
+   Note also: hot-join is Grid-split-only at runtime; none of the checks gate on that.
+
+   **A FOURTH scan landed 2026-09-11 (`feature/cli_validate_gap_closures`): `join_prefab_keys[slot]`
+   non-`None` ⇒ the same scene must define `spawn_points["player_{slot+1}_start"]`** (hard
+   `missing_reference`; runtime at `action_executor.rs`~1753 silently falls back to primary-player
+   position + `1.5 * next_slot` on X, no `warn!`). Its comment claims "no reachability
+   approximation is needed here" — true on the *scene* axis (both fields live on one
+   `GameSceneV2`), false on the *slot* axis: it models neither the Grid-split-only gate nor the
+   dead-low-slot rule above. Unlike `duplicate_player_index`, the remedy stays followable and
+   harmless ("add `player_N_start`"), which is why this is a comment fix rather than a severity
+   bug — but it is the 4th consecutive check in this family to ship without modelling
+   `ActiveSplitSlotCount`. If a 5th is proposed, factor the reachable-slot rule out once.
+   Third unmodelled edge, fully latent: `LoadedSpawnPoints` is only re-inserted on **Replace**-mode
+   loads (`scene_loader.rs`~118-123), so an overlay-loaded scene's `join_prefab_keys` would resolve
+   against the *underlying* scene's spawn points.
 
    **`player_index` is the sharper instance of this trap (found 2026-09-07,
    `feature/cli_validate_small_wins`'s `duplicate_player_index`): for a join slot the field isn't
@@ -252,12 +276,21 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    with zero output. Do NOT "fix" that with `fs::canonicalize`: on Windows it yields a `\\?\`
    verbatim path, where `Path::join("shared/models/x.glb")`'s forward slashes stop being separators
    and `is_file()` goes false — use `std::path::absolute` (lexical, no `\\?\`) instead.
-   **Coverage genuinely still missing:** `PrefabDef.animation_policy` (project-relative,
-   `entity_spawner.rs` ~183/1197 `asset_server.load(resolved)`) — the third sibling of
-   `behavior`/`dialogue`, checked by nothing. `rules_path`/`state_machine_path`/`model_fixes_path`
-   case-checking (see item 1c). And the CLI **never calls `AssetCatalog::validate()` /
-   `PrefabCatalog::validate()` at all**, so schema-level invariants (e.g. "model has empty path")
-   are runtime-only; `check_asset_catalog_path`'s `file_part.is_empty() → return` widens that gap.
+   **`PrefabDef.animation_policy` landed 2026-09-11** (`feature/cli_validate_gap_closures`) as a
+   verbatim third copy of the `behavior`/`dialogue` block — so that block now exists 3× at ~1668 /
+   ~1687 / ~1707, differing only by field name and label. A
+   `check_project_relative_path(project_dir, source_file, context, path, errors)` helper (mirroring
+   the existing `check_asset_catalog_path` shape) is earned; logged in `claude_suggestions.md`.
+   Load-bearing runtime fact behind that check, verified: a 404 `animation_policy` leaves the entity
+   **permanently** `Visibility::Hidden` with zero diagnostic — `animation_policy_loader_system`
+   (`entity_spawner.rs`~476) is `if let Some(policy) = policies.get(..)` with no else arm, and
+   `animation_playback_system`'s 5s `REVEAL_FAILSAFE_SECS` force-reveal can't rescue it because that
+   query requires `&AnimationPolicyComponent` (never inserted on a failed load) and
+   `awaiting_reveal_since` is never stamped. So the failsafe is **not** a universal safety net;
+   don't cite it as one.
+   **Coverage genuinely still missing:** `rules_path`/`state_machine_path`/`model_fixes_path`
+   case-checking (see item 1c). `AssetCatalog::validate()`/`PrefabCatalog::validate()` are now
+   wired — see item 11 for what that did and didn't cover.
    **Cross-checked non-surfaces (don't re-flag these as missed):** `EffectDef.sprite`/`.sprites`,
    `FoliageMaterialDef.leaf_texture`, `ResolvedTargetIndicator.texture_path`, decal/particle
    `texture_path`, `IconButtonDef.icon_on/off`, action-bar `icon`/`icon_sheet`, panel `"ui/cross"`
@@ -297,6 +330,52 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `initial_items` loop (~869), and the `items.items` loop (~904). All three emit hard errors, so
    report order is hash-seed-dependent whenever a project has 2+ offenders. Any "the loop now
    sorts, unlike every other loop in the file" claim in planning notes is inaccurate.
+
+11. **`schema/` types' own `validate()` methods are a whole second validation layer, and the CLI
+   wires 2 of 8.** `feature/cli_validate_gap_closures` (2026-09-11) added `AssetCatalog::validate()`
+   + `PrefabCatalog::validate()` calls at the *top* of `cross_file_checks`. **`cross_file_checks` is
+   the right layer, not `parse_file`** — it mirrors `project_loader.rs`'s own post-parse call
+   (`:302`/`:312`, and `:319`/`:342` for stat/item), keeps `parse_file`'s single responsibility
+   (RON syntax → `FileResult`) intact, and preserves the severity story: a `parse_file` error gates
+   downstream checks via `*_parsed_cleanly`, whereas an invariant violation must *not* (the catalog
+   still parsed, so every key-existence check is still meaningful). Escalating the runtime's
+   non-fatal `error!` to a hard `CrossFileError` is correct for a design-time gate.
+   **Two structural facts:** (a) every one of these methods is **fail-fast over a `HashMap`**, so
+   the CLI now surfaces exactly one invariant per catalog per run and *which* one is hash-seed
+   dependent — the opposite of every hand-written check in the file (which accumulates and sorts
+   keys). Any future fixture with 2+ violations in one catalog is flaky. Fixing it is an
+   `ironhold_core` change (`validate_all() -> Vec<String>`, 6 runtime call sites), so it can't land
+   on a CLI-only branch. (b) Still unwired: `StatCatalog::validate()`, `ItemCatalog::validate()`
+   (both runtime-called, both catalogs already `LoadedProject` fields); and `GameSceneV2::validate()`
+   / `LogicRulesAsset::validate()` / `ModelFixesAsset::validate()` are **dead code in both crates**.
+   `GameSceneV2::validate()` is the standout — it already detects duplicate scene-entity / UI /
+   `world_labels` `id`s, the exact failure class that batch hand-wrote a dialogue-specific
+   duplicate-`id` check for.
+   **Overlap check before wiring any more:** `PrefabCatalog::validate()`'s nested-prefab-existence
+   and cycle-detection arms have no CLI counterpart (verified — no duplicate diagnostics), but
+   `AssetCatalog::validate()`'s empty-`models[].path`/`decals[]` arms **are** now double-reported
+   alongside `check_asset_catalog_path`'s `missing_file`. Always diff the method's arms against the
+   hand-written checks first.
+
+12. **Fixture drift is the real cost of wiring a schema-level invariant.** Wiring the two
+   `.validate()` calls surfaced ~40 CLI fixtures with pre-existing violations: stale
+   `schema_version: 1` prefabs.ron predating the v2 migration (`c24f908`), and `kind: Primitive`
+   prefabs using the obsolete `model: "Cuboid"` convention instead of `model: "" ` + `shape: Cuboid`.
+   All shipped `assets/projects/` content was already clean. Expect this for any future
+   `.validate()` wiring — the fixtures are hand-written, never regenerated, and nothing else parses
+   them against the current schema. The correct fixture form is the shipped one (`primitive_world`):
+   explicit `model: ""` plus `shape:`, **not** omitting `model`.
+
+13. **`docs/60_contributing.md`'s "Checks performed" / `--strict` lists are exhaustively maintained
+   and are the de-facto public contract for this file.** Every prior CLI batch added a bullet per
+   check, with cross-references into `docs/20_data_formats.md`. A batch that adds checks without
+   touching that list is a workflow step-5 miss, not a nice-to-have — it's also the only place the
+   `error_type` string taxonomy is described for `--json` consumers. Check it on every validate.rs
+   review.
+   **`error_type` taxonomy note:** `missing_reference` is the dominant convention for a missing
+   *catalog key* (effect/decal/audio/prefab keys all use it). The lone `missing_catalog_key` site
+   (foliage `leaf_texture`, ~1765) is the pre-existing outlier — don't flag a new
+   `missing_reference` catalog-key check as inconsistent with it.
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.
