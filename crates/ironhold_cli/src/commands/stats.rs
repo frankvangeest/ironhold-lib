@@ -4,7 +4,7 @@ use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::StateMachineAsset;
 
-use super::utils::{glob_dir, silent_parse};
+use super::utils::{glob_dir, resolve_catalog_paths, silent_parse};
 use crate::output::OutputMode;
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -82,11 +82,34 @@ fn collect(project_dir: &Path) -> ProjectStats {
 
     let scene_count = glob_dir(project_dir, "scenes", ".scene.ron").len();
 
-    let prefab_count = silent_parse::<PrefabCatalog>(project_dir, "prefabs/prefabs.ron")
-        .map(|c| c.prefabs.len())
-        .unwrap_or(0);
+    let paths = resolve_catalog_paths(project_dir);
 
-    let asset_catalog: Option<AssetCatalog> = silent_parse(project_dir, "assets.ron");
+    // A misconfigured `prefab_catalog`/`asset_catalog` field (pointed at some OTHER parseable
+    // RON file) deserializes cleanly into an empty catalog rather than failing to parse --
+    // `.validate()` is the only thing that catches it, and without a check here `stats` would
+    // silently print all-zero counts for a misconfigured project, indistinguishable from a
+    // genuinely-empty one (debug-detective finding, `feature/cli_query_stats_paths`'s review,
+    // 2026-09-11). `stats` never hard-errors (it's a summary tool), so this degrades to a
+    // stderr warning plus the same zero counts `query`'s equivalent hard error would have
+    // otherwise hidden entirely -- at least visible here, not silent.
+    let prefab_catalog: Option<PrefabCatalog> = silent_parse(project_dir, &paths.prefab_catalog)
+        .filter(|c: &PrefabCatalog| match c.validate() {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("Warning: {} failed validation ({e}), counted as empty", paths.prefab_catalog);
+                false
+            }
+        });
+    let prefab_count = prefab_catalog.map(|c| c.prefabs.len()).unwrap_or(0);
+
+    let asset_catalog: Option<AssetCatalog> = silent_parse(project_dir, &paths.asset_catalog)
+        .filter(|c: &AssetCatalog| match c.validate() {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("Warning: {} failed validation ({e}), counted as empty", paths.asset_catalog);
+                false
+            }
+        });
     let effect_count = asset_catalog.as_ref().map(|c| c.effects.len()).unwrap_or(0);
     let catalog_model_count = asset_catalog.as_ref().map(|c| c.models.len()).unwrap_or(0);
     let catalog_texture_count = asset_catalog.as_ref().map(|c| c.textures.len()).unwrap_or(0);

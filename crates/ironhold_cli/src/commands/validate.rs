@@ -16,7 +16,7 @@ use ironhold_core::schema::material::MaterialKind;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 use ironhold_core::runtime::scene_manager::entity_spawner::default_camera_config;
 
-use super::utils::{glob_dir, rel, ron_from_str};
+use super::utils::{find_project_ron, glob_dir, rel, ron_from_str};
 use crate::output::OutputMode;
 
 // ── Internal data structures ──────────────────────────────────────────────────
@@ -647,14 +647,11 @@ fn first_seen<K: std::hash::Hash + Eq, V: Clone>(
 }
 
 // ── File discovery ────────────────────────────────────────────────────────────
-
-fn find_project_ron(project_dir: &Path) -> Option<String> {
-    std::fs::read_dir(project_dir)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .find(|name| name.ends_with(".project.ron"))
-}
+//
+// `find_project_ron` moved to `super::utils` so `query.rs`/`stats.rs` can share it too (both
+// previously never parsed `.project.ron` at all, hardcoding every catalog's convention path even
+// when a project relocated it -- system-architect finding, `feature/configurable_catalog_paths`'s
+// review, 2026-09-04). Imported below alongside this file's other `utils` helpers.
 
 /// A scene path authored outside the `scenes/` convention (`Action::LoadScene`/
 /// `LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, or `ProjectConfig.initial_scene`) was
