@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use ironhold_core::capabilities::camera::MAX_SPLIT_PLAYERS;
 use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind};
 use ironhold_core::schema::items::ItemCatalog;
@@ -8,7 +9,7 @@ use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
-use ironhold_core::schema::dialogue::DialogueDef;
+use ironhold_core::schema::dialogue::{DialogueCondition, DialogueDef};
 use ironhold_core::schema::material::MaterialKind;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 use ironhold_core::runtime::scene_manager::entity_spawner::default_camera_config;
@@ -752,9 +753,55 @@ fn fsm_actions(fsm: &StateMachineAsset) -> Vec<Action> {
 fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     let LoadedProject {
         project_dir, project_config, asset_catalog, prefab_catalog, stat_catalog, item_catalog,
-        scenes, actions, ..
+        scenes, dialogues, actions, ..
     } = project;
     let mut errors = Vec::new();
+
+    // All four catalog types have real schema-level invariants their own `.validate()` enforces
+    // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,
+    // `PrefabCatalog::validate()` rejects a Foliage prefab missing its `foliage` block,
+    // `StatCatalog::validate()` rejects `min > max`/a modifier referencing an undefined stat,
+    // `ItemCatalog::validate()` rejects `max_stack: 0`/an empty `display_name`) -- but
+    // `do_validate` only ever calls `try_parse`/`load_configured_catalog`, never the parsed
+    // catalog's own `.validate()`, so these invariants were runtime-only. Wiring all four in here
+    // costs nothing further parse-side; verified against all 15 shipped projects (schema_version
+    // 1/2 for asset/prefab catalogs respectively) before adding this. `source_file` resolves each
+    // catalog's actually-configured path (mirroring the `items_source` idiom further below),
+    // since all four are relocatable via `ProjectConfig` fields -- a hardcoded convention-path
+    // literal would misattribute the error on a project that moved one.
+    for (catalog_err, convention_path, field_name, error_type) in [
+        (
+            asset_catalog.and_then(|c| c.validate().err()),
+            "assets.ron",
+            project_config.and_then(|c| c.asset_catalog.as_deref()),
+            "invalid_asset_catalog",
+        ),
+        (
+            prefab_catalog.and_then(|c| c.validate().err()),
+            "prefabs/prefabs.ron",
+            project_config.and_then(|c| c.prefab_catalog.as_deref()),
+            "invalid_prefab_catalog",
+        ),
+        (
+            stat_catalog.and_then(|c| c.validate().err()),
+            "stats/stats.ron",
+            project_config.and_then(|c| c.stats_path.as_deref()),
+            "invalid_stat_catalog",
+        ),
+        (
+            item_catalog.and_then(|c| c.validate().err()),
+            "items/items.ron",
+            project_config.and_then(|c| c.items_path.as_deref()),
+            "invalid_item_catalog",
+        ),
+    ] {
+        let Some(message) = catalog_err else { continue };
+        errors.push(CrossFileError {
+            source_file: field_name.unwrap_or(convention_path).to_string(),
+            message,
+            error_type,
+        });
+    }
 
     for (source, action) in actions {
         match action {
@@ -1025,36 +1072,55 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         }
     }
 
-    // `ItemDef.currency_stat` (set when looting an item should add to a global stat, e.g. a coin
-    // pickup, instead of occupying an inventory slot) is only read the moment that item is
-    // looted -- a typo doesn't stop the item from being consumed, it just loses the currency gain
-    // (action_executor.rs does warn! at runtime, but only there, and only after the item is
-    // already gone). Same failure shape as the merchant currency_stat check above, catching it at
-    // design time instead.
+    // `ItemDef.currency_stat`/`.icon_sheet` are both only read at the moment they'd actually
+    // matter (looting the item; rendering its inventory slot) -- a typo in either doesn't stop
+    // the item from being usable, it just silently loses the currency gain (currency_stat --
+    // action_executor.rs does warn! at runtime, but only there, and only after the item is
+    // already gone) or falls back to the panel's default icon sheet with no signal at all
+    // (icon_sheet). Same failure shape as the merchant currency_stat check above, catching both
+    // at design time instead.
     if let Some(items) = item_catalog {
-        if let Some(stats) = stat_catalog {
-            // items.ron's path is configurable via ProjectConfig.items_path (unlike stats.ron's
-            // fixed convention path) -- pointing this diagnostic at a literal "items.ron" would
-            // send the designer to a path that doesn't exist in every shipped project (they all
-            // use "items/items.ron"). Fall back to the literal only in the unreachable case where
-            // an item_catalog exists without items_path having been set.
-            let items_source = project_config
-                .and_then(|c| c.items_path.clone())
-                .unwrap_or_else(|| "items.ron".to_string());
-            let mut item_keys: Vec<&String> = items.items.keys().collect();
-            item_keys.sort();
-            for item_key in item_keys {
-                let item = &items.items[item_key];
-                let Some(currency_stat) = &item.currency_stat else { continue };
-                if !stats.stats.contains_key(currency_stat) {
-                    errors.push(CrossFileError {
-                        source_file: items_source.clone(),
-                        message: format!(
-                            "item {:?}: currency_stat {:?} not found in stats.ron",
-                            item_key, currency_stat
-                        ),
-                        error_type: "missing_reference",
-                    });
+        // items.ron's path is configurable via ProjectConfig.items_path (unlike stats.ron's
+        // fixed convention path) -- pointing this diagnostic at a literal "items.ron" would
+        // send the designer to a path that doesn't exist in every shipped project (they all
+        // use "items/items.ron"). Fall back to the literal only in the unreachable case where
+        // an item_catalog exists without items_path having been set.
+        let items_source = project_config
+            .and_then(|c| c.items_path.clone())
+            .unwrap_or_else(|| "items.ron".to_string());
+        let mut item_keys: Vec<&String> = items.items.keys().collect();
+        item_keys.sort();
+        for item_key in item_keys {
+            let item = &items.items[item_key];
+            if let Some(stats) = stat_catalog {
+                if let Some(currency_stat) = &item.currency_stat {
+                    if !stats.stats.contains_key(currency_stat) {
+                        errors.push(CrossFileError {
+                            source_file: items_source.clone(),
+                            message: format!(
+                                "item {:?}: currency_stat {:?} not found in stats.ron",
+                                item_key, currency_stat
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+            }
+            if let Some(assets) = asset_catalog {
+                if let Some(icon_sheet) = &item.icon_sheet {
+                    if !assets.textures.contains_key(icon_sheet) {
+                        let assets_convention_name = project_config
+                            .and_then(|c| c.asset_catalog.as_deref())
+                            .unwrap_or("assets.ron");
+                        errors.push(CrossFileError {
+                            source_file: items_source.clone(),
+                            message: format!(
+                                "item {:?}: icon_sheet {:?} not found in {}'s textures",
+                                item_key, icon_sheet, assets_convention_name
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
                 }
             }
         }
@@ -1063,13 +1129,31 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // `join_prefab_keys` (local_coop_hot_join_leave.md) entries are read by Action::JoinPlayer
     // only at the moment a player actually presses the join key — a typo'd or missing entry
     // otherwise only surfaces as a runtime warn!+no-op, never at authoring time. Catch it here,
-    // and mirror the same two Action::JoinPlayer executor guards (player-tagged, GLB-only) so a
-    // scene author sees the mistake before ever running the project rather than discovering a
-    // silent no-op (or, for the primitive case, a spawn-time panic) during a playtest.
+    // and mirror the same three Action::JoinPlayer executor guards (in-bounds, player-tagged,
+    // GLB-only) so a scene author sees the mistake before ever running the project rather than
+    // discovering a silent no-op (or, for the primitive case, a spawn-time panic) during a
+    // playtest. The `player_{slot + 1}_start` spawn-point check (debug-detective finding) is
+    // folded into this same slot-by-slot walk, deliberately gated behind the other three: a slot
+    // beyond `MAX_SPLIT_PLAYERS` can never actually be hot-joined into at all (the executor bails
+    // on `next_slot >= MAX_SPLIT_PLAYERS` before ever reading `join_prefab_keys`), and neither can
+    // one whose prefab is missing/non-player/Primitive -- demanding a spawn point for a slot that
+    // can never be reached would be a false positive, not a real authoring mistake.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
             for (slot, entry) in scene.join_prefab_keys.iter().enumerate() {
                 let Some(prefab_key) = entry else { continue };
+                if slot >= MAX_SPLIT_PLAYERS as usize {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "join_prefab_keys[{}]: slot is beyond MAX_SPLIT_PLAYERS ({}) — a \
+                             hot-join can never reach this slot; the entry has no effect",
+                            slot, MAX_SPLIT_PLAYERS
+                        ),
+                        error_type: "unreachable_join_slot",
+                    });
+                    continue;
+                }
                 let Some(prefab) = catalog.prefabs.get(prefab_key) else {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
@@ -1091,7 +1175,9 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         ),
                         error_type: "unsupported_join_prefab",
                     });
-                } else if prefab.kind == PrefabKind::Primitive {
+                    continue;
+                }
+                if prefab.kind == PrefabKind::Primitive {
                     errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
@@ -1101,6 +1187,88 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         ),
                         error_type: "unsupported_join_prefab",
                     });
+                    continue;
+                }
+                // `Action::JoinPlayer` derives `player_{slot + 1}_start` (1-based) from this same
+                // slot index and looks it up in the SAME scene's `spawn_points`, with no `warn!`
+                // at all on a miss — it silently falls back to the primary player's position plus
+                // an X offset instead. Scene-scoped (both fields live on one `GameSceneV2`) unlike
+                // Action::Spawn's `spawn_point` check further below, which must approximate across
+                // every scene in the project. Known remaining gap, not modelled here: an overlay
+                // scene loaded over this one can desync which scene's `join_prefab_keys` vs.
+                // `spawn_points` the runtime actually reads from — logged separately, not fixed in
+                // this diagnostic (see planning/claude_suggestions.md).
+                let spawn_point_key = format!("player_{}_start", slot + 1);
+                if !scene.spawn_points.contains_key(spawn_point_key.as_str()) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "join_prefab_keys[{}]: no spawn_points entry named {:?} — a player \
+                             hot-joining into this slot will silently spawn next to the primary \
+                             player instead of at their own spawn point",
+                            slot, spawn_point_key
+                        ),
+                        error_type: "missing_reference",
+                    });
+                }
+            }
+        }
+    }
+
+    // A dialogue node `id` must be unique within its own file (the schema doc says so, but
+    // nothing enforced it) -- `capabilities/dialogue.rs`'s `nodes.iter().position(...)` matches
+    // only the FIRST node with a given id, so a duplicate makes the second one permanently
+    // unreachable by any `jump_to` targeting it, with zero diagnostic anywhere. A `jump_to` that
+    // names no node at all (and isn't the reserved `"__end__"`) is the milder sibling: the
+    // runtime only `warn!`s and closes the dialogue panel mid-conversation, a visible and
+    // confusing break with no design-time counterpart until now.
+    for (dialogue_path, dialogue) in dialogues {
+        let mut seen_ids: HashSet<&str> = HashSet::new();
+        for node in &dialogue.nodes {
+            if !seen_ids.insert(node.id.as_str()) {
+                errors.push(CrossFileError {
+                    source_file: dialogue_path.clone(),
+                    message: format!(
+                        "duplicate DialogueNode id {:?} — jump_to can only ever reach the FIRST \
+                         node with this id; every later one is permanently unreachable",
+                        node.id
+                    ),
+                    error_type: "duplicate_node_id",
+                });
+            }
+        }
+        let node_ids: HashSet<&str> = dialogue.nodes.iter().map(|n| n.id.as_str()).collect();
+        for node in &dialogue.nodes {
+            for (i, choice) in node.choices.iter().enumerate() {
+                if let Some(jump_to) = &choice.jump_to {
+                    if jump_to != "__end__" && !node_ids.contains(jump_to.as_str()) {
+                        errors.push(CrossFileError {
+                            source_file: dialogue_path.clone(),
+                            message: format!(
+                                "DialogueNode {:?} choice[{}]: jump_to {:?} names no node in \
+                                 this dialogue (and isn't \"__end__\") — the conversation will \
+                                 silently close when this choice is picked",
+                                node.id, i, jump_to
+                            ),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+                if let Some(DialogueCondition::StatAtLeast { stat_key, .. }) = &choice.condition {
+                    if let Some(stats) = stat_catalog {
+                        if !stats.stats.contains_key(stat_key) {
+                            errors.push(CrossFileError {
+                                source_file: dialogue_path.clone(),
+                                message: format!(
+                                    "DialogueNode {:?} choice[{}]: condition StatAtLeast \
+                                     stat_key {:?} not found in stats.ron — this choice will \
+                                     always be hidden",
+                                    node.id, i, stat_key
+                                ),
+                                error_type: "missing_reference",
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -1572,6 +1740,31 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     errors.push(CrossFileError {
                         source_file: "prefabs/prefabs.ron".to_string(),
                         message: format!("prefab {:?}: dialogue {:?} {}", key, dialogue_path, problem),
+                        error_type: "path_case_mismatch",
+                    });
+                }
+            }
+
+            // Resolved the same way as `behavior`/`dialogue` just above (project-relative, not
+            // assets-root-relative -- `entity_spawner.rs`'s `resolve_project_path`), and a 404 here
+            // is worse than either: the entity is spawned `Visibility::Hidden` pending the policy
+            // load (`entity_spawner.rs:186`) and never becomes visible again once that load fails.
+            if let Some(policy_path) = &def.animation_policy {
+                if !project_dir.join(policy_path).exists() {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: animation_policy {:?} not found on disk",
+                            key, policy_path
+                        ),
+                        error_type: "missing_file",
+                    });
+                } else if let Some(problem) = path_case_mismatch(project_dir, policy_path) {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: animation_policy {:?} {}", key, policy_path, problem
+                        ),
                         error_type: "path_case_mismatch",
                     });
                 }

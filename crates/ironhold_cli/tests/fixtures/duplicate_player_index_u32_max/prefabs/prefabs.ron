@@ -1,8 +1,9 @@
 (
-    schema_version: 1,
+    schema_version: 2,
     prefabs: {
         "coop_player_a": (
             kind: Primitive,
+            shape: Capsule3d,
             player_index: 4294967295,
             components: (
                 tags: ["player"],
@@ -14,6 +15,7 @@
         ),
         "coop_player_b": (
             kind: Primitive,
+            shape: Capsule3d,
             player_index: 4294967295,
             components: (
                 tags: ["player"],

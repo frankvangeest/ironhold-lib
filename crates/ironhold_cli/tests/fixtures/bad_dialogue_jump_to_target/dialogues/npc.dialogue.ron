@@ -1,0 +1,16 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "Hi",
+            choices: [
+                (
+                    label: "Bye",
+                    jump_to: "does_not_exist",
+                ),
+            ],
+        ),
+    ],
+)

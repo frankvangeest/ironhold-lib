@@ -3,6 +3,7 @@
     prefabs: {
         "bad_fixed_camera_player": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Fixed((

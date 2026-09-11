@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    stats: {
+        "broken": ( base: 0.0, min: 10.0, max: 5.0 ),
+    },
+)

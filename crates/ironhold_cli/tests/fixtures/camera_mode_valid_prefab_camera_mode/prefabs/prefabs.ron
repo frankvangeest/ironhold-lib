@@ -3,6 +3,7 @@
     prefabs: {
         "good_orbit_player": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Orbit((
@@ -22,6 +23,7 @@
         ),
         "good_fixed_camera_prop": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Fixed((

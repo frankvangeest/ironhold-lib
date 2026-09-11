@@ -2,13 +2,14 @@
     schema_version: 2,
     prefabs: {
         "spectator_flycam": (
-            kind: Primitive,
+            kind: Prop,
             components: (
                 tags: ["flycam"],
             ),
         ),
         "suppressed_player": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Orbit((

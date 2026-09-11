@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    items: {
+        "broken": ( display_name: "Broken Item", max_stack: 0 ),
+    },
+)

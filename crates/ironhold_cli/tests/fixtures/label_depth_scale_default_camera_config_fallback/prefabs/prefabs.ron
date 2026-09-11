@@ -3,6 +3,7 @@
     prefabs: {
         "no_camera_player": (
             kind: Primitive,
+            shape: Capsule3d,
             components: (
                 tags: ["player"],
             ),

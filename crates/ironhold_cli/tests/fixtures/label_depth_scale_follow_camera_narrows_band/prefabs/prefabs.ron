@@ -3,6 +3,7 @@
     prefabs: {
         "follow_player": (
             kind: Primitive,
+            shape: Cuboid,
             components: (
                 tags: ["player"],
                 camera_mode: Follow((

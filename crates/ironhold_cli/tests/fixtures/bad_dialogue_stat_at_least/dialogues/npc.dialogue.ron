@@ -1,0 +1,16 @@
+(
+    schema_version: 1,
+    nodes: [
+        (
+            id: "start",
+            speaker: "NPC",
+            body: "Hi",
+            choices: [
+                (
+                    label: "Show off my strength",
+                    condition: StatAtLeast(stat_key: "strenght", min: 10.0),
+                ),
+            ],
+        ),
+    ],
+)
