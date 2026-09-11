@@ -1,6 +1,8 @@
 # Memory Index
 
 - [TargetingPlugin's 3 PlayerTarget writers are unordered](project_targeting_systems_unordered_ambiguity.md) — plain unchained tuple, no ordering vs action_bar/interpreter; single-core affinity (40/40 fail) is the decisive probe for executor-order flakes
+- [Flycam has TWO authoring paths](project_flycam_dual_authoring_path.md) — legacy `flycam:` vs `camera_mode: Flycam(...)` both feed one FlyCamDef; a check gated on either is half-blind, and the 6 movement keys fall back to 6 DIFFERENT keys, not all KeyW
+- [icon_sheet `""` is an ActionBar-only "unset" sentinel](project_icon_sheet_empty_string_sentinel.md) — runtime filters empty for ActionBar but not Inventory/Container; a naive texture-key check exit-1s a working scene. IconButton icon_on/icon_off still uncovered
 - ["flycam" tag's three silent drops](project_flycam_tag_silent_semantics.md) — tag discards the prefab's own GLB model, last flycam entity wins, player beats flycam — all warn-free; Prop vs Actor has zero runtime divergence (verified from pixels)
 - [Browser pixel-probe recipe](project_browser_pixel_probe_recipe.md) — committed pkg/ + serve.py renders RON edits with no rebuild, but headless Chromium has NO WebGPU adapter here (fake "blank screen"); use headless=False + --enable-unsafe-webgpu
 - [Test harness latches keyboard just_pressed](project_test_harness_just_pressed_latch.md) — setup_test_app omits InputPlugin so just_pressed never clears; release() alone doesn't help, need clear_just_pressed; silently makes multi-update keyboard tests vacuous (gamepads unaffected)

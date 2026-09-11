@@ -115,9 +115,10 @@ height resolution into `schema/catalog.rs`, which would also de-duplicate valida
 `resolve_height` copy).
 
 **Deterministic-order sweep is still incomplete.** As of 2026-09-07 the two prefab loops at
-validate.rs:~1093/~1475 sort, but three error-emitting `HashMap` walks do not: merchant
-`currency_stat` (~822), merchant `stock[].item_key` (~869), and the `camera_modes:` registry
-(~1591) — the last is the odd one, since its own `--strict` twin (~2287) does sort.
+validate.rs:~1093/~1475 sort, but two error-emitting `HashMap` walks do not: merchant
+`currency_stat` (~822) and merchant `stock[].item_key` (~869). **Correction (2026-09-11): the
+`camera_modes:` registry loop needs no sort — `GameSceneV2.camera_modes` is a `BTreeMap`
+(scene_v2.rs:66), so it iterates in key order already.** Don't re-flag it.
 
 **Font-glyph lints (`non_ascii_dash_in_text`) must enumerate text surfaces by hand.** The lint
 walks parsed values (so the ~860 em-dashes in RON *comments* correctly don't fire) but covers only
@@ -138,7 +139,10 @@ new checks, `docs/20_data_formats.md` updated in three places, `60_contributing.
 Also recurred in `feature/camera_mode_validation` (2026-09-06): two new
 checks + a whole new prefab-level `camera_mode` surface shipped with line 249 untouched, and
 `docs/20_data_formats.md`'s own per-feature "**Validation:**" paragraph (there is one per feature
-area, e.g. camera_modes @~2556) left stale too. Check BOTH lists, not just 60_contributing.**
+area, e.g. camera_modes @~2556) left stale too. **And AGAIN in `feature/cli_validate_batch3`
+(2026-09-11): four new check families, `docs/60_contributing.md:240-262` untouched.** Check BOTH
+lists, not just 60_contributing. Treat this as a near-certain finding on any validate.rs feature —
+grep `docs/60_contributing.md` for one of the new `error_type` strings before writing the review.**
 
 **Design question to ask of any check that mirrors an existing runtime `warn!`: is the warn itself
 over-strict relative to the code?** Promoting a `warn!` to an exit-1 error raises the cost of a
@@ -146,6 +150,31 @@ false positive — a designer cannot suppress a `validate` error. Concrete case
 (`feature/camera_mode_validation`): `FixedCameraDef`'s doc says "exactly one of
 `look_at`/`look_at_entity`", but `fixed_camera_system` implements `look_at_entity ... .or(look_at)`,
 a real working fallback. Read the *system*, not just the warn text, before mirroring.
+
+**The camera-mode vocabulary surface has FOUR RON entry points; validate covers two.**
+Established `feature/cli_validate_batch3` (2026-09-11), which added `camera_mode_vocab_problems`
+(`orbit_button`/`character_rotate_button` ∈ Left/Right/Either/None; `look_button` ∈
+Left/Right/Either — **no None**; `FlyCamDef`'s six movement keys via `InputMap::parse_key`, whose
+miss path is `unwrap_or(KeyCode::KeyW)` with *no warn at either design time or runtime* — the
+quietest failure in the camera area). Covered: `PrefabDef.components.camera_mode` (both the
+`is_player()` and `is_flycam()` gates) and `GameSceneV2.camera_modes`. **Uncovered: the legacy
+`PrefabDef.components.camera` (`Option<CameraConfig>`) and `.flycam` (`Option<FlyCamDef>`)** —
+both still live (scene_loader.rs:272) and still shipped (`local_coop_demo` authors ~10 legacy
+`camera:` blocks; `foliage_demo`/`dynamic_animation_control` author legacy `flycam:`). If anyone
+retrofits, apply ONLY the vocab helper — `camera_mode_nested_split_party_problem` must never touch
+`components.camera`, where nested `split`/`party` is the *correct* legacy location. `PlayerConfig`
+is not `Deserialize` (player.rs:26), so its `camera`/`camera_mode` fields are not a fifth surface.
+No false-positive risk from `FlyCamDef` defaults: they are `"KeyW"`/`"Space"`/`"KeyQ"` etc., all of
+which `parse_key` accepts.
+
+**`scene_loader.rs` does NOT silently discard a flycam-tagged prefab's `camera_mode`.** Recurring
+wrong claim (appeared in `claude_suggestions.md`, a validate.rs comment, and a test doc comment).
+Reality: `scene_loader.rs:273-274` passes `components.camera_mode` straight through as `mode`; the
+flycam-spawn match at `:824-836` rejects any non-`Flycam(_)` value with its own `warn!` ("has no
+defined behavior for a standalone flycam-tagged prefab… falling back to Flycam defaults") and
+`FlyCamDef::default()`. Only `model`/`shape`/`primitive`/`children` (and the ~20 other fields in
+[[diagnostic-only-feature-pattern]]) are truly discarded. So the CLI check for this is a
+design-time twin of an existing warn, not a first-ever diagnostic.
 
 **A helper shared across two call sites needs per-call-site remedy text, not just a per-call-site
 `context` prefix.** Same feature: the nested-`split`/`party` message prescribes
@@ -259,13 +288,25 @@ design-time-stricter posture. But note the CLI's convention-path fallback means 
 `asset_catalog`/`prefab_catalog` field + a stale catalog on disk now exits 1 on schema invariants in
 a file the runtime never loads (new instance of the documented `load_configured_catalog` divergence).
 
-**Texture-key checks are still per-field, not a family.** After `feature/cli_validate_gap_closures`
-the checked `AssetCatalog.textures` key consumers are: `FoliageMaterialDef.leaf_texture`
-(validate.rs:~1758) and `ItemDef.icon_sheet` (~1090). Unchecked, all the same
-`asset_catalog.textures.get(key)` lookup with a silently-blank miss path:
-`InventoryPanelDef.icon_sheet` (scene_loader.rs:2288/2303 — the *default* sheet, higher blast radius
-than `ItemDef`'s per-item override), `ActionBarDef.icon_sheet`, `ActionSlotDef.icon`,
-`TargetIndicatorDef.texture`, and `world_stat_bar`'s `Icon.icon_sheet`/`Textured.texture_sheet`.
+**Texture-key checks are now a family — CLOSED by `feature/cli_validate_batch3` (2026-09-11).**
+`fn check_texture_key(asset_catalog, source_file, context, key, errors)` (validate.rs:~390,
+`error_type: "missing_catalog_key"`) now covers `InventoryPanelDef.icon_sheet`,
+`ContainerPanelDef.icon_sheet`, `ActionBarDef.icon_sheet`, `ActionSlotDef.icon`, and
+`PrefabDef.world_stat_bar`'s `Icon.icon_sheet`/`Textured.texture_sheet`. The two pre-existing
+sibling checks (`FoliageMaterialDef.leaf_texture`, `ItemDef.icon_sheet`) were deliberately NOT
+retrofitted — each has its own nuance (empty-string guard; relocation-aware `assets.ron` name) —
+so three shapes of the same check coexist, with three different `error_type`s
+(`missing_catalog_key` / `missing_catalog_key` / `missing_reference`).
+**`TargetIndicatorDef.texture` is NOT a `textures` key — it is a `decals` key** (verified twice:
+scene_loader.rs:1125 `params.asset_catalog.0.decals.get(&def.texture)` + its own "unknown decal
+key" warn). An earlier memory/review claim that it was a `.textures` lookup was wrong; it now has
+its own inline check, not a `check_texture_key` call.
+**Miss-path severity differs per field — don't copy one blanket "silent" claim across all six.**
+Genuinely silent (no warn anywhere): `InventoryPanel`/`ContainerPanel`/`ActionBar` icon sheets,
+`ActionSlotDef.icon`, and `WorldStatBarStyle::Icon.icon_sheet` (stat_display.rs:698-700,
+`unwrap_or_default()` ⇒ blank handle). NOT silent: `WorldStatBarStyle::Textured.texture_sheet`
+(stat_display.rs:775-781 warns *and* skips the whole bar) and `target_indicator.texture`
+(warns + disables the indicator).
 
 **Dialogue/JoinPlayer/animation_policy gaps: CLOSED by `feature/cli_validate_gap_closures`
 (2026-09-11)** — `PrefabDef.animation_policy` (existence + `path_case_mismatch`, third arm of the

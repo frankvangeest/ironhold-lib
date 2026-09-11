@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue referential checks now landed (query.rs's collector still hasn't); FOUR join_prefab_keys checks now ship without modelling the Grid-split-only/dead-low-slot reachability rules; schema types' own validate() is a second validation layer the CLI wires only 2 of 8 of, all fail-fast over a HashMap; wiring one surfaces mass fixture drift; docs/60_contributing.md's checks list is the de-facto contract and gets missed
+description: ironhold_cli validate silently skips checks when a catalog is absent; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue referential checks now landed (query.rs's collector still hasn't); FOUR join_prefab_keys checks now ship without modelling the Grid-split-only/dead-low-slot reachability rules; schema types' own validate() is a second validation layer the CLI wires only 2 of 8 of, all fail-fast over a HashMap; wiring one surfaces mass fixture drift; docs/60_contributing.md's checks list is the de-facto contract and gets missed; camera_mode: payloads have legacy sibling fields (components.camera/.flycam) that dominate shipped authoring and are missed by any CameraModeDef-shaped check; is_player()/is_flycam() tag gates are not mutually exclusive; per-field flycam key defaults are not uniform; target_indicator.texture is a decals key
 metadata:
   type: project
 ---
@@ -295,6 +295,14 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `FoliageMaterialDef.leaf_texture`, `ResolvedTargetIndicator.texture_path`, decal/particle
    `texture_path`, `IconButtonDef.icon_on/off`, action-bar `icon`/`icon_sheet`, panel `"ui/cross"`
    are all `AssetCatalog.textures`-**key** indirections, correctly left to the key checks.
+   **Those key checks now exist as of `feature/cli_validate_batch3` (shared `check_texture_key`):**
+   `InventoryPanelDef`/`ContainerPanelDef`/`ActionBarDef.icon_sheet`, `ActionSlotDef.icon`,
+   `WorldStatBarStyle::Icon.icon_sheet`/`::Textured.texture_sheet` — plus `target_indicator.texture`
+   against `decals`. `ShopPanelDef.icon_sheet` **does not exist** (a claim in an older
+   `claude_suggestions.md` entry; `scene_v2.rs`:1218 has no such field). The one real remaining
+   sibling is `IconButtonDef.icon_on`/`icon_off` (`scene_loader.rs`:1781/1784, silent
+   `unwrap_or_default`) — and it is the strictest of the family, since both are required non-`Option`
+   `String`s, so every shipped `IconButton` authors them and none is checked.
    **Structural facts worth remembering:** the case half of the check is a **no-op on a
    case-sensitive filesystem** (the caller's `exists()` fails first and reports `missing_file`),
    which makes the `bad_scene_path_case` / `bad_scene_path_backslash` /
@@ -372,10 +380,44 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    touching that list is a workflow step-5 miss, not a nice-to-have — it's also the only place the
    `error_type` string taxonomy is described for `--json` consumers. Check it on every validate.rs
    review.
-   **`error_type` taxonomy note:** `missing_reference` is the dominant convention for a missing
-   *catalog key* (effect/decal/audio/prefab keys all use it). The lone `missing_catalog_key` site
-   (foliage `leaf_texture`, ~1765) is the pre-existing outlier — don't flag a new
-   `missing_reference` catalog-key check as inconsistent with it.
+   **`error_type` taxonomy note (updated 2026-09-11):** `missing_reference` is the dominant
+   convention for a missing *catalog key* (effect/decal/audio/prefab/`ItemDef.icon_sheet`/
+   `target_indicator.texture` all use it). `missing_catalog_key` was a lone outlier (foliage
+   `leaf_texture`) until `feature/cli_validate_batch3` made it the shared `check_texture_key`
+   helper's type — so it is now a 7-site minority convention, not a one-off. The split is real but
+   arbitrary; don't flag either choice as inconsistent, do flag any *third* spelling.
+
+14. **The `camera_mode:` payload and its legacy sibling field are two authoring surfaces for the
+   same vocabulary, and a check written against one misses the other — usually the more common
+   one.** `PrefabDef.components` carries BOTH `camera: Option<CameraConfig>` and
+   `flycam: Option<FlyCamDef>` alongside `camera_mode: Option<CameraModeDef>`, and the legacy pair
+   is still fully live (`scene_loader.rs`:272-274 — `camera_mode` merely takes priority over an
+   unconditionally-defaulted `flycam`; `entity_spawner.rs`:1322-1325 for `camera`). Shipped content
+   is *dominated* by the legacy form: ~14 `camera: (...)` blocks in `local_coop_demo` (every
+   `orbit_button: "None"` / `character_rotate_button: None` hit in the repo) and 3 projects using
+   `flycam: (...)` (`camera_modes`, `dynamic_animation_control`, `foliage_demo`), versus ~10
+   `camera_mode:` sites total. So `feature/cli_validate_batch3`'s `camera_mode_vocab_problems`
+   (`orbit_button`/`character_rotate_button`/`look_button`/6 flycam movement keys), which matches on
+   `CameraModeDef`, reaches almost none of the shipped authoring it was written for. Fix shape:
+   split the payload checks into `orbit_config_vocab_problems(&CameraConfig)` /
+   `flycam_def_vocab_problems(&FlyCamDef)` and have the `CameraModeDef` matcher delegate, then call
+   the two bare helpers on `components.camera`/`components.flycam` as well.
+   **Per-field flycam defaults are NOT uniform** — `forward`→`KeyW`, `backward`→`KeyS`,
+   `left`→`KeyA`, `right`→`KeyD`, `up`→`Space`, `down`→`KeyQ` (identical at all three spawn sites:
+   `scene_loader.rs`:859-864, `entity_spawner.rs`:1490-1495 and ~1560). Any diagnostic saying "falls
+   back to KeyW" is wrong for 5 of the 6.
+   **Runtime severity per field, verified:** `parse_orbit_button`/`parse_flycam_look_button` both
+   `warn!` and substitute `Either`; the 6 movement keys `unwrap_or(..)` with **no warning at all**
+   (the only truly-silent half). `WorldStatBarStyle::Textured.texture_sheet` DOES warn
+   (`stat_display.rs`:777) while `::Icon.icon_sheet` is silent (`unwrap_or_default`, :698) — they are
+   not symmetric. `target_indicator.texture` resolves against `AssetCatalog.**decals**`, not
+   `.textures`, despite the field name, and already warns (`scene_loader.rs`:1125-1127).
+   **Tag gates in the prefab loop are not mutually exclusive.** `is_player()` and `is_flycam()` are
+   independent `tags` scans, and a dual-tagged prefab is a real authoring shape the runtime has its
+   own dedicated warn for (`scene_loader.rs`:240). Two separate `if is_X() { ...same check... }`
+   blocks therefore double-report on it. Runtime precedence is flycam-wins (`continue` at :285), so
+   the correct single predicate is `if def.is_flycam() { matches!(mode, Flycam(_)) } else {
+   def.is_player() }` — i.e. "does the runtime actually consume this payload".
 
 **Why:** these gaps are invisible by construction — the failure mode is *absence* of output, so
 they don't show up in test runs or in "all projects validate clean" verification.
