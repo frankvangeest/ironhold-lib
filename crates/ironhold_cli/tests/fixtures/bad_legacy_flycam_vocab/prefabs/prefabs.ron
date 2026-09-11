@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "spectator_flycam": (
+            kind: Prop,
+            model: "",
+            components: (
+                tags: ["flycam"],
+                flycam: (
+                    speed: 8.0,
+                    fast_speed: 20.0,
+                    look_button: "Middle",
+                    forward: "NotAKey",
+                ),
+            ),
+        ),
+    },
+)

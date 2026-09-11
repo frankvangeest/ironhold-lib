@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    textures: {
+        "unrelated_icon": "shared/textures/hero_diffuse.png",
+    },
+)

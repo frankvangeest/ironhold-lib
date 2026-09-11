@@ -181,7 +181,7 @@ File extension must be `.scene.ron`.
 | `world_labels` | `Vec<WorldLabelDef>` | 3D world-space text labels that project to screen space and face the camera |
 | `label_depth_scale` | `Option<LabelDepthScaleDef>` | When set, all labels shrink as camera distance increases. World labels (`world_labels:`, entity `label:`) can override per-label with `depth_scale: false` or `depth_scale: true`. Stat labels/bars (`stat_label`/`world_stat_bar` on a prefab — all four styles, `Ascii`/`Pixel`/`Icon`/`Textured`), and nameplates (`show_nameplates`/`show_player_nameplate`), have no per-widget override — they always simply inherit this scene setting, whether the entity is scene-placed or spawned at runtime via `Action::Spawn` (e.g. a wave-spawned enemy). Tune `reference_distance` to the scene's actual camera-to-widget distance range, not just `Orbit`/`Party`'s `min_radius`/`max_radius` — entities can sit elsewhere in the scene than the camera's own orbit target, so their real distance from the camera can exceed the radius range. A `reference_distance` well outside that real range means the `(reference_distance / distance)` ratio never drops below 1.0, so scaling silently never engages — `ironhold_cli validate --strict` and a scene-load `warn!` both flag this, see [Label depth scaling](#label-depth-scaling-labeldepthscaledef) below for the full field reference, tuning guidance, and validation coverage. |
 | `particle_budget` | `Option<u32>` | Maximum live particle count for this scene. Default: `2000`. `Ambient` effects are dropped when full; `Npc` effects are halved; `Player` effects always fire. |
-| `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. See below. |
+| `target_indicator` | `Option<TargetIndicatorDef>` | Ground-ring decal shown under the selected target entity. Omit to disable. Its `texture` field is an `AssetCatalog.decals` key (despite the field name) — `ironhold_cli validate` checks it exists there. See below. |
 | `target_hud` | `Option<TargetHudDef>` | Per-viewport target-name HUD readout for split-screen scenes (2+ players). Omit to disable. See [Per-player split-screen targeting](#per-player-split-screen-targeting) below. |
 | `show_nameplates` | `bool` | Enable the nameplate system for NPCs/props in this scene. Default: `false`. When `true`, entities tagged at spawn time display a floating name + pixel stat-bar widget above them. Individual prefabs can override this per-entity via `PrefabDef.nameplate`. Does **not** govern the player's own nameplate — see `show_player_nameplate` below. |
 | `nameplate_options` | `Option<NameplateOptionsDef>` | Scene-wide nameplate display configuration. Cosmetic fields (offset, font, colors, bars) apply regardless of `show_nameplates`/`show_player_nameplate`; `faction_filter` only matters when `show_nameplates: true`. Omit to use all defaults. See [Nameplate system](#nameplate-system-nameplateoptionsdef-) below. |
@@ -854,8 +854,8 @@ An icon-only button that swaps between two catalog textures depending on a bound
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
 | `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.toggle_mute"` → `"toggle_mute"`). Same `unreachable_trigger` requirement as `Button`'s `action:` above |
-| `icon_on` | `String` | required | Asset catalog texture key shown when `bind` resolves to `"true"` |
-| `icon_off` | `String` | required | Asset catalog texture key shown when `bind` resolves to anything else, including when the key is missing from `GameVariables` |
+| `icon_on` | `String` | required | Asset catalog texture key shown when `bind` resolves to `"true"`. `ironhold_cli validate` checks the key exists in `assets.ron`'s textures. |
+| `icon_off` | `String` | required | Asset catalog texture key shown when `bind` resolves to anything else, including when the key is missing from `GameVariables`. Checked the same way as `icon_on`. |
 | `bind` | `String` | required | `GameVariables` key holding `"true"`/`"false"`. Re-checked every frame. |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(36.0, 36.0)` | Width and height in pixels |
@@ -1020,7 +1020,7 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 | `slot_size` | `f32` | `64.0` | Width and height of each slot square in pixels |
 | `slot_gap` | `f32` | `4.0` | Pixel gap between slots |
 | `background_color` | `(f32,f32,f32,f32)` | near-black 70 % | Bar container background as sRGB RGBA |
-| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for a shared icon atlas (4×4 grid by default) |
+| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for a shared icon atlas (4×4 grid by default). `ironhold_cli validate` checks the key exists in `assets.ron`'s textures when set and non-empty (an empty string means "no bar-level default", same as omitting the field). |
 | `icon_cols` | `u32` | `4` | Columns in the icon atlas grid |
 | `icon_rows` | `u32` | `4` | Rows in the icon atlas grid |
 | `icon_cell_size` | `u32` | `64` | Pixel size of each square atlas cell |
@@ -1032,7 +1032,7 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 |-------|------|---------|-------------|
 | `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string. Stays keyboard-only and required even for a gamepad-routed slot — see `gamepad_key` below |
 | `gamepad_key` | `Option<String>` | `None` | Gamepad button that **also** activates this slot, in addition to `key` — see "Valid gamepad button names" in the `InputMap` section below. Resolved against the slot's **owning player's own** controller (`owner_player` → that player's own controller), never any connected pad — a gamepad is not shared hardware the way a keyboard is. An unrecognised name warns at scene load (bar + slot named) and an `ironhold_cli validate` error; the slot's `key` binding, if any, still works. Omit for a keyboard-only slot (default) |
-| `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot) |
+| `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot). `ironhold_cli validate` checks the key exists in `assets.ron`'s textures when non-empty. |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA multiplicative tint for the icon. White pixels show the exact specified color; dark pixels stay dark. Omit to render the icon untinted (see note below) |
 | `do_actions` | `Vec<Action>` | required | Actions fired through the pipeline on activation |
@@ -1356,7 +1356,7 @@ When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon
 | `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
 | `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as sRGB RGBA |
 | `font_size` | `f32` | `11.0` | Font size for slot count labels |
-| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for the item icon atlas (default sheet; items can override per-item with `ItemDef.icon_sheet`) |
+| `icon_sheet` | `Option<String>` | `None` | Catalog texture key for the item icon atlas (default sheet; items can override per-item with `ItemDef.icon_sheet`). `ironhold_cli validate` checks the key exists in `assets.ron`'s textures when set. |
 | `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
 | `icon_rows` | `u32` | `8` | Rows in the icon atlas grid |
 | `icon_cell_size` | `u32` | `64` | Pixel size of each square icon cell |
@@ -1416,7 +1416,7 @@ A slot grid that displays a container entity's `Inventory` (chest, crate, etc.).
 | `slot_gap` | `f32` | `4.0` | Gap between slots in pixels |
 | `background_color` | `(f32,f32,f32,f32)` | dark semi-transparent | Panel background as sRGB RGBA |
 | `font_size` | `f32` | `11.0` | Font size for count labels inside slots |
-| `icon_sheet` | `Option<String>` | `None` | Catalog key for the item icon atlas |
+| `icon_sheet` | `Option<String>` | `None` | Catalog key for the item icon atlas. `ironhold_cli validate` checks the key exists in `assets.ron`'s textures when set. |
 | `icon_cols` | `u32` | `8` | Columns in the icon atlas grid |
 | `icon_rows` | `u32` | `8` | Rows in the icon atlas grid |
 | `icon_cell_size` | `u32` | `64` | Pixel size of each icon cell |
@@ -1970,13 +1970,13 @@ A prefab with `components.tags: ["flycam"]` and any `kind` spawns a free-flying 
 | `speed` | `f32` | `100.0` | Normal movement speed in units/second |
 | `fast_speed` | `f32` | `200.0` | Movement speed while Shift is held, in units/second |
 | `sensitivity` | `f32` | `0.002` | Mouse look sensitivity in radians per pixel |
-| `forward` | `String` | `"KeyW"` | Key for moving forward |
+| `forward` | `String` | `"KeyW"` | Key for moving forward. An unrecognised key silently falls back to `"KeyW"` with no runtime warning at all — `ironhold_cli validate` catches this at design time, along with the same 5 fields below. |
 | `backward` | `String` | `"KeyS"` | Key for moving backward |
 | `left` | `String` | `"KeyA"` | Key for strafing left |
 | `right` | `String` | `"KeyD"` | Key for strafing right |
 | `up` | `String` | `"Space"` | Key for ascending |
 | `down` | `String` | `"KeyQ"` | Key for descending |
-| `look_button` | `String` | `"Either"` | Mouse button that activates look mode: `"Left"`, `"Right"`, or `"Either"` |
+| `look_button` | `String` | `"Either"` | Mouse button that activates look mode: `"Left"`, `"Right"`, or `"Either"`. An unrecognised value warns and falls back to `"Either"` at runtime; `ironhold_cli validate` also checks it. |
 
 To display the camera's world position in the UI, add a label element with `id: "flycam_position"` to the scene's `ui` array. The engine will update it every frame.
 
@@ -2338,8 +2338,8 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 | `max_radius` | `f32` | `20.0` | Maximum zoom distance in metres |
 | `min_pitch` | `f32` | `0.1` | Minimum pitch in radians (looking up limit) |
 | `max_pitch` | `f32` | `0.9` | Maximum pitch in radians (looking down limit) |
-| `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, `"Either"`, or `"None"` to disable manual mouse-orbit entirely (fixed-angle auto-follow only). See the `"None"` note below. |
-| `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable |
+| `orbit_button` | `String` | `"Either"` | Mouse button that orbits the camera: `"Left"`, `"Right"`, `"Either"`, or `"None"` to disable manual mouse-orbit entirely (fixed-angle auto-follow only). An unrecognised value warns and falls back to `"Either"` at runtime; `ironhold_cli validate` also checks it. See the `"None"` note below. |
+| `character_rotate_button` | `Option<String>` | `Some("Right")` | Mouse button that also rotates the character yaw while orbiting; set to `None` to disable. Same accepted values and validation as `orbit_button` above when set. |
 | `initial_pitch` | `f32` | `0.5` | Camera pitch at scene start in radians |
 | `initial_yaw` | `f32` | `0.0` | Camera yaw at scene start in radians |
 | `party` | `Option<PartyZoomDef>` | `None` | **Local co-op only.** Only read from the **first** `"player"`-tagged entity in the scene's `entities` list — `party` on any later player is ignored. When the scene has 2+ players and this is set, the engine spawns one shared camera that frames the midpoint of all players instead of giving each player their own orbit camera. See [Shared party camera](#shared-party-camera-partyzoomdef-) below. Mutually exclusive with `split` — see below. |
@@ -2411,7 +2411,9 @@ required (see "Backward compatibility" below). New authoring should prefer `came
 | `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov` | Yes |
 | `Fixed` | Static camera at a world position, looking at a fixed point or a named tracked entity (re-resolved every frame) | `position`, `look_at` or `look_at_entity`, `fov` | Yes — the mode most `camera_modes:` presets will use |
 | `Flycam` | Free-flying, keyboard + mouse look, no target — the same behavior `flycam:` above describes | Reuses `FlyCamDef` (the same struct `flycam:` uses) | Yes |
-| `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` | **No** — rejected with a load-time `warn!` and an `ironhold_cli validate` error; no per-camera meaning under a `SetCameraMode` fired at one camera |
+| `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` | **No** — rejected with a load-time `warn!` and an `ironhold_cli validate` error; no per-camera meaning under a `SetCameraMode` fired at one camera. Authoring it directly on a player prefab's `camera_mode:` is also an `ironhold_cli validate` error for the same reason — the runtime silently falls back to `Orbit`. |
+
+A `tags: ["flycam"]` prefab's `camera_mode:` must be `Flycam(...)` — any other variant is rejected by the flycam-spawn code itself (a runtime `warn!` + fallback to `FlyCamDef::default()`) and is also an `ironhold_cli validate` error, the design-time counterpart to that warn.
 
 **RON syntax gotcha (verified, not just written from the schema):** a `CameraModeDef` variant
 wrapping a named-field struct (`Orbit`, `Follow`, `FirstPerson`, `Fixed`, `Flycam`) needs a

@@ -1,0 +1,13 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        IconButton((
+            id: "hud_audio_toggle",
+            action: "ui.toggle_mute",
+            icon_on: "missing_audio_off",
+            icon_off: "missing_audio_on",
+            bind: "audio_muted",
+        )),
+    ],
+)
