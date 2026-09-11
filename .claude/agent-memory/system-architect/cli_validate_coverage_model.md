@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
+description: ironhold_cli validate silently skips checks when a catalog is absent; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue parse gate landed but its referential checks and query.rs's collector did not; join_prefab_keys union checks can false-positive on runtime-unreachable low slots; path case/separator checking covers 6 sites but assets.ron/env-map/rules_path paths remain case-blind and its fixtures are Windows-only
 metadata:
   type: project
 ---
@@ -229,28 +229,56 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    it is live. That comment block is also the file's own statement of the severity rule for
    over-approximation: widen freely for a `StrictWarning`, never for a hard `CrossFileError`.
 
-8. **Path-reference checks are case/separator-blind by default, and the 2026-09-05 fix covers only
-   6 of the path surfaces.** `feature/path_case_check` added `path_case_mismatch(project_dir,
-   authored_path) -> Option<String>` (a per-component case-insensitive `read_dir` walk +
-   a backslash short-circuit) behind an `else if` after each existing `exists()`/`is_file()` check:
-   the `LoadScene` family, `StartDialogue.dialogue_path`, `initial_scene`, `PrefabDef.behavior`,
-   `PrefabDef.dialogue`, and `load_configured_catalog`. **What is still case-blind:**
-   (a) every `assets.ron` model/texture/audio/shader path — validate never existence-checks these
-   at all; the only gate is `tools/asset_checker/check.py`, which uses `resolved.exists()` (also
-   case-insensitive on Windows) and `.resolve()` for orphan matching (case-normalizing), so the
-   *largest* 404 surface in the WASM build is unguarded by both tools. Note these resolve against
-   the **assets root**, not `project_dir`, so reusing the helper needs a `root` param, not
-   `project_dir`.
-   (b) `EnvironmentMapConfig.diffuse_path`/`specular_path` (`scene_loader.rs`~2869 raw
-   `asset_server.load(p)`) — no CLI check of any kind.
-   (c) `rules_path`/`state_machine_path`/`model_fixes_path` — never resolved by validate at all
-   (item 4b / the standing backlog item), so they get neither existence nor case checking.
-   **Two structural facts worth remembering:** the case half of the check is a **no-op on a
+8. **Path-reference checks: two families with two different roots.** `feature/path_case_check`
+   (2026-09-05) added `path_case_mismatch(project_dir, authored_path) -> Option<String>` (a
+   per-component case-insensitive `read_dir` walk + a backslash short-circuit) behind an `else if`
+   after each existing `exists()`/`is_file()` check, for the **project-relative** family: the
+   `LoadScene` family, `StartDialogue.dialogue_path`, `initial_scene`, `PrefabDef.behavior`,
+   `PrefabDef.dialogue`, `load_configured_catalog`.
+   **The asset-root family landed `feature/asset_catalog_path_check` (2026-09-10)**: new
+   `find_assets_root(project_dir)` (= `parent().parent()`, gated on a `shared/` sibling existing;
+   `None` ⇒ skip, don't fabricate) + `check_asset_catalog_path(assets_root, source_file, context,
+   authored_path, errors)` (strips a `#Scene0` fragment, then `is_file()` → `missing_file`, else
+   `path_case_mismatch` → `path_case_mismatch`). Covers `AssetCatalog` `models[].path`/`textures`/
+   `audio[].path`/`decals`, all three `MaterialKind` variants' nested paths,
+   `global_environment.diffuse_path`/`specular_path`, and per-scene `terrain.heightmap`/`.splatmap`/
+   `.material_paths`.
+   **Load-bearing facts about that root:** the assets root is Bevy's asset root (`assets/`), NOT
+   `assets/shared/` — shipped content authors both `shared/...` **and** `projects/{name}/...` (every
+   terrain heightmap does), so any message/doc phrasing it as "the shared assets root" with only a
+   `shared/` example is misleading. `find_assets_root` is **fixed-depth-2 on the raw, never-
+   canonicalized clap arg**, so `validate .` from inside a project, `validate name` from
+   `assets/projects/`, or any future `assets/projects/group/name/` nesting silently drops all of it
+   with zero output. Do NOT "fix" that with `fs::canonicalize`: on Windows it yields a `\\?\`
+   verbatim path, where `Path::join("shared/models/x.glb")`'s forward slashes stop being separators
+   and `is_file()` goes false — use `std::path::absolute` (lexical, no `\\?\`) instead.
+   **Coverage genuinely still missing:** `PrefabDef.animation_policy` (project-relative,
+   `entity_spawner.rs` ~183/1197 `asset_server.load(resolved)`) — the third sibling of
+   `behavior`/`dialogue`, checked by nothing. `rules_path`/`state_machine_path`/`model_fixes_path`
+   case-checking (see item 1c). And the CLI **never calls `AssetCatalog::validate()` /
+   `PrefabCatalog::validate()` at all**, so schema-level invariants (e.g. "model has empty path")
+   are runtime-only; `check_asset_catalog_path`'s `file_part.is_empty() → return` widens that gap.
+   **Cross-checked non-surfaces (don't re-flag these as missed):** `EffectDef.sprite`/`.sprites`,
+   `FoliageMaterialDef.leaf_texture`, `ResolvedTargetIndicator.texture_path`, decal/particle
+   `texture_path`, `IconButtonDef.icon_on/off`, action-bar `icon`/`icon_sheet`, panel `"ui/cross"`
+   are all `AssetCatalog.textures`-**key** indirections, correctly left to the key checks.
+   **Structural facts worth remembering:** the case half of the check is a **no-op on a
    case-sensitive filesystem** (the caller's `exists()` fails first and reports `missing_file`),
    which makes the `bad_scene_path_case` / `bad_scene_path_backslash` /
-   `bad_prefab_catalog_path_case` fixtures' *message-text* assertions Windows-only — they fail on
-   Linux/CI. And the backslash arm is a pure string check gated behind `exists()`, so it is
-   unreachable on exactly the platforms whose semantics it emulates.
+   `bad_prefab_catalog_path_case` / `bad_model_case` fixtures' *message-text* assertions
+   Windows-only — they fail on Linux/CI. The backslash arm is a pure string check gated behind
+   `exists()`, so it is unreachable on exactly the platforms whose semantics it emulates. And the
+   `MaterialKind` match is **exhaustive**, so a 4th variant is a CLI compile error (good) — whereas
+   a 7th path-bearing `AssetCatalog` map would be silently unchecked (the usual failure class).
+
+8b. **`tools/asset_checker/check.py` is complementary to validate, not redundant — but its
+   case check is a hand-port that already diverges.** `find_case_mismatch` (added 2026-09-10)
+   mirrors `path_case_mismatch`'s "byte-exact first, case-insensitive fallback" walk but has **no
+   backslash arm**, so `"shared\\models\\x.glb"` passes Python and fails Rust. Their coverage sets
+   differ by design and neither is a superset: Python is a regex/extension text-scan
+   (`ASSET_EXTS`, which omits `.ktx2` — so env-map paths are invisible to it) over *every*
+   project's `assets.ron` at once plus `--orphans`; Rust is a typed walk of one `project_dir`
+   including scenes and `.project.ron`. Keep both; the drift risk is confined to the case helper.
 
 9. **No test ever runs `validate --strict` over `assets/projects/`, so every `StrictWarning` kind
    is unenforced against this repo's own content.** `crates/ironhold_cli/tests/validate_projects.rs`

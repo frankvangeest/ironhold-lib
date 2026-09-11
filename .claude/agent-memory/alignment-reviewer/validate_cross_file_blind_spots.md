@@ -326,13 +326,9 @@ check either):
   path. Two live inconsistencies: a relocated `model_fixes_path` is never parse-checked, and a
   *dead* `overrides/model_fixes.ron` (field unset) can still exit-1 on a file the runtime never
   loads. Fix is one call: route it through `load_configured_catalog` + add it to the strict array.
-- **assets-root-relative** (different base dir — `assets/`, not `project_dir`): every
-  `AssetCatalog` entry `path` (models/textures/audio/effects/decals, schema/catalog.rs:602/608),
-  `MaterialDef.shader` (the one designer-authored shader path), `TerrainConfigV2.heightmap`/
-  `.splatmap`, `EnvironmentMapConfig.diffuse_path`/`.specular_path`. validate checks none of these;
-  `tools/asset_checker/check.py` checks existence with Python `Path.exists()`, which is **equally
-  case-blind on Windows** — so the largest population of HTTP-served paths still has the bug.
-  `path_case_mismatch(base, rel)` already takes its base dir as a param, so extending it is cheap.
+- ~~**assets-root-relative**~~ **CLOSED** by `feature/asset_catalog_path_check` (2026-09-10) — see
+  the "assets-root-relative paths" section at the end of this file for the full key-vs-path
+  inventory and the `find_assets_root` heuristic's known holes.
 
 **`path_case_mismatch` false-positive class to remember: duplicate case-variant siblings.** The walk
 does `read_dir(..).find(|e| e.file_name().eq_ignore_ascii_case(component))` — **first match in
@@ -355,6 +351,45 @@ every downstream check that depends on it silently vanishes (fix the case → re
 unrelated errors). The file is readable; continuing to `try_parse` after recording the error would
 be strictly better. Also: that site pushes a `FileResult` string, so it is the **1 of 6 sites with
 no `error_type: "path_case_mismatch"`** — a `--json` consumer grepping that type misses catalog paths.
+
+**assets-root-relative paths (`feature/asset_catalog_path_check`, 2026-09-10).** A second base dir
+now exists in validate.rs: `find_assets_root(project_dir)` = `project_dir.parent().parent()` gated
+on a `shared/` sibling being a dir, and `check_asset_catalog_path(assets_root, source_file, context,
+authored_path, errors)` does exists + `path_case_mismatch` on one raw path (stripping a `#Scene0`
+fragment). Now covered: `AssetCatalog.models[k].path`/`.textures[k]`/`.audio[k].path`/`.decals[k]`,
+all 3 `MaterialKind` variants' nested paths, `ProjectConfig.global_environment.diffuse_path`/
+`.specular_path`, per-scene `terrain.heightmap`/`.splatmap`/`.material_paths`.
+
+**The key-vs-path inventory (verified exhaustively — reuse instead of re-deriving).** RAW paths
+(assets-root-relative, straight to `asset_server.load`): the 4 `AssetCatalog` value/`.path` fields,
+`MaterialDef`'s nested texture/shader/splatmap/layers, `EnvironmentMapConfig.*_path`,
+`TerrainConfigV2.heightmap`/`.splatmap`/`.material_paths`. CATALOG KEYS (must NOT be path-checked):
+`FoliageMaterialDef.leaf_texture`, `EffectDef`/`LayerDef.sprite`/`.sprites`, `ItemDef.icon_sheet`,
+`InventoryPanelDef.icon_sheet`, `IconButtonDef.icon_on`/`.icon_off`, `TargetIndicatorDef.texture`,
+`PrefabDef.material`, `PrefabDef.model`, `FoliageDef.trunk`, `AnimationPolicy.animation_sources`.
+Two structural facts that make this stable: `MaterialDef` exists **only** inside
+`AssetCatalog.materials` and `EnvironmentMapConfig` **only** at `ProjectConfig.global_environment`
+(no inline scene/prefab variants), and there is **no raw-path fallback** on a failed
+`models.get()` anywhere (scene_loader.rs:720 pushes a load_error and `continue`s) — so checking the
+catalog's own paths transitively covers every key-based consumer.
+
+**`find_assets_root`'s two holes.** (1) It is purely textual — no `canonicalize`/`absolute` — so
+`ironhold validate .` or `cd assets/projects && ironhold validate quick_scene` yields
+`parent()` = `""`, `parent()` = `None` ⇒ **all these checks silently vanish, no diagnostic**. Same
+for `ironhold watch .`. One-line fix: `let root = project_dir.canonicalize().ok()?;` first.
+(2) The runtime's real invariant is `utils.rs::find_assets_folder` = "nearest ancestor dir literally
+named `assets`" and does **not** require `shared/`; the `shared/`-probe is a proxy for "am I in the
+repo layout" chosen so `tests/fixtures/asset_paths/{shared,projects}/` works. A downstream game with
+no `assets/shared/` gets silent skips. `root.file_name() == "assets" || root.join("shared").is_dir()`
+covers both. Fragility to remember: if anyone ever creates `crates/ironhold_cli/tests/shared/`, all
+~65 bare `tests/fixtures/{name}/` fixtures start resolving asset paths against `tests/` at once.
+
+**`tools/asset_checker/check.py` is the Python twin and diverges deliberately.** It got the same
+byte-exact-then-case-insensitive `find_case_mismatch` and now exits 1 on a mismatch, but it globs
+`PROJECTS_DIR.rglob("assets.ron")` and regex-scans for quoted strings ending in an asset extension —
+so it is blind to `terrain.*` and `global_environment.*` (which validate.rs now checks) and to a
+relocated `asset_catalog`. Conversely it reports **line numbers**, which validate.rs cannot (RON
+spans are lost post-parse). Neither tool subsumes the other; say so when either is extended.
 
 **Positive-path coverage for item checks already exists via the `validate_projects` smoke test:**
 `3rd_person_game_demo` has 4 `BuyItem`s (state_machine.ron:157-160), `ItemDef.currency_stat: "gold"`
