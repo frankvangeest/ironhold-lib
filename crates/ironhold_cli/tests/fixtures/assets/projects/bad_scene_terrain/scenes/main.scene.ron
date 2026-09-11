@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    terrain: (
+        heightmap: "shared/terrain/nonexistent_heightmap.png",
+        splatmap: "shared/terrain/splatmap.png",
+        scale: (0.5, 30.0, 0.5),
+        material_paths: [
+            "shared/terrain/heightmap.png",
+        ],
+    ),
+)

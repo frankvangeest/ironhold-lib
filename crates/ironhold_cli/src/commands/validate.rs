@@ -9,6 +9,7 @@ use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::dialogue::DialogueDef;
+use ironhold_core::schema::material::MaterialKind;
 use ironhold_core::schema::{Action, ModelFixesAsset, ProjectConfig, StateMachineAsset};
 use ironhold_core::runtime::scene_manager::entity_spawner::default_camera_config;
 
@@ -239,6 +240,9 @@ fn parse_configured_path<T: serde::de::DeserializeOwned>(
 /// exact-match fallback uses `str::to_lowercase` (full Unicode), but the *authored* string is
 /// compared byte-for-byte, so a non-ASCII filename that differs only in Unicode normalization form
 /// (NFC vs NFD, e.g. on a macOS volume) could still slip through as a false negative.
+/// `tools/asset_checker/check.py`'s `find_case_mismatch` is an independent Python port of this
+/// same logic (byte-exact match first, case-insensitive fallback, same `.`/`..`/empty
+/// non-coverage) for `assets.ron`-only spot-checks without a Rust build -- keep the two in sync.
 fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String> {
     if authored_path.contains('\\') {
         return Some(
@@ -275,6 +279,95 @@ fn path_case_mismatch(project_dir: &Path, authored_path: &str) -> Option<String>
              match, or rename the file on disk"
         )
     })
+}
+
+/// Finds the shared assets root: the nearest ancestor of `project_dir` literally named
+/// `"assets"` AND containing a `projects/` or `shared/` child as corroboration -- the name check
+/// alone (an earlier draft of this function) fabricates a false assets root, and therefore false
+/// `missing_file` errors, for a project living anywhere under a directory that merely happens to
+/// be named `assets` for an unrelated reason (e.g. a repo cloned to `D:\assets\...`) -- debug-
+/// detective reproduced this live. `AssetCatalog`/material/terrain paths are authored relative to
+/// this directory, not `project_dir` itself, since multiple projects reference the same `shared/`
+/// files. Walking ancestors (rather than assuming a fixed "exactly two levels up
+/// `assets/projects/{name}/`" distance, an even earlier draft) is what makes the single most
+/// common real invocation shape work at all -- `ironhold validate .` (or `watch .`) run from
+/// inside a project's own directory: an uncanonicalized relative `.` has no resolvable second
+/// parent at all, so a fixed-depth `project_dir.parent().parent()` returned `None` before a
+/// resolved path even entered the picture (debug-detective/system-architect finding, verified
+/// live: a genuinely broken texture path validated clean when invoked as `ironhold validate .`
+/// from inside the project). `std::path::absolute()` first (lexical only, no filesystem access,
+/// no symlink resolution) so a relative/`.`/`..`-containing `project_dir` still resolves to
+/// something `ancestors()` can walk -- deliberately not `Path::canonicalize()`, which does hit
+/// the filesystem and follows symlinks, neither of which this function needs. Returns `None` for
+/// anything with no corroborated `assets`-named ancestor at all (e.g. this crate's own bare
+/// `tests/fixtures/{name}/` fixtures -- the fixtures for these specific checks deliberately live
+/// under `tests/fixtures/assets/projects/{name}/` instead, so they have one) rather than guessing
+/// wrong and resolving asset paths against some unrelated directory -- callers must treat `None`
+/// as "skip these checks", not as a problem to report.
+fn find_assets_root(project_dir: &Path) -> Option<std::path::PathBuf> {
+    let project_dir = std::path::absolute(project_dir).ok()?;
+    project_dir
+        .ancestors()
+        .find(|a| {
+            a.file_name().is_some_and(|n| n == "assets")
+                && (a.join("projects").is_dir() || a.join("shared").is_dir())
+        })
+        .map(|a| a.to_path_buf())
+}
+
+/// Checks a single raw asset-relative file path (e.g. `AssetCatalog.models[key].path`,
+/// `TerrainConfigV2.heightmap`) for existence and case/separator correctness, resolved against
+/// `assets_root` (see `find_assets_root`). A GLB `#Scene0`-style sub-asset fragment, if any, is
+/// stripped before the on-disk check -- it names a scene inside the file, not part of the file
+/// path itself, matching the identical `path.split('#').next()` idiom `entity_spawner.rs`/
+/// `model_spawner.rs` already use when actually loading these paths.
+fn check_asset_catalog_path(
+    assets_root: &Path,
+    source_file: &str,
+    context: &str,
+    authored_path: &str,
+    errors: &mut Vec<CrossFileError>,
+) {
+    // An empty (or fragment-only, e.g. "#Scene0") path is NOT special-cased here -- it falls
+    // through to the ordinary `is_file()` check below (a directory is never a file, so
+    // `assets_root.join("")` correctly fails it) and is reported like any other missing file,
+    // rather than silently ignored. The one legitimate empty-path case in this schema
+    // (`CustomMaterialDef.shader`'s documented "empty means built-in magenta fallback") is
+    // filtered at its own call site before reaching this function, not here.
+    let file_part = authored_path.split('#').next().unwrap_or("");
+    // An absolute path (e.g. pasted from a file-browser "copy path" on the author's own machine,
+    // `C:/Users/.../shared/models/hero.glb`) must be rejected explicitly, not silently joined --
+    // `Path::join` with an absolute RHS *discards* the LHS entirely, so `assets_root.join(abs)`
+    // would resolve to the author's own local file and report a perfect false negative: valid
+    // only on that one machine, and never over the actual asset-relative HTTP path a real build
+    // serves from (debug-detective finding).
+    if Path::new(file_part).is_absolute() || Path::new(file_part).has_root() {
+        errors.push(CrossFileError {
+            source_file: source_file.to_string(),
+            message: format!(
+                "{context}: path {authored_path:?} is an absolute path -- author it relative to \
+                 the asset root `assets/` instead (e.g. \"shared/models/character-01.glb\"), or \
+                 it will only resolve on this machine, never in the actual build"
+            ),
+            error_type: "absolute_asset_path",
+        });
+    } else if !assets_root.join(file_part).is_file() {
+        errors.push(CrossFileError {
+            source_file: source_file.to_string(),
+            message: format!(
+                "{context}: path {authored_path:?} not found on disk (paths are relative to \
+                 the asset root `assets/`, e.g. \"shared/models/character-01.glb\" or \
+                 \"projects/{{name}}/terrain/heightmap.png\")"
+            ),
+            error_type: "missing_file",
+        });
+    } else if let Some(problem) = path_case_mismatch(assets_root, file_part) {
+        errors.push(CrossFileError {
+            source_file: source_file.to_string(),
+            message: format!("{context}: path {authored_path:?} {problem}"),
+            error_type: "path_case_mismatch",
+        });
+    }
 }
 
 /// `split`/`party` authored INSIDE a `camera_mode: Orbit(...)` payload (instead of as siblings of
@@ -1761,6 +1854,161 @@ fn collect_fsm_events(fsm: &StateMachineAsset, events: &mut HashSet<String>) {
     }
 }
 
+/// Existence/case checks for every raw asset-relative file path this schema authors -- see
+/// `check_asset_catalog_path`'s doc comment for exactly which fields these are and why (raw
+/// `asset_server.load()` paths, not `AssetCatalog` keys -- `AssetCatalog.models[key].path`,
+/// `.textures[key]`, `.audio[key].path`, `.decals[key]`; every `MaterialDef` variant's nested
+/// texture/shader/splatmap paths; `ProjectConfig.global_environment`'s IBL paths; and a scene's
+/// `terrain.heightmap`/`.splatmap`/`.material_paths`). Extracted from `cross_file_checks` (which
+/// was pushing 1,200+ lines) into its own function, matching the `check_ui_trigger_reachability`
+/// precedent below -- `find_assets_root` is resolved exactly once here, rather than once per
+/// path-family the way the original inline version did.
+fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
+    let LoadedProject { project_dir, project_config, asset_catalog, scenes, .. } = project;
+    let mut errors = Vec::new();
+    let Some(assets_root) = find_assets_root(project_dir) else { return errors };
+
+    if let Some(catalog) = asset_catalog {
+        // Mirrors the `items_source` pattern elsewhere in this file: `asset_catalog` is itself a
+        // configurable `ProjectConfig` field, so a project that relocates it must still get
+        // diagnostics pointing at the real file, not always the convention-path literal.
+        let assets_source = project_config
+            .and_then(|c| c.asset_catalog.clone())
+            .unwrap_or_else(|| "assets.ron".to_string());
+        let mut model_keys: Vec<&String> = catalog.models.keys().collect();
+        model_keys.sort();
+        for key in model_keys {
+            check_asset_catalog_path(
+                &assets_root, &assets_source, &format!("model {key:?}"),
+                &catalog.models[key].path, &mut errors,
+            );
+        }
+
+        let mut texture_keys: Vec<&String> = catalog.textures.keys().collect();
+        texture_keys.sort();
+        for key in texture_keys {
+            check_asset_catalog_path(
+                &assets_root, &assets_source, &format!("texture {key:?}"),
+                &catalog.textures[key], &mut errors,
+            );
+        }
+
+        let mut audio_keys: Vec<&String> = catalog.audio.keys().collect();
+        audio_keys.sort();
+        for key in audio_keys {
+            check_asset_catalog_path(
+                &assets_root, &assets_source, &format!("audio {key:?}"),
+                &catalog.audio[key].path, &mut errors,
+            );
+        }
+
+        let mut decal_keys: Vec<&String> = catalog.decals.keys().collect();
+        decal_keys.sort();
+        for key in decal_keys {
+            check_asset_catalog_path(
+                &assets_root, &assets_source, &format!("decal {key:?}"),
+                &catalog.decals[key], &mut errors,
+            );
+        }
+
+        // `MaterialDef`'s own nested path fields -- these are raw `asset_server.load()` paths
+        // (`material_factory.rs`), NOT `AssetCatalog.textures` keys, unlike e.g.
+        // `FoliageMaterialDef.leaf_texture` or `EffectDef.sprite`, which genuinely are catalog
+        // keys and are correctly left alone here.
+        let mut material_keys: Vec<&String> = catalog.materials.keys().collect();
+        material_keys.sort();
+        for key in material_keys {
+            match &catalog.materials[key].kind {
+                MaterialKind::Standard(std_def) => {
+                    let texture_fields = [
+                        ("base_color_texture", &std_def.base_color_texture),
+                        ("normal_map_texture", &std_def.normal_map_texture),
+                        ("metallic_roughness_texture", &std_def.metallic_roughness_texture),
+                        ("occlusion_texture", &std_def.occlusion_texture),
+                        ("emissive_texture", &std_def.emissive_texture),
+                    ];
+                    for (field_name, path) in texture_fields {
+                        let Some(path) = path else { continue };
+                        check_asset_catalog_path(
+                            &assets_root, &assets_source, &format!("material {key:?}.{field_name}"),
+                            path, &mut errors,
+                        );
+                    }
+                }
+                MaterialKind::Terrain(terrain_def) => {
+                    check_asset_catalog_path(
+                        &assets_root, &assets_source, &format!("material {key:?}.splatmap"),
+                        &terrain_def.splatmap, &mut errors,
+                    );
+                    for (i, layer) in terrain_def.layers.iter().enumerate() {
+                        check_asset_catalog_path(
+                            &assets_root, &assets_source, &format!("material {key:?}.layers[{i}]"),
+                            layer, &mut errors,
+                        );
+                    }
+                }
+                MaterialKind::Custom(custom_def) => {
+                    // Empty/absent shader path is a deliberate, already-warned-about fallback to
+                    // the built-in magenta shader (`material_factory.rs`), not a missing file.
+                    if let Some(shader) = &custom_def.shader {
+                        if !shader.is_empty() {
+                            check_asset_catalog_path(
+                                &assets_root, &assets_source, &format!("material {key:?}.shader"),
+                                shader, &mut errors,
+                            );
+                        }
+                    }
+                    let mut slot_keys: Vec<&String> = custom_def.textures.keys().collect();
+                    slot_keys.sort();
+                    for slot in slot_keys {
+                        check_asset_catalog_path(
+                            &assets_root, &assets_source, &format!("material {key:?}.textures[{slot:?}]"),
+                            &custom_def.textures[slot], &mut errors,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // `ProjectConfig.global_environment`'s IBL paths -- same raw-`asset_server.load()` shape as
+    // the `AssetCatalog` material paths above, just project-scoped instead of catalog-scoped.
+    if let Some(config) = project_config {
+        if let Some(env) = &config.global_environment {
+            let source_file = find_project_ron(project_dir).unwrap_or_default();
+            if let Some(path) = &env.diffuse_path {
+                check_asset_catalog_path(
+                    &assets_root, &source_file, "global_environment.diffuse_path", path, &mut errors,
+                );
+            }
+            if let Some(path) = &env.specular_path {
+                check_asset_catalog_path(
+                    &assets_root, &source_file, "global_environment.specular_path", path, &mut errors,
+                );
+            }
+        }
+    }
+
+    // `TerrainConfigV2`'s heightmap/splatmap/material_paths -- same raw-path shape again,
+    // scene-scoped this time (`GameSceneV2.terrain`).
+    for (scene_path, scene) in scenes {
+        let Some(terrain) = &scene.terrain else { continue };
+        check_asset_catalog_path(
+            &assets_root, scene_path, "terrain.heightmap", &terrain.heightmap, &mut errors,
+        );
+        check_asset_catalog_path(
+            &assets_root, scene_path, "terrain.splatmap", &terrain.splatmap, &mut errors,
+        );
+        for (i, path) in terrain.material_paths.iter().enumerate() {
+            check_asset_catalog_path(
+                &assets_root, scene_path, &format!("terrain.material_paths[{i}]"), path, &mut errors,
+            );
+        }
+    }
+
+    errors
+}
+
 /// For every scene `Button`/`IconButton`, every `global_key_bindings`/`scene_key_bindings` entry,
 /// and every `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` entry, derive
 /// the `ui.button_pressed:{trigger}` event it fires at runtime
@@ -2899,6 +3147,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
 
     let mut cross_errors = cross_file_checks(project);
     cross_errors.extend(check_ui_trigger_reachability(project));
+    cross_errors.extend(check_asset_root_paths(project));
 
     let strict_warnings = if strict { strict_checks(project) } else { Vec::new() };
 

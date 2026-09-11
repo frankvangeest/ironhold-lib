@@ -3,7 +3,10 @@
 Asset catalog integrity checker.
 
 Reads every assets.ron in assets/projects/ and verifies that every file path
-it references actually exists on disk (relative to the assets/ root).
+it references actually exists on disk (relative to the assets/ root) AND with
+the correct case/separators -- Path.exists() is case-insensitive on Windows,
+so a mis-cased reference previously validated clean here while still 404ing
+over the case-sensitive HTTP path a real WASM/browser build serves from.
 
 Optionally reports unreferenced (orphaned) files inside assets/shared/.
 The terminal shows a grouped summary; the full file list is written to
@@ -70,16 +73,61 @@ def extract_refs(ron_path: Path) -> list[tuple[int, str]]:
 # Checking
 # ---------------------------------------------------------------------------
 
-def check_project(assets_ron: Path, assets_root: Path) -> tuple[list, list, set]:
-    missing, ok, referenced = [], [], set()
+def find_case_mismatch(assets_root: Path, ref: str) -> str | None:
+    """Mirrors `ironhold_cli`'s Rust `path_case_mismatch` (see its doc comment there) --
+    `Path.exists()` is case-insensitive on Windows, so a mis-cased or backslash-separated
+    reference here previously validated clean locally while still 404ing over HTTP in the actual
+    WASM/browser build. Returns a ready-to-print problem description, or `None` if the path
+    matches exactly (or a component can't be resolved at all -- the caller's own `.exists()`
+    check already handles a genuinely missing file; this function only needs to explain a
+    wrong-case or wrong-separator one)."""
+    if "\\" in ref:
+        return (
+            "uses a backslash ('\\') path separator -- author with forward slashes ('/') "
+            "only; Windows resolves either locally, but the web build serves assets over HTTP, "
+            "which only understands '/'"
+        )
+    current_dir = assets_root
+    real_components = []
+    for component in ref.split("/"):
+        if not component or component in (".", ".."):
+            return None  # same known non-coverage as the Rust path_case_mismatch
+        try:
+            entries = list(current_dir.iterdir())
+        except OSError:
+            return None
+        # Prefer a byte-exact match, same reasoning as the Rust side: a project with two
+        # case-variant siblings on a case-sensitive filesystem must never have its correct
+        # reference flagged just because a case-insensitively-equal sibling also exists.
+        real_name = next((e.name for e in entries if e.name == component), None)
+        if real_name is None:
+            real_name = next(
+                (e.name for e in entries if e.name.lower() == component.lower()), None
+            )
+        if real_name is None:
+            return None
+        real_components.append(real_name)
+        current_dir = current_dir / real_name
+    real_path = "/".join(real_components)
+    if real_path == ref:
+        return None
+    return f"resolves on disk to {real_path!r} instead"
+
+
+def check_project(assets_ron: Path, assets_root: Path) -> tuple[list, list, list, set]:
+    missing, case_mismatches, ok, referenced = [], [], [], set()
     for lineno, ref in extract_refs(assets_ron):
         resolved = assets_root / ref
-        if resolved.exists():
-            ok.append((assets_ron, lineno, ref))
-            referenced.add(resolved.resolve())
-        else:
+        if not resolved.exists():
             missing.append((assets_ron, lineno, ref))
-    return missing, ok, referenced
+            continue
+        problem = find_case_mismatch(assets_root, ref)
+        if problem is not None:
+            case_mismatches.append((assets_ron, lineno, ref, problem))
+        else:
+            ok.append((assets_ron, lineno, ref))
+        referenced.add(resolved.resolve())
+    return missing, case_mismatches, ok, referenced
 
 
 # ---------------------------------------------------------------------------
@@ -160,17 +208,19 @@ def main() -> None:
         sys.exit(0)
 
     all_missing: list = []
+    all_case_mismatches: list = []
     all_ok: list = []
     all_referenced: set = set()
 
     for catalog in candidates:
-        missing, ok, referenced = check_project(catalog, ASSET_ROOT)
+        missing, case_mismatches, ok, referenced = check_project(catalog, ASSET_ROOT)
         all_missing.extend(missing)
+        all_case_mismatches.extend(case_mismatches)
         all_ok.extend(ok)
         all_referenced.update(referenced)
 
     # ---------------------------------------------------------------------------
-    # Report: missing references
+    # Report: missing references + case mismatches
     # ---------------------------------------------------------------------------
     if args.verbose:
         for (catalog, lineno, ref) in all_ok:
@@ -181,8 +231,20 @@ def main() -> None:
         for (catalog, lineno, ref) in all_missing:
             print(f"  MISS  {ref}")
             print(f"        {catalog}:{lineno}")
-    else:
-        print(f"References: {len(all_ok)} checked, 0 missing. All good.")
+
+    if all_case_mismatches:
+        print(f"\nCASE MISMATCH ({len(all_case_mismatches)} references with wrong casing/separators):")
+        for (catalog, lineno, ref, problem) in all_case_mismatches:
+            print(f"  CASE  {ref!r} {problem}")
+            print(f"        {catalog}:{lineno}")
+        print(
+            "  These validate clean on a case-insensitive filesystem (Windows/macOS default) but "
+            "404 over the case-sensitive HTTP path a real WASM/browser build serves assets from — "
+            "rename the reference or the file so they match exactly."
+        )
+
+    if not all_missing and not all_case_mismatches:
+        print(f"References: {len(all_ok)} checked, 0 missing, 0 case mismatches. All good.")
 
     # ---------------------------------------------------------------------------
     # Report: orphaned files
@@ -206,7 +268,7 @@ def main() -> None:
             else:
                 print(f"\nOrphans: 0 — every file in assets/shared/ is referenced.")
 
-    if all_missing:
+    if all_missing or all_case_mismatches:
         sys.exit(1)
 
 

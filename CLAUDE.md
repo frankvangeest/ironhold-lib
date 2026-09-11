@@ -187,7 +187,7 @@ Python CLI tools live in `tools/`. Always run them from the repo root.
 
 | Tool | When to use |
 |---|---|
-| `tools/asset_checker/check.py` | After editing any `assets.ron` or moving/renaming asset files — verifies all referenced paths resolve on disk |
+| `tools/asset_checker/check.py` | After editing any `assets.ron` or moving/renaming asset files — verifies all referenced paths resolve on disk with the correct case (`ironhold_cli validate` also checks this now — see `docs/60_contributing.md`'s "Checks performed" list) |
 | `tools/texture_gen/generate.py` | Generate seamless noise textures or per-project terrain heightmaps |
 | `tools/avif2png/convert.py` | Batch-convert AVIF preview images to PNG |
 | `tools/glb_inspector/inspect_glb.py` | Inspect a GLB for exact node names, animation clips, and materials before authoring RON |
