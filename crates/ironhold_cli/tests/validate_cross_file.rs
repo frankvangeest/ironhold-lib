@@ -2036,3 +2036,220 @@ fn item_catalog_validate_invariant_exits_1() {
         "expected the ItemCatalog::validate() invariant message in output:\n{stdout}"
     );
 }
+
+// ── Batch: icon_sheet texture-key family + camera-mode/flycam checks (cli_validate_batch3) ────
+
+#[test]
+fn inventory_panel_icon_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_ui_texture_keys");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("InventoryPanel") && stdout.contains("missing_inventory_icons"),
+        "expected the missing InventoryPanel icon_sheet in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn container_panel_icon_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_ui_texture_keys");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("ContainerPanel") && stdout.contains("missing_container_icons"),
+        "expected the missing ContainerPanel icon_sheet in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn action_bar_icon_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_ui_texture_keys");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("ActionBar") && stdout.contains("missing_bar_icons"),
+        "expected the missing ActionBar icon_sheet in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn action_bar_slot_icon_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_ui_texture_keys");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("slot[0]") && stdout.contains("missing_slot_icon"),
+        "expected the missing ActionBar slot icon in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn world_stat_bar_icon_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_world_stat_bar_icon_sheet");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("world_stat_bar Icon") && stdout.contains("missing_heart_icons"),
+        "expected the missing world_stat_bar Icon icon_sheet in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn world_stat_bar_texture_sheet_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_world_stat_bar_texture_sheet");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("world_stat_bar Textured") && stdout.contains("missing_bar_sheet"),
+        "expected the missing world_stat_bar Textured texture_sheet in output:\n{stdout}"
+    );
+}
+
+/// `target_indicator.texture` is a `decals` key despite the field name -- confirmed by reading
+/// `scene_loader.rs`'s own "unknown decal key" runtime warning before writing this check, since
+/// an earlier (uncommitted) claim that this resolves against `.textures` turned out to be wrong.
+#[test]
+fn target_indicator_texture_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_target_indicator_texture");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("target_indicator") && stdout.contains("missing_ring_decal")
+            && stdout.contains("decals"),
+        "expected the missing target_indicator decal key in output:\n{stdout}"
+    );
+}
+
+/// `CameraModeDef::Party(_)` authored directly on a player prefab has no meaning for a single
+/// player -- `entity_spawner.rs` silently falls back to Orbit at runtime.
+#[test]
+fn camera_mode_party_on_player_prefab_exits_1() {
+    let (code, stdout) = validate("bad_camera_mode_party_on_player");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("solo_player") && stdout.contains("Party(...)"),
+        "expected the Party-on-player-prefab error in output:\n{stdout}"
+    );
+}
+
+/// A flycam-tagged prefab's `camera_mode` is only rejected by `scene_loader.rs`'s flycam-spawn
+/// match arm if it isn't `Flycam(...)` -- that arm already `warn!`s and falls back to
+/// `FlyCamDef::default()`; this is the design-time counterpart to that existing runtime warn.
+#[test]
+fn flycam_prefab_wrong_camera_mode_exits_1() {
+    let (code, stdout) = validate("bad_flycam_wrong_camera_mode");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("confused_flycam") && stdout.contains("not") && stdout.contains("Flycam"),
+        "expected the flycam-wrong-camera_mode error in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn orbit_button_and_character_rotate_button_unrecognized_exits_1() {
+    let (code, stdout) = validate("bad_orbit_buttons");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("orbit_button") && stdout.contains("\"Middle\""),
+        "expected the unrecognised orbit_button in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("character_rotate_button"),
+        "expected the unrecognised character_rotate_button in output:\n{stdout}"
+    );
+}
+
+/// `FlyCamDef.look_button` is an unchecked vocabulary field (same shape as `orbit_button`), but
+/// the movement keys are the more severe sibling debug-detective found alongside it: they go
+/// through `InputMap::parse_key(..).unwrap_or(KeyCode::KeyW)` with NO warning at all, not even at
+/// runtime -- the most silent authoring mistake this whole batch closes.
+#[test]
+fn flycam_look_button_and_movement_key_unrecognized_exits_1() {
+    let (code, stdout) = validate("bad_flycam_vocab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("look_button") && stdout.contains("\"Middle\""),
+        "expected the unrecognised look_button in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("forward") && stdout.contains("NotAKey"),
+        "expected the unrecognised forward key in output:\n{stdout}"
+    );
+}
+
+/// Positive control: a valid Orbit config with `orbit_button: "None"` (a real, working opt-out)
+/// and a valid Flycam config must not false-positive.
+#[test]
+fn valid_camera_mode_vocab_exits_0() {
+    let (code, stdout) = validate("valid_camera_mode_vocab");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// System-architect finding: the legacy `components.camera` field (superseded by, but still
+/// live alongside, `camera_mode: Orbit(...)`) carries the identical `orbit_button` vocabulary and
+/// is in practice the DOMINANT authoring surface (`local_coop_demo` alone authors ~14 `camera:`
+/// blocks, zero `camera_mode: Orbit(...)` ones) -- a `camera_mode`-only check would have missed
+/// almost every real occurrence of this mistake.
+#[test]
+fn legacy_camera_field_orbit_button_unrecognized_exits_1() {
+    let (code, stdout) = validate("bad_legacy_camera_orbit_button");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("\"solo_player\"") && stdout.contains("orbit_button \"Middle\""),
+        "expected the unrecognised legacy-camera orbit_button in output:\n{stdout}"
+    );
+}
+
+/// Debug-detective finding: the legacy `components.flycam` field is resolved by the identical
+/// runtime parsers as `camera_mode: Flycam(...)` (`entity_spawner.rs`/`scene_loader.rs` both fall
+/// back to it when `camera_mode` is unset) and ships in 2 real projects
+/// (`foliage_demo`/`dynamic_animation_control`) that author `flycam:` with no `camera_mode` at
+/// all -- a `camera_mode`-only check reaches none of that.
+#[test]
+fn legacy_flycam_field_vocab_unrecognized_exits_1() {
+    let (code, stdout) = validate("bad_legacy_flycam_vocab");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("look_button") && stdout.contains("\"Middle\""),
+        "expected the unrecognised legacy-flycam look_button in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("forward") && stdout.contains("NotAKey"),
+        "expected the unrecognised legacy-flycam forward key in output:\n{stdout}"
+    );
+}
+
+/// Debug-detective finding: the movement-key message must name the REAL per-field runtime
+/// default, not hardcode "KeyW" for all six fields -- `down`'s actual fallback is `KeyQ`.
+#[test]
+fn flycam_movement_key_message_names_correct_default_exits_1() {
+    let (code, stdout) = validate("bad_flycam_movement_key_down");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("down") && stdout.contains("NotAKey") && stdout.contains("KeyQ"),
+        "expected the down key's REAL fallback (KeyQ, not KeyW) named in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("falls back to KeyW"),
+        "must not claim the down key falls back to KeyW -- its real default is KeyQ:\n{stdout}"
+    );
+}
+
+/// Debug-detective finding: `ActionBarDef.icon_sheet: Some("")` is a documented, runtime-legitimate
+/// way to say "no bar-level default sheet" (`scene_loader.rs` filters it identically to `None`) --
+/// must not false-positive as a missing texture key.
+#[test]
+fn action_bar_icon_sheet_empty_string_is_not_a_missing_key_exits_0() {
+    let (code, stdout) = validate("valid_action_bar_icon_sheet_empty");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// Debug-detective finding: `IconButtonDef.icon_on`/`icon_off` are required, non-`Option` texture
+/// keys resolved with zero runtime warning on a miss (`scene_loader.rs`) -- every `IconButton` in
+/// every scene authors both, making this the family's highest-density unchecked surface.
+#[test]
+fn icon_button_icon_on_and_icon_off_unresolved_exits_1() {
+    let (code, stdout) = validate("bad_icon_button_icons");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("icon_on") && stdout.contains("missing_audio_off"),
+        "expected the missing icon_on texture key in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("icon_off") && stdout.contains("missing_audio_on"),
+        "expected the missing icon_off texture key in output:\n{stdout}"
+    );
+}

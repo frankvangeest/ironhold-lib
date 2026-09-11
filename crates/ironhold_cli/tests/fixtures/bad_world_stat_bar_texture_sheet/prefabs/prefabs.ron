@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "enemy_with_bar": (
+            kind: Prop,
+            model: "",
+            world_stat_bar: (
+                stat_key: "{self}.health",
+                style: Textured(
+                    texture_sheet: "missing_bar_sheet",
+                    fill_rect: (0.0, 0.0, 32.0, 8.0),
+                    empty_rect: (0.0, 8.0, 32.0, 8.0),
+                ),
+            ),
+            stat_templates: [
+                ( key: "health", base: 10.0, max: 10.0 ),
+            ],
+        ),
+    },
+)

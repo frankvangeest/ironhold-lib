@@ -1,0 +1,7 @@
+(
+    schema_version: 2,
+    name: "main",
+    target_indicator: (
+        texture: "missing_ring_decal",
+    ),
+)

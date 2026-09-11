@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "spectator_flycam": (
+            kind: Prop,
+            model: "",
+            components: (
+                tags: ["flycam"],
+                camera_mode: Flycam((
+                    down: "NotAKey",
+                )),
+            ),
+        ),
+    },
+)

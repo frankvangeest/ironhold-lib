@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "enemy_with_bar": (
+            kind: Prop,
+            model: "",
+            world_stat_bar: (
+                stat_key: "{self}.health",
+                style: Icon(
+                    icon_sheet: "missing_heart_icons",
+                    filled_index: 0,
+                    empty_index: 1,
+                ),
+            ),
+            stat_templates: [
+                ( key: "health", base: 10.0, max: 10.0 ),
+            ],
+        ),
+    },
+)

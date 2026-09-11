@@ -1,0 +1,34 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [
+        (
+            id: "box_01",
+            prefab: "box",
+            transform: (translation: (0.0, 0.0, 0.0)),
+        ),
+    ],
+    ui: [
+        InventoryPanel((
+            id: "inventory_panel",
+            position: (0.0, 0.0),
+            icon_sheet: "missing_inventory_icons",
+        )),
+        ContainerPanel((
+            id: "container_panel",
+            position: (0.0, 0.0),
+            icon_sheet: "missing_container_icons",
+        )),
+        ActionBar((
+            id: "skill_bar",
+            icon_sheet: "missing_bar_icons",
+            slots: [
+                (
+                    key: "KeyE",
+                    icon: "missing_slot_icon",
+                    do_actions: [Log("test")],
+                ),
+            ],
+        )),
+    ],
+)

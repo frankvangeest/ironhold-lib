@@ -1,0 +1,16 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((
+            id: "skill_bar",
+            icon_sheet: "",
+            slots: [
+                (
+                    key: "KeyE",
+                    do_actions: [Log("test")],
+                ),
+            ],
+        )),
+    ],
+)

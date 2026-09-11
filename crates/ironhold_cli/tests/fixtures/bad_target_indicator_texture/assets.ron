@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    decals: {
+        "unrelated_decal": "shared/decals/ring.png",
+    },
+)

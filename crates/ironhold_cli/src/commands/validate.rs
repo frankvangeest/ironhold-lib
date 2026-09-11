@@ -3,11 +3,13 @@ use std::path::Path;
 
 use ironhold_core::capabilities::camera::MAX_SPLIT_PLAYERS;
 use ironhold_core::schema::camera::CameraModeDef;
-use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, PrefabKind};
+use ironhold_core::schema::catalog::{
+    AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
+};
 use ironhold_core::schema::items::ItemCatalog;
 use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
-use ironhold_core::schema::player::InputMap;
+use ironhold_core::schema::player::{CameraConfig, InputMap};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::dialogue::{DialogueCondition, DialogueDef};
 use ironhold_core::schema::material::MaterialKind;
@@ -371,6 +373,40 @@ fn check_asset_catalog_path(
     }
 }
 
+/// Checks a designer-authored `AssetCatalog.textures` key (not a raw file path -- the runtime
+/// resolves the key to a path itself, e.g. `asset_catalog.textures.get(key)`). Used for the new
+/// icon/texture-sheet checks this pass adds: `InventoryPanelDef`/`ContainerPanelDef.icon_sheet`,
+/// `ActionBarDef.icon_sheet`/`ActionSlotDef.icon`, and `WorldStatBarStyle::Icon.icon_sheet`/
+/// `::Textured.texture_sheet` -- a miss silently renders a blank/unchanged image node with no
+/// runtime warning at all for every one of these EXCEPT `Textured.texture_sheet`, which does
+/// `warn!` and skips spawning the bar entirely (`stat_display.rs`) -- still worth a design-time
+/// check (a hard error beats discovering it via a runtime log line), just not claimed as silent
+/// here. Deliberately NOT used to retrofit the two pre-existing sibling
+/// checks of this same shape (`FoliageMaterialDef.leaf_texture`, which has its own empty-string
+/// guard whose full reasoning wasn't re-verified here; `ItemDef.icon_sheet`, which already
+/// resolves a relocation-aware `assets.ron` name this helper doesn't parametrize) -- left as-is
+/// to keep this batch additive rather than a refactor. `error_type: "missing_catalog_key"`
+/// matches the pre-existing `leaf_texture` check's own error_type, distinct from
+/// `"missing_reference"` (used elsewhere in this file for cross-entity references like
+/// `currency_stat`/`item_key`, not a same-catalog key lookup) -- `ItemDef.icon_sheet` uses
+/// `"missing_reference"` instead, a pre-existing inconsistency not addressed here.
+fn check_texture_key(
+    asset_catalog: Option<&AssetCatalog>,
+    source_file: &str,
+    context: &str,
+    key: &str,
+    errors: &mut Vec<CrossFileError>,
+) {
+    let Some(assets) = asset_catalog else { return };
+    if !assets.textures.contains_key(key) {
+        errors.push(CrossFileError {
+            source_file: source_file.to_string(),
+            message: format!("{context}: texture key {key:?} not found in assets.ron's textures"),
+            error_type: "missing_catalog_key",
+        });
+    }
+}
+
 /// `split`/`party` authored INSIDE a `camera_mode: Orbit(...)` payload (instead of as siblings of
 /// `camera_mode` under `components:`) parse fine but are never read (`entity_spawner.rs`'s
 /// spawn-time match arm) -- a hard error, since there is no legitimate reason to author them
@@ -448,6 +484,108 @@ fn camera_mode_fixed_look_at_problem(mode: &CameraModeDef, context: &str) -> Opt
         ))
     } else {
         None
+    }
+}
+
+/// Unrecognized string-vocabulary/key fields inside a `CameraModeDef` payload -- shared between
+/// prefab-authored `camera_mode:` and a scene's `camera_modes:` registry entries, same pattern as
+/// `camera_mode_nested_split_party_problem`/`camera_mode_fixed_look_at_problem` above. Two
+/// payload types have fields whose runtime parser only ever `warn!`s and silently substitutes a
+/// default on an unrecognized value, with no `ironhold_cli validate` counterpart until now:
+/// `Orbit(CameraConfig)`'s `orbit_button`/`character_rotate_button` (`parse_orbit_button`, valid:
+/// `"Left"`/`"Right"`/`"Either"`/`"None"`) and `Flycam(FlyCamDef)`'s `look_button`
+/// (`parse_flycam_look_button`, valid: `"Left"`/`"Right"`/`"Either"`, no `"None"`). `Flycam`'s six
+/// movement-key fields (`forward`/`backward`/`left`/`right`/`up`/`down`) are a stricter, worse
+/// gap: they go through `InputMap::parse_key(..).unwrap_or(KeyCode::KeyW)` with **no warning at
+/// all**, not even a runtime one -- a typo'd flycam movement key is completely silent at both
+/// design time and runtime before this check existed.
+const ORBIT_BUTTON_VALUES: &[&str] = &["Left", "Right", "Either", "None"];
+const LOOK_BUTTON_VALUES: &[&str] = &["Left", "Right", "Either"];
+
+/// Checks a `CameraConfig` payload's own vocabulary fields -- shared by every place one can be
+/// authored: `camera_mode: Orbit(...)`, and the legacy `components.camera` field it superseded
+/// (`entity_spawner.rs`'s `orbit_state_from_config` reads either one identically via the same
+/// `parse_orbit_button`, and the legacy field is still the ONLY place these values appear in
+/// several shipped projects -- `local_coop_demo` alone authors ~14 `camera:` blocks and zero
+/// `camera_mode: Orbit(...)` ones, so a `CameraModeDef`-only check would miss the majority of
+/// real authored `orbit_button`/`character_rotate_button` values, system-architect finding).
+fn orbit_config_vocab_problems(cfg: &CameraConfig, context: &str) -> Vec<(String, &'static str)> {
+    let mut out = Vec::new();
+    if !ORBIT_BUTTON_VALUES.contains(&cfg.orbit_button.as_str()) {
+        out.push((
+            format!(
+                "{context}: orbit_button {:?} is not one of \"Left\"/\"Right\"/\"Either\"/\
+                 \"None\" -- the runtime warns and falls back to \"Either\"",
+                cfg.orbit_button
+            ),
+            "invalid_binding",
+        ));
+    }
+    if let Some(rot) = &cfg.character_rotate_button {
+        if !ORBIT_BUTTON_VALUES.contains(&rot.as_str()) {
+            out.push((
+                format!(
+                    "{context}: character_rotate_button {:?} is not one of \"Left\"/\"Right\"/\
+                     \"Either\"/\"None\" -- the runtime warns and falls back to \"Either\"",
+                    rot
+                ),
+                "invalid_binding",
+            ));
+        }
+    }
+    out
+}
+
+/// Checks a `FlyCamDef` payload's own vocabulary/key fields -- shared by `camera_mode:
+/// Flycam(...)` and the legacy `components.flycam` field it superseded (both resolved by the
+/// identical `parse_flycam_look_button`/`InputMap::parse_key` calls at every flycam-camera spawn
+/// site; `camera_modes`/`dynamic_animation_control`/`foliage_demo` all still author `flycam:
+/// (...)`, never `camera_mode: Flycam(...)`, so this is the dominant real authoring surface, not
+/// the `CameraModeDef` variant). The six movement-key fields are the more severe check: they go
+/// through `InputMap::parse_key(..).unwrap_or(<per-field default>)` with **no warning at all**,
+/// not even a runtime one -- a typo'd flycam movement key was completely silent at both design
+/// time and runtime before this check existed. Defaults verified against
+/// `scene_loader.rs`'s/`entity_spawner.rs`'s flycam-spawn sites, NOT assumed to all be `KeyW`
+/// (an earlier draft of this message wrongly claimed that for every field).
+fn flycam_def_vocab_problems(fc: &FlyCamDef, context: &str) -> Vec<(String, &'static str)> {
+    let mut out = Vec::new();
+    if !LOOK_BUTTON_VALUES.contains(&fc.look_button.as_str()) {
+        out.push((
+            format!(
+                "{context}: look_button {:?} is not one of \"Left\"/\"Right\"/\"Either\" -- the \
+                 runtime warns and falls back to \"Either\"",
+                fc.look_button
+            ),
+            "invalid_binding",
+        ));
+    }
+    for (field_name, key, default_key) in [
+        ("forward", &fc.forward, "KeyW"), ("backward", &fc.backward, "KeyS"),
+        ("left", &fc.left, "KeyA"), ("right", &fc.right, "KeyD"),
+        ("up", &fc.up, "Space"), ("down", &fc.down, "KeyQ"),
+    ] {
+        if InputMap::parse_key(key).is_none() {
+            out.push((
+                format!(
+                    "{context}: {field_name} {:?} is not a recognised key -- the runtime \
+                     silently falls back to {default_key} with NO warning at all, not even at \
+                     runtime",
+                    key
+                ),
+                "invalid_key",
+            ));
+        }
+    }
+    out
+}
+
+/// Delegates to whichever of the two payload-specific checks above applies to this
+/// `CameraModeDef` variant -- see their doc comments for the runtime behavior each closes.
+fn camera_mode_vocab_problems(mode: &CameraModeDef, context: &str) -> Vec<(String, &'static str)> {
+    match mode {
+        CameraModeDef::Orbit(cfg) => orbit_config_vocab_problems(cfg, context),
+        CameraModeDef::Flycam(fc) => flycam_def_vocab_problems(fc, context),
+        _ => Vec::new(),
     }
 }
 
@@ -1528,6 +1666,97 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             }
         }
 
+        // `icon_sheet`/`icon` fields on the panel/bar UI nodes are `AssetCatalog.textures` keys
+        // resolved at scene-load time (`scene_loader.rs`) -- a miss silently skips loading that
+        // atlas (InventoryPanel/ContainerPanel) or leaves a slot's icon unresolved (ActionBar),
+        // with no runtime `warn!` anywhere. `Option<String>` fields are only checked when actually
+        // set — omitting them is a normal, working authoring choice (e.g. an ActionBar whose every
+        // slot sets its own `icon` override, or a panel not showing icons at all).
+        for node in &scene.ui {
+            match node {
+                // `icon_on`/`icon_off` are required (non-`Option`) `String` fields resolved via
+                // `asset_catalog.textures.get(...).unwrap_or_default()` with zero runtime warning
+                // (`scene_loader.rs`) -- every `IconButton` in every scene authors both, so this
+                // is the family's highest-density surface, not an edge case (debug-detective
+                // finding).
+                UiNodeDef::IconButton(btn) => {
+                    check_texture_key(
+                        asset_catalog, scene_path,
+                        &format!("IconButton {:?}: icon_on", btn.id),
+                        &btn.icon_on, &mut errors,
+                    );
+                    check_texture_key(
+                        asset_catalog, scene_path,
+                        &format!("IconButton {:?}: icon_off", btn.id),
+                        &btn.icon_off, &mut errors,
+                    );
+                }
+                UiNodeDef::InventoryPanel(panel) => {
+                    if let Some(icon_sheet) = &panel.icon_sheet {
+                        check_texture_key(
+                            asset_catalog, scene_path,
+                            &format!("InventoryPanel {:?}: icon_sheet", panel.id),
+                            icon_sheet, &mut errors,
+                        );
+                    }
+                }
+                UiNodeDef::ContainerPanel(panel) => {
+                    if let Some(icon_sheet) = &panel.icon_sheet {
+                        check_texture_key(
+                            asset_catalog, scene_path,
+                            &format!("ContainerPanel {:?}: icon_sheet", panel.id),
+                            icon_sheet, &mut errors,
+                        );
+                    }
+                }
+                UiNodeDef::ActionBar(bar) => {
+                    // `scene_loader.rs`'s own slot-sheet resolution does
+                    // `bar.icon_sheet.as_deref().filter(|s| !s.is_empty())` -- `Some("")` is
+                    // treated identically to `None` (no default sheet for this bar), the same
+                    // sentinel `ActionSlotDef.icon`'s own empty-string guard below already
+                    // respects. Missing this on `bar.icon_sheet` too would hard-error a working,
+                    // documented authoring form (debug-detective finding).
+                    if let Some(icon_sheet) = bar.icon_sheet.as_deref().filter(|s| !s.is_empty()) {
+                        check_texture_key(
+                            asset_catalog, scene_path,
+                            &format!("ActionBar {:?}: icon_sheet", bar.id),
+                            icon_sheet, &mut errors,
+                        );
+                    }
+                    for (i, slot) in bar.slots.iter().enumerate() {
+                        if !slot.icon.is_empty() {
+                            check_texture_key(
+                                asset_catalog, scene_path,
+                                &format!("ActionBar {:?} slot[{i}]: icon", bar.id),
+                                &slot.icon, &mut errors,
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // `target_indicator.texture` is an `AssetCatalog.decals` key (NOT `.textures` -- despite
+        // the field name, it's a ground-ring decal like `Action::ProjectDecal`), resolved at scene
+        // load (`scene_loader.rs`'s `target_indicator` setup). A miss already `warn!`s at runtime
+        // ("unknown decal key ... indicator disabled for this scene") but had no design-time
+        // counterpart until now.
+        if let Some(indicator) = &scene.target_indicator {
+            if let Some(c) = asset_catalog {
+                if !c.decals.contains_key(&indicator.texture) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "target_indicator: texture {:?} not found in assets.ron's decals",
+                            indicator.texture
+                        ),
+                        error_type: "missing_reference",
+                    });
+                }
+            }
+        }
+
         // Same-player gamepad-slot collision — a different failure mode than the keyboard check
         // above, so a separate pass: the intent/cooldown pipeline is never keyed by `gamepad_key`,
         // so there's no cross-bar pipeline entanglement risk here. The risk is a same-player
@@ -1774,14 +2003,136 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             // (`assemble_player_config`, `entity_spawner.rs`) -- gating here avoids a misleading
             // "the camera will..." diagnostic on a prefab whose `camera_mode` the runtime never
             // consumes at all (an untagged prop, or a `tags: ["flycam"]` prefab, whose non-Flycam
-            // `camera_mode` is silently discarded and replaced wholesale by `scene_loader.rs` --
-            // a real, different mistake this check isn't meant to describe).
+            // `camera_mode` gets its own dedicated check further below -- a real, different
+            // mistake worded for its own failure mode, not this one).
             if def.is_player() {
                 if let Some(mode) = &def.components.camera_mode {
                     if let Some((message, error_type)) = camera_mode_nested_split_party_problem(
                         mode,
                         &format!("prefab {key:?}: camera_mode"),
                         false,
+                    ) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message,
+                            error_type,
+                        });
+                    }
+                    // `Party(_)` authored directly on a player prefab has no meaning for a single
+                    // player -- `entity_spawner.rs`'s `resolve_orbit_config_for_multiplayer` warns
+                    // and silently falls back to Orbit at runtime. The `camera_modes:` registry
+                    // loop already rejects this identical shape (`unsupported_registry_camera_mode`,
+                    // below); the prefab-level loop had no equivalent until now.
+                    if matches!(mode, CameraModeDef::Party(_)) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message: format!(
+                                "prefab {key:?}: camera_mode: Party(...) has no meaning on a \
+                                 single player prefab -- the runtime silently falls back to Orbit \
+                                 at spawn time. Use camera_mode: Orbit(...) directly, or author \
+                                 Party framing via the scene's own party:/split.dynamic fields \
+                                 instead"
+                            ),
+                            error_type: "unsupported_prefab_camera_mode",
+                        });
+                    }
+                }
+            }
+
+            // A `tags: ["flycam"]` prefab's `camera_mode`, UNLIKE `model`/`shape`/`primitive`/
+            // `children` (which really are silently discarded by the same branch), is not
+            // discarded at all -- `scene_loader.rs` passes it straight through as the flycam's
+            // mode. It's only rejected one step later, where the flycam-spawn code itself
+            // pattern-matches on `CameraModeDef::Flycam(_)` specifically: anything else already
+            // gets its own runtime `warn!` ("has no defined behavior for a standalone flycam...
+            // falling back to Flycam defaults") and a `FlyCamDef::default()` fallback -- verified
+            // directly against that match arm before writing this check, since an earlier
+            // (uncommitted) draft of this comment wrongly assumed a silent discard. This is the
+            // design-time counterpart to that existing runtime warn, same twin-check pattern used
+            // throughout this file. Deliberately NOT folded into the player-tagged check above:
+            // this is a different authoring mistake (wrong mode shape on a flycam prefab, not a
+            // nested-split/Party mistake on a player prefab), worded for its own failure mode.
+            if def.is_flycam() {
+                if let Some(mode) = &def.components.camera_mode {
+                    if !matches!(mode, CameraModeDef::Flycam(_)) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message: format!(
+                                "prefab {key:?}: has tags: [\"flycam\"] but its camera_mode is not \
+                                 Flycam(...) -- the flycam spawn code already warns about this at \
+                                 runtime and falls back to FlyCamDef::default(), silently \
+                                 discarding every field this camera_mode actually set"
+                            ),
+                            error_type: "unsupported_prefab_camera_mode",
+                        });
+                    }
+                }
+            }
+
+            // `camera_mode_vocab_problems` runs exactly once per prefab, on whichever mode the
+            // runtime actually ends up consuming -- computed here rather than duplicated inside
+            // both `if def.is_player()`/`if def.is_flycam()` blocks above, since those two tags are
+            // NOT mutually exclusive (a real, runtime-warned authoring shape: `scene_loader.rs`'s
+            // "has both \"player\" and \"flycam\" tags" warn). Two bugs a naive "call it in both
+            // blocks" version would have: (1) a dual-tagged prefab with a correctly-shaped
+            // `camera_mode: Flycam(...)` would get every vocab error reported TWICE; (2) a
+            // dual-tagged prefab with `camera_mode: Orbit(...)` would get Orbit's fields
+            // vocab-checked under the `is_player()` gate even though the flycam tag makes the
+            // runtime discard this camera_mode entirely (it never reaches `orbit_state_from_config`
+            // at all) -- exactly the "misleading diagnostic on a payload the runtime never
+            // consumes" class the `is_player()` gate's own comment above says it exists to prevent.
+            // `consumed` mirrors the runtime's own precedence: flycam-tagged wins over player-tagged
+            // (`scene_loader.rs`'s `if is_flycam { ... continue; }` runs before player assembly),
+            // and even then only a `Flycam(_)`-shaped mode is actually read (system-architect
+            // finding).
+            if let Some(mode) = &def.components.camera_mode {
+                let consumed = if def.is_flycam() {
+                    matches!(mode, CameraModeDef::Flycam(_))
+                } else {
+                    def.is_player()
+                };
+                if consumed {
+                    for (message, error_type) in camera_mode_vocab_problems(
+                        mode, &format!("prefab {key:?}: camera_mode"),
+                    ) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message,
+                            error_type,
+                        });
+                    }
+                }
+            }
+
+            // Legacy `components.camera`/`components.flycam` fields carry the identical
+            // vocabulary/key fields as their `camera_mode: Orbit(...)`/`Flycam(...)` successors
+            // and are resolved through the exact same runtime parsers (`entity_spawner.rs`'s
+            // `orbit_state_from_config`/flycam-spawn sites) -- and are, in practice, the DOMINANT
+            // authoring surface: `local_coop_demo` alone authors ~14 `camera:` blocks and zero
+            // `camera_mode: Orbit(...)` ones; `camera_modes`/`dynamic_animation_control`/
+            // `foliage_demo` all still author `flycam: (...)`, never `camera_mode: Flycam(...)`.
+            // A `camera_mode`-only check would miss almost every real shipped occurrence of this
+            // vocabulary (system-architect finding). Gated the same way as their modern
+            // equivalents (`camera`: player-only; `flycam`: flycam-tagged-only) -- the two legacy
+            // fields can't collide with each other the way `camera_mode` collides across both
+            // tags, since each is read only by its own capability.
+            if def.is_player() {
+                if let Some(cfg) = &def.components.camera {
+                    for (message, error_type) in orbit_config_vocab_problems(
+                        cfg, &format!("prefab {key:?}: camera"),
+                    ) {
+                        errors.push(CrossFileError {
+                            source_file: "prefabs/prefabs.ron".to_string(),
+                            message,
+                            error_type,
+                        });
+                    }
+                }
+            }
+            if def.is_flycam() {
+                if let Some(fc) = &def.components.flycam {
+                    for (message, error_type) in flycam_def_vocab_problems(
+                        fc, &format!("prefab {key:?}: flycam"),
                     ) {
                         errors.push(CrossFileError {
                             source_file: "prefabs/prefabs.ron".to_string(),
@@ -1835,6 +2186,25 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         ),
                         error_type: "missing_stat_widget_template",
                     });
+                }
+            }
+
+            // `WorldStatBarStyle::Icon.icon_sheet`/`::Textured.texture_sheet` are both
+            // `AssetCatalog.textures` keys resolved at spawn time (`stat_display.rs`) -- `Icon`
+            // silently renders nothing on a miss, no runtime `warn!` at all; `Textured` DOES
+            // `warn!` and skips spawning the bar entirely, so it's not silent, just still worth a
+            // design-time hard error over discovering it via a runtime log line.
+            if let Some(bar) = &def.world_stat_bar {
+                match &bar.style {
+                    WorldStatBarStyle::Icon { icon_sheet, .. } => check_texture_key(
+                        asset_catalog, "prefabs/prefabs.ron",
+                        &format!("prefab {key:?}: world_stat_bar Icon"), icon_sheet, &mut errors,
+                    ),
+                    WorldStatBarStyle::Textured { texture_sheet, .. } => check_texture_key(
+                        asset_catalog, "prefabs/prefabs.ron",
+                        &format!("prefab {key:?}: world_stat_bar Textured"), texture_sheet, &mut errors,
+                    ),
+                    WorldStatBarStyle::Ascii { .. } | WorldStatBarStyle::Pixel { .. } => {}
                 }
             }
         }
@@ -1891,6 +2261,11 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 mode,
                 &format!("camera_modes: preset {key:?}"),
                 true,
+            ) {
+                errors.push(CrossFileError { source_file: scene_path.clone(), message, error_type });
+            }
+            for (message, error_type) in camera_mode_vocab_problems(
+                mode, &format!("camera_modes: preset {key:?}"),
             ) {
                 errors.push(CrossFileError { source_file: scene_path.clone(), message, error_type });
             }
@@ -2720,6 +3095,14 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         for entry in scene.join_prefab_keys.iter().flatten() {
             used_prefabs.insert(entry);
         }
+        // `target_indicator.texture` is a decal reference just like `Action::ProjectDecal`'s
+        // `key` -- omitting it here would make a project using the indicator get a false
+        // "decal defined but never used" warning below (debug-detective finding, reproduced
+        // live against `local_coop_demo` and `3rd_person_game_demo`, both of which reference
+        // `target_ring` this way).
+        if let Some(indicator) = &scene.target_indicator {
+            used_decals.insert(&indicator.texture);
+        }
     }
     for (_, action) in actions {
         match action {
@@ -3178,7 +3561,8 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                 warnings.push(StrictWarning {
                     source_file: "assets.ron".to_string(),
                     message: format!(
-                        "decal {:?} is defined but never used in any ProjectDecal action",
+                        "decal {:?} is defined but never used in any ProjectDecal action or \
+                         scene's target_indicator.texture",
                         key
                     ),
                     kind: "unused_decal",
