@@ -230,13 +230,32 @@ single highest-leverage change in this file. Confirmed complete, though: the onl
 hard exit-1 `missing_file` today. Don't add a `{`-skip guard there (unlike `spawn_point`); if a code
 comment calls templated scene paths a "hypothetical future" form, that's misleading on both counts.
 
-**`query scenes` (query.rs:326) and `stats` (stats.rs:83) still glob only `scenes/`** — whenever
+**`query scenes` (query.rs:~341) and `stats` (stats.rs:~90) still glob only `scenes/`** — whenever
 validate's coverage goes reference-driven, those two stay convention-only and disagree with it.
-As of `feature/configurable_logic_paths` this is no longer hypothetical: `query rules`/`actions`/
-`events` (query.rs:437-438, 646, 663) and `stats` (stats.rs:96,100) still `silent_parse` the two
-hardcoded logic convention paths, so `ironhold query rules assets/projects/3rd_person_game_demo`
-(the exact command documented at 60_contributing.md:302) lists that project's runtime-dead
-`logic/rules.ron` as live while `validate` no longer sees it at all.
+
+**CATALOG half CLOSED by `feature/cli_query_stats_paths` (2026-09-11); LOGIC half still open.**
+`find_project_ron` moved from validate.rs to `commands/utils.rs` (now `pub`), joined by a new
+`pub fn resolve_catalog_path(configured: Option<&str>, convention_path: &str) -> &str` (a bare
+`unwrap_or`). `query.rs`/`stats.rs` each got their own duplicated 4-line
+`load_project_config(project_dir) -> Option<ProjectConfig>` and route all 5 catalog sites
+(`query_prefabs`, `query_effects`, `query_scenes`, `stats::collect`×2) through it. **validate.rs
+does NOT use `resolve_catalog_path`** — it keeps `load_configured_catalog`/`parse_configured_path`
+(stricter: configured-but-missing = hard error, `path_case_mismatch`, re-parse dedup), so there are
+now TWO catalog resolvers in the crate with different semantics, and `resolve_catalog_path`'s doc
+comment wrongly claims validate is one of its call sites. Divergence is fine in substance
+(`query`/`stats` have no `FileResult` channel; both still fall back to the convention path on an
+unset field, matching validate's deliberate CLI-only divergence from the runtime's load-nothing).
+Residual behavior split worth knowing: a configured-but-missing catalog makes `query prefabs`
+hard-error naming the configured path, but `stats` silently print `0`.
+
+**Still hardcoded: the two logic convention paths** (`query.rs`:457-458 for `query rules`, :666/:683
+in `collect_logic` feeding `query actions`/`query events`; `stats.rs`:111/115). So
+`ironhold query rules assets/projects/3rd_person_game_demo` (the exact command documented at
+60_contributing.md:302) still lists that project's runtime-dead `logic/rules.ron` as live while
+`validate` no longer sees it at all — `terrain_demo` same shape. Fixing this is NOT another
+`resolve_catalog_path` call: the correct semantic is `resolve_logic_files`' (unset `rules_path` ⇒
+inline V1 `ProjectConfig.rules`, unset `state_machine_path` ⇒ no FSM), so it needs a port of that
+function, not a fallback helper.
 
 **SIX configured paths now, not four.** `feature/configurable_logic_paths` (2026-09-06) added
 `resolve_logic_files` + `ResolvedLogicFiles { rules, rules_source, state_machine,
@@ -386,7 +405,8 @@ exist in that project. Structural fix: make `load_configured_catalog` return
 `cross_file_checks`/`strict_checks` as `source_file`. Note the resolved path is also the honest
 value for checks whose `source_file` is currently `find_project_ron(project_dir)`.
 
-**`find_project_ron` picks the *first* `*.project.ron` in `read_dir` order** and
+**`find_project_ron` (now in `commands/utils.rs`, shared by validate/query/stats) picks the *first*
+`*.project.ron` in `read_dir` order** and
 `assets/projects/integration_tests/` has three (`integration_tests`, `test_terrain`,
 `test_start_menu`). Pre-existing, but catalog resolution now depends on that arbitrary pick — inert
 only because all three declare identical `asset_catalog`/`prefab_catalog` values.
