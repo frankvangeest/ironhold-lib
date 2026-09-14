@@ -34,6 +34,64 @@ Inventory & item system (introduced ~2026-06-20). Items defined in `items/items.
 
 **Both blockers above are FIXED as of 2026-08-24** (verified during `monster_corpse_loot` v1 review): `OpenContainer` is in both `rewrite_self` (message_interpreter.rs ~280) and `rewrite_target` (~333); the three-spawn-path `Inventory` divergence is gone — `entity_spawner.rs::attach_prefab_features` is now the single source of truth (`.max(4)` + `initial_items`) called from the GLB path and both Primitive branches. See [[lootable-corpse-pattern]] for what still bites in this area.
 
+**`max_stack` catalog-threading fix reviewed clean (2026-09-12), + a NEW anti-pattern class to watch for:**
+`attach_prefab_features` built prefab `initial_items` by calling `add_to_slots(..., None)` — a hardcoded
+`None` catalog, so every spawn-time stack silently used `add_to_slots`'s `.unwrap_or(99)` fallback and
+ignored the designer's authored `ItemDef.stackable`/`max_stack`. **This is the "silently-ignored
+authored data" anti-pattern: a `None`/`Default::default()` passed where a loaded RON catalog belongs.
+It produces no warn, no parse error, and no CLI signal — grep for `, None)` / `&Default::default()` at
+any call site whose parameter is a `Loaded*Catalog`.** The fix threads
+`Option<&ItemCatalog>` through: `attach_prefab_features` + `spawn_prefab_instance` params, a
+`ChildSpawnCtx.item_catalog` field (for the nested-prefab recursion), and a `Res<LoadedItemCatalog>` on
+`drain_spawn_queue_system`. Full call-site inventory to re-verify on any future change:
+`spawn_prefab_instance` x4 (scene_loader.rs foliage trunk ~306, GLB actor/prop ~746,
+`spawn_primitive_children` nested-prefab ~3169 via `ctx.item_catalog`; entity_spawner.rs
+`drain_spawn_queue_system` ~426) and `attach_prefab_features` x3 (entity_spawner.rs ~326 tail of
+`spawn_prefab_instance`; scene_loader.rs composite-primitive ~472, single-mesh-primitive ~692).
+Resource ordering is safe — `LoadedItemCatalog` is inserted at project_loader.rs ~353 in the same
+system that emits `SceneEvent::Requested`, so it's populated a frame before any scene spawn (same
+pattern as `LoadedPrefabCatalog`).
+Residual non-blocking items from that review: (a) `validate.rs` ~1181 comment still claims
+entity_spawner passes `None`; (b) `tests/corpse_loot_interact_tests.rs::spawn_real_corpse` ~232 still
+passes `None` while its doc says it "mirrors `attach_prefab_features`"; (c) `CLAUDE.md` ~100's explicit
+`ChildSpawnCtx` field list omits `item_catalog`; (d) `.unwrap_or(99)` in `capabilities/inventory.rs`
+duplicates `schema/items.rs::default_max_stack()`. **Pre-existing gap, still open:** nested
+**Primitive** prefab refs inside a composite (`scene_loader.rs` ~3184) never call
+`attach_prefab_features` at all — a nested Primitive prefab with `inventory:` gets no `Inventory`.
+
+**Panel UI-tree traversal rule + panel chrome inventory (2026-09-14, `inventory_max_stack_fix` playtest fixes):**
+- **Never walk a panel marker's direct `Children` to find its slot/label entities.** All three panel
+  arms in `scene_loader.rs` nest content two levels down (`Panel -> SlotGrid -> Slot`, `Panel ->
+  ShopEntries -> Row`), so a `Query<&Children, With<XPanelMarker>>` + `slot_q.get_mut(child)` inner
+  match never succeeds and the labels stay silently blank forever (icons still work — the icon loops
+  were always flat). `container_ui_system` shipped with exactly this bug from introduction until
+  2026-09-14. **The correct pattern is a flat `for (marker, mut text) in slot_q.iter_mut()`**, which
+  `inventory_ui_system` always used. Verified whole-crate: only 3 `Query<&Children>` remain
+  (`material_factory.rs:187`, `animation.rs:80/427`) and all are recursive GLB-hierarchy walks, not
+  UI — **no other instance of this bug class exists**. `shop_entries_q` uses `ChildOf` (upward), fine.
+  Flat queries are world-wide, so 2 authored panels of the same type both get written — pre-existing
+  and identical to the old behavior (`panel_q.iter()` also hit every panel), not a regression.
+- **A test helper that spawns a childless/flat panel can never catch this class of bug.**
+  `corpse_loot_interact_tests.rs::spawn_container_panel` (still used by 4 other tests) builds a
+  childless `ContainerPanelMarker`; the new `spawn_full_container_panel_tree` builds the real
+  Panel→SlotGrid→Slot nesting. **When reviewing any UI-tree fix, check whether the test helper
+  reproduces the production nesting** — if it doesn't, the test proves nothing about the traversal.
+- **The test harness loads real `prefabs.ron`/`assets.ron` but NOT `items/items.ron`** — so
+  `LoadedItemCatalog` is `None` and every count-label assertion falls through to the hardcoded
+  `.unwrap_or(99)`. A `real_item_catalog()` helper (mirroring `real_prefab_catalog()`) would let the
+  test assert the designer-authored `15/999` instead of the fallback `15/99`, closing the gap between
+  "the loop ran" and "the authored `stackable`/`max_stack` reaches the screen." Same
+  hardcoded-`None`-catalog shape as the `attach_prefab_features` anti-pattern above, but in tests.
+- **Panel chrome (hardcoded, unauthorable, undocumented) — current inventory:** titles
+  `"Inventory"`/`"Shop"`/`"Loot"` (was `"Chest"` until 2026-09-14 — renamed because a monster corpse
+  read "Chest"; a per-prefab `title` field is the real fix and was NOT in the backlog as of that
+  date, despite being claimed), `"Take All"`, `✕`/`ui/cross`, font sizes 12.0/11.0/13.0 (that last
+  one IS tracked — `backlog.md` ▸ UI ▸ "Remaining hardcoded font sizes in composite UI widgets"),
+  and the shared header/content padding convention `UiRect::new(8,6,4,4)` / `UiRect::all(8.0)` (all
+  three panels aligned on this 2026-09-14; ShopPanel previously had a 10px outer padding instead).
+  `docs/20_data_formats.md`'s panel field tables document none of the title strings. WARNING-class,
+  consistent across all three panels.
+
 **Panel click-blocking / backdrop follow-up reviewed clean (2026-06-28):** ALIGNED — matches the [[guard-vs-behavior-distinction]] hybrid the system-architect pre-approved same day.
   - `LoadedInventoryUi.panel_open: bool` (runtime-only, NOT schema) read by `interactable_system` (Update) + `collectible_system` (FixedUpdate) to early-return / suppress message *emission* while any panel is open. This is an input-arbitration guard upstream of the pipeline — correctly Rust-only, do NOT flag as a philosophy violation and do NOT recommend promoting to RON or routing through LogicState (EnterState clobbers the scalar mode-slot).
   - Six executor arms (Open/Close/Toggle Inventory, Open/Close Shop, Open/Close Container) set the bool AND emit `GameEvent::Trigger("ui.panel_opened"/"ui.panel_closed")` — the designer-reachable *response* surface (pause AI, duck music). Correct: events from executor (downstream of interpreter) are fine; capabilities still only `game_events.write`, never push ActionQueue.

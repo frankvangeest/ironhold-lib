@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Player prefabs skip attach_prefab_features](project_player_spawn_skips_attach_prefab_features.md) — inventory/interactable/dialogue/behavior/trigger_zone silently dropped for player-tagged prefabs; only stat_templates is shared
+- [Schema validate() errors are non-fatal](project_schema_validate_errors_are_nonfatal.md) — project_loader error!s then loads the invalid catalog anyway, so max_stack:0 and friends DO reach runtime code
 - [TargetingPlugin's 3 PlayerTarget writers are unordered](project_targeting_systems_unordered_ambiguity.md) — plain unchained tuple, no ordering vs action_bar/interpreter; single-core affinity (40/40 fail) is the decisive probe for executor-order flakes
 - [Flycam has TWO authoring paths](project_flycam_dual_authoring_path.md) — legacy `flycam:` vs `camera_mode: Flycam(...)` both feed one FlyCamDef; a check gated on either is half-blind, and the 6 movement keys fall back to 6 DIFFERENT keys, not all KeyW
 - [icon_sheet `""` is an ActionBar-only "unset" sentinel](project_icon_sheet_empty_string_sentinel.md) — runtime filters empty for ActionBar but not Inventory/Container; a naive texture-key check exit-1s a working scene. IconButton icon_on/icon_off still uncovered
