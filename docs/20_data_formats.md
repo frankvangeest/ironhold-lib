@@ -4561,7 +4561,7 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `max_slots` | `usize` | `9` | Maximum number of item slots this container entity has. Clamped to at least 4. |
-| `initial_items` | `Vec<InitialItemEntry>` | `[]` | Items pre-placed at spawn time, in slot order. Excess is silently ignored when slots are full. |
+| `initial_items` | `Vec<InitialItemEntry>` | `[]` | Items pre-placed at spawn time, in slot order. Stacking respects each item's `stackable`/`max_stack` from the project's item catalog (`items.ron`) — an item absent from the catalog falls back to `max_stack: 99`. Excess is silently ignored when slots are full. |
 
 **`InitialItemEntry` fields:**
 

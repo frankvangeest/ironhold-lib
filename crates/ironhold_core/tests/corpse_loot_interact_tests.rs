@@ -28,7 +28,8 @@ use ironhold_core::capabilities::animation_resolver::{
 };
 use ironhold_core::capabilities::interactable::Interactable;
 use ironhold_core::capabilities::inventory::{
-    ContainerPanelMarker, Inventory, LoadedContainerUi, LoadedInventoryUi, add_to_slots,
+    ContainerPanelMarker, ContainerSlotMarker, Inventory, LoadedContainerUi, LoadedInventoryUi,
+    add_to_slots,
 };
 use ironhold_core::capabilities::player::{CharacterController, PlayerTarget};
 use ironhold_core::runtime::{
@@ -60,6 +61,12 @@ fn real_asset_catalog() -> AssetCatalog {
     let s = std::fs::read_to_string(format!("{DEMO}/assets.ron"))
         .expect("demo assets.ron readable");
     ron_opts().from_str(&s).expect("demo assets.ron parses")
+}
+
+fn real_item_catalog() -> ironhold_core::schema::items::ItemCatalog {
+    let s = std::fs::read_to_string(format!("{DEMO}/items/items.ron"))
+        .expect("demo items.ron readable");
+    ron_opts().from_str(&s).expect("demo items.ron parses")
 }
 
 fn real_behavior(path: &str) -> StateMachineAsset {
@@ -316,6 +323,34 @@ fn spawn_container_panel(app: &mut App) -> Entity {
         .id()
 }
 
+/// Same as `spawn_container_panel`, but with the real production shape: the slot entities live
+/// two levels down (Panel -> SlotGrid -> Slot), not as direct children of the panel. Needed to
+/// exercise `container_ui_system`'s slot-label update loop faithfully — a flat, childless panel
+/// (like `spawn_container_panel` above) can't reproduce the "only walks direct children" class of
+/// bug this test guards against.
+fn spawn_full_container_panel_tree(app: &mut App, slot_count: usize) -> Entity {
+    let slots: Vec<Entity> = (0..slot_count)
+        .map(|idx| {
+            app.world_mut()
+                .spawn((
+                    Node::default(),
+                    Text::new(""),
+                    ContainerSlotMarker { slot_index: idx },
+                ))
+                .id()
+        })
+        .collect();
+    let slot_grid = app.world_mut().spawn(Node::default()).add_children(&slots).id();
+    app.world_mut()
+        .spawn((
+            Node::default(),
+            ContainerPanelMarker { columns: slot_count as u32, rows: 1, font_size: 14.0 },
+            Visibility::Hidden,
+        ))
+        .add_children(&[slot_grid])
+        .id()
+}
+
 fn spawn_test_player(app: &mut App, pos: Vec3) -> Entity {
     app.world_mut()
         .spawn((
@@ -481,6 +516,74 @@ fn corpse_interact_opens_loot_panel() {
 
     assert_eq!(app.world().resource::<LoadedContainerUi>().active_container, Some(corpse));
     assert_eq!(*app.world().get::<Visibility>(panel).unwrap(), Visibility::Visible);
+}
+
+/// Regression test: `container_ui_system`'s slot-count-label loop used to walk only the
+/// `ContainerPanelMarker` entity's *direct* `Children`, but the actual `ContainerSlotMarker`
+/// entities are grandchildren (Panel -> SlotGrid -> Slot) in the real UI tree `scene_loader.rs`
+/// builds — so the loop's inner `slot_q.get_mut(child)` never matched anything, and every loot
+/// panel slot label stayed permanently empty (no "count/max" text), even though the icon in the
+/// same slot rendered fine (the icon-update loop uses a flat query, unaffected). Fixed by
+/// switching the label loop to the same flat-query pattern `inventory_ui_system` already used.
+#[test]
+fn corpse_loot_panel_slot_labels_show_the_real_stack_counts() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(
+        ironhold_core::capabilities::inventory::LoadedItemCatalog(Some(real_item_catalog())),
+    );
+    spawn_test_player(&mut app, Vec3::ZERO);
+    // zombie_corpse's real inventory.initial_items: gold_coin x15, health_potion x1.
+    let corpse = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
+    // Panel slot count must match the corpse's own Inventory length -- hardcoding a literal here
+    // (e.g. 6) would silently stop meaning anything the moment zombie_corpse's max_slots changes
+    // in prefabs.ron, since nothing would fail except a length mismatch several lines down with no
+    // obvious link back to the RON.
+    let slot_count = app.world().get::<Inventory>(corpse).expect("corpse has an Inventory").slots.len();
+    let panel = spawn_full_container_panel_tree(&mut app, slot_count);
+
+    press_f(&mut app);
+    app.update();
+
+    assert_eq!(app.world().resource::<LoadedContainerUi>().active_container, Some(corpse));
+    assert_eq!(*app.world().get::<Visibility>(panel).unwrap(), Visibility::Visible);
+
+    let catalog = real_item_catalog();
+    let inv = app.world().get::<Inventory>(corpse).expect("corpse has an Inventory");
+    let expected: Vec<String> = inv.slots.iter()
+        .map(|s| match s {
+            // Mirrors container_ui_system's own label formula exactly, reading the SAME real
+            // items.ron this test loaded into LoadedItemCatalog -- this proves the designer's
+            // authored stackable/max_stack values (gold_coin: 999, health_potion: 10) actually
+            // reach the label text, not just that the loop runs at all.
+            Some(stack) => {
+                let max_stack = catalog.items.get(&stack.item_key)
+                    .map(|d| if d.stackable { d.max_stack } else { 1 })
+                    .unwrap_or(99);
+                if max_stack > 1 { format!("{}/{}", stack.count, max_stack) } else { String::new() }
+            }
+            None => String::new(),
+        })
+        .collect();
+
+    let mut slot_texts: Vec<(usize, String)> = app.world_mut()
+        .query::<(&ContainerSlotMarker, &Text)>()
+        .iter(app.world())
+        .map(|(marker, text)| (marker.slot_index, text.0.clone()))
+        .collect();
+    slot_texts.sort_by_key(|(idx, _)| *idx);
+    let actual: Vec<String> = slot_texts.into_iter().map(|(_, text)| text).collect();
+
+    assert_eq!(
+        actual, expected,
+        "every slot's Text must reflect its real stack count/max_stack (from the real items.ron) \
+         -- with the bug, every slot stays \"\" regardless of what's in the corpse's Inventory"
+    );
+    assert_eq!(
+        actual, vec!["15/999".to_string(), "1/10".to_string(), String::new(), String::new(), String::new(), String::new()],
+        "sanity check against zombie_corpse's known authored contents -- if this fails while the \
+         assert above passes, prefabs.ron or items.ron changed underneath this test"
+    );
 }
 
 #[test]

@@ -300,30 +300,28 @@ pub fn container_ui_system(
     container_ui: Res<LoadedContainerUi>,
     catalog: Res<LoadedItemCatalog>,
     inventory_q: Query<&Inventory>,
-    panel_q: Query<&Children, With<ContainerPanelMarker>>,
     mut slot_q: Query<(&ContainerSlotMarker, &mut Text)>,
     mut icon_q: Query<(&ContainerSlotIconMarker, &mut ImageNode, &mut Visibility)>,
 ) {
     let Some(container_entity) = container_ui.active_container else { return; };
     let Ok(inv) = inventory_q.get(container_entity) else { return; };
 
-    // Update slot count labels.
-    for children in panel_q.iter() {
-        for child in children.iter() {
-            if let Ok((marker, mut text)) = slot_q.get_mut(child) {
-                let label = match inv.slots.get(marker.slot_index).and_then(|s| s.as_ref()) {
-                    Some(stack) => {
-                        let max_stack = catalog.0.as_ref()
-                            .and_then(|c| c.items.get(&stack.item_key))
-                            .map(|d| if d.stackable { d.max_stack } else { 1 })
-                            .unwrap_or(99);
-                        if max_stack > 1 { format!("{}/{}", stack.count, max_stack) } else { String::new() }
-                    }
-                    _ => String::new(),
-                };
-                if text.0 != label { text.0 = label; }
+    // Update slot count labels. Flat query (not scoped through ContainerPanelMarker's direct
+    // `Children`) since the slot entities are grandchildren of the panel (Panel -> SlotGrid ->
+    // Slot), not direct children — matching `inventory_ui_system`'s label_q pattern, which never
+    // had this bug because it was never routed through a `Children` walk in the first place.
+    for (marker, mut text) in slot_q.iter_mut() {
+        let label = match inv.slots.get(marker.slot_index).and_then(|s| s.as_ref()) {
+            Some(stack) => {
+                let max_stack = catalog.0.as_ref()
+                    .and_then(|c| c.items.get(&stack.item_key))
+                    .map(|d| if d.stackable { d.max_stack } else { 1 })
+                    .unwrap_or(99);
+                if max_stack > 1 { format!("{}/{}", stack.count, max_stack) } else { String::new() }
             }
-        }
+            _ => String::new(),
+        };
+        if text.0 != label { text.0 = label; }
     }
 
     // Update icon nodes with sRGB tint when item has icon_color; white otherwise.

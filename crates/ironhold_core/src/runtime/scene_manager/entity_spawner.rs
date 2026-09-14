@@ -48,6 +48,7 @@ pub(super) fn attach_prefab_features(
     entity_id: &str,
     stat_overrides: &HashMap<String, f32>,
     prefab_key: &str,
+    item_catalog: Option<&crate::schema::items::ItemCatalog>,
 ) {
     if let Some(behavior_path) = &prefab.behavior {
         let resolved = resolve_project_path(project_root, behavior_path);
@@ -73,9 +74,16 @@ pub(super) fn attach_prefab_features(
         let slots = inv_def.max_slots.max(4);
         let mut inv = crate::capabilities::inventory::Inventory::new(slots);
         for entry in &inv_def.initial_items {
-            crate::capabilities::inventory::add_to_slots(
-                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, None,
+            let (added, _full) = crate::capabilities::inventory::add_to_slots(
+                &mut inv.slots, inv.max_slots, &entry.item_key, entry.count, item_catalog,
             );
+            if added < entry.count {
+                warn!(
+                    "prefab '{}': inventory.initial_items entry '{}' (count {}) only fit {} \
+                     into {} slots -- excess silently dropped. Increase max_slots or reduce count.",
+                    prefab_key, entry.item_key, entry.count, added, inv_def.max_slots,
+                );
+            }
         }
         commands.entity(entity).insert(inv);
     }
@@ -168,6 +176,7 @@ pub fn spawn_prefab_instance(
     transform: Transform,
     name: &str,
     stat_overrides: &HashMap<String, f32>,
+    item_catalog: Option<&crate::schema::items::ItemCatalog>,
 ) -> Entity {
     let spawned =
         model_spawner.spawn_instance(commands, asset_server, fixes, model_path.clone(), transform);
@@ -321,7 +330,7 @@ pub fn spawn_prefab_instance(
 
     // Capability features: single call covers behavior, interactable, dialogue, inventory,
     // stat_templates, and trigger_zone — all three spawn paths now route through this helper.
-    attach_prefab_features(commands, spawned.parent, prefab, project_root, asset_server, name, stat_overrides, name);
+    attach_prefab_features(commands, spawned.parent, prefab, project_root, asset_server, name, stat_overrides, name, item_catalog);
 
     spawned.parent
 }
@@ -348,6 +357,7 @@ pub fn drain_spawn_queue_system(
     nameplate_config: Res<crate::capabilities::nameplate::NameplateSceneConfig>,
     mut active_split_slot_count: ResMut<super::ActiveSplitSlotCount>,
     ring_visibility: Res<super::TargetRingVisibilityMode>,
+    loaded_item_catalog: Res<crate::capabilities::inventory::LoadedItemCatalog>,
 ) {
     for _ in 0..SPAWNS_PER_FRAME {
         let Some(queued) = pending.0.pop_front() else { break };
@@ -431,6 +441,7 @@ pub fn drain_spawn_queue_system(
             queued.transform,
             &queued.spawn_id,
             &Default::default(),
+            loaded_item_catalog.0.as_ref(),
         );
         tag_spawned_entity(
             &mut commands.entity(parent),

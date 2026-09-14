@@ -190,6 +190,7 @@ pub fn spawn_scene_v2(
         let prefab_catalog = &params.prefab_catalog.0;
         let asset_catalog  = &params.asset_catalog.0;
         let project_root   = params.project_root.0.as_str();
+        let item_catalog   = params.loaded_item_catalog.0.as_ref();
         let dyn_stat_ui_queue: &mut DynamicStatUiQueue = &mut params.dynamic_stat_ui_queue;
 
         // Spawn entities from prefabs
@@ -314,6 +315,7 @@ pub fn spawn_scene_v2(
                             Transform::IDENTITY,
                             trunk_key,
                             &Default::default(),
+                            item_catalog,
                         );
                         commands.entity(root).add_child(trunk);
                     } else {
@@ -379,6 +381,7 @@ pub fn spawn_scene_v2(
                             fixes: &merged_fixes.0,
                             asset_catalog,
                             project_root,
+                            item_catalog,
                         };
                         spawn_primitive_children(
                             &mut commands, parent, &prefab.children,
@@ -471,6 +474,7 @@ pub fn spawn_scene_v2(
                         &mut commands, parent, prefab,
                         params.project_root.0.as_str(), &asset_server,
                         &entity_def.id, &entity_def.stat_overrides, &entity_def.prefab,
+                        item_catalog,
                     );
 
                     // Motion: continuous rotation and/or vertical bob on the root entity.
@@ -690,6 +694,7 @@ pub fn spawn_scene_v2(
                             &mut commands, spawned, prefab,
                             params.project_root.0.as_str(), &asset_server,
                             &entity_def.id, &entity_def.stat_overrides, &entity_def.prefab,
+                            item_catalog,
                         );
 
                         if let Some(label_def) = &entity_def.label {
@@ -750,6 +755,7 @@ pub fn spawn_scene_v2(
                     transform,
                     &entity_def.id,
                     &entity_def.stat_overrides,
+                    item_catalog,
                 );
                 tag_spawned_entity(
                     &mut commands.entity(parent), &mut spawn_registry,
@@ -932,6 +938,7 @@ pub fn spawn_scene_v2(
                         fixes: &merged_fixes.0,
                         asset_catalog,
                         project_root,
+                        item_catalog,
                     },
                     prefab_catalog,
                     load_errors: &mut load_errors,
@@ -2499,8 +2506,11 @@ fn spawn_ui_element_node(
                 .map(|p| asset_server.load(p.clone()));
             let mut panel_node = node;
             panel_node.flex_direction = FlexDirection::Column;
-            panel_node.padding = UiRect::all(Val::Px(10.0));
-            panel_node.row_gap = Val::Px(6.0);
+            // No outer padding and no row_gap here — matching InventoryPanel/ContainerPanel,
+            // whose header rows and content areas sit flush against the panel edge, pad
+            // themselves internally, and rely on that internal padding alone for header/content
+            // separation. (Previously `padding: UiRect::all(Val::Px(10.0))` plus this `row_gap`
+            // inset and over-spaced the whole panel relative to the other two.)
             let entity = parent
                 .spawn((
                     Name::new(format!("ShopPanel: {}", panel.id)),
@@ -2514,6 +2524,7 @@ fn spawn_ui_element_node(
                 ))
                 .with_children(|p| {
                     // Header row: title + inline close button (child of panel so it hides together).
+                    // Padding matches InvHeader/ContainerHeader exactly for visual consistency.
                     p.spawn((
                         Name::new("ShopHeader"),
                         Node {
@@ -2521,7 +2532,9 @@ fn spawn_ui_element_node(
                             justify_content: JustifyContent::SpaceBetween,
                             align_items: AlignItems::Center,
                             width: Val::Percent(100.0),
-                            padding: UiRect::new(Val::Px(4.0), Val::Px(4.0), Val::Px(2.0), Val::Px(2.0)),
+                            padding: UiRect::new(
+                                Val::Px(8.0), Val::Px(6.0), Val::Px(4.0), Val::Px(4.0),
+                            ),
                             ..default()
                         },
                         BackgroundColor(Color::srgba(r * 0.6, g * 0.6, b * 0.6, a)),
@@ -2574,7 +2587,7 @@ fn spawn_ui_element_node(
                             width: Val::Percent(100.0),
                             flex_grow: 1.0,
                             row_gap: Val::Px(4.0),
-                            padding: UiRect::all(Val::Px(4.0)),
+                            padding: UiRect::all(Val::Px(8.0)),
                             ..default()
                         },
                         crate::capabilities::inventory::ShopEntriesContainerMarker,
@@ -2657,7 +2670,7 @@ fn spawn_ui_element_node(
                     .with_children(|h| {
                         h.spawn((
                             Name::new("ContainerTitle"),
-                            Text::new("Chest"),
+                            Text::new("Loot"),
                             TextFont { font_size: 12.0, ..default() },
                             TextColor(Color::srgba(0.85, 0.80, 0.65, 0.90)),
                         ));
@@ -2715,16 +2728,9 @@ fn spawn_ui_element_node(
                                     Node {
                                         width: Val::Px(slot_size),
                                         height: Val::Px(slot_size),
-                                        justify_content: JustifyContent::FlexEnd,
-                                        align_items: AlignItems::FlexEnd,
-                                        padding: UiRect::all(Val::Px(2.0)),
                                         ..default()
                                     },
                                     BackgroundColor(Color::srgba(0.12, 0.10, 0.08, 0.85)),
-                                    ContainerSlotMarker { slot_index: idx },
-                                    Text::new(""),
-                                    TextFont { font_size, ..default() },
-                                    TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
                                 ));
                                 slot_cmd.with_children(|slot_parent| {
                                     // Normal icon (ImageNode) — shown when item has no icon_color.
@@ -2752,6 +2758,29 @@ fn spawn_ui_element_node(
                                             ContainerSlotIconMarker { slot_index: idx },
                                         ));
                                     }
+                                    // Label — spawned after the icon so it renders on top, and as
+                                    // its own absolutely-positioned child (not Text on the slot
+                                    // entity itself) so it actually respects a bottom-right
+                                    // position, matching InventoryPanel's SlotLabel exactly. Text
+                                    // on a node with children doesn't honor that node's own
+                                    // justify_content/align_items (those lay out children, not
+                                    // this node's own text content) — the previous Text-on-slot
+                                    // approach rendered top-left regardless of the FlexEnd/FlexEnd
+                                    // style that was set, visibly inconsistent with the inventory
+                                    // panel's count labels sitting bottom-right.
+                                    slot_parent.spawn((
+                                        Name::new("ContainerSlotLabel"),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            bottom: Val::Px(2.0),
+                                            right: Val::Px(2.0),
+                                            ..default()
+                                        },
+                                        Text::new(""),
+                                        TextFont { font_size, ..default() },
+                                        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+                                        ContainerSlotMarker { slot_index: idx },
+                                    ));
                                 });
                             }
                         }
@@ -3073,6 +3102,7 @@ pub(crate) struct ChildSpawnCtx<'a> {
     pub(crate) fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>,
     pub(crate) asset_catalog: &'a crate::schema::catalog::AssetCatalog,
     pub(crate) project_root:  &'a str,
+    pub(crate) item_catalog: Option<&'a crate::schema::items::ItemCatalog>,
 }
 
 /// Spawns the `children` list of a composite prefab under `parent`, recursing into
@@ -3170,6 +3200,7 @@ pub(crate) fn spawn_primitive_children(
                         world_child_tf,
                         nested_key,
                         &Default::default(),
+                        ctx.item_catalog,
                     );
                     visiting.remove(nested_key.as_str());
                 }

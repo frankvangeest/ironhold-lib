@@ -1179,10 +1179,10 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     }
 
     // A prefab's `inventory.initial_items[].item_key` is only read at spawn time -- a typo there
-    // doesn't drop the item, it silently creates a stack with no catalog entry (entity_spawner.rs
-    // passes None for the catalog, so add_to_slots falls back to max_stack: 99 and the panel
-    // renders it at icon_index 0 of the default sheet): a phantom, wrong-icon slot instead of a
-    // design-time error. Same failure shape as the merchant stock check above.
+    // doesn't drop the item, it silently creates a stack with no catalog entry (the key misses the
+    // lookup in `add_to_slots`, which falls back to `max_stack: 99` and the panel renders it at
+    // icon_index 0 of the default sheet): a phantom, wrong-icon slot instead of a design-time
+    // error. Same failure shape as the merchant stock check above.
     if let Some(catalog) = prefab_catalog {
         if let Some(items) = item_catalog {
             let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();

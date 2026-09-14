@@ -340,8 +340,12 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, world_icon_bar_update_system, world_textured_bar_update_system))
             .add_systems(Update, stat_widget_cleanup_system)
             .add_systems(Update, stat_radar_update_system)
-            .add_systems(Update, crate::capabilities::inventory::inventory_ui_system)
-            .add_systems(Update, crate::capabilities::inventory::container_ui_system)
+            // .after(action_executor_system): AddItem/RemoveItem/TransferItem/BuyItem/
+            // TakeAllFromContainer all mutate PlayerInventory/Inventory this same frame — without
+            // this ordering the scheduler is free to run these before the executor, rendering one
+            // frame of stale slot counts/icons on the same frame an item is added or removed.
+            .add_systems(Update, crate::capabilities::inventory::inventory_ui_system.after(action_executor_system))
+            .add_systems(Update, crate::capabilities::inventory::container_ui_system.after(action_executor_system))
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

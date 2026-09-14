@@ -1272,3 +1272,155 @@ fn test_spawn_at_entity_unresolvable_falls_back_to_position_when_given() {
         .expect("an unresolvable at_entity with an explicit position fallback must still spawn");
     assert_eq!(app.world().get::<Transform>(spawned).unwrap().translation, Vec3::new(5.0, 0.0, 5.0));
 }
+
+// ── inventory.initial_items must respect the real ItemCatalog max_stack ────────────────────
+
+/// Regression test: `attach_prefab_features` (via `spawn_prefab_instance`, reached here through
+/// the real `Action::Spawn` -> `drain_spawn_queue_system` path) used to call `add_to_slots` with
+/// a hardcoded `None` item catalog, silently discarding the real `LoadedItemCatalog` resource and
+/// falling back to the default 99-per-stack cap for every item regardless of its authored
+/// `stackable`/`max_stack` fields. `gold_coin` here authors `max_stack: 500` — with the bug, 250
+/// units would still be split across 3 slots (99, 99, 52) because the fallback ignored the real
+/// resource entirely; with the fix, they fit in a single slot.
+#[test]
+fn test_spawn_action_initial_items_respect_real_item_catalog_max_stack() {
+    use ironhold_core::schema::catalog::{
+        AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind,
+        InventoryContainerDef, InitialItemEntry,
+    };
+    use ironhold_core::schema::items::{ItemCatalog, ItemDef, ITEM_CATALOG_SCHEMA_VERSION};
+    use ironhold_core::capabilities::inventory::{Inventory, LoadedItemCatalog};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("crate_model".to_string(), ModelCatalogEntry {
+                path: "shared/models/props/crate.glb#Scene0".to_string(),
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("loot_crate".to_string(), PrefabDef {
+                kind: PrefabKind::Prop,
+                model: "crate_model".to_string(),
+                inventory: Some(InventoryContainerDef {
+                    max_slots: 9,
+                    initial_items: vec![
+                        InitialItemEntry { item_key: "gold_coin".to_string(), count: 250 },
+                    ],
+                }),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(ItemCatalog {
+        schema_version: ITEM_CATALOG_SCHEMA_VERSION,
+        items: std::collections::HashMap::from([
+            ("gold_coin".to_string(), ItemDef {
+                display_name: "Gold Coin".to_string(),
+                icon_sheet: None,
+                icon_index: 0,
+                icon_color: None,
+                stackable: true,
+                max_stack: 500,
+                weight: 0.01,
+                tags: vec![],
+                currency_stat: None,
+            }),
+        ]),
+    })));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "loot_crate".to_string(), id: Some("crate_test".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.update();
+
+    let inv = app.world_mut().query::<&Inventory>().iter(app.world()).next()
+        .expect("spawned loot_crate should have an Inventory component");
+
+    let filled: Vec<u32> = inv.slots.iter().filter_map(|s| s.as_ref().map(|stack| stack.count)).collect();
+    assert_eq!(
+        filled, vec![250],
+        "250 gold_coin at the catalog's real max_stack of 500 must fit in a single slot; a hardcoded \
+         99-cap fallback would split it into multiple slots instead (got {:?})", filled
+    );
+}
+
+/// Companion regression covering the other direction: a `stackable: false` item forces
+/// `max_stack: 1` regardless of `count`, so N units occupy N slots (one item per slot) rather than
+/// piling into a single stack — the old hardcoded-99 fallback would have wrongly allowed up to 99
+/// units of a non-stackable item to share one slot. Also exercises `initial_items` overflowing
+/// `max_slots`: `count: 12` into `max_slots: 9` must silently cap at 9 filled slots, never panic.
+#[test]
+fn test_spawn_action_non_stackable_initial_item_occupies_one_slot_per_unit() {
+    use ironhold_core::schema::catalog::{
+        AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind,
+        InventoryContainerDef, InitialItemEntry,
+    };
+    use ironhold_core::schema::items::{ItemCatalog, ItemDef, ITEM_CATALOG_SCHEMA_VERSION};
+    use ironhold_core::capabilities::inventory::{Inventory, LoadedItemCatalog};
+
+    let mut app = setup_test_app();
+    app.update();
+
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+        models: std::collections::HashMap::from([
+            ("crate_model".to_string(), ModelCatalogEntry {
+                path: "shared/models/props/crate.glb#Scene0".to_string(),
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+        prefabs: std::collections::HashMap::from([
+            ("sword_crate".to_string(), PrefabDef {
+                kind: PrefabKind::Prop,
+                model: "crate_model".to_string(),
+                inventory: Some(InventoryContainerDef {
+                    max_slots: 9,
+                    initial_items: vec![
+                        InitialItemEntry { item_key: "iron_sword".to_string(), count: 12 },
+                    ],
+                }),
+                ..Default::default()
+            }),
+        ]),
+        ..Default::default()
+    }));
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(ItemCatalog {
+        schema_version: ITEM_CATALOG_SCHEMA_VERSION,
+        items: std::collections::HashMap::from([
+            ("iron_sword".to_string(), ItemDef {
+                display_name: "Iron Sword".to_string(),
+                icon_sheet: None,
+                icon_index: 0,
+                icon_color: None,
+                stackable: false,
+                max_stack: 99, // ignored: non-stackable always caps at 1
+                weight: 3.5,
+                tags: vec![],
+                currency_stat: None,
+            }),
+        ]),
+    })));
+
+    app.world_mut().resource_mut::<ActionQueue>().push(
+        Action::Spawn { prefab: "sword_crate".to_string(), id: Some("sword_crate_test".to_string()), position: None, spawn_point: None, yaw_deg: None, at_entity: None }
+    );
+    app.update();
+
+    let inv = app.world_mut().query::<&Inventory>().iter(app.world()).next()
+        .expect("spawned sword_crate should have an Inventory component");
+
+    let filled: Vec<u32> = inv.slots.iter().filter_map(|s| s.as_ref().map(|stack| stack.count)).collect();
+    assert_eq!(
+        filled, vec![1; 9],
+        "12 units of a stackable:false item into 9 slots must fill 9 slots of 1 each and silently \
+         drop the remaining 3 (got {:?})", filled
+    );
+}

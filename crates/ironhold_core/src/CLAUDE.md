@@ -97,7 +97,7 @@ When a nested prefab reference is resolved, the spawner dispatches on `nested_pr
 - **`Primitive` with no `children`** — spawns an anchor + one mesh child using `build_primitive_mesh` (reads `nested_prefab.shape`).
 - **`Actor` / `Prop`** — calls `spawn_prefab_instance` with the resolved GLB model path; the returned entity is parented directly under the composite parent at the child `offset`/`rotation_euler_deg`/`scale`.
 
-**`ChildSpawnCtx<'a>`** fields: `meshes`, `standard`, `built_mats`, `custom_mats`, `primitive_default_color` (material/mesh refs) plus `asset_server`, `model_spawner`, `fixes`, `asset_catalog`, `project_root` (needed for GLB dispatch).
+**`ChildSpawnCtx<'a>`** fields: `meshes`, `standard`, `built_mats`, `custom_mats`, `primitive_default_color` (material/mesh refs) plus `asset_server`, `model_spawner`, `fixes`, `asset_catalog`, `project_root`, `item_catalog` (needed for GLB dispatch — `item_catalog` specifically so a nested `Actor`/`Prop` prefab reference's `attach_prefab_features` call can stack its `inventory.initial_items` against the real `ItemCatalog` instead of falling back to `max_stack: 99`).
 
 - Cycle detection and depth limit (8 levels) are enforced inside `spawn_primitive_children`.
 - Cycle detection at **load time** is in `PrefabCatalog::validate()` (DFS via `prefab_has_cycle()`).
