@@ -1,7 +1,7 @@
 # Memory Index — alignment-reviewer
 
 - [UiMaterial-driven UI node pattern](uimaterial_ui_node_pattern.md) — five-touchpoint pattern (schema, capability, SceneMaterialParams, scene_loader, lib.rs) that StatRadar/terrain follow; consult when reviewing new shader-backed UI nodes
-- [Entity-targeted action pattern](entity_targeted_action_pattern.md) — six-touchpoint checklist for new Action variants that reference an entity by spawn ID; rewrite_self omission is the most common silent break
+- [Entity-targeted action pattern](entity_targeted_action_pattern.md) — 7-touchpoint checklist for new Action variants that reference an entity by spawn ID; rewrite_self + action_needs_target are the silent breaks
 - [Particle quality/budget pattern](particle_quality_budget_pattern.md) — six-touchpoint checklist for global-state Actions that mutate persistent resources, plus backward-compat rules for adding fields to EffectDef/LayerDef
 - [PrefabDef markers need all 3 spawn paths](prefab_marker_three_spawn_paths.md) — spawn-time marker fields wired only into spawn_prefab_instance silently break primitive/composite prefabs; grep scene_loader.rs for the field
 - [Targeting capability + {target} pattern](targeting_capability_pattern.md) — click/Tab selection, screen-space not raycast, 3-spawn-path markers, and the SetTarget-vs-capability GameVariable asymmetry footgun
@@ -44,4 +44,5 @@
 - [Serde-default loosening](serde_default_loosening_pattern.md) — adding `#[serde(default)]` to required fields: typo-detection loss without deny_unknown_fields, duplicate hardcoded ctor drift, stale-RON-comment sweep
 - [Stale feature base-branch hazard](stale_feature_base_branch_hazard.md) — branches cut from `main` miss `integration`'s schema fields; new test struct literals merge cleanly then fail to compile
 - [rules_path vs state_machine_path coexistence](rules_vs_state_machine_coexistence.md) — both are independently live; the runtime warn + docs + backlog all falsely claim FSM replaces rules.ron
+- [System-ordering determinism fixes](system_ordering_determinism_pattern.md) — how to review a pure `.chain()`/`.before()` fix: Update-tier ordering map, transitive pre-interpreter pull-in, deferred-spawn/auto-clear edge, test-fixture fallout
 - [UI trigger reachability map](ui_trigger_reachability_pattern.md) — 4 `UiEvent::ButtonPressed` emit sites + 5 panel triggers, both directions now covered; 3x literal duplication; buy_item scoping rationale

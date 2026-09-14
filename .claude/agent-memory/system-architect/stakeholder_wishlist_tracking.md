@@ -7,7 +7,9 @@ metadata:
 
 `planning/stakeholder_priority_list.md` holds a 5-stakeholder snapshot (commit `db1ede0`, 2026-09-03). My section is "System-Architect — stability, maintainability, future-proofing": (1) Rapier cross-platform float divergence gating Beta 0.5-0.9, (2) `Action` `deny_unknown_fields`, (3) scene-singleton config misplaced on `PrefabDef`, (4) test-suite trust (flakiness + no "warning was logged" infra), (5) `spawn_scene_v2` at the 16-param ceiling.
 
-Status at the 2026-09-14 check-in: only #2 shipped (`4b8c865`/`b203f1f`/`3677859`). Everything after it in `db1ede0..HEAD` was CLI-validate hardening plus two small fixes. #1 has no investigation file and Beta 0.5 is untouched; #3 sits in Icebox; #4's both halves are open (targeting race root-caused `c936bdc`, 3rd recurrence 2026-09-14, unfixed); #5 unchanged at exactly 16 params.
+Status at the 2026-09-14 check-in: only #2 shipped (`4b8c865`/`b203f1f`/`3677859`). Everything after it in `db1ede0..HEAD` was CLI-validate hardening plus two small fixes. #1 has no investigation file and Beta 0.5 is untouched; #3 sits in Icebox; #5 unchanged at exactly 16 params (`spawn_scene_v2` in `scene_loader.rs`, re-counted 2026-09-14).
+
+**Update, later the same day (2026-09-14):** #4's *first* half is now addressed — `feature/targeting_race_fix` landed the `.chain()` + `.before(action_bar_input_system)` ordering fix I recommended pulling forward, eliminating the suite's only known flake. #4's second half (no "assert a warning was logged" infra) is still open, and the fix has its own caveats — see [[flaky-test-trust-gate]].
 
 **Why:** Frank periodically asks each agent persona to grade progress against its own wishlist, so the snapshot is a recurring reference point, not a one-off doc.
 

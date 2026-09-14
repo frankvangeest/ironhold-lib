@@ -18,6 +18,19 @@ For any new `Action` variant that takes an `entity` / `target` / `event` string 
 
 5. **`tests/ron_validation.rs`** — add a parse test (`from_str::<Action>("…")`) to prove the variant deserializes correctly.
 
+6b. **`capabilities/action_bar.rs::action_needs_target`** — *the `{target}` twin of #3, and the one
+   nobody remembers.* This is a hand-maintained allowlist `match` deciding whether a slot's action
+   requires a live target (→ emit `action_bar.no_target` and refuse to fire). It has already drifted
+   out of sync with `message_interpreter.rs::rewrite_target`: as of 2026-09-14 `rewrite_target`
+   substitutes `{target}` in 16 variants but `action_needs_target` only recognizes 11, missing
+   `SetVariable`, `ResetToSpawn`, `AddItem`/`RemoveItem`/`TransferItem`, `OpenShop`,
+   `OpenContainer`, `EmitEventAfterDelay`, and `Spawn`'s `id`/`spawn_point` (only `at_entity` is
+   checked). Consequence for a designer: an action-bar slot using `{target}` in any unlisted field
+   fires with no target, and `action_bar.rs:228`'s `player_target.0.as_deref().unwrap_or("")`
+   silently rewrites `{target}` → `""` — no event, no warning. Any new `{target}`-capable field must
+   be added here too, or the right fix is to derive this from `rewrite_target` (return a `changed`
+   bool) instead of duplicating the arm list a third time.
+
 6. **The matching domain test file** (`tests/{domain}_tests.rs` — e.g. `action_tests.rs`, `spawn_tests.rs`; see `tests/CLAUDE.md`'s file layout table) — add a behavior test pushing the action onto `ActionQueue`, calling `app.update()`, and asserting the side effect (component changed, event emitted, etc.). `integration_tests.rs` was split into domain files 2026-07-02 — do not recreate it.
 
 ## Patterns that signal a problem when reviewing such an action
