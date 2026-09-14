@@ -817,6 +817,7 @@ pub fn spawn_scene_v2(
         warn_missing_stat_widget_templates(scene, prefab_catalog);
         warn_label_depth_scale_min_scale_out_of_range(scene);
         warn_label_depth_scale_reference_distance(scene, &player_configs, prefab_catalog, has_flycam);
+        warn_missing_interactable_item_key(scene, prefab_catalog, item_catalog);
 
         // Flycam spawns unconditionally and immediately, ahead of the player/spawn-points/default
         // dispatch below — it has no terrain dependency (a plain Transform + Camera3d spawn) and,
@@ -1590,6 +1591,51 @@ fn warn_missing_stat_widget_templates(
                 );
             }
         }
+    }
+}
+
+/// Warns at scene load when an `interactable.requires_item` names a key not in the loaded
+/// `ItemCatalog`, **or when there is no loaded `ItemCatalog` at all**. `ironhold_cli validate`
+/// catches the first case too (see `commands/validate.rs`'s matching `requires_item` reference
+/// check), but that check silently skips entirely in a project with no `items_path` configured —
+/// this function is the only diagnostic that still fires in that case, and a WASM-only designer
+/// has no local CLI access regardless. Unlike a typo'd stat/widget key (which degrades to an
+/// empty display), a typo'd or catalog-less `requires_item` fails *closed*: the entity
+/// permanently blocks every player, since no item any player could ever hold matches. Scoped to
+/// `scene.entities` (only prefabs actually placed in this scene), mirroring
+/// `warn_missing_stat_widget_templates`'s shape.
+fn warn_missing_interactable_item_key(
+    scene: &GameSceneV2,
+    prefab_catalog: &crate::schema::catalog::PrefabCatalog,
+    item_catalog: Option<&crate::schema::items::ItemCatalog>,
+) {
+    // Deliberately does NOT early-return when `item_catalog` is `None` (unlike this function's
+    // sibling `warn_*` checks) -- a project with `requires_item` authored but no `items_path` set
+    // at all is the single worst case this diagnostic exists for: `ironhold_cli validate`'s
+    // matching check also silently skips when there's no item catalog to check against, so
+    // without this branch NEITHER diagnostic layer would ever fire for it. Found by
+    // debug-detective's post-implementation review: 7 of the 8 shipped projects using
+    // `interactable:` have no `items_path` configured at all.
+    for entity_def in &scene.entities {
+        let Some(prefab) = prefab_catalog.prefabs.get(&entity_def.prefab) else { continue };
+        let Some(interactable) = &prefab.interactable else { continue };
+        let Some(requires_item) = &interactable.requires_item else { continue };
+        let missing = match item_catalog {
+            Some(items) => !items.items.contains_key(requires_item),
+            None => true,
+        };
+        if !missing { continue; }
+        let reason = if item_catalog.is_none() {
+            "but this project loads no item catalog at all (no items_path set in .project.ron)"
+        } else {
+            "but no such key exists in the loaded item catalog"
+        };
+        warn!(
+            "Entity '{}' (prefab '{}') has interactable.requires_item \"{}\", {} — this entity \
+             will emit entity.interact_blocked:{} for every player, forever, regardless of what \
+             they're carrying. Fix the typo, add '{}' to items.ron, or set items_path.",
+            entity_def.id, entity_def.prefab, requires_item, reason, entity_def.id, requires_item
+        );
     }
 }
 

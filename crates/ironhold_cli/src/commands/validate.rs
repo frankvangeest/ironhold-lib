@@ -1207,6 +1207,33 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         }
     }
 
+    // A prefab's `interactable.requires_item` is only read at interact time -- a typo there fails
+    // *closed*, not just cosmetically: the entity permanently emits `entity.interact_blocked:{id}`
+    // for every player regardless of what they're carrying, since no item_key will ever match a
+    // typo'd catalog reference. Same failure shape as the two item_key checks above, at higher
+    // severity (an unopenable door vs. a wrong-icon slot).
+    if let Some(catalog) = prefab_catalog {
+        if let Some(items) = item_catalog {
+            let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+            prefab_keys.sort();
+            for prefab_key in prefab_keys {
+                let prefab = &catalog.prefabs[prefab_key];
+                let Some(interactable) = &prefab.interactable else { continue };
+                let Some(requires_item) = &interactable.requires_item else { continue };
+                if !items.items.contains_key(requires_item) {
+                    errors.push(CrossFileError {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {:?}: interactable requires_item {:?} not found in items.ron",
+                            prefab_key, requires_item
+                        ),
+                        error_type: "missing_reference",
+                    });
+                }
+            }
+        }
+    }
+
     // `ItemDef.currency_stat`/`.icon_sheet` are both only read at the moment they'd actually
     // matter (looting the item; rendering its inventory slot) -- a typo in either doesn't stop
     // the item from being usable, it just silently loses the currency gain (currency_stat --

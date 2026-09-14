@@ -977,6 +977,8 @@ pub struct MotionDef {
 /// Configuration for the Interactable capability.
 /// Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the
 /// interact key (configured via `inputs.interact` in the player prefab; default: `"KeyF"`).
+/// If `requires_item` is set and the player doesn't have it, emits `entity.interact_blocked:{id}`
+/// instead.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct InteractableDef {
@@ -985,6 +987,11 @@ pub struct InteractableDef {
     /// Optional text shown near the entity when the player is in range.
     #[serde(default)]
     pub hint_text: Option<String>,
+    /// Optional `items.ron` catalog key the player must hold in `PlayerInventory` to interact.
+    /// When set and absent, emits `entity.interact_blocked:{id}` instead of `entity.interacted:{id}`.
+    /// `None` (the default) is unchanged legacy behavior — no gate.
+    #[serde(default)]
+    pub requires_item: Option<String>,
 }
 
 /// Configuration for the TriggerZone capability.

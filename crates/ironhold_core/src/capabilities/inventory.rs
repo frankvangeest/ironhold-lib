@@ -162,6 +162,11 @@ pub struct ContainerSlotIconMarker {
 
 // ─── Inventory helpers ────────────────────────────────────────────────────────
 
+/// Whether `slots` contains at least one of `item_key`, regardless of count.
+pub fn has_item(slots: &[Option<ItemStack>], item_key: &str) -> bool {
+    slots.iter().flatten().any(|slot| slot.item_key == item_key)
+}
+
 /// Try to add `count` of `item_key` to `slots` (up to `max_slots`).
 /// Returns `(actually_added, inventory_full)`.
 pub fn add_to_slots(

@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    items: {
+        "old_key": ( display_name: "Old Key" ),
+    },
+)

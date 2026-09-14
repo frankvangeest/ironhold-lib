@@ -405,6 +405,22 @@ fn missing_inventory_item_key_exits_1() {
 }
 
 #[test]
+fn missing_interactable_item_key_exits_1() {
+    let (code, stdout) = validate("bad_interactable_item_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("typo_old_key") && stdout.contains("not found in items.ron"),
+        "expected the missing interactable requires_item in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn valid_interactable_item_key_exits_0() {
+    let (code, stdout) = validate("valid_interactable_item_key");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+#[test]
 fn missing_item_currency_stat_exits_1() {
     let (code, stdout) = validate("bad_item_currency_stat");
     assert_eq!(code, 1, "expected exit 1, got {code}");

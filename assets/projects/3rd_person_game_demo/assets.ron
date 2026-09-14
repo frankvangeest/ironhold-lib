@@ -13,6 +13,9 @@
     "anvil": (
       path: "shared/models/props/anvil.glb#Scene0",
     ),
+    "wooden_gate_01": (
+      path: "shared/models/props/wooden_gate_01.glb#Scene0",
+    ),
     "snake": (
       path: "shared/models/creatures/snake01.glb#Scene0",
     ),

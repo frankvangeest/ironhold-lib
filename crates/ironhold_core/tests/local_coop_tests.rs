@@ -3917,7 +3917,7 @@ fn test_interact_fires_for_pressing_player_with_two_players_present() {
     app.world_mut().spawn((
         Transform::from_xyz(1.0, 0.0, 0.0),
         SpawnId("chest_01".to_string()),
-        Interactable { radius: 2.0, hint_text: None },
+        Interactable { radius: 2.0, hint_text: None, requires_item: None },
     ));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyF);
@@ -3953,6 +3953,132 @@ fn test_interact_fires_for_pressing_player_with_two_players_present() {
     );
 }
 
+// ── Item-gated interactable (planning/features/item_gated_interactable.md) ─────────
+
+fn press_interact_and_collect_events(app: &mut App) -> Vec<String> {
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyF);
+    app.update();
+    app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .filter_map(|e| match e { GameEvent::Trigger(name) => Some(name.clone()), _ => None })
+        .collect()
+}
+
+/// A `requires_item`-gated interactable fires `entity.interact_blocked:{id}`, not
+/// `entity.interacted:{id}`, when the player's `PlayerInventory` lacks the key — and the press
+/// still does NOT count as a miss (`player.attack_missed`), since it landed on a real entity and
+/// was correctly refused (see the plan's `hit_any` note — a first draft had this backwards).
+#[test]
+fn test_gated_interactable_fires_blocked_when_player_lacks_item() {
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut inputs = test_input_map();
+    inputs.interact = "KeyF".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("seal_door".to_string()),
+        Interactable { radius: 2.0, hint_text: None, requires_item: Some("old_key".to_string()) },
+    ));
+    // PlayerInventory starts empty by default (Resource, Default) — the player has nothing.
+
+    let events = press_interact_and_collect_events(&mut app);
+    assert!(
+        events.iter().any(|e| e == "entity.interact_blocked:seal_door"),
+        "a gated interactable must fire entity.interact_blocked:{{id}} when the player lacks the \
+         required item; got: {events:?}"
+    );
+    assert!(
+        !events.iter().any(|e| e == "entity.interacted:seal_door"),
+        "entity.interacted:{{id}} must NOT also fire alongside entity.interact_blocked:{{id}}; \
+         got: {events:?}"
+    );
+    assert!(
+        !events.iter().any(|e| e == "player.attack_missed"),
+        "a blocked interact must not count as a miss — the press landed on seal_door and was \
+         correctly refused, unlike pressing interact with nothing in range at all; got: {events:?}"
+    );
+}
+
+/// The mirror case: once the player has the required item, a `requires_item`-gated interactable
+/// fires `entity.interacted:{id}` exactly as an ungated one does.
+#[test]
+fn test_gated_interactable_fires_interacted_when_player_has_item() {
+    use ironhold_core::capabilities::inventory::PlayerInventory;
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+    use ironhold_core::schema::items::ItemStack;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut inputs = test_input_map();
+    inputs.interact = "KeyF".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("seal_door".to_string()),
+        Interactable { radius: 2.0, hint_text: None, requires_item: Some("old_key".to_string()) },
+    ));
+    let mut inv = PlayerInventory::new(5);
+    inv.slots[0] = Some(ItemStack { item_key: "old_key".to_string(), count: 1 });
+    app.world_mut().insert_resource(inv);
+
+    let events = press_interact_and_collect_events(&mut app);
+    assert!(
+        events.iter().any(|e| e == "entity.interacted:seal_door"),
+        "a gated interactable must fire entity.interacted:{{id}} once the player has the \
+         required item; got: {events:?}"
+    );
+    assert!(
+        !events.iter().any(|e| e == "entity.interact_blocked:seal_door"),
+        "entity.interact_blocked:{{id}} must not fire once the player has the required item; \
+         got: {events:?}"
+    );
+}
+
+/// Regression guard: an `interactable` authored with no `requires_item` at all (the pre-existing
+/// shape, `requires_item: None`) behaves identically to before this feature — no shipped project
+/// needs any RON change.
+#[test]
+fn test_ungated_interactable_unaffected_by_item_gating() {
+    use ironhold_core::capabilities::interactable::Interactable;
+    use ironhold_core::runtime::scene_manager::SpawnId;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut inputs = test_input_map();
+    inputs.interact = "KeyF".to_string();
+    app.world_mut().spawn((
+        CharacterController { inputs, ..test_character_controller() },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+    app.world_mut().spawn((
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        SpawnId("chest_01".to_string()),
+        Interactable { radius: 2.0, hint_text: None, requires_item: None },
+    ));
+
+    let events = press_interact_and_collect_events(&mut app);
+    assert!(
+        events.iter().any(|e| e == "entity.interacted:chest_01"),
+        "an interactable with no requires_item must fire entity.interacted:{{id}} exactly as \
+         before this feature; got: {events:?}"
+    );
+}
+
 /// `gamepad_controller_input.md`: a custom `gamepad_interact` button fires `entity.interacted:{id}`
 /// exactly as the keyboard `interact` key does.
 #[test]
@@ -3976,7 +4102,7 @@ fn test_gamepad_interact_button_fires_entity_interacted() {
     app.world_mut().spawn((
         Transform::from_xyz(1.0, 0.0, 0.0),
         SpawnId("chest_01".to_string()),
-        Interactable { radius: 2.0, hint_text: None },
+        Interactable { radius: 2.0, hint_text: None, requires_item: None },
     ));
 
     press_gamepad_button(&mut app, gamepad, GamepadButton::West);
@@ -4028,7 +4154,7 @@ fn test_gamepad_interact_works_independently_in_two_player_local_coop() {
     app.world_mut().spawn((
         Transform::from_xyz(1.0, 0.0, 0.0),
         SpawnId("chest_01".to_string()),
-        Interactable { radius: 2.0, hint_text: None },
+        Interactable { radius: 2.0, hint_text: None, requires_item: None },
     ));
 
     press_gamepad_button(&mut app, gamepad, GamepadButton::West);

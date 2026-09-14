@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    items: {
+        "health_potion": ( display_name: "Health Potion" ),
+    },
+)

@@ -171,6 +171,27 @@
                 ( event: "ui.button_pressed:close_container",        do_actions: [ CloseContainer ] ),
                 ( event: "ui.button_pressed:take_all_from_container", do_actions: [ TakeAllFromContainer ] ),
 
+                // ── Item-gated interactable demo (docs/20_data_formats.md's "interactable" row;
+                // entity.interact_blocked:{id} in docs/30_runtime_events_and_logic.md) ──────────
+                // seal_door requires the "old_key" item (buyable from merchant_01) to open.
+                // State-scoped here (not global_on:) to match every other interact rule above —
+                // pressing F near the door while paused correctly does nothing, same as the
+                // merchant/chests. Blocked feedback reuses the existing "click" audio key rather
+                // than adding a new asset just for this example — use a real locked-door sfx in a
+                // real project. SetDespawnTimer (not Despawn) so "The seal breaks..." is actually
+                // visible for a moment before the door disappears — ShowFloatingText's popup
+                // tracks the door's position and hides the instant its tracked entity is gone, so
+                // an immediate Despawn in the same do_actions list would make the text invisible
+                // for its entire duration.
+                ( event: "entity.interact_blocked:seal_door", do_actions: [
+                    ShowFloatingText(entity: "seal_door", text: "Locked - needs the old key"),
+                    PlaySound(key: "click"),
+                ] ),
+                ( event: "entity.interacted:seal_door", do_actions: [
+                    ShowFloatingText(entity: "seal_door", text: "The seal breaks..."),
+                    SetDespawnTimer(entity: "seal_door", delay_secs: 1.5),
+                ] ),
+
                 // Monster respawn rules moved to the top-level global_on: block — see its comment
                 // for why (a state-scoped on: list here would silently drop the respawn event if
                 // the game happens to be paused when the 30s timer fires).

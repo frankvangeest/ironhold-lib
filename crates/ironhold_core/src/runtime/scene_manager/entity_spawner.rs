@@ -61,6 +61,7 @@ pub(super) fn attach_prefab_features(
         commands.entity(entity).insert(crate::capabilities::interactable::Interactable {
             radius: interactable_def.radius,
             hint_text: interactable_def.hint_text.clone(),
+            requires_item: interactable_def.requires_item.clone(),
         });
     }
 
