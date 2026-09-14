@@ -117,7 +117,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"target.clicked:<id>"` — player left-clicked a `click_selectable: true` entity (screen-space proximity) ✅
 - `"target.changed:<id>"` — fires only when that specific entity becomes the target; use for per-entity reactions (e.g. `target.changed:boss_01` → start a boss healthbar) ✅
 - `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. `ShowFloatingText(entity: "{target}", text: "Selected!")` — see `3rd_person_game_demo/logic/rules.ron`) ✅
-- `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, or `LoadScene`) ✅
+- `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, `LoadScene`, or the targeted entity becoming hidden/despawned) ✅
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
@@ -805,4 +805,6 @@ tick_delayed_events_system  →  interactable_system
 `tick_delayed_events_system` runs before the interpreter chain so delayed events fired in a given frame are visible to all three interpreters in the same frame.
 
 `trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to all three interpreter systems in the following `Update` tick.
+
+The targeting systems (`click_select_system`, `tab_targeting_system`, `target_auto_clear_system`) are also ordered before the interpreter chain, same as `tick_delayed_events_system` above — a `target.*` event fired by a click or Tab-cycle in a given frame is guaranteed visible to all three interpreters, and to the action bar's `{target}` substitution, in that same frame.
 

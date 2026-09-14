@@ -277,6 +277,43 @@ primary player" normalization `owns_slot`/`warn_missing_player_stat_templates` a
 *different* players sharing a button name (each has their own physical pad) is correctly not
 flagged.
 
+**`TargetingPlugin`'s three mutating systems are `.chain()`ed and ordered `.before(
+action_bar_input_system)` — this is load-bearing, not incidental.** `click_select_system` →
+`tab_targeting_system` → `target_auto_clear_system` all read/write `PlayerTarget`/`CurrentTarget`
+with no data dependency forcing an order between them, so before this ordering existed Bevy's
+scheduler was free to interleave them with `action_bar_input_system` (which reads `PlayerTarget`
+for `{target}` substitution) in whichever order thread availability picked each run — on the exact
+frame a targeted entity despawned, this nondeterministically raced whether the action bar saw the
+freshly-cleared target or the stale one, and surfaced as unreproducible flaky test failures (see
+`planning/backlog.md`'s former "Same-frame targeting/action-bar race" bug entry) long before it was
+root-caused. `target_indicator_system` (`capabilities/target_indicator.rs`) and `camera.rs`'s
+`target_hud_update_system` are also explicitly ordered `.after(target_auto_clear_system)` for the
+same reason (both are read-only consumers, so this costs zero parallelism). If you add another
+system that reads or writes `PlayerTarget`/`CurrentTarget` in `Update`, order it explicitly
+relative to this chain rather than leaving it ambiguous — do not assume "it passed in testing"
+proves the ordering is safe, since the failure mode is a scheduling race, not a logic bug, and can
+pass hundreds of times before flipping.
+
+**The targeting→interpreter ordering is transitive, not direct — it depends on `ActionBarPlugin`
+owning its own edge to `message_interpreter_system`.** `TargetingPlugin` only orders itself before
+`action_bar_input_system`; it never references any interpreter system directly. It's
+`ActionBarPlugin`'s own `(cooldown_tick_system, action_bar_input_system,
+action_bar_visual_system).chain().before(message_interpreter_system)` (`capabilities/action_bar.rs`)
+that pulls the whole targeting chain ahead of `message_interpreter_system`/`fsm_interpreter_system`/
+`entity_fsm_interpreter_system` too — meaning `target.*` events are guaranteed visible to all three
+interpreters in the same frame they fire, not just to the action bar. If that `ActionBarPlugin` edge
+is ever removed or restructured, this second guarantee silently disappears along with it — there is
+no test asserting the schedule graph itself, only behavioral tests that would go back to being
+flaky rather than reliably red.
+
+**Test fixtures for `Targetable`/`ClickSelectable` entities must register in `SpawnRegistry`,
+not just carry a `SpawnId`.** `target_auto_clear_system` treats an unregistered `SpawnId` as
+"already despawned" and clears it immediately — harmless in production (every real entity goes
+through `tag_spawned_entity`, which always registers), but with the ordering above now
+deterministic, a test fixture missing the registration will have its freshly-selected target wiped
+in the very same `app.update()` call, every time, not just occasionally. See
+`local_coop_tests.rs::spawn_targetable_at` for the helper that does both.
+
 **`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
 `click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
 proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the

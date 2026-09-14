@@ -3681,16 +3681,23 @@ fn test_click_select_resolves_against_the_viewport_the_cursor_is_actually_over()
     // One selectable sits exactly at the left camera's look-at target (projects to the left
     // viewport's centre, screen (320, 360)); another at the right camera's look-at target
     // (projects to the right viewport's centre, screen (960, 360)).
-    app.world_mut().spawn((
+    // Registered in SpawnRegistry (matching production's `tag_spawned_entity`) even though these
+    // fixtures currently spawn players without `CharacterController` — `target_auto_clear_system`
+    // is filtered `With<CharacterController>` and so can't see them today, but that exemption is
+    // accidental, not structural (see `spawn_targetable_at`'s doc comment), so registering removes
+    // the fragility rather than relying on it.
+    let left_entity = app.world_mut().spawn((
         SpawnId("left_entity".to_string()),
         GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
         ClickSelectable,
-    ));
-    app.world_mut().spawn((
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("left_entity".to_string(), left_entity);
+    let right_entity = app.world_mut().spawn((
         SpawnId("right_entity".to_string()),
         GlobalTransform::from_translation(Vec3::new(3.0, 0.0, 0.0)),
         ClickSelectable,
-    ));
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("right_entity".to_string(), right_entity);
 
     // Click at the LEFT viewport's centre.
     set_cursor_position(&mut app, 320.0, 360.0);
@@ -3726,16 +3733,19 @@ fn test_click_select_resolves_against_the_other_viewport_when_cursor_moves_there
     );
     app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1), test_orbit_camera(right_player)));
 
-    app.world_mut().spawn((
+    // See the identical comment in `test_click_select_resolves_against_the_viewport_the_cursor_is_actually_over`.
+    let left_entity = app.world_mut().spawn((
         SpawnId("left_entity".to_string()),
         GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
         ClickSelectable,
-    ));
-    app.world_mut().spawn((
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("left_entity".to_string(), left_entity);
+    let right_entity = app.world_mut().spawn((
         SpawnId("right_entity".to_string()),
         GlobalTransform::from_translation(Vec3::new(3.0, 0.0, 0.0)),
         ClickSelectable,
-    ));
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("right_entity".to_string(), right_entity);
 
     // Click at the RIGHT viewport's centre this time.
     set_cursor_position(&mut app, 960.0, 360.0);
@@ -3760,11 +3770,12 @@ fn test_click_select_single_camera_regression_unaffected_by_viewport_fix() {
     );
     app.world_mut().spawn((Camera3d::default(), camera, t, g, test_orbit_camera(player)));
 
-    app.world_mut().spawn((
+    let only_entity = app.world_mut().spawn((
         SpawnId("only_entity".to_string()),
         GlobalTransform::from_translation(Vec3::ZERO),
         ClickSelectable,
-    ));
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("only_entity".to_string(), only_entity);
 
     set_cursor_position(&mut app, 640.0, 360.0);
     app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
@@ -3786,6 +3797,19 @@ fn test_targetable_at(id: &str, pos: Vec3) -> impl Bundle {
         GlobalTransform::from_translation(pos),
         ironhold_core::capabilities::targeting::Targetable,
     )
+}
+
+/// Spawns a `test_targetable_at` entity and registers it in `SpawnRegistry`, matching what every
+/// real targetable entity gets from `tag_spawned_entity` at production spawn time. Needed since
+/// `TargetingPlugin`'s ordering fix (see `capabilities/targeting.rs`) now runs
+/// `target_auto_clear_system` deterministically last in every frame — an unregistered `SpawnId`
+/// is indistinguishable from "already despawned" and gets auto-cleared the instant it's selected,
+/// which a nondeterministic system order previously masked most of the time. Use this instead of
+/// the bare `test_targetable_at` bundle whenever a test needs the selection to actually persist.
+fn spawn_targetable_at(app: &mut App, id: &str, pos: Vec3) -> Entity {
+    let entity = app.world_mut().spawn(test_targetable_at(id, pos)).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert(id.to_string(), entity);
+    entity
 }
 
 #[test]
@@ -3811,11 +3835,12 @@ fn test_click_select_only_changes_the_clicking_players_target() {
     );
     app.world_mut().spawn((Camera3d::default(), cam1, t1, g1, SplitViewportSlot(1), test_orbit_camera(right_player)));
 
-    app.world_mut().spawn((
+    let left_entity = app.world_mut().spawn((
         SpawnId("left_entity".to_string()),
         GlobalTransform::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
         ClickSelectable,
-    ));
+    )).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("left_entity".to_string(), left_entity);
 
     // Click the left viewport — only the left (primary) player should get a target.
     set_cursor_position(&mut app, 320.0, 360.0);
@@ -3858,8 +3883,8 @@ fn test_tab_targeting_each_player_cycles_independently() {
         GlobalTransform::default(),
     )).id();
 
-    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
-    app.world_mut().spawn(test_targetable_at("enemy_b", Vec3::new(-2.0, 0.0, 0.0)));
+    spawn_targetable_at(&mut app, "enemy_a", Vec3::new(2.0, 0.0, 0.0));
+    spawn_targetable_at(&mut app, "enemy_b", Vec3::new(-2.0, 0.0, 0.0));
 
     // Player 2 presses their own key first — only player 2's target should change.
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyT);
@@ -4079,7 +4104,7 @@ fn test_gamepad_target_next_advances_targeting_independently_in_two_player_scene
         BoundGamepad::default(),
     )).id();
 
-    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+    spawn_targetable_at(&mut app, "enemy_a", Vec3::new(2.0, 0.0, 0.0));
 
     press_gamepad_button(&mut app, gamepad, GamepadButton::North);
     app.update();
@@ -4158,7 +4183,7 @@ fn test_only_primary_player_target_mirrors_into_current_target_and_global_events
     // absent here on purpose to isolate "does a non-primary change ever leak into CurrentTarget",
     // matching the primitive-player path's "no PlayerIndex at all" shape too.
 
-    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+    spawn_targetable_at(&mut app, "enemy_a", Vec3::new(2.0, 0.0, 0.0));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::KeyT);
     app.update();
@@ -4221,7 +4246,7 @@ fn test_legacy_target_vars_blank_when_multiplayer() {
         Transform::default(), GlobalTransform::default(),
     ));
 
-    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+    spawn_targetable_at(&mut app, "enemy_a", Vec3::new(2.0, 0.0, 0.0));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Tab);
     app.update();
@@ -4243,7 +4268,7 @@ fn test_legacy_target_vars_populate_when_single_player() {
         PlayerTarget::default(),
         Transform::default(), GlobalTransform::default(),
     ));
-    app.world_mut().spawn(test_targetable_at("enemy_a", Vec3::new(2.0, 0.0, 0.0)));
+    spawn_targetable_at(&mut app, "enemy_a", Vec3::new(2.0, 0.0, 0.0));
 
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Tab);
     app.update();

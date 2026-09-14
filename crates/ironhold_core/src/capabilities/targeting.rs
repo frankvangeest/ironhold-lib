@@ -4,7 +4,7 @@ use bevy::window::PrimaryWindow;
 use bevy::input::gamepad::Gamepad;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
-use crate::capabilities::action_bar::CurrentTarget;
+use crate::capabilities::action_bar::{action_bar_input_system, CurrentTarget};
 use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::schema::player::InputMap;
 use crate::GameVariables;
@@ -46,10 +46,23 @@ impl Plugin for TargetingPlugin {
         // match the visible pose of skinned/animated GLB characters — clicks on an animated
         // orc would pass through to the ground. Projecting the entity origin to the screen
         // and measuring cursor distance is pose-independent and works for every prefab kind.
+        //
+        // The three targeting-mutation systems are explicitly chained in their documented
+        // intent order (select/tab-cycle first, auto-clear last) and ordered before
+        // `action_bar_input_system` — all four write/read `PlayerTarget`/`CurrentTarget` with
+        // no prior ordering constraint between them, which let Bevy's scheduler serialize them
+        // in whichever order thread availability happened to pick each run. On the exact frame a
+        // targeted entity despawns, that let `action_bar_input_system` sometimes read a
+        // just-cleared target and sometimes read the stale one depending purely on scheduling
+        // luck — see `planning/backlog.md`'s "Same-frame targeting/action-bar race" bug entry.
         app.add_systems(Update, (
-            click_select_system,
-            tab_targeting_system,
-            target_auto_clear_system,
+            (
+                click_select_system,
+                tab_targeting_system,
+                target_auto_clear_system,
+            )
+                .chain()
+                .before(action_bar_input_system),
             debug_selectables_system.run_if(resource_exists::<GizmoConfigStore>),
         ));
     }
