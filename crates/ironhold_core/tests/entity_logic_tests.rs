@@ -684,6 +684,16 @@ fn test_owner_player_slot_resolves_against_its_own_players_target() {
         PlayerTarget(Some("enemy_b".to_string())),
         PlayerIndex(1),
     ));
+    // `target_auto_clear_system` now runs deterministically before `action_bar_input_system`
+    // (see `TargetingPlugin`'s ordering fix) rather than racing it — an unregistered
+    // `PlayerTarget` is treated as "despawned" and cleared every run, not just some. Register
+    // both targets so this test exercises the intended {target}-resolution path instead of the
+    // (now-deterministic) auto-clear path, matching `test_single_player_slot_with_no_owner_
+    // still_resolves_via_player_target`'s existing precedent.
+    let enemy_a = app.world_mut().spawn(SpawnId("enemy_a".to_string())).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_a".to_string(), enemy_a);
+    let enemy_b = app.world_mut().spawn(SpawnId("enemy_b".to_string())).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_b".to_string(), enemy_b);
 
     // Only player 1's key this frame.
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
@@ -736,6 +746,11 @@ fn test_both_players_bars_firing_same_frame_neither_press_dropped() {
         PlayerTarget(Some("enemy_b".to_string())),
         PlayerIndex(1),
     ));
+    // See the identical comment in `test_owner_player_slot_resolves_against_its_own_players_target`.
+    let enemy_a = app.world_mut().spawn(SpawnId("enemy_a".to_string())).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_a".to_string(), enemy_a);
+    let enemy_b = app.world_mut().spawn(SpawnId("enemy_b".to_string())).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_b".to_string(), enemy_b);
 
     // Both keys pressed the same frame.
     app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);

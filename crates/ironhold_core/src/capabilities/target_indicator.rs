@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::runtime::scene_manager::{LevelEntity, LoadedPrefabCatalog, LoadedTargetIndicator, PrefabKey, ResolvedTargetIndicator, SpawnRegistry, TargetRingVisibilityMode};
 use crate::capabilities::player::{CharacterController, PlayerIndex, PlayerTarget};
 use crate::capabilities::camera::PLAYER_LABEL_COLORS;
+use crate::capabilities::targeting::target_auto_clear_system;
 use bevy::camera::visibility::RenderLayers;
 
 /// Marks an active target-indicator ring: which world entity it tracks, and which player entity
@@ -18,7 +19,11 @@ pub struct TargetIndicatorPlugin;
 
 impl Plugin for TargetIndicatorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, target_indicator_system);
+        // Ordered after the targeting chain's `target_auto_clear_system` (see
+        // `TargetingPlugin`/`capabilities/targeting.rs`) so a ring never renders for one extra
+        // frame against a target that was already cleared this same frame — both already
+        // conflict (both touch `PlayerTarget`-derived state), so this costs zero parallelism.
+        app.add_systems(Update, target_indicator_system.after(target_auto_clear_system));
     }
 }
 

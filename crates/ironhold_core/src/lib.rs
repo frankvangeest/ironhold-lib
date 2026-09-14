@@ -314,7 +314,11 @@ impl Plugin for GamePlugin {
                 dynamic_split_screen_system,
                 split_screen_viewport_system,
                 split_viewport_player_label_update_system,
-                target_hud_update_system,
+                // Ordered after the targeting chain's `target_auto_clear_system` (see
+                // `TargetingPlugin`/`capabilities/targeting.rs`) so the readout never shows a
+                // target that was already cleared this same frame — both already conflict (both
+                // touch `PlayerTarget`-derived state), so this costs zero parallelism.
+                target_hud_update_system.after(crate::capabilities::targeting::target_auto_clear_system),
                 camera_shake_system,
                 fly_camera_system,
                 // Blends a switched camera's rendered pose/FOV toward whatever the newly-active
