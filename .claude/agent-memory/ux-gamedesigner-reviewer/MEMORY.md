@@ -1,5 +1,7 @@
 # Memory Index
 
+- [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 5 places a new entity.* event/InteractableDef field must land; interactable row still omits hint_text
+
 - [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder_priority_list.md ownership; #1 shipped, #2 mostly closed, #3 demo projects still all unbuilt, #4/#5 half-done
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Player-count-change assumptions](project_player_count_change_assumptions.md) — seat index vs viewport slot conflated at join; "2+ players" gating assumes count is fixed per scene; both break on leave
