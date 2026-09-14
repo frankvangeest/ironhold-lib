@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Item-gated interactable** — `requires_item: Option<String>` on `InteractableDef`; fires `entity.interact_blocked:{id}` when the player lacks the item, `entity.interacted:{id}` when they have it; enables key-locked doors and quest-gated triggers without a GameVariable workaround. _Dep: Inventory (shipped)._ See `planning/features/item_gated_interactable.md`
+
 ---
 
 ## Bugs
@@ -104,7 +106,6 @@ Staged incrementally; each stage ships and is playtested before the next starts.
 - [ ] **Spawn wave / encounter system** — `WaveDef` in RON: an ordered sequence of spawn steps each with a prefab key, count, delay, and optional position list; fires on an event (`StartWave("wave_01")`), emits `wave.complete:{id}` when all spawned entities are dead; supports looping waves and inter-wave delays. Designer-friendly alternative to scripting individual `Spawn` + `EmitEventAfterDelay` chains. See `planning/features/spawn_wave_encounter.md`
 - [ ] **Day/night cycle** — `DayNightCycleDef` in scene RON: cycle duration, sun color/intensity keyframes at dawn/noon/dusk/midnight; `TimeOfDay` resource drives directional light + ambient each frame; `SetTimeOfDay(hour)` and `SetDaySpeed(multiplier)` actions; emits `time.dawn` / `time.noon` / `time.dusk` / `time.midnight` events designers can hook; WASM compatible (pure CPU, no post-process). See `planning/features/day_night_cycle.md`
 - [ ] **Audio channels (volume buses)** — `channels: HashMap<String, f32>` on `AudioConfig`; each audio entry in `assets.ron` declares a `channel` key; `SetChannelVolume(channel, f32)` action scales that category within the master ceiling; enables independent music/sfx/ambient balance without touching source files. _Depends on mute toggle + master volume._
-- [ ] **Item-gated interactable** — `requires_item: "key_id"` field on `PrefabDef.interactable`; fires `entity.interact_blocked:{id}` when the player lacks the item, `entity.interacted:{id}` when they have it; enables key-locked doors and quest-gated triggers without a GameVariable workaround. _Dep: Inventory._
 - [ ] **Sound zones** — ambient audio driven by player location; a new `kind: SoundZone` trigger zone variant with `audio_key`, `volume`, and `fade_distance` fields; entering the zone fades in the audio, leaving fades it out; defined entirely in scene RON using the existing trigger zone + `PlayMusicLoop`/`StopMusic` actions, no new systems needed beyond the fade envelope.
 - [ ] **Stat radar labels** — render stat-key labels at each axis tip of `StatRadar`; blocked by UI text on `UiMaterial` nodes; low priority
 - [ ] **Equipment system (v1)** — string-key slot system (`EquipmentSlotsDef` on `PrefabDef`); `equippable`+`slot`+`stat_bonuses` on `ItemDef`; `EquipmentMap` component + `PlayerEquipment` resource; `Equip`/`Unequip`/`UnequipAll` actions; stat delta snapshot for reversal on unequip; two-handed exclusion. See `planning/features/equipment_system.md` _Deps: Inventory (hard); Stat templates (soft)._
