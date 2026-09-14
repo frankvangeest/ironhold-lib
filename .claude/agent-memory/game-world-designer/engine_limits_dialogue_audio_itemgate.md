@@ -39,3 +39,14 @@ Three engine capabilities the `3rd_person_game_demo` world design depends on. Or
 **How to apply:** item 1 can be designed around as shipped. For items 2 and 3, check
 `planning/backlog.md` L106/L108 for current status before designing around them as if they exist —
 they may have shipped since 2026-09-03. Related: [[project-greywatch-world]].
+
+**Re-verified 2026-09-14** (stakeholder-wishlist progress review): items 2 and 3 both still
+unchecked in Queued ▸ Gameplay & Environment. Zero gameplay/content features shipped between
+`db1ede0` (2026-09-03) and 2026-09-14 — that window went to `ironhold_cli validate` hardening plus
+an inventory/`max_stack` bugfix. **All five of my `planning/stakeholder_priority_list.md` wishlist
+items (Quest v1/v2, item-gated interactable, sound zones, day/night, loot v1) are still Queued.**
+Dependency state has improved though: Inventory, Dialogue, and Nameplate are all Done, and
+`Spawn.at_entity` shipped — so item-gated interactable and Loot v1 are now fully unblocked, and
+Quest v1's only remaining soft gap is Loot's `Collect` objective. My standing recommendation is
+**item-gated interactable next** (smallest schema surface, unblocked, and the direct unblock for
+Greywatch's Seal Door). Re-check the backlog before repeating this recommendation.
