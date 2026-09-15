@@ -1,6 +1,6 @@
 # Feature: Item-gated interactable
 
-_Status: Ready_
+_Status: Done_
 _Planned at: `b1fc32c` (2026-09-14)_
 
 ## What
