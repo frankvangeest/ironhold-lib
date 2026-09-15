@@ -463,10 +463,11 @@ update system, so there's no stale-frame risk across a `dynamic` split's merge/s
 - `GameEvent::Trigger("entity.entered:{id}")` on player enter
 - `GameEvent::Trigger("entity.exited:{id}")` on player exit
 
-`Interactable` — set `interactable: (radius: 2.5)` on a `PrefabDef`. No collider needed. Emits:
+`Interactable` — set `interactable: (radius: 2.5)` on a `PrefabDef`. No collider needed. Emits one of:
 - `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses the interact key (configured via `inputs.interact` in the player prefab, default `"KeyF"`)
+- `GameEvent::Trigger("entity.interact_blocked:{id}")` instead, when `requires_item: Option<String>` names an `items.ron` key the player's `PlayerInventory` doesn't hold (item-gated interactable) — never both for the same press. A blocked interact still counts as "hit something" for `interactable_system`'s own miss-detection (`player.attack_missed` doesn't fire), since the press landed on a real entity and was correctly refused.
 
-`interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
+`interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`), and fires one of the two events above for *every* in-range `Interactable` on one keypress, not just the nearest — placing two interactables within a few metres of each other means both can fire on the same press (see `3rd_person_game_demo`'s `seal_door`/`merchant_01` placement note in `main.scene.ron`, which exists specifically to avoid this). `trigger_zone_system` runs in `FixedUpdate`.
 
 **Lootable corpse (loot-on-death), `planning/features/monster_corpse_loot.md`** — on death, a
 monster despawns itself and is replaced by a separate, disposable corpse entity at the same

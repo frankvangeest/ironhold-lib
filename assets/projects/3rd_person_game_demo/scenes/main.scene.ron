@@ -204,6 +204,21 @@
         scale: (1.0, 1.0, 1.0),
       ),
     ),
+    // Item-gated interactable demo — locked gate; the merchant (merchant_01, ~5.8m away) sells
+    // the "old_key" it requires. Distance chosen so the gate's 2.0m interactable radius never
+    // overlaps the merchant's 3.0m interactable radius / 3.5m trigger_zone (a closer placement
+    // made both fire on the same keypress). Free-standing rather than blocking a path — this
+    // demo is about the item gate, not level geometry; pair requires_item with real blocking
+    // geometry in a real project.
+    (
+      id: "seal_door",
+      prefab: "seal_door",
+      transform: (
+        translation: (-13.0, 0.0, 5.0),
+        rotation_euler_deg: (0.0, 45.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
   ],
 
   ui: [

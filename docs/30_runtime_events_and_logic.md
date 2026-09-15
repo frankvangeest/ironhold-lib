@@ -100,10 +100,12 @@ Scene lifecycle events fire in this order:
 Physics sensors and gameplay capabilities emit named triggers via `GameEvent::Trigger(String)`.
 The name is used as-is in the rules pipeline — the caller is responsible for namespacing:
 - `"player.jumped"` — emitted by `CharacterController` on every successful jump ✅
+- `"player.attack_missed"` — pressed the interact key with no `Interactable` in range at all. Does **not** fire for a gated interactable the player is in range of but lacks the item for — that press still "landed" on a real entity (`entity.interact_blocked:<id>` fires instead), it just didn't succeed ✅
 - `"entity.collected:<id>"` — collectible sensor overlap ✅
 - `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.interacted:<id>"` — player within radius + pressed the interact key (default: `"KeyF"`; override via `inputs.interact` on the player prefab) ✅
+- `"entity.interact_blocked:<id>"` — player within radius + pressed the interact key, but `interactable.requires_item` names an `items.ron` key not in `PlayerInventory`; fires instead of `entity.interacted:<id>` (never both). `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for every player. Event matching is exact-id-only (no wildcard) same as `entity.interacted:<id>` — for many gated doors sharing one prefab, a `.behavior.ron` with `event: "entity.interact_blocked:{self}"` scales better than one `global_on:`/`rules.ron` rule per door ✅
 - `"container.opened:<id>"` — emitted by `Action::OpenContainer(id)` after the `ContainerPanel` UI is shown for the given entity's `Inventory` ✅
 - `"container.closed"` — emitted by `Action::CloseContainer` (no entity id — only one container can be open at a time) ✅
 - `"container.looted:<id>"` — emitted by `Action::TakeAllFromContainer` once every item has been transferred out of the given entity's `Inventory`. **Does not fire if the container was already empty** — `TakeAllFromContainer` early-returns before emitting when there is nothing to transfer, so an empty container is indistinguishable from "never looted" to anything listening for this event ✅
@@ -469,6 +471,7 @@ Spawn(prefab: "zombie_corpse", id: "{self}_corpse_{new_id}")
 | `CharacterController` | `components.movement` | `player.jumped` | Emitted on every jump; bind sound/effect in `state_machine.ron` |
 | `TriggerZone` | `trigger_zone: ( radius: 2.0 )` | `entity.entered:{id}` / `entity.exited:{id}` | Rapier sphere sensor; runs in `FixedUpdate`. Ghost collider — excluded from player ground detection, so it can never be stood on and never suppresses grounding on the real floor beneath/near it |
 | `Interactable` | `interactable: ( radius: 2.5 )` | `entity.interacted:{id}` | Player within radius + presses interact key (`inputs.interact`, default `"KeyF"`); runs in `Update` |
+| `Interactable` (with `requires_item`) | `interactable: ( radius: 2.5, requires_item: "old_key" )` | `entity.interact_blocked:{id}` | Same trigger as above, but the player's `PlayerInventory` lacks `requires_item`'s key — fires instead of `entity.interacted:{id}` |
 
 ### Respawn pattern (hide + delayed re-emit)
 

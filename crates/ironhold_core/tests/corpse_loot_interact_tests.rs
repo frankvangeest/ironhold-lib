@@ -252,6 +252,7 @@ fn spawn_real_corpse(app: &mut App, corpse_prefab_key: &str, id: &str, pos: Vec3
             Interactable {
                 radius: interactable_def.radius,
                 hint_text: interactable_def.hint_text.clone(),
+                requires_item: interactable_def.requires_item.clone(),
             },
             inv,
             BehaviorHandle(handle),

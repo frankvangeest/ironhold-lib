@@ -517,6 +517,24 @@
       ),
     ),
 
+    // Item-gated interactable demo (see the "interactable" row in docs/20_data_formats.md and
+    // entity.interact_blocked:{id} in docs/30_runtime_events_and_logic.md) — requires "old_key"
+    // (buyable from merchant_01, the merchant_vendor prefab) to interact; see
+    // logic/state_machine.ron's "playing" state for the entity.interact_blocked:seal_door /
+    // entity.interacted:seal_door wiring. Collider sized to wooden_gate_01.glb's real bounds
+    // (~0.87m wide x 0.90m tall) rather than the model's own scale, which reads as a garden gate
+    // rather than a barrier at 1x — deliberately kept small since blocking a path isn't this
+    // demo's point (see main.scene.ron's placement comment).
+    "seal_door": (
+      kind: Prop,
+      model: "wooden_gate_01",
+      nameplate: false,
+      colliders: [
+        (shape: Cuboid, size: (0.9, 1.0, 0.2), offset: (0.0, 0.5, 0.0)),
+      ],
+      interactable: (radius: 2.0, hint_text: "Open", requires_item: "old_key"),
+    ),
+
     "chest_02": (
       kind: Prop,
       model: "chest_02",

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::input::gamepad::Gamepad;
 use crate::capabilities::player::{BoundGamepad, CharacterController};
-use crate::capabilities::inventory::LoadedInventoryUi;
+use crate::capabilities::inventory::{has_item, LoadedInventoryUi, PlayerInventory};
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::SpawnId;
 
@@ -10,6 +10,8 @@ use crate::runtime::scene_manager::SpawnId;
 /// When the player is within `radius` metres and presses the interact key (configured via
 /// `inputs.interact` in the player prefab, default: `"KeyF"`), the system emits:
 ///   `GameEvent::Trigger("entity.interacted:{spawn_id}")`
+/// unless `requires_item` is set and the player's `PlayerInventory` lacks that item key, in which
+/// case it emits `GameEvent::Trigger("entity.interact_blocked:{spawn_id}")` instead.
 ///
 /// The response is configured in RON — either in `rules.ron`, `state_machine.ron`,
 /// or the entity's own `.behavior.ron` file.
@@ -20,6 +22,9 @@ pub struct Interactable {
     /// Optional hint shown near the entity when the player enters range.
     /// Not yet rendered — reserved for a future UI pass.
     pub hint_text: Option<String>,
+    /// Optional `items.ron` catalog key the player must hold in `PlayerInventory` to interact.
+    /// `None` (the default) means no gate — unchanged legacy behavior.
+    pub requires_item: Option<String>,
 }
 
 /// Checks each frame whether each player is within range of any `Interactable` entity
@@ -42,6 +47,7 @@ pub fn interactable_system(
     interactables: Query<(&Transform, &SpawnId, &Interactable)>,
     mut game_events: MessageWriter<GameEvent>,
     inventory_ui: Res<LoadedInventoryUi>,
+    player_inventory: Res<PlayerInventory>,
 ) {
     if inventory_ui.panels_open > 0 { return; }
 
@@ -62,11 +68,25 @@ pub fn interactable_system(
         for (transform, spawn_id, interactable) in &interactables {
             let dist = player_transform.translation.distance(transform.translation);
             if dist <= interactable.radius {
-                info!("Interacted with: {}", spawn_id.0);
-                game_events.write(GameEvent::Trigger(format!(
-                    "entity.interacted:{}",
-                    spawn_id.0
-                )));
+                let gated_and_missing = interactable.requires_item.as_deref()
+                    .is_some_and(|key| !has_item(&player_inventory.slots, key));
+                if gated_and_missing {
+                    info!("Interact blocked (missing item) on: {}", spawn_id.0);
+                    game_events.write(GameEvent::Trigger(format!(
+                        "entity.interact_blocked:{}",
+                        spawn_id.0
+                    )));
+                } else {
+                    info!("Interacted with: {}", spawn_id.0);
+                    game_events.write(GameEvent::Trigger(format!(
+                        "entity.interacted:{}",
+                        spawn_id.0
+                    )));
+                }
+                // A blocked interact still counts as "hit something" — the press landed on a real
+                // entity and was correctly refused, which is not the same failure as pressing
+                // interact with nothing in range at all (see planning/features/
+                // item_gated_interactable.md's hit_any note).
                 hit_any = true;
             }
         }
