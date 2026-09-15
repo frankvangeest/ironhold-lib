@@ -11,6 +11,8 @@ _Planned at: `6905b71` (2026-05-31)_
 >
 > - [ ] **Beta 0.5 (Deterministic Tick + Replay) must be complete.** Networking sync requires a fixed-tick simulation loop and deterministic RNG. Without this foundation, any multiplayer implementation will produce desync that is impossible to diagnose. Do not start networking until the replay demo works.
 >
+> - [ ] **Cross-platform determinism harness must validate clean before committing to lockstep.** See `planning/features/deterministic_fixed_timestep.md` (v2). A 2026-09-15 system-architect investigation found Rapier's `enhanced-determinism` feature already enabled, which per its own docs should give cross-platform bit-determinism — but this has never actually been measured against this engine's usage. If the harness comes back clean, Form 1's lock-step plan below stands. If it diverges, fall back to server-authoritative-with-interpolation (or client prediction + reconciliation) instead — see that feature file for the full option analysis.
+>
 > - [ ] **Library spike: confirm Bevy Lightyear fits the action-queue architecture.** Lightyear is the strongest current candidate (native + WASM, rollback/prediction built-in, WebTransport/WebRTC). Before committing, run a one-day spike: wire Lightyear's input replication to `InputActionMessage` and verify that `ActionQueue` actions can be dispatched server-side from replicated inputs. If Lightyear is a poor fit, evaluate `bevy_renet` (UDP/WebSocket, no built-in rollback) and `matchbox_socket` (WebRTC peer-to-peer, WASM-friendly). Document the decision in this file before proceeding.
 >
 > - [ ] **WASM transport confirmed.** Web clients cannot open raw TCP/UDP sockets. The chosen library must support WebSocket or WebRTC/WebTransport for WASM targets. Confirm this compiles and connects in a browser before writing game-sync code.
@@ -54,7 +56,7 @@ The current Beta 0.6 milestone describes "server-authoritative networking" as a 
 - Other players launch with `--join <host-ip>` or a `JoinGame(address)` action.
 - The host ticks the fixed simulation (Beta 0.5 tick loop) and replicates state to clients.
 - Clients send `InputActionMessage` packets to the host; the host authorises and simulates.
-- Initial sync strategy: **lock-step** (simpler to implement, acceptable on LAN latency). Rollback/prediction can be added in Form 2 if needed.
+- Initial sync strategy: **lock-step** (simpler to implement, acceptable on LAN latency) — **contingent on the cross-platform determinism harness (`planning/features/deterministic_fixed_timestep.md` v2) validating clean.** If the harness finds real divergence that can't be closed cheaply, fall back to server-authoritative-with-interpolation for Form 1 instead — that model doesn't require cross-platform bit-determinism at all. Rollback/prediction can be added in Form 2 if needed.
 
 ### New RON actions / events
 

@@ -8,7 +8,8 @@
 > - 🧭 **Planned** — intended design; not implemented yet
 
 ## Status
-🧭 Planned (design notes; not implemented yet)
+🧭 Mostly planned (design notes; not implemented yet) — see "Physics determinism" below for the
+one sub-area with real ✅ items already in place.
 
 ## Why we care
 Multiplayer (especially rollback/prediction) becomes far simpler if gameplay simulation is **deterministic**:
@@ -51,6 +52,10 @@ For Ironhold, determinism means:
 
 ### RNG in gameplay capabilities 🧭
 
+_(No current violations, verified 2026-09-15: `ironhold_core` has zero `rand` usage today. This
+section is a forward-looking guardrail for the first capability that needs randomness, not a
+fix for existing code.)_
+
 Any gameplay capability that uses randomness (loot rolls, procedural decisions, AI variance) must use an explicit seeded RNG — never `rand::thread_rng()` or any `from_entropy()` call.
 
 Rules:
@@ -88,13 +93,46 @@ Mitigations:
   or network-sync key — key on something author-stable instead (prefab key + a designer-authored
   slot id).
 
-### Physics determinism 🧭
-General-purpose physics engines are often not deterministic across platforms.
+### Physics determinism 🧪
+_(Updated 2026-09-15 — system-architect investigation into
+`planning/stakeholder_priority_list.md`'s "Rapier cross-platform float divergence" item.)_
 
-Mitigations:
-- Keep authoritative gameplay logic separate from physics
-- Use simple deterministic collision primitives in the gameplay core
-- Treat full physics as presentation/approximation unless proven deterministic
+✅ Rapier's `enhanced-determinism` feature is already enabled
+(`crates/ironhold_core/Cargo.toml:16`) — it unifies transcendental math (`sin`/`cos`/`acos`/etc.)
+across platforms via `libm` and disables the native-only MXCSR denormal-flush-to-zero
+optimization, both of which are real, verified sources of native-vs-WASM divergence that this
+feature closes (it also, as a side effect, makes rapier's joint wake-up iteration order
+deterministic, and is mutually exclusive with rapier's SIMD feature — `enhanced-determinism` and
+SIMD cannot both be enabled, so this class of regression cannot be introduced silently, but it is
+a standing SIMD-throughput cost paid today). Per Rapier's own documentation this gives bit-level
+cross-platform determinism under normal use — same rapier version, same feature flags, on
+IEEE-754-2008-compliant platforms (conditions this engine already meets) — but **not
+independently proven for this engine's specific usage yet**, hence 🧪 not ✅ for the section as a
+whole.
+
+What's actually left, in priority order:
+
+- 🧭 **Variable timestep** (the real remaining blocker) — `capabilities/physics.rs` runs Rapier on
+  wall-clock `dt`, not a fixed tick. Different frame rates feed the solver different inputs
+  regardless of float determinism. See `planning/features/deterministic_fixed_timestep.md` (v1).
+- 🧭 **Three un-`libm`'d transcendental call sites** in gameplay code bypass Rapier's libm-forcing
+  and could still diverge by a ULP: `player.rs:289`'s `acos` for slope-angle (feeding a
+  grounded/airborne branch), `player.rs:579`'s rotation, and `motion.rs:38-55`'s
+  `Quat::from_rotation_*`/`.sin()` bob — the last of which is worse-shaped than the first two since
+  it runs in `Update` on wall-clock time and can touch entities with colliders. Fix once the
+  timestep is fixed. See `planning/features/deterministic_fixed_timestep.md` (v1).
+- 🧭 **Unverified in practice** — no harness yet actually compares native vs. WASM-Chrome vs.
+  WASM-Firefox state over time. See `planning/features/deterministic_fixed_timestep.md` (v2).
+
+✅ Authoritative gameplay logic is already effectively separate from raw physics: the engine has no
+free-body dynamic rigid-body gameplay (dynamic bodies are only rotation-locked player/NPC
+capsules) and gameplay overwrites velocity every tick rather than trusting accumulated physics
+state — this is the property that makes the rest of this section tractable at all.
+
+Mitigations (remaining):
+- Fix the timestep before drawing any conclusion about cross-platform behavior
+- Route the three known transcendental call sites above through `libm` directly
+- Measure with a real divergence harness before committing a networking model to bit-determinism
 
 ## Networking models (planned)
 

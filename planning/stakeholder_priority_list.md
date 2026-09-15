@@ -39,6 +39,15 @@ feature. Every month of feature work built on top of the current physics/movemen
 surface area a future determinism retrofit will have to re-audit. This isn't a bug — it's a
 foundation nobody has verified is buildable, sitting under a quarter of the roadmap.
 
+> **Correction (2026-09-15):** a full system-architect investigation found this item's stated
+> cause doesn't hold up — `bevy_rapier3d`'s `enhanced-determinism` feature has been enabled the
+> whole time (`crates/ironhold_core/Cargo.toml:16`), which per Rapier's own docs already gives
+> cross-platform float determinism under normal use. This is a dated snapshot and is being left
+> as-is rather than rewritten, but the *priority* was right even though the *cause* was wrong: the
+> real remaining blockers (a variable physics timestep, two un-`libm`'d transcendental call sites,
+> and the fact nobody had measured any of this) are now scoped as concrete backlog items — see
+> `planning/backlog.md` ▸ Beta 0.5 and `planning/features/deterministic_fixed_timestep.md`.
+
 ### 2. `Action` enum has no `#[serde(deny_unknown_fields)]`, so typo'd RON action fields silently vanish
 **Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime; originally flagged by debug-detective during `dynamic_animation_control.md`'s review (2026-08-26)
 
