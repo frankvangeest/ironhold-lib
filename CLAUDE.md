@@ -398,8 +398,8 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     ```
     Verify new action kinds appear in the output and nothing crashes. Re-run the two cache-build
     lines above afterward so `tools/bin/ironhold` picks up the schema change for later use.
- 7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu`
-    Fast (~2 min). For local play-testing only — **never commit `pkg/` on a feature branch** (enforced by `.githooks/pre-commit`).
+ 7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu --features inspector`
+    Fast (~2 min once `inspector`'s deps — `bevy_egui`/`bevy_inspector_egui` — are warm in the shared target dir; the first build after a `cargo clean` pays their compile cost once, same as any other dependency). `inspector` is a standing default for every dev build, not a judgment call based on what the playtest checklist covers — this is what makes F9 (physics collider wireframes) and `` ` `` (full egui world inspector) available in-browser without having to predict ahead of time whether a given playtest will need them (real incident, 2026-09-15: a collider-fit check requested mid-playtest needed a second ~13-minute rebuild because the first dev build omitted `inspector`). For local play-testing only — **never commit `pkg/` on a feature branch** (enforced by `.githooks/pre-commit`). Never add `inspector` to the release build (step 12) — production must never ship inspector tooling.
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
     - If the user requests changes or changes are required we go back to step **Code changes** to implement them, then re-run step 4 (review + tests) before playtesting again.

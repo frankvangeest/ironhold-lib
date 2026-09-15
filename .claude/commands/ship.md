@@ -35,10 +35,11 @@ Steps 1–10 happen **on a `feature/{slug}` branch**, in its own git worktree �
 
 7. **WASM dev build** — Run:
    ```
-   wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu
+   wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu --features inspector
    ```
-   Report the size of `pkg/ironhold_web_bg.wasm`. Warn if ≥ 95 MB.
-   ⚠️ **Never commit `pkg/` on a feature branch** — release builds only happen on `integration` (enforced by `.githooks/pre-commit`). This is a dev build for local play-testing only.
+   `inspector` is a standing default for every dev build (not a judgment call based on what the playtest checklist covers) — it's what makes F9 (physics collider wireframes) and `` ` `` (full egui world inspector) available in-browser without having to predict ahead of time whether a given playtest will need them. Fast once `bevy_egui`/`bevy_inspector_egui` are warm in the shared target dir; the first build after a `cargo clean` pays their compile cost once, same as any other dependency.
+   Report the size of `pkg/ironhold_web_bg.wasm`, but note it is **not** a proxy for the release build's size — an unoptimized `--dev` build (further inflated by `inspector`'s egui dependencies, which never ship) is routinely much larger than the optimized release build. Use it only to sanity-check nothing has grown unexpectedly huge; the real 95/100 MB GitHub Pages check happens at step 12's actual release build.
+   ⚠️ **Never commit `pkg/` on a feature branch** — release builds only happen on `integration` (enforced by `.githooks/pre-commit`). This is a dev build for local play-testing only. Never add `inspector` to the step 12 release build — production must never ship inspector tooling.
 
 8. **Play-test checklist** — Provide a concrete checklist for Frank to verify the feature in the browser: which project to load, what to interact with, what to look for. Include golden path and at least one edge case.
 
