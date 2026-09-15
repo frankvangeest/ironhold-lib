@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Fixed-timestep Rapier physics** _(promoted 2026-09-15, system-architect investigation into the "Rapier cross-platform float divergence" stakeholder-priority item; independently re-verified by a second system-architect plan-review pass same day; started 2026-09-15 on `feature/deterministic_fixed_timestep`)_ — `capabilities/physics.rs` currently runs Rapier on a variable, wall-clock-driven `PostUpdate` timestep (`TimestepMode::Variable`, the `bevy_rapier3d` default); different frame rates feed the solver different `dt` regardless of float determinism. This is the actual hard blocker the stakeholder item was chasing, not Rapier's floating-point behavior — see the correction below. Fix must target `dt = 1/64` (matching `FIXED_TICK_RATE` in `player.rs`, not 60Hz — `FixedUpdate` already runs at 64Hz) and must explicitly order the existing `FixedUpdate` gameplay chain against Rapier's `PhysicsSet` stages, since moving physics into the same schedule removes an ordering guarantee that used to come for free from being in separate schedules. Also fixes real gameplay jank today (the dual-clock contortions in `player.rs`'s coyote-time/jump-grace logic), independent of multiplayer. See `planning/features/deterministic_fixed_timestep.md` (v1).
+
 ---
 
 ## Bugs
@@ -135,11 +137,22 @@ Staged incrementally; each stage ships and is playtested before the next starts.
 
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] Fixed-tick schedule for gameplay systems (separate from render tick)
-- [ ] Deterministic RNG resource (seeded, replaces any `rand` usage in gameplay)
+- [ ] **Cross-platform determinism harness** _(promoted 2026-09-15, same investigation)_ — scripted-input, per-tick state-hash comparison across native / WASM-Chrome / WASM-Firefox / dev / release, to verify with evidence (not assumption) whether Rapier's `enhanced-determinism` feature — already enabled in `crates/ironhold_core/Cargo.toml:16` — actually holds cross-platform for this engine's usage, before `networking_multiplayer.md`'s Form 1 commits to lockstep. Doubles as Milestone B (replay tooling / tick-level state hashing) below. Depends on the fixed-timestep item above (a variable timestep guarantees divergence and would tell us nothing). See `planning/features/deterministic_fixed_timestep.md` (v2).
+- [ ] Deterministic RNG resource (seeded, replaces any `rand` usage in gameplay) — _note (2026-09-15): zero `rand` usage currently exists in `ironhold_core`, so this item is a forward-looking guardrail (add the resource before the first capability actually needs randomness), not a fix for an existing violation._
 - [ ] `InputAction` stream capture to file (native)
 - [ ] Replay playback from captured stream
 - [ ] Snapshot/restore stub for core gameplay state
 - [ ] Determinism constraints doc
+
+> **Correction (2026-09-15):** `planning/stakeholder_priority_list.md`'s system-architect item #1
+> ("Rapier cross-platform float divergence blocks the entire multiplayer roadmap") was based on a
+> premise that doesn't hold up: `bevy_rapier3d`'s `enhanced-determinism` feature has been enabled
+> the whole time. The real blockers — variable timestep, three un-`libm`'d transcendental call sites
+> (two in `player.rs`, one in `motion.rs`), and the fact nobody had actually measured cross-platform
+> behavior — are captured as the two items above. See
+> `planning/features/deterministic_fixed_timestep.md` for the full investigation writeup (including
+> a second, independent system-architect review that corrected the tick rate and found the third
+> call site).
 
 ### Beta 0.6 — Multiplayer Form 1: LAN Co-op
 See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic tick) must ship first.
