@@ -11,7 +11,7 @@ Inventory & item system (introduced ~2026-06-20). Items defined in `items/items.
 - Item data fully in RON; zero hardcoded items. `ItemDef` has proper `#[serde(default)]` + named default fns, `deny_unknown_fields`, and `ItemCatalog::validate()` with designer-facing error messages.
 - `PlayerInventory` persists across scenes (Resource, like LoadedStats); container `Inventory` is a `LevelEntity` component cleared on scene load. Correct persistence split.
 - `MerchantDef` is **NOT** a spawned component — `OpenShop(merchant_id)` resolves `PrefabKey` via SpawnRegistry then looks up `prefab.merchant` live from `LoadedPrefabCatalog`. So merchant works on ALL prefab kinds with no per-spawn-path wiring needed (immune to the [[prefab-marker-three-spawn-paths]] footgun). Stock is per-prefab in prefabs.ron. Good design.
-- No capability pushes to ActionQueue — `inventory_ui_system` only reads `PlayerInventory` and writes `Text`. All mutation is in the executor.
+- No capability pushes to ActionQueue — `inventory_ui_system` only reads `PlayerInventory` and writes `Text`. All mutation is in the executor. `interactable_system` is the second read-only consumer (2026-09-14, `requires_item` gating via the new pure-lookup helper `capabilities::inventory::has_item(slots, key)`) — see [[item-gated-interactable-pattern]].
 - `AddItem`/`RemoveItem` emit namespaced `GameEvent::Trigger` (`inventory.added:{e}:{k}:{n}`, `inventory.full:{e}`, etc.) — designer-reachable for chaining.
 
 **Three blockers found at introduction (check these on any inventory follow-up):**

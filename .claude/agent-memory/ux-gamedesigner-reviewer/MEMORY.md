@@ -1,6 +1,8 @@
 # Memory Index
 
-- [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 5 places a new entity.* event/InteractableDef field must land; interactable row still omits hint_text
+- [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 6 places a new entity.* event/InteractableDef field must land; STATUS.md event list + docs/60 check list lag most
+- [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning
+- [Pause is cosmetic](project_pause_is_cosmetic.md) — pause menu is an overlay only; nothing in the sim stops; 4 doc surfaces claim otherwise; no UI focus/keyboard-nav concept exists anywhere
 
 - [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder_priority_list.md ownership; #1 shipped, #2 mostly closed, #3 demo projects still all unbuilt, #4/#5 half-done
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed

@@ -8,7 +8,7 @@ metadata:
 The NPC dialogue system (`dialogues/*.dialogue.ron`, schema v1) is documented in `docs/20_data_formats.md` (DialogueDef section ~line 1943, DialoguePanel ~line 685, actions appendix ~1937) and `docs/30_runtime_events_and_logic.md` (events ~122). Canonical example: `3rd_person_game_demo` — prefab `friendly_npc_male`, scene entity id `npc_01`, dialogue file `dialogues/npc_intro.dialogue.ron`, panel id `npc_dialogue_panel`.
 
 Recurring gaps observed at review (2026-06):
-- **`hint_text` on `InteractableDef` is undocumented.** Ships in `friendly_npc_male` prefab (`interactable: (radius, hint_text: "Talk")`) but the PrefabDef `interactable` row only documents `radius: f32`. Check this whenever interactable/dialogue prefabs change.
+- ~~`hint_text` on `InteractableDef` is undocumented.~~ **CLOSED 2026-09-14** (`item_gated_interactable`): the `interactable` row in `docs/20_data_formats.md` ~1940 now lists `radius` / `hint_text` / `requires_item`, and states `hint_text` is not yet rendered. Do not re-flag.
 - **`dialogue.started:{npc_id}` payload is the scene-placed spawn id** (e.g. `npc_01`), NOT the prefab key. Docs example historically used a non-existent `npc_guard_01`.
 - **`dialogue.ended:{dialogue_path}` is keyed by file path, not npc id** — multi-NPC scenes sharing one `.dialogue.ron` cannot distinguish which NPC closed it via the ended event.
 - **`DialogueCondition` absent-key semantics unexplained** — whether an unset GameVariable compares equal to `""` (HasVariable) or `0` (VariableGte) is not stated, which breaks the shipped `HasVariable(value:"")` example on a fresh run.

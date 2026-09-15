@@ -35,6 +35,10 @@ GitHub Pages hard-blocks at 100 MB. Warn Frank at 95 MB. Every new capability ad
 
 HTTP fetch + GLTF decode on first load takes ~1–2 s. Use `Action::PreloadPrefab` during scene.ready to warm the asset server cache before the player can interact with a spawn trigger.
 
+For what happens when a fetch *fails* (no retry anywhere; a failed `.scene.ron` hangs `LoadingScene`
+forever) and why `serve.py` connection errors don't generalize to GitHub Pages, see
+[[asset-fetch-failure-handling]].
+
 ## WebFetch domain restrictions
 
 The permission allow list restricts `WebFetch` to `docs.rs` and `github.com`. Any new external dependency or documentation source needs to be added to `settings.json`.

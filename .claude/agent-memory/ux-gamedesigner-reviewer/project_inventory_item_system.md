@@ -12,7 +12,8 @@ Schema/doc locations:
 - `docs/30_runtime_events_and_logic.md`: 4 `inventory.*` events (~124); 7 actions AddItem/RemoveItem/TransferItem/OpenInventory/CloseInventory/OpenShop/CloseShop (~310).
 
 Designer footguns / scope:
-- **v1 is display-only for shops.** No buy/sell transaction; `buy_price`/`sell_price`/`currency_stat`/`stock_count` deduction not wired. Documented in 3 places (ShopPanel note, MerchantDef row, bottom scope note) — well covered.
+- ~~v1 is display-only for shops.~~ **STALE — `BuyItem` now ships and works.** `3rd_person_game_demo`'s `state_machine.ron` "playing" state wires `ui.button_pressed:buy_item:{key}` → `BuyItem("{key}")` for every merchant stock entry, and the player starts with `gold: 200` in `stats/stats.ron`. `ironhold_cli validate` covers `BuyItem` item keys. Verify current state before repeating any "shops are display-only" claim.
+- **`interactable.requires_item`** (shipped 2026-09-14) gates an interact on `PlayerInventory` possession; it does **not** consume the item. Canonical example: `3rd_person_game_demo` `seal_door` prefab + `entity.interact_blocked:seal_door` wiring in `state_machine.ron`'s `global_on:`. See [[entity-event-doc-surfaces]].
 - **`AddItem(entity: "player")` is a magic string** routing to the persistent `PlayerInventory` resource; any OTHER string routes to a container entity by spawn id. This is the key conceptual split designers must learn. The chest rule uses `entity: "player"` while the adjacent `ShowFloatingText` uses `entity: "player_01"` (the spawn id) — both correct but the mismatch in one rule block looks like a bug to a designer.
 - **PlayerInventory persists across scenes; container Inventory resets on LoadScene** (owned by LevelEntity). Documented at items.ron section intro.
 
