@@ -5,12 +5,16 @@ use crate::schema::stats::{LoadedStats, LoadedModifiers}; // used by update_play
 use crate::runtime::messages::*;
 use crate::runtime::scene_manager::ActiveViewBox;
 use crate::runtime::scene_manager::scene_loader::GRAVITY;
+use crate::det_math;
 use std::collections::HashMap;
 
-/// `FixedUpdate`'s tick rate — Bevy's engine default (`Time<Fixed>`'s period), unmodified
-/// anywhere in this crate. Used only to convert the physically-derived jump air-grace duration
-/// (seconds) into a tick count once, at jump-fire time — see `CharacterController::jump_air_grace`.
-const FIXED_TICK_RATE: f32 = 64.0;
+// `FixedUpdate`'s tick rate. Imports `capabilities::physics::FIXED_TICK_RATE` directly — the
+// single source of truth also driving `PhysicsPlugin`'s `TimestepMode::Fixed::dt` and the
+// schedule's own `Time<Fixed>` rate — so this module's jump-timing math (converting the
+// physically-derived jump air-grace duration in seconds into a tick count at jump-fire time, see
+// `CharacterController::jump_air_grace`) can never drift out of sync with the actual physics
+// tick rate.
+use crate::capabilities::physics::FIXED_TICK_RATE;
 
 /// Safety multiplier applied to the analytically-estimated ground-sensor detach time when
 /// deriving `jump_air_grace`. `t_detach` (see `jump_air_grace_ticks`) is a simplified ballistic
@@ -286,7 +290,11 @@ fn is_walkable_contact(controller: &CharacterController, details: Option<ShapeCa
         // degenerate normal) dots to 0, giving a 90° angle — unwalkable, matching the
         // existing "no computable normal" treatment above.
         let normal = d.normal1.normalize_or_zero();
-        let angle_from_up_deg = normal.dot(Vec3::Y).clamp(-1.0, 1.0).acos().to_degrees();
+        // `det_math::acos`, not `f32::acos`: routes through `libm` for bit-identical
+        // native/WASM results — see `det_math`'s doc comment. This is the worst-shaped of the
+        // engine's transcendental call sites for divergence risk: it feeds a grounded/airborne
+        // branch, so a 1-ULP platform difference here could flip a boolean.
+        let angle_from_up_deg = det_math::acos(normal.dot(Vec3::Y).clamp(-1.0, 1.0)).to_degrees();
         angle_from_up_deg <= controller.max_walkable_slope_deg
     })
 }
@@ -518,13 +526,15 @@ pub fn player_movement_system(
         // or which branch of `can_jump` below runs (double-jump height is unaffected) — it only
         // gates the `jumps_used` reset.
         //
-        // `jump_air_grace` alone is not sufficient: it's counted in `FixedUpdate` ticks, but
-        // Rapier's own physics stepping runs on `TimestepMode::Variable` in `PostUpdate` (see
-        // `capabilities/physics.rs`) — a different, framerate-coupled clock. At a low enough
-        // framerate (or one clamped `Time<Virtual>::max_delta` hitch), real elapsed *physics* time
-        // can lag behind the tick count, so the grace window alone could expire while the body is
-        // still genuinely rising. The two extra checks below are physical, not clock-derived, so
-        // they can't desync from however much real physics time has actually elapsed:
+        // `jump_air_grace` alone is not sufficient, even though `capabilities/physics.rs` now
+        // steps Rapier on `TimestepMode::Fixed` in `FixedUpdate` (see
+        // `planning/features/deterministic_fixed_timestep.md`) — the same clock this tick count
+        // is measured against, so the specific dual-clock-lag scenario this comment used to
+        // describe (`TimestepMode::Variable` in `PostUpdate` lagging behind real elapsed time)
+        // can no longer happen. The two checks below are kept anyway as defense-in-depth against
+        // any other source of a slower-than-assumed ascent (e.g. a future substep count or drag
+        // tuning change) — they're physical, not clock-derived, so they can't desync from
+        // whatever the body is actually doing regardless of cause:
         // `velocity.linvel.y <= 0.0` covers a jump whose ballistic ascent has genuinely ended
         // (flat ground, or a jump too short to ever clear the sensor — see
         // `warn_jump_cannot_clear_ground_sensor`); the liftoff-height check covers a *continuously
@@ -574,9 +584,15 @@ pub fn player_movement_system(
             }
         }
 
-        // Apply Rotation
+        // Apply Rotation. Equivalent to `transform.rotate_y(angle)` (`Transform::rotate_y` =
+        // `self.rotation = Quat::from_rotation_y(angle) * self.rotation`), but constructed via
+        // `det_math::quat_from_rotation_y` instead — `Quat::from_rotation_y` composes
+        // `f32::sin_cos` through glam's default (std) math backend, not `libm`. See `det_math`'s
+        // doc comment for the residual: the quaternion multiply below is still glam's
+        // per-SIMD-backend `Quat::mul_quat`, not itself guaranteed bit-identical native/WASM.
         if rotation != 0.0 {
-            transform.rotate_y(rotation * controller.rot_speed * time.delta_secs());
+            let angle = rotation * controller.rot_speed * time.delta_secs();
+            transform.rotation = det_math::quat_from_rotation_y(angle) * transform.rotation;
         }
 
         // Apply Movement via Linear Velocity (XZ only to allow gravity to work on Y)

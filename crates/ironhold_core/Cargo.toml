@@ -17,6 +17,11 @@ bevy_rapier3d = { version = "0.33", features = ["enhanced-determinism", "serde-s
 bevy_mesh = "0.18"
 futures-lite = "2.3"
 indexmap = { version = "2", features = ["serde"] }
+# Deterministic (bit-identical native/WASM) transcendental math for the gameplay call sites in
+# `det_math.rs` — see `planning/features/deterministic_fixed_timestep.md`. Already a transitive
+# dependency via bevy_rapier3d's `enhanced-determinism` feature; pinned here directly since we
+# call it ourselves now.
+libm = "0.2"
 
 # For the DebugState in the DOM and browser tests
 [target.'cfg(target_arch = "wasm32")'.dependencies]

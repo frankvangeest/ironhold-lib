@@ -14,8 +14,11 @@
 //! reachable in production once sensors are excluded from the cast).
 //!
 //! See `planning/features/uphill_jump_lock.md` for the full writeup. Style follows
-//! `player_slope_jump_tests.rs`: real Rapier physics, `player_movement_system` driven directly via
-//! `run_system_once`, one `step()` == one `FixedUpdate` tick.
+//! `player_slope_jump_tests.rs`: real Rapier physics, one `app.update()` call == one
+//! `FixedUpdate` tick (`TimeUpdateStrategy::ManualDuration` pinned to one tick's worth of
+//! virtual time), which runs the full gameplay chain (`player_movement_system` included)
+//! followed by Rapier's own physics step — both registered in `FixedUpdate` as of
+//! `planning/features/deterministic_fixed_timestep.md`.
 //!
 //! Also covers a second, later-discovered regression from the same slope-walkability gate: a solid
 //! (non-sensor) prop/wall pressed directly against the player could win the ground cast over the
@@ -169,7 +172,13 @@ fn setup_trimesh(build_props: impl FnOnce(&mut World)) -> Case {
 fn setup_with_ground(spawn_ground: fn(&mut World), build_props: impl FnOnce(&mut World)) -> Case {
     let mut app = setup_test_app();
     app.insert_resource(TimestepMode::Fixed { dt: 1.0 / 64.0, substeps: 1 });
-    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::ZERO));
+    // Pin the virtual clock to exactly one `FixedUpdate` tick's worth of time per `app.update()`
+    // call, so the schedule (gameplay chain + Rapier, both registered there as of
+    // `planning/features/deterministic_fixed_timestep.md`) fires exactly once per `step()`,
+    // deterministically — not zero, and not real wall-clock time.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f32(1.0 / 64.0),
+    ));
     app.update();
 
     spawn_ground(app.world_mut());
@@ -229,7 +238,10 @@ fn step(case: &mut Case, moving: bool) -> bool {
             msgs.write(InputActionMessage { entity: player, action: InputAction::Move(Vec2::new(1.0, 0.0)) });
         }
     }
-    case.app.world_mut().run_system_once(player_movement_system).unwrap();
+    // One `app.update()` call equals exactly one `FixedUpdate` tick (`setup_with_ground`'s
+    // `TimeUpdateStrategy`), which runs the full gameplay chain — including
+    // `player_movement_system` — followed by Rapier's own physics step, matching production
+    // (`planning/features/deterministic_fixed_timestep.md`).
     case.app.update();
     case.app.world().entity(case.player).get::<LocomotionState>().unwrap().is_grounded
 }
@@ -492,6 +504,10 @@ fn solid_prop_taller_than_cast_ball_centre_no_longer_vetoes_when_pressed_against
         msgs.write(InputActionMessage { entity: player, action: InputAction::Move(Vec2::new(1.0, 0.0)) });
         msgs.write(InputActionMessage { entity: player, action: InputAction::Jump(true) });
     }
+    // Deliberately a direct `run_system_once`, not `step()`/`app.update()`: this checks
+    // `player_movement_system`'s *immediate* output (did it decide to jump, what velocity did it
+    // assign) before any physics step runs, not the state after a full tick — the assertions
+    // below read `CharacterController`/`Velocity` as `player_movement_system` itself left them.
     case.app.world_mut().run_system_once(player_movement_system).unwrap();
     let controller = case.app.world().entity(case.player).get::<CharacterController>().unwrap();
     let velocity = case.app.world().entity(case.player).get::<Velocity>().unwrap();

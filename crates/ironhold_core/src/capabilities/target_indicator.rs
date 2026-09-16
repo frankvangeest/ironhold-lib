@@ -85,7 +85,15 @@ pub fn target_indicator_system(
     registry: Res<SpawnRegistry>,
     prefab_catalog: Res<LoadedPrefabCatalog>,
     prefab_keys: Query<&PrefabKey>,
-    global_transforms: Query<&GlobalTransform>,
+    // `Without<TrackingTarget>`: this only ever looks up a *tracked* entity (a player or NPC),
+    // never a ring itself — the filter also proves disjointness from `transforms` below (which
+    // takes `&mut Transform` on ring entities), so Bevy doesn't need to serialize the two queries.
+    // `&Transform` + `Option<&ChildOf>` alongside `&GlobalTransform`: see
+    // `crate::utils::fresh_global_transform`'s doc comment for why the raw `GlobalTransform`
+    // component alone is one frame stale for a root-level entity moved this same `Update` frame
+    // (a real regression found during `planning/features/deterministic_fixed_timestep.md`'s v1
+    // playtest, in the structurally identical `world_label_screen_pos_system`).
+    global_transforms: Query<(&GlobalTransform, Option<&Transform>, Option<&ChildOf>), Without<TrackingTarget>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
@@ -120,8 +128,8 @@ pub fn target_indicator_system(
     // Move any existing ring to follow its tracked entity.
     for (indicator_entity, tracking) in &existing {
         match global_transforms.get(tracking.target) {
-            Ok(gt) => {
-                let p = gt.translation();
+            Ok((gt, transform, child_of)) => {
+                let p = crate::utils::fresh_global_transform(transform, gt, child_of).translation();
                 if let Ok(mut tf) = transforms.get_mut(indicator_entity) {
                     if (tf.translation.x - p.x).abs() > 0.001
                         || (tf.translation.z - p.z).abs() > 0.001
@@ -160,7 +168,8 @@ pub fn target_indicator_system(
             continue;
         };
 
-        let Ok(gt) = global_transforms.get(target_entity) else { continue };
+        let Ok((gt, transform, child_of)) = global_transforms.get(target_entity) else { continue };
+        let gt = crate::utils::fresh_global_transform(transform, gt, child_of);
 
         // Resolve colour: per-player tint in multiplayer, per-target precedence otherwise.
         let rgba = if is_multiplayer {

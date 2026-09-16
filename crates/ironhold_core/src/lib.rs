@@ -5,6 +5,7 @@ use crate::schema::ImplicitRonPlugin;
 use std::time::Duration;
 
 use bevy::camera::visibility::NoFrustumCulling;
+use bevy_rapier3d::prelude::PhysicsSet;
 
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
@@ -13,6 +14,7 @@ pub mod schema;
 pub mod runtime;
 pub mod capabilities;
 pub mod utils;
+pub mod det_math;
 
 // Optional debug inspector (native + web)
 #[cfg(feature = "inspector")]
@@ -278,6 +280,37 @@ impl Plugin for GamePlugin {
             .add_systems(Update, npc_hit_relay_system.after(action_executor_system))
             // Physics-driven input + movement must run in FixedUpdate for stable simulation.
             // npc_behavior_system reads NpcHitQueue drained at the start of each FixedUpdate tick.
+            // motion_system (moved from `Update` — see its doc comment) is folded into the same
+            // chain rather than registered as a separate `.before(PhysicsSet::SyncBackend)` call:
+            // two independently-ordered groups both writing `&mut Transform` would themselves be
+            // an unresolved ambiguity between each other, even though each is individually
+            // ordered against physics — exactly the class of schedule race this whole chain
+            // exists to close, so it must not reintroduce a smaller instance of the same problem.
+            // `mark_dirty_trees` (`bevy_transform`) runs immediately after: Rapier's own
+            // `SyncBackend` includes Bevy's `propagate_parent_transforms`/`sync_simple_transforms`
+            // but NOT `mark_dirty_trees`, and `propagate_parent_transforms`'s static-scene
+            // optimization skips recomputing `GlobalTransform` for any subtree `mark_dirty_trees`
+            // hasn't just flagged — normally invisible (something dirties the flag by the next
+            // frame regardless), but on a frame that runs two `FixedUpdate` ticks — genuinely
+            // common (~4/s on a 60Hz display, more on higher refresh rates; matching native's
+            // framepace to `FIXED_TICK_RATE` does NOT eliminate this beat, see the
+            // `FramepaceSettings` comment in `start_app` — plus any `Time<Virtual>::max_delta`
+            // catch-up burst) — the second tick's `GlobalTransform` would go one tick stale for
+            // any entity this chain just moved — read by `player_movement_system`'s `ground_cast`
+            // as a stale `feet_pos`, intermittently. Found during v1 review (see `planning/
+            // features/deterministic_fixed_timestep.md`); not merely theoretical.
+            //
+            // `.before(PhysicsSet::SyncBackend)`: Rapier's physics now also runs in FixedUpdate
+            // (`PhysicsPlugin::build`, `in_fixed_schedule()`), and Bevy does not order two
+            // FixedUpdate system groups against each other by default — without this, this
+            // chain's ordering relative to Rapier's SyncBackend/StepSimulation/Writeback stages
+            // is unspecified (an ambiguity, not a guarantee), which is exactly the class of
+            // schedule race that has previously caused hard-to-reproduce test flakiness in this
+            // codebase. This preserves the same read-before-step relationship the chain already
+            // had for free when physics lived in the later-running `PostUpdate` schedule: every
+            // system here reads/writes state that was last resolved by the *previous* tick's
+            // physics step, not this tick's (see `planning/features/
+            // deterministic_fixed_timestep.md`'s Approach section).
             .add_systems(FixedUpdate, (
                 gamepad_bind_system,
                 input_translator_system,
@@ -286,7 +319,9 @@ impl Plugin for GamePlugin {
                 collectible_system,
                 trigger_zone_system,
                 npc_behavior_system,
-            ).chain())
+                motion_system,
+                bevy::transform::systems::mark_dirty_trees,
+            ).chain().before(PhysicsSet::SyncBackend))
             // Interactable input runs before all interpreters so all three readers
             // see the emitted GameEvent in the same frame.
             .add_systems(Update, interactable_system.before(message_interpreter_system))
@@ -329,11 +364,16 @@ impl Plugin for GamePlugin {
             ).chain())
             .add_systems(Update, split_viewport_player_label_spawn_system)
             .add_systems(Update, target_hud_spawn_system)
-            .add_systems(Update, motion_system)
             .add_systems(Update, pipeline_warmup_system)
             .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))
             .add_systems(Update, despawn_timer_system)
-            .add_systems(Update, world_label_screen_pos_system)
+            // `.after(camera_blend_system)`: must see this frame's *final* camera pose (after the
+            // whole per-mode camera chain above, blended) — previously unordered relative to that
+            // chain, which happened to be masked by `fresh_global_transform`'s freshness fix
+            // needing this ordering to matter at all. See `world_label_screen_pos_system`'s doc
+            // comment and `planning/features/deterministic_fixed_timestep.md`'s v1 playtest fix.
+            .add_systems(Update, world_label_screen_pos_system
+                .after(crate::capabilities::camera::camera_blend_system))
             .add_systems(Update, nameplate_setup_system)
             .add_systems(Update, nameplate_visibility_system.after(world_label_screen_pos_system))
             .add_systems(Update, nameplate_cleanup_system)
@@ -581,7 +621,7 @@ fn depth_scale_factor_from(ref_dist: f32, min_floor: f32, dist: f32) -> f32 {
 /// disagree on which camera is authoritative for a given anchor's position and visibility — see
 /// `planning/features/split_screen_camera_followups.md` Phase 3.
 fn world_label_screen_pos_system(
-    camera_q: Query<(Entity, &Camera, &GlobalTransform, Option<&SplitViewportSlot>), With<Camera3d>>,
+    camera_q: Query<(Entity, &Camera, &GlobalTransform, Option<&Transform>, Option<&ChildOf>, Option<&SplitViewportSlot>), (With<Camera3d>, Without<crate::runtime::scene_manager::WorldLabel>)>,
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut label_q: Query<(
         &crate::runtime::scene_manager::WorldLabel,
@@ -591,7 +631,7 @@ fn world_label_screen_pos_system(
         Option<&mut TextFont>,
         Option<&mut crate::capabilities::nameplate::NameplateCameraDistance>,
     )>,
-    tracked_q: Query<(&GlobalTransform, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
+    tracked_q: Query<(&GlobalTransform, Option<&Transform>, Option<&ChildOf>, Option<&Visibility>), Without<crate::runtime::scene_manager::WorldLabel>>,
 ) {
     let Ok(window) = window_q.single() else { return };
     let half_w = window.width() / 2.0;
@@ -601,9 +641,19 @@ fn world_label_screen_pos_system(
     // resolves the same way across frames: by `SplitViewportSlot` index first
     // (cameras with no slot — single-camera or Party-mode camera scenes —
     // sort last), then by `Entity` to break ties.
+    //
+    // `crate::utils::fresh_global_transform`, not the raw `&GlobalTransform` component: this
+    // system runs in `Update`, after the camera chain has just written this frame's `Transform`
+    // (`camera_orbit_system` et al.) but before `PostUpdate` has propagated it into
+    // `GlobalTransform` — reading the component directly here would be one frame stale. See
+    // `fresh_global_transform`'s doc comment for the full derivation (a real playtest-found
+    // regression, `planning/features/deterministic_fixed_timestep.md` v1).
     let mut active_cameras: Vec<_> = camera_q
         .iter()
         .filter(|(_, camera, ..)| camera.is_active)
+        .map(|(entity, camera, global, transform, child_of, slot)| {
+            (entity, camera, crate::utils::fresh_global_transform(transform, global, child_of), slot)
+        })
         .collect();
     active_cameras.sort_by_key(|(entity, _, _, slot)| {
         crate::capabilities::camera::camera_priority_key(*entity, *slot)
@@ -611,7 +661,7 @@ fn world_label_screen_pos_system(
 
     for (label, rank, mut t, mut vis, text_font_opt, mut cam_dist_opt) in label_q.iter_mut() {
         let world_pos = if let Some(tracked) = label.tracked_entity {
-            let Ok((gt, tracked_vis)) = tracked_q.get(tracked) else {
+            let Ok((gt, transform, child_of, tracked_vis)) = tracked_q.get(tracked) else {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 if let Some(cam_dist) = cam_dist_opt.as_deref_mut() { cam_dist.0 = None; }
                 continue;
@@ -621,7 +671,8 @@ fn world_label_screen_pos_system(
                 if let Some(cam_dist) = cam_dist_opt.as_deref_mut() { cam_dist.0 = None; }
                 continue;
             }
-            gt.translation() + label.offset
+            // Same freshness fix as the camera above — see `fresh_global_transform`'s doc comment.
+            crate::utils::fresh_global_transform(transform, gt, child_of).translation() + label.offset
         } else {
             label.world_pos
         };
@@ -796,9 +847,26 @@ pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
         app.insert_resource(InitialSceneOverride(scene));
     }
 
+    // Matches `FIXED_TICK_RATE` (`capabilities::physics`), not an independent 60.0 literal — a
+    // native framepace that doesn't evenly divide the physics tick rate beats against it (a
+    // 60fps/64Hz mismatch caused ~4 double-physics-tick frames per second, found during
+    // `planning/features/deterministic_fixed_timestep.md`'s v1 review).
+    //
+    // ⚠️ This does NOT actually eliminate that beat, and must not be read as if it does — found
+    // during the same feature's *playtest* (not just its code review), after this comment
+    // originally claimed otherwise. `Window`'s default `PresentMode::Fifo` (hard vsync) means the
+    // real present rate is the *display's* refresh rate, not this cap — nothing in this crate
+    // sets `present_mode`, and `bevy_framepace` never touches it either. At a 60Hz display, 60
+    // frames still consume ~1.0s of `Time<Virtual>` against a 64Hz `Time<Fixed>`, so the same ~4
+    // double-tick frames/second still occur; at 144Hz it's worse (~16/s). No framepace/tick-rate
+    // pairing fixes this — there is no common display refresh rate that evenly divides 64Hz.
+    // Kept anyway because it's still marginally safer than the old independent `60.0` (a 15.625ms
+    // sleep target under a 16.67ms vsync period never overshoots), but the actual fix for
+    // double-tick-frame artifacts is `crate::utils::fresh_global_transform` (see its doc comment)
+    // and the `mark_dirty_trees` ordering in the `FixedUpdate` chain above, not this cap.
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(FramepacePlugin).insert_resource(FramepaceSettings {
-        limiter: Limiter::from_framerate(60.0),
+        limiter: Limiter::from_framerate(FIXED_TICK_RATE as f64),
     });
 
     app.add_plugins(GamePlugin).run();

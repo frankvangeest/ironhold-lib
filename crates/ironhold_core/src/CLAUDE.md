@@ -725,6 +725,35 @@ See `docs/25_custom_shaders.md` for the full shader authoring guide.
 ## Physics & movement must use `FixedUpdate`
 All player movement, physics processing, and camera-follow logic must run in `FixedUpdate`. Using `Update` for physics-driven movement causes stuttering.
 
+**Rapier itself now steps in `FixedUpdate` too** (`capabilities/physics.rs`, `TimestepMode::Fixed`
+at `FIXED_TICK_RATE` = 64Hz, `planning/features/deterministic_fixed_timestep.md` v1) — no longer a
+variable, wall-clock-driven `PostUpdate` step. Render smoothing decision: **accept aliasing, no
+transform interpolation** — `TimestepMode::Interpolated` would reintroduce the wall-clock coupling
+this fix exists to remove. Native's framepace is capped to match `FIXED_TICK_RATE` exactly (`lib.rs`,
+`FramepaceSettings`), but ⚠️ **this does NOT eliminate multi-tick frames** — `Window`'s default
+`PresentMode::Fifo` (vsync) means the real present rate is the *display's* refresh rate, not this
+cap, and no common refresh rate evenly divides 64Hz (a 60Hz display still produces ~4 double-tick
+frames/second; 144Hz produces more, not fewer — see the `FramepaceSettings` comment in `lib.rs`'s
+`start_app` for the derivation). A frame that advances physics by two ticks is routine, not just a
+`Time<Virtual>::max_delta` catch-up edge case. Two separate mitigations exist for it, in different
+schedules:
+- The `FixedUpdate` gameplay chain runs `bevy::transform::systems::mark_dirty_trees` immediately
+  before Rapier's `SyncBackend` (see the ordering comment in `lib.rs`) — without it, a second tick
+  in the same frame can read one-tick-stale `GlobalTransform` **within `FixedUpdate` itself** (e.g.
+  `player_movement_system`'s `ground_cast`).
+- **Any `Update`-scheduled system must never read `&GlobalTransform` for a physics-driven or
+  camera-driven entity — use `crate::utils::fresh_global_transform` instead.** `GlobalTransform`
+  is one tick stale relative to the `Transform` an `Update` system (e.g. the camera chain) just
+  wrote this same frame; that staleness used to cancel between the camera and its trackee (both
+  equally one *frame* behind), but a fixed-tick physics entity and a per-frame camera no longer
+  desync at the same rate, so a multi-tick frame pops visibly. Found as a real regression (world
+  labels/nameplates, target-selection rings, `fixed_camera_system`'s `look_at_entity`, a tracked
+  decal) during v1's playtest — see the feature plan for the full derivation and the list of
+  fixed vs. deliberately-untouched call sites.
+On a display refreshing faster than 64Hz, motion-carrying entities (`capabilities/motion.rs`) and
+physics-driven bodies visibly step rather than updating every rendered frame — a known, accepted
+tradeoff, not a bug.
+
 ### Jump reset cannot rely on a ground-check edge (`planning/features/uphill_jump_lock.md`)
 
 `player_movement_system`'s ground detection (`capabilities/player.rs`) is a fixed-reach downward
@@ -780,14 +809,17 @@ fall (e.g. walking off a ledge, `jumps_used` already `0`) must still play the la
    explain a grounded reading.
 
 **Both of those two extra checks are physical quantities, not clock-derived — this is deliberate,
-not redundant with the tick counter.** `jump_air_grace` alone is not sufficient: it's counted in
-`FixedUpdate` ticks, but Rapier's own physics stepping runs on `TimestepMode::Variable` in
-`PostUpdate` (`capabilities/physics.rs`) — a *different*, framerate-coupled clock, not guaranteed
-to advance in lockstep with `FixedUpdate`'s tick count. At a low enough real framerate (or one
-`Time<Virtual>::max_delta`-clamped hitch), real elapsed physics time can lag behind what the tick
-count assumes, so a tick-only grace could expire while the body is still genuinely rising — see
+not redundant with the tick counter.** As of `planning/features/deterministic_fixed_timestep.md`
+(v1), Rapier's own physics stepping runs on `TimestepMode::Fixed` in `FixedUpdate`
+(`capabilities/physics.rs`) — the *same* clock `jump_air_grace` is counted against, so the
+dual-clock lag scenario this section used to describe (`TimestepMode::Variable` in `PostUpdate`
+drifting from `FixedUpdate`'s tick count at a low framerate or a `Time<Virtual>::max_delta`-clamped
+hitch) can no longer happen. The two checks are kept anyway as defense-in-depth against any other
+source of a slower-than-assumed ascent — see
 `player_slope_jump_tests.rs::grace_expiry_does_not_reset_early_when_real_physics_time_lags_ticks`,
-which decouples the two clocks on purpose (`physics_dt != 1.0/64.0`) to prove this. The two checks
+whose doc comment was rewritten alongside this fix: its `physics_dt != 1.0/64.0` setup no longer
+represents a scenario reachable in the shipped game, but its underlying assertions (the
+`jump_liftoff_y`/velocity belt-and-braces check) remain valid and are kept. The two checks
 serve different terrain: `velocity.linvel.y <= 0.0` covers a jump whose ascent has genuinely ended
 (flat ground, or a jump too short to ever clear the sensor); the liftoff-height check covers a
 *continuously climbing* slope, where the contact solver keeps `linvel.y` pinned positive (matching
@@ -974,7 +1006,7 @@ Terrain mesh generation is compute-heavy. Always use Bevy's `AsyncComputeTaskPoo
 
 ## Frame pacing and performance
 
-**Native frame cap:** `bevy_framepace` (native only, `#[cfg(not(target_arch = "wasm32"))]`) caps the render loop at 60 fps to prevent vsync busy-wait inflating GPU utilisation numbers. Web builds are capped by `requestAnimationFrame` naturally.
+**Native frame cap:** `bevy_framepace` (native only, `#[cfg(not(target_arch = "wasm32"))]`) caps the render loop at `FIXED_TICK_RATE` (64 fps, matching the physics tick rate — was an independent 60 fps literal before `planning/features/deterministic_fixed_timestep.md` v1) to prevent vsync busy-wait inflating GPU utilisation numbers. Web builds are capped by `requestAnimationFrame` naturally.
 
 **Unfocused throttle:** `WinitSettings` drops the focused mode to `Reactive { wait: 100ms }` (~10 fps) when the window loses focus, reducing GPU load in the background.
 

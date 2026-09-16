@@ -66,7 +66,20 @@ pub fn setup_test_app() -> App {
            PreUpdate,
            (gamepad_connection_system, gamepad_event_processing_system.after(gamepad_connection_system)),
        )
-       .add_plugins(GamePlugin);
+       .add_plugins(GamePlugin)
+       // Pin the virtual clock to exactly one `FixedUpdate` tick's worth of time per
+       // `app.update()` call — not real wall-clock time. As of `planning/features/
+       // deterministic_fixed_timestep.md` (v1), Rapier physics runs in `FixedUpdate` alongside
+       // the gameplay chain; without this, every test in this suite that constructs a physics
+       // world (`RigidBody`/`Collider`/`Velocity`) would step Rapier a wall-clock-dependent,
+       // nondeterministic number of times per `app.update()` call, since headless tests run far
+       // faster than real time and the elapsed-time accumulator would rarely cross a full tick.
+       // A test needing a different cadence (e.g. a settle/advance loop simulating a longer
+       // real-time gap) overrides this afterward with its own `insert_resource` call, same as
+       // before this existed.
+       .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+           std::time::Duration::from_secs_f32(1.0 / ironhold_core::capabilities::physics::FIXED_TICK_RATE),
+       ));
     app
 }
 

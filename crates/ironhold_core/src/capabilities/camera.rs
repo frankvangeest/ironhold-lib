@@ -492,7 +492,15 @@ pub struct FixedState {
 pub fn fixed_camera_system(
     mut camera_query: Query<(&mut Transform, &ActiveCameraMode), With<FixedCameraMode>>,
     registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
-    transforms: Query<&GlobalTransform>,
+    // `Option<&Transform>` + `Option<&ChildOf>`, read via `crate::utils::fresh_global_transform`:
+    // `look_at_entity` feeds the camera's own rotation directly, not just a distance check, so a
+    // stale `GlobalTransform` here visibly jitters the whole rendered view when the target moves
+    // and two physics ticks land in one frame — same bug class as `world_label_screen_pos_system`
+    // (`planning/features/deterministic_fixed_timestep.md`'s v1 playtest fix). `Without<
+    // FixedCameraMode>`: required to prove disjointness from `camera_query`'s `&mut Transform`
+    // above, since this query would otherwise gain conflicting `&Transform` access with no filter
+    // to rule out a `FixedCameraMode` entity also being its own `look_at_entity`.
+    transforms: Query<(&GlobalTransform, Option<&Transform>, Option<&ChildOf>), Without<FixedCameraMode>>,
 ) {
     for (mut transform, mode) in &mut camera_query {
         let ActiveCameraMode::Fixed(fixed) = mode else { continue };
@@ -500,7 +508,7 @@ pub fn fixed_camera_system(
         let look_at = fixed.look_at_entity.as_ref()
             .and_then(|id| registry.entities.get(id))
             .and_then(|&e| transforms.get(e).ok())
-            .map(|gt| gt.translation())
+            .map(|(gt, t, child_of)| crate::utils::fresh_global_transform(t, gt, child_of).translation())
             .or(fixed.look_at);
         if let Some(target) = look_at {
             transform.look_at(target, Vec3::Y);
