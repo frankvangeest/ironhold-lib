@@ -750,6 +750,12 @@ schedules:
   labels/nameplates, target-selection rings, `fixed_camera_system`'s `look_at_entity`, a tracked
   decal) during v1's playtest — see the feature plan for the full derivation and the list of
   fixed vs. deliberately-untouched call sites.
+  **Confirmed fine and deliberately left unconverted** (debug-detective, same playtest-fix
+  review): `capabilities/targeting.rs`'s click-ray origin and tab-target distance sort (a one-tick
+  position error on a ray cast or a `min_by` over distances is far below any perceptual/behavioral
+  threshold) and `capabilities/particle_renderer.rs`'s billboard basis (uses only the camera's
+  *rotation* — `.right()`/`.up()` — never position, so a one-frame-stale rotation is a sub-degree
+  tilt). Don't re-investigate these as if they were missed if this code is revisited.
 On a display refreshing faster than 64Hz, motion-carrying entities (`capabilities/motion.rs`) and
 physics-driven bodies visibly step rather than updating every rendered frame — a known, accepted
 tradeoff, not a bug.

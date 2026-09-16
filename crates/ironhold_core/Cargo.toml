@@ -20,7 +20,10 @@ indexmap = { version = "2", features = ["serde"] }
 # Deterministic (bit-identical native/WASM) transcendental math for the gameplay call sites in
 # `det_math.rs` — see `planning/features/deterministic_fixed_timestep.md`. Already a transitive
 # dependency via bevy_rapier3d's `enhanced-determinism` feature; pinned here directly since we
-# call it ourselves now.
+# call it ourselves now. ⚠️ At the next bevy_rapier3d/Bevy upgrade, re-check that this stays on
+# the same libm major version rapier pulls in (`cargo tree -p bevy_rapier3d -i libm`) — if the two
+# ever diverge, det_math silently stops matching Rapier's own transcendental implementation, which
+# is the entire point of routing through libm at all.
 libm = "0.2"
 
 # For the DebugState in the DOM and browser tests
