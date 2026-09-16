@@ -35,6 +35,10 @@ more expensive below it — i.e. more expensive precisely where WASM already str
 frame can run ~16 fixed ticks. That burst already carried the gameplay chain (see
 [[project-ground-cast-loop]]); it now also carries 16x {2 transform propagations + collider/body
 user-change scans + solver step + writeback}. Lowering `max_delta` to ~100 ms is the cheap guard.
+Measured follow-up (`planning/investigations/fixed_timestep_max_delta.md`): the 250 ms default does
+**not** spiral — under sustained 12x CPU throttle it pins at 16 ticks/frame and degrades to
+slow-motion, which is the intended behavior. The cap is now RON-configurable but opt-in and unused
+by any project — see [[project-max-fixed-delta-config]].
 
 **No render interpolation.** bevy_rapier's `TransformInterpolation` component is only honored by
 `TimestepMode::Interpolated`, not `Fixed`. Cameras run in `Update` (`lib.rs` ~line 320) which sits

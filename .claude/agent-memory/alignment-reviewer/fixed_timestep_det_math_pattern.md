@@ -69,6 +69,32 @@ it, so no authored value needs retuning. Three things to re-check on any future 
    `target_indicator_system` site that *was* fixed. A designer-authored decal and target ring on the
    same entity can now visibly disagree by one tick.
 
+**Follow-up feature (reviewed 2026-09-16): `ProjectConfig.max_fixed_delta_secs`** —
+`feature/fixed_timestep_max_delta`, the one RON knob this family legitimately gets. Facts worth
+reusing:
+- **Why it's RON-exposable when `FIXED_TICK_RATE` isn't:** it bounds *how many* ticks a frame may
+  run to catch up, never `dt` per tick. Verified exhaustively: nothing in `ironhold_core` derives a
+  tick count from real elapsed time — `jump_air_grace_ticks()`/`coyote_ticks()` count FixedUpdate
+  ticks and Rapier now steps on that same clock, and every `time.elapsed_secs()` consumer
+  (`animation_resolver.rs:224`, `animation.rs:95/247/264`, `camera.rs:1128`, `motion.rs:36`,
+  `entity_spawner.rs:498/517`) reads `Res<Time>` = `Time<Virtual>`, so they all scale together.
+  There is **no `Time<Real>` consumer anywhere in the crate**. Reuse this list instead of re-deriving.
+- **`max_delta` clamps ALL of virtual time, not just the FixedUpdate accumulator.** The engine's own
+  evidence: `corpse_loot_interact_tests.rs::advance()` steps in 0.25s increments precisely because a
+  larger `ManualDuration` is silently truncated. So a value below the machine's frame time puts the
+  whole game (Update-tier dt included) into permanent slow motion — the field name/doc framing
+  ("FixedUpdate catch-up") under-describes the blast radius.
+- **`Duration::from_secs_f32` panics above ~1.8e19s**, and `validate()`'s positive+finite check does
+  not bound the top end — so there is (an unlikely but real) RON-authorable panic, plus the much more
+  likely ms/s mix-up (`250` = 250 seconds, silently disabling the clamp entirely). Any future numeric
+  RON field feeding a `Duration` needs an upper bound / `try_from_secs_f32`, not just `is_finite()`.
+- Applied once via a pure `apply_max_fixed_delta(&mut Time<Virtual>, Option<f32>)` at
+  `project_loader.rs`'s shared phase-1/phase-2 tail, with 4 unit tests. Good template for any future
+  boot-time resource-mutating project setting.
+- Only two places in the crate reason about the 250ms default: `camera.rs:17-23`
+  (`MAX_WHEEL_NOTCHES_PER_FRAME`, conclusion survives an override) and `lib.rs:297`. Both are comments,
+  neither is load-bearing.
+
 **Ordering gap to check if it recurs:** `motion_system` and the 7-system gameplay chain are both
 `.before(PhysicsSet::SyncBackend)` but unordered *relative to each other*, and both take
 `&mut Transform` — an ambiguity of exactly the kind the change's own comment says it exists to

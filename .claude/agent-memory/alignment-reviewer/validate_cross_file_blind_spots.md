@@ -284,12 +284,17 @@ the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and 
 `schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).
 
 **`schema/` `validate()` methods are a separate coverage axis from validate.rs's hand-written checks.**
-There are **8** of them; `feature/cli_validate_gap_closures` (2026-09-11) wired the first 2 into
-`cross_file_checks` (`AssetCatalog`, `PrefabCatalog`, `source_file` = hardcoded literals). Still
-runtime-only (called at `project_loader.rs:319`/`:342`, not by the CLI): `StatCatalog`,
-`ItemCatalog`. Called **nowhere in either crate** (dead code): `GameSceneV2::validate()`,
-`LogicRulesAsset::validate()`, `ModelFixesAsset::validate()`. Also runtime-only: `ProjectConfig`
-(`:41`), `StateMachineAsset` (`:260`). Three things to check whenever another one gets wired:
+There are **8** of them; **5 are now wired** into `cross_file_checks`: `AssetCatalog`/`PrefabCatalog`
+(`feature/cli_validate_gap_closures`, 2026-09-11), then `StatCatalog`/`ItemCatalog` — all four in one
+array loop whose `source_file` resolves the *configured* path (the fix for the hardcoded-literal lie)
+— and `ProjectConfig` (`error_type: "invalid_project_config"`, `source_file:
+find_project_ron(...).unwrap_or_default()`, added by `feature/fixed_timestep_max_delta`, 2026-09-16;
+covers `schema_version` range + `max_fixed_delta_secs` positive/finite). Still called **nowhere in
+either crate** (dead code): `GameSceneV2::validate()`, `LogicRulesAsset::validate()`,
+`ModelFixesAsset::validate()`. Still runtime-only: `StateMachineAsset` (`project_loader.rs:~270`).
+Note the `ProjectConfig` wiring is the pattern to copy for the last one — and that feature *did*
+update `docs/60_contributing.md`'s "Checks performed" list (a rare counter-example to the
+most-frequently-missed-step note above). Three things to check whenever another one gets wired:
 - **They are fail-fast over a `HashMap`** (`return Err` on first problem), so exactly one violation
   surfaces per catalog per run and *which* one is nondeterministic — the opposite posture from every
   hand-written check here. Any fixture with >1 violation is flaky; the two added in that batch are

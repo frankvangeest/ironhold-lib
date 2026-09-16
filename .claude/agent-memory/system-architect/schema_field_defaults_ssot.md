@@ -42,6 +42,15 @@ file-siblings `AnimationPolicy`/`BaseAnimations`/`AnimationOverrideDef` (`schema
 — so a typo at the `components:` level is caught but one *inside* `inputs: (...)` is not.
 See [[schema-tightening-blast-radius]] for the opposite direction.
 
+**`validate()` must bound the *range*, not just sign/finiteness, when the value feeds a panicking
+std constructor.** `std::time::Duration::from_secs_f32` panics on negative, NaN **and overflow**
+(> ~1.8e19 s) — verified empirically 2026-09-16. So a guard of `secs > 0.0 && secs.is_finite()`
+still lets `1e20` through to a hard panic (on WASM: unrecoverable abort, blank canvas), and
+`ironhold_cli validate` reports exit 0. Prefer the `try_*` constructor
+(`Duration::try_from_secs_f32`) or an explicit upper bound in `validate()`. First instance:
+`ProjectConfig.max_fixed_delta_secs` (`feature/fixed_timestep_max_delta`); it is core's only
+float→`Duration` conversion today, so check any new one added later.
+
 **Reviewer heuristic that paid off here:** `docs/20_data_formats.md`'s per-field **Default** column
 can promise a default the parser doesn't implement. Its `InputMap` table already listed
 `"KeyW"`/`"KeyS"`/…/`"Space"` as defaults for the 7 fields that were in fact required, so that fix
