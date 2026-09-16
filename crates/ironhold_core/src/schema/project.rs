@@ -250,7 +250,50 @@ pub struct ProjectConfig {
     /// Project-level audio settings. Omit to use defaults (`max_volume: 1.0, mute_on_start: false`).
     #[serde(default)]
     pub audio: AudioConfig,
+
+    /// Caps `Time<Virtual>::max_delta` — the largest delta the *whole* virtual clock reports for
+    /// a single frame, in seconds (default 0.25s / ~16 ticks at this engine's 64Hz
+    /// `FIXED_TICK_RATE`). This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` as
+    /// seen by ordinary `Update`-schedule systems (camera smoothing, animation blending,
+    /// `capabilities::motion`), so a very small value visibly slows down more than physics catch-
+    /// up. Omit to use Bevy's default.
+    ///
+    /// A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile
+    /// hitch) does not make the recovery frame run more ticks than this allows — the game falls
+    /// further behind real time instead (graceful slow-motion), rather than one very expensive
+    /// catch-up frame. Lower this for a tighter worst-case per-frame cost at the price of
+    /// entering visible slow-motion sooner on smaller stalls; raise it to tolerate bigger stalls
+    /// before slow-motion becomes visible, at the price of a larger worst-case single-frame
+    /// catch-up cost. Typical values: `0.1`–`0.25` for a responsive feel, up to `0.5` to ride out
+    /// bigger hitches before showing slow-motion.
+    ///
+    /// Deliberately **not** the same kind of knob as the physics tick rate itself
+    /// (`FIXED_TICK_RATE`, not RON-authorable — see `capabilities/physics.rs`): changing this
+    /// cannot desync any tick-derived gameplay constant (`jump_air_grace_ticks()`,
+    /// `coyote_ticks()`), since `dt` per tick never changes — it only changes how many ticks a
+    /// single frame is allowed to run to catch up. See
+    /// `planning/investigations/fixed_timestep_max_delta.md` for the measurement behind this.
+    ///
+    /// Must be at least two fixed-tick periods (`2.0 / FIXED_TICK_RATE`, ~0.03s at 64Hz) —
+    /// `ProjectConfig::validate()` rejects anything smaller, since below that floor the game runs
+    /// in **permanent**, silent slow-motion on every frame (not just after a stall), for no
+    /// visible reason in the RON file.
+    #[serde(default)]
+    pub max_frame_delta_secs: Option<f32>,
 }
+
+/// Floor for `ProjectConfig::max_frame_delta_secs`: two fixed-tick periods. Below this, the cap
+/// clamps ordinary healthy frames (not just stall recovery), producing permanent slow-motion with
+/// no visible cause in the RON file — see that field's doc comment. Also comfortably above the
+/// ~5e-10s threshold where `Duration::from_secs_f32` rounds to `Duration::ZERO`, which Bevy's own
+/// `Time::<Virtual>::set_max_delta` refuses (panics on `Duration::ZERO`).
+pub const MIN_MAX_FRAME_DELTA_SECS: f32 = 2.0 / crate::capabilities::physics::FIXED_TICK_RATE;
+
+/// Ceiling for `ProjectConfig::max_frame_delta_secs`. Comfortably below the ~1.8e19s point where
+/// `Duration::from_secs_f32` overflows and panics, and far past any value a real stall-recovery
+/// tuning decision would ever use — anything this large exists only to catch authoring mistakes
+/// (e.g. a stray extra zero) before they reach the panic-prone conversion at runtime.
+pub const MAX_MAX_FRAME_DELTA_SECS: f32 = 60.0;
 
 /// Project-level audio configuration. All fields have data-driven defaults so existing projects
 /// that omit the `audio:` block behave identically to `max_volume: 1.0, mute_on_start: false`.
@@ -340,6 +383,15 @@ impl ProjectConfig {
                 "Unsupported ProjectConfig schema_version {} (expected 1, 2, or 3)",
                 self.schema_version
             ));
+        }
+        if let Some(secs) = self.max_frame_delta_secs {
+            if !(secs >= MIN_MAX_FRAME_DELTA_SECS && secs <= MAX_MAX_FRAME_DELTA_SECS) {
+                return Err(format!(
+                    "max_frame_delta_secs must be between {MIN_MAX_FRAME_DELTA_SECS} (two fixed \
+                     ticks — anything smaller runs the whole game in permanent slow-motion) and \
+                     {MAX_MAX_FRAME_DELTA_SECS} seconds, got {secs}"
+                ));
+            }
         }
         Ok(())
     }

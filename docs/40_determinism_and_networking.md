@@ -131,6 +131,9 @@ whole.
 ✅ **Fixed timestep** — `capabilities/physics.rs` now steps Rapier via `TimestepMode::Fixed` in
 `FixedUpdate` (`dt = 1.0 / FIXED_TICK_RATE`, 64Hz) instead of a variable, wall-clock-driven
 `PostUpdate` step. Every device now feeds the solver the same `dt` regardless of frame rate.
+`ProjectConfig.max_frame_delta_secs` (`docs/20_data_formats.md#max_frame_delta_secs`) only bounds
+how many ticks a single frame may run to catch up after a stall — `dt` per tick is unaffected, so
+it cannot desync `jump_air_grace_ticks()`/`coyote_ticks()` or any other tick-derived constant.
 
 ✅ **Known per-tick transcendental call sites routed through `libm`** — `player.rs`'s slope-angle
 `acos` (feeding a grounded/airborne branch) and turn rotation, and `motion.rs`'s

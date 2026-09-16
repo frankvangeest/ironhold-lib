@@ -760,6 +760,16 @@ On a display refreshing faster than 64Hz, motion-carrying entities (`capabilitie
 physics-driven bodies visibly step rather than updating every rendered frame — a known, accepted
 tradeoff, not a bug.
 
+A third, RON-authorable lever exists alongside those two mitigations, but for a different cause of
+multi-tick frames — a genuine stall (asset load, GC pause, shader hitch), not the routine
+refresh-rate mismatch above: `ProjectConfig.max_frame_delta_secs` (`schema/project.rs`) caps how
+many ticks a single frame's `FixedUpdate` catch-up may run after a stall. Lowering it does not
+reduce the routine 60Hz/144Hz multi-tick rate described above (that's refresh-rate math, not
+stall-driven catch-up) — it only bounds the worst case after an actual hitch, trading a smaller
+per-frame cost cap for entering visible slow-motion sooner. See
+`planning/investigations/fixed_timestep_max_delta.md` for the measurement behind it and
+`docs/20_data_formats.md#max_frame_delta_secs` for the authoring reference.
+
 ### Jump reset cannot rely on a ground-check edge (`planning/features/uphill_jump_lock.md`)
 
 `player_movement_system`'s ground detection (`capabilities/player.rs`) is a fixed-reach downward

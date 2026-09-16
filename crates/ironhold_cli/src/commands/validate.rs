@@ -1436,6 +1436,20 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         }
     }
 
+    // `ProjectConfig::validate()` covers schema_version and max_frame_delta_secs -- previously
+    // runtime-only (project_loader.rs logs it via a bare `error!` at scene-load time), never
+    // surfaced by this command. Wiring it here costs nothing further parse-side, same rationale
+    // as the four-catalog loop above.
+    if let Some(config) = project_config {
+        if let Err(message) = config.validate() {
+            errors.push(CrossFileError {
+                source_file: find_project_ron(project_dir).unwrap_or_default(),
+                message,
+                error_type: "invalid_project_config",
+            });
+        }
+    }
+
     // The project's own boot scene -- the highest-consequence scene path of all, since a typo
     // here means the project never gets past a blank/loading screen. Same on-disk-existence
     // check as the LoadScene/LoadSceneOverlay/PreloadScene/ToggleOverlay action arm above,

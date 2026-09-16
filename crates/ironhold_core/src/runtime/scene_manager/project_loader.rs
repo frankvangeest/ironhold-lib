@@ -16,6 +16,21 @@ use super::{
     LogicState, AudioState, resolve_project_path,
 };
 
+/// Bundled `SystemParam` for the pending-catalog-asset `LoadState` checks in
+/// `check_project_loaded` — grouped here (rather than 7 bare params) to stay within Bevy's
+/// 16-param limit once `Time<Virtual>` was added for `ProjectConfig.max_frame_delta_secs`. Same
+/// pattern as `SpawnParams`/`SceneV2Params` in `runtime/scene_manager/mod.rs`.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct PendingCatalogAssets<'w> {
+    pub model_fixes: Res<'w, Assets<ModelFixesAsset>>,
+    pub rules: Res<'w, Assets<LogicRulesAsset>>,
+    pub state_machine: Res<'w, Assets<StateMachineAsset>>,
+    pub asset_catalog: Res<'w, Assets<AssetCatalog>>,
+    pub prefab_catalog: Res<'w, Assets<PrefabCatalog>>,
+    pub stat_catalog: Res<'w, Assets<StatCatalog>>,
+    pub item_catalog: Res<'w, Assets<ItemCatalog>>,
+}
+
 pub fn check_project_loaded(
     mut commands: Commands,
     config_handle: Res<ProjectConfigHandle>,
@@ -25,14 +40,9 @@ pub fn check_project_loaded(
     mut scene_events: MessageWriter<SceneEvent>,
     project_root: Res<ProjectRoot>,
     pending: Option<Res<PendingProjectLoads>>,
-    model_fixes_assets: Res<Assets<ModelFixesAsset>>,
-    rules_assets: Res<Assets<LogicRulesAsset>>,
-    state_machine_assets: Res<Assets<StateMachineAsset>>,
-    asset_catalog_assets: Res<Assets<AssetCatalog>>,
-    prefab_catalog_assets: Res<Assets<PrefabCatalog>>,
-    stat_catalog_assets: Res<Assets<StatCatalog>>,
-    item_catalog_assets: Res<Assets<ItemCatalog>>,
+    pending_assets: PendingCatalogAssets,
     scene_override: Option<Res<crate::InitialSceneOverride>>,
+    mut time_virtual: ResMut<Time<Virtual>>,
 ) {
     let Some(config) = configs.get(&config_handle.0) else { return; };
 
@@ -238,7 +248,7 @@ pub fn check_project_loaded(
         // Phase 3: merge and store results.
         let mut merged_fixes = config.model_fixes.clone();
         if let Some(h) = &pending.model_fixes {
-            if let Some(fixes_asset) = model_fixes_assets.get(h) {
+            if let Some(fixes_asset) = pending_assets.model_fixes.get(h) {
                 merged_fixes.extend(
                     fixes_asset.model_fixes.iter().map(|(k, v)| (k.clone(), v.clone())),
                 );
@@ -247,14 +257,14 @@ pub fn check_project_loaded(
         commands.insert_resource(MergedModelFixes(merged_fixes));
 
         let rules = if let Some(h) = &pending.rules {
-            rules_assets.get(h).map(|a| a.rules.clone()).unwrap_or_default()
+            pending_assets.rules.get(h).map(|a| a.rules.clone()).unwrap_or_default()
         } else {
             config.rules.clone()
         };
         commands.insert_resource(LoadedRules(rules));
 
         let fsm = pending.state_machine.as_ref()
-            .and_then(|h| state_machine_assets.get(h))
+            .and_then(|h| pending_assets.state_machine.get(h))
             .cloned();
         if let Some(ref machine) = fsm {
             if let Err(e) = machine.validate() {
@@ -295,7 +305,7 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedGamepadBindings(gamepad_bindings));
 
         let asset_catalog = if let Some(h) = &pending.asset_catalog {
-            asset_catalog_assets.get(h).cloned().unwrap_or_default()
+            pending_assets.asset_catalog.get(h).cloned().unwrap_or_default()
         } else {
             AssetCatalog::default()
         };
@@ -305,7 +315,7 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedAssetCatalog(asset_catalog));
 
         let prefab_catalog = if let Some(h) = &pending.prefab_catalog {
-            prefab_catalog_assets.get(h).cloned().unwrap_or_default()
+            pending_assets.prefab_catalog.get(h).cloned().unwrap_or_default()
         } else {
             PrefabCatalog::default()
         };
@@ -315,7 +325,7 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedPrefabCatalog(prefab_catalog));
 
         let (loaded_stats, loaded_modifiers) = if let Some(h) = &pending.stats {
-            if let Some(catalog) = stat_catalog_assets.get(h) {
+            if let Some(catalog) = pending_assets.stat_catalog.get(h) {
                 if let Err(e) = catalog.validate() {
                     error!("Invalid StatCatalog: {} — stat system may not behave correctly", e);
                 }
@@ -338,7 +348,7 @@ pub fn check_project_loaded(
         commands.insert_resource(loaded_modifiers);
 
         let loaded_item_catalog = if let Some(h) = &pending.items {
-            if let Some(catalog) = item_catalog_assets.get(h) {
+            if let Some(catalog) = pending_assets.item_catalog.get(h) {
                 if let Err(e) = catalog.validate() {
                     error!("Invalid ItemCatalog: {} — item system may not behave correctly", e);
                 }
@@ -359,6 +369,13 @@ pub fn check_project_loaded(
         });
     }
 
+    // Runs once per project load (this is the shared tail both phase-1 and phase-2
+    // config-application paths above fall through to, and exactly one ProjectConfig loads per
+    // app lifetime today), so this can't double-apply or race a later scene load.
+    if let Some(secs) = config.max_frame_delta_secs {
+        apply_max_frame_delta(&mut time_virtual, secs);
+    }
+
     let initial = scene_override
         .as_deref()
         .map(|r| r.0.as_str())
@@ -373,4 +390,98 @@ pub fn check_project_loaded(
     commands.insert_resource(SceneHandleV2(scene_handle));
     scene_events.write(SceneEvent::Requested(scene_path));
     next_state.set(AppState::LoadingScene);
+}
+
+/// Applies `ProjectConfig.max_frame_delta_secs` to a `Time<Virtual>` — see that field's doc
+/// comment (`schema/project.rs`) for the full rationale. Pure logic (no ECS access beyond the
+/// passed-in resource reference), so it's directly unit-testable without spinning up an app.
+/// Only called when the config has `Some(secs)` — see the call site — so `time_virtual` is never
+/// touched (and never marked changed) on the common "field omitted" path.
+///
+/// `ironhold_cli validate` (`ProjectConfig::validate()`) already rejects a value outside
+/// `[MIN_MAX_FRAME_DELTA_SECS, MAX_MAX_FRAME_DELTA_SECS]` at author time; this mirrors the same
+/// bound as a runtime-side belt-and-braces guard for a config that skipped validation (e.g.
+/// constructed in a test, or a future non-CLI authoring path). Two distinct panics are guarded
+/// against here, not just "out of range": `Duration::from_secs_f32` panics above ~1.8e19s, and
+/// separately rounds anything below ~5e-10s to `Duration::ZERO`, which Bevy's own
+/// `Time::<Virtual>::set_max_delta` refuses via an internal assert. `try_from_secs_f32` plus an
+/// explicit zero-check catches both without relying on the caller having validated first.
+fn apply_max_frame_delta(time_virtual: &mut Time<Virtual>, secs: f32) {
+    match std::time::Duration::try_from_secs_f32(secs) {
+        Ok(duration) if !duration.is_zero() => {
+            time_virtual.set_max_delta(duration);
+            info!("max_frame_delta_secs override applied: {secs}s (Bevy default: 0.25s)");
+        }
+        _ => {
+            warn!(
+                "max_frame_delta_secs must be a positive, finite number of seconds that doesn't \
+                 round to zero, got {secs} — ignoring, using Bevy's default (0.25s)"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::project::{MIN_MAX_FRAME_DELTA_SECS, MAX_MAX_FRAME_DELTA_SECS};
+
+    #[test]
+    fn valid_value_sets_max_delta() {
+        let mut time = Time::<Virtual>::default();
+        apply_max_frame_delta(&mut time, 0.1);
+        assert_eq!(time.max_delta(), std::time::Duration::from_secs_f32(0.1));
+    }
+
+    #[test]
+    fn non_positive_value_is_ignored() {
+        let mut time = Time::<Virtual>::default();
+        let default_max_delta = time.max_delta();
+        apply_max_frame_delta(&mut time, -1.0);
+        assert_eq!(time.max_delta(), default_max_delta, "a negative value must not change max_delta");
+        apply_max_frame_delta(&mut time, 0.0);
+        assert_eq!(time.max_delta(), default_max_delta, "zero must not change max_delta");
+    }
+
+    #[test]
+    fn non_finite_value_is_ignored() {
+        let mut time = Time::<Virtual>::default();
+        let default_max_delta = time.max_delta();
+        apply_max_frame_delta(&mut time, f32::NAN);
+        assert_eq!(time.max_delta(), default_max_delta);
+        apply_max_frame_delta(&mut time, f32::INFINITY);
+        assert_eq!(time.max_delta(), default_max_delta);
+    }
+
+    /// F1 (system-architect/debug-detective): `Duration::from_secs_f32` panics above ~1.8e19s —
+    /// must not reach that call unguarded.
+    #[test]
+    fn overflow_value_does_not_panic_and_is_ignored() {
+        let mut time = Time::<Virtual>::default();
+        let default_max_delta = time.max_delta();
+        apply_max_frame_delta(&mut time, 1e20);
+        assert_eq!(time.max_delta(), default_max_delta, "an overflowing value must not change max_delta");
+    }
+
+    /// F2 (debug-detective): values below ~5e-10s round to `Duration::ZERO` via
+    /// `from_secs_f32`/`try_from_secs_f32`, and Bevy's `set_max_delta` asserts `!= ZERO` —
+    /// must not reach that call unguarded.
+    #[test]
+    fn zero_rounding_value_does_not_panic_and_is_ignored() {
+        let mut time = Time::<Virtual>::default();
+        let default_max_delta = time.max_delta();
+        apply_max_frame_delta(&mut time, 1e-10);
+        assert_eq!(time.max_delta(), default_max_delta, "a value that rounds to zero must not change max_delta");
+    }
+
+    #[test]
+    fn schema_validate_bounds_agree_with_runtime_guard() {
+        let mut time = Time::<Virtual>::default();
+        apply_max_frame_delta(&mut time, MIN_MAX_FRAME_DELTA_SECS);
+        assert_eq!(time.max_delta(), std::time::Duration::from_secs_f32(MIN_MAX_FRAME_DELTA_SECS));
+
+        let mut time = Time::<Virtual>::default();
+        apply_max_frame_delta(&mut time, MAX_MAX_FRAME_DELTA_SECS);
+        assert_eq!(time.max_delta(), std::time::Duration::from_secs_f32(MAX_MAX_FRAME_DELTA_SECS));
+    }
 }

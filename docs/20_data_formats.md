@@ -115,6 +115,7 @@ Entry point for a project. References all other files.
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. `ironhold_cli validate` reads this field the same way — see `asset_catalog` above. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
+| `max_frame_delta_secs` | `Option<f32>` | — | Caps the largest per-frame time delta the whole game clock reports, in seconds. Omit for Bevy's default (0.25s). See [max_frame_delta_secs](#max_frame_delta_secs) below. |
 | `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
@@ -152,6 +153,7 @@ Entry point for a project. References all other files.
         "Escape": "toggle_pause",
     },
     // global_unclaimed_gamepad_bindings: { "South": "join" },  // see Gamepad-triggered hot join
+    // max_frame_delta_secs: 0.25,  // default; see max_frame_delta_secs below
 )
 ```
 
@@ -4526,6 +4528,33 @@ Optional block in `{name}.project.ron` that controls project-level audio volume.
 | `audio.muted` | `ToggleMute` transitions to muted, or `SyncAudioState` while already muted |
 | `audio.unmuted` | `ToggleMute` transitions to unmuted, or `SyncAudioState` while not muted |
 | `audio.volume_changed` | `SetVolume` changes the active fraction |
+
+---
+
+## `max_frame_delta_secs`
+
+Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — the largest delta the *whole* game clock reports for a single frame. Omit to use Bevy's default (`0.25`, ≈16 ticks at this engine's 64Hz tick rate).
+
+```ron
+// {name}.project.ron
+(
+    schema_version: 3,
+    ...
+    max_frame_delta_secs: 0.25,  // default; try 0.1 for a snappier feel, 0.5 to ride out bigger hitches
+)
+```
+
+This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` for ordinary `Update`-schedule systems (camera smoothing, animation blending, `capabilities::motion`), so a value picked purely for physics catch-up will also visibly slow those down.
+
+A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile hitch) does **not** make the recovery frame run more ticks than this allows — the game falls further behind real time instead (graceful slow-motion), rather than paying one very expensive catch-up frame.
+
+| Value | Effect |
+|-------|--------|
+| Lower (e.g. `0.1`) | Tighter worst-case per-frame cost; slow-motion becomes visible sooner on smaller stalls |
+| Bevy default (`0.25`) | ~16 ticks of catch-up tolerated before the game falls behind |
+| Higher (e.g. `0.5`) | Tolerates bigger stalls before slow-motion is visible, at the cost of a larger worst-case single-frame catch-up |
+
+`ironhold_cli validate` rejects a value outside roughly `0.03`–`60` seconds: below two fixed-tick periods (~0.03s at 64Hz) the game runs in **permanent**, silent slow-motion on every healthy frame — not just after a stall — for no visible reason in the RON file, so that range is treated as an authoring mistake rather than a valid tuning choice. Does not affect the physics tick rate itself or any tick-derived gameplay constant (jump/coyote timing) — only how many ticks (or how much `Update`-schedule time) a single frame may cover. See `planning/investigations/fixed_timestep_max_delta.md` for the empirical measurement behind this knob.
 
 ---
 

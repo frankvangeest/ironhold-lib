@@ -93,3 +93,29 @@ something to resolve unilaterally.
 - If a cap is chosen: implement, route through `wasm-perf-reviewer` (per-frame hot-path change,
   per the original triage's instruction), full review/test/playtest cycle per the standard
   workflow.
+
+## Decision (2026-09-16)
+
+Frank: don't hardcode either tradeoff option — expose it as a per-project RON setting instead
+(`ProjectConfig.max_frame_delta_secs`, `schema/project.rs`), and leave the shipped default
+untouched at Bevy's own 250ms/~16-tick default when the field is omitted. Verified this is safe to
+make RON-authorable, unlike `FIXED_TICK_RATE` itself: it has no interaction with any tick-derived
+gameplay constant (`jump_air_grace_ticks()`, `coyote_ticks()`) since `dt` per tick never changes —
+only how many ticks a single frame may run to catch up — so per-project values cannot desync
+gameplay feel the way a per-project tick *rate* would.
+
+The temporary `FixedTickCounter`/`DebugState` instrumentation was stripped entirely (not kept as a
+permanent diagnostic) — it was scoped only to this investigation's measurement, and `lib.rs` is
+back to its pre-investigation state.
+
+Implementation went straight to code (no separate feature-plan file — a single optional RON field
+with no cross-capability surface) through the standard review cycle (`alignment-reviewer`, `system-architect`,
+`debug-detective`, `ux-gamedesigner-reviewer`, `wasm-perf-reviewer`), which converged on two real
+panic bugs in the naive `secs > 0.0 && secs.is_finite()` guard (`Duration::from_secs_f32` overflows
+above ~1.8e19s, and separately rounds anything below ~5e-10s to `Duration::ZERO`, which Bevy's own
+`set_max_delta` refuses) plus a missing floor: any positive value below ~2 fixed-tick periods
+passes a naive check but runs the whole game in permanent, silent slow-motion. Both are now hard
+`ProjectConfig::validate()` errors (`MIN_MAX_FRAME_DELTA_SECS`/`MAX_MAX_FRAME_DELTA_SECS` in
+`schema/project.rs`), and the field was renamed `max_fixed_delta_secs` → `max_frame_delta_secs`
+before any shipped project could reference it, since it clamps the whole virtual clock
+(`Update`-schedule delta too), not just `FixedUpdate`.

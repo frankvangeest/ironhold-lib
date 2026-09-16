@@ -74,6 +74,9 @@ bar on a timeline. It is the right tool for answering "which system is taking 8 
 - `poll_terrain_generation_system` — terrain mesh task completion; expect a spike on the first frame terrain is ready.
 - `npc_behavior_system`, `animation_resolver_system` — scales with entity count.
 - `FixedUpdate` frame budget — should stay well under your target tick interval.
+- If frames routinely eat multiple ticks of catch-up, consider lowering
+  `ProjectConfig.max_frame_delta_secs` (`docs/20_data_formats.md#max_frame_delta_secs`) to cap the
+  worst-case single-frame cost — at the price of visible slow-motion kicking in sooner on a stall.
 
 Tracy is native-only. Not available in WASM builds.
 

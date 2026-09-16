@@ -2017,6 +2017,28 @@ fn asset_catalog_validate_invariant_exits_1() {
     );
 }
 
+/// `ProjectConfig::validate()` was never called by `ironhold_cli` either -- a negative
+/// `max_frame_delta_secs` was runtime-only before this (a bare `error!` at scene-load time,
+/// `project_loader.rs`). See `feature/fixed_timestep_max_delta`.
+#[test]
+fn project_config_validate_invariant_exits_1() {
+    let (code, stdout) = validate("bad_max_frame_delta_secs");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("max_frame_delta_secs") && stdout.contains("between"),
+        "expected the ProjectConfig::validate() invariant message in output:\n{stdout}"
+    );
+}
+
+/// A valid `max_frame_delta_secs` value must not be flagged — regression coverage for the actual
+/// valid path, not just the negative fixture above (no shipped project or doc example used a
+/// positive value before this, per the `max_frame_delta_secs` review cycle).
+#[test]
+fn good_max_frame_delta_secs_exits_0() {
+    let (code, stdout) = validate("good_max_frame_delta_secs");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
 /// Same as above for `PrefabCatalog::validate()` -- a `kind: Foliage` prefab missing its
 /// `foliage` block is a real schema invariant that was runtime-only before this batch.
 #[test]

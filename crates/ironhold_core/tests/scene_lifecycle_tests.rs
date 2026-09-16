@@ -2,7 +2,7 @@
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
 use ironhold_core::PipelineWarmup;
-use ironhold_core::runtime::{ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, OverlayEntity, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings};
+use ironhold_core::runtime::{ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, OverlayEntity, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, PendingProjectLoads};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, TransformFix, GameSceneV2};
 use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system};
 use ironhold_core::capabilities::animation::AnimationController;
@@ -746,6 +746,42 @@ fn test_pipeline_warmup_decrements_to_zero() {
 
     let warmup = app.world().resource::<PipelineWarmup>();
     assert_eq!(warmup.0, 0, "PipelineWarmup should reach 0 after 4 frames");
+}
+
+#[test]
+fn max_frame_delta_secs_is_applied_by_check_project_loaded_during_project_load() {
+    // F4 (debug-detective, max_frame_delta_secs review): the pure apply_max_frame_delta() unit
+    // tests in project_loader.rs would all still pass if the actual call site inside
+    // check_project_loaded were deleted — this test drives the real system through a project
+    // load so the wiring itself is under test, not just the pure logic.
+    let mut app = setup_test_app();
+    // Let the real integration_tests project (which does not set max_frame_delta_secs) finish
+    // its normal boot first.
+    for _ in 0..5 {
+        app.update();
+    }
+
+    // Swap in a synthetic ProjectConfig with max_frame_delta_secs set and no external file
+    // references, so Phase 1 of check_project_loaded completes in a single frame (including the
+    // apply_max_frame_delta call), independent of real asset-loading timing.
+    let config_handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+        schema_version: 1,
+        initial_scene: "scenes/t.ron".to_string(),
+        max_frame_delta_secs: Some(0.1),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    app.world_mut().remove_resource::<PendingProjectLoads>();
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingProject);
+    app.update();
+    app.update();
+
+    let max_delta = app.world().resource::<Time<Virtual>>().max_delta();
+    assert_eq!(
+        max_delta,
+        std::time::Duration::from_secs_f32(0.1),
+        "check_project_loaded must apply ProjectConfig.max_frame_delta_secs to Time<Virtual>"
+    );
 }
 
 #[test]
