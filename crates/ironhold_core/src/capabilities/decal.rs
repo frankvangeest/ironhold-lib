@@ -104,7 +104,14 @@ pub fn fading_decal_system(
         &mut Transform,
         Option<&TrackedDecal>,
     )>,
-    target_transforms: Query<&GlobalTransform, Without<FadingDecal>>,
+    // `Option<&Transform>` + `Option<&ChildOf>`, read via `crate::utils::fresh_global_transform`
+    // instead of the raw `&GlobalTransform` — same one-tick-stale-in-`Update` bug as
+    // `world_label_screen_pos_system`/`target_indicator_system` (`planning/features/
+    // deterministic_fixed_timestep.md`'s v1 playtest fix): a decal tracking a moving entity
+    // would otherwise slide behind its feet on a frame where two physics ticks ran. No new
+    // query-conflict filter needed here — `Without<FadingDecal>` (already present) already
+    // proves disjointness from `query`'s `&mut Transform` above.
+    target_transforms: Query<(&GlobalTransform, Option<&Transform>, Option<&ChildOf>), Without<FadingDecal>>,
 ) {
     let dt = time.delta_secs();
     for (entity, mut decal, mat_handle, mut transform, tracked) in &mut query {
@@ -112,8 +119,8 @@ pub fn fading_decal_system(
 
         // Update XZ position to follow tracked entity.
         if let Some(TrackedDecal(target)) = tracked {
-            if let Ok(gt) = target_transforms.get(*target) {
-                let p = gt.translation();
+            if let Ok((gt, t, child_of)) = target_transforms.get(*target) {
+                let p = crate::utils::fresh_global_transform(t, gt, child_of).translation();
                 transform.translation.x = p.x;
                 transform.translation.z = p.z;
             }

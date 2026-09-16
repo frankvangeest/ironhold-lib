@@ -15,15 +15,16 @@
 //! spawn site already used `0.0` unconditionally and was never affected.
 //!
 //! Style follows `prop_ground_veto_tests.rs`/`player_slope_jump_tests.rs`: real Rapier physics,
-//! `player_movement_system` driven directly via `run_system_once`, one `step()` == one
-//! `FixedUpdate` tick. Comparisons are against a same-input open-field control rather than
-//! hardcoded numbers, so these tests don't depend on the exact jump-velocity/gravity constants
-//! staying at their current values.
+//! one `app.update()` call == one `FixedUpdate` tick (`TimeUpdateStrategy::ManualDuration`
+//! pinned to one tick's worth of virtual time), which runs the full gameplay chain
+//! (`player_movement_system` included) followed by Rapier's own physics step — both registered
+//! in `FixedUpdate` as of `planning/features/deterministic_fixed_timestep.md`. Comparisons are
+//! against a same-input open-field control rather than hardcoded numbers, so these tests don't
+//! depend on the exact jump-velocity/gravity constants staying at their current values.
 use bevy::prelude::*;
-use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::*;
 use ironhold_core::runtime::{InputAction, InputActionMessage};
-use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system, PLAYER_IDLE_FRICTION};
+use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, PLAYER_IDLE_FRICTION};
 use ironhold_core::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
 use ironhold_core::schema::player::InputMap;
 
@@ -122,7 +123,13 @@ fn spawn_tall_wall(world: &mut World, x: f32) {
 fn setup(ground: fn(&mut World), wall_x: Option<f32>, start: Vec3, jump_velocity: f32, is_running: bool) -> Case {
     let mut app = setup_test_app();
     app.insert_resource(TimestepMode::Fixed { dt: 1.0 / 64.0, substeps: 1 });
-    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::ZERO));
+    // Pin the virtual clock to exactly one `FixedUpdate` tick's worth of time per `app.update()`
+    // call, so the schedule (gameplay chain + Rapier, both registered there as of
+    // `planning/features/deterministic_fixed_timestep.md`) fires exactly once per `step()`,
+    // deterministically — not zero, and not real wall-clock time.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f32(1.0 / 64.0),
+    ));
     app.update();
 
     ground(app.world_mut());
@@ -150,7 +157,10 @@ fn step(case: &mut Case, moving: bool, jumping: bool) -> (f32, f32, f32) {
             msgs.write(InputActionMessage { entity: player, action: InputAction::Jump(true) });
         }
     }
-    case.app.world_mut().run_system_once(player_movement_system).unwrap();
+    // One `app.update()` call equals exactly one `FixedUpdate` tick (`setup`'s
+    // `TimeUpdateStrategy`), which runs the full gameplay chain — including
+    // `player_movement_system` — followed by Rapier's own physics step, matching production
+    // (`planning/features/deterministic_fixed_timestep.md`).
     case.app.update();
     let t = case.app.world().entity(case.player).get::<Transform>().unwrap();
     let v = case.app.world().entity(case.player).get::<Velocity>().unwrap();
@@ -237,7 +247,13 @@ fn falling_against_a_wall_with_move_held_still_descends_at_free_fall_rate() {
 fn setup_slope_case() -> Case {
     let mut app = setup_test_app();
     app.insert_resource(TimestepMode::Fixed { dt: 1.0 / 64.0, substeps: 1 });
-    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::ZERO));
+    // Pin the virtual clock to exactly one `FixedUpdate` tick's worth of time per `app.update()`
+    // call, so the schedule (gameplay chain + Rapier, both registered there as of
+    // `planning/features/deterministic_fixed_timestep.md`) fires exactly once per `step()`,
+    // deterministically — not zero, and not real wall-clock time.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f32(1.0 / 64.0),
+    ));
     app.update();
 
     let theta = 20f32.to_radians();

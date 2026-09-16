@@ -1,14 +1,16 @@
 // Regression coverage for the "uphill jump lock" bug fix — see
 // `planning/features/uphill_jump_lock.md`. Steps a real Rapier physics world (a sloped static
 // collider + a player capsule matching `spawn_player_entity_core`'s construction) across many
-// `FixedUpdate` ticks, driving `player_movement_system` directly via `run_system_once` — the
-// mechanism is physics-timing-dependent and not reliably reproducible by hand or by the headless
+// `FixedUpdate` ticks — one `app.update()` call always equals exactly one `FixedUpdate` tick
+// (`TimeUpdateStrategy::ManualDuration` pinned to one tick's worth of virtual time, see
+// `setup_case_full`), which now also steps the real Rapier physics registered in the same
+// schedule (`planning/features/deterministic_fixed_timestep.md`, v1) — the mechanism is
+// physics-timing-dependent and not reliably reproducible by hand or by the headless
 // (no-Rapier-context) tests in `action_tests.rs`/`scene_lifecycle_tests.rs`.
 use bevy::prelude::*;
-use bevy::ecs::system::RunSystemOnce;
 use bevy_rapier3d::prelude::*;
 use ironhold_core::runtime::{InputAction, InputActionMessage, GameEvent};
-use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system};
+use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier};
 use ironhold_core::capabilities::animation_resolver::{LocomotionState, AnimationRequests};
 use ironhold_core::schema::player::InputMap;
 
@@ -90,21 +92,35 @@ fn trimesh_ground_collider() -> Collider {
 /// Spawns a real Rapier world: a slope of `angle_deg` (rising toward +X) with a player capsule
 /// identical to `spawn_player_entity_core`'s (collider/damping/friction/controller values), then
 /// settles it onto the slope. `angle_deg: 0.0` is flat ground. One `step()` call always equals
-/// one `FixedUpdate` tick (so `jump_air_grace_ticks()`'s tick-counting is exercised normally),
-/// but `physics_dt` controls how much *real physics time* Rapier advances per tick — passing
-/// something other than `1.0/64.0` deliberately decouples the two clocks, simulating the
-/// tick-vs-Rapier-timestep mismatch a low real framerate (or a `Time<Virtual>::max_delta`-clamped
-/// hitch) can cause in production, where `player_movement_system`'s `FixedUpdate` ticks are
-/// counted independently of Rapier's own `TimestepMode::Variable` stepping in `PostUpdate`.
+/// one `FixedUpdate` tick (so `jump_air_grace_ticks()`'s tick-counting is exercised normally).
+/// `physics_dt` independently controls how much *simulated* physics time Rapier advances per
+/// step (`TimestepMode::Fixed::dt` doesn't care how much real/virtual time elapsed) — passing
+/// something other than `1.0/64.0` deliberately decouples tick count from simulated time, a
+/// scenario that was reachable in production before `planning/features/
+/// deterministic_fixed_timestep.md` (v1) — a low real framerate or a `Time<Virtual>::max_delta`-
+/// clamped hitch could desync `TimestepMode::Variable`'s `PostUpdate` stepping from
+/// `FixedUpdate`'s own tick count — but is no longer reachable now that production hardcodes
+/// `dt = 1.0 / FIXED_TICK_RATE` (`capabilities/physics.rs`). Kept as a synthetic probe of the
+/// belt-and-braces physical checks in `player_movement_system`, not a reachable production case.
 fn setup_case_full(angle_deg: f32, jump_velocity: f32, double_jump_enabled: bool, max_jumps: u8, physics_dt: f32, max_walkable_slope_deg: f32, ground_kind: GroundKind) -> Case {
     let mut app = setup_test_app();
     app.insert_resource(TimestepMode::Fixed { dt: physics_dt, substeps: 1 });
-    // Pin the virtual clock so `GamePlugin`'s own `FixedUpdate`-registered `player_movement_system`
-    // never self-triggers off real wall-clock time during `app.update()` — this harness drives it
-    // exclusively via explicit `run_system_once` calls in `step()`, and letting `FixedUpdate`'s
-    // real-time accumulator also fire it (a variable number of extra times depending on how long
-    // each test iteration actually takes to run) would make jump counts nondeterministic.
-    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::ZERO));
+    // Pin the virtual clock to exactly one `FixedUpdate` tick's worth of time per `app.update()`
+    // call — not real wall-clock time, and not zero — so `GamePlugin`'s `FixedUpdate` schedule
+    // (gameplay chain + Rapier, both registered there as of `planning/features/
+    // deterministic_fixed_timestep.md`) fires exactly once per `step()`, deterministically,
+    // regardless of how long the test actually takes to run. `1.0 / 64.0` here is the *virtual
+    // clock's own tick period* (matching `FIXED_TICK_RATE`) — orthogonal to `physics_dt` above,
+    // which controls how much *simulated* physics time Rapier advances per step regardless of
+    // how much virtual time elapsed. Kept deliberately distinct so `physics_dt != 1.0/64.0` can
+    // still simulate a real-physics-time-vs-tick-count mismatch for the tests that need it (see
+    // `grace_expiry_does_not_reset_early_when_real_physics_time_lags_ticks` below) — that
+    // mismatch is no longer reachable in the *shipped* game once `dt` is hardcoded to
+    // `FIXED_TICK_RATE` (`capabilities/physics.rs`), but remains a useful synthetic probe of the
+    // belt-and-braces physical checks in `player_movement_system`.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f32(1.0 / 64.0),
+    ));
     app.update();
 
     let theta = angle_deg.to_radians();
@@ -203,7 +219,14 @@ fn step(case: &mut Case, moving: bool, jumping: bool) -> (bool, u8) {
             msgs.write(InputActionMessage { entity: case.player, action: InputAction::Jump(true) });
         }
     }
-    case.app.world_mut().run_system_once(player_movement_system).unwrap();
+    // One `app.update()` call now equals exactly one `FixedUpdate` tick (`setup_case_full`'s
+    // `TimeUpdateStrategy`), which runs the full gameplay chain — including
+    // `player_movement_system` — followed by Rapier's own physics step, in that order, matching
+    // production exactly (`planning/features/deterministic_fixed_timestep.md`). Message-reading
+    // below moved to *after* this call accordingly: `player_movement_system` no longer runs
+    // ahead of it via a standalone `run_system_once`.
+    case.app.update();
+    case.tick += 1;
     // Count this tick's firings, then explicitly `.update()` (rotate) the buffer ourselves —
     // `setup_test_app()` never registers `message_update_system` for `GameEvent` (nothing in this
     // harness needs it otherwise), so without this the buffer would just keep accumulating every
@@ -219,12 +242,25 @@ fn step(case: &mut Case, moving: bool, jumping: bool) -> (bool, u8) {
         messages.update();
         case.jumps_taken += fired_this_tick;
     }
-    case.app.update();
-    case.tick += 1;
 
     let controller = case.app.world().entity(case.player).get::<CharacterController>().unwrap();
     let loco = case.app.world().entity(case.player).get::<LocomotionState>().unwrap();
     (loco.is_grounded, controller.jumps_used)
+}
+
+/// Forces the player's `GlobalTransform` to match a just-mutated `Transform` without running a
+/// real `app.update()` pass — used right after directly mutating `Transform` (teleporting the
+/// player in a test) so the next `step()`'s `ground_cast` (which reads `GlobalTransform`, not
+/// `Transform`) sees the new position immediately. Deliberately not `case.app.update()`: as of
+/// `planning/features/deterministic_fixed_timestep.md` (v1), a real `app.update()` tick also
+/// runs the entire `FixedUpdate` gameplay chain (`player_movement_system` included, now that
+/// Rapier lives in the same schedule) — an extra, unaccounted-for tick these tests' precise
+/// tick-counted assertions (coyote windows, grace windows) must not see. The player entity here
+/// is always root-level (no parent), so `GlobalTransform::from` is exactly what real propagation
+/// would compute.
+fn sync_transform(case: &mut Case) {
+    let transform = *case.app.world().entity(case.player).get::<Transform>().unwrap();
+    case.app.world_mut().entity_mut(case.player).insert(GlobalTransform::from(transform));
 }
 
 /// Drains and returns this tick's queued `AnimationRequests` (as pushed by
@@ -503,9 +539,12 @@ fn coyote_time_lets_a_jump_fire_briefly_after_leaving_the_ground() {
     // left it) and confirm a jump a few ticks later — comfortably inside the default ~6-tick
     // (0.1s @ 64Hz) coyote window — still succeeds.
     let mut case = setup_case(0.0, 5.94, false, 1);
-    // Confirm genuinely grounded first — this also seeds `coyote_ticks_remaining` to full
-    // (it starts at 0 from construction and is only ever set by a real ground-check tick, which
-    // the settle loop inside `setup_case` never runs).
+    // Confirm genuinely grounded first. `coyote_ticks_remaining` starts at 0 from construction
+    // and is only ever set by a real ground-check tick — as of `planning/features/
+    // deterministic_fixed_timestep.md` (v1), `setup_case`'s settle loop now runs the full
+    // gameplay chain (not just a physics-only PostUpdate step), so it already re-seeds this to
+    // full during settling; this explicit `step()` re-confirms the value, it doesn't uniquely
+    // produce it. The assertion below still pins what actually matters — the *value* itself.
     let (grounded_before, _) = step(&mut case, false, false);
     assert!(grounded_before, "sanity: should start grounded");
     // Pin the seeded value itself, not just that grounding was reported — `coyote_time_secs: 0.1`
@@ -519,7 +558,7 @@ fn coyote_time_lets_a_jump_fire_briefly_after_leaving_the_ground() {
         entity.get_mut::<Transform>().unwrap().translation.y = 1.0; // clearly beyond the ~0.71m sensor reach
         entity.get_mut::<Velocity>().unwrap().linvel = Vec3::ZERO;
     }
-    case.app.update(); // sync GlobalTransform + Rapier before the first real step() (see the sibling test below for why)
+    sync_transform(&mut case); // sync GlobalTransform before the first real step() (see the sibling test below for why)
 
     let (grounded_after_leaving, _) = step(&mut case, false, false);
     assert!(grounded_after_leaving, "coyote buffer should still report grounded immediately after leaving the ground");
@@ -546,7 +585,7 @@ fn coyote_time_does_not_mask_an_extended_fall_forever() {
         entity.get_mut::<Transform>().unwrap().translation.y = 1.0;
         entity.get_mut::<Velocity>().unwrap().linvel = Vec3::ZERO;
     }
-    case.app.update();
+    sync_transform(&mut case);
 
     for tick in 1..=6 {
         let (grounded, _) = step(&mut case, false, false);
@@ -573,15 +612,14 @@ fn falling_off_a_ledge_still_plays_landing_animation_without_ever_jumping() {
         // explicit rather than relying on whatever it happened to hold from settling.
         entity.get_mut::<LocomotionState>().unwrap().is_grounded = false;
     }
-    // A direct `Transform` mutation doesn't propagate to `GlobalTransform` (nor sync into
-    // Rapier's own body position) until a real `app.update()` runs that pass — `player_movement_
-    // system` reads `GlobalTransform`, not `Transform`, for `feet_pos`. Without this, the very
-    // first `step()` below would read the *pre-teleport* (still resting on the ground) position,
-    // immediately reporting grounded and ending the test before the fall ever happens. `step()`
-    // itself can't be used here since it also runs `player_movement_system`, which is exactly
-    // what must NOT see the stale position.
-    case.app.update();
-    drain_animation_requests(&mut case); // clear anything queued by the teleport-adjacent tick
+    // A direct `Transform` mutation doesn't propagate to `GlobalTransform` on its own —
+    // `player_movement_system` reads `GlobalTransform`, not `Transform`, for `feet_pos`. Without
+    // this, the very first `step()` below would read the *pre-teleport* (still resting on the
+    // ground) position, immediately reporting grounded and ending the test before the fall ever
+    // happens. `step()` itself can't be used here since it also runs `player_movement_system`,
+    // which is exactly what must NOT see the stale position — see `sync_transform`'s doc comment.
+    sync_transform(&mut case);
+    drain_animation_requests(&mut case); // clear anything left over from before the teleport
 
     let mut saw_jump_exit = false;
     let mut landed = false;
