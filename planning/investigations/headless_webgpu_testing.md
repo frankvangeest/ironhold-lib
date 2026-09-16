@@ -80,3 +80,17 @@ on the same machine works with zero issues.
   worth adding to `test_web.py`'s `CHROMIUM_ARGS_GL`/`CHROMIUM_ARGS_REAL_GPU` for any environment
   hitting the same missing-DLL failure — but only after confirming it doesn't mask real
   rendering differences from the D3D12 path real users' browsers take.
+
+**Update (2026-09-16, `feature/fixed_timestep_max_delta` investigation, `planning/investigations/
+fixed_timestep_max_delta.md`):** partially resolves finding 5's "visual confirmation unresolved"
+question — a plain headed launch (`headless=False`, `--enable-unsafe-webgpu`, **no**
+`--use-webgpu-adapter=d3d11` workaround) worked cleanly this session: zero WebGPU device-creation
+errors, `3rd_person_game_demo` reached real gameplay (character-select scene) via the
+`#debug-state` element, no dxil.dll/D3D12 failure observed. Either this session's Chromium/DLL
+setup differs from the one that produced finding #2 (a Playwright/Chromium version bump since
+this was written could plausibly have bundled `dxil.dll`), or the D3D12 failure is
+machine/session-specific rather than fixed to "this sandboxed environment" as originally
+concluded. Not root-caused further (wasn't blocking that investigation) — worth checking the
+Playwright Chromium version next time this is revisited, before assuming the `d3d11` workaround
+is still necessary. Headless mode was not retested and is assumed still broken (unrelated
+symptom — no GPU adapter at all, not a device-creation failure).
