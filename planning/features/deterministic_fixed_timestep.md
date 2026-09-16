@@ -1,13 +1,13 @@
 # Feature: Deterministic Fixed Timestep + Cross-Platform Divergence Harness
 
-_Status: In Progress (v1 Active, v2 Queued)_
+_Status: In Progress (v1 Done, v2 Queued)_
 _Planned at: `7332d62` (2026-09-15)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Fixed-timestep Rapier physics | Active | — |
+| v1 | Fixed-timestep Rapier physics | Done | `6f720de` (2026-09-16) |
 | v2 | Cross-platform determinism harness | Queued | — |
 
 ## What
