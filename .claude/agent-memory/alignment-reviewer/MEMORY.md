@@ -46,4 +46,5 @@
 - [rules_path vs state_machine_path coexistence](rules_vs_state_machine_coexistence.md) — both are independently live; the runtime warn + docs + backlog all falsely claim FSM replaces rules.ron
 - [System-ordering determinism fixes](system_ordering_determinism_pattern.md) — how to review a pure `.chain()`/`.before()` fix: Update-tier ordering map, transitive pre-interpreter pull-in, deferred-spawn/auto-clear edge, test-fixture fallout
 - [UI trigger reachability map](ui_trigger_reachability_pattern.md) — 4 `UiEvent::ButtonPressed` emit sites + 5 panel triggers, both directions now covered; 3x literal duplication; buy_item scoping rationale
+- [Fixed timestep + det_math pattern](fixed_timestep_det_math_pattern.md) — engine-internal determinism changes: why no RON knob, FIXED_TICK_RATE's missing third leg (Time::<Fixed>), stale-doc-claims-rewrite trap
 - [Item-gated interactable pattern](item_gated_interactable_pattern.md) — 8-touchpoint "gate an existing capability event" recipe; hit_any polarity; catalog-wide-CLI vs scene-scoped-warn asymmetry; PlayerInventory-is-global is a legit boundary

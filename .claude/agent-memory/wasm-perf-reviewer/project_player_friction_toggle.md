@@ -10,6 +10,12 @@ the 9th query element and writes `friction.coefficient` to `PLAYER_IDLE_FRICTION
 `raw_grounded && !loco.moving`, else `0.0`. Added by `feature/wall-friction` to kill the Coulomb
 wall-crush bug. Facts verified by inspection of bevy_ecs 0.18 / bevy_rapier3d 0.33 / rapier3d 0.31:
 
+⚠️ **The PostUpdate paragraph below is being invalidated** by `feature/deterministic_fixed_timestep`
+(reviewed 2026-09-15, see [[project-deterministic-fixed-timestep]]), which adds `.in_fixed_schedule()`.
+If that lands, `apply_collider_user_changes` runs **once per tick**, not once per frame, and the
+"catch-up burst writes coalesce to one collider sync per frame" guarantee is gone. Re-check
+`capabilities/physics.rs` before citing it.
+
 **bevy_rapier's physics sets default to `PostUpdate`, NOT `FixedUpdate`.** `capabilities/physics.rs`
 uses `RapierPhysicsPlugin::<NoUserData>::default()` and never calls `.in_fixed_schedule()`. So
 `apply_collider_user_changes` (the `Changed<Friction>` consumer) runs **once per rendered frame**.

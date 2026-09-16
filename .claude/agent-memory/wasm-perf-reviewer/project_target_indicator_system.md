@@ -23,3 +23,12 @@ metadata:
 **Binary size:** the new `HashMap<[u32;4],Handle<StandardMaterial>>` monomorphization adds a few KB at most; zero new deps. Noise vs ~90.7 MB. See [[project_wasm_size]].
 
 Nit: `color_key` uses raw `to_bits()` so +0.0/-0.0/NaN would key inconsistently — fine because colours are well-behaved RON config values, never computed.
+
+**2026-09-16 amendment (fresh_global_transform):** `global_transforms` is now
+`Query<(&GlobalTransform, Option<&Transform>, Option<&ChildOf>), Without<TrackingTarget>>` and both
+lookups go through `crate::utils::fresh_global_transform`. Per-frame delta on the XZ tracking loop is
+~40 scalar flops + 2 extra column lookups **per ring** (1-4 rings) — immeasurable. The epsilon guard
+and zero-alloc property are preserved. See [[project_fresh_global_transform]] for the full cost
+derivation, the translation-only dead-work nit, and the native-parallelism consequence. Note the new
+`Without<TrackingTarget>` also silently changes behaviour if a target were ever itself a ring
+(`.get()` → Err → ring despawned) — impossible today, but it is a silent-despawn path, not a log.

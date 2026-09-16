@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Update-schedule GlobalTransform is one tick stale](project_update_globaltransform_one_tick_stale.md) — camera reads fresh Transform, world-space UI reads stale GT; errors cancel at 0/1 ticks, break on 2-tick frames; propagating after Writeback makes it WORSE
+- [Vsync defeats framepace/tick matching](project_vsync_defeats_framepace_tick_matching.md) — PresentMode::Fifo is the default and is never overridden, so a 64fps cap never engages; 60Hz display = exactly 4 double-tick frames/sec regardless
 - [Player prefabs skip attach_prefab_features](project_player_spawn_skips_attach_prefab_features.md) — inventory/interactable/dialogue/behavior/trigger_zone silently dropped for player-tagged prefabs; only stat_templates is shared
 - [Schema validate() errors are non-fatal](project_schema_validate_errors_are_nonfatal.md) — project_loader error!s then loads the invalid catalog anyway, so max_stack:0 and friends DO reach runtime code
 - [TargetingPlugin's 3 PlayerTarget writers — now chained](project_targeting_systems_unordered_ambiguity.md) — fixed on feature/targeting_race_fix; click_select lacks the With<CharacterController> filter (accidental test safety net), indicator/HUD still unordered, drain_spawn_queue now always last
