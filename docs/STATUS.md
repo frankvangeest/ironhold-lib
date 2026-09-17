@@ -15,7 +15,7 @@ _Last updated: 2026‑05‑18_
 |----------:|-----------------------------------|:------:|-------|
 | 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
 | 0.2       | Event/Action Bus refactor         |   ✅   | Message→Interpreter→Action→Executor fully wired with project-level logic rules. |
-| 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states, state-gated rules, `EnterState`, and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` migrated to FSM. |
+| 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states, state-gated rules, `EnterState`, and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` uses **both** `rules.ron` (menu/UI transitions) and `state_machine.ron` (gameplay state machine) complementarily. |
 | 0.4       | Entity Logic (FSM v1)             |   ✅   | Per-entity `StateMachineAsset` behaviors (`.behavior.ron`), `{self}` substitution, `entity_fsm_interpreter_system`, `TriggerZone` and `Interactable` capabilities, `PlayAnimationOn`/`EmitEvent` actions. `entity_logic_demo` example project. |
 | 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
 | 0.6       | Networking Prototype              |   ⛔   | Not implemented. |
@@ -31,7 +31,7 @@ _Last updated: 2026‑05‑18_
 | Logic → Action execution      |   ✅   | `ActionQueue` processed by `action_executor_system`. |
 | Action infrastructure         |   ✅   | interpreter & executor wired. |
 | State-gated rules             |   ✅   | `LogicRule.when` field gates rules to a named logic state; `EnterState` action transitions between states. |
-| FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; replaces `rules.ron` for FSM projects. |
+| FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; use for gameplay state machines (playing, paused, character selection). Use `logic/rules.ron` for project-level rules (menus, options, scene transitions) with optional `when:` state gating. Both formats can be used together — the 3rd person game demo uses `rules.ron` for menu/UI transitions and `state_machine.ron` for the gameplay state machine. |
 | Live event domains            |   ✅   | `UiEvent`, `GameEvent`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. Entity events (`entity.entered/exited/interacted`) live. |
 | Planned event domains         |   ⛔   | (AI, dialogue, networking) are planned. Interaction events are now live. |
 | Entity FSM (per-entity behavior) |   ✅   | `behavior` field on `PrefabDef`; `.behavior.ron` uses `StateMachineAsset` format; `{self}` substitution; `entity_fsm_interpreter_system` runs alongside global interpreters. |

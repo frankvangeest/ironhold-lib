@@ -215,7 +215,16 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
 - **Filters/conditions**: restrict rules (by entity tags, state variables, scene, etc.). 🧭
 - **Parameters**: allow payload data to flow into actions (e.g., button id → scene path). 🧭
 
-### Example ✅
+### When to use `logic/rules.ron` 🧭
+Use for **project-level rules** — menus, options, scene transitions, and other declarative event→action mappings that may need to fire across different states or have multiple independent rules for the same event.
+
+**Best for:**
+- UI button presses with optional `when:` state gating
+- Scene lifecycle triggers (start game, quit, pause, etc.)
+- One-shot, stateless actions
+- When you need multiple rules with the same `on:` event but different `when:` conditions
+
+**Example:**
 ```ron
 // logic/rules.ron
 (
@@ -228,15 +237,12 @@ The heart of data-driven behavior is a rule system that maps incoming messages t
         ( on: "ui.button_pressed:start_game", when: "menu", do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
         ( on: "ui.button_pressed:quit",       when: "menu", do_actions: [ Quit ] ),
 
+        // Multiple rules can share the same event with different when guards
         ( on: "ui.button_pressed:toggle_pause", when: "playing", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
         ( on: "ui.button_pressed:toggle_pause", when: "paused",  do_actions: [ UnloadOverlay, EnterState("playing") ] ),
     ],
 )
 ```
-
-Event name format: `"<domain>.<type>:<payload>"`. The interpreter matches the full string against each rule's `on` field. UI button events are always `"ui.button_pressed:<trigger>"` where the trigger is the button's `action` field with the `"ui."` prefix stripped.
-
-The optional `when` field gates a rule to a named logic state. Omitting it fires in every state.
 
 ## Execution model (planned)
 
@@ -338,6 +344,16 @@ Applies actions to the world. Key design points:
 
 ### FSM asset schema (`logic/state_machine.ron`) ✅
 
+Use `logic/state_machine.ron` for **gameplay state machines** — managing named logic states with explicit transitions, entry/exit actions, and per-state event binding.
+
+**Best for:**
+- Gameplay states (playing, paused, menus as states)
+- Systems requiring entry/exit actions when transitioning between states
+- Explicit state transitions with `from:`/`to:` guards
+- `global_on:` events that fire from any state without changing state
+- Per-state `on:` bindings that fire while in that state
+
+**Schema pattern:**
 ```ron
 (
     schema_version: 1,
@@ -379,6 +395,7 @@ Applies actions to the world. Key design points:
 
 **Execution order per transition:** exit actions → state change → entry actions.
 The engine handles this automatically; authors do not write `EnterState` in FSM data.
+```
 
 > New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
 
