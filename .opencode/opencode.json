@@ -1,0 +1,81 @@
+{
+  "fallbackToClaudeConfig": true,
+  "claudeConfigPath": ".claude",
+  "permissions": {
+    "allow": [
+      "Bash(cargo test:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo clean:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo info:*)",
+      "Bash(cargo tree:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(wasm-pack build:*)",
+      "Bash(python test_web.py:*)",
+      "Bash(python -m py_compile test_web.py)",
+      "Bash(python -c:*)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/prevent_dev_wasm_commit.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check_glb_previews.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/schema_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/action_executor_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/assets_ron_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/ron_validation_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/action_docs_reminder.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/capability_registration_reminder.py"
+          }
+        ]
+      }
+    ]
+  }
+}
