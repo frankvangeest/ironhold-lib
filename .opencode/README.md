@@ -83,9 +83,32 @@ Frank's request, to stop OpenCode falling back to the global Juva `CLAUDE.md` la
 projects that have no instructions file of their own. It has no effect on this repo (which has its
 own `AGENTS.md`) and isn't part of this repo's config.
 
+## Checking for config drift
+
+`.opencode/opencode.json` pulls every prompt from `.claude/agents/*.md`/`.claude/commands/*.md`
+rather than duplicating them, so there's exactly one copy of each — but nothing stops the two
+sides from drifting apart on their own (a new Claude agent added with no OpenCode entry, a renamed
+`.claude` file breaking a `{file:}` reference, a `-deep` twin's prompt diverging from its
+plain-named counterpart, or a configured model quietly disappearing from a provider's live list —
+this last one is exactly what broke `deepseek-v4-flash-free` a couple of hours after it was first
+verified present, during v1's own testing). Run this periodically, e.g. before a session that
+leans on OpenCode:
+
+```bash
+python tools/opencode_sync_check.py
+# Skip the live `opencode models` check (e.g. opencode isn't installed here):
+python tools/opencode_sync_check.py --skip-models
+```
+
+It only checks "did something that used to be true stop being true" — it deliberately does not try
+to recommend a better free model for a tier when one exists; that's a judgment call for a periodic
+manual review of `.opencode/opencode_free_models.md`, not a mechanical check.
+
 ## Known gaps
 
 See `planning/features/opencode_compatibility.md` §6 for the full list (no context-inheriting
 forks, no per-subagent worktree isolation, no `Monitor`/`Cron`/`ScheduleWakeup`, free-model
-reliability, etc.). The reminder hooks (`cargo check` after a schema change, and similar) don't
-fire under OpenCode yet — that's phase v2, not yet built.
+reliability, etc.). The reminder hooks (`cargo check` after a schema change, and similar) now fire
+under OpenCode too (phase v2, `.opencode/plugins/claude_hooks_bridge.ts`) — live-tested for the
+reminder half; the blocking half (`git add pkg/`, etc.) hasn't been independently fired outside a
+TUI session.

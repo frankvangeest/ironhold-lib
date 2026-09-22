@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility (tooling)
 
-_Status: In Progress (v0/v1/v2 Done and live-verified 2026-09-22 against opencode-ai 1.18.31 — a few checklist items still open, see below; v3 Icebox)_
+_Status: In Progress (v0/v1/v2/v3's sync-check script all Done and live-verified 2026-09-22 against opencode-ai 1.18.31 — a few checklist items still open, see below; the optional `rust-idioms`-as-skill move is not done)_
 _Planned at: `20287fc` (2026-09-22)_
 
 This is a tooling/infrastructure plan, not an engine feature: nothing here touches `crates/`,
@@ -15,7 +15,7 @@ are recorded under **Decisions** below and built into the design.
 | v0 | Prerequisite: fix the 8 `.claude/hooks/*.py` scripts to follow Claude Code's real exit-code/output contract (F4) | Done | `7155299` (2026-09-22) |
 | v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Done, live-verified (checklist items 1-3/5-8/13; 4/9/10/11/12 still open) | `b8749c3`+ (2026-09-22) |
 | v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Done, live-verified for the reminder half; blocking half not independently fired (see v2 tasks) | 2026-09-22 |
-| v3 | Drift check script (extended to also flag a disappeared model — see v3 tasks), plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Icebox | — |
+| v3 | Drift check script (extended to also flag a disappeared model — see v3 tasks), plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Sync-check script Done, live-verified; the optional `rust-idioms` move not done | 2026-09-22 |
 
 ## What
 
@@ -640,13 +640,25 @@ and simpler. Step 10's "commit agent-memory on integration" note doesn't apply t
   `bun.lock` with no action needed here.
 
 **v3**
-- [ ] `tools/opencode_sync_check.py` (§2, drift check; also checks that every `-deep` entry's
-  prompt matches its plain twin's). **Extended scope (2026-09-22, Frank):** also run `opencode
-  models` and flag any model ID referenced in `.opencode/opencode.json` that's no longer listed —
+- [x] `tools/opencode_sync_check.py` (§2, drift check; also checks that every `-deep` entry's
+  prompt matches its plain twin's). **Extended scope (2026-09-22, Frank):** also runs `opencode
+  models` and flags any model ID referenced in `.opencode/opencode.json` that's no longer listed —
   this is exactly how the `deepseek-v4-flash-free` breakage during v1 testing was found, by luck,
-  not by a repeatable check. Scope this narrowly to "did a configured model disappear," not "find a
-  better one" — evaluating whether a new free model is actually good enough for a given tier is a
-  judgment call, not a mechanical check, and stays a periodic manual review instead.
+  not by a repeatable check. Scoped narrowly to "did a configured model disappear," not "find a
+  better one" — evaluating whether a new free model is actually good enough for a given tier stays
+  a periodic manual review, not a mechanical check.
+  **Live-tested against the real config, both the pass and fail paths**: a clean run against the
+  actual `.opencode/opencode.json` reports no drift (all 4 checks); each of the 4 checks was also
+  independently verified to correctly catch a deliberately introduced problem (a broken `{file:}`
+  reference, a `-deep`/plain prompt mismatch, and a fake model ID not in the live `opencode models`
+  list — the unreferenced-`.claude`-file check wasn't separately exercised with a deliberately
+  unreferenced file, since the other three already confirm the same file-matching machinery
+  works), then reverted via a byte-identical restore, confirmed via `git status`/`git diff` showing
+  no change. Also confirmed the script degrades gracefully (warns, doesn't crash) when `opencode
+  models` itself fails — which happened for real mid-test, since OpenCode's config loading fails
+  fast on any `{file:}` resolution error, so a config broken for the *first* check also breaks the
+  model check's own ability to run.
+  Documented in `.opencode/README.md`'s new "Checking for config drift" section.
 - [ ] Optional: move `rust-idioms` into `.claude/skills/rust-idioms/SKILL.md`. Both tools load that
   path natively, and it's a skill in all but location. Check that Claude Code still offers it as
   `/rust-idioms`.
