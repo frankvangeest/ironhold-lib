@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility (tooling)
 
-_Status: Ready (decisions resolved 2026-09-22; v1 not started)_
+_Status: In Progress (v0 Done, v1 built 2026-09-22 — awaiting Frank's verification checklist against a real OpenCode install, v2/v3 Queued)_
 _Planned at: `20287fc` (2026-09-22)_
 
 This is a tooling/infrastructure plan, not an engine feature: nothing here touches `crates/`,
@@ -14,7 +14,7 @@ have been changed yet.
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v0 | Prerequisite: fix the 8 `.claude/hooks/*.py` scripts to follow Claude Code's real exit-code/output contract (F4) | Done | `7155299` (2026-09-22) |
-| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Queued | — |
+| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Built, unverified | `b8749c3`+ (2026-09-22) |
 | v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Queued | — |
 | v3 | Drift check script, plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Icebox | — |
 
@@ -581,34 +581,37 @@ and simpler. Step 10's "commit agent-memory on integration" note doesn't apply t
   command's own arguments / actually-staged files instead.
 
 **v1**
-- [ ] Replace `.opencode/opencode.json` with the §3 shape:
-  - remove `permissions`, `hooks`, `fallbackToClaudeConfig` and `claudeConfigPath`;
-  - add `instructions`, `permission` (including `task` `*-deep` deny) and `model`/`small_model`;
-  - add 11 `agent` blocks: 9 plain free-tier agents, plus `system-architect-deep` and
-    `debug-detective-deep`;
-  - add 9 `command` blocks, with the advisory prefix line on `/code-review`, `/plan-review` and
+- [x] Replace `.opencode/opencode.json` with the §3 shape:
+  - removed `permissions`, `hooks`, `fallbackToClaudeConfig` and `claudeConfigPath`;
+  - added `instructions`, `permission` (including `task` `*-deep` deny) and `model`/`small_model`;
+  - added 11 `agent` blocks: 9 plain free-tier agents, plus `system-architect-deep` and
+    `debug-detective-deep` — every `{file:}` reference verified to resolve to a real file;
+  - added 9 `command` blocks, with the advisory prefix line on `/code-review`, `/plan-review` and
     `/ship`.
-- [ ] Check `opencode auth list` shows OpenRouter, Zen (`opencode`) and Google configured. Frank's
-  Gemini key already is.
-- [ ] Write `.opencode/prompts/agent_preamble.md` (§2: 4 points).
-- [ ] Create `.opencode/memory-inbox/.gitkeep`.
-- [ ] Rewrite `AGENTS.md` as the thin shim (§1). Include the translation table, the merge-gate rule
-  and the memory-inbox rule, and drop the out-of-date FixedUpdate/camera claim.
-- [ ] Short `.opencode/README.md` covering:
-  - the tier table and the three providers;
-  - the `-deep` opt-in convention and its cost;
-  - the merge-gate rule;
-  - memory-inbox triage;
-  - a note that `~/.config/opencode/AGENTS.md` is Frank's machine-local choice (Decision 6);
-  - the tested OpenCode version;
-  - a pointer to this plan.
-- [ ] Fix `.opencode/opencode_free_models.md`'s invalid config examples (`agents` → `agent`, drop
-  `model_routing`) and wrong context values, and add a Gemini free-tier section (F8, F10). Or
-  regenerate it.
-- [ ] Short "Using OpenCode" note in root `CLAUDE.md` § Tools pointing at `.opencode/README.md`, so
-  the Claude side knows the second toolchain exists and that the memory inbox needs triage.
-- [ ] Log a `claude_suggestions.md` entry: `crates/ironhold_core/src/CLAUDE.md` says camera-follow
-  must run in `FixedUpdate`, but the camera chain is in `Update`.
+  - **Permissions for the 3 `C`-tier authoring agents (`integration-test-author`,
+    `ron-gameplay-scripter`, `data-format-doc-writer`) were not fully specified in §3** (it only
+    worked through the reviewer-agent shape in detail) — filled in as: `task: deny` only, no
+    edit/bash override, so they inherit the top-level `edit: allow` and the top-level bash
+    allow-list. This matches their actual job (writing test/RON/doc files, running the same
+    validate/test commands the allow-list already covers) but wasn't an explicit plan decision —
+    flagged here for Frank to confirm rather than silently assumed correct forever.
+- [ ] **Not done — Frank's own step**: check `opencode auth list` shows OpenRouter, Zen
+  (`opencode`) and Google configured.
+- [x] Write `.opencode/prompts/agent_preamble.md` (§2: 4 points).
+- [x] Create `.opencode/memory-inbox/.gitkeep`.
+- [x] Rewrite `AGENTS.md` as the thin shim (§1): translation table, merge-gate rule, memory-inbox
+  rule, and the out-of-date FixedUpdate/camera claim dropped.
+- [x] `.opencode/README.md`: tier table, three providers, `-deep` opt-in convention and cost,
+  merge-gate rule, memory-inbox triage, the `~/.config/opencode/AGENTS.md` machine-local note,
+  a pointer to this plan. **Not filled in**: the tested OpenCode version — Frank should run
+  `opencode --version` and add it, since none of this was run against a real install.
+- [x] Fixed `.opencode/opencode_free_models.md`'s invalid config examples (`agents` → `agent`,
+  dropped `model_routing`, removed the nonexistent `mistral-7b` model), wrong context values
+  (355B/137B → 262K), the duplicate Laguna S 2.1 row, the stale `stealth/union-alpha` entry, and
+  added the Gemini free-tier + paid-DeepSeek-tier sections (F8, F10).
+- [x] "Using OpenCode" note in root `CLAUDE.md` § Tools pointing at `.opencode/README.md`.
+- [x] Logged a `claude_suggestions.md` entry for the `FixedUpdate`/camera doc inaccuracy
+  (`crates/ironhold_core/src/CLAUDE.md`, not just the now-fixed `AGENTS.md` copy).
 
 **v2**
 - [ ] `.opencode/plugins/claude_hooks_bridge.ts` (§3, Hooks), mapping `block()`/`emit_context()`.

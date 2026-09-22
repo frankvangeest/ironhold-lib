@@ -207,6 +207,18 @@ python tools/asset_checker/check.py --orphans
 python tools/build_asset_manifest.py
 ```
 
+### Using OpenCode alongside Claude Code
+
+This repo also runs under [OpenCode](https://opencode.ai), mostly on free models, as a second
+toolchain alongside Claude Code — see `.opencode/README.md` for setup and model routing, and
+`planning/features/opencode_compatibility.md` for the full design. Two things worth knowing from
+the Claude Code side:
+- Any review OpenCode produces is **advisory only** — the mandatory review before merging a
+  feature into `integration` (step 4/step 10 above) stays a Claude Code `/code-review`.
+- OpenCode agents write anything they want remembered to `.opencode/memory-inbox/<agent>.md`
+  rather than directly into `.claude/agent-memory/` — check that folder periodically (e.g. during
+  a review cycle) and promote anything worth keeping by hand.
+
 ## Planning
 
 All work items live in `planning/`. See `planning/CLAUDE.md` for the full folder reference.
