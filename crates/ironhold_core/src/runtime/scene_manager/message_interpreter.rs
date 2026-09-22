@@ -346,8 +346,9 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
 }
 
 /// Interprets events against a loaded `StateMachineAsset`, driving state transitions and
-/// queuing entry/exit actions.  Runs alongside `message_interpreter_system`; only one of
-/// the two will have data to act on for any given project (rules vs. FSM).
+/// queuing entry/exit actions.  Runs alongside `message_interpreter_system` -- both are always
+/// live and process every event independently when a project sets both `rules_path` and
+/// `state_machine_path`; this is not mutually exclusive with the rules interpreter.
 pub fn fsm_interpreter_system(
     mut ui_events: MessageReader<UiEvent>,
     mut game_events: MessageReader<GameEvent>,
