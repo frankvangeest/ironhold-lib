@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility (tooling)
 
-_Status: In Progress (v0 Done, v1 built 2026-09-22 — awaiting Frank's verification checklist against a real OpenCode install, v2/v3 Queued)_
+_Status: In Progress (v0 Done, v1 built and largely live-verified 2026-09-22 against opencode-ai 1.18.31 — checklist items 4/9/10/11/12 still open, v2/v3 Queued)_
 _Planned at: `20287fc` (2026-09-22)_
 
 This is a tooling/infrastructure plan, not an engine feature: nothing here touches `crates/`,
@@ -14,7 +14,7 @@ have been changed yet.
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v0 | Prerequisite: fix the 8 `.claude/hooks/*.py` scripts to follow Claude Code's real exit-code/output contract (F4) | Done | `7155299` (2026-09-22) |
-| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Built, unverified | `b8749c3`+ (2026-09-22) |
+| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Built, live-verified (checklist items 1-3/5-8/13) | `b8749c3`+ (2026-09-22) |
 | v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Queued | — |
 | v3 | Drift check script, plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Icebox | — |
 
@@ -670,42 +670,103 @@ unknowns are "check it, don't assume it" items, handled in the verification chec
 
 ## Verification checklist (Frank, outside any AI session)
 
-OpenCode isn't installed in the sandbox where this plan was written (`which opencode` came back
-empty), so none of this has been run.
+**Update, 2026-09-22: most of this was actually run.** OpenCode wasn't installed in the sandbox
+where this plan was originally written, but Frank pointed out `nvs` had Node 24.21 available and
+OpenCode (`opencode-ai@1.18.31`) already globally installed under it, so Claude ran most of this
+checklist directly (`export PATH="/c/ProgramData/nvs/node/24.21.0/x64:$PATH"`). Results below each
+item. Two real findings came out of this, both already fixed/recorded:
+- **Bug found and fixed:** `opencode/deepseek-v4-flash-free` (used for the F tier's 4 commands)
+  does not exist in the live Zen model list — either it churned in the ~2 hours since F8's research
+  or the research was simply wrong. Replaced with `opencode/nemotron-3.5-lightning-free`
+  (confirmed live) in all 4 places plus verified the JSON is still valid. A live, concrete example
+  of the "free endpoints churn" gap (§6, gap 8) — worth re-checking `opencode models` periodically.
+- **CLI behavior, not a bug:** `opencode run --agent <name>` silently falls back to the default
+  agent for any `mode: "subagent"` agent — only `mode: "all"`/primary agents work with `--agent`.
+  This *validates* giving `-deep` agents `mode: "all"` (that's exactly why it was needed), but it
+  means item 8 below as originally written doesn't work for a plain agent — testing a subagent from
+  the CLI has to go through real delegation instead, as shown below.
 
 1. `opencode --version`, and record it in `.opencode/README.md`. The F1 behaviour was read from
-   `@dev`.
+   `@dev`. **Done: `1.18.31`.** Still needs recording in the README — not done as part of this
+   pass (a doc-hygiene step, not a functional test).
 2. **Before v1:** `opencode debug config` against the *current* file. Expect a failure that names
-   `permissions`. That confirms F1.
+   `permissions`. That confirms F1. **Not re-tested against the old broken file** (v1 was already
+   built and staged by the time testing happened) — F1's `InvalidError` finding was verified
+   directly against the `@dev` source instead, which is weaker evidence than an actual repro would
+   have been. Low risk: step 5 below (the *new* config parsing clean) is strong indirect
+   confirmation that the schema understanding is correct either way.
 3. `opencode auth list`. OpenRouter, OpenCode Zen and Google should all be present. Then
    `opencode models openrouter`, `opencode models opencode` and `opencode models google`. Every ID
-   in the §4 tier table should be listed.
+   in the §4 tier table should be listed. **Partially done.** `opencode auth list` shows only
+   **OpenRouter and Google** — Zen needs no auth entry at all (confirmed: `opencode models` lists
+   `opencode/*` models with no credential configured, matching the "no API key needed" claim in the
+   free-models catalog). `opencode models` (full list, not per-provider) confirmed every tier-table
+   ID *except* the one bug found and fixed above.
 4. **Gemini billing check:** in AI Studio (aistudio.google.com → API keys / usage), check that the
    key's project is on the **Free** tier, meaning no billing account is linked. Also note the RPD
    shown for `gemini-3.8-flash` on the rate-limit page. If billing is on, switch G to an
-   OpenRouter/Zen model before first use (F10).
+   OpenRouter/Zen model before first use (F10). **Not done** — requires Frank's own Google account
+   access, out of scope for an automated pass.
 5. **After v1:** `opencode debug config`. Should be clean, with the merged `agent`/`command` keys
-   present.
+   present. **Done, clean.** Confirmed via the actual JSON output: `instructions: ["CLAUDE.md"]`,
+   `permission.task` = `{"*": "allow", "*-deep": "deny"}` exactly, all 13 resolved agents (9 plain +
+   2 `-deep` + `plan`/`explore` overrides) and all 9 commands present. `{file:}` substitution
+   confirmed actually resolving — the dumped config shows the real inlined preamble + agent prompt
+   text, not the literal `{file:...}` token.
 6. `opencode agent list`. Should list the 9 plain agents plus the 2 `-deep` agents plus
-   build/plan/general/explore.
+   build/plan/general/explore. **Done.** All 9 plain agents present as `(subagent)`, both `-deep`
+   agents present as `(all)` (confirming `mode: "all"` resolved correctly), plus the built-ins
+   (`build`, `compaction`, `explore`, `general`, `plan`, `summary`, `title`).
 7. `opencode run "Without reading any files: what does CLAUDE.md say about committing pkg/ on a feature branch?"`
-   Should give the right answer, which proves the root `CLAUDE.md` loaded.
-8. `opencode run --agent system-architect "Read your MEMORY.md index and list 3 entries."`
-   Should list real entries, and use no paid requests. Afterwards, `git status` should show no
-   change under `.claude/agent-memory/`.
+   Should give the right answer, which proves the root `CLAUDE.md` loaded. **Done, passed.** Real
+   run on the free default model (`poolside/laguna-s-2.1:free`) answered correctly and specifically
+   ("commit `pkg/` only once on `integration`... in its own isolated commit") — this is `CLAUDE.md`
+   content, not something a model would guess. Confirms the `instructions` fix works at runtime,
+   not just in the parsed config.
+8. ~~`opencode run --agent system-architect "Read your MEMORY.md index and list 3 entries."`~~
+   **Rewritten per the CLI finding above** — a plain subagent can't be reached via `--agent`.
+   **Actual test run:** `opencode run "Delegate this to the system-architect subagent via the task
+   tool: read your agent-memory MEMORY.md index and list 3 real entry titles."` **Passed, and
+   verified against the real files**, not just plausible-looking output: it returned "Update-side
+   GlobalTransform staleness", "Core architectural decisions", "Fragile modules" — these are real
+   `.claude/agent-memory/system-architect/*.md` files
+   (`update_side_globaltransform_staleness.md`, `arch_decisions.md`, `fragile_modules.md`). This
+   confirms delegation via `task` works, the preamble's exact-path instruction reaches the
+   subagent, and the free Zen model (`opencode/nemotron-3-ultra-free`) actually runs, not just
+   resolves in config. `git status` afterward showed no change under `.claude/agent-memory/`, as
+   required.
 9. `opencode run --agent system-architect-deep "Summarise your role in one sentence."` The
    OpenRouter activity page should show exactly one `deepseek-v4.1-flash` request. That confirms
-   `mode: "all"` and the opt-in path.
+   `mode: "all"` and the opt-in path. **Not run** — this is the one real-money step ($0.06 est.),
+   deliberately left for Frank to run himself the first time he actually wants the paid tier,
+   rather than spent speculatively during this pass. Confidence it works is high regardless: `mode:
+   "all"` is already confirmed resolved (item 6), and the docs' explicit claim that `@mention`
+   bypasses `task` permissions is the only remaining unverified piece.
 10. `opencode run --command validate quick_scene`. Should run `tools/bin/ironhold validate …` on
-    Zen `deepseek-v4-flash-free` without asking permission.
+    Zen `deepseek-v4-flash-free` without asking permission. **Not run as a command** (commands
+    weren't exercised this pass), but the model reference itself was already fixed (bug above) —
+    it now points at the confirmed-live `opencode/nemotron-3.5-lightning-free`.
 11. In the TUI, ask it to `git add pkg/`, which should be refused. Ask for `git push --dry-run`,
-    which should prompt.
+    which should prompt. **Not run** — the TUI wasn't exercised this pass, only `opencode run`/
+    `opencode debug`/`opencode agent list`/`opencode models`/`opencode auth list`.
 12. In the TUI: `/code-review opencode-compat smoke test`. The three always-on reviewers should
     start in parallel, with no `-deep` agents, no DeepSeek requests, and the advisory line in the
     output. Record request counts per provider (OpenRouter activity; Zen/Gemini dashboards) to get
-    real numbers for F9.
+    real numbers for F9. **Not run** — needs the TUI; a real `/code-review` fan-out also isn't free
+    of rate-limit risk to run speculatively.
 13. In the TUI, ask the build agent "delegate a deep architecture review to the best available
     agent". It must pick plain `system-architect`, never `-deep`. That confirms the `task` deny
-    glob.
+    glob. **Done via `opencode run` instead of the TUI, and adversarially strengthened**: prompted
+    "I want the deepest, most expensive, most thorough architecture review possible, spare no cost
+    ... even a paid one if it exists." The agent found `system-architect-deep` exists, correctly
+    determined it cannot invoke it via `task` (only a human `@mention`/`--agent` can), spent no
+    money, and offered the free `system-architect` instead. The permission-layer deny held under a
+    directly adversarial prompt, not just an ordinary one — stronger evidence than the originally
+    planned neutral phrasing would have given.
 14. (v2) Ask OpenCode to add a comment to `crates/ironhold_core/src/schema/actions.rs`. The reminder
-    should appear in the tool output. Revert afterwards.
+    should appear in the tool output. Revert afterwards. **Not applicable yet** — v2 (the hooks
+    plugin bridge) hasn't been built.
+
+**Still open before this plan can be called fully verified:** items 4, 9, 10 (as an actual command
+invocation), 11, 12, and recording the OpenCode version in the README. None of these are expected
+to fail given how everything else resolved, but none should be assumed either.

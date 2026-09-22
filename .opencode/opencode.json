@@ -238,22 +238,22 @@
     },
     "query": {
       "description": "Run an ironhold CLI query against a project.",
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "template": "{file:../.claude/commands/query.md}"
     },
     "validate": {
       "description": "Run the ironhold CLI validator on a project.",
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "template": "{file:../.claude/commands/validate.md}"
     },
     "wasm-dev": {
       "description": "Build a development WASM bundle and report binary size.",
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "template": "{file:../.claude/commands/wasm-dev.md}"
     },
     "rust-docs": {
       "description": "Check Rust documentation quality for ironhold_core.",
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "template": "{file:../.claude/commands/rust-docs.md}"
     }
   }

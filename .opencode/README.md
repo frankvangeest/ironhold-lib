@@ -3,10 +3,11 @@
 Design doc: `planning/features/opencode_compatibility.md` (read that first for the full reasoning
 — this file is the quick-reference for actually using the setup).
 
-**Tested OpenCode version:** not yet recorded — run `opencode --version` and fill this in. The
-config in this folder was written against the `sst/opencode@dev` source tree on 2026-09-22; a
-released build could differ. If anything here doesn't match what you see, `opencode debug config`
-is the first thing to check.
+**Tested OpenCode version:** `1.18.31` (confirmed 2026-09-22 — config loads clean, `instructions`/
+`{file:}`/delegation/the `-deep` permission deny were all live-tested against this exact version;
+see `planning/features/opencode_compatibility.md`'s verification checklist for what was and wasn't
+covered). The design itself was researched against the `sst/opencode@dev` source tree, so if a
+future OpenCode release changes behavior, `opencode debug config` is the first thing to check.
 
 ## The rule that matters most
 
