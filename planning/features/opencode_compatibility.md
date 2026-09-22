@@ -13,7 +13,7 @@ are recorded under **Decisions** below and built into the design.
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v0 | Prerequisite: fix the 8 `.claude/hooks/*.py` scripts to follow Claude Code's real exit-code/output contract (F4) | Done | `7155299` (2026-09-22) |
-| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Done, live-verified (checklist items 1-3/5-8/13; 4/9/10/11/12 still open) | `b8749c3`+ (2026-09-22) |
+| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Done, live-verified (checklist items 1-8/13; 9/10/11/12 still open) | `b8749c3`+ (2026-09-22) |
 | v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Done, live-verified for the reminder half; blocking half not independently fired (see v2 tasks) | 2026-09-22 |
 | v3 | Drift check script (extended to also flag a disappeared model — see v3 tasks), plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Sync-check script Done, live-verified; the optional `rust-idioms` move not done | 2026-09-22 |
 
@@ -744,8 +744,10 @@ item. Two real findings came out of this, both already fixed/recorded:
 4. **Gemini billing check:** in AI Studio (aistudio.google.com → API keys / usage), check that the
    key's project is on the **Free** tier, meaning no billing account is linked. Also note the RPD
    shown for `gemini-3.8-flash` on the rate-limit page. If billing is on, switch G to an
-   OpenRouter/Zen model before first use (F10). **Not done** — requires Frank's own Google account
-   access, out of scope for an automated pass.
+   OpenRouter/Zen model before first use (F10). **Done, confirmed 2026-09-22 (Frank): no billing
+   account is set up** — the free tier applies as designed, `google/gemini-3.8-flash` calls for
+   `ux-gamedesigner-reviewer`/`game-world-designer` cost nothing. RPD wasn't separately recorded —
+   low risk given those two agents are the lowest-volume in the routing table by design (§4).
 5. **After v1:** `opencode debug config`. Should be clean, with the merged `agent`/`command` keys
    present. **Done, clean.** Confirmed via the actual JSON output: `instructions: ["CLAUDE.md"]`,
    `permission.task` = `{"*": "allow", "*-deep": "deny"}` exactly, all 13 resolved agents (9 plain +
@@ -806,6 +808,9 @@ item. Two real findings came out of this, both already fixed/recorded:
     should appear in the tool output. Revert afterwards. **Not applicable yet** — v2 (the hooks
     plugin bridge) hasn't been built.
 
-**Still open before this plan can be called fully verified:** items 4, 9, 10 (as an actual command
-invocation), 11, 12, and recording the OpenCode version in the README. None of these are expected
-to fail given how everything else resolved, but none should be assumed either.
+**Still open before this plan can be called fully verified:** item 9 (an actual paid `-deep`
+invocation — deliberately not spent speculatively), item 10 as an actual command invocation, and
+items 11/12 (TUI-only checks: `git add pkg/` refusal, a real `/code-review` fan-out). Item 4
+(Gemini billing) is now confirmed, and the OpenCode version is recorded in the README. None of the
+remaining items are expected to fail given how everything else resolved, but none should be
+assumed either.
