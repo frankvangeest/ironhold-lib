@@ -1,22 +1,21 @@
 # Feature: OpenCode compatibility (tooling)
 
-_Status: In Progress (v0 Done, v1 built and largely live-verified 2026-09-22 against opencode-ai 1.18.31 — checklist items 4/9/10/11/12 still open, v2/v3 Queued)_
+_Status: In Progress (v0/v1/v2 Done and live-verified 2026-09-22 against opencode-ai 1.18.31 — a few checklist items still open, see below; v3 Icebox)_
 _Planned at: `20287fc` (2026-09-22)_
 
 This is a tooling/infrastructure plan, not an engine feature: nothing here touches `crates/`,
 `assets/`, or the WASM build. It's filed under `planning/features/` because it needed design
 decisions before anything got written. Frank answered all the open questions on 2026-09-22; they
-are recorded under **Decisions** below and built into the design. No `.opencode/` config files
-have been changed yet.
+are recorded under **Decisions** below and built into the design.
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v0 | Prerequisite: fix the 8 `.claude/hooks/*.py` scripts to follow Claude Code's real exit-code/output contract (F4) | Done | `7155299` (2026-09-22) |
-| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Built, live-verified (checklist items 1-3/5-8/13) | `b8749c3`+ (2026-09-22) |
-| v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Queued | — |
-| v3 | Drift check script, plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Icebox | — |
+| v1 | Working `.opencode/opencode.json`: instructions, permissions, 3 providers, agents and commands pulled in from `.claude/` via `{file:}`, free-by-default routing with `-deep` opt-in, memory-inbox rule, thin `AGENTS.md` | Done, live-verified (checklist items 1-3/5-8/13; 4/9/10/11/12 still open) | `b8749c3`+ (2026-09-22) |
+| v2 | Hook parity: one OpenCode plugin that runs the (now fixed) `.claude/hooks` scripts | Done, live-verified for the reminder half; blocking half not independently fired (see v2 tasks) | 2026-09-22 |
+| v3 | Drift check script (extended to also flag a disappeared model — see v3 tasks), plus an optional move of `rust-idioms` into a shared `.claude/skills/` | Icebox | — |
 
 ## What
 
@@ -614,12 +613,40 @@ and simpler. Step 10's "commit agent-memory on integration" note doesn't apply t
   (`crates/ironhold_core/src/CLAUDE.md`, not just the now-fixed `AGENTS.md` copy).
 
 **v2**
-- [ ] `.opencode/plugins/claude_hooks_bridge.ts` (§3, Hooks), mapping `block()`/`emit_context()`.
-- [ ] `.opencode/.gitignore` for plugin dependencies, if OpenCode doesn't create one.
+- [x] `.opencode/plugins/claude_hooks_bridge.ts` (§3, Hooks), mapping `block()`/`emit_context()`.
+  Auto-discovered by OpenCode with zero config changes (confirmed local plugins under
+  `.opencode/plugins/` don't go in the `plugin` array at all — that array is npm packages only;
+  `opencode debug config` showed it picked up as `file:///.../claude_hooks_bridge.ts`
+  automatically). Reads `.claude/settings.json`'s `hooks` block fresh on every tool call (not
+  cached), so an edit to that file takes effect without restarting OpenCode.
+  **Live-tested, real result, not just design confidence:** asked OpenCode to `write` a file at
+  `crates/ironhold_core/src/schema/_hook_test_probe.rs` (a throwaway, deleted immediately after).
+  The exact `schema_reminder.py` reminder text
+  ("REMINDER: schema file changed — run: `cargo check -p ironhold_cli`...") appeared live in the
+  tool output, proving the full chain works: tool-name mapping (`write` → `Write`), matcher
+  resolution against `.claude/settings.json`'s `"Write|Edit"` pattern, the script actually running
+  with the right `tool_input.file_path`, its JSON `additionalContext` stdout being parsed, and that
+  text being appended to what the model sees.
+  **Not independently live-fired: the `PreToolUse`/blocking half** (`prevent_dev_wasm_commit.py`/
+  `check_glb_previews.py`, via `throw new Error(...)`). Structurally hard to trigger through
+  non-interactive `opencode run` — anything not already permission-allowed auto-rejects before the
+  tool call (and likely the plugin hook) is ever reached, and weakening real permissions just to
+  force a test wasn't worth the risk. High confidence regardless: it's the same script-execution
+  code path already proven live above, and `throw Error()` inside `tool.execute.before` is
+  officially documented, simple, unconditional block behavior — but this half should get a real
+  TUI test before being trusted blind (e.g. try `git add pkg/anything` in an interactive session).
+- [x] `.opencode/.gitignore` for plugin dependencies. **OpenCode creates this itself** — confirmed
+  during v1 testing, it already covers `node_modules`/`package.json`/`package-lock.json`/
+  `bun.lock` with no action needed here.
 
 **v3**
 - [ ] `tools/opencode_sync_check.py` (§2, drift check; also checks that every `-deep` entry's
-  prompt matches its plain twin's).
+  prompt matches its plain twin's). **Extended scope (2026-09-22, Frank):** also run `opencode
+  models` and flag any model ID referenced in `.opencode/opencode.json` that's no longer listed —
+  this is exactly how the `deepseek-v4-flash-free` breakage during v1 testing was found, by luck,
+  not by a repeatable check. Scope this narrowly to "did a configured model disappear," not "find a
+  better one" — evaluating whether a new free model is actually good enough for a given tier is a
+  judgment call, not a mechanical check, and stays a periodic manual review instead.
 - [ ] Optional: move `rust-idioms` into `.claude/skills/rust-idioms/SKILL.md`. Both tools load that
   path natively, and it's a skill in all but location. Check that Claude Code still offers it as
   `/rust-idioms`.
