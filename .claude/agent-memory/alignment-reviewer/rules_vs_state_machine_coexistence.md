@@ -1,30 +1,30 @@
 ---
 name: rules-vs-state-machine-coexistence
-description: project_loader.rs's "rules.ron is NOT loaded when state_machine_path is present" warn is factually wrong — both are loaded and both interpreters run; docs and backlog repeat the same false claim
+description: rules_path and state_machine_path are both live when both are set. The project_loader.rs warn was fixed in feature/fix_stale_logic_path_warning (2026-09-22); docs/00 and docs/30 still say FSM "replaces" rules.ron
 metadata:
   type: project
 ---
 
-`rules_path` and `state_machine_path` are **independently live** — setting both means both run.
+`rules_path` and `state_machine_path` are **independently live**: if both are set, both run.
 
-**Why:** established reading the code during the `feature/configurable_logic_paths` review
-(2026-09-06). `check_project_loaded` builds `rules_handle` (project_loader.rs:~49-53) with no
-state-machine condition, and inserts `LoadedRules` from it regardless of whether `fsm` resolved
-(~249-254). `message_interpreter_system` reads `LoadedRules` unconditionally
-(message_interpreter.rs:13) and runs alongside `fsm_interpreter_system` — neither suppresses the
-other. But project_loader.rs:~59-64 emits a `warn!` claiming *"rules.ron is NOT loaded when
-state_machine_path is present — remove rules_path to silence this"*, which contradicts its own
-code. The same false claim is repeated in `docs/20_data_formats.md` (the `state_machine_path` table
-row "use instead of `rules_path`", and the `StateMachineAsset` section "Replaces `rules.ron` for
-FSM-based projects") and in `planning/backlog.md`'s v2→v3 migration-guide item ("rename
-`rules_path` → `state_machine_path` ... and the warning to expect if both files coexist").
+**Why:** found by reading the code during the `feature/configurable_logic_paths` review
+(2026-09-06). `check_project_loaded` builds `rules_handle` (project_loader.rs:~49-53) without
+checking for a state machine, and inserts `LoadedRules` whether or not the FSM resolved.
+`message_interpreter_system` reads `LoadedRules` unconditionally and runs alongside
+`fsm_interpreter_system`. Neither one turns the other off.
 
-**How to apply:** never mirror that warn in a CLI check or treat the two fields as mutually
-exclusive — `resolve_logic_files` correctly treats them as independently live, and the
-`valid_ui_trigger` fixture (sets both, passes `unreachable_trigger` and `--strict orphan_rule` at
-exit 0) is the regression coverage for it. If a future change is asked to "make validate match the
-warning," push back: the warn is what's wrong, and a designer who trusts it and deletes their
-`rules_path` silently loses working rules. Fixing it is either a warn-text correction in
-`ironhold_core` (cheap, no behavior change) or an actual exclusivity implementation (a breaking
-change for any project relying on coexistence) — that is a Frank decision, not a review call.
-Related: [[validate-cross-file-blind-spots]].
+**Status (2026-09-22):** `feature/fix_stale_logic_path_warning` changed the old false warn text
+("rules.ron is NOT loaded...") to say correctly that both files are live when both are set. It
+changed wording only. `docs/20_data_formats.md` was fixed earlier. Places that still suggest
+FSM replaces rules.ron, as of that review:
+- `docs/00_overview.md`:~121: "`state_machine_path` instead of `rules_path`"
+- `docs/30_runtime_events_and_logic.md`:~45: "Replaces `rules.ron` for FSM projects"
+- `planning/backlog.md`: the v2→v3 migration-guide item mentions "the warning to expect if both
+  files coexist"
+- The debug-detective and system-architect memory files still quote the old warn text
+
+**How to apply:** don't copy the old exclusivity idea into a CLI check, and don't treat the two
+fields as mutually exclusive. `resolve_logic_files` already treats them as independently live, and
+the `valid_ui_trigger` fixture is the regression coverage for that. Making them truly exclusive
+would break any project that uses both, so that is Frank's decision, not something a review should
+decide. Related: [[validate-cross-file-blind-spots]].

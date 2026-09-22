@@ -33,7 +33,7 @@ Entity-targeted actions (those that reference a spawn ID) need two additional to
 
 - `rules.ron` — simple event→action mapping; no state tracking. Use for projects where all events trigger the same response regardless of game state.
 - `state_machine.ron` — FSM with named states, entry/exit actions, and `when:` condition guards. Use when behavior depends on the current game state (e.g., playing vs paused, hp_low vs hp_ok).
-- Both can coexist: rules.ron fires unconditionally; state_machine.ron fires in context. The interpreter chain runs both: `message_interpreter_system` then `fsm_interpreter_system`.
+- Both are independently live if both paths are set (chain: `message_interpreter_system` then `fsm_interpreter_system`), but NO shipped project does this and coexistence has real hazards. See [[rules-vs-fsm-consolidation]] for the open keep-vs-consolidate question (my recommendation: consolidate on FSM, staged).
 
 ## Feature spec splitting
 

@@ -80,7 +80,12 @@ intent. `feature/configurable_logic_paths` (`f82de0e`) is the first thing to enc
 semantics: `resolve_logic_files` treats both halves as live, and the `valid_ui_trigger` fixture now
 sets both paths and asserts exit 0 under `--strict`. So the CLI matches the code and contradicts
 the message. Either fix the runtime to match its own warning or delete the warning; don't "fix"
-the CLI to match it.
+the CLI to match it. **Resolved 2026-09-22** (`feature/fix_stale_logic_path_warning`, an OpenCode
+pilot): warning text corrected to "both ... independently live — remove one to silence this".
+Lesson from that review: a docs sentence that *cites* a warning's inaccuracy ("despite an
+inaccurate runtime warning", `20_data_formats.md`~108) goes stale the moment the warning is fixed
+— grep docs for back-references to the message, not just for the old claim. Also, "remove one"
+remedy still invites breaking a project that legitimately uses both (valid_ui_trigger does).
 
 **Mirror-vs-import: the deciding question is whether the CLI's *inputs* differ in shape, not
 whether the core item is `pub`.** `validate.rs` has both precedents and they are not
