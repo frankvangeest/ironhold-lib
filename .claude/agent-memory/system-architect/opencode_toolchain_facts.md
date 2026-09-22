@@ -16,5 +16,9 @@ Verified 2026-09-22 against sst/opencode@dev source + docs while writing `planni
 - OpenCode default permission is allow-all incl. bash — omitting a permission block is less safe than the Claude setup. Last-match-wins pattern rules; webfetch takes no domain patterns.
 - OpenRouter free tier: 20 RPM, 50 req/day under $10 purchased credit, 1000/day at ≥$10 — per account, so spreading across free models doesn't help.
 
+- **`permission.task` deny removes a subagent from the task tool entirely, but users can still `@mention` it** — the mechanism behind the plan's free-by-default naming: plain agent names (what shared `.claude/commands` templates invoke) are free-tier; paid DeepSeek only as `<name>-deep`, task-denied via `"*-deep": "deny"`. Shared templates can't carry per-tool tier choices, so tier must be encoded in the agent-name → model mapping, never in the template.
+
+Frank's decisions (2026-09-22): OpenCode reviews are advisory-only (Claude `/code-review` is the merge gate); 3 providers (OpenRouter w/ $10 credit, Zen, Gemini free tier via `google/`); paid `deepseek/deepseek-v4.1-flash` is the sole paid tier — Zen `deepseek-v4-flash-free` is NOT a substitute (lighter flash-class; used for run-and-report tier); `~/.config/opencode/AGENTS.md` is machine-local, suppresses the global Juva layer. Gemini free tier only applies to non-billing GCP projects.
+
 **Why:** Frank runs OpenCode alongside Claude Code on free models; see [[claude-hooks-contract-bug]] for the related hook finding.
 **How to apply:** when reviewing any `.opencode/` change, check it against these facts; flag any hand-copied agent prompt (drift) or any OpenCode agent granted write access to `.claude/agent-memory/` (plan decision: read-only + `.opencode/memory-inbox/`).
