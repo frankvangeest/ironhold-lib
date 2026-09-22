@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 import subprocess
 
+from _hook_common import block
+
 
 def _glb_has_meshes(path: str) -> bool:
     """Return False for animation-only GLBs (no mesh objects). Reads only the JSON chunk."""
@@ -49,14 +51,13 @@ try:
     if missing:
         paths = "\n".join(f"  {g}" for g in missing)
         glb_args = " ".join(missing)
-        print(
+        block(
             f"BLOCKED: {len(missing)} staged GLB(s) missing an AVIF preview:\n{paths}\n\n"
             f"Generate previews, then verify none are blank:\n"
             f"  python tools/glb_preview/preview.py {glb_args} --avif-only\n"
             f"  python tools/glb_preview/preview.py assets/shared/models/ --check\n\n"
             f"Stage the new .avif files and re-commit."
         )
-        sys.exit(1)
 
 except Exception:
     pass
