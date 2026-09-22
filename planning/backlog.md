@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **`project_loader.rs`'s "rules.ron is NOT loaded when state_machine_path is present" warning is factually false** — see `## Bugs` entry below for full detail. Scope narrowed 2026-09-23: `docs/20_data_formats.md`'s `state_machine_path` row and the `logic/state_machine.ron` section header were already corrected by `feature/configurable_logic_paths`; only `project_loader.rs`'s own `warn!` string (lines ~69-72) is still stale. Being implemented via OpenCode (`feature/fix_stale_logic_path_warning`) as a pilot of the `opencode_compatibility.md` setup — Claude Code's `/code-review` still gates the merge per that plan's Decision 1.
+
 ---
 
 ## Bugs
