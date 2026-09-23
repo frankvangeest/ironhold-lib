@@ -120,6 +120,29 @@ review agents use) but cannot write to it. Anything an OpenCode agent wants to r
 this folder periodically (or during a Claude Code review cycle) and promote anything worth keeping
 into the real `.claude/agent-memory/<name>/` files by hand — discard the rest.
 
+## Known limitations research (2026-09-23)
+
+The North Mini Code incident (above) showed benchmark ratings alone don't predict whether a model
+is safe for a given unsupervised agentic role. Every model currently routed in `opencode.json` was
+then researched the same way — reasoning-state/tool-call caveats, fabrication-under-loop reports,
+vendor-only vs. independently-verified benchmarks, real-world usable context, free-tier
+reliability. Full findings with sources: `.opencode/opencode_free_models.md`'s "Known Limitations
+by Model" section. None came back an outright AVOID, but three findings are worth acting on:
+
+- **`poolside/laguna-s-2.1:free`'s headline benchmark (70.2% Terminal-Bench 2.1) requires "max
+  thinking" enabled** — without it, Poolside's own numbers drop to 60.4%. `opencode.json` doesn't
+  set a thinking-effort parameter for this model, and it's unconfirmed whether OpenRouter's free
+  endpoint defaults to max thinking. If Laguna's real-world output quality looks weaker than the
+  benchmark suggests, this is the first thing to check.
+- **`nvidia/nemotron-3-ultra-550b-a55b:free`/`opencode/nemotron-3-ultra-free`** (backing
+  `system-architect`, `debug-detective`, `plan`, and all three review-orchestration commands) has a
+  documented reasoning-state-drop on every new turn, plus a measured ~16% failure/empty-response
+  rate on OpenRouter's free endpoint. A review that comes back suspiciously thin or shallow may be
+  this, not an actual clean bill of health.
+- **`nex-agi/nex-n2.5-pro:free`** (`integration-test-author`) has zero independent agentic-coding
+  track record — every benchmark claim is Nex-AGI's own. Generated tests from it are worth a closer
+  read than usual before trusting them, since a wrong-but-plausible assertion is easy to miss.
+
 ## Machine-local note
 
 `~/.config/opencode/AGENTS.md` (outside this repo) was created separately from this plan, at

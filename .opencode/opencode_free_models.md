@@ -2,9 +2,11 @@
 
 > **Last generated**: 2026-09-17
 > **Corrections applied**: 2026-09-22, per `planning/features/opencode_compatibility.md` finding
-> F8 (verified against live OpenRouter/Zen model lists and models.dev) and F10 (Gemini). This is a
-> catalog for reference/regeneration — the routing decisions actually in effect for this repo live
-> in `.opencode/opencode.json` and `.opencode/README.md`, not here.
+> F8 (verified against live OpenRouter/Zen model lists and models.dev) and F10 (Gemini).
+> **Known-limitations research pass added 2026-09-23** (see "Known Limitations by Model" below) —
+> triggered by a real `cohere/north-mini-code:free` failure that benchmark ratings alone didn't
+> predict. This is a catalog for reference/regeneration — the routing decisions actually in effect
+> for this repo live in `.opencode/opencode.json` and `.opencode/README.md`, not here.
 >
 > **Sources**:
 > - OpenCode Zen: `https://opencode.ai/zen/v1/models` (fetched via API)
@@ -46,6 +48,27 @@ Models were rated across these agent task categories:
 - ⭐⭐⭐ **Good** - Usable for most cases, some caveats
 - ⭐⭐ **Fair** - Works for simple tasks, avoid complex work
 - ⭐ **Poor** - Avoid for this task category
+
+### 5. Known-Issue Research (added 2026-09-23, mandatory going forward)
+
+Real incident: `cohere/north-mini-code:free` was rated highly on benchmarks and Apache-2.0
+licensing alone, then failed in live use — it stopped making real edits mid-task and started
+re-describing its plan instead, a documented model-card behavior (dropped reasoning state between
+tool calls) that a benchmark score alone never would have surfaced. **A star rating from
+benchmarks is not sufficient to route a model to an unsupervised agentic role.** Before adding or
+re-routing any model, research (WebSearch) each of the following and record a SAFE / CAUTION /
+AVOID verdict with sources in "Known Limitations by Model" below:
+
+- Model-card language about reasoning-state/context preservation across tool calls or turns
+- Documented fabrication/hallucination tendency under iterative or long multi-turn pressure
+- Whether tool/function-calling is confirmed supported by the model card **and** by the serving
+  endpoint actually used (OpenRouter vs. OpenCode Zen vs. native SDK can differ)
+- Whether headline benchmark numbers require a non-default setting (e.g. "max thinking") to
+  achieve, and what the number is without it
+- Independent (non-vendor) benchmark reproduction, vs. self-reported-only numbers
+- Free-tier rate limits/availability — a model with a sub-90% success rate on its own free
+  endpoint can look like a silent task failure rather than an obvious rate-limit error
+- Real advertised-vs-practically-usable context window (community reports, not just the spec sheet)
 
 ---
 
@@ -141,7 +164,117 @@ it, never a per-command or always-on review slot.
 
 ---
 
+## Known Limitations by Model (research pass 2026-09-23)
+
+Triggered by the `cohere/north-mini-code:free` incident (see its catalog entry above and
+`.opencode/README.md`) — benchmark scores didn't predict that failure, so every model actually in
+this repo's routing got the same scrutiny applied after the fact, via three parallel research
+passes. See "Known-Issue Research" above for the methodology; re-run it for any new model before
+routing it to a role. **None of the models below rose to an outright AVOID** on current evidence —
+none has a documented "stops editing, reconstructs its plan" analog as blatant as the Cohere
+incident — but several share the same *category* of risk (reasoning-state loss, vendor-only
+benchmarks, tool-call plumbing immaturity) and are flagged CAUTION accordingly. These star ratings
+in the tables above and below reflect benchmark/capability performance only — read this section
+before routing any model to an unsupervised agentic role.
+
+### Primary code-editing models
+
+**`poolside/laguna-s-2.1:free`** (default `build`/`general` agent, `ron-gameplay-scripter`) —
+**CAUTION**. The headline 70.2% Terminal-Bench 2.1 / 40.4% DeepSWE numbers are reported only with
+"max thinking" enabled (Poolside's own "Introducing Laguna S 2.1" post); without it they drop to
+60.4% / 16.5%. Unconfirmed whether OpenRouter's free endpoint (as OpenCode calls it, with no
+thinking-effort parameter set) defaults to max thinking or something lower — real day-to-day
+capability may sit closer to the lower numbers. Model card also documents "harness overfitting"
+(relies on memory of Poolside's native tool schema; can emit invalid calls against a
+differently-shaped harness schema) and occasional malformed JSON on array-typed tool arguments —
+both typically self-correct via a harness retry rather than silently abandoning the edit, a
+materially milder failure mode than north-mini-code's. Model card also admits quality degrades at
+long context despite the advertised up-to-1M window. No evidence found of the "stops editing,
+re-describes the plan" failure mode specifically — this is the closest thing to a safe pick in the
+primary coding role, just not risk-free.
+
+**`poolside/laguna-xs-2.1:free`** (unused, catalogued candidate) — **CAUTION**. Terminal-Bench 2.1
+only ~33-38% (vs. S 2.1's 70.2%) — a big capability gap for sustained agentic/terminal work despite
+similar SWE-bench-style scores. Model card explicitly documents "native reasoning with interleaved
+thinking between tool calls" — structurally the same reasoning-across-tool-calls dependency that
+caused the north-mini-code incident elsewhere. Not proven broken here, but don't promote this to
+active routing without testing that dependency directly first.
+
+**`nex-agi/nex-n2.5-pro:free`** (`integration-test-author`) — **CAUTION**. Tool-calling and
+structured output are solid, but every benchmark claim (82.7 Terminal-Bench 2.1, 61.2 SWE-Bench
+Pro) is vendor-self-reported via Nex-AGI's own harness, flagged as such by third-party coverage —
+no independent reproduction found. Launched 2026-09-08, essentially no independent agentic-coding
+track record yet. Risk here is role-specific: wrong-but-plausible test code is easier to miss in
+review than wrong prose.
+
+**`nex-agi/nex-n2.5-mini:free`** (`data-format-doc-writer`) — **CAUTION**, slightly better signal
+than Pro. Same vendor-only-benchmark caveat, but one independent hands-on review found it declines
+low-confidence answers rather than fabricating — "a meaningfully better failure mode than
+confident hallucination" (not tested on sustained code editing). Role here (single-shot markdown
+doc writing) is lower-stakes than Pro's — bad docs are easy to spot-check.
+
+**`cohere/north-mini-code:free`** — **AVOID**. See dedicated entry above; not used in routing.
+
+### Review/reasoning models (no edit permission — risk is fabricated findings, not broken edits)
+
+**`nvidia/nemotron-3-ultra-550b-a55b:free`** (`system-architect`, `debug-detective`, plus the
+`opencode/nemotron-3-ultra-free` Zen twin backing the built-in `plan` agent and
+`/code-review`/`/plan-review`/`/ship` orchestration) — **CAUTION**. NVIDIA's own tech report
+documents that reasoning tokens from previous turns are dropped whenever a new user/tool-result
+message arrives — a different trigger than Cohere's "between tool calls" case, but the same
+failure family (reasoning-state loss → risk of reconstructing/fabricating rather than continuing
+coherently). Separately, OpenRouter's own 3-day snapshot (2026-09-19) measured only 84.07%
+successful-response rate on the free endpoint (100% reachable, but ~16% of calls errored or
+returned empty) — free tier capped at 20 RPM/200 RPD with no SLA. For a review agent this could
+look like a dropped/incomplete review rather than an obvious error — worth a second look if a
+review agent ever comes back suspiciously thin.
+
+**`nvidia/nemotron-3.5-lightning:free`** (`small_model`, `/query` `/validate` `/wasm-dev`
+`/rust-docs`) — **CAUTION**. No `response_format`/enforced JSON schema support. Advertised 1M
+context vs. NVIDIA's own docs citing a native 262K window, with community reports of materially
+lower practical usable context on top of that — a real advertised-vs-actual gap. Smallest model in
+the family (3B active) increases fabrication risk beyond its current scope of short, low-stakes
+commands — don't extend it to longer review work.
+
+**`nvidia/nemotron-3-super-120b-a12b:free`** (`wasm-perf-reviewer`) — **CAUTION**. Tool-calling and
+structured JSON output are better-specified than Lightning's, but HuggingFace discussions on a
+sibling Nemotron-3 model document broken tool-call-argument parsing and reasoning content leaking
+into the message body on certain serving stacks (version-dependent; NVIDIA's own workaround was
+"parse the arguments yourself") — a family-wide plumbing-immaturity signal, not confirmed on this
+exact OpenRouter/Zen endpoint. Worth spot-checking that its tool calls parse cleanly rather than
+assuming they do.
+
+### Exploration / design-consultation models
+
+**`thinkingmachines/inkling-small:free`** (built-in `explore` agent, read-only) — **CAUTION**.
+Model card itself lists hallucination, imprecise instruction-following, and degraded
+long-multi-turn performance as known limitations — the same *category* of issue as
+north-mini-code, without the specific tool-call mechanism. Its Terminal-Bench 2.1 score is
+separately flagged by the vendor's own model card as partially contaminated by web-search-derived
+solutions scoring 0 — a benchmark data-integrity flag, not a runtime risk given this role has no
+edit permission.
+
+**`thinkingmachines/inkling:free`** (full, unused, catalogued candidate) — **CAUTION**, same
+documented limitations as Inkling Small (larger model, no evidence scale fixes the pattern).
+
+**`google/gemini-3.8-flash`** (`ux-gamedesigner-reviewer`, `game-world-designer`) — **SAFE** for
+tool-calling itself (confirmed supported, no agentic-loop fabrication reports found), but
+**CAUTION** on free-tier throughput: Google's own docs cap no-billing access at ~10-15 requests/
+minute — an OpenCode agentic loop making rapid tool-call round-trips could hit 429s mid-task. Not
+a correctness risk, but expect occasional stalls, not silent wrong output.
+
+### Not yet re-verified against this methodology
+
+`inclusionai/ling-3.0-flash-*` variants, `mimo-v2.5/2.6-flash-free`, `muse-spark-1.2/1.3-free`,
+`jev-1.13-free`, and `deepseek-v4-flash-free` (Zen) are catalogued but currently unused in
+routing — apply the "Known-Issue Research" step above before activating any of them.
+
+---
+
 ## Model Ratings by Agent Role/Task
+
+> Ratings below are benchmark/capability scores only — see "Known Limitations by Model" above for
+> the reliability caveat on each currently-routed model before trusting a rating alone.
 
 ### 🎯 Coding Agents
 | Model | Rating | Notes |
