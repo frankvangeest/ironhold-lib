@@ -61,19 +61,37 @@ at once with no automatic recovery.
 This happened for real (2026-09-23): `openrouter/poolside/laguna-s-2.1:free` — the original,
 single C-tier model backing the default `build`/`general` agent plus all three authoring
 subagents — started returning `"[Poolside] ... is temporarily rate-limited upstream"` mid-session.
-Fix: spread the 4 C-tier consumers across **3 different upstream providers**, so at most 2 share
-any single provider's bottleneck at once:
+First fix: spread the 4 C-tier consumers across 3 different upstream providers, moving the default
+`build`/`general` model to `openrouter/cohere/north-mini-code:free` (Cohere) so at most 2 agents
+shared any single provider's bottleneck.
+
+**Reverted the default back to Laguna the same day** — North Mini Code turned out to have a worse
+problem than the rate limit it was meant to work around. In live use it stopped making real edits
+partway through a multi-step implementation and started re-describing the plan instead of acting
+on it — consistent with two things Cohere's own model card documents: (1) it explicitly requires
+preserving the model's reasoning content between tool calls, warning that dropping it "force[s]
+[the model] to reconstruct its plan on the next turn" (local serving needs Cohere's own "Melody"
+parser for this; whether a generic harness talking to it via OpenRouter preserves that state
+correctly is unverified and plausibly the actual cause), and (2) independent review found it can
+"multiply fabricated completions under the pressure of a loop" — i.e. get *worse*, not better, over
+repeated agentic turns. Both match the observed symptom closely enough that this isn't treated as
+a fluke. Laguna's rate limit is an intermittent, recoverable annoyance; this looked like a standing
+reliability problem for exactly the sustained multi-step editing a `build` agent does. North Mini
+Code is not used anywhere in this repo's routing anymore.
 
 | Consumer | Model | Provider |
 |---|---|---|
-| Default `model` (`build`/`general`) | `openrouter/cohere/north-mini-code:free` | Cohere |
+| Default `model` (`build`/`general`) | `openrouter/poolside/laguna-s-2.1:free` | Poolside (reverted; if it rate-limits again, `nex-agi/nex-n2.5-pro:free` is the next thing to try, not `cohere/north-mini-code:free`) |
 | `integration-test-author` | `openrouter/nex-agi/nex-n2.5-pro:free` | Nex AGI |
-| `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` | Poolside (kept — still the highest-rated pick when it's actually available) |
+| `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` | Poolside |
 | `data-format-doc-writer` | `openrouter/nex-agi/nex-n2.5-mini:free` | Nex AGI (lighter sibling of the test-author's model — doc writing needs less than active Rust authoring) |
 
-If one of these starts rate-limiting too, the fix is the same: edit that agent's `model` in
-`opencode.json` to a different provider's free model — there's no config-level fallback list to
-maintain instead. `.opencode/opencode_free_models.md` has the fuller candidate list.
+If one of these starts rate-limiting (or, per the above, misbehaving) again, the fix is the same:
+edit that agent's `model` in `opencode.json` to a different provider's free model — there's no
+config-level fallback list to maintain instead, and don't assume a model swap is safe just because
+it's free and rated well for coding; check for known agentic-loop/tool-call reliability issues
+first, the way this one was found. `.opencode/opencode_free_models.md` has the fuller candidate
+list.
 
 ## The paid escalation opt-in
 
