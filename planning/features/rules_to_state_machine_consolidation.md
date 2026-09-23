@@ -376,7 +376,7 @@ Every `.before(message_interpreter_system)` becomes `.before(fsm_interpreter_sys
   `model_fixes` is V1.
 - `StateMachineAsset` stays at `1`, per §2.
 
-### 5. `Action::EnterState`: removed (recommended default; Frank may veto)
+### 5. `Action::EnterState`: removed (decided — Frank, 2026-09-23)
 
 `EnterState` exists as rules.ron's way to change state.
 - Once this change lands, the only places it could still be written are FSM bindings and
@@ -386,15 +386,72 @@ Every `.before(message_interpreter_system)` becomes `.before(fsm_interpreter_sys
 - `docs/30_…:397` already tells authors "you do not write `EnterState` in FSM data".
 - After §1 there are **zero** content uses. What remains is 2 tests in `fsm_tests.rs`, one
   `query.rs` label, and docs.
-- **The replacement recipe is `EmitEvent("name")` + a transition on that event**, which runs the
-  exit/entry hooks. Example: a dialogue choice that starts a quest does
-  `do_actions: [ EmitEvent("quest.started") ]`, and the FSM has
-  `( from: "exploring", on: "quest.started", to: "on_quest" )` (bare string, no `Some(…)`, per
-  `ron_lint`'s implicit-some style). For gameplay-driven
-  conditions, emit a `GameEvent` (`stat_threshold_system` already does) and transition on it. The
-  recipe must be designer-visible, not only in `crates/ironhold_core/src/CLAUDE.md` (a dev-only
-  file): §6 puts it in docs/20's "Removed" callout, docs/20's Action table, and docs/30's new
-  "Project logic" section. Rewrite the CLAUDE.md "Conditions on rules" section to match.
+- **Verified against the schema before deciding, not assumed**: `FsmTransition.from: Option<String>`
+  is documented as "omit (or `None`) to match any current state" — so the common `EnterState`
+  pattern ("go to state X from wherever the game currently is") is exactly **one** transition with
+  `from` omitted, not one transition per possible source state. There is no capability regression:
+  every use case `EnterState` covered maps onto `global_on`/per-state `on:`/`transitions` with no
+  loss, and the one thing that changes (a real transition always runs the target state's
+  `entry_actions` and the source state's `exit_actions`) is a correctness improvement over
+  `EnterState`'s silent hook-skipping, not a tradeoff.
+
+**The replacement recipe is `EmitEvent("name")` + a transition on that event.** Full worked example
+(a dialogue choice that starts a quest, replacing the old `EnterState("on_quest")`):
+
+```ron
+// dialogues/npc_quest_giver.dialogue.ron — a choice's do_actions
+do_actions: [
+    SetVariable("quest_started", "true"),
+    EmitEvent("quest.started"),
+],
+```
+
+```ron
+// logic/state_machine.ron
+(
+    schema_version: 1,
+    initial_state: "exploring",
+    states: [
+        (
+            name: "exploring",
+            on: [ ( event: "quest.started", do_actions: [ Log("Quest offered") ] ) ],
+        ),
+        (
+            name: "on_quest",
+            entry_actions: [
+                Log("Quest started"),
+                SetVariable("quest_label", "Quest: find the crystal"),
+                PlayMusicLoop(key: "quest_theme"),
+            ],
+            exit_actions: [ StopMusic ],
+        ),
+    ],
+    transitions: [
+        ( from: "exploring", on: "quest.started", to: "on_quest" ),
+    ],
+)
+```
+
+(`entry_actions`/`exit_actions` at the project level have no `{self}` to resolve — that substitution only applies
+inside a per-entity `.behavior.ron` file — so this example deliberately uses `Log`/`SetVariable`/
+`PlayMusicLoop` rather than an entity-targeted action like `ShowFloatingText`, to stay correct as
+a project-level FSM example rather than accidentally implying `{self}` works here.)
+
+The dialogue choice never names a state directly — it only emits an event. The transition is what
+actually changes `LogicState`, and only the transition's firing runs `on_quest`'s `entry_actions`
+(the music swap, the `quest_label` UI variable a `Label` widget can bind to) and `exploring`'s
+`exit_actions`. An `EnterState("on_quest")` in the old system would have changed the state with
+**neither** of those side effects running — exactly the silent desync bug class this removal
+closes. For a gameplay-driven (rather than dialogue-driven) condition, the same pattern applies:
+emit a `GameEvent` (`stat_threshold_system` already does this for stat-threshold conditions) and
+add a transition on it, instead of reaching for `EnterState` from a capability system.
+
+This worked example is not just internal reasoning — §6 requires it to actually land in
+designer-visible docs (not only `crates/ironhold_core/src/CLAUDE.md`, a dev-only file): the
+"Removed: rules.ron" callout in `docs/20_data_formats.md`, that same file's Action table (the new
+`EmitEvent` row), and `docs/30_runtime_events_and_logic.md`'s new "Project logic" section all get
+this exact example (or an equivalent one using existing shipped-project vocabulary). Rewrite the
+`crates/ironhold_core/src/CLAUDE.md` "Conditions on rules" section to match.
 
 This is an `Action` enum removal. Existing RON that uses it would fail to parse. There is none.
 
@@ -491,16 +548,27 @@ RON comments (`local_coop_demo`, `particles_demo`, `dynamic_animation_control`,
   - `.claude/agents/{alignment-reviewer,debug-detective,system-architect}.md`
   - `.claude/commands/query.md:16`
   - Check `.opencode/prompts/` too. None were found at `59f10e9`.
-- **Agent memory** (`.claude/agent-memory/**`, ~60 files mention rules). Update or retire the
-  ones whose claims become false; at minimum:
-  - `alignment-reviewer/rules_vs_state_machine_coexistence.md`
-  - `debug-detective/project_logic_file_on_disk_is_not_loaded.md`
-  - `system-architect/capability_patterns.md`, `system-architect/cli_validate_coverage_model.md`,
-    `system-architect/rules_vs_fsm_consolidation.md` (mark shipped)
-
-  Grep the rest (`rules\.ron|rules_path|EnterState|message_interpreter_system`) and fix or delete
-  stale claims. Per the root `CLAUDE.md` step 10, these edits land in the primary checkout and are
-  committed separately on `integration`.
+- **Agent memory cleanup** (`.claude/agent-memory/**`, ~60 files mention rules) — **do this only
+  after Commits 1-4 have actually landed**, i.e. as part of this same Commit 5, not speculatively
+  before. Frank's explicit concern (2026-09-23): a stale memory file describing
+  `message_interpreter_system`/`LogicRulesAsset`/`rules_path` as live, current behavior is exactly
+  the kind of thing that causes a *future* review agent to hallucinate — confidently citing code
+  that no longer exists, or recommending a fix framed against a system that's gone. This is not
+  optional documentation polish; treat it with the same rigor as the code-level acceptance
+  criteria.
+  - Update or retire every file whose claims become false. At minimum:
+    - `alignment-reviewer/rules_vs_state_machine_coexistence.md`
+    - `debug-detective/project_logic_file_on_disk_is_not_loaded.md`
+    - `system-architect/capability_patterns.md`, `system-architect/cli_validate_coverage_model.md`,
+      `system-architect/rules_vs_fsm_consolidation.md` (mark shipped)
+  - **Grep all of `.claude/agent-memory/` for `rules\.ron|rules_path|EnterState|LogicRulesAsset|LoadedRules|message_interpreter_system`
+    and read every hit, not just the ones above** — the named files are a floor, not the whole
+    scope. For each hit: if the memory describes now-removed code as current, correct or delete it;
+    if it's a historical note that's still accurate as history (e.g. "this bug existed in the old
+    rules interpreter, fixed by X"), leave it, since deleting true history isn't the goal — only
+    false-as-of-now claims are.
+  - Per the root `CLAUDE.md` step 10, these edits land in the primary checkout (not the feature
+    worktree) and are committed separately on `integration`, alongside the feature merge.
 - **Planning:**
   - Close the backlog's "Schema version v2→v3 migration guide" (Designer Experience) as
     superseded when this ships. Relocate it into Done next to this item with a
@@ -658,11 +726,12 @@ Every one should behave exactly as on `main`.
 
 ## Open questions
 
-- **`Action::EnterState`: remove it (the plan's default, §5) or keep it?** The plan removes it: no
-  content uses it, it is the only way to change state that skips the FSM's hooks, and the docs
-  already tell FSM authors not to use it. **Frank: veto here if you want it kept.** Keeping it only
-  means leaving the variant, its executor arm, `SceneStateParams.logic_state`, and 2 tests in
-  place. No other part of the plan depends on the answer.
+None remaining that block starting — the one live question (`Action::EnterState`) is resolved
+below. Everything else was already decided in the plan or by Frank during plan-review.
+
+- **`Action::EnterState`: decided — remove it (Frank, 2026-09-23).** Confirmed via the schema
+  (`FsmTransition.from: Option<String>`, "omit to match any current state") that this is not a
+  capability regression — see §5's full reasoning and worked `EmitEvent` + transition example.
 - **Backlog "Schema version v2→v3 migration guide": decided, not open. It is superseded and
   closed when this ships.** Its premise is already stale: every shipped project is already at
   `schema_version: 3`, and "rename `rules_path` → `state_machine_path`" is exactly what this
