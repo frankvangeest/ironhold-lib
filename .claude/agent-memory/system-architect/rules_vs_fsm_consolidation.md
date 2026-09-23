@@ -1,38 +1,38 @@
 ---
 name: rules-vs-fsm-consolidation
-description: Open question (2026-09-23), Frank to decide: keep rules.ron alongside state_machine.ron, or consolidate on the FSM. My staged-consolidation recommendation, and the facts it rests on
+description: DECIDED 2026-09-23 — rules.ron is being removed outright (one breaking change, no bridge); plan at planning/features/rules_to_state_machine_consolidation.md; the non-obvious traps the plan rests on
 metadata:
   type: project
 ---
 
-On 2026-09-23 I recommended **consolidating project logic on `StateMachineAsset`, in stages**.
-Frank has not decided yet. Full write-up: `planning/investigations/rules_vs_state_machine_architecture.md`.
+**Decision (Frank, 2026-09-23):** remove `rules_path`/inline `rules:`/`message_interpreter_system`
+as ONE deliberate breaking change. Frank explicitly rejected a load-time rules→FSM translation
+bridge ("do it right the first time"). Reasons: he is pre-1.0 with no stable release, he is the
+only author, and the only external consumer (`Ironhold-fps-demo`, pinned via a `pkg/` commit)
+already uses `state_machine_path` only. Plan: `planning/features/rules_to_state_machine_consolidation.md`
+(Draft, planned `59f10e9`). Background: `planning/investigations/rules_vs_state_machine_architecture.md`.
 
-**Why:** facts checked at `f64a970`:
-- rules.ron is a strict subset of the FSM. A rule with no `when:` = `global_on`. A rule with
-  `when: S` = an `on:` binding in state S. `EnterState` = a transition without the entry/exit hooks.
-- None of the 11 live rules-only projects uses `when:` or `EnterState`. The only `when:` user is
-  the dead `3rd_person_game_demo/logic/rules.ron`.
-- Per-entity behaviors already use `StateMachineAsset`, so rules.ron is the only logic file that
-  is not an FSM.
-- Coexistence has caused a string of confusion bugs: the false warn, the "replaces" docs,
-  dead files that look live, and `query`/`stats` counting dead files.
-- Hazards when both are set:
-  - both interpreters fire on the same event
-  - rules check the whole frame against the start-of-frame `LogicState`, while the FSM changes
-    state per event
-  - `EnterState` from rules skips the FSM's exit/entry actions
-  - nothing checks that `when:` names are real FSM states
+**Why:** rules.ron is a strict subset of the FSM. None of the live rules files (10 files,
+~139 rules) or the 38 CLI fixture rules files (~91 rules) uses `when:` or `EnterState`. They are
+all flat `global_on` lists.
 
-**The key move:** make `StateMachineAsset.transitions`, `initial_state`, and `states` defaultable.
-That is additive and non-breaking. A flat FSM file then becomes as short as rules.ron, which
-removes the only real reason to keep rules.ron.
+**Non-obvious facts the plan depends on (re-verify before acting):**
+- `message_interpreter_system` is the `.before()` ordering ANCHOR for 9 registrations (8 in
+  lib.rs, 1 in action_bar.rs), not only a chain member. Each must be re-anchored to
+  `fsm_interpreter_system`.
+- Default `initial_state` to `""` so migrated projects keep `LogicState==""`. That value is
+  exposed via the `#debug-state` DOM JSON to test_web.py.
+- No `ProjectConfig` schema_version bump. Its `deny_unknown_fields` already turns a leftover
+  `rules_path:` into a hard parse error that names the field.
+- Migration = a comment-preserving text transform plus a temporary parsed-equivalence test
+  (`Action: PartialEq`). Parse-and-reserialize would destroy ~100 designer comments.
+- ~32 CLI fixtures have no `.project.ron`. They rely on validate's convention fallback.
+- The rules_path-semantics fixtures are the only coverage of the configured-path code. Port them
+  to state_machine_path; do not delete them.
+- `Action::EnterState` removal is the plan's default. Frank may veto it.
 
-**The step that gets most of the benefit for the least churn:** at load time, convert
-`LoadedRules` into the FSM, then delete `message_interpreter_system`. Rules-derived bindings go
-*before* the file's own `global_on`, to keep today's order. Existing RON keeps working.
-
-**How to apply:** if a future review touches logic-file loading, the CLI rules branches, or adds a
-logic feature, check whether Frank has decided. Do not build new rules.ron-only features, and do
-not build duplicated rules/FSM features, before that. Related: [[capability_patterns]],
-[[cli-runtime-mirror-check-pairs]], [[cli-validate-coverage-model]].
+**How to apply:** when reviewing the implementation, check the re-anchoring, the tripwire test
+(no `rules.ron` anywhere), and that `query`/`stats` now resolve `state_machine_path`. Do not
+accept a bridge or a `migrate-rules` subcommand, which Frank rejected. After it ships, update
+[[capability_patterns]] and [[cli-validate-coverage-model]] (their rules.ron branches go away).
+Related: [[cli-runtime-mirror-check-pairs]], [[schedule_ordering_mechanism]].

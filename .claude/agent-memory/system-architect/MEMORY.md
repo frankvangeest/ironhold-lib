@@ -63,4 +63,4 @@
 - [OpenCode toolchain facts](opencode_toolchain_facts.md) — AGENTS.md shadows root CLAUDE.md; `{file:}` single-sourcing; free-by-default plain names + `-deep` paid opt-in; Frank's provider/gate decisions
 - [Claude hooks contract](claude_hooks_contract_bug.md) — hooks were no-ops (exit 1 / plain stdout); fixed via `_hook_common.py` block()/emit_context(); new hooks must use it
 - [Asset fetch failure handling](asset_fetch_failure_handling.md) — no retry anywhere; failed .scene.ron = permanent LoadingScene hang; cheap Bevy retry primitives; serve.py HTTP/1.0+backlog-5 vs GH Pages HTTP/2
-- [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — open Frank decision (2026-09-23); rules.ron is strict FSM subset, no live project uses when:/EnterState; staged consolidation recommended
+- [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — DECIDED 2026-09-23: remove outright, no bridge; plan in planning/features/; 9 schedule anchors, "" initial_state, no version bump
