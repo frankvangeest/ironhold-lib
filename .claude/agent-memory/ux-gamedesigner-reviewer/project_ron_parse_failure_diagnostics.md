@@ -16,9 +16,9 @@ bad field, and the valid field list. Do NOT flag "the error will be opaque"; ver
 **The engine's own per-file handling is inconsistent** (`runtime/scene_manager/project_loader.rs`,
 phase 2, ~lines 153-225):
 - `asset_catalog` / `prefab_catalog` / `stats` / `items` → `error!` **with path and `{e}`**. Good.
-- `model_fixes` / `rules` / `state_machine` → `warn!("… failed to load — proceeding without it")`,
-  matching on `LoadState::Failed(_)` — **the error and the path are discarded**, and `warn!` +
-  "proceeding without it" understates a total logic outage.
+- `model_fixes` / `rules` / `state_machine` → UPDATED (verified 2026-09-23): now `error!` with
+  path + `{e}` and an "every rule/state transition in this file is now inactive" suffix. The old
+  warn!-without-path tier is gone for these three.
 - `.behavior.ron` → **no diagnostic at all**. `resolve_pending_behaviors_system`
   (`entity_spawner.rs` ~552) only acts on success; on parse failure the entity keeps
   `PendingBehavior` forever and is silently inert. Only Bevy's generic asset error appears.

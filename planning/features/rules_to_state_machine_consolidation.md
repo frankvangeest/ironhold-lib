@@ -1,6 +1,6 @@
 # Feature: Consolidate rules.ron onto state_machine.ron
 
-_Status: Draft_
+_Status: Ready (revised after plan-review: system-architect + ux-gamedesigner-reviewer, 2026-09-23)_
 _Planned at: `59f10e9` (2026-09-23)_
 _Background: `planning/investigations/rules_vs_state_machine_architecture.md` (the pros/cons, the
 code-level equivalence proof, and the content survey). This plan builds on that investigation and
@@ -32,7 +32,12 @@ so that a flat file needs only `schema_version` + `global_on`:
 Designers learn one progression: "start with `global_on`, add `states` + `transitions` when you
 need modes". There is no longer a point where they must switch file formats. `Action::EnterState`
 is removed as well (see Approach §5). A `.project.ron` that still says `rules_path:` or `rules:`
-becomes a hard parse error that names the field.
+becomes a hard parse error that names the field (see §4 for exactly how that surfaces, including
+the runtime loading-screen hang).
+
+**User-facing terminology:** one `( event: …, do_actions: … )` entry is still called a **rule** in
+every designer-facing doc. "Binding" (the Rust type is `FsmEventBinding`) is reserved for internal
+code and test naming only.
 
 ## Why
 
@@ -62,8 +67,11 @@ ship usefully on their own:
 
 So this is **one feature branch, one merge into `integration`, one breaking change**. Inside the
 branch the work is split into **five ordered commits**. The commit boundaries are proof and review
-checkpoints, not release points (see Tasks). The branch is sized for roughly 1.5–2.5 days of work.
-Most of that is mechanical content, test, and doc churn, not design.
+checkpoints, not release points (see Tasks). The branch is sized for roughly **2.5–3.5 days** of
+work (revised up from 1.5–2.5 after plan review): the one-binary-at-a-time core test loop, ~43 CLI
+test references, 7 core test files, the new `validate()` wiring and its fallout triage, the
+migration script's abort paths, two baseline captures with binary rebuilds, the docs pass across
+~12 files, and the WASM dev build + playtest. Most of it is mechanical, not design.
 
 ### 1. Cleanup: the two dead files and the stale claims
 
@@ -78,12 +86,18 @@ them cannot change runtime behavior.
   loaded. Its `quit` rule is already in the FSM's `global_on`.
 - The 23 rules in `3rd_person_game_demo` (menu, options, pause, all using `when:`/`EnterState`) are
   covered by that project's `state_machine.ron`. This is the old logic that the FSM replaced.
+- **Non-goal, noted for docs:** that dead file also holds the only `target.changed` →
+  `ShowFloatingText(entity: "{target}", …)` pair in the repo, which `docs/30_…:121` cites as the
+  canonical `{target}` example. Grep confirms the pattern exists nowhere else in shipped content.
+  This branch only rewrites the doc reference (§6) so it no longer cites a dead file. Porting the
+  two bindings into `3rd_person_game_demo`'s live `state_machine.ron` would be a real behavior
+  change (they have never run), so it is an optional follow-up, not part of this migration.
 
 The stale "replaces rules.ron" wording (`docs/00_overview.md:121`, `docs/30_…:45`, the
 `StateMachineAsset` doc comment, the `ProjectConfig` field comment) is **not** fixed separately.
 §6's docs pass rewrites or deletes all four, because after this change "replaces" is simply true.
 
-### 2. Schema: make the minimal FSM as short as rules.ron (additive, non-breaking)
+### 2. Schema: make the minimal FSM as short as rules.ron, and make `validate()` actually run
 
 In `schema/project.rs`, `StateMachineAsset` changes as follows:
 
@@ -95,8 +109,8 @@ In `schema/project.rs`, `StateMachineAsset` changes as follows:
 | `transitions: Vec<FsmTransition>` | required | `#[serde(default)]` |
 | `global_on` | already `#[serde(default)]` | unchanged |
 
-- **This is additive.** Every file that is valid today stays valid. Only files that were rejected
-  before (missing fields) are now accepted.
+- **This is additive at the parse level.** Every file that is valid today stays valid. Only files
+  that were rejected before (missing fields) are now accepted.
 - **Behavior is preserved exactly.** Today a rules-only project runs with `LogicState` = `""`,
   because no FSM is loaded and `LogicState` is `Default`. A migrated flat FSM defaults
   `initial_state` to `""`, and `project_loader.rs` inserts `LogicState("")`, which is the same
@@ -104,11 +118,32 @@ In `schema/project.rs`, `StateMachineAsset` changes as follows:
   the `#debug-state` DOM JSON → `test_web.py`.
 - `validate()` already skips the check that `initial_state` is in `states` when `states` is empty,
   and transitions to undeclared states already fail. So a flat file cannot quietly half-declare an
-  FSM.
-- Per-entity behaviors share this type, so they get the same loosening. That is harmless. A
-  behavior with only `global_on` is a legitimate "always react" entity.
+  FSM — **provided `validate()` actually runs**, which today it mostly does not (next bullet).
 - The `StateMachineAsset` doc comment is rewritten to "the project's logic file, and the schema of
   every behavior file". The word "replaces" goes away.
+
+**Blocking design fix (plan review): wire `StateMachineAsset::validate()` into every load path.**
+Today `validate()` has exactly one caller, `project_loader.rs:270` (the top-level project FSM).
+It is never called for any of the 21 `.behavior.ron` files (`entity_spawner.rs`'s
+`resolve_pending_behaviors_system` never calls it), and `ironhold_cli validate` never calls it at
+all. Right now the *parse* is the only loud gate: a behavior file that forgets `initial_state:` is
+a hard serde error. Loosening `initial_state` to `#[serde(default)]` removes that gate — without
+this fix, such a file would silently run in state `""` with zero entry actions and zero state
+bindings, and nothing would report it. So Commit 2 must also:
+- call `validate()` in `ironhold_cli validate` for the project FSM **and** every behavior file the
+  CLI already discovers, reporting each failure as a hard error (exit 1) naming the file;
+- call `validate()` in `resolve_pending_behaviors_system` and `error!` on failure (naming the
+  behavior path and the entity's spawn id). Match `project_loader.rs:270`'s existing precedent —
+  log and continue attaching — rather than inventing a new "reject the behavior" policy here; the
+  point is loudness, and a behavior-attachment policy change is out of scope;
+- **triage the fallout before moving on.** The 21 behavior files and every CLI fixture's FSM have
+  never been validated before, so this may surface real, pre-existing content errors. Fix genuine
+  content bugs in this commit; if a CLI fixture is deliberately invalid, update its expected
+  output. This is also why the §3 baseline is captured *after* Commit 2 (see Tasks).
+
+Per-entity behaviors share this type, so they get the same loosening. That is harmless once
+`validate()` runs: a behavior with only `global_on` is a legitimate "always react" entity, and one
+that declares `states` without `initial_state` is now rejected loudly.
 
 ### 3. Migration mechanism: a text transform plus a parsed-equivalence proof
 
@@ -137,30 +172,61 @@ RON reserialization does not keep comments anyway.
    `logic/*rules*.ron` in `assets/projects/` and `crates/ironhold_cli/tests/fixtures/`:
    - **Abort** on any `when:` or `EnterState`. None are expected, so a hit means a person needs
      to look at that file.
-   - Rewrite `schema_version: 2` (or `1`) to `schema_version: 1`.
+   - **Abort if the target `logic/state_machine.ron` already exists.** Never overwrite. At
+     `59f10e9` this is true for `valid_ui_trigger`, `unset_rules_path_with_convention_file`, and
+     `state_machine_only_ignores_dead_rules_ron` — all three are hand-handled (below).
+   - **Abort on any `.project.ron` `rules_path:` line it cannot cleanly pattern-match** as
+     exactly `rules_path: "logic/rules.ron"` (or `Some("logic/rules.ron")`). Never skip
+     silently. Known hits: `rules_path_case_mismatch` (`"Logic/Rules.ron"`) and
+     `rules_path_custom_filename_is_discovered` (`my_custom_rules.ron`) — both hand-handled.
+   - The script carries an explicit `HAND_HANDLED` set of fixture directories (the list under
+     "Files that need hand work" below). It prints and skips exactly those; every other anomaly
+     aborts the whole run. This makes "what did the script not touch" an explicit, reviewable
+     list instead of an absence.
+   - Rewrite `schema_version: 2` (or `1`) to `schema_version: 1`. **This is not a downgrade:**
+     `state_machine.ron` has always been version 1; the `2` was `LogicRulesAsset`'s own counter.
    - Rewrite the top-level `rules:` key to `global_on:`.
    - Rewrite each rule tuple's `on:` to `event:`. **Only at rule-tuple depth**: track
-     paren/bracket depth, not a blind regex. No `Action` variant has an `on` field today, but the
-     depth check means the script does not depend on that.
+     paren/bracket depth, not a blind regex, **and skip string literals (including escaped
+     quotes) while tracking depth.** Today a paren inside a string is balanced by luck
+     (`camera_modes/logic/rules.ron:9` has one inside a `Log(...)` string), but the tracker must be
+     correct, not lucky. No `Action` variant has an `on` field today, but the depth check means the
+     script does not depend on that.
    - Write the result as `logic/state_machine.ron`, keeping comments, blank lines, and CRLF/LF
      line endings as they were.
    - Flip the matching `.project.ron` line from `rules_path: "logic/rules.ron"` to
-     `state_machine_path: "logic/state_machine.ron"`.
+     `state_machine_path: "logic/state_machine.ron"`. This includes `bad_action_item_key`, which
+     also sets `rules_path` and gets the same treatment as every other fixture.
    - **Leave `rules.ron` on disk** for step 2.
    - Fix any comment text that says "rules.ron" by hand, found with grep afterward.
 2. **Proof: a temporary test** (`crates/ironhold_core/tests/rules_migration_equivalence.rs`). It
    also lives for exactly one commit. It walks every directory that has both a `rules.ron` and the
    generated `state_machine.ron`, parses both, and asserts:
+   - every parsed rule's `when` is `None` — the one field the transform cannot carry over, so the
+     test must prove there was nothing to lose (belt-and-braces with the script's own abort);
    - `rules.iter().map(|r| (&r.on, &r.do_actions))` == `global_on.iter().map(|b| (&b.event, &b.do_actions))`.
-     `Action: PartialEq` already exists, so this compares the parsed actions, not text.
-   - `states.is_empty() && transitions.is_empty() && initial_state.is_empty()`.
+     `Action: PartialEq` already exists, so this compares the parsed actions, not text;
+   - `states.is_empty() && transitions.is_empty() && initial_state.is_empty()`;
    - `StateMachineAsset::validate()` is `Ok`.
+
+   **Explicit skip list:** `bad_rules_parse_no_cascade/logic/rules.ron` is deliberately
+   unparseable. The test must name it in an allowlist and skip it (asserting that it indeed fails
+   to parse, so the allowlist can't silently mask a real regression), or Commit 3 goes red.
 
    This check is at the parsed level, so it catches mistakes in the script, not only syntax errors.
 3. **Behavioral cross-check.** Capture `tools/bin/ironhold --json query actions <p>` and
-   `--json validate --strict <p>` for every shipped project **before** the migration commit, then
-   diff them after the removal commit. The action lists must be identical. Warning and error sets
-   must be identical except for file-path strings.
+   `--json validate --strict <p>` for every shipped project, then diff after the removal commit.
+   - **Capture the "before" baseline after Commit 2, not before Commit 1.** A pre-Commit-1
+     baseline for `3rd_person_game_demo`/`terrain_demo` includes the two dead files' actions and an
+     `unset_logic_path_with_convention_file` `--strict` warning, both of which Commit 1 legitimately
+     removes; and Commit 2's new `validate()` wiring may legitimately add diagnostics. Capturing
+     immediately before the migration isolates exactly what Commit 3+4 change.
+   - **Rebuild `tools/bin/ironhold` from the branch's current source immediately before each
+     capture** (both before and after). A stale cached binary would silently compare against old
+     code. Use the two cache-build lines in the root `CLAUDE.md`.
+   - Expected: action lists identical; warning/error sets identical except for file-path strings
+     (`rules.ron` → `state_machine.ron`). `stats --json` is not diffed, since its keys change by
+     design (§4).
 
 **Why a flat `global_on` list is behavior-identical to the rules interpreter** (from the code at
 `59f10e9`, `runtime/scene_manager/message_interpreter.rs`):
@@ -170,18 +236,32 @@ RON reserialization does not keep comments anyway.
   `rewrite_target`.
 - Both insert `intent.slot.*` keys into `HandledIntentSlots` when a binding matches. Rules did
   this only for `GameEvent`s, but intents only ever arrive as `GameEvent`s.
-- The only difference between the interpreters is the same-frame state timing, and it only affects
-  `when:` rules. There are none.
+- The only difference in matching is the same-frame state timing, and it only affects `when:`
+  rules. There are none.
+- **One real, minor, unobservable difference, documented rather than left silently true:**
+  `fsm_interpreter_system` returns early when `LoadedStateMachine` is `None`, *before* draining its
+  `MessageReader`s, whereas `message_interpreter_system` always drained them. The only frame where
+  that matters is the project-load frame, before `LoadedStateMachine` is inserted: its
+  `scene.requested:<initial>` event is never seen by the FSM interpreter. No live content binds
+  `scene.requested:` for the initial scene, so nothing observable changes. Note it in the
+  `fsm_interpreter_system` doc comment during Commit 4.
 
-**Files that need hand work, not the script:**
-- **`crates/ironhold_cli/tests/fixtures/valid_ui_trigger/`** sets both paths today. Merge its rules
-  into the existing `state_machine.ron` `global_on`, **placed first**. Rules actions were queued
-  before FSM actions, so this keeps the order.
-- **`inline_rules_are_discovered`**: inline `rules:` in a `.project.ron`. Handled in §4 (Tests).
-- **`blank_project`**, the `/new-project` template. The script handles it, then check by eye that
-  the result is the 5-line minimal form shown under What. `.claude/commands/new-project.md` copies
-  the directory and does not name `rules.ron`, so it needs no change.
-  `assets/projects/CLAUDE.md:321`'s "new project" steps do need a change.
+**Files that need hand work, not the script** (this is also the script's `HAND_HANDLED` set):
+- **`valid_ui_trigger`** sets both paths today. Merge its rules into the existing
+  `state_machine.ron` `global_on`, **placed first**. Rules actions were queued before FSM actions,
+  so this keeps the order.
+- **`unset_rules_path_with_convention_file`**: keep only its state_machine half (Commit 4 port).
+- **`state_machine_only_ignores_dead_rules_ron`**: deleted in Commit 4 (premise gone).
+- **`rules_path_case_mismatch`**, **`rules_path_custom_filename_is_discovered`**: ported to
+  `state_machine_path_*` equivalents in Commit 4 (see Tasks).
+- **`bad_rules_parse_no_cascade`**: deliberately unparseable; ported in Commit 4.
+- **`inline_rules_are_discovered`**: inline `rules:` in a `.project.ron`. Replaced in Commit 4.
+- **`blank_project`**, the `/new-project` template. The script handles it, then hand-edit the
+  result into the minimal form shown under What **plus a 2–3 line explanatory comment** (it is the
+  file every new designer copies first), e.g. "Rules in `global_on` fire on every event, whatever
+  the state. Add `states:` + `transitions:` + `initial_state:` when you need modes like menu /
+  playing / paused." `.claude/commands/new-project.md` copies the directory and does not name
+  `rules.ron`, so it needs no change. `assets/projects/CLAUDE.md:321`'s "new project" steps do.
 
 ### 4. Removal
 
@@ -194,6 +274,7 @@ RON reserialization does not keep comments anyway.
 - `runtime/scene_manager/message_interpreter.rs`:
   - `message_interpreter_system` and `match_rules`
   - the "runs alongside `message_interpreter_system`" paragraph on `fsm_interpreter_system`
+    (replaced by the early-return note from §3)
   - `intent_slot_key`/`scene_path_stem`/`rewrite_target` **stay**, because the two FSM
     interpreters use them
   - optional: add the `debug!("No binding matched …")` from `match_rules` to
@@ -201,17 +282,25 @@ RON reserialization does not keep comments anyway.
 - `runtime/scene_manager/mod.rs`:
   - `LoadedRules`
   - `PendingProjectLoads.rules`
-  - the `LogicState` doc comment, which mentions `when:`/`EnterState`
+  - the `LogicState` doc comment (:49), which mentions `EnterState`
+  - **`SceneStateParams.logic_state` (:635)** — its only user is the `EnterState` executor arm
 - `runtime/scene_manager/project_loader.rs`:
   - `PendingCatalogAssets.rules`
   - the `rules_path` load
   - the "both set" `warn!` (just corrected in `5b9209a`; it goes away completely)
-  - the rules `LoadState::Failed` arm
+  - the rules `LoadState::Failed` arm (:182)
   - both `insert_resource(LoadedRules(…))` sites (inline path :121, pending path :259-264)
+  - **reword the state-machine load-failure `error!` (:194).** Today: "every state transition in
+    this file is now inactive", which reads as irrelevant to someone with a flat zero-transition
+    file. Replace with wording that covers the whole file generically, e.g. "proceeding without it
+    — no project logic (global_on rules, states, transitions) will run".
 - `lib.rs`:
   - `.init_resource::<LoadedRules>()` (:141)
   - `ImplicitRonPlugin::<LogicRulesAsset>` (:197)
   - `message_interpreter_system` from the interpreter `.chain()` (:259)
+  - **fix the `DebugState.logic_state` doc comment (:61)**, which says "set by
+    `Action::EnterState`" — rewrite to "the FSM's current state; empty for a flat (`global_on`
+    only) logic file"
 - **`Action::EnterState`** (see §5): `schema/actions.rs:138`, the executor arm
   (`action_executor.rs:532`), and `query.rs:596`'s label.
 
@@ -244,6 +333,7 @@ Every `.before(message_interpreter_system)` becomes `.before(fsm_interpreter_sys
     `check_orphan_ui_rules` (:2923)
   - the rules half of the "convention file exists but field unset" check (:3055-3067)
   - every doc comment that names `rules_path`/`LogicRulesAsset`
+  - (the `StateMachineAsset::validate()` wiring was already added in Commit 2, §2)
 - `commands/query.rs`:
   - the `LogicRulesAsset` branch of `query rules` (:458-525) and of `query actions` (:666)
   - the `EnterState` label
@@ -252,17 +342,30 @@ Every `.before(message_interpreter_system)` becomes `.before(fsm_interpreter_sys
     `resolve_logic_files` that `validate` uses. These are the same lines being rewritten, and
     without the fix the only logic file left would still be resolved two different ways. The
     command stays named `query rules`, with its help text updated to describe what it lists now.
-- `commands/stats.rs`: `rule_count` (:119) becomes FSM counts (global bindings, states,
+- `commands/stats.rs`: `rule_count` (:119) becomes FSM counts (global rules, states,
   transitions). The `--json` key changes from `"rules"` to those counts. That is acceptable
   because nothing outside the repo consumes it.
+- **`commands/utils.rs::resolve_catalog_paths`: warn on an unparseable `.project.ron`.** It calls
+  `silent_parse` on the project file and, on failure, silently falls back to convention paths.
+  After this change, a stale `rules_path:` makes the `.project.ron` fail to parse, so `query` and
+  `stats` would quietly report convention-path results with zero diagnostic (validate and the
+  runtime both already fail loudly). Add an `eprintln!` warning (stderr, so `--json` stdout stays
+  clean) naming the file and the parse error whenever a `.project.ron` exists but fails to parse.
 
 **No `schema_version` bump for `ProjectConfig`.** Decision and reasoning:
 - `ProjectConfig` has `#[serde(deny_unknown_fields)]`. Once the fields are deleted, any
   `.project.ron` that still says `rules_path:` or `rules:` **fails to parse**, with a RON error
-  that names the field (`unknown field 'rules_path', expected one of …`):
-  - at runtime, as a Bevy asset-load error, the same failure mode as any other `.project.ron`
-    typo
-  - in `ironhold validate`, as exit 1 with a parse error
+  that names the field (`unknown field 'rules_path', expected one of …`). How that surfaces,
+  stated honestly:
+  - **at runtime: a permanent loading-screen hang.** The browser console shows a `bevy_asset` load
+    error naming the field, but `check_project_loaded` has no `LoadState::Failed` arm for the
+    `ProjectConfig` handle itself, so it spins forever. This is pre-existing behavior for *any*
+    `.project.ron` parse error (a sibling of the backlog's "No retry or timeout for a failed
+    ordinary scene asset load" item), not something this plan introduces — but this plan makes it
+    newly reachable by old content, so it must be documented in the "Removed" callout and logged
+    as its own backlog bug (see §6 Planning). Fixing it is out of scope here.
+  - in `ironhold validate`: exit 1 with a parse error naming the field
+  - in `query`/`stats`: the new stderr warning above
 
   That is the hard, loud error a version bump would exist to produce, and it comes for free.
 - `schema_version` exists to tell apart formats that cannot be told apart by their structure. Here
@@ -283,15 +386,32 @@ Every `.before(message_interpreter_system)` becomes `.before(fsm_interpreter_sys
 - `docs/30_…:397` already tells authors "you do not write `EnterState` in FSM data".
 - After §1 there are **zero** content uses. What remains is 2 tests in `fsm_tests.rs`, one
   `query.rs` label, and docs.
-- The replacement for the one documented pattern that uses it (`crates/ironhold_core/src/CLAUDE.md`
-  "Conditions on rules": a gameplay system calls `EnterState("hp_low")`) is already better: emit a
-  `GameEvent` (`stat_threshold_system` already does, for example) and add an FSM transition on it.
-  That runs the hooks. Rewrite that CLAUDE.md section to match.
+- **The replacement recipe is `EmitEvent("name")` + a transition on that event**, which runs the
+  exit/entry hooks. Example: a dialogue choice that starts a quest does
+  `do_actions: [ EmitEvent("quest.started") ]`, and the FSM has
+  `( from: "exploring", on: "quest.started", to: "on_quest" )` (bare string, no `Some(…)`, per
+  `ron_lint`'s implicit-some style). For gameplay-driven
+  conditions, emit a `GameEvent` (`stat_threshold_system` already does) and transition on it. The
+  recipe must be designer-visible, not only in `crates/ironhold_core/src/CLAUDE.md` (a dev-only
+  file): §6 puts it in docs/20's "Removed" callout, docs/20's Action table, and docs/30's new
+  "Project logic" section. Rewrite the CLAUDE.md "Conditions on rules" section to match.
 
 This is an `Action` enum removal. Existing RON that uses it would fail to parse. There is none.
 
 ### 6. Docs, including the absorbed migration-guide item
 
+**Coverage rule:** the line numbers below are a starting point from `59f10e9`, not the complete
+list. The authoritative completeness check is the second grep in Acceptance criteria (over
+`assets/`, `docs/`, `README.md`, `index.html`). Run it at the end of Commit 5 and fix every hit
+outside the "Removed" callout. This is deliberately a grep rather than an exhaustive line list in
+this plan: line numbers drift with every intervening merge, and the grep catches the ~40 shipped
+RON comments (`local_coop_demo`, `particles_demo`, `dynamic_animation_control`,
+`entity_logic_demo`'s scene/prefab files) that a hand-maintained list would miss.
+
+- **`README.md`** (designer-facing, was missing from the original list): it presents "Rules
+  workflow (`logic/rules.ron`) — simpler projects" as a real option (~:58-60, ~:166). Replace with
+  one "Game logic" section: a flat `global_on` example first, then "add states/transitions when
+  you need modes".
 - **`docs/20_data_formats.md`:**
   - Delete the `rules_path` row (:107) and the `rules` row (:119). Rewrite the
     `state_machine_path` row (:108) and the project example (:133).
@@ -300,20 +420,42 @@ This is an `Action` enum removal. Existing RON that uses it would fail to parse.
   - Update the file tree (:62) and the asset-type table (:83).
   - Rewrite about **15 example snippets** that use `( on: …, do_actions: … )` rule syntax into
     `global_on` `( event: …, do_actions: … )` form (the `// logic/rules.ron` headers at :1709,
-    :2525, :3091, :3135, :4009, :4182, and others).
-  - Delete the `EnterState` row (:3852).
+    :2525, :3091, :3135, :4009, :4182, and others — the grep finds the rest).
+  - Delete the `EnterState` row (:3852). **Add an `EmitEvent("name")` row** to the Action table
+    (today only `EmitEventAfterDelay` is listed), cross-referencing the state-change recipe.
   - Update the deny_unknown_fields error example (:3813-3825), which quotes a `LogicRulesAsset`
     loader error.
-  - **Add a short "Removed: `rules.ron`" callout.** It is a 3-row mapping table: rule without
-    `when:` → `global_on`; `when: S` → `on:` inside state `S`; `EnterState` → a transition. Add
-    one line saying the removed fields are now a parse error. **This is the whole absorbed
-    "migration guide" deliverable** (see Open questions). A full guide would document a migration
-    nobody else has to perform.
+  - **Add a "Removed: `rules.ron`" callout.** This is the whole absorbed "migration guide"
+    deliverable (see Open questions). Contents:
+    - the mapping table: rule without `when:` → `global_on`; `when: S` → a rule inside state
+      `S`'s `on:` list; `EnterState("S")` → `EmitEvent("go_s")` + a transition `on: "go_s"`, with
+      the dialogue-choice worked example from §5;
+    - **the `on:` overload callout.** In the new format `on` means three different things: a
+      state's `on:` is a *list of rules*; a transition's `on:` is an *event-name string*; a rule
+      itself uses `event:`, **not** `on:`. Old rules.ron muscle memory (`( on: "x", do_actions: … )`)
+      produces a plausible-looking file that fails to parse — show the wrong and right forms side
+      by side;
+    - the verbatim error text, so it is greppable: `unknown field 'rules_path', expected one of …`
+      (and the `rules` variant), plus the note that at runtime this shows as a loading screen that
+      never finishes, with the error in the browser console;
+    - one line that `schema_version: 1` in a migrated file is not a downgrade (§3).
 - **`docs/30_runtime_events_and_logic.md`:**
   - Rewrite `## Logic rules: mapping Events → Actions` and "When to use `logic/rules.ron`"
     (:210-245) into "Project logic: `state_machine.ron`". Teach it flat-first (`global_on`), then
-    add states and transitions, using today's pause example rewritten as transitions.
-  - Fix :43, :45, :59, :181, :270, :317, and :342.
+    add states and transitions, using today's pause example rewritten as transitions. Include:
+    - **per-event evaluation order**: `global_on` → the current state's `on:` → the first matching
+      transition;
+    - **the `initial_state` entry-actions gotcha**: `initial_state`'s `entry_actions` do **not**
+      run at boot — entry actions only run when a transition enters a state. So when a designer
+      follows "start flat, add states later", boot-time work stays in a
+      `global_on` `scene.ready:<scene>` rule (or moves to a transition out of a boot state);
+      otherwise the "add states later" step silently drops it;
+    - the `EmitEvent` + transition recipe from §5, with the worked example;
+    - the same `on:` overload callout as docs/20 (or a link to it).
+  - **:121**: rewrite the `{target}` example so it no longer cites the deleted
+    `3rd_person_game_demo/logic/rules.ron` (§1 non-goal). Inline the `target.changed` →
+    `ShowFloatingText(entity: "{target}", …)` pair as a standalone snippet instead of citing a file.
+  - Fix :43, :45, :59, :181, :270, :317, and :342, plus any further grep hits.
   - About 7 snippets need rewriting.
 - **`docs/00_overview.md`:** rewrite the quick-start logic section (:116, :121, :145-165, 3
   snippets) to `state_machine_path` + `global_on`. Fix :63.
@@ -323,9 +465,11 @@ This is an `Action` enum removal. Existing RON that uses it would fail to parse.
     and the debug-state JSON example that shows `EnterState` (:123).
 - **`docs/10_architecture.md`:** :29 (`logic_state` description) and :113 (the project-level
   rules bullet).
-- **`docs/60_contributing.md`:** the validate checks list (:243-285, rules mentions) and the
-  `query rules`/`query actions` descriptions (:334-336). Also note that `query`/`stats` now honor
-  `state_machine_path`.
+- **`docs/60_contributing.md`:** the validate checks list (:243-285, rules mentions — and add the
+  new FSM/behavior `validate()` check) and the `query rules`/`query actions` descriptions
+  (:334-336). Also note that `query`/`stats` now honor `state_machine_path` and warn on an
+  unparseable `.project.ron`.
+- **`index.html:849`**: "rules catalogs" wording → "logic files" (or equivalent).
 - **`crates/ironhold_core/src/CLAUDE.md`:**
   - the pipeline step 2 (:13) and the interpreter chain list (:116-120, now 3 members)
   - "Conditions on rules" (:71-76, per §5)
@@ -347,12 +491,32 @@ This is an `Action` enum removal. Existing RON that uses it would fail to parse.
   - `.claude/agents/{alignment-reviewer,debug-detective,system-architect}.md`
   - `.claude/commands/query.md:16`
   - Check `.opencode/prompts/` too. None were found at `59f10e9`.
+- **Agent memory** (`.claude/agent-memory/**`, ~60 files mention rules). Update or retire the
+  ones whose claims become false; at minimum:
+  - `alignment-reviewer/rules_vs_state_machine_coexistence.md`
+  - `debug-detective/project_logic_file_on_disk_is_not_loaded.md`
+  - `system-architect/capability_patterns.md`, `system-architect/cli_validate_coverage_model.md`,
+    `system-architect/rules_vs_fsm_consolidation.md` (mark shipped)
+
+  Grep the rest (`rules\.ron|rules_path|EnterState|message_interpreter_system`) and fix or delete
+  stale claims. Per the root `CLAUDE.md` step 10, these edits land in the primary checkout and are
+  committed separately on `integration`.
 - **Planning:**
   - Close the backlog's "Schema version v2→v3 migration guide" (Designer Experience) as
     superseded when this ships. Relocate it into Done next to this item with a
     "superseded by …" note.
   - Link this plan from the backlog's "Consolidate rules.ron…" item.
   - Strike claude_suggestions 477/484 when §4's query/stats fold-in lands.
+  - **Log as separate backlog follow-ups (not part of this branch):**
+    - Bug: a `.project.ron` parse error (now reachable by a stale `rules_path:`) hangs the loading
+      screen forever — no `LoadState::Failed` arm for the `ProjectConfig` handle in
+      `check_project_loaded`. Sibling of the existing scene-asset hang item.
+    - Feature: a **permanent** `ironhold validate` diagnostic for a leftover `logic/rules.ron`
+      sitting unreferenced on disk ("rules.ron is no longer supported — move its rules into
+      state_machine.ron's `global_on`"). This plan's tripwire test only protects this repo's CI,
+      not `Ironhold-fps-demo` or future projects that may still carry a stray file.
+    - Optional: port `3rd_person_game_demo`'s dead `target.changed` `{target}` pair into its live
+      `state_machine.ron` if Frank wants that behavior (§1 non-goal).
 
 ## Tasks
 
@@ -362,34 +526,48 @@ any `logic/rules.ron`, `validate.rs`, or `message_interpreter.rs`.** Such a bran
 on merge or bring back a dead file. §4's tripwire test catches the second case after the fact,
 but it is better to avoid it.
 
-**Commit 0 (before any edit): capture baselines**
-- [ ] Capture `--json query actions` and `--json validate --strict` output for every shipped
-  project into the scratchpad. These are used by §3's behavioral cross-check. They are not
-  committed.
-
 **Commit 1: cleanup**
 - [ ] Delete `3rd_person_game_demo/logic/rules.ron` and `terrain_demo/logic/rules.ron`. Record the
-  `dance` finding from §1 in the commit message.
+  `dance` finding and the `{target}`-example non-goal from §1 in the commit message.
 
-**Commit 2: schema loosening (additive)**
+**Commit 2: schema loosening + `validate()` wiring**
 - [ ] `StateMachineAsset`: `#[serde(default)]` on `initial_state`, `states`, `transitions`.
   `validate()` rejects an empty `initial_state` only when `states` is non-empty. Rewrite the doc
   comment.
+- [ ] Wire `StateMachineAsset::validate()` into `ironhold_cli validate` (project FSM + every
+  behavior file) as a hard error, and into `resolve_pending_behaviors_system` as an `error!`
+  (log-and-continue, matching `project_loader.rs:270`).
+- [ ] Triage any new diagnostics on shipped content and CLI fixtures: fix real content bugs;
+  update expected output for deliberately-invalid fixtures.
 - [ ] `ron_validation.rs`: add tests.
   - A minimal `schema_version` + `global_on` file parses and validates.
   - `states` non-empty with `initial_state` missing fails `validate()`.
   - A file with every field present still parses (regression).
+- [ ] CLI test (`validate_cross_file.rs`, new fixture): a **behavior file** with non-empty
+  `states` and no `initial_state` → exit 1, error names the file. Plus the same for the project
+  FSM.
+
+**Baseline capture (after Commit 2, before Commit 3; not committed)**
+- [ ] Rebuild `tools/bin/ironhold` from current source. Capture `--json query actions` and
+  `--json validate --strict` for every shipped project into the scratchpad (§3 step 3).
 
 **Commit 3: content migration (old interpreter still present; this is the proof point)**
-- [ ] Write the script (§3). Run it over `assets/projects/` + `crates/ironhold_cli/tests/fixtures/`.
-- [ ] Hand-merge `valid_ui_trigger` (rules first in `global_on`). Check `blank_project` by eye.
-- [ ] Add `tests/rules_migration_equivalence.rs`. It must pass.
+- [ ] Write the script (§3), including: abort-on-existing-target, abort-on-unmatched-`rules_path`,
+  the explicit `HAND_HANDLED` set, and string-literal-aware depth tracking. Run it over
+  `assets/projects/` + `crates/ironhold_cli/tests/fixtures/`.
+- [ ] Hand-merge `valid_ui_trigger` (rules first in `global_on`). Hand-edit `blank_project` into
+  the minimal form plus its explanatory comment.
+- [ ] Add `tests/rules_migration_equivalence.rs` (with the `when == None` assertion and the
+  `bad_rules_parse_no_cascade` allowlist). It must pass.
 - [ ] `cargo test -p ironhold_core --test ron_lint --test ron_validation` on the generated files.
 
 **Commit 4: removal**
-- [ ] Core deletions from §4, including `Action::EnterState`.
+- [ ] Core deletions from §4, including `Action::EnterState`, `SceneStateParams.logic_state`, the
+  `DebugState.logic_state` doc comment fix, and the reworded state-machine load-failure `error!`.
+- [ ] Add the `fsm_interpreter_system` early-return note (§3) to its doc comment.
 - [ ] Re-anchor the 9 schedule sites to `fsm_interpreter_system`.
-- [ ] CLI deletions from §4. Make `query`/`stats` resolve `state_machine_path`.
+- [ ] CLI deletions from §4. Make `query`/`stats` resolve `state_machine_path`. Add the
+  `resolve_catalog_paths` stderr warning for an unparseable `.project.ron`.
 - [ ] Delete every `rules.ron`/`my_custom_rules.ron`, the script, and
   `rules_migration_equivalence.rs`.
 - [ ] Core tests:
@@ -403,7 +581,7 @@ but it is better to avoid it.
     boundary) and `ui_tests.rs` (2 tests): these used `LoadedRules` only to inject a global
     binding. Rewrite them to `LoadedStateMachine(Some(…))`. Add a
     `support::global_bindings(&[(&str, Vec<Action>)]) -> LoadedStateMachine` helper so the rewrite
-    stays one line per test. Rename "rule" to "binding" in names and assert messages.
+    stays one line per test. Internal test names/assert messages may say "binding".
   - `ron_validation.rs`:
     - delete the `LogicRulesAsset` parse tests (:854-905)
     - port the deny_unknown_fields typo test (:2326) to `FsmEventBinding`
@@ -420,7 +598,8 @@ but it is better to avoid it.
     no file named `rules.ron` exists under `assets/projects/` or `crates/ironhold_cli/tests/fixtures/`.
     After this change any such file is dead by definition. This guards against a stale parallel
     branch bringing one back.
-  - `local_coop_tests.rs:518/535`: comment wording only.
+  - `local_coop_tests.rs:518/535` and `corpse_loot_interact_tests.rs:115`: comment wording only
+    (stale `message_interpreter` references).
 - [ ] CLI tests (`validate_cross_file.rs`, about 43 references):
   - The ~32 fixtures with no `.project.ron` now use the `logic/state_machine.ron` convention
     fallback. Update expected-output strings that quote `logic/rules.ron`.
@@ -434,22 +613,31 @@ but it is better to avoid it.
     - `bad_rules_path_and_state_machine_path` → `bad_state_machine_path` (missing file)
     - `unset_rules_path_with_convention_file`: keep only its state_machine half
     - `orphan_ui_rule`: convert its content
+    - `bad_action_item_key`: already migrated by the script; verify its expected output
   - **Delete** `state_machine_only_ignores_dead_rules_ron` (its premise no longer exists).
   - **Replace** `inline_rules_are_discovered` with `project_with_rules_path_fails_to_parse`
     (exit 1, the error names `rules_path`).
   - `query_stats_configured_paths.rs`: add a relocated-`state_machine_path` case for `query rules`
-    / `query actions` / `stats`.
+    / `query actions` / `stats`, and an unparseable-`.project.ron` case asserting the stderr
+    warning (and that stdout `--json` stays valid).
 - [ ] Full suites (one binary at a time, per root `CLAUDE.md`) + `cargo check -p ironhold_cli` +
   `cargo test -p ironhold_cli`.
-- [ ] §3 behavioral cross-check against the commit-0 baselines.
+- [ ] Rebuild `tools/bin/ironhold`, then run the §3 behavioral cross-check against the
+  post-Commit-2 baselines.
 
 **Commit 5: docs + planning**
-- [ ] Everything in §6.
+- [ ] Everything in §6, including `README.md`, the docs/20 `EmitEvent` row and "Removed" callout
+  (mapping table, `on:` overload, verbatim error text, loading-hang note), docs/30's evaluation
+  order + `initial_state` gotcha + recipe, the docs/30:121 `{target}` rewrite, and `index.html:849`.
+- [ ] Run the **second acceptance grep** (over `assets/`, `docs/`, `README.md`, `index.html`) and
+  fix every hit outside the "Removed" callout — this is what catches the ~40 shipped RON comments.
+- [ ] Log the three backlog follow-ups from §6 Planning.
+- [ ] Agent-memory updates (§6) — committed separately on `integration` per step 10.
 
 **Then the normal workflow:**
 - [ ] Review trio + `ux-gamedesigner-reviewer` (schema/docs/assets changed) + `wasm-perf-reviewer`
   (the interpreter chain is a per-frame system, but the change only removes work, so a quick pass
-  is expected).
+  is expected; behavior `validate()` runs once per behavior resolution, not per frame).
 - [ ] Step 6 CLI spot-check (`cargo run -p ironhold_cli -- query actions …` on a migrated project
   and on `3rd_person_game_demo`), then rebuild `tools/bin/ironhold`.
 - [ ] WASM dev build + playtest (checklist below).
@@ -464,45 +652,57 @@ Every one should behave exactly as on `main`.
 - `entity_logic_demo`: rule-driven spawns/interactions.
 - `foliage_demo`: boots.
 - `integration_tests` (via `test_web.py`).
-- Plus the FSM regression projects `3rd_person_game_demo` (pause/menu nav) and `terrain_demo`.
-- Browser console: no asset-load errors.
+- Plus the FSM regression projects `3rd_person_game_demo` (pause/menu nav, behavior-driven
+  monsters/corpses — exercises the new behavior `validate()` path) and `terrain_demo`.
+- Browser console: no asset-load errors, no new `Invalid StateMachineAsset` errors.
 
 ## Open questions
 
 - **`Action::EnterState`: remove it (the plan's default, §5) or keep it?** The plan removes it: no
   content uses it, it is the only way to change state that skips the FSM's hooks, and the docs
   already tell FSM authors not to use it. **Frank: veto here if you want it kept.** Keeping it only
-  means leaving the variant, its executor arm, and 2 tests in place. No other part of the plan
-  depends on the answer.
+  means leaving the variant, its executor arm, `SceneStateParams.logic_state`, and 2 tests in
+  place. No other part of the plan depends on the answer.
 - **Backlog "Schema version v2→v3 migration guide": decided, not open. It is superseded and
   closed when this ships.** Its premise is already stale: every shipped project is already at
   `schema_version: 3`, and "rename `rules_path` → `state_machine_path`" is exactly what this
   feature does for all content. Its only lasting value, a record of the mechanical mapping, is
-  §6's 3-row "Removed: rules.ron" callout. Frank can overrule this if he wants a longer standalone
+  §6's "Removed: rules.ron" callout. Frank can overrule this if he wants a longer standalone
   guide, but with no external authors there is nobody for it to serve.
 - **Decided within the plan (flagged for review, not for Frank):**
   - no `ProjectConfig` version bump (§4)
   - `initial_state` defaults to `""`, to keep `LogicState` identical (§2)
-  - the `query`/`stats` state_machine-path fix is folded in (§4)
+  - behavior `validate()` failures log-and-continue at runtime, matching the project-FSM precedent
+    (§2); hard error in the CLI
+  - the `query`/`stats` state_machine-path fix and the unparseable-`.project.ron` warning are
+    folded in (§4)
+  - the `ProjectConfig` loading-hang is documented and logged, not fixed here (§4)
   - `query rules` keeps its name
   - no `SystemSet` introduced for the re-anchoring
+  - docs completeness is enforced by grep, not an exhaustive line list (§6)
 
 ## Acceptance criteria
 
 - Given the repo after this change, when grepping `crates/` for `rules_path|LogicRule|LoadedRules|LogicRulesAsset|message_interpreter_system|EnterState`,
-  then there are zero code hits. Docs may only mention them in the "Removed: rules.ron" callout.
+  then there are zero code hits.
+- Given the repo after this change, when grepping `assets/`, `docs/`, `README.md`, and
+  `index.html` for `rules\.ron|rules_path|EnterState`, then the only hits are inside docs/20's
+  "Removed: rules.ron" callout (and any docs/30 link to it).
 - Given `assets/projects/` and `crates/ironhold_cli/tests/fixtures/`, when the schema-regression
   test runs, then it finds no `rules.ron` file anywhere.
-- Given a `.project.ron` containing `rules_path:` or `rules:`, when it is loaded at runtime or run
-  through `ironhold validate`, then it fails with a parse error naming the field (validate exit
-  code 1). It does not silently ignore the field.
+- Given a `.project.ron` containing `rules_path:` or `rules:`, when run through `ironhold validate`,
+  then it fails with a parse error naming the field (exit code 1); when loaded at runtime, the
+  console shows a load error naming the field (the loading-screen hang is the documented,
+  pre-existing behavior, logged separately); when run through `query`/`stats`, a stderr warning
+  names the parse failure. None of the three silently ignores the field.
 - Given a `state_machine.ron` with only `schema_version` + `global_on`, when loaded, then it parses,
   validates, and `LogicState` is `""`.
-- Given a `state_machine.ron` with non-empty `states` and no `initial_state`, when validated, then
-  it is rejected.
+- Given a project `state_machine.ron` **or a `.behavior.ron`** with non-empty `states` and no
+  `initial_state`, when run through `ironhold validate`, then it exits 1 naming the file; when the
+  behavior is resolved at runtime, an `error!` is logged naming the file.
 - Given each migrated project, when comparing `query actions --json` and `validate --strict --json`
-  before and after, then the action lists are identical and the diagnostics are identical except
-  for file paths.
+  from the post-Commit-2 baseline against post-Commit-4 (freshly rebuilt binary both times), then
+  the action lists are identical and the diagnostics are identical except for file paths.
 - Given a relocated `state_machine_path`, when running `query rules`/`query actions`/`stats`, then
   they read the configured file, not the convention path.
 - Given the full `ironhold_core` + `ironhold_cli` suites and `python test_web.py` (existing

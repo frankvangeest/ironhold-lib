@@ -1,5 +1,7 @@
 # Memory Index
 
+- [FSM designer traps](project_fsm_designer_traps.md) — `on` means 3 things; initial_state entry_actions skip boot; first-match transitions; EmitEvent missing from docs/20 table
+
 - [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 6 places a new entity.* event/InteractableDef field must land; STATUS.md event list + docs/60 check list lag most
 - [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning
 - [Pause is cosmetic](project_pause_is_cosmetic.md) — pause menu is an overlay only; nothing in the sim stops; 4 doc surfaces claim otherwise; no UI focus/keyboard-nav concept exists anywhere
@@ -50,7 +52,7 @@
 - [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot
 - [ui: Label/Button font & clip](project_ui_label_button_font_and_clip.md) — font_size house style is f32+default fn (13 precedents); 22/26px, ~11px/char; clip+wrap+center = half-cut lines; camera_modes hints overflow today
-- [RON parse-failure diagnostics](project_ron_parse_failure_diagnostics.md) — ron 0.11 error text is GOOD (names the Action variant); engine handling is 3 tiers, .behavior.ron is silent; blast radius = whole file
+- [RON parse-failure diagnostics](project_ron_parse_failure_diagnostics.md) — ron 0.11 error text is GOOD (names the Action variant); logic/catalog loaders now error! w/ path; .behavior.ron still silent; blast radius = whole file
 - [UI trigger wiring](project_ui_trigger_wiring.md) — 4 surfaces emit ui.button_pressed:{trigger}; exact-match only; `unreachable_trigger` check's blind spots (gamepad, state gating, nested behaviors, parse cascade)
 - [max_fixed_delta_secs](project_max_fixed_delta_secs.md) — any value <= the real frame interval = permanent slow-motion; validate only rejects <=0/non-finite; 6 doc surfaces, 3 missing
 - [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op
