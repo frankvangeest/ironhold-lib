@@ -1,0 +1,260 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["CLAUDE.md"],
+  "model": "openrouter/poolside/laguna-s-2.1:free",
+  "small_model": "opencode/nemotron-3.5-lightning-free",
+  "permission": {
+    "edit": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "external_directory": "ask",
+    "task": { "*": "allow", "*-deep": "deny" },
+    "bash": {
+      "*": "ask",
+      "cargo test*": "allow",
+      "cargo check*": "allow",
+      "cargo build*": "allow",
+      "cargo run*": "allow",
+      "cargo clippy*": "allow",
+      "cargo fmt*": "allow",
+      "cargo doc*": "allow",
+      "cargo tree*": "allow",
+      "cargo metadata*": "allow",
+      "cargo info*": "allow",
+      "cargo clean*": "ask",
+      "wasm-pack build*": "allow",
+      "python test_web.py*": "allow",
+      "python tools/*": "allow",
+      "python -c*": "allow",
+      "tools/bin/ironhold*": "allow",
+      "ls*": "allow",
+      "cat *": "allow",
+      "wc *": "allow",
+      "echo *": "allow",
+      "grep *": "allow",
+      "find *": "allow",
+      "find * -delete*": "deny",
+      "find * -exec*": "ask",
+      "git status*": "allow",
+      "git log*": "allow",
+      "git diff*": "allow",
+      "git show*": "allow",
+      "git rev-parse*": "allow",
+      "git push*": "ask",
+      "git merge*": "ask",
+      "git worktree remove*": "ask",
+      "git branch -d*": "ask",
+      "git reset --hard*": "ask",
+      "git add*pkg*": "deny",
+      "git commit*pkg*": "deny"
+    }
+  },
+  "agent": {
+    "system-architect": {
+      "mode": "subagent",
+      "description": "Architecture/maintainability review: crate boundaries, WASM compat, schema stability (free tier, advisory).",
+      "model": "opencode/nemotron-3-ultra-free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/system-architect.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "system-architect-deep": {
+      "mode": "all",
+      "description": "PAID (DeepSeek v4.1 flash) architecture review. Explicit @mention or --agent only.",
+      "model": "openrouter/deepseek/deepseek-v4.1-flash",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/system-architect.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "debug-detective": {
+      "mode": "subagent",
+      "description": "Adversarial bug/edge-case investigation and systematic root-causing (free tier, advisory).",
+      "model": "opencode/nemotron-3-ultra-free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/debug-detective.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "ask", ".opencode/memory-inbox/*": "allow" }
+      }
+    },
+    "debug-detective-deep": {
+      "mode": "all",
+      "description": "PAID (DeepSeek v4.1 flash) root-cause investigation. Explicit @mention or --agent only.",
+      "model": "openrouter/deepseek/deepseek-v4.1-flash",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/debug-detective.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "ask", ".opencode/memory-inbox/*": "allow" }
+      }
+    },
+    "alignment-reviewer": {
+      "mode": "subagent",
+      "description": "RON designer-reachability and no-hardcoded-behavior review (free tier, advisory).",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/alignment-reviewer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "wasm-perf-reviewer": {
+      "mode": "subagent",
+      "description": "WASM frame-time/binary-size review for runtime, rendering, and per-frame code (free tier, advisory).",
+      "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/wasm-perf-reviewer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "ux-gamedesigner-reviewer": {
+      "mode": "subagent",
+      "description": "Designer-experience review for assets/RON schema/docs changes (free tier, advisory).",
+      "model": "google/gemini-3.8-flash",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/ux-gamedesigner-reviewer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "game-world-designer": {
+      "mode": "subagent",
+      "description": "World-building, narrative, and thematic-cohesion consultation (free tier).",
+      "model": "google/gemini-3.8-flash",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/game-world-designer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": { "*": "deny", ".opencode/memory-inbox/*": "allow" },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "integration-test-author": {
+      "mode": "subagent",
+      "description": "Writes ironhold_core integration tests following this repo's test-harness conventions (free tier).",
+      "model": "openrouter/poolside/laguna-s-2.1:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/integration-test-author.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "ron-gameplay-scripter": {
+      "mode": "subagent",
+      "description": "Authors RON gameplay logic (events/actions/state machines) for a described behaviour (free tier).",
+      "model": "openrouter/poolside/laguna-s-2.1:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/ron-gameplay-scripter.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "data-format-doc-writer": {
+      "mode": "subagent",
+      "description": "Documents new schema fields/actions/events in docs/20_data_formats.md (free tier).",
+      "model": "openrouter/poolside/laguna-s-2.1:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/data-format-doc-writer.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "plan": {
+      "model": "opencode/nemotron-3-ultra-free"
+    },
+    "explore": {
+      "model": "openrouter/thinkingmachines/inkling-small:free"
+    }
+  },
+  "command": {
+    "code-review": {
+      "description": "Run a full pre-commit review of the current feature's code changes.",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/code-review.md}"
+    },
+    "plan-review": {
+      "description": "Review a feature's plan doc before any code is written.",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/plan-review.md}"
+    },
+    "ship": {
+      "description": "Walk through the ironhold-lib code change workflow for the current feature.",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/ship.md}"
+    },
+    "new-project": {
+      "description": "Scaffold a new ironhold project from the blank_project template.",
+      "template": "{file:../.claude/commands/new-project.md}"
+    },
+    "rust-idioms": {
+      "description": "Idiomatic Rust & Memory Ownership review.",
+      "template": "{file:../.claude/commands/rust-idioms.md}"
+    },
+    "query": {
+      "description": "Run an ironhold CLI query against a project.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "template": "{file:../.claude/commands/query.md}"
+    },
+    "validate": {
+      "description": "Run the ironhold CLI validator on a project.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "template": "{file:../.claude/commands/validate.md}"
+    },
+    "wasm-dev": {
+      "description": "Build a development WASM bundle and report binary size.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "template": "{file:../.claude/commands/wasm-dev.md}"
+    },
+    "rust-docs": {
+      "description": "Check Rust documentation quality for ironhold_core.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "template": "{file:../.claude/commands/rust-docs.md}"
+    }
+  }
+}

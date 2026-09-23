@@ -1,56 +1,43 @@
-# Ironhold Library - Agent Onboarding & Project Rules
+# Ironhold Library — Agent Onboarding
 
-Welcome! If you are an AI assistant or an agent working on this project, please read this document first. It contains critical context, architectural choices, and hard-learned lessons about this codebase.
+`CLAUDE.md` files (starting with the one at the repo root, plus one per crate/tools/docs folder)
+are the source of truth for this project's architecture, workflow, and hard-learned lessons — read
+them, not a duplicate summary here. This file used to carry its own copy of several of those rules;
+that copy has been removed because it drifted out of date (it claimed camera-following logic runs
+in `FixedUpdate` — it actually runs in `Update`; see `crates/ironhold_core/src/CLAUDE.md`'s
+"Physics & movement must use `FixedUpdate`" section for the real, current rule) and because
+maintaining the same rules in two places is exactly the kind of drift this project's own planning
+conventions (`planning/CLAUDE.md`) exist to prevent elsewhere.
 
-> **CRITICAL**: For in-depth architectural details, planning workflows, Python tooling, and instructions on adding new projects, you **must** also read the `CLAUDE.md` files (starting with the one in the root).
+If you are OpenCode: this file is discovered first (`AGENTS.md` wins over `CLAUDE.md` in
+per-directory discovery), and the project config (`.opencode/opencode.json`) additionally loads
+the root `CLAUDE.md` via its `instructions` field specifically so you see the real rules too — read
+both. Nested `CLAUDE.md` files (per-crate, per-tool, per-docs-folder) load automatically the first
+time you touch a file in that folder, the same way they do for Claude Code.
 
-## 1. Technology Stack
-- **Language**: Rust
-- **Game Engine**: Bevy `0.18.0` `(CRITICAL: Always rely on 0.18 API changes, such as AsBindGroup behaviors and resource initialization.)`
-- **Targets**: Native (Desktop) and Web/WASM (WebGPU)
-- **UI / Debug**: `bevy_egui` for the inspector/editor GUI.
-- **Serialization**: `ron` (Rusty Object Notation) for scenes and configurations.
+## Running outside Claude Code
 
-## 2. Project Architecture & Patterns
-This is a Cargo workspace with the following core crates:
-- `ironhold_core/`: The main library containing game logic, rendering pipelines, terrain generation, and the `scene_manager`. This code must remain platform-agnostic.
-- `ironhold_native/`: The desktop executable runner.
-- `ironhold_web/`: The WebAssembly (WASM) runner.
+Some of `CLAUDE.md`'s conventions reference Claude Code-specific mechanics. If you are not Claude
+Code, translate them:
 
-### Web Architecture (Multi-Page)
-- **`index.html`**: The project gallery and dark-themed selection dashboard.
-- **`play.html`**: The dedicated game runner (accepts `?project=<name>` as a parameter).
-Ensure you do not break this routing when modifying the web build.
+| Claude Code mechanic | Under OpenCode |
+|---|---|
+| `Agent` tool / "launch agents in parallel" | OpenCode's `task` tool (same parallel/background semantics, but every invocation starts cold — no context-inheriting fork) |
+| A slash command (`/code-review`, `/ship`, etc.) | The identically-named OpenCode command |
+| `Monitor`, `ToolSearch`, `EnterWorktree`/`isolation: "worktree"`, `Cron*`/`ScheduleWakeup`, Claude's `Skill` tool | No equivalent — skip and proceed with the rest of the instructions |
 
-### Data-Driven Game Loop
-Game behavior is authored in RON files (`logic/rules.ron`, `logic/state_machine.ron`). Do not hardcode logic in Rust if it belongs in the data schema. The engine uses a strict pipeline: **Message → Interpreter → Action → Executor**.
+**Merge gate (applies to every AI tool other than Claude Code, including OpenCode):** any review
+you produce is **advisory only**. The mandatory review that gates a merge into `integration` per
+this repo's branching model is Claude Code's own `/code-review` — nothing else substitutes for it,
+regardless of which model or tool produced the review.
 
-## 3. Critical Coding Rules & Quirks
+**Agent memory:** `.claude/agent-memory/<agent-name>/` is a durable knowledge base the Claude-side
+review agents read and write. If you are not Claude Code, you may **read** it but must **never
+write to it directly** — write anything worth remembering to
+`.opencode/memory-inbox/<agent-name>.md` instead, tagged with your own model id, for later triage.
+This exists so a less-verified or weaker model can never silently corrupt the shared knowledge
+base.
 
-### Graphics & WebGPU Alignment
-- **WebGPU 16-Byte Alignment**: When creating custom shader materials or structs that are bound to the GPU (e.g., `TerrainMaterial`), you **must** adhere to WebGPU's strict 16-byte alignment rules for uniform buffers. Even if using smaller types like `Vec4`, ensure padding is correctly handled to avoid `BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED` validation panics.
-- **Shaders in WebBuilds**: When updating shaders, verify that `AsBindGroup` mappings correctly differentiate between Uniform and Storage buffers based on Bevy 0.18's expected layout.
-
-### Gameplay Physics & Movement
-- **Use `FixedUpdate`**: All player movement, physics processing, and camera-following logic that relies on physics bodies must be scheduled in `FixedUpdate`. Do not use `Update` for physics movement, as it causes stuttering.
-
-### Asynchronous Operations
-- **Terrain Generation**: Terrain mesh generation involves heavy computations. Do not block the main thread. Always defer heavy generation logic to background tasks using Bevy's `AsyncComputeTaskPool` and poll the `Task` components on entities.
-
-### UI & Render Layers
-- **Inspector Isolation**: The `bevy_egui` inspector and game UI must be strictly separated. The inspector should be rendered by its own camera and layer on top of the 3D scene without bleeding into the main game UI.
-
-### Integration Tests
-- **Missing Plugins**: When writing or updating integration tests inside `ironhold_core`, always ensure that the test environment sets up the required resources. Specifically:
-  - You must include the `PhysicsPlugin` to prevent tests from panicking due to missing physics resources.
-  - If the test involves messaging, ensure the custom `Message` framework (Writer/Reader resources) is correctly initialized before execution.
-
-## 4. Workflows & Commands
-If executing commands, use these general patterns:
-- **Test Native Build**: `cargo run -p ironhold_native`
-- **Run Tests**: `cargo test -p ironhold_core --test '*' -- --nocapture`
-- **Test Web Build**: Web builds generally target `wasm32-unknown-unknown`. When debugging the web build, ensure alignment and WGPU validation fixes are verified by compiling against it.
-
----
-
-*(Note to Agents: Reference these rules immediately when asked to debug a rendering validation error, fix player stuttering, or write passing tests!)*
+See `.opencode/README.md` for the full OpenCode setup (providers, model routing tiers, the
+paid-escalation opt-in convention) and `planning/features/opencode_compatibility.md` for the design
+this was built from.

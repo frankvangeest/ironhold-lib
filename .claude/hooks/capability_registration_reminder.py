@@ -1,13 +1,15 @@
 import sys
 import json
 
+from _hook_common import emit_context
+
 try:
     data = json.load(sys.stdin)
     fp = data.get("tool_input", {}).get("file_path", "").replace("\\", "/")
     if "capabilities/mod.rs" in fp or (
         "ironhold_core/src/lib.rs" in fp
     ):
-        print(
+        emit_context(
             "REMINDER: Capability wiring file changed — verify any new capability is registered in ALL of:\n"
             "  1. capabilities/mod.rs       — pub mod + pub use\n"
             "  2. ironhold_core/src/lib.rs  — .add_plugins(MyCapabilityPlugin) and system scheduling\n"
