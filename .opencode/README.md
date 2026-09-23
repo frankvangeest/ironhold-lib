@@ -138,3 +138,10 @@ reliability, etc.). The reminder hooks (`cargo check` after a schema change, and
 under OpenCode too (phase v2, `.opencode/plugins/claude_hooks_bridge.ts`) — live-tested for the
 reminder half; the blocking half (`git add pkg/`, etc.) hasn't been independently fired outside a
 TUI session.
+
+**Resolved, 2026-09-23:** a new `feature/{slug}` worktree used to have zero `.opencode/` config at
+all (cut from `main`, which lags `integration` — see root `CLAUDE.md`'s Branching Model section).
+`.githooks/post-checkout` now auto-syncs it on a worktree's first checkout, so this is no longer a
+manual step to remember. It's still a one-off workaround, not a fix to the underlying lag — the
+permanent fix is `main` catching up to `integration` at the next release promotion, after which the
+hook is simply a no-op.
