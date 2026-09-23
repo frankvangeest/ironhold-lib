@@ -43,11 +43,37 @@ the project your key belongs to has **no billing account linked**. If billing is
 | E (paid) | `openrouter/deepseek/deepseek-v4.1-flash` | Only `system-architect-deep` / `debug-detective-deep` |
 | R (free reasoning) | `opencode/nemotron-3-ultra-free` or `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | `system-architect`, `debug-detective`, `alignment-reviewer`, `/code-review`/`/plan-review`/`/ship` orchestration, the built-in `plan` agent |
 | R-lite | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | `wasm-perf-reviewer` |
-| C (free code) | `openrouter/poolside/laguna-s-2.1:free` | `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, the default `build`/`general` agents |
+| C (free code) | Split across 3 providers (2026-09-23), see below | `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, the default `build`/`general` agents |
 | G (free, low-volume) | `google/gemini-3.8-flash` | `ux-gamedesigner-reviewer`, `game-world-designer` |
-| F (free, light) | `opencode/deepseek-v4-flash-free` | `/query`, `/validate`, `/wasm-dev`, `/rust-docs` |
+| F (free, light) | `opencode/nemotron-3.5-lightning-free` | `/query`, `/validate`, `/wasm-dev`, `/rust-docs` |
 | T (titles) | `opencode/nemotron-3.5-lightning-free` | `small_model` (background title generation) only |
 | X (explore) | `openrouter/thinkingmachines/inkling-small:free` | The built-in `explore` agent |
+
+## C tier is split across providers, on purpose
+
+OpenCode has **no fallback/retry-with-a-different-model mechanism** — `model` is a single string
+per agent, full stop (confirmed against the docs, not assumed). So when a free model's *upstream*
+provider rate-limits its own `:free` tier (a capacity limit shared across every OpenRouter user
+hitting that model, not something your OpenRouter credit balance fixes — that only raises
+OpenRouter's own daily-request cap, a separate thing), every agent pointed at that one model stalls
+at once with no automatic recovery.
+
+This happened for real (2026-09-23): `openrouter/poolside/laguna-s-2.1:free` — the original,
+single C-tier model backing the default `build`/`general` agent plus all three authoring
+subagents — started returning `"[Poolside] ... is temporarily rate-limited upstream"` mid-session.
+Fix: spread the 4 C-tier consumers across **3 different upstream providers**, so at most 2 share
+any single provider's bottleneck at once:
+
+| Consumer | Model | Provider |
+|---|---|---|
+| Default `model` (`build`/`general`) | `openrouter/cohere/north-mini-code:free` | Cohere |
+| `integration-test-author` | `openrouter/nex-agi/nex-n2.5-pro:free` | Nex AGI |
+| `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` | Poolside (kept — still the highest-rated pick when it's actually available) |
+| `data-format-doc-writer` | `openrouter/nex-agi/nex-n2.5-mini:free` | Nex AGI (lighter sibling of the test-author's model — doc writing needs less than active Rust authoring) |
+
+If one of these starts rate-limiting too, the fix is the same: edit that agent's `model` in
+`opencode.json` to a different provider's free model — there's no config-level fallback list to
+maintain instead. `.opencode/opencode_free_models.md` has the fuller candidate list.
 
 ## The paid escalation opt-in
 
