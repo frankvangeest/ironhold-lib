@@ -529,10 +529,6 @@ pub fn action_executor_system(
                     warn!("Action::PlaySound: key {:?} not found in audio catalog", key);
                 }
             }
-            Action::EnterState(state) => {
-                info!("Action::EnterState: \"{}\" -> \"{}\"", scene_state.logic_state.0, state);
-                scene_state.logic_state.0 = state;
-            }
             Action::SetVariable(key, value) => {
                 info!("Action::SetVariable: \"{}\" = \"{}\"", key, value);
                 scene_state.game_vars.0.insert(key, value);

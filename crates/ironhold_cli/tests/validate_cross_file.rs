@@ -1379,21 +1379,21 @@ fn bad_ui_trigger_key_binding_exits_1() {
     );
 }
 
-/// A malformed `logic/rules.ron` must not cascade into a wave of `unreachable_trigger` errors on
+/// A malformed `logic/state_machine.ron` must not cascade into a wave of `unreachable_trigger` errors on
 /// top of the real parse error — the UI trigger reachability check is skipped entirely whenever
 /// any logic file failed to parse, since "nothing parsed" cannot be distinguished from "nothing
 /// is handled" without fabricating noise.
 #[test]
-fn bad_rules_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
-    let (code, stdout) = validate("bad_rules_parse_no_cascade");
+fn bad_state_machine_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
+    let (code, stdout) = validate("bad_state_machine_parse_no_cascade");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
         stdout.contains("Expected comma"),
-        "expected the rules.ron parse error reported in output:\n{stdout}"
+        "expected the state_machine.ron parse error reported in output:\n{stdout}"
     );
     assert!(
         !stdout.contains("wired_button") && !stdout.contains("but no rule/transition/binding"),
-        "a rules.ron parse error must not also produce unreachable_trigger noise for its \
+        "a state_machine.ron parse error must not also produce unreachable_trigger noise for its \
          (would-be-correctly-wired) button:\n{stdout}"
     );
     assert!(
@@ -1444,40 +1444,35 @@ fn state_machine_only_project_ignores_dead_rules_ron() {
 }
 
 #[test]
-fn rules_path_custom_filename_is_discovered_exits_1() {
-    // The other direction of the same bug: a custom rules_path filename (not the
-    // "logic/rules.ron" convention) must still be discovered and cross-checked.
-    let (code, stdout) = validate("rules_path_custom_filename_is_discovered");
+fn state_machine_path_custom_filename_is_discovered_exits_1() {
+    // The other direction of the same bug: a custom state_machine_path filename (not the
+    // "logic/state_machine.ron" convention) must still be discovered and cross-checked.
+    let (code, stdout) = validate("state_machine_path_custom_filename_is_discovered");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
         stdout.contains("missing_prefab_in_custom_named_rules_file"),
-        "expected the custom-named rules file's own missing_prefab error in output:\n{stdout}"
+        "expected the custom-named state_machine file's own missing_prefab error in output:\n{stdout}"
     );
 }
 
 #[test]
-fn inline_rules_are_discovered_exits_1() {
-    // Inline V1 ProjectConfig.rules (no rules_path, no logic/ dir at all) must be cross-checked
-    // exactly like an external rules.ron would be.
-    let (code, stdout) = validate("inline_rules_are_discovered");
+fn project_with_rules_path_fails_to_parse_exits_1() {
+    // A .project.ron with a stale rules_path: field fails to parse (deny_unknown_fields).
+    // This replaces the old inline_rules_are_discovered test which tested inline V1 rules.
+    let (code, stdout) = validate("project_with_rules_path_fails_to_parse");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        stdout.contains("missing_prefab_in_inline_rules"),
-        "expected the inline rule's own missing_prefab error in output:\n{stdout}"
+        stdout.contains("rules_path"),
+        "expected the parse error to name the rules_path field:\n{stdout}"
     );
 }
 
 #[test]
-fn missing_configured_rules_path_and_state_machine_path_exits_1() {
-    // A configured-but-missing rules_path/state_machine_path is a hard error, matching the
+fn missing_state_machine_path_exits_1() {
+    // A configured-but-missing state_machine_path is a hard error, matching the
     // existing load_configured_catalog precedent for the four catalog paths.
-    let (code, stdout) = validate("bad_rules_path_and_state_machine_path");
+    let (code, stdout) = validate("bad_state_machine_path");
     assert_eq!(code, 1, "expected exit 1, got {code}");
-    assert!(
-        stdout.contains("logic/does_not_exist.ron")
-            && stdout.contains("rules_path in .project.ron does not exist on disk"),
-        "expected the missing rules_path error in output:\n{stdout}"
-    );
     assert!(
         stdout.contains("logic/also_missing.ron")
             && stdout.contains("state_machine_path in .project.ron does not exist on disk"),
@@ -1486,26 +1481,26 @@ fn missing_configured_rules_path_and_state_machine_path_exits_1() {
 }
 
 #[test]
-fn rules_path_case_mismatch_exits_1() {
-    // rules_path is a designer-authored path like any other -- it must get the same
+fn state_machine_path_case_mismatch_exits_1() {
+    // state_machine_path is a designer-authored path like any other -- it must get the same
     // path_case_mismatch coverage every other configurable path in this file has.
-    let (code, stdout) = validate("rules_path_case_mismatch");
+    let (code, stdout) = validate("state_machine_path_case_mismatch");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
-        (stdout.contains("resolves on disk to") && stdout.contains("logic/rules.ron"))
+        (stdout.contains("resolves on disk to") && stdout.contains("logic/state_machine.ron"))
             || stdout.contains("does not exist on disk"),
         "expected the case-mismatch or missing-path message in output:\n{stdout}"
     );
 }
 
 #[test]
-fn rules_path_pointed_at_wrong_file_type_does_not_corrupt_that_files_own_report() {
-    // Regression guard: a rules_path typo'd onto an existing, valid, different-type file (here,
+fn state_machine_path_pointed_at_wrong_file_type_does_not_corrupt_that_files_own_report() {
+    // Regression guard: a state_machine_path typo'd onto an existing, valid, different-type file (here,
     // prefabs/prefabs.ron, itself also configured as prefab_catalog) must not be re-parsed as a
-    // LogicRulesAsset and reported as broken -- that file already has its own, correct FileResult
+    // StateMachineAsset and reported as broken -- that file already has its own, correct FileResult
     // from loading it as a catalog. The scene's own unrelated missing_prefab error must still
-    // fire, proving the catalog itself loaded fine despite the rules_path collision attempt.
-    let (code, stdout) = validate("rules_path_pointed_at_wrong_file_type");
+    // fire, proving the catalog itself loaded fine despite the state_machine_path collision attempt.
+    let (code, stdout) = validate("state_machine_path_pointed_at_wrong_file_type");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert_eq!(
         stdout.matches("prefabs/prefabs.ron").count(),
@@ -1519,18 +1514,16 @@ fn rules_path_pointed_at_wrong_file_type_does_not_corrupt_that_files_own_report(
 }
 
 #[test]
-fn unset_rules_path_with_convention_file_strict_exits_1() {
-    // A project setting only state_machine_path, with a logic/rules.ron still sitting on disk,
-    // must get a --strict signal that the file is dead and unchecked -- otherwise resolve_logic_
-    // files correctly ignoring it (see the dead-rules-ron test above) leaves the file with zero
-    // diagnostic coverage from any tool at all.
-    let (code, stdout) = validate("unset_rules_path_with_convention_file");
+fn unset_state_machine_path_with_convention_file_strict_exits_1() {
+    // A project with a logic/state_machine.ron convention file on disk but no state_machine_path
+    // in .project.ron must get a --strict signal that the file is dead and unchecked.
+    let (code, stdout) = validate("unset_state_machine_path_with_convention_file");
     assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
-    let (code, stdout) = validate_strict("unset_rules_path_with_convention_file");
+    let (code, stdout) = validate_strict("unset_state_machine_path_with_convention_file");
     assert_eq!(code, 1, "expected exit 1 with --strict, got {code}");
     assert!(
-        stdout.contains("logic/rules.ron exists but rules_path is not set"),
-        "expected the unset_logic_path_with_convention_file warning in output:\n{stdout}"
+        stdout.contains("logic/state_machine.ron exists but state_machine_path is not set"),
+        "expected the unset state_machine_path warning in output:\n{stdout}"
     );
 }
 

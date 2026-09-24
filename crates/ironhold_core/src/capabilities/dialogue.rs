@@ -81,7 +81,7 @@ impl ActiveDialogue {
 /// 4. **Choice clicks** — reads `UiEvent::ButtonPressed("dialogue_choice:{n}")` and
 ///    navigates to the next node, a named jump target, or closes the dialogue.
 ///
-/// Ordering: runs `.after(button_system).after(interactable_system).before(message_interpreter_system)`.
+/// Ordering: runs `.after(button_system).after(interactable_system).before(fsm_interpreter_system)`.
 pub fn dialogue_tick_system(
     mut active: ResMut<ActiveDialogue>,
     dialogue_assets: Res<Assets<DialogueDef>>,

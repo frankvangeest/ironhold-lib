@@ -56,7 +56,8 @@ pub struct DebugState {
     pub last_action: String,
     /// Asset path of the most recently fully-loaded scene.
     pub scene: String,
-    /// Current named logic state set by `Action::EnterState`. Empty string means no active state.
+    /// Current named logic state. The FSM's current state; empty for a flat (`global_on`
+    /// only) logic file.
     pub logic_state: String,
     /// Running score total. Derived from `GameVariables["score"]` each frame.
     pub score: i32,
@@ -136,7 +137,6 @@ impl Plugin for GamePlugin {
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
-            .init_resource::<crate::runtime::scene_manager::LoadedRules>()
             .init_resource::<crate::runtime::scene_manager::LoadedStateMachine>()
             .init_resource::<crate::runtime::scene_manager::ProjectKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
@@ -192,7 +192,6 @@ impl Plugin for GamePlugin {
             .add_message::<AppExit>()
             .add_plugins(ImplicitRonPlugin::<ProjectConfig>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::project::ModelFixesAsset>::new(&["ron"]))
-            .add_plugins(ImplicitRonPlugin::<crate::schema::project::LogicRulesAsset>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::project::StateMachineAsset>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::player::AnimationPolicy>::new(&["ron"]))
             .add_plugins(ImplicitRonPlugin::<crate::schema::scene_v2::GameSceneV2>::new(&["ron"]))
@@ -222,7 +221,7 @@ impl Plugin for GamePlugin {
                 // executor in the same frame it would see load_mode=Overlay with the old
                 // SceneHandleV2, triggering a spurious spawn and resetting load_mode to
                 // Replace before the correct handle is ever visible.
-                spawn_scene_v2.before(message_interpreter_system),
+                spawn_scene_v2.before(fsm_interpreter_system),
                 preload_audio_system,
                 preload_decals_system,
                 spawn_player_when_terrain_ready,
@@ -233,28 +232,27 @@ impl Plugin for GamePlugin {
                 icon_button_click_system,
             ))
             // Global key input (ESC, etc.) → UI messages, must run before interpreter
-            .add_systems(Update, global_input_system.before(message_interpreter_system))
+            .add_systems(Update, global_input_system.before(fsm_interpreter_system))
             // Unclaimed-gamepad join trigger (gamepad equivalent of global_input_system above) —
             // must also run before the interpreter so Action::JoinPlayer sees this frame's
             // PendingJoinGamepad value, not a stale one from last frame.
-            .add_systems(Update, unclaimed_gamepad_trigger_system.before(message_interpreter_system))
+            .add_systems(Update, unclaimed_gamepad_trigger_system.before(fsm_interpreter_system))
             // Stat pipeline: modifier ticks → regen → effective value recompute — all before
             // the interpreter chain so threshold crossings are visible in the same frame.
             .add_systems(Update, (
                 stat_modifier_system,
                 stat_regen_system,
                 stat_effective_value_system,
-            ).chain().before(message_interpreter_system))
+            ).chain().before(fsm_interpreter_system))
             // Apply AudioState changes (mute_on_start, ToggleMute, SetVolume) to GlobalVolume
             // before any actions fire so mute_on_start is respected before PlayMusicLoop runs.
-            .add_systems(Update, audio_state_system.before(message_interpreter_system))
+            .add_systems(Update, audio_state_system.before(fsm_interpreter_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
             // stat_threshold_system runs after action_executor to detect crossings from
             // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.
             // drain_spawn_queue_system runs last: processes items queued by action_executor
             // this frame at a rate-limited SPAWNS_PER_FRAME to spread pipeline compile stalls.
             .add_systems(Update, (
-                message_interpreter_system,
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
                 flush_pending_intent_system,
@@ -289,16 +287,16 @@ impl Plugin for GamePlugin {
             ).chain())
             // Interactable input runs before all interpreters so all three readers
             // see the emitted GameEvent in the same frame.
-            .add_systems(Update, interactable_system.before(message_interpreter_system))
+            .add_systems(Update, interactable_system.before(fsm_interpreter_system))
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
             // Runs after button_system and interactable_system so all events are in the buffer.
             .add_systems(Update, dialogue_tick_system
                 .after(button_system)
                 .after(interactable_system)
-                .before(message_interpreter_system))
+                .before(fsm_interpreter_system))
             // Delayed events tick down each frame; emitted GameEvents are visible to all
             // three interpreter systems in the same frame they fire.
-            .add_systems(Update, tick_delayed_events_system.before(message_interpreter_system))
+            .add_systems(Update, tick_delayed_events_system.before(fsm_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (
                 animation_resolver_system,

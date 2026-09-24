@@ -1,7 +1,7 @@
 ﻿use bevy::prelude::*;
 use ironhold_core::GameVariables;
-use ironhold_core::runtime::{GameEvent, LoadedRules, SpawnId, SpawnRegistry, BehaviorHandle, EntityFsmState};
-use ironhold_core::schema::{Action, LogicRule, StateMachineAsset, FsmState, FsmTransition};
+use ironhold_core::runtime::{GameEvent, SpawnId, SpawnRegistry, BehaviorHandle, EntityFsmState};
+use ironhold_core::schema::{Action, StateMachineAsset, FsmState, FsmTransition};
 use ironhold_core::capabilities::player::CharacterController;
 
 mod support;

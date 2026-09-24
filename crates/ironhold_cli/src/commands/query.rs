@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use clap::Subcommand;
 
 use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EffectPriority, PrefabCatalog, PrefabDef};
-use ironhold_core::schema::project::{LogicRulesAsset, StateMachineAsset};
+use ironhold_core::schema::project::StateMachineAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::Action;
 
@@ -455,10 +455,10 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
 // ── query rules ───────────────────────────────────────────────────────────────
 
 fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
-    let rules: Option<LogicRulesAsset> = silent_parse(project_dir, "logic/rules.ron");
+    // Only state_machine.ron is supported; rules.ron has been removed.
     let fsm: Option<StateMachineAsset> = silent_parse(project_dir, "logic/state_machine.ron");
 
-    if rules.is_none() && fsm.is_none() {
+    if fsm.is_none() {
         if mode.json {
             println!("[]");
         } else {
@@ -468,105 +468,64 @@ fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std:
     }
 
     if mode.json {
-        let mut arr = Vec::new();
-        if let Some(r) = &rules {
-            let rules_json: Vec<_> = r
-                .rules
-                .iter()
-                .map(|rule| {
-                    serde_json::json!({
-                        "on": rule.on,
-                        "when": rule.when,
-                        "actions": rule.do_actions.len(),
-                    })
+        let fsm = fsm.unwrap();
+        let states_json: Vec<_> = fsm
+            .states
+            .iter()
+            .map(|state| {
+                serde_json::json!({
+                    "name": state.name,
+                    "entry_actions": state.entry_actions.len(),
+                    "exit_actions": state.exit_actions.len(),
+                    "on_bindings": state.on.len(),
                 })
-                .collect();
-            arr.push(serde_json::json!({
-                "type": "rules",
-                "path": "logic/rules.ron",
-                "count": r.rules.len(),
-                "rules": rules_json,
-            }));
-        }
-        if let Some(s) = &fsm {
-            let states_json: Vec<_> = s
-                .states
-                .iter()
-                .map(|state| {
-                    serde_json::json!({
-                        "name": state.name,
-                        "entry_actions": state.entry_actions.len(),
-                        "exit_actions": state.exit_actions.len(),
-                        "on_bindings": state.on.len(),
-                    })
-                })
-                .collect();
-            arr.push(serde_json::json!({
-                "type": "state_machine",
-                "path": "logic/state_machine.ron",
-                "initial_state": s.initial_state,
-                "states": states_json,
-                "transitions": s.transitions.len(),
-                "global_on": s.global_on.len(),
-            }));
-        }
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr)).unwrap());
+            })
+            .collect();
+        let arr = serde_json::json!([{
+            "type": "state_machine",
+            "path": "logic/state_machine.ron",
+            "initial_state": fsm.initial_state,
+            "states": states_json,
+            "transitions": fsm.transitions.len(),
+            "global_on": fsm.global_on.len(),
+        }]);
+        println!("{}", serde_json::to_string_pretty(&arr).unwrap());
         return Ok(());
     }
 
     println!("Rules: {}", project_dir.display());
     println!();
 
-    if let Some(r) = &rules {
-        println!("  logic/rules.ron  ({} rules)", r.rules.len());
-        for rule in &r.rules {
-            let guard = rule
-                .when
-                .as_deref()
-                .map(|w| format!("[when:{w}] "))
-                .unwrap_or_default();
-            println!(
-                "    {guard}on:{:<40}  → {} action{}",
-                rule.on,
-                rule.do_actions.len(),
-                if rule.do_actions.len() == 1 { "" } else { "s" }
-            );
-        }
-        println!();
-    }
-
-    if let Some(s) = &fsm {
-        let global_note = if s.global_on.is_empty() {
-            String::new()
-        } else {
-            format!(", {} global binding{}", s.global_on.len(), if s.global_on.len() == 1 { "" } else { "s" })
-        };
+    let fsm = fsm.unwrap();
+    let global_note = if fsm.global_on.is_empty() {
+        String::new()
+    } else {
+        format!(", {} global binding{}", fsm.global_on.len(), if fsm.global_on.len() == 1 { "" } else { "s" })
+    };
+    println!(
+        "  logic/state_machine.ron  initial:{}  ({} states, {} transitions{})",
+        fsm.initial_state,
+        fsm.states.len(),
+        fsm.transitions.len(),
+        global_note
+    );
+    for state in &fsm.states {
         println!(
-            "  logic/state_machine.ron  initial:{}  ({} states, {} transitions{})",
-            s.initial_state,
-            s.states.len(),
-            s.transitions.len(),
-            global_note
+            "    state: {}  entry:{} exit:{} on:{}",
+            state.name,
+            state.entry_actions.len(),
+            state.exit_actions.len(),
+            state.on.len()
         );
-        for state in &s.states {
-            let to_states: Vec<&str> = s
-                .transitions
-                .iter()
-                .filter(|t| t.from.as_deref() == Some(state.name.as_str()))
-                .map(|t| t.to.as_str())
-                .collect();
-            let mut info = format!(
-                "entry:{}  exit:{}  on:{}",
-                state.entry_actions.len(),
-                state.exit_actions.len(),
-                state.on.len()
-            );
-            if !to_states.is_empty() {
-                info.push_str(&format!("  → {}", to_states.join(", ")));
-            }
-            println!("    {}  {}", state.name, info);
+    }
+    if !fsm.transitions.is_empty() {
+        for t in &fsm.transitions {
+            let from = t.from.as_deref().unwrap_or("*");
+            println!("    transition: {from} --({})--> {}", t.on, t.to);
         }
-        println!();
+    }
+    for b in &fsm.global_on {
+        println!("    global_on: {} → {} action{}", b.event, b.do_actions.len(), if b.do_actions.len() == 1 { "" } else { "s" });
     }
 
     Ok(())
@@ -593,7 +552,6 @@ fn action_kind(a: &Action) -> &'static str {
         Action::PreloadScene(_) => "PreloadScene",
         Action::PreloadPrefab(_) => "PreloadPrefab",
         Action::PreloadGlb(_) => "PreloadGlb",
-        Action::EnterState(_) => "EnterState",
         Action::SetVariable(_, _) => "SetVariable",
         Action::IncrementVariable(_, _) => "IncrementVariable",
         Action::PlayAnimationOn { .. } => "PlayAnimationOn",
@@ -662,23 +620,6 @@ struct LogicCollection {
 fn collect_logic(project_dir: &Path) -> LogicCollection {
     let mut actions = Vec::new();
     let mut events = Vec::new();
-
-    // rules.ron
-    if let Some(rules) = silent_parse::<LogicRulesAsset>(project_dir, "logic/rules.ron") {
-        let src = "logic/rules.ron";
-        for rule in &rules.rules {
-            let kinds: Vec<String> = rule.do_actions.iter().map(|a| action_kind(a).to_string()).collect();
-            for a in &rule.do_actions {
-                actions.push(ActionRecord { source: src.to_string(), kind: action_kind(a).to_string() });
-            }
-            events.push(EventRecord {
-                source: src.to_string(),
-                event: rule.on.clone(),
-                action_kinds: kinds,
-                is_transition: false,
-            });
-        }
-    }
 
     // state_machine.ron
     if let Some(fsm) = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron") {

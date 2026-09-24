@@ -1,6 +1,12 @@
-(
-    schema_versievent: 1,
-    // Foliage demo is static — no event-driven logic needed.
-    // Add rules here to respond to game events (e.g. button presses, trigger zones).
-    global_event: [],
-)
+(
+
+    schema_version: 1,
+
+    // Foliage demo is static — no event-driven logic needed.
+
+    // Add rules here to respond to game events (e.g. button presses, trigger zones).
+
+    global_on: [],
+
+)
+

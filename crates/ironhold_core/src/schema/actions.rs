@@ -132,10 +132,6 @@ pub enum Action {
     /// Stores the handle in `PreloadedGlbHandles` alongside `PreloadPrefab` handles; cleared on
     /// `LoadScene`. Does not create any visible entity.
     PreloadGlb(String),
-    /// Transition the interpreter to a named logic state.
-    /// Rules with a matching `when` field become active; rules in other states are suppressed.
-    /// Use an empty string `""` to return to the stateless (always-fire) default.
-    EnterState(String),
     /// Set a named runtime variable to a string value.
     /// The value is stored in `GameVariables` and readable by data-bound UI labels.
     /// Example: `SetVariable("level", "2")` or `SetVariable("player_name", "Hero")`.

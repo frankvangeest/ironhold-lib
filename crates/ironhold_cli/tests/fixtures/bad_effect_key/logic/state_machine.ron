@@ -1,9 +1,18 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        (
-            on: "scene.ready:main",
-            do_actions: [ SpawnEffect(key: "missing_effect") ],
-        ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        (
+
+            event: "scene.ready:main",
+
+            do_actions: [ SpawnEffect(key: "missing_effect") ],
+
+        ),
+
+    ],
+
+)
+

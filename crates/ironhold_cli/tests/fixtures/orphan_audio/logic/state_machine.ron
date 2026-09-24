@@ -1,11 +1,22 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        (
-            on: "ui.button_pressed:play",
-            do_actions: [
-                PlaySound(key: "click"),
-            ],
-        ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        (
+
+            event: "ui.button_pressed:play",
+
+            do_actions: [
+
+                PlaySound(key: "click"),
+
+            ],
+
+        ),
+
+    ],
+
+)
+

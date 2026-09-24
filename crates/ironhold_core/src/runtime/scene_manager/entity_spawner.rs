@@ -25,7 +25,7 @@ use super::{
     scene_loader::{resolve_jump_velocity, warn_jump_cannot_clear_ground_sensor, warn_invalid_walkable_slope_limit, warn_negative_coyote_time_secs, ChildSpawnCtx, build_primitive_mesh, primitive_material, spawn_primitive_children},
 };
 use crate::runtime::actions::ActionQueue;
-use super::message_interpreter::rewrite_self;
+use super::action_substitution::rewrite_self;
 use crate::schema::stats::{LiveStat, StatMap, StatTemplateDef};
 use crate::capabilities::npc::{NpcAgent, NpcState};
 use crate::capabilities::motion::Motion;

@@ -1,9 +1,18 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        (
-            on: "entity.interacted:npc",
-            do_actions: [ StartDialogue(npc_id: "npc", dialogue_path: "dialogues/does_not_exist.dialogue.ron") ],
-        ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        (
+
+            event: "entity.interacted:npc",
+
+            do_actions: [ StartDialogue(npc_id: "npc", dialogue_path: "dialogues/does_not_exist.dialogue.ron") ],
+
+        ),
+
+    ],
+
+)
+

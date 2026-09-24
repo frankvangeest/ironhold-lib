@@ -1,5 +1,4 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
-use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
 use ironhold_core::schema::player::AnimationPolicy;
@@ -100,21 +99,13 @@ fn regression_schema_version_in_assets() {
         }
     }
 
-    // 3) Logic files: assets/projects/*/logic/rules.ron and logic/state_machine.ron
+    // 3) Logic files: assets/projects/*/logic/state_machine.ron
     let project_dirs = fs::read_dir(&projects_dir)
         .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
 
     for entry in project_dirs.flatten() {
         let logic_dir = entry.path().join("logic");
         if !logic_dir.is_dir() { continue; }
-
-        let rules_file = logic_dir.join("rules.ron");
-        if rules_file.is_file() {
-            let contents = fs::read_to_string(&rules_file)
-                .unwrap_or_else(|e| panic!("Failed to read {}: {}", rules_file.display(), e));
-            let _: LogicRulesAsset = from_str(&contents)
-                .unwrap_or_else(|e| panic!("LogicRulesAsset failed to parse {}: {}", rules_file.display(), e));
-        }
 
         let sm_file = logic_dir.join("state_machine.ron");
         if sm_file.is_file() {

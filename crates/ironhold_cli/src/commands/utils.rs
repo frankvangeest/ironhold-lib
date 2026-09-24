@@ -96,6 +96,11 @@ pub struct ResolvedCatalogPaths {
 ///
 /// One `.project.ron` parse per call (not per catalog) -- callers needing both paths get them
 /// from one `ResolvedCatalogPaths`, not two separate lookups.
+///
+/// Also warns on stderr if a `.project.ron` exists but fails to parse — after the rules/state_machine
+/// removal, a stale `rules_path:` makes the file unparseable, so `query`/`stats` would quietly
+/// report convention-path results with zero diagnostic (validate and the runtime both already fail
+/// loudly). The stderr warning names the file and the parse error (stdout `--json` stays clean).
 pub fn resolve_catalog_paths(project_dir: &Path) -> ResolvedCatalogPaths {
     let config: Option<ProjectConfig> = find_project_ron(project_dir)
         .and_then(|name| silent_parse(project_dir, &name));
@@ -104,6 +109,19 @@ pub fn resolve_catalog_paths(project_dir: &Path) -> ResolvedCatalogPaths {
     // which `.exists()` (a directory does) but can't be read as a file, producing a confusing
     // "" not found" error with the field name silently dropped (debug-detective finding,
     // `feature/cli_query_stats_paths`'s review, 2026-09-11).
+    if let Some(project_ron_name) = find_project_ron(project_dir) {
+        let full = project_dir.join(&project_ron_name);
+        if full.exists() {
+            if let Ok(content) = std::fs::read_to_string(&full) {
+                if ron::de::from_str::<ProjectConfig>(&content).is_err() {
+                    eprintln!(
+                        "Warning: {} exists but failed to parse — query/stats will use convention paths",
+                        project_ron_name
+                    );
+                }
+            }
+        }
+    }
     ResolvedCatalogPaths {
         prefab_catalog: config.as_ref()
             .and_then(|c| c.prefab_catalog.clone())

@@ -1,13 +1,26 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        (
-            on: "scene.ready:main",
-            do_actions: [ LoadScene("scenes/does_not_exist.scene.ron") ],
-        ),
-        (
-            on: "ui.button_pressed:pause",
-            do_actions: [ ToggleOverlay("scenes/also_does_not_exist.scene.ron") ],
-        ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        (
+
+            event: "scene.ready:main",
+
+            do_actions: [ LoadScene("scenes/does_not_exist.scene.ron") ],
+
+        ),
+
+        (
+
+            event: "ui.button_pressed:pause",
+
+            do_actions: [ ToggleOverlay("scenes/also_does_not_exist.scene.ron") ],
+
+        ),
+
+    ],
+
+)
+

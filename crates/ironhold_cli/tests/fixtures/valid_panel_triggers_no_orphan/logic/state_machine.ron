@@ -1,10 +1,20 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        ( on: "ui.button_pressed:close_inventory", do_actions: [] ),
-        ( on: "ui.button_pressed:close_shop", do_actions: [] ),
-        ( on: "ui.button_pressed:buy_item:sword", do_actions: [] ),
-        ( on: "ui.button_pressed:close_container", do_actions: [] ),
-        ( on: "ui.button_pressed:take_all_from_container", do_actions: [] ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        ( event: "ui.button_pressed:close_inventory", do_actions: [] ),
+
+        ( event: "ui.button_pressed:close_shop", do_actions: [] ),
+
+        ( event: "ui.button_pressed:buy_item:sword", do_actions: [] ),
+
+        ( event: "ui.button_pressed:close_container", do_actions: [] ),
+
+        ( event: "ui.button_pressed:take_all_from_container", do_actions: [] ),
+
+    ],
+
+)
+

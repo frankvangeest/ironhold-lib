@@ -1,13 +1,26 @@
-(
-    schema_versievent: 1,
-    global_event: [
-        (
-            on: "ui.button_pressed:go_cinematic",
-            do_actions: [ SetCameraMode(mode: "cine") ],
-        ),
-        (
-            on: "ui.button_pressed:go_default",
-            do_actions: [ SetCameraMode(mode: "default") ],
-        ),
-    ],
-)
+(
+
+    schema_version: 1,
+
+    global_on: [
+
+        (
+
+            event: "ui.button_pressed:go_cinematic",
+
+            do_actions: [ SetCameraMode(mode: "cine") ],
+
+        ),
+
+        (
+
+            event: "ui.button_pressed:go_default",
+
+            do_actions: [ SetCameraMode(mode: "default") ],
+
+        ),
+
+    ],
+
+)
+

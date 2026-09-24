@@ -36,31 +36,6 @@ impl ModelFixesAsset {
     }
 }
 
-/// A standalone `.ron` asset that holds the logic rules for a project (schema v2).
-#[derive(Deserialize, Asset, TypePath, Debug, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct LogicRulesAsset {
-    pub schema_version: u32,
-    pub rules: Vec<LogicRule>,
-}
-
-impl LogicRulesAsset {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version < 1 || self.schema_version > 2 {
-            return Err(format!(
-                "Unsupported LogicRulesAsset schema_version {} (expected 1 or 2)",
-                self.schema_version
-            ));
-        }
-        for (i, rule) in self.rules.iter().enumerate() {
-            if rule.on.is_empty() {
-                return Err(format!("LogicRule[{}] has empty \"on\" field", i));
-            }
-        }
-        Ok(())
-    }
-}
-
 /// A standalone `.ron` asset holding a finite-state machine definition (schema v1).
 /// The project's logic file, and the schema of every behavior file.
 /// Referenced via `state_machine_path` in the project config.
@@ -170,13 +145,8 @@ pub struct ProjectConfig {
     pub schema_version: u32,
     pub initial_scene: String,
 
-    // V1: inline logic rules
-    #[serde(default)]
-    pub rules: Vec<LogicRule>,
-    // V2: path to external logic/rules.ron
-    #[serde(default)]
-    pub rules_path: Option<String>,
-    // V2: path to external logic/state_machine.ron (FSM workflow; replaces rules_path)
+    /// Path to an external `logic/state_machine.ron` file (FSM workflow).
+    /// Referenced via `state_machine_path` in the project config.
     #[serde(default)]
     pub state_machine_path: Option<String>,
 
@@ -322,17 +292,6 @@ fn default_popup_rise_speed() -> f32 { 1.5 }
 fn default_popup_spawn_offset() -> (f32, f32, f32) { (0.0, 1.2, 0.0) }
 fn default_popup_damage_color() -> (f32, f32, f32, f32) { (0.95, 0.25, 0.20, 1.0) }
 fn default_popup_heal_color() -> (f32, f32, f32, f32) { (0.20, 0.90, 0.20, 1.0) }
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct LogicRule {
-    pub on: String,
-    /// Optional logic-state guard. When set, the rule only fires while the interpreter
-    /// is in the named state. When omitted (or `None`), the rule fires in every state.
-    #[serde(default)]
-    pub when: Option<String>,
-    pub do_actions: Vec<Action>,
-}
 
 #[derive(Resource)]
 pub struct ProjectConfigHandle(pub Handle<ProjectConfig>);
