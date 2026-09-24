@@ -1,0 +1,127 @@
+(
+    schema_versievent: 1,
+    global_event: [
+
+        // WebGPU pipeline warmup — four variants need separate warmup bursts.
+        // Fired during the scene-load window (off-screen, y=-100) before the player
+        // can interact, so the first visible burst does not stall the GPU thread.
+        //
+        //   1. Sphere  + AlphaMode::Add (no sprite)            → explosion_burst
+        //   2. Quad    + FlameParticleMaterial + AlphaMode::Add → campfire_fire (both layers), torch_flame
+        //   3. Quad    + StandardMaterial + AlphaMode::Blend    → campfire_smoke
+        //   4. Quad    + StandardMaterial + AlphaMode::Add      → star_rain, frost_burst, heal_pulse,
+        //                                                          magic_orbit, magic_nova,
+        //                                                          charge_burst, sphere_nova (new station effects)
+        (
+            on: "scene.ready:main",
+            do_actions: [
+                SpawnEffect(key: "explosion_burst",    position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_fire",      position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "campfire_smoke",     position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "star_rain",          position: (0.0, -100.0, 0.0)),
+                // Flipbook shares Additive+StandardMaterial pipeline — star_rain warmup covers it.
+                // Include explicitly for clarity; zero extra pipeline cost.
+                SpawnEffect(key: "explosion_flipbook", position: (0.0, -100.0, 0.0)),
+                // Warms the decal pipeline: StandardMaterial + AlphaBlend + depth_bias:128 + double_sided.
+                // This variant is distinct from particle blend materials (no depth_bias).
+                ProjectDecal(key: "explosion_ring", position: (0.0, -100.0, 0.0),
+                             radius: 1.0, duration_secs: 2.0, color: (1.0, 1.0, 1.0, 0.01)),
+                SetParticleQuality(High),
+            ],
+        ),
+
+        // Press F near the flipbook pad — sprite-sheet animated explosion burst.
+        (
+            on: "entity.interacted:flipbook_pad_01",
+            do_actions: [ SpawnEffect(key: "explosion_flipbook", entity: "flipbook_pad_01") ],
+        ),
+
+        // Walk into the explosion pad to trigger a burst + orange ring decal.
+        (
+            on: "entity.entered:explosion_pad_01",
+            do_actions: [
+                SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01"),
+                ProjectDecal(key: "explosion_ring", entity: "explosion_pad_01", radius: 3.5,
+                             duration_secs: 3.0, color: (1.0, 0.40, 0.10, 0.75), pulse_speed: 0.6),
+            ],
+        ),
+
+        // Press F near the frost crystal for an ice shard burst + blue circle decal.
+        (
+            on: "entity.interacted:frost_crystal_01",
+            do_actions: [
+                SpawnEffect(key: "frost_burst", entity: "frost_crystal_01"),
+                ProjectDecal(key: "frost_circle", entity: "frost_crystal_01", radius: 2.5,
+                             duration_secs: 4.0, color: (0.45, 0.80, 1.0, 0.70), pulse_speed: 1.2),
+            ],
+        ),
+
+        // Press F near the healing fountain for a green healing burst.
+        (
+            on: "entity.interacted:heal_fountain_01",
+            do_actions: [ SpawnEffect(key: "heal_pulse", entity: "heal_fountain_01") ],
+        ),
+
+        // Press F on the magic rune to summon an arcane nova.
+        (
+            on: "entity.interacted:magic_rune_01",
+            do_actions: [ SpawnEffect(key: "magic_nova", entity: "magic_rune_01") ],
+        ),
+
+        // Walk onto the charge pad to trigger an EaseIn energy burst.
+        (
+            on: "entity.entered:charge_pad_01",
+            do_actions: [ SpawnEffect(key: "charge_burst", entity: "charge_pad_01") ],
+        ),
+
+        // Press F near the energy sphere for a Sphere-emitter Pulse-curve nova.
+        (
+            on: "entity.interacted:energy_sphere_01",
+            do_actions: [ SpawnEffect(key: "sphere_nova", entity: "energy_sphere_01") ],
+        ),
+
+        // ── Portal navigation ─────────────────────────────────────────────────
+        (
+            on: "entity.entered:portal_to_p2",
+            do_actions: [ LoadScene("scenes/particles2.scene.ron") ],
+        ),
+        (
+            on: "entity.entered:portal_to_main",
+            do_actions: [ LoadScene("scenes/main.scene.ron") ],
+        ),
+
+        // ── Arcane Observatory — pipeline warmup on scene entry ───────────────
+        // All variants used in scene 2 are Add+Standard (same as star_rain) or
+        // flame material; pipelines are warm from the main scene warmup in the
+        // same session, but included here for correctness if entry is direct.
+        (
+            on: "scene.ready:particles2",
+            do_actions: [
+                SpawnEffect(key: "magic_nova",  position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "frost_burst", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "sphere_nova", position: (0.0, -100.0, 0.0)),
+                SpawnEffect(key: "star_rain",   position: (0.0, -100.0, 0.0)),
+                ProjectDecal(key: "explosion_ring", position: (0.0, -100.0, 0.0),
+                             radius: 1.0, duration_secs: 2.0, color: (1.0, 1.0, 1.0, 0.01)),
+                SetParticleQuality(Minimal),
+            ],
+        ),
+
+        // ── Arcane Observatory — magic rune ring ──────────────────────────────
+        ( on: "entity.interacted:rune_p2_01", do_actions: [ SpawnEffect(key: "magic_nova", entity: "rune_p2_01") ] ),
+        ( on: "entity.interacted:rune_p2_02", do_actions: [ SpawnEffect(key: "magic_nova", entity: "rune_p2_02") ] ),
+        ( on: "entity.interacted:rune_p2_03", do_actions: [ SpawnEffect(key: "magic_nova", entity: "rune_p2_03") ] ),
+        ( on: "entity.interacted:rune_p2_04", do_actions: [ SpawnEffect(key: "magic_nova", entity: "rune_p2_04") ] ),
+        ( on: "entity.interacted:rune_p2_05", do_actions: [ SpawnEffect(key: "magic_nova", entity: "rune_p2_05") ] ),
+
+        // ── Arcane Observatory — frost obelisks ───────────────────────────────
+        ( on: "entity.interacted:frost_p2_01", do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_p2_01") ] ),
+        ( on: "entity.interacted:frost_p2_02", do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_p2_02") ] ),
+        ( on: "entity.interacted:frost_p2_03", do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_p2_03") ] ),
+
+        // ── Arcane Observatory — energy spheres ───────────────────────────────
+        ( on: "entity.interacted:esphere_p2_01", do_actions: [ SpawnEffect(key: "sphere_nova", entity: "esphere_p2_01") ] ),
+        ( on: "entity.interacted:esphere_p2_02", do_actions: [ SpawnEffect(key: "sphere_nova", entity: "esphere_p2_02") ] ),
+
+    ],
+)

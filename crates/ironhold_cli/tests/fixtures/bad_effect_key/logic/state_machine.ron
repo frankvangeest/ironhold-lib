@@ -1,0 +1,9 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        (
+            on: "scene.ready:main",
+            do_actions: [ SpawnEffect(key: "missing_effect") ],
+        ),
+    ],
+)

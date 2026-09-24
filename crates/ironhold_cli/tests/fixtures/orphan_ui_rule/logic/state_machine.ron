@@ -1,0 +1,9 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        (
+            on: "ui.button_pressed:truly_orphaned",
+            do_actions: [],
+        ),
+    ],
+)

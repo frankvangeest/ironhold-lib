@@ -1,0 +1,10 @@
+(
+    schema_version: 1,
+    // Minimal FSM for a new project — all logic goes in `global_on`.
+    // Rules in `global_on` fire on every event, whatever the state.
+    // Add `states:` + `transitions:` + `initial_state:` when you need modes
+    // like menu / playing / paused.
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ Log("Scene ready") ] ),
+    ],
+)

@@ -1,0 +1,9 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        (
+            on: "scene.ready:main",
+            do_actions: [ LoadScene("../load_scene_path_traversal_sibling/evil_scenes/thing.scene.ron") ],
+        ),
+    ],
+)

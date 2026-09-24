@@ -1,0 +1,76 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        ( on: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
+        // Temporary camera_modes.md v1 playtest aid (main.scene.ron's scene_key_bindings) —
+        // fires on the shared party camera, verifying CameraShake now covers Party mode too.
+        ( on: "ui.button_pressed:shake_camera", do_actions: [
+            CameraShake(duration_secs: 0.4, intensity: 0.2),
+        ] ),
+        // interact_status starts blank so interact_hint (room2.scene.ron) reads "Interact test: "
+        // before either player has pressed F near the interact_test_prop box.
+        ( on: "scene.ready:room2", do_actions: [ Log("Local co-op demo room2 ready"), SetVariable("interact_status", "") ] ),
+        // Local-coop interact-fix playtest aid (planning/backlog.md ▸ Bugs): confirms
+        // interactable_system fires with 2 CharacterControllers present (it previously used
+        // player_query.single() and silently did nothing for anyone in this situation).
+        ( on: "entity.interacted:interact_test_prop", do_actions: [
+            Log("Interact test: fired with 2 players present"),
+            SetVariable("interact_status", "fired!"),
+        ] ),
+        // Also spawns a stationary billboard_test_spark burst — playtest aid for the
+        // split-screen particle billboard orientation fix (Phase 1 of
+        // planning/features/split_screen_camera_followups.md). See assets.ron's comment.
+        ( on: "scene.ready:room3", do_actions: [
+            Log("Local co-op demo room3 ready"),
+            SpawnEffect(key: "billboard_test_spark", position: (0.0, 1.5, 0.0), entity: None),
+            // Phase 4 (split_screen_camera_followups.md) playtest aid: dynamically spawns a
+            // second stat_widget_test instance (mirrors the drain_dynamic_stat_ui_system path
+            // used by wave-spawned enemies), also centered so both split viewports see it —
+            // verifies the Action::Spawn path duplicates ranks identically to the scene-placed
+            // instance above.
+            Spawn(prefab: "stat_widget_test", id: "stat_widget_dynamic", position: (0.0, 2.0, -7.0)),
+        ] ),
+        ( on: "scene.ready:room4", do_actions: [ Log("Local co-op demo room4 ready") ] ),
+        ( on: "scene.ready:room5", do_actions: [ Log("Local co-op demo room5 ready") ] ),
+        ( on: "scene.ready:room6", do_actions: [ Log("Local co-op demo room6 ready") ] ),
+        ( on: "scene.ready:room7", do_actions: [ Log("Local co-op demo room7 (primitive players) ready") ] ),
+        ( on: "scene.ready:room8", do_actions: [ Log("Local co-op demo room8 (hot join) ready") ] ),
+        // These two were missing (room9 predates this fix; room10 is new) — every other room in
+        // this project has its own scene.ready Log rule, so both are added together here.
+        ( on: "scene.ready:room9", do_actions: [ Log("Local co-op demo room9 (own-viewport rings) ready") ] ),
+        ( on: "scene.ready:room10", do_actions: [ Log("Local co-op demo room10 (mixed player models) ready") ] ),
+        ( on: "scene.ready:room11", do_actions: [ Log("Local co-op demo room11 (SetCameraMode retargeting) ready") ] ),
+
+        // camera_modes v2 demo (room11.scene.ron's scene_key_bindings + camera_modes registry).
+        // owner_player: 0 retargets ONLY player 1's camera — player 2's Orbit camera is never
+        // touched by either rule, proving SetCameraMode's per-player targeting is real.
+        ( on: "ui.button_pressed:cam_p1_fixed", do_actions: [
+            SetCameraMode(mode: "cinematic_fixed", owner_player: 0),
+        ] ),
+        ( on: "ui.button_pressed:cam_p1_default", do_actions: [
+            SetCameraMode(mode: "default", owner_player: 0),
+        ] ),
+
+        // Hot-join (local_coop_hot_join_leave.md): "G" is bound to the "join" trigger via
+        // room8's scene_key_bindings. Action::JoinPlayer itself no-ops (with a warn!) outside a
+        // Grid-split scene or once MAX_SPLIT_PLAYERS is reached, so this rule is safe to leave
+        // active in every scene rather than needing a per-scene `when` guard.
+        ( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
+
+        // Portal navigation — either player entering fires the LoadScene reload, which
+        // respawns both players from the destination scene's entities: list. If both players
+        // enter the same tick, this rule fires twice; the second LoadScene is a harmless no-op
+        // re-trigger of an already-in-flight load. See prefabs.ron's portal_to_room2 comment.
+        ( on: "entity.entered:portal_to_room2", do_actions: [ LoadScene("scenes/room2.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room1", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room3", do_actions: [ LoadScene("scenes/room3.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room4", do_actions: [ LoadScene("scenes/room4.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room5", do_actions: [ LoadScene("scenes/room5.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room6", do_actions: [ LoadScene("scenes/room6.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room7", do_actions: [ LoadScene("scenes/room7.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room8", do_actions: [ LoadScene("scenes/room8.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room9", do_actions: [ LoadScene("scenes/room9.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room10", do_actions: [ LoadScene("scenes/room10.scene.ron") ] ),
+        ( on: "entity.entered:portal_to_room11", do_actions: [ LoadScene("scenes/room11.scene.ron") ] ),
+    ],
+)

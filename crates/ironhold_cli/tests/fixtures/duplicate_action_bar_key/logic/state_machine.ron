@@ -1,0 +1,12 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        (
+            on: "scene.ready:main",
+            do_actions: [
+                SpawnEffect(key: "hit_spark"),
+                PlaySound(key: "click"),
+            ],
+        ),
+    ],
+)

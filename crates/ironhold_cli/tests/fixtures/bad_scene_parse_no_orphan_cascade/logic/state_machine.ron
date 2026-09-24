@@ -1,0 +1,9 @@
+(
+    schema_versievent: 1,
+    global_event: [
+        (
+            on: "ui.button_pressed:wired_trigger",
+            do_actions: [],
+        ),
+    ],
+)
