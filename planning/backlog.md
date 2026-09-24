@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Consolidate rules.ron onto state_machine.ron** — `planning/features/rules_to_state_machine_consolidation.md` (single phase, one breaking change, pre-1.0, no external users)
+
 ---
 
 ## Bugs
