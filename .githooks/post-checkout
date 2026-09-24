@@ -1,12 +1,22 @@
 #!/bin/sh
-# Auto-syncs .opencode/, .claude/hooks/, and AGENTS.md from `integration`'s tip into a brand-new
-# worktree that doesn't have them yet. feature/* branches are cut from `main`, which lags behind
-# `integration` until the next release promotion (see CLAUDE.md Branching Model) -- until then,
-# every freshly created worktree has no OpenCode config at all, and OpenCode silently falls back
-# to no project instructions, no model routing, no permission scoping. This closes that gap
-# automatically instead of needing a manual `git checkout integration -- .opencode/ ...` + commit
-# every time (real incidents: feature/fix_stale_logic_path_warning and
-# feature/rules_to_state_machine_consolidation both hit this, 2026-09-23).
+# Auto-syncs files from `integration`'s tip into a brand-new worktree that's missing them.
+# feature/* branches are cut from `main`, which lags behind `integration` until the next release
+# promotion (see CLAUDE.md Branching Model) -- until then, every freshly created worktree is
+# missing whatever's only landed on `integration` so far. Two independent things can be missing,
+# so each is checked and synced on its own rather than gated behind a single early-return:
+#
+# 1. OpenCode tooling (.opencode/, .claude/hooks/, AGENTS.md) -- without it OpenCode silently
+#    falls back to no project instructions, no model routing, no permission scoping.
+# 2. This feature's own plan file (planning/features/{slug}.md) -- plan-review (workflow step 1)
+#    happens *before* the branch is cut (step 2), so the plan is committed to `integration` first
+#    and is *always* missing from a brand-new feature/{slug} branch cut from `main`, regardless of
+#    whether `.opencode/` happens to already be up to date. Missing this caused a real incident
+#    (2026-09-23): an OpenCode build agent found nothing at that path on
+#    feature/rules_to_state_machine_consolidation and fabricated a shorter, wrong replacement
+#    instead of reporting it missing, rather than erroring out cleanly.
+#
+# Real incidents behind #1: feature/fix_stale_logic_path_warning and
+# feature/rules_to_state_machine_consolidation both hit it, 2026-09-23.
 #
 # $1 = previous HEAD, $2 = new HEAD, $3 = 1 if a branch checkout, 0 if a file checkout.
 # git passes the all-zero SHA as $1 specifically for a worktree's very first checkout -- an
@@ -21,36 +31,61 @@ if [ "$prev_head" != "$zero_sha" ]; then
   exit 0
 fi
 
-# Already has config (e.g. this worktree is on integration itself, or main has since been
-# promoted and already carries it) -- nothing to do.
-if [ -f ".opencode/opencode.json" ]; then
-  exit 0
-fi
-
 # No local `integration` branch to sync from (e.g. a fresh clone before the one-time bootstrap
 # in CLAUDE.md has run) -- don't guess, just skip.
 if ! git rev-parse --verify -q integration >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "post-checkout: this worktree has no .opencode/ config -- auto-syncing from integration's tip..." >&2
+paths_to_sync=""
 
-git checkout integration -- .opencode/ .claude/hooks/ AGENTS.md 2>/dev/null
+# Already has OpenCode config (e.g. this worktree is on integration itself, or main has since
+# been promoted and already carries it) -- nothing to do for this part.
+if [ ! -f ".opencode/opencode.json" ]; then
+  paths_to_sync=".opencode/ .claude/hooks/ AGENTS.md"
+fi
+
+# Only meaningful on a feature/{slug} branch. Sync the plan file only if it's genuinely missing
+# here AND actually exists on integration -- don't fabricate a path or fail loudly if a feature
+# has no plan file (simple features can skip planning/features/ entirely, see CLAUDE.md).
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+case "$branch" in
+  feature/*)
+    slug="${branch#feature/}"
+    plan_path="planning/features/${slug}.md"
+    if [ ! -f "$plan_path" ] && git cat-file -e "integration:${plan_path}" 2>/dev/null; then
+      paths_to_sync="$paths_to_sync $plan_path"
+    fi
+    ;;
+esac
+
+if [ -z "$paths_to_sync" ]; then
+  exit 0
+fi
+
+echo "post-checkout: this worktree is missing files that exist on integration -- auto-syncing:$paths_to_sync" >&2
+
+git checkout integration -- $paths_to_sync 2>/dev/null
 
 # Nothing actually changed (paths already matched) -- don't create an empty commit.
 if git diff --cached --quiet 2>/dev/null; then
   exit 0
 fi
 
-git commit -q -m "chore(opencode): auto-sync OpenCode tooling config from integration
+git commit -q -m "chore(opencode): auto-sync missing tooling/plan files from integration
 
 Automated by .githooks/post-checkout: this worktree was created from a
-branch that predates the OpenCode compatibility work living on
-integration. Byte-identical copy of .opencode/, .claude/hooks/, and
-AGENTS.md from integration's tip at worktree-creation time. See CLAUDE.md
-Branching Model for why this gap exists until integration is next
-promoted to main, at which point this hook becomes a no-op again."
+branch that predates content that already landed on integration
+($paths_to_sync). Byte-identical copy from integration's tip at
+worktree-creation time. See CLAUDE.md Branching Model for why this gap
+exists until integration is next promoted to main, at which point this
+hook becomes a no-op again.
 
-echo "post-checkout: committed OpenCode config sync ($(git rev-parse --short HEAD))." >&2
+This does not cover every possible integration-only dependency a
+feature might have (e.g. a sibling feature's in-flight schema change)
+-- only .opencode/ tooling and this feature's own plan file are synced
+automatically. See CLAUDE.md workflow step 2 for the manual check."
+
+echo "post-checkout: committed sync ($(git rev-parse --short HEAD))." >&2
 
 exit 0

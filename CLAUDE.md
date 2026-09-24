@@ -327,7 +327,35 @@ git config core.hooksPath .githooks
 
 `core.hooksPath` activates `.githooks/pre-commit` (blocks `pkg/` being committed on a `feature/*` branch), `.githooks/pre-push` (blocks pushing `main` unless it exactly matches `integration`'s tip), and `.githooks/post-checkout` (see below).
 
-**`.githooks/post-checkout` auto-fixes the OpenCode config gap on every new worktree.** Every `feature/{slug}` worktree is cut from `main` (per the Branching Model above), but `main` only advances by fast-forwarding to `integration`'s tip at release time — so until the next promotion, `main` (and any branch cut from it) doesn't have whatever's currently only on `integration`, including all of `.opencode/`. Before this hook existed, a brand-new feature worktree had **zero** OpenCode config: no `CLAUDE.md` access (falls back to a possibly-stale `AGENTS.md` only), no model routing, no permission scoping — this happened for real twice in one day (2026-09-23, `feature/fix_stale_logic_path_warning` and `feature/rules_to_state_machine_consolidation`) before being automated away. The hook fires only on a worktree's very first checkout (detected via git's all-zero "previous HEAD," which never occurs on an ordinary `checkout`/`switch` inside a worktree that already exists) and only when `.opencode/opencode.json` is missing — it's a no-op once `main` is promoted and already carries the config. When it does fire, it auto-commits a byte-identical copy of `.opencode/`, `.claude/hooks/`, and `AGENTS.md` from `integration`'s current tip, in its own commit (`chore(opencode): auto-sync OpenCode tooling config from integration`) — don't be surprised to see this commit already sitting on a feature branch you didn't create yourself.
+**`.githooks/post-checkout` auto-fixes the OpenCode config gap and the missing-plan-file gap on
+every new worktree.** Every `feature/{slug}` worktree is cut from `main` (per the Branching Model
+above), but `main` only advances by fast-forwarding to `integration`'s tip at release time — so
+until the next promotion, `main` (and any branch cut from it) doesn't have whatever's currently
+only on `integration`. Two independent things can be missing, and the hook checks each on its own
+rather than gating both behind one condition:
+
+1. **OpenCode tooling** (`.opencode/`, `.claude/hooks/`, `AGENTS.md`) — before this hook existed, a
+   brand-new feature worktree had **zero** OpenCode config: no `CLAUDE.md` access (falls back to a
+   possibly-stale `AGENTS.md` only), no model routing, no permission scoping — this happened for
+   real twice in one day (2026-09-23, `feature/fix_stale_logic_path_warning` and
+   `feature/rules_to_state_machine_consolidation`) before being automated away.
+2. **The feature's own plan file** (`planning/features/{slug}.md`) — plan-review (workflow step 1
+   below) happens *before* the branch is cut (step 2), so the plan is committed to `integration`
+   first and is *always* missing from a brand-new `feature/{slug}` branch, independent of whether
+   `.opencode/` happens to already be up to date. Missing this caused a real, worse incident
+   (2026-09-23): an OpenCode build agent on `feature/rules_to_state_machine_consolidation` found
+   nothing at that path and **fabricated a shorter, wrong replacement plan** instead of reporting
+   it missing, then built several files against its own fabrication before the mistake was caught.
+
+The hook fires only on a worktree's very first checkout (detected via git's all-zero "previous
+HEAD," which never occurs on an ordinary `checkout`/`switch` inside a worktree that already
+exists) and skips whichever of the two is already present — it's a full no-op once `main` is
+promoted and the branch's own plan file is already tracked. When it does fire, it auto-commits a
+byte-identical copy of whatever's missing from `integration`'s current tip, in its own commit
+(`chore(opencode): auto-sync missing tooling/plan files from integration`) — don't be surprised to
+see this commit already sitting on a feature branch you didn't create yourself. **This hook only
+covers those two specific things** — see workflow step 2 below for what to do if a feature depends
+on something else that only exists on `integration`.
 
 **`CARGO_TARGET_DIR` must be a persistent environment variable, not a per-shell `export`.** This
 machine has no shell profile file (`.bashrc`/`.bash_profile`/`.profile` don't exist) for an
@@ -384,6 +412,19 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     ```bash
     git worktree add ../ironhold-lib-{slug} -b feature/{slug} main
     ```
+    `.githooks/post-checkout` fires automatically here and auto-syncs `.opencode/` tooling and this
+    feature's own `planning/features/{slug}.md` from `integration`'s tip if either is missing (see
+    the "One-time machine setup" section above for why — `main` lags `integration`). Check its
+    stderr output for a `post-checkout: ... auto-syncing:` line to confirm it ran, or its silence to
+    confirm nothing was missing. **The hook only covers those two things.** If the plan itself
+    depends on something else that exists only on `integration` — e.g. a schema/doc change from a
+    sibling feature still mid-batch — that's a real cross-feature dependency the plan file should
+    already call out explicitly (per step 1); copy the specific file(s) needed
+    (`git checkout integration -- <path>`) right now, before starting Code changes, rather than
+    discovering the gap mid-implementation. Don't broaden this into cutting the branch from
+    `integration` instead of `main` to sidestep the check — that reintroduces exactly the coupling
+    between parallel features (and exposure to a not-yet-release-tested batch) the three-tier model
+    exists to avoid.
  3. **Code changes** 
       - implement the feature or fix
       - update cli 
