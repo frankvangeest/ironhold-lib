@@ -58,7 +58,7 @@ pub fn global_input_system(
 /// `scene_unclaimed_gamepad_bindings` trigger) on an **unclaimed** gamepad and, for the specific
 /// purpose of `Action::JoinPlayer` binding the right physical pad to a freshly-joined player,
 /// records which pad triggered it in `PendingJoinGamepad`. Only fires in `InGame` state. Must run
-/// `.before(message_interpreter_system)` so `Action::JoinPlayer`'s executor sees this frame's
+/// `.before(fsm_interpreter_system)` so `Action::JoinPlayer`'s executor sees this frame's
 /// value, not last frame's.
 ///
 /// No separate "live signal" prefilter is needed: a phantom/dead duplicate gamepad entry (the
@@ -73,7 +73,7 @@ pub fn global_input_system(
 /// **At most one (pad, button) match is serviced per frame, full stop — capped at emission, not
 /// just at capture.** `PendingJoinGamepad` can only hold one `Entity`, and nothing downstream can
 /// tell which of several same-frame `UiEvent::ButtonPressed` messages a captured pad belongs to
-/// (`message_interpreter_system` has no concept of "this message paired with that resource
+/// (`fsm_interpreter_system` has no concept of "this message paired with that resource
 /// value") — so emitting more than one qualifying event in a frame this system also captures a
 /// pad for would silently mispair, or worse, both events could resolve to `Action::JoinPlayer`
 /// and spawn two players from one pad's worth of same-frame pairing capacity (debug-detective /

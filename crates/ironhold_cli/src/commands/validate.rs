@@ -197,8 +197,8 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
 ///   unrelated errors that were there all along).
 /// - A path already attempted by an earlier step this same run (any `rel_path` already in
 ///   `results`, regardless of what it was parsed as) is not re-parsed under a different type --
-///   without this, e.g. a `rules_path` typo'd onto `prefabs/prefabs.ron` would be re-parsed as a
-///   `LogicRulesAsset`, fail, and report a perfectly valid file as broken (found live during
+///   without this, e.g. a `state_machine_path` typo'd onto `prefabs/prefabs.ron` would be re-parsed as a
+///   `StateMachineAsset`, fail, and report a perfectly valid file as broken (found live during
 ///   `configurable_logic_paths.md`'s review).
 fn parse_configured_path<T: serde::de::DeserializeOwned>(
     project_dir: &Path,
