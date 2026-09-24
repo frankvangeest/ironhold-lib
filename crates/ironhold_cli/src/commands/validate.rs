@@ -3649,10 +3649,27 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let ResolvedLogicFiles { rules, rules_source, state_machine, state_machine_source } =
         resolve_logic_files(project_dir, project_config.as_ref(), &mut file_results);
 
+    // Validate project state machine if present
+    if let Some(ref fsm) = state_machine {
+        if let Err(e) = fsm.validate() {
+            file_results.push(FileResult {
+                rel_path: state_machine_source.clone(),
+                errors: vec![format!("StateMachineAsset validation failed: {}", e)],
+            });
+        }
+    }
+
     let mut behaviors: Vec<(String, StateMachineAsset)> = Vec::new();
     for path in glob_dir(project_dir, "behaviors", ".behavior.ron") {
         let r = rel(project_dir, &path);
         if let Some(b) = parse_file::<StateMachineAsset>(&path, &r, &mut file_results) {
+            // Validate each behavior file
+            if let Err(e) = b.validate() {
+                file_results.push(FileResult {
+                    rel_path: r.clone(),
+                    errors: vec![format!("StateMachineAsset (behavior) validation failed: {}", e)],
+                });
+            }
             behaviors.push((r, b));
         }
     }

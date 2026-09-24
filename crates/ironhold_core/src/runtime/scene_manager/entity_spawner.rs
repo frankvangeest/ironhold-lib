@@ -580,6 +580,12 @@ pub fn resolve_pending_behaviors_system(
             continue;
         }
         if let Some(fsm) = state_machines.get(&pending_behavior.0) {
+            if let Err(e) = fsm.validate() {
+                error!(
+                    "Invalid StateMachineAsset for behavior on spawn id \"{}\": {} — this entity's behavior will run with no state bindings",
+                    spawn_id.0, e
+                );
+            }
             let initial = fsm.initial_state.clone();
             commands
                 .entity(entity)

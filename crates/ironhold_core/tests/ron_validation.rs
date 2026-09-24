@@ -266,6 +266,71 @@ fn test_state_machine_duplicate_state_names_is_invalid() {
     assert!(fsm.validate().is_err());
 }
 
+// ── Schema loosening tests (rules_to_state_machine_consolidation) ──────────────
+
+#[test]
+fn test_minimal_fsm_global_only_parses_and_validates() {
+    // Minimal FSM with only schema_version and global_on — no states, no transitions,
+    // no initial_state. This is the new flat form that replaces rules.ron.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            global_on: [
+                ( event: "scene.ready:main", do_actions: [ Log("Scene ready") ] ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).expect("Minimal global_on FSM must parse");
+    assert_eq!(fsm.schema_version, 1);
+    assert_eq!(fsm.initial_state, ""); // defaults to empty
+    assert!(fsm.states.is_empty());
+    assert!(fsm.transitions.is_empty());
+    assert_eq!(fsm.global_on.len(), 1);
+    assert!(fsm.validate().is_ok(), "Minimal global_on FSM must validate");
+}
+
+#[test]
+fn test_fsm_with_states_but_no_initial_state_fails_validation() {
+    // When states are declared but initial_state is missing (empty), validate() must fail.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "",
+            states: [
+                ( name: "menu", entry_actions: [], exit_actions: [], on: [] ),
+            ],
+            transitions: [],
+            global_on: [],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).unwrap();
+    assert!(fsm.validate().is_err(), "FSM with states but empty initial_state must fail validate()");
+}
+
+#[test]
+fn test_full_fsm_with_all_fields_still_parses() {
+    // Regression test: a fully-specified FSM with all fields must still parse and validate.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "menu",
+            states: [
+                ( name: "menu", entry_actions: [], exit_actions: [], on: [] ),
+                ( name: "playing", entry_actions: [], exit_actions: [], on: [] ),
+            ],
+            transitions: [
+                ( on: "scene.ready:main", to: "playing" ),
+                ( from: Some("playing"), on: "ui.button_pressed:quit", to: "menu" ),
+            ],
+            global_on: [
+                ( event: "ui.button_pressed:debug", do_actions: [ Log("debug") ] ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).expect("Full FSM must parse");
+    assert!(fsm.validate().is_ok(), "Full FSM must validate");
+}
+
 // ── GameSceneV2 validation ────────────────────────────────────────────────────
 
 #[test]

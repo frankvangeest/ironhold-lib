@@ -62,17 +62,22 @@ impl LogicRulesAsset {
 }
 
 /// A standalone `.ron` asset holding a finite-state machine definition (schema v1).
-/// Replaces `logic/rules.ron` for projects that use the FSM authoring workflow.
+/// The project's logic file, and the schema of every behavior file.
 /// Referenced via `state_machine_path` in the project config.
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct StateMachineAsset {
     pub schema_version: u32,
     /// The logic state the machine starts in before any transitions fire.
+    /// Defaults to empty string. `validate()` rejects empty only when `states` is non-empty:
+    /// "if you declare states, name the starting one".
+    #[serde(default)]
     pub initial_state: String,
     /// Named states with entry/exit actions and in-state event bindings.
+    #[serde(default)]
     pub states: Vec<FsmState>,
     /// State-change transitions triggered by events.
+    #[serde(default)]
     pub transitions: Vec<FsmTransition>,
     /// Event bindings that fire from any state without changing state.
     #[serde(default)]
@@ -87,8 +92,8 @@ impl StateMachineAsset {
                 self.schema_version
             ));
         }
-        if self.initial_state.is_empty() {
-            return Err("StateMachineAsset initial_state must not be empty".to_string());
+        if self.initial_state.is_empty() && !self.states.is_empty() {
+            return Err("StateMachineAsset initial_state must not be empty when states are declared".to_string());
         }
         let mut state_names = std::collections::HashSet::new();
         for state in &self.states {

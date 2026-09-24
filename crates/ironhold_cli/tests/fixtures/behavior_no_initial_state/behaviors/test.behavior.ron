@@ -1,0 +1,9 @@
+(
+    schema_version: 1,
+    initial_state: "",
+    states: [
+        ( name: "idle", entry_actions: [], exit_actions: [], on: [] ),
+    ],
+    transitions: [],
+    global_on: [],
+)

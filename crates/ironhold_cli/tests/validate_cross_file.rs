@@ -424,6 +424,29 @@ fn missing_behavior_file_exits_1() {
     );
 }
 
+#[test]
+fn behavior_file_with_states_but_no_initial_state_exits_1() {
+    // StateMachineAsset::validate() now rejects a behavior file that declares states
+    // but has no initial_state. This tests the CLI validation wiring.
+    let (code, stdout) = validate("behavior_no_initial_state");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("initial_state must not be empty when states are declared"),
+        "expected validation error about empty initial_state in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn project_fsm_with_states_but_no_initial_state_exits_1() {
+    // Same validation for the project-level state_machine.ron
+    let (code, stdout) = validate("fsm_no_initial_state");
+    assert_eq!(code, 1, "expected exit 1, got {code}");
+    assert!(
+        stdout.contains("initial_state must not be empty when states are declared"),
+        "expected validation error about empty initial_state in output:\n{stdout}"
+    );
+}
+
 /// The prefab-catalog loop (behavior/camera_mode/foliage/stat-widget checks) iterates sorted
 /// keys, not the `HashMap`'s arbitrary iteration order — otherwise error output would depend on
 /// hash-seed-driven ordering instead of being stable across runs. 3 prefabs authored out of
