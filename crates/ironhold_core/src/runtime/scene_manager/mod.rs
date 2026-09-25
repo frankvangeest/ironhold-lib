@@ -628,7 +628,6 @@ pub struct SceneStateParams<'w, 's> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
     pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
-    pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
     pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
     pub loaded_modifiers: Res<'w, crate::schema::stats::LoadedModifiers>,

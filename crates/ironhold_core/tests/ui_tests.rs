@@ -1,8 +1,8 @@
 ﻿use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use ironhold_core::GameVariables;
-use ironhold_core::runtime::{UiEvent, ActionQueue, LoadedRules, SceneHandleV2};
-use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, LogicRule, GameSceneV2};
+use ironhold_core::runtime::{UiEvent, ActionQueue, LoadedStateMachine, SceneHandleV2};
+use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, StateMachineAsset, GameSceneV2, FsmEventBinding};
 
 mod support;
 use support::setup_test_app;
@@ -53,30 +53,26 @@ fn spawn_icon_button(
 #[test]
 fn test_ui_button_to_load_scene_action() {
     let mut app = setup_test_app();
-       
+        
     // 1. Run once to process Startup (setup)
     app.update();
     
-    // Override ProjectConfig with test-specific rules
-    {
-        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
-        let rules = vec![
-            LogicRule {
-                on: "ui.button_pressed:test_load".to_string(),
-                when: None,
+    // Override ProjectConfig with test-specific FSM
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "ui.button_pressed:test_load".to_string(),
                 do_actions: vec![Action::LoadScene("scenes/tests/test_scene.scene.ron".to_string())],
             }
-        ];
-        let config_handle = configs.add(ProjectConfig {
-            schema_version: 1,
-            initial_scene: "scenes/tests/test_scene.scene.ron".to_string(),
-            rules: rules.clone(),
-            ..Default::default()
-        });
-        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-        app.world_mut().insert_resource(LoadedRules(rules));
-    }
-
+        ],
+    };
+    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    
     // 2. Simulate Button Press Message
     app.world_mut().resource_mut::<Messages<UiEvent>>().write(UiEvent::ButtonPressed("test_load".to_string()));
     
@@ -102,26 +98,22 @@ fn test_ui_button_to_quit_action() {
     // 1. Run once to process Startup (setup)
     app.update();
     
-    // Override ProjectConfig with test-specific rules
-    {
-        let mut configs = app.world_mut().resource_mut::<Assets<ProjectConfig>>();
-        let rules = vec![
-            LogicRule {
-                on: "ui.button_pressed:test_quit".to_string(),
-                when: None,
+    // Override ProjectConfig with test-specific FSM
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "ui.button_pressed:test_quit".to_string(),
                 do_actions: vec![Action::Quit],
             }
-        ];
-        let config_handle = configs.add(ProjectConfig {
-            schema_version: 1,
-            initial_scene: "scenes/tests/test_scene.ron".to_string(),
-            rules: rules.clone(),
-            ..Default::default()
-        });
-        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
-        app.world_mut().insert_resource(LoadedRules(rules));
-    }
-
+        ],
+    };
+    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    
     // 2. Simulate Quit Message
     app.world_mut().resource_mut::<Messages<UiEvent>>().write(UiEvent::ButtonPressed("test_quit".to_string()));
     
