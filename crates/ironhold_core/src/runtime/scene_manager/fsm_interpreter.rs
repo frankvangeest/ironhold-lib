@@ -1,21 +1,22 @@
 use bevy::prelude::*;
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
-use crate::schema::Action;
 use crate::capabilities::action_bar::{CurrentTarget, HandledIntentSlots};
-use crate::capabilities::player::PlayerTarget;
-use crate::SpawnId;
 use super::{LoadedStateMachine, LogicState};
 
 use crate::runtime::scene_manager::action_substitution::{rewrite_target, scene_path_stem, intent_slot_key};
 
 /// Interprets events against a loaded `StateMachineAsset`, driving state transitions and
 /// queuing entry/exit actions.
-/// 
+///
 /// Returns early when `LoadedStateMachine` is `None`, *before* draining its `MessageReader`s.
-/// This means the project-load frame's `scene.requested:<initial>` event is never seen by the FSM
-/// interpreter. No live content binds `scene.requested:` for the initial scene, so nothing
-/// observable changes.
+/// This does NOT mean the project-load frame's `scene.requested:<initial>` event is lost: the
+/// readers aren't advanced, so the message stays in Bevy's double buffer and this system does see
+/// it, one frame later, once `LoadedStateMachine` becomes `Some` (`check_project_loaded` isn't
+/// ordered against this system, so the load can complete on the same frame the event was written
+/// or the frame after). Nothing observable changes either way today, since no live content binds
+/// `scene.requested:` for the initial scene — but this comment previously claimed the event was
+/// "never seen," which is false; don't build a workaround for a problem that doesn't exist.
 pub fn fsm_interpreter_system(
     mut ui_events: MessageReader<UiEvent>,
     mut game_events: MessageReader<GameEvent>,
@@ -50,8 +51,6 @@ pub fn fsm_interpreter_system(
         events.push(name);
     }
 
-    let mut any_intent_matched = false;
-
     for event_name in &events {
         let mut intent_matched = false;
 
@@ -63,7 +62,6 @@ pub fn fsm_interpreter_system(
                     action_queue.push(rewrite_target(action.clone(), target_id));
                 }
                 intent_matched = true;
-                any_intent_matched = true;
                 // Mark intent slot as handled so action_bar doesn't also fire its built-in.
                 if let Some(slot_key) = intent_slot_key(event_name) {
                     handled_intents.0.insert(slot_key);
@@ -80,7 +78,6 @@ pub fn fsm_interpreter_system(
                         action_queue.push(rewrite_target(action.clone(), target_id));
                     }
                     intent_matched = true;
-                    any_intent_matched = true;
                     // Mark intent slot as handled so action_bar doesn't also fire its built-in.
                     if let Some(slot_key) = intent_slot_key(event_name) {
                         handled_intents.0.insert(slot_key);
@@ -122,16 +119,18 @@ pub fn fsm_interpreter_system(
 
             // Advance logic state immediately so subsequent events this frame see the new state.
             logic_state.0 = to_name.clone();
+            intent_matched = true;
 
             // Mark handled intent slot for this event (so action_bar doesn't also fire its built-in).
-            if let Some(slot_key) = super::action_substitution::intent_slot_key(event_name) {
+            if let Some(slot_key) = intent_slot_key(event_name) {
                 handled_intents.0.insert(slot_key);
             }
         }
-    }
 
-    // Debug: log when an event has no matching bindings (helps diagnose "why didn't my event fire")
-    if !events.is_empty() && !any_intent_matched {
-        debug!("No FSM binding matched events: {:?}", events);
+        // Per-event, not per-frame: a typo'd event alongside one that DID match should still be
+        // reported, not swallowed by the frame having at least one match elsewhere.
+        if !intent_matched {
+            debug!("No FSM binding matched event: {:?}", event_name);
+        }
     }
 }

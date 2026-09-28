@@ -94,6 +94,37 @@ fn stats_respects_relocated_asset_catalog() {
     );
 }
 
+/// `ironhold stats`' logic (global_on) count -- before this fix, `query`/`stats` hardcoded the
+/// convention-path literal `"logic/state_machine.ron"` instead of resolving `state_machine_path`,
+/// so a project with a relocated state machine file silently reported 0 global_ons despite
+/// `validate` passing clean on the same project (system-architect finding,
+/// rules_to_state_machine_consolidation's post-implementation review, 2026-09-28).
+#[test]
+fn stats_respects_relocated_state_machine_path() {
+    let (code, stdout) = run(&["stats"], "relocated_state_machine_path");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("1 global_on"),
+        "expected the relocated state machine's global_on binding to be counted in output:\n{stdout}"
+    );
+}
+
+/// Same gap, `query rules`' half -- before this fix, hardcoded the convention-path literal and
+/// so reported "No logic files found" for a project with a relocated `state_machine_path`.
+#[test]
+fn query_rules_respects_relocated_state_machine_path() {
+    let (code, stdout) = run(&["query", "rules"], "relocated_state_machine_path");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("logic/custom_state_machine.ron"),
+        "expected the relocated state machine's own path to be named in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("No logic files found"),
+        "expected the relocated state machine to actually be found:\n{stdout}"
+    );
+}
+
 /// Positive control: the common case (no `.project.ron` at all, or one that doesn't relocate
 /// anything) must keep working exactly as before -- convention-path fallback, not a regression.
 #[test]

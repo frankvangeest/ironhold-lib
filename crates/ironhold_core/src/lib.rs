@@ -285,7 +285,7 @@ impl Plugin for GamePlugin {
                 trigger_zone_system,
                 npc_behavior_system,
             ).chain())
-            // Interactable input runs before all interpreters so all three readers
+            // Interactable input runs before all interpreters so both readers
             // see the emitted GameEvent in the same frame.
             .add_systems(Update, interactable_system.before(fsm_interpreter_system))
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
@@ -294,8 +294,8 @@ impl Plugin for GamePlugin {
                 .after(button_system)
                 .after(interactable_system)
                 .before(fsm_interpreter_system))
-            // Delayed events tick down each frame; emitted GameEvents are visible to all
-            // three interpreter systems in the same frame they fire.
+            // Delayed events tick down each frame; emitted GameEvents are visible to both
+            // interpreter systems in the same frame they fire.
             .add_systems(Update, tick_delayed_events_system.before(fsm_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             .add_systems(Update, (

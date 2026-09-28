@@ -450,7 +450,7 @@ position and facing from a live entity's current `GlobalTransform`, via the same
 `SpawnRegistry`-keyed lookup `SpawnEffect.entity` already uses. Necessary because these monsters
 patrol, so the corpse's spawn transform can't be hardcoded in RON; it has to be read from wherever
 the monster actually died. Precedence and substitution mirror `SpawnEffect.entity` exactly
-(`{self}`/`{target}` supported at both `rewrite_self`/`rewrite_target` in `message_interpreter.rs`,
+(`{self}`/`{target}` supported at both `rewrite_self`/`rewrite_target` in `action_substitution.rs`,
 plus `action_bar.rs`'s `action_needs_target`) — but unlike `SpawnEffect`, `at_entity` resolves via
 `GlobalTransform::compute_transform()` and so copies the source entity's full transform —
 position, rotation, *and scale* — not just position, since it's meant to faithfully reproduce a

@@ -68,12 +68,13 @@ pub fn find_project_ron(project_dir: &Path) -> Option<String> {
     matches.into_iter().next()
 }
 
-/// `prefab_catalog`/`asset_catalog` resolved for `query`/`stats` specifically -- see
-/// `resolve_catalog_paths`'s own doc comment for what "resolved" means here and why it's a
-/// deliberate divergence from the runtime, not a general-purpose catalog-path resolver.
+/// `prefab_catalog`/`asset_catalog`/`state_machine_path` resolved for `query`/`stats`
+/// specifically -- see `resolve_catalog_paths`'s own doc comment for what "resolved" means here
+/// and why it's a deliberate divergence from the runtime, not a general-purpose path resolver.
 pub struct ResolvedCatalogPaths {
     pub prefab_catalog: String,
     pub asset_catalog: String,
+    pub state_machine_path: String,
 }
 
 /// Resolves `ProjectConfig.prefab_catalog`/`.asset_catalog` against their convention-path
@@ -102,24 +103,30 @@ pub struct ResolvedCatalogPaths {
 /// report convention-path results with zero diagnostic (validate and the runtime both already fail
 /// loudly). The stderr warning names the file and the parse error (stdout `--json` stays clean).
 pub fn resolve_catalog_paths(project_dir: &Path) -> ResolvedCatalogPaths {
-    let config: Option<ProjectConfig> = find_project_ron(project_dir)
-        .and_then(|name| silent_parse(project_dir, &name));
+    // Single `find_project_ron` call and single parse, reusing `silent_parse` (which enables RON's
+    // IMPLICIT_SOME extension via `ron_from_str`) for both the config value AND the parse-failure
+    // check below. A previous version called `find_project_ron` a second time and re-parsed with
+    // plain `ron::de::from_str` (no IMPLICIT_SOME) just to detect a parse failure -- since every
+    // shipped `.project.ron` writes an `Option<String>` field like `state_machine_path` as a bare
+    // string, that second parser rejected every single one, producing a false-positive "failed to
+    // parse" warning on every project and a doubled `find_project_ron` warning on top of it
+    // (debug-detective finding, rules_to_state_machine_consolidation's post-implementation review,
+    // 2026-09-28 -- confirmed live by running the built CLI: `stats` warned on all 15 shipped
+    // projects despite `validate` exiting 0 on every one of them).
+    let project_ron_name = find_project_ron(project_dir);
+    let config: Option<ProjectConfig> = project_ron_name.as_ref()
+        .and_then(|name| silent_parse(project_dir, name));
     // `Some("")` (an accidentally-emptied field) is treated the same as unset, not as a literal
     // empty relative path -- `project_dir.join("")` resolves to the project directory itself,
     // which `.exists()` (a directory does) but can't be read as a file, producing a confusing
     // "" not found" error with the field name silently dropped (debug-detective finding,
     // `feature/cli_query_stats_paths`'s review, 2026-09-11).
-    if let Some(project_ron_name) = find_project_ron(project_dir) {
-        let full = project_dir.join(&project_ron_name);
-        if full.exists() {
-            if let Ok(content) = std::fs::read_to_string(&full) {
-                if ron::de::from_str::<ProjectConfig>(&content).is_err() {
-                    eprintln!(
-                        "Warning: {} exists but failed to parse — query/stats will use convention paths",
-                        project_ron_name
-                    );
-                }
-            }
+    if let Some(name) = &project_ron_name {
+        if config.is_none() {
+            eprintln!(
+                "Warning: {} exists but failed to parse — query/stats will use convention paths",
+                name
+            );
         }
     }
     ResolvedCatalogPaths {
@@ -131,5 +138,9 @@ pub fn resolve_catalog_paths(project_dir: &Path) -> ResolvedCatalogPaths {
             .and_then(|c| c.asset_catalog.clone())
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "assets.ron".to_string()),
+        state_machine_path: config.as_ref()
+            .and_then(|c| c.state_machine_path.clone())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "logic/state_machine.ron".to_string()),
     }
 }

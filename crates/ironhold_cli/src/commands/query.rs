@@ -456,7 +456,8 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
 
 fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
     // Only state_machine.ron is supported; rules.ron has been removed.
-    let fsm: Option<StateMachineAsset> = silent_parse(project_dir, "logic/state_machine.ron");
+    let state_machine_path = resolve_catalog_paths(project_dir).state_machine_path;
+    let fsm: Option<StateMachineAsset> = silent_parse(project_dir, &state_machine_path);
 
     if fsm.is_none() {
         if mode.json {
@@ -483,7 +484,7 @@ fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std:
             .collect();
         let arr = serde_json::json!([{
             "type": "state_machine",
-            "path": "logic/state_machine.ron",
+            "path": state_machine_path,
             "initial_state": fsm.initial_state,
             "states": states_json,
             "transitions": fsm.transitions.len(),
@@ -503,7 +504,8 @@ fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std:
         format!(", {} global binding{}", fsm.global_on.len(), if fsm.global_on.len() == 1 { "" } else { "s" })
     };
     println!(
-        "  logic/state_machine.ron  initial:{}  ({} states, {} transitions{})",
+        "  {}  initial:{}  ({} states, {} transitions{})",
+        state_machine_path,
         fsm.initial_state,
         fsm.states.len(),
         fsm.transitions.len(),
@@ -621,10 +623,10 @@ fn collect_logic(project_dir: &Path) -> LogicCollection {
     let mut actions = Vec::new();
     let mut events = Vec::new();
 
-    // state_machine.ron
-    if let Some(fsm) = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron") {
-        let src = "logic/state_machine.ron";
-        collect_fsm(&fsm, src, &mut actions, &mut events);
+    // state_machine.ron (or wherever `state_machine_path` points, defaulting to the convention path)
+    let state_machine_path = resolve_catalog_paths(project_dir).state_machine_path;
+    if let Some(fsm) = silent_parse::<StateMachineAsset>(project_dir, &state_machine_path) {
+        collect_fsm(&fsm, &state_machine_path, &mut actions, &mut events);
     }
 
     // behavior files

@@ -1590,7 +1590,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                                     message: format!(
                                         "ActionBar {:?} slot {:?} and ActionBar {:?} slot {:?} both resolve to {:?} — \
                                          the intent/cooldown pipeline is keyed by slot_key alone, scene-wide, so a \
-                                         rules.ron rule handling one bar's intent on this key will also silently \
+                                         state_machine.ron rule handling one bar's intent on this key will also silently \
                                          suppress the other bar's pending slot",
                                         prev_bar, prev_key, bar.id, slot.key, kc
                                     ),
@@ -2629,8 +2629,8 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
             errors.push(CrossFileError {
                 source_file: source.to_string(),
                 message: format!(
-                    "{describe} fires {event:?} {verb}, but no rule/transition/binding in \
-                     rules.ron, state_machine.ron, or a behavior file handles it — {consequence}"
+                    "{describe} fires {event:?} {verb}, but no binding/transition in \
+                     state_machine.ron or a behavior file handles it — {consequence}"
                 ),
                 error_type: "unreachable_trigger",
             });

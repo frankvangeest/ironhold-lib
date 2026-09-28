@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
-use crate::schema::Action;
 use crate::capabilities::action_bar::{CurrentTarget, HandledIntentSlots};
-use super::{LoadedStateMachine, BehaviorHandle, EntityFsmState, SpawnId};
+use super::{BehaviorHandle, EntityFsmState, SpawnId};
 
 use crate::runtime::scene_manager::action_substitution::{rewrite_self, rewrite_target, intent_slot_key, scene_path_stem};
 

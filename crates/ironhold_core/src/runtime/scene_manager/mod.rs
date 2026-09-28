@@ -26,7 +26,6 @@ pub use project_loader::*;
 pub use scene_loader::*;
 pub use entity_spawner::*;
 pub use action_executor::*;
-pub use action_substitution::*;
 pub use fsm_interpreter::*;
 pub use entity_fsm_interpreter::*;
 
@@ -37,8 +36,9 @@ pub use entity_fsm_interpreter::*;
 #[derive(Resource, Default)]
 pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 
-/// The FSM loaded for the current project. `None` when the project uses `rules.ron` instead.
-/// Populated from `logic/state_machine.ron` when `state_machine_path` is set in the project config.
+/// The FSM loaded for the current project. `None` when the project has no `state_machine_path`
+/// set at all (a project with no logic file). Populated from `logic/state_machine.ron` (or
+/// wherever `state_machine_path` points) when set in the project config.
 #[derive(Resource, Default, Clone)]
 pub struct LoadedStateMachine(pub Option<crate::schema::project::StateMachineAsset>);
 

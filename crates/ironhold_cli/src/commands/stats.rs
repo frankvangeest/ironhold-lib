@@ -116,17 +116,14 @@ fn collect(project_dir: &Path) -> ProjectStats {
     let catalog_audio_count = asset_catalog.as_ref().map(|c| c.audio.len()).unwrap_or(0);
     let catalog_decal_count = asset_catalog.as_ref().map(|c| c.decals.len()).unwrap_or(0);
 
-    let state_count = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron")
-        .map(|s| s.states.len())
-        .unwrap_or(0);
-
-    let transition_count = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron")
-        .map(|s| s.transitions.len())
-        .unwrap_or(0);
-
-    let global_on_count = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron")
-        .map(|s| s.global_on.len())
-        .unwrap_or(0);
+    // Parsed once and reused for all three counts below -- previously parsed the same file three
+    // times, and hardcoded the convention-path literal instead of resolving `state_machine_path`
+    // (system-architect finding, rules_to_state_machine_consolidation's post-implementation
+    // review, 2026-09-28).
+    let state_machine: Option<StateMachineAsset> = silent_parse(project_dir, &paths.state_machine_path);
+    let state_count = state_machine.as_ref().map(|s| s.states.len()).unwrap_or(0);
+    let transition_count = state_machine.as_ref().map(|s| s.transitions.len()).unwrap_or(0);
+    let global_on_count = state_machine.as_ref().map(|s| s.global_on.len()).unwrap_or(0);
 
     let behavior_count = glob_dir(project_dir, "behaviors", ".behavior.ron").len();
 
