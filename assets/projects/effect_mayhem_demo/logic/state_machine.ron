@@ -1,154 +1,72 @@
 (
-
     schema_version: 1,
-
     global_on: [
-
-
-
         // ── Warmup + init ──────────────────────────────────────────────────────
-
         // Fires off-screen to pre-compile all pipeline variants before the player
-
         // can interact. Initialises the mayhem counter to "0".
-
         //
-
         // Pipeline variants covered:
-
         //   1. Additive sphere (no sprite)      → explosion_burst
-
         //   2. Additive sprite (StandardMaterial + Add) → star_rain
-
         //   3. Blend sprite   (StandardMaterial + Blend) → campfire_smoke
-
         //   4. Flame material (PoolFlameMaterial + Add)  → campfire_fire (both layers)
-
         (
-
             event: "scene.ready:main",
-
             do_actions: [
-
                 SetVariable("mayhem_count", "0"),
-
                 SpawnEffect(key: "explosion_burst", position: (0.0, -100.0, 0.0)),
-
                 SpawnEffect(key: "star_rain",       position: (0.0, -100.0, 0.0)),
-
                 SpawnEffect(key: "campfire_smoke",  position: (0.0, -100.0, 0.0)),
-
                 SpawnEffect(key: "campfire_fire",   position: (0.0, -100.0, 0.0)),
-
             ],
-
         ),
-
-
-
         // ── MAYHEM button ──────────────────────────────────────────────────────
-
         // Fires 9 simultaneous bursts at positions spread across the arena,
-
         // then increments the counter label.
-
         (
-
             event: "ui.button_pressed:btn_mayhem",
-
             do_actions: [
-
                 SpawnEffect(key: "explosion_burst", position: ( 0.0, 0.5,  0.0)),
-
                 SpawnEffect(key: "frost_burst",     position: ( 8.0, 0.5, -8.0)),
-
                 SpawnEffect(key: "heal_pulse",      position: (-8.0, 0.5, -8.0)),
-
                 SpawnEffect(key: "magic_nova",      position: ( 8.0, 0.5,  8.0)),
-
                 SpawnEffect(key: "void_nova",       position: (-8.0, 0.5,  8.0)),
-
                 SpawnEffect(key: "ember_shower",    position: ( 0.0, 0.5, -12.0)),
-
                 SpawnEffect(key: "star_rain",       position: ( 0.0, 8.0,  0.0)),
-
                 SpawnEffect(key: "lightning_arc",   position: (10.0, 0.5, -10.0)),
-
                 SpawnEffect(key: "lightning_arc",   position: (-10.0, 0.5, -10.0)),
-
                 IncrementVariable("mayhem_count", 1),
-
             ],
-
         ),
-
-
-
         // ── Trigger zones ──────────────────────────────────────────────────────
-
         (
-
             event: "entity.entered:explosion_pad_01",
-
             do_actions: [ SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01") ],
-
         ),
-
         (
-
             event: "entity.entered:ember_geyser_01",
-
             do_actions: [ SpawnEffect(key: "ember_shower", entity: "ember_geyser_01") ],
-
         ),
-
-
-
         // ── Interactables ──────────────────────────────────────────────────────
-
         (
-
             event: "entity.interacted:frost_crystal_01",
-
             do_actions: [ SpawnEffect(key: "frost_burst", entity: "frost_crystal_01") ],
-
         ),
-
         (
-
             event: "entity.interacted:heal_fountain_01",
-
             do_actions: [ SpawnEffect(key: "heal_pulse", entity: "heal_fountain_01") ],
-
         ),
-
         (
-
             event: "entity.interacted:void_altar_01",
-
             do_actions: [ SpawnEffect(key: "void_nova", entity: "void_altar_01") ],
-
         ),
-
         (
-
             event: "entity.interacted:magic_rune_w",
-
             do_actions: [ SpawnEffect(key: "magic_nova", entity: "magic_rune_w") ],
-
         ),
-
         (
-
             event: "entity.interacted:magic_rune_e",
-
             do_actions: [ SpawnEffect(key: "magic_nova", entity: "magic_rune_e") ],
-
         ),
-
-
-
     ],
-
 )
-
