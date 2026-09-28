@@ -1,12 +1,13 @@
 ﻿use bevy::prelude::*;
 use ironhold_core::GameVariables;
-use ironhold_core::runtime::{GameEvent, LoadedRules, SpawnId, SpawnRegistry, BehaviorHandle, EntityFsmState};
-use ironhold_core::schema::{Action, LogicRule, StateMachineAsset, FsmState, FsmTransition};
+use ironhold_core::runtime::{GameEvent, SpawnId, SpawnRegistry, BehaviorHandle, EntityFsmState};
+use ironhold_core::schema::{Action, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
 use ironhold_core::capabilities::player::CharacterController;
 
 mod support;
 use support::setup_test_app;
 
+/// Helper: build a StateMachineAsset with two states ("a" and "b") and one transition.
 fn make_two_state_behavior(app: &mut App) -> Handle<StateMachineAsset> {
     let fsm = StateMachineAsset {
         schema_version: 1,
@@ -25,6 +26,22 @@ fn make_two_state_behavior(app: &mut App) -> Handle<StateMachineAsset> {
         global_on: vec![],
     };
     app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm)
+}
+
+/// Helper: build a StateMachineAsset with a global_on rule for intent slot testing.
+fn make_intent_test_fsm() -> StateMachineAsset {
+    StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "intent.slot.1:player_01".to_string(),
+                do_actions: vec![],
+            },
+        ],
+    }
 }
 
 fn intent_test_player_controller() -> CharacterController {
@@ -344,23 +361,27 @@ fn test_intent_slot_no_rule_fires_slot_do_actions() {
 #[test]
 fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
     use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::runtime::LoadedStateMachine;
 
     let mut app = setup_test_app();
     app.update();
 
     // Register an intent rule that fires "rule_fired" for slot 1 on player_01
-    {
-        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
-        rules.0 = vec![
-            LogicRule {
-                on: "intent.slot.1:player_01".to_string(),
-                when: None,
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "intent.slot.1:player_01".to_string(),
                 do_actions: vec![
                     Action::SetVariable("intent_test".to_string(), "rule_fired".to_string()),
                 ],
-            }
-        ];
-    }
+            },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     // Slot 1: would set "slot_fired" — this must be suppressed
     app.world_mut().spawn(ActionSlotUi {
@@ -394,18 +415,24 @@ fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
 #[test]
 fn test_intent_slot_rule_match_does_not_start_cooldown() {
     use ironhold_core::capabilities::action_bar::{ActionSlotUi, CooldownMap};
+    use ironhold_core::runtime::LoadedStateMachine;
 
     let mut app = setup_test_app();
     app.update();
 
-    {
-        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
-        rules.0 = vec![LogicRule {
-            on: "intent.slot.1:player_01".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("intercepted".to_string())],
-        }];
-    }
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "intent.slot.1:player_01".to_string(),
+                do_actions: vec![Action::Log("intercepted".to_string())],
+            },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
@@ -436,6 +463,7 @@ fn test_intent_slot_rule_match_does_not_start_cooldown() {
 #[test]
 fn test_activated_fires_only_on_commit() {
     use ironhold_core::capabilities::action_bar::ActionSlotUi;
+    use ironhold_core::runtime::LoadedStateMachine;
 
     // ── Case A: rule suppresses → activated must not clear the status variable ──
     let mut app = setup_test_app();
@@ -446,23 +474,25 @@ fn test_activated_fires_only_on_commit() {
         let mut vars = app.world_mut().resource_mut::<GameVariables>();
         vars.0.insert("status".to_string(), "silenced".to_string());
     }
-    {
-        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
-        rules.0 = vec![
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
             // intercept the intent
-            LogicRule {
-                on: "intent.slot.1:player_01".to_string(),
-                when: None,
+            FsmEventBinding {
+                event: "intent.slot.1:player_01".to_string(),
                 do_actions: vec![Action::Log("intercepted".to_string())],
             },
             // would clear status on activated — must NOT fire
-            LogicRule {
-                on: "action_bar.activated:1".to_string(),
-                when: None,
+            FsmEventBinding {
+                event: "action_bar.activated:1".to_string(),
                 do_actions: vec![Action::SetVariable("status".to_string(), "".to_string())],
             },
-        ];
-    }
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
@@ -496,14 +526,20 @@ fn test_activated_fires_only_on_commit() {
         let mut vars = app2.world_mut().resource_mut::<GameVariables>();
         vars.0.insert("status".to_string(), "silenced".to_string());
     }
-    {
-        let mut rules = app2.world_mut().resource_mut::<LoadedRules>();
-        rules.0 = vec![LogicRule {
-            on: "action_bar.activated:1".to_string(),
-            when: None,
-            do_actions: vec![Action::SetVariable("status".to_string(), "".to_string())],
-        }];
-    }
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "action_bar.activated:1".to_string(),
+                do_actions: vec![Action::SetVariable("status".to_string(), "".to_string())],
+            },
+        ],
+    };
+    let fsm_handle = app2.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
+    app2.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
 
     app2.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
@@ -852,6 +888,7 @@ fn test_slot_with_unmatched_owner_player_never_fires() {
 fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only() {
     use ironhold_core::capabilities::action_bar::{ActionSlotUi, CurrentTarget};
     use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+    use ironhold_core::runtime::LoadedStateMachine;
 
     let mut app = setup_test_app();
     app.update();
@@ -861,14 +898,20 @@ fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only
     // interpreter's rule-override path, not the targeting capability).
     app.world_mut().insert_resource(CurrentTarget(Some("primary_target".to_string())));
 
-    {
-        let mut rules = app.world_mut().resource_mut::<LoadedRules>();
-        rules.0 = vec![LogicRule {
-            on: "intent.slot.1:player_02".to_string(),
-            when: None,
-            do_actions: vec![Action::SetVariable("rule_target_seen".to_string(), "{target}".to_string())],
-        }];
-    }
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding {
+                event: "intent.slot.1:player_02".to_string(),
+                do_actions: vec![Action::SetVariable("rule_target_seen".to_string(), "{target}".to_string())],
+            },
+        ],
+    };
+    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),

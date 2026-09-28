@@ -1,9 +1,16 @@
-﻿use bevy::prelude::*;
-use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, LoadedRules, LoadedStateMachine, LogicState};
-use ironhold_core::schema::{AppState, Action, LogicRule, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
+use bevy::prelude::*;
+use ironhold_core::runtime::{UiEvent, ActionQueue, SceneEvent, LoadedStateMachine, LogicState};
+use ironhold_core::schema::{AppState, Action, StateMachineAsset, FsmState, FsmTransition, FsmEventBinding};
 
 mod support;
 use support::setup_test_app;
+
+/// Sentinel written to `DebugState.last_action` before a negative-assertion phase of a test, so
+/// "nothing fired" can be verified as "the sentinel is still there" rather than accidentally
+/// passing because a *previous* phase's real action is still sitting in `last_action` unchanged
+/// (a stale value in a single mutable slot reads the same either way, so the two cases are only
+/// distinguishable if the slot is reset to something neither phase would ever produce).
+const RESET_MARKER: &str = "__test_reset_marker__";
 
 /// Helper: build a minimal StateMachineAsset with two states ("a" and "b") and one transition.
 fn make_test_fsm() -> StateMachineAsset {
@@ -48,116 +55,50 @@ fn make_test_fsm() -> StateMachineAsset {
 #[test]
 fn test_action_to_state_transition() {
     let mut app = setup_test_app();
-       
+
     // 1. Run once to handle Startup
     app.update();
-    
-    // 2. Transition to InGame 
+
+    // 2. Transition to InGame
     app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::InGame);
     app.update(); // Set transition
     app.update(); // Apply transition
-    
+
     {
         let state = app.world().resource::<State<AppState>>();
         assert_eq!(*state.get(), AppState::InGame);
     }
-    
+
     // 3. Manually push an action
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("scenes/tests/another_scene.ron".to_string()));
-    
+    app.world_mut().resource_mut::<ActionQueue>().0.push_back(Action::LoadScene("scenes/tests/another_scene.ron".to_string()));
+
     // 4. Run executor
     app.update(); // Executor sets NextState
     app.update(); // Apply transition
-    
+
     // 5. Verify state transitioned to LoadingScene
     let state = app.world().resource::<State<AppState>>();
     assert_eq!(*state.get(), AppState::LoadingScene);
 }
 
 #[test]
-fn test_enter_state_action_updates_logic_state() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::EnterState("playing".to_string()));
-    app.update(); // executor fires
-
-    let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "playing", "EnterState should update LogicState");
-}
-
-#[test]
-fn test_state_gated_rule_only_fires_in_matching_state() {
-    let mut app = setup_test_app();
-    app.update();
-
-    // Rule fires EnterState("triggered") only while in the "active" logic state.
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "ui.button_pressed:do_thing".to_string(),
-            when: Some("active".to_string()),
-            do_actions: vec![Action::EnterState("triggered".to_string())],
-        }
-    ]));
-
-    // Fire event while in the wrong state ("") â€” rule must be suppressed.
-    app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("do_thing".to_string()));
-    app.update();
-    {
-        let state = app.world().resource::<LogicState>();
-        assert_eq!(state.0, "", "Rule should be suppressed in non-matching state");
-    }
-
-    // Transition to the matching state, then fire the event again.
-    app.world_mut().resource_mut::<ActionQueue>()
-        .push(Action::EnterState("active".to_string()));
-    app.update();
-
-    app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("do_thing".to_string()));
-    app.update();
-
-    let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "triggered", "Rule should fire in the matching state");
-}
-
-#[test]
-fn test_fsm_in_state_on_binding_fires() {
+fn test_global_on_fires_action() {
     let mut app = setup_test_app();
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
+    // Fire a global event
     app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
+        .write(UiEvent::ButtonPressed("global_action".to_string()));
     app.update();
 
+    // action_executor_system runs chained right after the interpreter in the same Update pass,
+    // so the queue is already drained by the time we get here -- check DebugState.last_action
+    // instead (same pattern as every other action-firing assertion in this file).
     let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"in_state_a_fired\")",
-        "In-state on binding should fire while in matching state");
-}
-
-#[test]
-fn test_fsm_in_state_on_binding_suppressed_in_wrong_state() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
-    // Start in "b" â€” the "in_state_a" binding belongs to "a".
-    app.world_mut().insert_resource(LogicState("b".to_string()));
-
-    app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
-    app.update();
-
-    let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "b", "State must not change");
-    let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_ne!(debug.last_action, "Log(\"in_state_a_fired\")",
-        "In-state on binding must be suppressed in wrong state");
+    assert_eq!(debug.last_action, "Log(\"global_fired\")");
 }
 
 #[test]
@@ -168,19 +109,50 @@ fn test_fsm_transition_fires_exit_enter_and_advances_state() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    // Trigger the transition a â†’ b.
+    // Fire event that triggers transition a -> b
     app.world_mut().resource_mut::<Messages<UiEvent>>()
         .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
 
-    // State must have advanced to "b".
     let state = app.world().resource::<LogicState>();
     assert_eq!(state.0, "b", "Transition should advance LogicState to the target state");
 
-    // The last action processed by the executor should be the entry action for "b".
+    // FIFO exit->entry: last executed action should be the entry action of state b.
     let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"entered_b\")",
-        "Entry actions for the new state should fire after the transition");
+    assert_eq!(debug.last_action, "Log(\"entered_b\")");
+}
+
+#[test]
+fn test_state_gated_on_binding_only_fires_in_matching_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // In-state binding in "a" should not fire when in "b"
+    app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    // Fire event for state "a" binding while in "a" - should fire
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"in_state_a_fired\")");
+
+    // Change state to "b" - should NOT fire. Reset the sentinel first: `last_action` is a single
+    // mutable slot, so if nothing fires it just stays at whatever the PREVIOUS phase left there
+    // (the assertion above's own value) -- indistinguishable from "correctly suppressed" without
+    // resetting to a value neither phase would ever produce.
+    app.world_mut().resource_mut::<LogicState>().0 = "b".to_string();
+    app.world_mut().resource_mut::<ironhold_core::DebugState>().last_action = RESET_MARKER.to_string();
+
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, RESET_MARKER,
+        "In-state on binding must be suppressed in wrong state");
 }
 
 #[test]
@@ -189,7 +161,7 @@ fn test_fsm_transition_does_not_fire_from_wrong_state() {
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
-    // Start in "b" â€” transition is from "a" only.
+    // Start in "b" -- transition is from "a" only.
     app.world_mut().insert_resource(LogicState("b".to_string()));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -201,174 +173,80 @@ fn test_fsm_transition_does_not_fire_from_wrong_state() {
 }
 
 #[test]
-fn test_fsm_any_state_transition_fires_from_any_state() {
-    let mut fsm = make_test_fsm();
-    // Add an any-state transition to "b".
-    fsm.transitions.push(FsmTransition {
-        from: None,
-        on: "ui.button_pressed:anywhere_go_b".to_string(),
-        to: "b".to_string(),
-    });
-
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
-    // Start in "b" â€” the any-state transition should still fire.
-    app.world_mut().insert_resource(LogicState("b".to_string()));
-
-    app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("anywhere_go_b".to_string()));
-    app.update();
-
-    let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "b", "Any-state transition (from: None) should fire from any state");
-}
-
-#[test]
-fn test_fsm_global_on_fires_regardless_of_state() {
+fn test_fsm_in_state_on_binding_suppressed_in_wrong_state() {
     let mut app = setup_test_app();
     app.update();
 
     app.world_mut().insert_resource(LoadedStateMachine(Some(make_test_fsm())));
+    // Start in "b" -- the "in_state_a" binding belongs to "a".
     app.world_mut().insert_resource(LogicState("b".to_string()));
+    app.world_mut().resource_mut::<ironhold_core::DebugState>().last_action = RESET_MARKER.to_string();
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("global_action".to_string()));
+        .write(UiEvent::ButtonPressed("in_state_a".to_string()));
     app.update();
 
-    // State must not change; global_on fires only the declared action.
     let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "b", "global_on must not change state");
+    assert_eq!(state.0, "b", "State must not change");
     let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"global_fired\")",
-        "global_on binding should fire from any state");
+    assert_eq!(debug.last_action, RESET_MARKER,
+        "In-state on binding must be suppressed in wrong state");
 }
 
 #[test]
-fn test_rules_no_match_does_not_queue_action() {
+fn test_transition_advances_logic_state() {
     let mut app = setup_test_app();
     app.update();
 
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "ui.button_pressed:something_else".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("should_not_fire".to_string())],
-        },
-    ]));
+    let fsm = make_test_fsm();
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    // Fire transition event
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
+    app.update();
+
+    // LogicState should be updated
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b", "Transition should advance LogicState");
+}
+
+#[test]
+fn test_global_on_fires_before_state_transition() {
+    let mut app = setup_test_app();
+    app.update();
+
+    // "b" has an entry action, so the LAST action executed proves ordering: if global_on's action
+    // is still the last thing executed, the transition's entry action never ran (or ran first and
+    // got overwritten) -- either way this test would fail, so asserting "entered_b" specifically
+    // proves global_on fired *before* the transition's entry action within the same frame, not
+    // merely that "something" fired.
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState { name: "a".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "b".to_string(), entry_actions: vec![Action::Log("entered_b".to_string())], exit_actions: vec![], on: vec![] },
+        ],
+        transitions: vec![
+            FsmTransition { from: Some("a".to_string()), on: "ui.button_pressed:go_b".to_string(), to: "b".to_string() },
+        ],
+        global_on: vec![
+            FsmEventBinding { event: "ui.button_pressed:go_b".to_string(), do_actions: vec![Action::Log("global_fired_first".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("unmatched_event".to_string()));
-    app.update();
-
-    let queue = app.world().resource::<ActionQueue>();
-    assert!(queue.0.is_empty(), "No rule matched â€” queue must stay empty");
-}
-
-#[test]
-fn test_rules_scene_event_ready_triggers_action() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "scene.ready:main".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("scene_ready_fired".to_string())],
-        },
-    ]));
-
-    // Interpreter strips path to stem "main" via scene_path_stem.
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Ready("projects/test/scenes/main.scene.ron".to_string()));
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
 
     let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"scene_ready_fired\")",
-        "scene.ready:main rule should fire on SceneEvent::Ready for main scene");
-}
-
-#[test]
-fn test_rules_scene_event_loaded_triggers_action() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "scene.loaded:main".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("scene_loaded_fired".to_string())],
-        },
-    ]));
-
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Loaded("projects/test/scenes/main.scene.ron".to_string()));
-    app.update();
-
-    let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"scene_loaded_fired\")",
-        "scene.loaded:main rule should fire on SceneEvent::Loaded before entities are spawned");
-}
-
-#[test]
-fn test_rules_scene_event_requested_triggers_action() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "scene.requested:main".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("scene_requested_fired".to_string())],
-        },
-    ]));
-
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Requested("projects/test/scenes/main.scene.ron".to_string()));
-    app.update();
-
-    let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"scene_requested_fired\")",
-        "scene.requested:main rule should fire on SceneEvent::Requested");
-}
-
-#[test]
-fn test_rules_scene_event_unloading_triggers_action() {
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().insert_resource(LoadedRules(vec![
-        LogicRule {
-            on: "scene.unloading:main".to_string(),
-            when: None,
-            do_actions: vec![Action::Log("scene_unloading_fired".to_string())],
-        },
-    ]));
-
-    app.world_mut().resource_mut::<Messages<SceneEvent>>()
-        .write(SceneEvent::Unloading("projects/test/scenes/main.scene.ron".to_string()));
-    app.update();
-
-    let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"scene_unloading_fired\")",
-        "scene.unloading:main rule should fire on SceneEvent::Unloading");
-}
-
-#[test]
-fn test_action_queue_is_fifo() {
-    // Actions pushed first must execute first.
-    let mut app = setup_test_app();
-    app.update();
-
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("first".to_string()));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("second".to_string()));
-    app.world_mut().resource_mut::<ActionQueue>().push(Action::Log("third".to_string()));
-    app.update();
-
-    let debug = app.world().resource::<ironhold_core::DebugState>();
-    assert_eq!(debug.last_action, "Log(\"third\")",
-        "FIFO: last pushed action should be last executed (last_action reflects final execution)");
+    assert_eq!(debug.last_action, "Log(\"entered_b\")",
+        "global_on's action must execute before the transition's entry action within the same frame");
+    assert_eq!(app.world().resource::<LogicState>().0, "b", "transition should still advance state");
 }
 
 #[test]
@@ -422,7 +300,7 @@ fn test_fsm_exit_before_entry_fifo_order() {
     // last_action reflects the final action executed.
     let debug = app.world().resource::<ironhold_core::DebugState>();
     assert_eq!(debug.last_action, "Log(\"entry_b_2\")",
-        "FIFO exitâ†’entry: last executed action should be the second entry action of state b");
+        "FIFO exit->entry: last executed action should be the second entry action of state b");
 }
 
 #[test]
@@ -470,6 +348,114 @@ fn test_fsm_exit_action_fires_on_transition() {
     let debug = app.world().resource::<ironhold_core::DebugState>();
     assert_eq!(debug.last_action, "Log(\"exited_a\")",
         "Exit action should be the last executed action when target state has no entry actions");
+}
+
+// ── SceneEvent tests ──────────────────────────────────────────────────────────
+//
+// All scene-event payloads below use a realistic scene-path shape
+// ("projects/test/scenes/{stem}.scene.ron"), not a bare stem string -- a `scene_path_stem`
+// implementation that just echoed its input verbatim (the bug fixed in 7ef4df9) would still pass
+// tests that fed it an already-bare stem, which is exactly why that regression shipped with zero
+// test coverage catching it.
+
+#[test]
+fn test_scene_ready_event_fires_actions() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding { event: "scene.ready:test_scene".to_string(), do_actions: vec![Action::Log("scene_ready_fired".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Ready("projects/test/scenes/test_scene.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_ready_fired\")");
+}
+
+#[test]
+fn test_scene_loaded_event_fires_actions() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding { event: "scene.loaded:test_scene".to_string(), do_actions: vec![Action::Log("scene_loaded_fired".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Loaded("projects/test/scenes/test_scene.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_loaded_fired\")");
+}
+
+#[test]
+fn test_scene_requested_event_fires_actions() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding { event: "scene.requested:test_scene".to_string(), do_actions: vec![Action::Log("scene_requested_fired".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Requested("projects/test/scenes/test_scene.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_requested_fired\")");
+}
+
+#[test]
+fn test_scene_unloading_event_fires_actions() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "".to_string(),
+        states: vec![],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding { event: "scene.unloading:test_scene".to_string(), do_actions: vec![Action::Log("scene_unloading_fired".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("".to_string()));
+
+    app.world_mut().resource_mut::<Messages<SceneEvent>>()
+        .write(SceneEvent::Unloading("projects/test/scenes/test_scene.scene.ron".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"scene_unloading_fired\")");
 }
 
 #[test]
@@ -548,7 +534,7 @@ fn test_fsm_no_loaded_state_machine_is_noop() {
     let mut app = setup_test_app();
     app.update();
 
-    // Explicit None â€” no FSM loaded.
+    // Explicit None -- no FSM loaded.
     app.world_mut().insert_resource(LoadedStateMachine(None));
 
     app.world_mut().resource_mut::<Messages<UiEvent>>()
@@ -556,15 +542,38 @@ fn test_fsm_no_loaded_state_machine_is_noop() {
     app.update(); // must not panic
 
     let queue = app.world().resource::<ActionQueue>();
-    assert!(queue.0.is_empty(), "No FSM loaded â€” action queue must remain empty");
+    assert!(queue.0.is_empty(), "No FSM loaded -- action queue must remain empty");
     let state = app.world().resource::<LogicState>();
     assert_eq!(state.0, "", "LogicState must remain unchanged when no FSM is loaded");
 }
 
+// ── ActionQueue FIFO ordering ─────────────────────────────────────────────────
+
 #[test]
-fn test_fsm_only_first_matching_transition_fires() {
-    // Two transitions on the same event from state "a": first â†’ "b", second â†’ "c".
-    // The FSM interpreter uses `.find()` so only the first match executes.
+fn test_action_queue_is_fifo() {
+    // Actions pushed first must execute first.
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+    queue.0.push_back(Action::Log("first".to_string()));
+    queue.0.push_back(Action::Log("second".to_string()));
+    queue.0.push_back(Action::Log("third".to_string()));
+
+    app.update(); // executor runs
+
+    let queue = app.world().resource::<ActionQueue>();
+    assert!(queue.0.is_empty(), "Queue should be empty after executor runs");
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"third\")",
+        "FIFO: last pushed action should be last executed (last_action reflects final execution)");
+}
+
+#[test]
+fn test_multiple_transitions_same_frame_only_first_fires() {
+    let mut app = setup_test_app();
+    app.update();
+
     let fsm = StateMachineAsset {
         schema_version: 1,
         initial_state: "a".to_string(),
@@ -574,41 +583,98 @@ fn test_fsm_only_first_matching_transition_fires() {
             FsmState { name: "c".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
         ],
         transitions: vec![
-            FsmTransition {
-                from: Some("a".to_string()),
-                on: "ui.button_pressed:go".to_string(),
-                to: "b".to_string(),
-            },
-            FsmTransition {
-                from: Some("a".to_string()),
-                on: "ui.button_pressed:go".to_string(),
-                to: "c".to_string(),
-            },
+            FsmTransition { from: Some("a".to_string()), on: "ui.button_pressed:go_b".to_string(), to: "b".to_string() },
+            FsmTransition { from: Some("a".to_string()), on: "ui.button_pressed:go_b".to_string(), to: "c".to_string() },
         ],
         global_on: vec![],
     };
-
-    let mut app = setup_test_app();
-    app.update();
-
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    app.world_mut()
-        .resource_mut::<Messages<UiEvent>>()
-        .write(UiEvent::ButtonPressed("go".to_string()));
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
+    app.update();
+
+    // Only first matching transition should fire
+    let state = app.world().resource::<LogicState>();
+    assert_eq!(state.0, "b", "Only first matching transition should fire");
+}
+
+#[test]
+fn test_transition_with_no_from_matches_any_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState { name: "a".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "b".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+        ],
+        transitions: vec![
+            FsmTransition { from: None, on: "ui.button_pressed:go_b".to_string(), to: "b".to_string() },
+        ],
+        global_on: vec![],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("go_b".to_string()));
     app.update();
 
     let state = app.world().resource::<LogicState>();
-    assert_eq!(state.0, "b",
-        "Only the first matching transition should fire; second transition to 'c' must be ignored");
+    assert_eq!(state.0, "b", "Transition with no from should match any state");
+}
+
+#[test]
+fn test_global_on_fires_regardless_of_state() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let fsm = StateMachineAsset {
+        schema_version: 1,
+        initial_state: "a".to_string(),
+        states: vec![
+            FsmState { name: "a".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+            FsmState { name: "b".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![] },
+        ],
+        transitions: vec![],
+        global_on: vec![
+            FsmEventBinding { event: "ui.button_pressed:global".to_string(), do_actions: vec![Action::Log("global_works".to_string())] },
+        ],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LogicState("a".to_string()));
+
+    // Should fire in any state
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("global".to_string()));
+    app.update();
+    assert_eq!(app.world().resource::<LogicState>().0, "a");
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"global_works\")");
+
+    // Change state, should still fire. Reset the sentinel first so this second phase's assertion
+    // proves a fresh fire happened, not just that the first phase's value is still sitting there.
+    app.world_mut().resource_mut::<LogicState>().0 = "b".to_string();
+    app.world_mut().resource_mut::<ironhold_core::DebugState>().last_action = RESET_MARKER.to_string();
+
+    app.world_mut().resource_mut::<Messages<UiEvent>>()
+        .write(UiEvent::ButtonPressed("global".to_string()));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.last_action, "Log(\"global_works\")",
+        "global_on must fire again from state \"b\", not merely retain state \"a\"'s stale result");
 }
 
 #[test]
 fn test_fsm_state_advance_visible_in_same_frame() {
     // Two events arrive in the same frame.
-    // Event 1 "go_b" fires the aâ†’b transition and advances logic_state to "b" immediately.
-    // Event 2 "go_c" fires the bâ†’c transition because the interpreter already sees state "b".
+    // Event 1 "go_b" fires the a->b transition and advances logic_state to "b" immediately.
+    // Event 2 "go_c" fires the b->c transition because the interpreter already sees state "b".
     let fsm = StateMachineAsset {
         schema_version: 1,
         initial_state: "a".to_string(),
@@ -638,7 +704,7 @@ fn test_fsm_state_advance_visible_in_same_frame() {
     app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
     app.world_mut().insert_resource(LogicState("a".to_string()));
 
-    // Both events in the same frame â€” first advances state so second can fire.
+    // Both events in the same frame -- first advances state so second can fire.
     app.world_mut()
         .resource_mut::<Messages<UiEvent>>()
         .write(UiEvent::ButtonPressed("go_b".to_string()));
@@ -650,4 +716,26 @@ fn test_fsm_state_advance_visible_in_same_frame() {
     let state = app.world().resource::<LogicState>();
     assert_eq!(state.0, "c",
         "State advance from first transition must be visible to second event in the same frame");
+}
+
+#[test]
+fn test_minimal_fsm_parses() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            global_on: [
+                ( event: "scene.ready:main", do_actions: [ Log("Scene ready") ] ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(ron_str)
+        .expect("Minimal global_on FSM must parse");
+    assert_eq!(fsm.schema_version, 1);
+    assert_eq!(fsm.initial_state, "");
+    assert!(fsm.states.is_empty());
+    assert!(fsm.transitions.is_empty());
+    assert_eq!(fsm.global_on.len(), 1);
+    assert!(fsm.validate().is_ok(), "Minimal global_on FSM must validate");
 }

@@ -113,7 +113,7 @@
     // ── Magic rune ────────────────────────────────────────────────────────────
     // Slowly rotating disc + central orb. Two functions:
     //   1. Behavior runs magic_orbit loop (sparkle swirl).
-    //   2. Interactable fires entity.interacted → rules.ron → magic_nova burst.
+    //   2. Interactable fires entity.interacted → state_machine.ron → magic_nova burst.
     "magic_rune": (
       kind: Primitive,
       model: "",
@@ -133,7 +133,7 @@
 
     // ── Frost crystal ─────────────────────────────────────────────────────────
     // Icy blue pedestal + glowing crystal sphere.
-    // Press F to fire frost_burst (handled in rules.ron).
+    // Press F to fire frost_burst (handled in state_machine.ron).
     "frost_crystal": (
       kind: Primitive,
       model: "",
@@ -151,7 +151,7 @@
 
     // ── Healing fountain ─────────────────────────────────────────────────────
     // Green stone pedestal + bowl rim + glowing water orb.
-    // Press F to fire heal_pulse (handled in rules.ron).
+    // Press F to fire heal_pulse (handled in state_machine.ron).
     "heal_fountain": (
       kind: Primitive,
       model: "",
@@ -168,7 +168,7 @@
     ),
 
     // ── Explosion pad ─────────────────────────────────────────────────────────
-    // TriggerZone sensor (radius 3 m) fires entity.entered → rules.ron → explosion_burst.
+    // TriggerZone sensor (radius 3 m) fires entity.entered → state_machine.ron → explosion_burst.
     // Visible orange disc warns the player they are standing on a danger zone.
     "explosion_pad": (
       kind: Primitive,
@@ -240,7 +240,7 @@
     ),
 
     // ── Portal arch — Night Arena → Arcane Observatory ────────────────────────
-    // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene particles2.
+    // TriggerZone (radius 1.5) fires entity.entered → state_machine.ron → LoadScene particles2.
     // Blue glow disc + dark stone pillars hint at the bright magical destination.
     "portal_to_p2": (
       kind: Primitive,
@@ -262,7 +262,7 @@
     ),
 
     // ── Portal arch — Arcane Observatory → Night Arena ────────────────────────
-    // TriggerZone (radius 1.5) fires entity.entered → rules.ron → LoadScene main.
+    // TriggerZone (radius 1.5) fires entity.entered → state_machine.ron → LoadScene main.
     // Violet glow disc + light stone pillars hint at the dark night destination.
     "portal_to_main": (
       kind: Primitive,

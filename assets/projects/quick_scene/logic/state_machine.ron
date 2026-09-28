@@ -1,0 +1,25 @@
+(
+    schema_version: 1,
+    global_on: [
+        (
+            event: "scene.ready:main",
+            do_actions: [ PreloadPrefab("enemy_orc_melee") ],
+        ),
+        (
+            event: "ui.button_pressed:quit",
+            do_actions: [ Log("Quit Triggered"), PlaySound(key: "click"), Quit ],
+        ),
+        (
+            event: "ui.button_pressed:ping",
+            do_actions: [ Log("Ping Triggered"), PlaySound(key: "click") ],
+        ),
+        (
+            event: "ui.button_pressed:dance",
+            do_actions: [ Log("PlayAnimation Dance_Loop Triggered"), PlaySound(key: "click"), PlayAnimation("dance") ],
+        ),
+        (
+            event: "ui.button_pressed:spawn_enemy",
+            do_actions: [ Log("Spawning enemy orc"), PlaySound(key: "click"), Spawn(prefab: "enemy_orc_melee", spawn_point: "enemy_wave_a", yaw_deg: 90.0) ],
+        ),
+    ],
+)

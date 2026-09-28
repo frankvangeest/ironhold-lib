@@ -10,7 +10,7 @@ use crate::capabilities::inventory::LoadedItemCatalog;
 use crate::schema::player::InputMap;
 use crate::runtime::messages::*;
 use super::{
-    MergedModelFixes, LoadedRules, LoadedStateMachine, LoadedKeyBindings, ProjectKeyBindings,
+    MergedModelFixes, LoadedStateMachine, LoadedKeyBindings, ProjectKeyBindings,
     LoadedGamepadBindings, ProjectGamepadBindings,
     LoadedAssetCatalog, LoadedPrefabCatalog, PendingProjectLoads, SceneHandleV2,
     LogicState, AudioState, resolve_project_path,
@@ -23,7 +23,6 @@ use super::{
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct PendingCatalogAssets<'w> {
     pub model_fixes: Res<'w, Assets<ModelFixesAsset>>,
-    pub rules: Res<'w, Assets<LogicRulesAsset>>,
     pub state_machine: Res<'w, Assets<StateMachineAsset>>,
     pub asset_catalog: Res<'w, Assets<AssetCatalog>>,
     pub prefab_catalog: Res<'w, Assets<PrefabCatalog>>,
@@ -56,22 +55,11 @@ pub fn check_project_loaded(
             info!("Loading external model fixes from: {}", resolved);
             asset_server.load::<ModelFixesAsset>(resolved)
         });
-        let rules_handle = config.rules_path.as_ref().map(|p| {
-            let resolved = resolve_project_path(&project_root.0, p);
-            info!("Loading external rules from: {}", resolved);
-            asset_server.load::<LogicRulesAsset>(resolved)
-        });
         let state_machine_handle = config.state_machine_path.as_ref().map(|p| {
             let resolved = resolve_project_path(&project_root.0, p);
             info!("Loading state machine from: {}", resolved);
             asset_server.load::<StateMachineAsset>(resolved)
         });
-        if config.rules_path.is_some() && config.state_machine_path.is_some() {
-            warn!(
-                "Project has both rules_path and state_machine_path set; \
-                 both rules.ron and state_machine.ron are independently live when both are set — remove one to silence this"
-            );
-        }
         let asset_catalog_handle = config.asset_catalog.as_ref().map(|p| {
             let resolved = resolve_project_path(&project_root.0, p);
             info!("Loading asset catalog from: {}", resolved);
@@ -96,7 +84,6 @@ pub fn check_project_loaded(
         });
 
         let any_pending = model_fixes_handle.is_some()
-            || rules_handle.is_some()
             || state_machine_handle.is_some()
             || asset_catalog_handle.is_some()
             || prefab_catalog_handle.is_some()
@@ -104,7 +91,6 @@ pub fn check_project_loaded(
             || items_handle.is_some();
         commands.insert_resource(PendingProjectLoads {
             model_fixes: model_fixes_handle,
-            rules: rules_handle,
             state_machine: state_machine_handle,
             asset_catalog: asset_catalog_handle,
             prefab_catalog: prefab_catalog_handle,
@@ -118,7 +104,6 @@ pub fn check_project_loaded(
 
         // No external files — store inline data and proceed.
         commands.insert_resource(MergedModelFixes(config.model_fixes.clone()));
-        commands.insert_resource(LoadedRules(config.rules.clone()));
         commands.insert_resource(LoadedStateMachine(None));
         commands.insert_resource(LoadedItemCatalog(None));
         commands.insert_resource(LoadedStats::default());
@@ -172,18 +157,6 @@ pub fn check_project_loaded(
                 _ => { return; }
             }
         }
-        if let Some(h) = &pending.rules {
-            match asset_server.load_state(h) {
-                bevy::asset::LoadState::Loaded => {}
-                bevy::asset::LoadState::Failed(e) => {
-                    let path = asset_server.get_path(h)
-                        .map(|p| p.to_string())
-                        .unwrap_or_else(|| "<unknown>".to_string());
-                    error!("rules failed to load: {} — {} — proceeding without it (every rule in this file is now inactive)", path, e);
-                }
-                _ => { return; }
-            }
-        }
         if let Some(h) = &pending.state_machine {
             match asset_server.load_state(h) {
                 bevy::asset::LoadState::Loaded => {}
@@ -191,7 +164,7 @@ pub fn check_project_loaded(
                     let path = asset_server.get_path(h)
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "<unknown>".to_string());
-                    error!("state machine failed to load: {} — {} — proceeding without it (every state transition in this file is now inactive)", path, e);
+                    error!("state machine failed to load: {} — {} — proceeding without it (no project logic (global_on rules, states, transitions) will run)", path, e);
                 }
                 _ => { return; }
             }
@@ -255,13 +228,6 @@ pub fn check_project_loaded(
             }
         }
         commands.insert_resource(MergedModelFixes(merged_fixes));
-
-        let rules = if let Some(h) = &pending.rules {
-            pending_assets.rules.get(h).map(|a| a.rules.clone()).unwrap_or_default()
-        } else {
-            config.rules.clone()
-        };
-        commands.insert_resource(LoadedRules(rules));
 
         let fsm = pending.state_machine.as_ref()
             .and_then(|h| pending_assets.state_machine.get(h))

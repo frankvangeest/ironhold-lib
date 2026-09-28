@@ -1348,9 +1348,9 @@ pub fn spawn_scene_v2(
 /// The existing per-bar duplicate check (in the `UiNodeDef::ActionBar` spawn arm below) only
 /// catches collisions within one bar's own slots. A cross-bar collision is worse than "the wrong
 /// slot fires": `CooldownMap`/`PendingIntentActions`/`HandledIntentSlots` are keyed by the literal
-/// `slot_key` string alone, scene-wide — so a `rules.ron` rule that handles one player's intent on
-/// a colliding key silently suppresses the other player's pending slot too, via
-/// `intent_slot_key()`/`HandledIntentSlots` in `message_interpreter.rs`. Per-player action bars
+/// `slot_key` string alone, scene-wide — so a `state_machine.ron` binding that handles one player's
+/// intent on a colliding key silently suppresses the other player's pending slot too, via
+/// `intent_slot_key()`/`HandledIntentSlots` in `action_substitution.rs`/`fsm_interpreter.rs`. Per-player action bars
 /// (Phase 2 of `planning/features/per_player_split_screen_targeting.md`) are the first feature to
 /// author 2+ `ActionBar`s in one scene, so this check has nothing to catch before that.
 fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
@@ -1369,7 +1369,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
                     warn!(
                         "Scene has 2+ ActionBars sharing key {:?}: bar '{}' slot '{}' and bar '{}' \
                          slot '{}'. The intent/cooldown pipeline is keyed by slot_key alone, \
-                         scene-wide — a rules.ron rule handling one bar's intent on this key will \
+                         scene-wide — a state_machine.ron rule handling one bar's intent on this key will \
                          also silently suppress the other bar's pending slot. Use disjoint slot \
                          keys across bars in the same scene.",
                         kc, prev_bar_id, prev_slot_key, bar.id, slot.key

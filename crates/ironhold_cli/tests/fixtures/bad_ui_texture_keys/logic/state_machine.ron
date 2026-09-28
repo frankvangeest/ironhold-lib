@@ -1,0 +1,17 @@
+(
+    schema_version: 1,
+    global_on: [
+        (
+            event: "ui.button_pressed:close_inventory",
+            do_actions: [Log("close inventory")],
+        ),
+        (
+            event: "ui.button_pressed:close_container",
+            do_actions: [Log("close container")],
+        ),
+        (
+            event: "ui.button_pressed:take_all_from_container",
+            do_actions: [Log("take all")],
+        ),
+    ],
+)

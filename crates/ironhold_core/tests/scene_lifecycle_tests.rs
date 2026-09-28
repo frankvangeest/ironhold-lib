@@ -191,8 +191,6 @@ fn model_fixup_persists_reset() {
         let config_handle = configs.add(ProjectConfig {
             schema_version: 1,
             initial_scene: "scenes/tests/test_scene.ron".to_string(),
-            rules: vec![],
-            rules_path: None,
             state_machine_path: None,
             model_fixes: {
                 let mut map = std::collections::HashMap::new();

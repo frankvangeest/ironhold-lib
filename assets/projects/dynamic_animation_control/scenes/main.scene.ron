@@ -1,6 +1,6 @@
 // Frozen poses (deterministic) — see "Spawn-already-posed pattern" in docs/20_data_formats.md.
 // Four zombies, each frozen at a different fraction of the "death" clip's duration via
-// PlayAnimationOn(..., freeze: true) fired from logic/rules.ron on scene.ready:main. Every pose
+// PlayAnimationOn(..., freeze: true) fired from logic/state_machine.ron on scene.ready:main. Every pose
 // is set once and held (no locomotion, no per-frame drift), which is what makes this scene a
 // valid screenshot regression baseline for the whole seek/freeze mechanism — see
 // screenshot_baselines/scenes/dynamic_animation_control_main.png.

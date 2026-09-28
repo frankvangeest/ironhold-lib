@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    initial_state: "",
+    states: [],
+    transitions: [],
+    global_on: [],
+)

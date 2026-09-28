@@ -59,7 +59,7 @@
       ),
     ),
 
-    // entity.entered:portal_to_room1 -> logic/rules.ron -> LoadScene(main).
+    // entity.entered:portal_to_room1 -> logic/state_machine.ron -> LoadScene(main).
     (
       id: "portal_to_room1",
       prefab: "portal_to_room1",
@@ -71,7 +71,7 @@
       label: (text: "Room 1", offset: (0.0, 4.0, 0.0)),
     ),
 
-    // entity.entered:portal_to_room3 -> logic/rules.ron -> LoadScene(room3) — Stage 3.
+    // entity.entered:portal_to_room3 -> logic/state_machine.ron -> LoadScene(room3) — Stage 3.
     (
       id: "portal_to_room3",
       prefab: "portal_to_room3",
@@ -84,7 +84,7 @@
     ),
 
     // Local-coop interact-fix playtest aid (see prefabs.ron's "interact_test_prop" comment) —
-    // entity.interacted:interact_test_prop -> logic/rules.ron -> SetVariable, shown below.
+    // entity.interacted:interact_test_prop -> logic/state_machine.ron -> SetVariable, shown below.
     (
       id: "interact_test_prop",
       prefab: "interact_test_prop",

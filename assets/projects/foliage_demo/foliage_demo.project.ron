@@ -5,5 +5,5 @@
     initial_scene: "scenes/main.scene.ron",
     asset_catalog: "assets.ron",
     prefab_catalog: "prefabs/prefabs.ron",
-    rules_path: "logic/rules.ron",
+    state_machine_path: "logic/state_machine.ron",
 )

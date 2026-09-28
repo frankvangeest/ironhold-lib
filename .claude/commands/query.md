@@ -13,7 +13,7 @@ Available query types:
 - `prefabs`  — list prefabs (kind, model, tags, behavior)
 - `effects`  — list particle effects (count, layers, flags)
 - `scenes`   — list scenes (entities, ui, player, overlay)
-- `rules`    — list rules.ron and/or state_machine.ron
+- `rules`    — list state_machine.ron's states, transitions, and global_on bindings
 - `actions`  — list all action types used across logic files
 - `events`   — list all event triggers used across logic files
 

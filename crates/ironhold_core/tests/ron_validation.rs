@@ -1,7 +1,6 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
 use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, StatSpreadLayout};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
-use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::player::InputMap;
 use ron::extensions::Extensions;
@@ -20,7 +19,6 @@ fn test_project_config_deserialization() {
         (
             schema_version: 1,
             initial_scene: "scenes/main.ron",
-            rules: []
         )
     "#;
     let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize ProjectConfig");
@@ -38,7 +36,7 @@ fn test_project_config_v2_deserialization() {
             display_name: Some("My Project"),
             asset_catalog: Some("assets.ron"),
             prefab_catalog: Some("prefabs/prefabs.ron"),
-            rules_path: Some("logic/rules.ron"),
+            state_machine_path: Some("logic/state_machine.ron"),
             model_fixes_path: Some("overrides/model_fixes.ron"),
         )
     "#;
@@ -53,7 +51,6 @@ fn test_project_config_missing_schema_version_is_error() {
     let ron_str = r#"
         (
             initial_scene: "scenes/main.ron",
-            rules: []
         )
     "#;
     let result: Result<ProjectConfig, _> = ron::de::from_str(ron_str);
@@ -84,7 +81,6 @@ fn test_project_config_v3_deserialization() {
     let config: ProjectConfig = from_str(ron_str).expect("Failed to deserialize v3 ProjectConfig");
     assert_eq!(config.schema_version, 3);
     assert_eq!(config.state_machine_path.as_deref(), Some("logic/state_machine.ron"));
-    assert!(config.rules_path.is_none());
     assert!(config.validate().is_ok());
 }
 
@@ -94,7 +90,6 @@ fn test_project_config_wrong_schema_version_is_invalid() {
         (
             schema_version: 999,
             initial_scene: "scenes/main.ron",
-            rules: []
         )
     "#;
     let config: ProjectConfig = ron::de::from_str(ron_str).unwrap();
@@ -264,6 +259,71 @@ fn test_state_machine_duplicate_state_names_is_invalid() {
     "#;
     let fsm: StateMachineAsset = from_str(ron_str).unwrap();
     assert!(fsm.validate().is_err());
+}
+
+// ── Schema loosening tests (rules_to_state_machine_consolidation) ──────────────
+
+#[test]
+fn test_minimal_fsm_global_only_parses_and_validates() {
+    // Minimal FSM with only schema_version and global_on — no states, no transitions,
+    // no initial_state. This is the new flat form that replaces rules.ron.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            global_on: [
+                ( event: "scene.ready:main", do_actions: [ Log("Scene ready") ] ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).expect("Minimal global_on FSM must parse");
+    assert_eq!(fsm.schema_version, 1);
+    assert_eq!(fsm.initial_state, ""); // defaults to empty
+    assert!(fsm.states.is_empty());
+    assert!(fsm.transitions.is_empty());
+    assert_eq!(fsm.global_on.len(), 1);
+    assert!(fsm.validate().is_ok(), "Minimal global_on FSM must validate");
+}
+
+#[test]
+fn test_fsm_with_states_but_no_initial_state_fails_validation() {
+    // When states are declared but initial_state is missing (empty), validate() must fail.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "",
+            states: [
+                ( name: "menu", entry_actions: [], exit_actions: [], on: [] ),
+            ],
+            transitions: [],
+            global_on: [],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).unwrap();
+    assert!(fsm.validate().is_err(), "FSM with states but empty initial_state must fail validate()");
+}
+
+#[test]
+fn test_full_fsm_with_all_fields_still_parses() {
+    // Regression test: a fully-specified FSM with all fields must still parse and validate.
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            initial_state: "menu",
+            states: [
+                ( name: "menu", entry_actions: [], exit_actions: [], on: [] ),
+                ( name: "playing", entry_actions: [], exit_actions: [], on: [] ),
+            ],
+            transitions: [
+                ( on: "scene.ready:main", to: "playing" ),
+                ( from: Some("playing"), on: "ui.button_pressed:quit", to: "menu" ),
+            ],
+            global_on: [
+                ( event: "ui.button_pressed:debug", do_actions: [ Log("debug") ] ),
+            ],
+        )
+    "#;
+    let fsm: StateMachineAsset = from_str(ron_str).expect("Full FSM must parse");
+    assert!(fsm.validate().is_ok(), "Full FSM must validate");
 }
 
 // ── GameSceneV2 validation ────────────────────────────────────────────────────
@@ -848,61 +908,6 @@ fn test_prefab_catalog_missing_schema_version_is_error() {
         )
     "#;
     let result: Result<PrefabCatalog, _> = from_str(ron_str);
-    assert!(result.is_err(), "schema_version must be present");
-}
-
-// ── LogicRulesAsset validation ────────────────────────────────────────────────
-
-#[test]
-fn test_logic_rules_asset_validates_ok() {
-    let ron_str = r#"
-        (
-            schema_version: 1,
-            rules: [
-                ( on: "ui.button_pressed:start", do_actions: [ Quit ] ),
-            ],
-        )
-    "#;
-    let rules: LogicRulesAsset = from_str(ron_str).unwrap();
-    assert!(rules.validate().is_ok());
-}
-
-#[test]
-fn test_logic_rules_set_variable_and_increment_variable_parse() {
-    let ron_str = r#"
-        (
-            schema_version: 1,
-            rules: [
-                ( on: "scene.ready:main", do_actions: [ SetVariable("level", "1") ] ),
-                ( on: "entity.collected:coin_01", do_actions: [ IncrementVariable("score", 10) ] ),
-                ( on: "npc.player_reached:goblin_01", do_actions: [ IncrementVariable("score", -5) ] ),
-            ],
-        )
-    "#;
-    let rules: LogicRulesAsset = from_str(ron_str).unwrap();
-    assert!(rules.validate().is_ok());
-}
-
-#[test]
-fn test_logic_rules_asset_wrong_version_is_invalid() {
-    let ron_str = r#"
-        (
-            schema_version: 99,
-            rules: [],
-        )
-    "#;
-    let rules: LogicRulesAsset = from_str(ron_str).unwrap();
-    assert!(rules.validate().is_err());
-}
-
-#[test]
-fn test_logic_rules_asset_missing_schema_version_is_error() {
-    let ron_str = r#"
-        (
-            rules: [],
-        )
-    "#;
-    let result: Result<LogicRulesAsset, _> = from_str(ron_str);
     assert!(result.is_err(), "schema_version must be present");
 }
 
@@ -2322,19 +2327,18 @@ fn test_fsm_state_unknown_field_is_error() {
 }
 
 #[test]
-fn test_logic_rule_unknown_field_is_error() {
-    use ironhold_core::schema::project::LogicRulesAsset;
-    // Typo: "whn" instead of "when" — silently made a state-guarded rule fire in every state.
+fn test_fsm_event_binding_unknown_field_is_error() {
+    // Typo: "evnt" instead of "event" — silently made a binding never fire.
     let ron_str = r#"
         (
-            schema_version: 2,
-            rules: [
-                (on: "e", whn: "hp_low", do_actions: [Log("hi")]),
+            schema_version: 1,
+            global_on: [
+                (evnt: "e", do_actions: [Log("hi")]),
             ],
         )
     "#;
-    let result: Result<LogicRulesAsset, _> = from_str(ron_str);
-    assert!(result.is_err(), "typo'd LogicRule field must be rejected (deny_unknown_fields)");
+    let result: Result<StateMachineAsset, _> = from_str(ron_str);
+    assert!(result.is_err(), "typo'd FsmEventBinding field must be rejected (deny_unknown_fields)");
 }
 
 #[test]
@@ -3895,14 +3899,14 @@ fn test_action_spawn_effect_key_only_parses() {
 }
 
 #[test]
-fn test_action_spawn_effect_in_rules_asset_parses() {
-    // SpawnEffect must round-trip inside a full LogicRulesAsset, as it would appear in rules.ron.
+fn test_action_spawn_effect_in_state_machine_asset_parses() {
+    // SpawnEffect must round-trip inside a full StateMachineAsset, as it would appear in state_machine.ron.
     let ron_str = r#"
         (
             schema_version: 1,
-            rules: [
+            global_on: [
                 (
-                    on: "entity.interacted:dummy_01",
+                    event: "entity.interacted:dummy_01",
                     do_actions: [
                         SpawnEffect(key: "hit_spark", entity: "dummy_01"),
                         ShowDamagePopup(entity: "dummy_01", amount: -25.0),
@@ -3911,10 +3915,10 @@ fn test_action_spawn_effect_in_rules_asset_parses() {
             ],
         )
     "#;
-    let rules: ironhold_core::schema::project::LogicRulesAsset = from_str(ron_str)
-        .expect("LogicRulesAsset with SpawnEffect should parse");
-    assert!(rules.validate().is_ok());
-    let actions = &rules.rules[0].do_actions;
+    let fsm: StateMachineAsset = from_str(ron_str)
+        .expect("StateMachineAsset with SpawnEffect should parse");
+    assert!(fsm.validate().is_ok());
+    let actions = &fsm.global_on[0].do_actions;
     assert_eq!(actions.len(), 2);
     assert!(matches!(&actions[0],
         ironhold_core::schema::actions::Action::SpawnEffect { key, .. } if key == "hit_spark"

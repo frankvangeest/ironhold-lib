@@ -59,7 +59,7 @@
       ),
     ),
 
-    // entity.entered:portal_to_room2 -> logic/rules.ron -> LoadScene(room2). Either player
+    // entity.entered:portal_to_room2 -> logic/state_machine.ron -> LoadScene(room2). Either player
     // walking in teleports both (see prefabs.ron comment on portal_to_room2).
     (
       id: "portal_to_room2",
@@ -78,7 +78,7 @@
     // every time was slow). Reuses each destination room's own already-wired forward portal prefab
     // (`portal_to_room4`/`portal_to_room7`/`portal_to_room10` — same `id`-keyed
     // `entity.entered:portal_to_roomN` -> `LoadScene` rule every other placement of these prefabs
-    // already uses, see `logic/rules.ron`; no new prefab or rule needed) — placed a third/fourth
+    // already uses, see `logic/state_machine.ron`; no new prefab or rule needed) — placed a third/fourth
     // time here, exactly like `portal_to_room10` is already reused as room11's own back-portal.
     // Arranged in a N/E/S/W compass around the two players' spawn point (room2 due north, unchanged
     // above) so all four are evenly spaced and visible together as the shared party camera pulls

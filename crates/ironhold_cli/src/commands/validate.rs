@@ -7,7 +7,6 @@ use ironhold_core::schema::catalog::{
     AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
 };
 use ironhold_core::schema::items::ItemCatalog;
-use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
 use ironhold_core::schema::player::{CameraConfig, InputMap};
 use ironhold_core::schema::stats::StatCatalog;
@@ -58,12 +57,11 @@ struct ValidationRun {
 /// three unrelated features (`cli_validate_hardening.md`, `orphan_rule_check`,
 /// `unreachable_trigger_panel_buttons`) until `strict_checks` alone reached 10 parameters —
 /// this struct is that accumulated signature, named and collected in one place instead of
-/// threaded positionally through every call site. `rules`/`state_machine` carry their source path
-/// (resolved by `resolve_logic_files` from `ProjectConfig.rules_path`/`state_machine_path` --
-/// falling back to the `"logic/rules.ron"`/`"logic/state_machine.ron"` convention paths only when
-/// there's no `.project.ron` at all, and to inline `ProjectConfig.rules` for an unset `rules_path`
-/// specifically -- see that function's own doc comment) alongside the parsed asset (the richest
-/// form any consumer needs — `strict_checks` uses both
+/// threaded positionally through every call site. `state_machine` carries its source path
+/// (resolved by `resolve_logic_files` from `ProjectConfig.state_machine_path` --
+/// falling back to the `"logic/state_machine.ron"` convention path only when
+/// there's no `.project.ron` at all -- see that function's own doc comment) alongside the parsed
+/// asset (the richest form any consumer needs — `strict_checks` uses both
 /// halves; `check_ui_trigger_reachability` only needs the parsed asset and discards the path
 /// itself, right after destructuring). Not every consumer uses every field — that's expected for
 /// a shared context struct, not a code smell to fix.
@@ -81,10 +79,9 @@ struct LoadedProject<'a> {
     scenes: &'a [(String, GameSceneV2)],
     dialogues: &'a [(String, DialogueDef)],
     actions: &'a [(String, Action)],
-    rules: Option<(&'a str, &'a LogicRulesAsset)>,
     state_machine: Option<(&'a str, &'a StateMachineAsset)>,
     behaviors: &'a [(String, StateMachineAsset)],
-    /// `true` iff `logic/rules.ron`/`logic/state_machine.ron`/every `behaviors/*.behavior.ron`
+    /// `true` iff `logic/state_machine.ron`/every `behaviors/*.behavior.ron`
     /// parsed without error. Gates `check_ui_trigger_reachability` and (combined with
     /// `scenes_parsed_cleanly`) `strict_checks`'s `orphan_rule` check — both skip entirely rather
     /// than fabricate a wave of secondary noise once a source file's rules/transitions/bindings
@@ -189,7 +186,7 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
 
 /// Parses an explicitly-configured `.project.ron` path -- the shared "explicit path is
 /// authoritative" contract every configurable-path field in this file uses (`asset_catalog`,
-/// `prefab_catalog`, `stats_path`, `items_path`, `rules_path`, `state_machine_path`, ...):
+/// `prefab_catalog`, `stats_path`, `items_path`, `state_machine_path`, ...):
 /// - A configured-but-missing path is a hard error, unlike a merely-absent convention-path file --
 ///   the runtime unconditionally tries to load whatever's configured, so `try_parse`'s silent
 ///   `None`-on-missing (designed for "this convention path might not apply to this project") is
@@ -200,8 +197,8 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
 ///   unrelated errors that were there all along).
 /// - A path already attempted by an earlier step this same run (any `rel_path` already in
 ///   `results`, regardless of what it was parsed as) is not re-parsed under a different type --
-///   without this, e.g. a `rules_path` typo'd onto `prefabs/prefabs.ron` would be re-parsed as a
-///   `LogicRulesAsset`, fail, and report a perfectly valid file as broken (found live during
+///   without this, e.g. a `state_machine_path` typo'd onto `prefabs/prefabs.ron` would be re-parsed as a
+///   `StateMachineAsset`, fail, and report a perfectly valid file as broken (found live during
 ///   `configurable_logic_paths.md`'s review).
 fn parse_configured_path<T: serde::de::DeserializeOwned>(
     project_dir: &Path,
@@ -743,21 +740,20 @@ fn discover_extra_scenes(
 /// this into `Option<(String, Asset)>` pairs: the filter specifically needs to see a project.ron
 /// whose *configured* path failed to parse, which requires the source to outlive a failed parse.
 struct ResolvedLogicFiles {
-    rules: Option<LogicRulesAsset>,
-    rules_source: String,
     state_machine: Option<StateMachineAsset>,
     state_machine_source: String,
 }
 
 /// Mirrors the runtime's actual resolution (`project_loader.rs::check_project_loaded`) instead of
-/// the two hardcoded convention-path literals this function used to always parse: once a
-/// `.project.ron` exists, `rules_path`/`state_machine_path` are the ONLY source for their half --
-/// an unset `rules_path` falls back to the inline V1 `ProjectConfig.rules` (the runtime never
-/// looks at `"logic/rules.ron"` on disk in that case, even if the file exists), and an unset
-/// `state_machine_path` means no state machine at all, full stop. Getting this wrong is exactly
-/// how a project that sets only `state_machine_path` (e.g. `3rd_person_game_demo`, `terrain_demo`)
-/// previously had its unrelated, dead-at-runtime `logic/rules.ron` silently counted as live by
-/// every cross-file check.
+/// a hardcoded convention-path literal this function used to always parse: once a `.project.ron`
+/// exists, `state_machine_path` is the ONLY source -- an unset `state_machine_path` means no state
+/// machine at all, full stop (no fallback to a convention-path guess). This function predates the
+/// rules.ron/state_machine.ron consolidation (2026-09) -- back when both fields coexisted, getting
+/// this wrong is exactly how a project that set only `state_machine_path` (e.g.
+/// `3rd_person_game_demo`, `terrain_demo`) had its unrelated, dead-at-runtime `logic/rules.ron`
+/// silently counted as live by every cross-file check; `rules_path`/`ProjectConfig.rules` no
+/// longer exist, but the fallback-free contract that fixed that bug still applies to the one
+/// remaining field.
 ///
 /// Two deliberate divergences from the runtime:
 /// - When there's no *parseable* `.project.ron` (either none exists, or the one that does failed
@@ -767,11 +763,11 @@ struct ResolvedLogicFiles {
 ///   look would silently stop checking logic entirely for every fixture/project that predates
 ///   configurable paths.
 /// - A configured path containing a `..` segment IS followed (unlike `discover_extra_scenes`,
-///   which refuses to discover one) -- this is intentional, not an oversight: `rules_path`/
-///   `state_machine_path` are exactly-one-hardcoded-field values the runtime resolves with the
-///   identical plain `format!("{root}/{path}")` (`resolve_project_path`), so following it here
-///   is runtime-faithful, whereas `discover_extra_scenes`'s candidates are arbitrary
-///   designer-authored strings from inside action bodies, a materially different trust boundary.
+///   which refuses to discover one) -- this is intentional, not an oversight: `state_machine_path`
+///   is an exactly-one-hardcoded-field value the runtime resolves with the identical plain
+///   `format!("{root}/{path}")` (`resolve_project_path`), so following it here is runtime-faithful,
+///   whereas `discover_extra_scenes`'s candidates are arbitrary designer-authored strings from
+///   inside action bodies, a materially different trust boundary.
 ///
 /// A configured-but-missing path is a hard error (see `parse_configured_path`), not `try_parse`'s
 /// silent `None` -- correct for a convention-path guess, but this is a `.project.ron`-authored
@@ -782,36 +778,13 @@ fn resolve_logic_files(
     file_results: &mut Vec<FileResult>,
 ) -> ResolvedLogicFiles {
     let Some(config) = project_config else {
-        // No .project.ron at all -- nothing to divide by field, fall back to both convention
-        // paths exactly like this function always did (needed for every fixture/project that
-        // predates configurable paths).
+        // No .project.ron at all -- fall back to state_machine convention path.
         return ResolvedLogicFiles {
-            rules: try_parse::<LogicRulesAsset>(project_dir, "logic/rules.ron", file_results),
-            rules_source: "logic/rules.ron".to_string(),
             state_machine: try_parse::<StateMachineAsset>(
                 project_dir, "logic/state_machine.ron", file_results,
             ),
             state_machine_source: "logic/state_machine.ron".to_string(),
         };
-    };
-
-    let (rules, rules_source) = match config.rules_path.as_deref() {
-        Some(path) => (
-            parse_configured_path::<LogicRulesAsset>(project_dir, path, "rules_path", file_results),
-            path.to_string(),
-        ),
-        // No convention-path fallback here on purpose -- the runtime's own fallback for an unset
-        // rules_path is the inline V1 field, never a guess at "logic/rules.ron" existing on disk.
-        // The source string is a filter key for logic_files_parsed_cleanly, not an attribution --
-        // it's populated (to the project.ron's own name) even when `rules` ends up `None`, same as
-        // the state_machine arm below, so a project.ron that fails to parse (routing to the
-        // no-.project.ron branch above instead) is the only way either half comes up genuinely
-        // sourceless.
-        None => {
-            let rules = (!config.rules.is_empty())
-                .then(|| LogicRulesAsset { schema_version: 2, rules: config.rules.clone() });
-            (rules, find_project_ron(project_dir).unwrap_or_default())
-        }
     };
 
     let (state_machine, state_machine_source) = match config.state_machine_path.as_deref() {
@@ -826,26 +799,18 @@ fn resolve_logic_files(
         None => (None, find_project_ron(project_dir).unwrap_or_default()),
     };
 
-    ResolvedLogicFiles { rules, rules_source, state_machine, state_machine_source }
+    ResolvedLogicFiles { state_machine, state_machine_source }
 }
 
 // ── Action collection ─────────────────────────────────────────────────────────
 
 fn collect_actions(
-    rules: Option<(&str, &LogicRulesAsset)>,
     state_machine: Option<(&str, &StateMachineAsset)>,
     behaviors: &[(String, StateMachineAsset)],
     dialogues: &[(String, DialogueDef)],
 ) -> Vec<(String, Action)> {
     let mut out = Vec::new();
 
-    if let Some((src, r)) = rules {
-        for rule in &r.rules {
-            for action in &rule.do_actions {
-                out.push((src.to_string(), action.clone()));
-            }
-        }
-    }
     if let Some((src, fsm)) = state_machine {
         for action in fsm_actions(fsm) {
             out.push((src.to_string(), action));
@@ -1666,7 +1631,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                                     message: format!(
                                         "ActionBar {:?} slot {:?} and ActionBar {:?} slot {:?} both resolve to {:?} — \
                                          the intent/cooldown pipeline is keyed by slot_key alone, scene-wide, so a \
-                                         rules.ron rule handling one bar's intent on this key will also silently \
+                                         state_machine.ron rule handling one bar's intent on this key will also silently \
                                          suppress the other bar's pending slot",
                                         prev_bar, prev_key, bar.id, slot.key, kc
                                     ),
@@ -2348,7 +2313,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     for (source, action) in actions {
         let Action::Spawn { spawn_point: Some(spawn_point), .. } = action else { continue };
         // `spawn_point` is substituted at interpret time for `{self}`/`{target}` tokens
-        // (message_interpreter.rs, dialogue.rs) — see the supported-fields list in
+        // (action_substitution.rs, dialogue.rs) — see the supported-fields list in
         // `crates/ironhold_core/src/CLAUDE.md`. The authored string here is pre-substitution, so a
         // templated value (e.g. `"{self}_spawn"`, used to share one behavior rule across several
         // named spawn points) is not the literal key that will be looked up at runtime; skip it
@@ -2425,17 +2390,11 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
 /// same parse error a second time and fabricating an `unreachable_trigger` report against every
 /// button in the project on top of the real error.
 fn collect_handled_events(
-    rules: Option<&LogicRulesAsset>,
     state_machine: Option<&StateMachineAsset>,
     behaviors: &[(String, StateMachineAsset)],
 ) -> HashSet<String> {
     let mut events = HashSet::new();
 
-    if let Some(rules) = rules {
-        for rule in &rules.rules {
-            events.insert(rule.on.clone());
-        }
-    }
     if let Some(fsm) = state_machine {
         collect_fsm_events(fsm, &mut events);
     }
@@ -2636,7 +2595,7 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 ///
 /// **Known latent gap, no shipped project hits it today:** an entity `.behavior.ron`'s event
 /// pattern can contain a `{self}` token, substituted against the owning entity's spawn id at
-/// match time (`message_interpreter.rs`) — `collect_handled_events` stores the raw,
+/// match time (`action_substitution.rs`) — `collect_handled_events` stores the raw,
 /// pre-substitution literal, so a behavior authored as `on: "ui.button_pressed:{self}_open"`
 /// would never string-match a button's already-concrete derived event and would be wrongly
 /// reported as unreachable. No shipped behavior file currently handles a `ui.button_pressed:*`
@@ -2648,14 +2607,13 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 /// are also handled there, in `check_orphan_event`.
 fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> {
     let LoadedProject {
-        project_dir, project_config, scenes, prefab_catalog, actions, rules, state_machine,
+        project_dir, project_config, scenes, prefab_catalog, actions, state_machine,
         behaviors, logic_files_parsed_cleanly, ..
     } = project;
     // collect_handled_events/the checks below only need the parsed asset, not its source path.
-    let rules = rules.map(|(_, r)| r);
     let state_machine = state_machine.map(|(_, s)| s);
 
-    // A malformed rules.ron/state_machine.ron/behavior file already reports its own parse error
+    // A malformed state_machine.ron/behavior file already reports its own parse error
     // in the per-file results above. Treating that file's "nothing parsed" state as "this project
     // handles nothing" would flood every button/binding in the project with a derived
     // `unreachable_trigger` report piled on top of the one real root cause. Skip entirely until
@@ -2665,7 +2623,7 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
     }
 
     let mut errors = Vec::new();
-    let handled = collect_handled_events(rules, state_machine, behaviors);
+    let handled = collect_handled_events(state_machine, behaviors);
 
     // Which prefab keys are actually placed/spawnable anywhere in this project -- mirrors
     // strict_checks's own `used_prefabs` computation (scene entities, join_prefab_keys hot-join
@@ -2712,8 +2670,8 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
             errors.push(CrossFileError {
                 source_file: source.to_string(),
                 message: format!(
-                    "{describe} fires {event:?} {verb}, but no rule/transition/binding in \
-                     rules.ron, state_machine.ron, or a behavior file handles it — {consequence}"
+                    "{describe} fires {event:?} {verb}, but no binding/transition in \
+                     state_machine.ron or a behavior file handles it — {consequence}"
                 ),
                 error_type: "unreachable_trigger",
             });
@@ -2920,16 +2878,10 @@ fn collect_reachable_ui_triggers(
 /// `planning/claude_suggestions.md`.
 fn check_orphan_ui_rules(
     reachable: &HashSet<String>,
-    rules: Option<(&str, &LogicRulesAsset)>,
     state_machine: Option<(&str, &StateMachineAsset)>,
     behaviors: &[(String, StateMachineAsset)],
 ) -> Vec<StrictWarning> {
     let mut warnings = Vec::new();
-    if let Some((src, r)) = rules {
-        for rule in &r.rules {
-            check_orphan_event(&mut warnings, reachable, src, format!("rule handling {:?}", rule.on), &rule.on);
-        }
-    }
     if let Some((src, fsm)) = state_machine {
         check_fsm_orphans(&mut warnings, reachable, src, fsm);
     }
@@ -2991,7 +2943,7 @@ fn check_orphan_event(
     // Same false-positive class every other string-key check in this file already guards against
     // (e.g. stat_label's "{self}." skip): a behavior file's on:/event: pattern can contain a
     // `{self}` token, substituted against the owning entity's spawn id at match time
-    // (message_interpreter.rs) -- the raw, pre-substitution literal stored here would never
+    // (action_substitution.rs) -- the raw, pre-substitution literal stored here would never
     // string-match the button's already-concrete derived event.
     if event.contains('{') {
         return;
@@ -3014,7 +2966,7 @@ fn check_orphan_event(
 fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     let LoadedProject {
         project_dir, project_config, asset_catalog, prefab_catalog, scenes, dialogues, actions,
-        rules, state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
+        state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
         ..
     } = project;
     let orphan_rule_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
@@ -3052,9 +3004,9 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         }
     }
 
-    // Unlike the catalog paths above, `rules_path`/`state_machine_path` have NO convention-path
+    // Unlike the catalog paths above, `state_machine_path` has NO convention-path
     // fallback at all once a `.project.ron` exists (`resolve_logic_files`) -- a
-    // `logic/rules.ron`/`logic/state_machine.ron` left on disk with its matching field unset is
+    // `logic/state_machine.ron` left on disk with its matching field unset is
     // not just unloaded by the runtime, it's not even parsed or cross-checked by THIS validate
     // run either (unlike the catalog case, whose message can truthfully say "checked via the
     // convention-path fallback"). Without this warning such a file gets zero signal from any
@@ -3063,22 +3015,17 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     // used to (incorrectly) surface via `orphan_rule` -- that was a real bug fix, but it also
     // silently deleted the only signal pointing at those files, which this restores correctly.
     if let Some(config) = project_config {
-        for (field, convention_path, field_name) in [
-            (config.rules_path.as_deref(), "logic/rules.ron", "rules_path"),
-            (config.state_machine_path.as_deref(), "logic/state_machine.ron", "state_machine_path"),
-        ] {
-            if field.is_none() && project_dir.join(convention_path).is_file() {
-                warnings.push(StrictWarning {
-                    source_file: find_project_ron(project_dir).unwrap_or_default(),
-                    message: format!(
-                        "{convention_path} exists but {field_name} is not set in .project.ron — \
-                         the runtime never loads it, and this validate run never parsed or \
-                         cross-checked it either; delete the file if it's leftover, or set \
-                         {field_name} if it's meant to be live"
-                    ),
-                    kind: "unset_logic_path_with_convention_file",
-                });
-            }
+        if config.state_machine_path.is_none() && project_dir.join("logic/state_machine.ron").is_file() {
+            warnings.push(StrictWarning {
+                source_file: find_project_ron(project_dir).unwrap_or_default(),
+                message: format!(
+                    "logic/state_machine.ron exists but state_machine_path is not set in .project.ron — \
+                     the runtime never loads it, and this validate run never parsed or \
+                     cross-checked it either; delete the file if it's leftover, or set \
+                     state_machine_path if it's meant to be live"
+                ),
+                kind: "unset_logic_path_with_convention_file",
+            });
         }
     }
 
@@ -3620,7 +3567,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     // scene parsed cleanly.
     if orphan_rule_prereqs_clean {
         let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
-        warnings.extend(check_orphan_ui_rules(&reachable, rules, state_machine, behaviors));
+        warnings.extend(check_orphan_ui_rules(&reachable, state_machine, behaviors));
     }
 
     warnings
@@ -3687,13 +3634,30 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         }
     }
 
-    let ResolvedLogicFiles { rules, rules_source, state_machine, state_machine_source } =
+    let ResolvedLogicFiles { state_machine, state_machine_source } =
         resolve_logic_files(project_dir, project_config.as_ref(), &mut file_results);
+
+    // Validate project state machine if present
+    if let Some(ref fsm) = state_machine {
+        if let Err(e) = fsm.validate() {
+            file_results.push(FileResult {
+                rel_path: state_machine_source.clone(),
+                errors: vec![format!("StateMachineAsset validation failed: {}", e)],
+            });
+        }
+    }
 
     let mut behaviors: Vec<(String, StateMachineAsset)> = Vec::new();
     for path in glob_dir(project_dir, "behaviors", ".behavior.ron") {
         let r = rel(project_dir, &path);
         if let Some(b) = parse_file::<StateMachineAsset>(&path, &r, &mut file_results) {
+            // Validate each behavior file
+            if let Err(e) = b.validate() {
+                file_results.push(FileResult {
+                    rel_path: r.clone(),
+                    errors: vec![format!("StateMachineAsset (behavior) validation failed: {}", e)],
+                });
+            }
             behaviors.push((r, b));
         }
     }
@@ -3715,7 +3679,6 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     );
 
     let all_actions = collect_actions(
-        rules.as_ref().map(|r| (rules_source.as_str(), r)),
         state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         &behaviors,
         &dialogues,
@@ -3732,8 +3695,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
     let logic_files_parsed_cleanly = file_results
         .iter()
         .filter(|r| {
-            r.rel_path == rules_source
-                || r.rel_path == state_machine_source
+            r.rel_path == state_machine_source
                 || r.rel_path.starts_with("behaviors/")
         })
         .all(|r| r.is_ok());
@@ -3753,7 +3715,6 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         scenes: &scenes,
         dialogues: &dialogues,
         actions: &all_actions,
-        rules: rules.as_ref().map(|r| (rules_source.as_str(), r)),
         state_machine: state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         behaviors: &behaviors,
         logic_files_parsed_cleanly,

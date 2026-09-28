@@ -59,7 +59,7 @@ assets/projects/{name}/
   behaviors/*.behavior.ron    ← per-entity FSM behavior files (optional)
   dialogues/*.dialogue.ron    ← DialogueDef   (NPC conversation trees, optional)
   scenes/*.scene.ron          ← GameSceneV2   (one file per scene)
-  logic/rules.ron             ← LogicRulesAsset (event → action rules)
+  logic/state_machine.ron     ← StateMachineAsset (event → action logic; flat, or with states/transitions)
   overrides/model_fixes.ron   ← ModelFixesAsset (per-asset transform corrections)
   stats/stats.ron             ← StatCatalog     (global named stat definitions; optional)
 ```
@@ -80,7 +80,6 @@ The engine identifies files by their path (as set in the project config) and by 
 | Prefab catalog | `.ron` | `prefabs/prefabs.ron` |
 | Animation policy | `.ron` | `prefabs/animation/{name}_policy.ron` |
 | Asset catalog | `.ron` | `assets.ron` |
-| Logic rules | `.ron` | `logic/rules.ron` |
 | State machine | `.ron` | `logic/state_machine.ron` |
 | Model overrides | `.ron` | `overrides/model_fixes.ron` |
 | Stat catalog | `.ron` | `stats/stats.ron` |
@@ -104,8 +103,7 @@ Entry point for a project. References all other files.
 | `display_name` | `Option<String>` | v2+ | Human-readable name |
 | `asset_catalog` | `Option<String>` | v2+ | Path to an `assets.ron` file. When absent, no asset catalog loads for this project at all — no models/effects/audio/decals are resolvable. `ironhold_cli validate`/`query effects`/`stats` all read this field, not the `assets.ron` convention path, so relocating it is honored (falls back to checking the convention path only when this field itself is unset). |
 | `prefab_catalog` | `Option<String>` | v2+ | Path to a `prefabs/prefabs.ron` file. When absent, no prefab catalog loads for this project at all. Same `ironhold_cli validate`/`query prefabs`/`query scenes`/`stats` behavior as `asset_catalog` above. |
-| `rules_path` | `Option<String>` | v2 | Path to `logic/rules.ron` (rules workflow). When absent, inline `rules:` is used instead — **not** the `logic/rules.ron` convention path, even if that file exists on disk. `ironhold_cli validate` reads this field the same way the runtime does (no convention-path fallback once a `.project.ron` exists — falls back only when there's no project config at all). |
-| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` (FSM workflow). Both `rules_path` and `state_machine_path` can be set together — both are fully loaded and live regardless of the other (the runtime logs an informational warning noting this when it happens). `ironhold_cli validate` reads this field the same way as `rules_path` above — see "Checks performed" in `docs/60_contributing.md`. |
+| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` — every project's game logic. When absent, no logic file loads for this project at all (no convention-path fallback once a `.project.ron` exists). `ironhold_cli validate` reads this field the same way the runtime does — see "Checks performed" in `docs/60_contributing.md`. |
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron`. `ironhold_cli validate` reads this field, not the convention path — see `asset_catalog` above. |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` |
@@ -116,26 +114,9 @@ Entry point for a project. References all other files.
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `max_frame_delta_secs` | `Option<f32>` | — | Caps the largest per-frame time delta the whole game clock reports, in seconds. Omit for Bevy's default (0.25s). See [max_frame_delta_secs](#max_frame_delta_secs) below. |
-| `rules` | `Vec<LogicRule>` | v1 only | Inline rules (v1 only; use `rules_path` in v2) |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
-**Example (v2 — rules workflow):**
-```ron
-(
-    schema_version: 2,
-    project_id: "quick_scene",
-    display_name: "Quick Scene",
-
-    initial_scene: "scenes/main.scene.ron",
-
-    asset_catalog: "assets.ron",
-    prefab_catalog: "prefabs/prefabs.ron",
-    rules_path: "logic/rules.ron",
-    model_fixes_path: "overrides/model_fixes.ron",
-)
-```
-
-**Example (v3 — FSM workflow):**
+**Example:**
 ```ron
 (
     schema_version: 3,
@@ -603,12 +584,12 @@ scene has no `SplitViewportSlot` camera for `target_hud:` to attach to, so it ge
 all today (blank legacy vars, no replacement) — a known Phase 1 gap, not yet built. **Single-player
 scenes are unaffected** — the vars keep populating exactly as before.
 
-**Only the primary player's selection drives `rules.ron`/`state_machine.ron`/behavior `do_actions`
+**Only the primary player's selection drives `state_machine.ron`/behavior `do_actions`
 through the shared pipeline.** The first player-tagged scene entity (matching `PlayerIndex(0)`, or
 no `PlayerIndex` at all — a case only reachable via the terrain-deferred or character-select spawn
 paths, since neither currently spawns primitive-shaped players; every player spawned via the
 ordinary scene-load path, GLB or primitive, gets a `PlayerIndex`) is "primary". `{target}`
-substitution in `rules.ron`/`state_machine.ron`/behaviors still resolves against the
+substitution in `state_machine.ron`/behaviors still resolves against the
 primary player's target only — a second (or third, or fourth) player's selection drives their own
 visual feedback (ring, HUD readout) but has no effect on those global `do_actions`.
 
@@ -837,7 +818,7 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
 | `text` | `String` | required | Button label text |
-| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`). You must also author a rule/transition/binding matching `ui.button_pressed:<trigger>` in `rules.ron`/`state_machine.ron`/a behavior file — a button with no matching handler renders and is clickable but does nothing; `ironhold_cli validate` reports this as `unreachable_trigger` |
+| `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`). You must also author a rule/transition/binding matching `ui.button_pressed:<trigger>` in `state_machine.ron`/a behavior file — a button with no matching handler renders and is clickable but does nothing; `ironhold_cli validate` reports this as `unreachable_trigger` |
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
@@ -1032,7 +1013,7 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.ron` wired to the old key string. Stays keyboard-only and required even for a gamepad-routed slot — see `gamepad_key` below |
+| `key` | `String` | required | Key that activates the slot — see "Accepted key names" below. Also the slot's identity: cooldown tracking and every emitted `action_bar.*:{key}` event use this string verbatim, so rebinding a slot (changing `key`) also renames its event contract — update any `state_machine.ron` wired to the old key string. Stays keyboard-only and required even for a gamepad-routed slot — see `gamepad_key` below |
 | `gamepad_key` | `Option<String>` | `None` | Gamepad button that **also** activates this slot, in addition to `key` — see "Valid gamepad button names" in the `InputMap` section below. Resolved against the slot's **owning player's own** controller (`owner_player` → that player's own controller), never any connected pad — a gamepad is not shared hardware the way a keyboard is. An unrecognised name warns at scene load (bar + slot named) and an `ironhold_cli validate` error; the slot's `key` binding, if any, still works. Omit for a keyboard-only slot (default) |
 | `icon` | `String` | `""` | Per-slot texture catalog key override (overrides `icon_sheet` for this slot). `ironhold_cli validate` checks the key exists in `assets.ron`'s textures when non-empty. |
 | `icon_index` | `u32` | `0` | Zero-based atlas cell (row-major). `icon_sheet` on the bar must be set |
@@ -1173,23 +1154,36 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 | `action_bar.insufficient_resource:{key}` | Key pressed but cost stat too low |
 | `action_bar.no_target:{key}` | `{target}` used in `do_actions` but no target is selected |
 
-**Intent event layer:** When a slot key is pressed and passes all checks (cooldown, cost, target), the action bar emits `intent.slot.{key}:{entity}` (e.g. `intent.slot.1:player_01`) before committing the slot's `do_actions`. If any rule in `rules.ron`, `state_machine.ron`, or a `.behavior.ron` file matches this event, its `do_actions` run **and the slot's built-in `do_actions` are suppressed — including the cooldown and `action_bar.activated` event**. If no rule matches, the slot's `do_actions` fire unchanged, the cooldown starts, and `activated` fires — so existing projects with no intent rules behave identically to before.
+**Intent event layer:** When a slot key is pressed and passes all checks (cooldown, cost, target), the action bar emits `intent.slot.{key}:{entity}` (e.g. `intent.slot.1:player_01`) before committing the slot's `do_actions`. If any binding in `state_machine.ron`, or a `.behavior.ron` file matches this event, its `do_actions` run **and the slot's built-in `do_actions` are suppressed — including the cooldown and `action_bar.activated` event**. If no rule matches, the slot's `do_actions` fire unchanged, the cooldown starts, and `activated` fires — so existing projects with no intent rules behave identically to before.
 
 ```ron
-// Suppress slot 1 and show a "Silenced!" popup when the player is in the "silenced" state
-( on: "intent.slot.1:player_01", when: "silenced", do_actions: [
-    ShowFloatingText(entity: "player_01", text: "Silenced!"),
-    // no damage action — intent is consumed with no effect
-] )
+// logic/state_machine.ron
+states: [
+    (
+        name: "silenced",
+        on: [
+            // Suppress slot 1 and show a "Silenced!" popup while in the "silenced" state
+            ( event: "intent.slot.1:player_01", do_actions: [
+                ShowFloatingText(entity: "player_01", text: "Silenced!"),
+                // no damage action — intent is consumed with no effect
+            ] ),
+        ],
+    ),
+    (
+        name: "berserk",
+        on: [
+            // Redirect slot 1 to a rage-strike while in the "berserk" state
+            ( event: "intent.slot.1:player_01", do_actions: [
+                PlayAnimation("rage_strike"),
+                ModifyStat(key: "{target}.health", delta: -25.0),
+                EmitEvent("combat.hit:player_01"),
+            ] ),
+        ],
+    ),
+],
 
-// Redirect slot 1 to a rage-strike when the player is in "berserk" state
-( on: "intent.slot.1:player_01", when: "berserk", do_actions: [
-    PlayAnimation("rage_strike"),
-    ModifyStat(key: "{target}.health", delta: -25.0),
-    EmitEvent("combat.hit:player_01"),
-] )
-
-// No rule on intent.slot.1 → slot's own do_actions run as normal
+// In any other state, with no matching on: binding for intent.slot.1 → slot's own do_actions
+// run as normal.
 ```
 
 > **In a split-screen scene with per-player `owner_player` bars, a rule that intercepts a
@@ -1251,7 +1245,7 @@ ActionBar((
 ))
 ```
 
-Wire feedback events in `rules.ron` or `state_machine.ron` to surface cooldown or low-mana messages:
+Wire feedback events in `state_machine.ron` to surface cooldown or low-mana messages:
 
 ```ron
 ( event: "action_bar.on_cooldown:1",           do_actions: [ SetVariable("status", "Skill on cooldown") ] ),
@@ -1344,7 +1338,7 @@ DialoguePanel((
 
 #### `InventoryPanel((...))` ✅
 
-A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `rules.ron`/`state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`).
+A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`).
 
 When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon_index` (from `items.ron`); a small count label (`x3`) appears in the corner for stacks greater than 1.
 
@@ -1402,11 +1396,11 @@ ShopPanel((
 )),
 ```
 
-> **Close button**: the ShopPanel now spawns its own close button as an embedded child (header row). No standalone `Button` is needed alongside the panel. The button fires `ui.button_pressed:close_shop` → `CloseShop`. `ironhold_cli validate` cross-checks `close_shop`, and `buy_item:{item_key}` for every merchant prefab's `stock[].item_key`, against `rules.ron`/`state_machine.ron`/behavior files whenever a `ShopPanel` is present in a scene (`unreachable_trigger`) — see "MerchantDef fields" above for the reference wiring.
+> **Close button**: the ShopPanel now spawns its own close button as an embedded child (header row). No standalone `Button` is needed alongside the panel. The button fires `ui.button_pressed:close_shop` → `CloseShop`. `ironhold_cli validate` cross-checks `close_shop`, and `buy_item:{item_key}` for every merchant prefab's `stock[].item_key`, against `state_machine.ron`/behavior files whenever a `ShopPanel` is present in a scene (`unreachable_trigger`) — see "MerchantDef fields" above for the reference wiring.
 
 #### `ContainerPanel((...))` ✅
 
-A slot grid that displays a container entity's `Inventory` (chest, crate, etc.). Always positioned absolutely. Hidden by default; shown by `OpenContainer(entity_id)` and hidden by `CloseContainer`. Includes an embedded close button and a "Take All" button. Requires `items_path` to be set in `project.ron`. The close button fires `ui.button_pressed:close_container`, the take-all button fires `ui.button_pressed:take_all_from_container` — `ironhold_cli validate` cross-checks both against `rules.ron`/`state_machine.ron`/behavior files whenever a `ContainerPanel` is present in a scene (`unreachable_trigger`).
+A slot grid that displays a container entity's `Inventory` (chest, crate, etc.). Always positioned absolutely. Hidden by default; shown by `OpenContainer(entity_id)` and hidden by `CloseContainer`. Includes an embedded close button and a "Take All" button. Requires `items_path` to be set in `project.ron`. The close button fires `ui.button_pressed:close_container`, the take-all button fires `ui.button_pressed:take_all_from_container` — `ironhold_cli validate` cross-checks both against `state_machine.ron`/behavior files whenever a `ContainerPanel` is present in a scene (`unreachable_trigger`).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1706,8 +1700,8 @@ The engine supports a global quality level and a per-scene live-particle cap to 
 The multiplier is applied to each `particle_count` at spawn time. When `quality: (minimal: N, low: N, medium: N)` is set on an `EffectDef` or `LayerDef`, those explicit counts are used instead of the multiplier. The optional `high: N` field overrides the count at High quality too; when omitted, High uses `particle_count` directly.
 
 ```ron
-// rules.ron — downgrade quality on scene load for mobile-class builds
-( on: "scene.ready:main", do_actions: [ SetParticleQuality(Low) ] ),
+// state_machine.ron — downgrade quality on scene load for mobile-class builds, as a global_on entry
+( event: "scene.ready:main", do_actions: [ SetParticleQuality(Low) ] ),
 ```
 
 `SetParticleQuality` persists across scene transitions (the `ParticleQuality` resource is never reset on `LoadScene`). Explicitly call `SetParticleQuality(High)` to restore full counts.
@@ -1798,7 +1792,7 @@ Particles use `AlphaMode::Add` (additive blending) by default when no sprite is 
 
 **Ground decals (`decals`)**
 
-The `decals` map in `assets.ron` registers texture paths for flat ground-projected quads. Decals are spawned by `Action::ProjectDecal` from `rules.ron` or behavior files. All decal textures are white-on-transparent PNGs — colour comes from the `color` field in the action.
+The `decals` map in `assets.ron` registers texture paths for flat ground-projected quads. Decals are spawned by `Action::ProjectDecal` from `state_machine.ron` or behavior files. All decal textures are white-on-transparent PNGs — colour comes from the `color` field in the action.
 
 ```ron
 // assets.ron
@@ -1830,10 +1824,10 @@ decals: {
 | `splat_01` | `splat_01.png` | Soft-edged disc (feathered) |
 | `shockwave` | `shockwave.png` | Two concentric thin rings |
 
-Example rule:
+Example `global_on` binding:
 
 ```ron
-( on: "entity.entered:explosion_pad_01", do_actions: [
+( event: "entity.entered:explosion_pad_01", do_actions: [
     SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01"),
     ProjectDecal(key: "aoe_fire_circle", entity: "explosion_pad_01",
                  radius: 3.5, duration_secs: 3.0,
@@ -2496,7 +2490,7 @@ switch is handled by `SetCameraMode`'s `transition:` — see the next section.
 Added in `planning/features/camera_modes.md` v2. `components.camera_mode` (above) is *the mode a
 camera starts in* — this section is a different, plural thing: `GameSceneV2.camera_modes` is a
 scene-level, named list of **switchable presets** that `Action::SetCameraMode` can jump a camera to
-at runtime, from a `rules.ron`/`state_machine.ron` rule or FSM state. It does not change what any
+at runtime, from a `state_machine.ron` rule or FSM state. It does not change what any
 camera starts as.
 
 ```ron
@@ -2522,11 +2516,11 @@ camera_modes: {
 ```
 
 ```ron
-// logic/rules.ron or state_machine.ron
-( on: "ui.button_pressed:enter_cutscene", do_actions: [SetCameraMode(mode: "cutscene_fixed")] ),
-( on: "dialogue.ended:dialogue/boss_intro.ron", do_actions: [SetCameraMode(mode: "default")] ),
+// logic/state_machine.ron — global_on entries
+( event: "ui.button_pressed:enter_cutscene", do_actions: [SetCameraMode(mode: "cutscene_fixed")] ),
+( event: "dialogue.ended:dialogue/boss_intro.ron", do_actions: [SetCameraMode(mode: "default")] ),
 // Local co-op: retarget only player 2's viewport — player 1 keeps playing uninterrupted.
-( on: "entity.entered:puzzle_room", do_actions: [SetCameraMode(mode: "topdown", owner_player: 1)] ),
+( event: "entity.entered:puzzle_room", do_actions: [SetCameraMode(mode: "topdown", owner_player: 1)] ),
 ```
 
 **`"default"` is a reserved key, not a preset you define.** `SetCameraMode(mode: "default")`
@@ -3079,7 +3073,7 @@ explicit `None`) is a no-op with a `warn!` — nothing crashes, but nothing join
    time, not its own baked value — don't rely on the prefab's own `player_index` for a hot-joined
    player, only for one placed directly in `entities:`.
 
-Typically bound via a scene-scoped key and a rule:
+Typically bound via a scene-scoped key and a binding:
 
 ```ron
 // scenes/my_scene.scene.ron
@@ -3088,8 +3082,8 @@ scene_key_bindings: {
 },
 ```
 ```ron
-// logic/rules.ron
-( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
+// logic/state_machine.ron
+( event: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
 ```
 
 > **Pick a join key that no join-target prefab's own `inputs:` also binds.** `global_input_system`
@@ -3132,8 +3126,8 @@ scene_unclaimed_gamepad_bindings: {
 },
 ```
 ```ron
-// logic/rules.ron — same rule as the keyboard trigger, no gamepad-specific rule needed
-( on: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
+// logic/state_machine.ron — same binding as the keyboard trigger, no gamepad-specific one needed
+( event: "ui.button_pressed:join", do_actions: [ JoinPlayer ] ),
 ```
 
 > **These maps are for join-style triggers only — not a general gamepad analogue of
@@ -3160,9 +3154,9 @@ because nothing downstream can tell which of two same-frame join presses a bound
 so allowing both through could produce a second player with no pad bound at all, permanently (v1
 has no hot-leave to fix a bad join after the fact).
 
-**The join trigger must be produced synchronously, in the same frame's rule match** — i.e. a
-direct `( on: "ui.button_pressed:<trigger>", do_actions: [ JoinPlayer ] )` rule, not a chain that
-routes through `EmitEvent` into a second rule or a delayed event. The pad identity is only valid
+**The join trigger must be produced synchronously, in the same frame's binding match** — i.e. a
+direct `( event: "ui.button_pressed:<trigger>", do_actions: [ JoinPlayer ] )` binding, not a chain
+that routes through `EmitEvent` into a second binding or a delayed event. The pad identity is only valid
 for the one frame it was captured; a `JoinPlayer` that fires a frame later still joins, just with
 no gamepad bound (falls back to the join prefab's own authored default), which can look like a
 confusing "sometimes gamepad join doesn't work" bug if a project's rules aren't wired directly.
@@ -3767,29 +3761,9 @@ Defines the locomotion clips and override animations for a character type.
 
 ---
 
-## `logic/rules.ron` — LogicRulesAsset ✅
+## Actions reference ✅
 
-Maps runtime events to action sequences. This is the primary place for data-driven game logic.
-
-```ron
-(
-    schema_version: 2,
-    rules: [
-        (
-            on: "ui.button_pressed:start_game",
-            do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ],
-        ),
-        (
-            on: "ui.button_pressed:dance",
-            do_actions: [ Log("Dance triggered"), PlayAnimation("dance") ],
-        ),
-        (
-            on: "ui.button_pressed:quit",
-            do_actions: [ Quit ],
-        ),
-    ],
-)
-```
+The full set of actions any `state_machine.ron` binding's (or a behavior/dialogue file's) `do_actions` can use. See `logic/state_machine.ron` below for how events map to these actions — flat `global_on` bindings first, states/transitions once you need modes.
 
 **Event name format:** `"<domain>.<event_type>:<payload>"`. Available event names:
 
@@ -3810,9 +3784,9 @@ Maps runtime events to action sequences. This is the primary place for data-driv
 
 **Typos in action fields are now hard errors.** Every `Action` rejects field names it doesn't
 recognise. Writing `start_at_fracton` instead of `start_at_fraction` no longer silently does
-nothing — it stops the **whole file** from loading. One typo in `logic/rules.ron` means *every*
-rule in that file stops firing; one typo in a `.behavior.ron` means that entity never runs its
-behavior at all. This applies wherever `Action`s are authored: `rules.ron`, `state_machine.ron`,
+nothing — it stops the **whole file** from loading. One typo in `logic/state_machine.ron` means
+*every* binding in that file stops firing; one typo in a `.behavior.ron` means that entity never
+runs its behavior at all. This applies wherever `Action`s are authored: `state_machine.ron`,
 `.behavior.ron` files, dialogue choices' `do_actions`, `scenes/*.scene.ron` UI button and
 action-bar slot `do_actions`, and `prefabs/prefabs.ron`. If a project suddenly "loses all its
 logic" after an edit, check this first.
@@ -3821,8 +3795,8 @@ Open the browser console (F12) — the message names the file, the line, the act
 that action actually accepts:
 
 ```
-Failed to load asset 'projects/my_game/logic/rules.ron' with asset loader
-'...ImplicitRonLoader<LogicRulesAsset>': RON parse error: 34:41: Unexpected field
+Failed to load asset 'projects/my_game/logic/state_machine.ron' with asset loader
+'...ImplicitRonLoader<StateMachineAsset>': RON parse error: 34:41: Unexpected field
 named `start_at_fracton` in `PlayAnimationOn`, expected one of `target`, `clip`,
 `start_at_fraction`, or `freeze` instead
 ```
@@ -3849,7 +3823,7 @@ column.
 | `Log("message")` | Emit an `info!` log line |
 | `Quit` | Exit the application |
 | `PreloadScene("path")` | Warm the asset cache for a `.scene.ron` before it is needed |
-| `EnterState("name")` | Transition the interpreter to a named logic state; `""` returns to stateless |
+| `EmitEvent("name")` | Fire a `GameEvent::Trigger(name)` other bindings/transitions can react to. The idiomatic way to drive a state change — see [`logic/state_machine.ron`](#logicstate_machineron--statemachineasset-) below for the recipe. `{self}` substituted in behavior files. |
 | `SetVariable("key", "value")` | Write a named string variable into `GameVariables`; readable by data-bound UI labels |
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |
 | `ModifyStat(key: "key", delta: f32)` | Add `delta` to a stat and clamp. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap`; no dot targets global `LoadedStats`. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID. |
@@ -3872,7 +3846,7 @@ column.
 | `ResetToSpawn("{self}")` | Teleport an NPC entity to its scene-placed origin and zero its velocity. Call before `SetEntityVisible(visible: true)` in respawn entry_actions so the entity appears at its spawn point instead of where it died. Warns and no-ops for non-NPC entities. `{self}` is substituted in behavior files. |
 | `CameraShake(duration_secs: f32, intensity: f32, owner_player: Option<u32>)` | Apply a procedural position shake to every active `Orbit`- or `Party`-mode camera (both split-screen's per-player cameras and a shared party camera shake correctly). `duration_secs` is the shake duration in seconds (typical range 0.2–0.8). `intensity` is the peak camera displacement in world-space metres (typical range 0.05–0.25 — scale with enemy weight: a snake might use 0.10, a heavy boss 0.25). Re-triggering while a shake is active replaces it with the new parameters. No-op (warning logged) in scenes that use a flycam instead — an orbit camera is created by a prefab tagged `"player"` (see the `player` tag description above). `owner_player` (v2, omit for the pre-v2 behavior: every active camera) targets one local-coop player's camera — see the `owner_player` targeting table under [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) above, which this field follows identically. Example: `CameraShake(duration_secs: 0.4, intensity: 0.15)` |
 | `SetCameraMode(mode: "preset_or_default", owner_player: Option<u32>)` | Switch a camera's active mode at runtime (v2). `mode` is either the reserved key `"default"` (restore the camera's own scene-authored starting mode) or a key from the current scene's `camera_modes:` registry. `owner_player` targets one local-coop player's camera; omitted targets every active camera. See [`camera_modes:` registry and `SetCameraMode`](#camera_modes-registry-and-setcameramode-v2-) above for the full targeting table, `transition:` blending, and validation rules. Examples: `SetCameraMode(mode: "cutscene_fixed")`, `SetCameraMode(mode: "default", owner_player: 1)` |
-| `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `rules.ron` or `state_machine.ron`. |
+| `StartDialogue(npc_id: "id", dialogue_path: "dialogues/npc.dialogue.ron")` | Open the `DialoguePanel` UI for the given NPC and begin playing the `.dialogue.ron` conversation. Emits `dialogue.started:{npc_id}`. Auto-fired when the player interacts with an entity that has `PrefabDef.dialogue` set; can also be fired from `state_machine.ron`. |
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
 | `JoinPlayer` | Hot-join a new player into an already `Grid`-split local co-op scene, growing the split-screen layout live (up to `MAX_SPLIT_PLAYERS`) with no scene reload. No-ops with a `warn!` outside a `Grid`-split scene, at the cap, or with no `join_prefab_keys` entry for the next slot. Emits `coop.lobby_full` on the join that reaches the cap. See [Local co-op hot join](#local-co-op-hot-join) above. |
@@ -4006,11 +3980,11 @@ ui: [
 
 The panel is `Visibility::Hidden` at spawn (`initially_hidden: true` is the default). It becomes visible when `StartDialogue` is processed and returns to hidden on `EndDialogue` or `LoadScene`.
 
-**Reacting to dialogue events in `rules.ron`:**
+**Reacting to dialogue events in `state_machine.ron`:**
 
 ```ron
-( on: "dialogue.started:npc_guard_01", do_actions: [ SetVariable("talking_to_guard", "true") ] ),
-( on: "dialogue.ended:dialogues/npc_intro.dialogue.ron", do_actions: [ SetVariable("talking_to_guard", "") ] ),
+( event: "dialogue.started:npc_guard_01", do_actions: [ SetVariable("talking_to_guard", "true") ] ),
+( event: "dialogue.ended:dialogues/npc_intro.dialogue.ron", do_actions: [ SetVariable("talking_to_guard", "") ] ),
 ```
 
 ---
@@ -4058,7 +4032,10 @@ This is expected and normal — nearly every character model in `shared/models/c
 
 ## `logic/state_machine.ron` — StateMachineAsset ✅
 
-Used when `state_machine_path` is set in the project config (schema v3), for FSM-based projects. Despite the "v2 vs v3 workflow" framing, `rules_path` is not disabled by setting this — both load and run independently if both are set. See `docs/30_runtime_events_and_logic.md` for detailed FSM semantics.
+Every project's game logic — set via `state_machine_path` in the project config. Start flat with
+just `global_on`; add `states`/`transitions` once you need modes (menu vs. playing vs. paused). See
+`docs/30_runtime_events_and_logic.md` for detailed FSM semantics, and the "Removed: rules.ron"
+callout below if you're migrating an older two-dialect project.
 
 **Top-level fields:**
 
@@ -4089,7 +4066,110 @@ Used when `state_machine_path` is set in the project config (schema v3), for FSM
 
 Execution order on transition: `exit_actions` of old state → state change → `entry_actions` of new state.
 
-A `ui.button_pressed:{trigger}`-shaped `on:`/`event:` (in `rules.ron`'s `LogicRule.on`, an `FsmState.on[].event`, an `FsmTransition.on`, or `global_on[].event` — including inside a `behaviors/*.behavior.ron` file) that no button, key binding, or gamepad binding anywhere in the project can ever fire is reported by `ironhold_cli validate --strict` as `orphan_rule` — the reverse of `unreachable_trigger`.
+A `ui.button_pressed:{trigger}`-shaped `on:`/`event:` (an `FsmState.on[].event`, an `FsmTransition.on`, or `global_on[].event` — including inside a `behaviors/*.behavior.ron` file) that no button, key binding, or gamepad binding anywhere in the project can ever fire is reported by `ironhold_cli validate --strict` as `orphan_rule` — the reverse of `unreachable_trigger`.
+
+### Removed: `rules.ron`
+
+Before 2026-09, projects could author game logic in either of two dialects: `logic/rules.ron`
+(flat event → action rules, with an optional `when: "state"` guard) or `logic/state_machine.ron`
+(the FSM format above). `rules.ron` has been removed — every project now uses
+`state_machine.ron` alone, flat (`global_on` only) or with `states`/`transitions`. If you're
+migrating an old project, or just recognize the old syntax, this section is for you.
+
+**Mapping table:**
+
+| Old `rules.ron` | New `state_machine.ron` |
+|---|---|
+| A rule with no `when:` guard | A `global_on` entry |
+| A rule with `when: "some_state"` | An entry inside `states: [ ( name: "some_state", on: [...] ) ]`'s `on:` list |
+| `EnterState("some_state")` in a rule's `do_actions` | `EmitEvent("some_event")` in the `do_actions`, plus a `transitions` entry: `( from: ..., on: "some_event", to: "some_state" )` — see the worked example below for why |
+
+**The `on:` field means three different things — this is the easiest thing to get wrong migrating
+by muscle memory.** Old `rules.ron` syntax (`( on: "x", do_actions: [...] )`) produces a
+plausible-looking `state_machine.ron` file that fails to parse, because in the new format:
+- A **state's** `on:` is a *list of bindings*, each with its own `event:` field.
+- A **transition's** `on:` is an *event-name string*.
+- A **binding** itself (inside `global_on` or a state's `on:` list) uses `event:`, never `on:`.
+
+```ron
+// WRONG — old rules.ron syntax, fails to parse in state_machine.ron
+( on: "ui.button_pressed:start", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+
+// RIGHT — as a global_on entry
+( event: "ui.button_pressed:start", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+```
+
+**Why there's no direct "set state" action.** The old `EnterState("name")` changed `LogicState`
+directly from a rule's `do_actions`, without going through a transition — which meant **neither**
+the old state's `exit_actions` **nor** the new state's `entry_actions` ran. That's a silent-desync
+bug class: any side effect you'd expect from "entering" a state (a music swap, a UI variable
+update) simply wouldn't happen if something called `EnterState` directly instead of triggering a
+transition. Emitting an event and reacting to it with a `transitions` entry is the only way to
+change state now, and it always runs the correct exit/entry actions. Worked example — a dialogue
+choice that starts a quest:
+
+```ron
+// dialogues/npc_quest_giver.dialogue.ron — a choice's do_actions
+do_actions: [
+    SetVariable("quest_started", "true"),
+    EmitEvent("quest.started"),
+],
+```
+```ron
+// logic/state_machine.ron
+(
+    schema_version: 1,
+    initial_state: "exploring",
+    states: [
+        (
+            name: "exploring",
+            on: [ ( event: "quest.started", do_actions: [ Log("Quest offered") ] ) ],
+        ),
+        (
+            name: "on_quest",
+            entry_actions: [
+                Log("Quest started"),
+                SetVariable("quest_label", "Quest: find the crystal"),
+                PlayMusicLoop(key: "quest_theme"),
+            ],
+            exit_actions: [ StopMusic ],
+        ),
+    ],
+    transitions: [
+        ( from: "exploring", on: "quest.started", to: "on_quest" ),
+    ],
+)
+```
+
+The dialogue choice never names a state directly — it only emits an event. The transition is what
+actually changes `LogicState`, and only the transition's firing runs `on_quest`'s `entry_actions`
+(the music swap, the `quest_label` UI variable a `Label` widget can bind to) and `exploring`'s
+`exit_actions`. (`entry_actions`/`exit_actions` at the project level have no `{self}` to resolve —
+that substitution only applies inside a per-entity `.behavior.ron` file — which is why this example
+uses `Log`/`SetVariable`/`PlayMusicLoop` rather than an entity-targeted action.)
+
+**What you'll see if a stale `rules_path:` or `rules:` field is left in a `.project.ron`.** Both
+fields were removed from `ProjectConfig`, and every RON asset in this engine rejects unknown
+fields — so a leftover `rules_path:` doesn't get ignored, it fails the whole file to parse:
+
+```
+line 4, col 5: Unexpected field named `rules_path` in `ProjectConfig`, expected one of
+`schema_version`, `initial_scene`, `state_machine_path`, `model_fixes`, `model_fixes_path`,
+`project_id`, `display_name`, `asset_catalog`, `prefab_catalog`, `global_environment`,
+`global_key_bindings`, `global_unclaimed_gamepad_bindings`, `primitive_default_color`,
+`stats_path`, `items_path`, `damage_popup_style`, or `audio` instead
+```
+
+(the `rules` field, if present instead, produces the same shape of error, naming `rules` in place
+of `rules_path`). `ironhold_cli validate` reports this clearly with the file and line, as shown
+above. At runtime, though, a `.project.ron` that fails to parse this way shows only as a loading
+screen that never finishes — the actual parse error is visible in the browser console, not
+on-screen, so `validate` (or `ironhold watch`) before you ever open the browser is the fast way to
+catch this.
+
+**One more thing:** `schema_version: 1` in a migrated `state_machine.ron` file is not a downgrade
+from a `rules.ron` file's `schema_version: 2` — they're independent per-file schema versions for
+two different asset types. `state_machine.ron` has always been schema v1.
 
 ---
 
@@ -4177,14 +4257,13 @@ Threshold events are **edge-triggered**: they fire once when the condition trans
 )
 ```
 
-**Reacting to threshold events in rules:**
+**Reacting to threshold events (`global_on` entries in `state_machine.ron`):**
 ```ron
-// logic/rules.ron or state_machine.ron
-( on: "stat.player_health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
-( on: "stat.player_health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
+( event: "stat.player_health.depleted", do_actions: [ LoadScene("scenes/game_over.scene.ron") ] ),
+( event: "stat.player_health.low",      do_actions: [ PlaySound(key: "heartbeat") ] ),
 
 // Play a death animation when the player's health hits zero (global stat, no {self}):
-( on: "stat.player_health.depleted", do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
+( event: "stat.player_health.depleted", do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
 ```
 
 > The global-stat event name is `stat.<key>.<threshold-emit-value>` — no `{self}` substitution since

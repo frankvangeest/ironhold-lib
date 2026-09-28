@@ -7,7 +7,8 @@ use crate::schema::scene_v2::SlotCost;
 use crate::schema::stats::{LoadedStats, StatMap};
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::GameEvent;
-use crate::runtime::scene_manager::message_interpreter::rewrite_target;
+use crate::runtime::scene_manager::action_substitution::rewrite_target;
+use crate::runtime::scene_manager::fsm_interpreter::fsm_interpreter_system;
 use crate::runtime::scene_manager::SpawnId;
 use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::capabilities::targeting::is_primary_player;
@@ -81,7 +82,6 @@ fn any_action_slots(slots: Query<&ActionSlotUi>) -> bool {
 
 impl Plugin for ActionBarPlugin {
     fn build(&self, app: &mut App) {
-        use crate::runtime::scene_manager::message_interpreter::message_interpreter_system;
         app.init_resource::<CooldownMap>()
             .init_resource::<CurrentTarget>()
             .init_resource::<PendingIntentActions>()
@@ -94,7 +94,7 @@ impl Plugin for ActionBarPlugin {
                     action_bar_visual_system.run_if(any_action_slots),
                 )
                     .chain()
-                    .before(message_interpreter_system),
+                    .before(fsm_interpreter_system),
             );
     }
 }

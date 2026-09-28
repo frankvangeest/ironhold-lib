@@ -121,7 +121,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     // STATION 3 — MAGIC SHRINE  (SW, −9, 0, +9)
     // Continuous: orbiting violet sparkles (magic_orbit via behavior).
-    // Interactive: press F → arcane nova burst (magic_nova via rules.ron).
+    // Interactive: press F → arcane nova burst (magic_nova via state_machine.ron).
     // ═══════════════════════════════════════════════════════════════════════
     (
       id: "magic_rune_01",

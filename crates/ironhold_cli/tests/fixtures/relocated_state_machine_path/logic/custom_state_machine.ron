@@ -1,0 +1,6 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "test.marker_event", do_actions: [ Log("relocated fsm loaded") ] ),
+    ],
+)

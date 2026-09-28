@@ -17,14 +17,17 @@ use crate::capabilities::terrain_material::TerrainMaterial;
 pub mod project_loader;
 pub mod scene_loader;
 pub mod entity_spawner;
-pub mod message_interpreter;
 pub mod action_executor;
+pub mod action_substitution;
+pub mod fsm_interpreter;
+pub mod entity_fsm_interpreter;
 
 pub use project_loader::*;
 pub use scene_loader::*;
 pub use entity_spawner::*;
-pub use message_interpreter::*;
 pub use action_executor::*;
+pub use fsm_interpreter::*;
+pub use entity_fsm_interpreter::*;
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
@@ -33,20 +36,14 @@ pub use action_executor::*;
 #[derive(Resource, Default)]
 pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
 
-/// The rules loaded for the current project. Populated from inline `config.rules` (v1)
-/// or from the external `logic/rules.ron` file (v2). Always available after project loading.
-#[derive(Resource, Default, Clone)]
-pub struct LoadedRules(pub Vec<LogicRule>);
-
-/// The FSM loaded for the current project. `None` when the project uses `rules.ron` instead.
-/// Populated from `logic/state_machine.ron` when `state_machine_path` is set in the project config.
+/// The FSM loaded for the current project. `None` when the project has no `state_machine_path`
+/// set at all (a project with no logic file). Populated from `logic/state_machine.ron` (or
+/// wherever `state_machine_path` points) when set in the project config.
 #[derive(Resource, Default, Clone)]
 pub struct LoadedStateMachine(pub Option<crate::schema::project::StateMachineAsset>);
 
-/// The current named logic state for the message interpreter.
-/// Rules with a matching `when` field only fire in that state.
-/// Rules with `when: None` fire regardless of the current state.
-/// Set via `Action::EnterState`; default is `""` (no active state).
+/// The current named logic state for the FSM interpreter.
+/// The FSM's current state; empty for a flat (`global_on` only) logic file.
 #[derive(Resource, Default, Clone)]
 pub struct LogicState(pub String);
 
@@ -350,7 +347,6 @@ pub struct LoadedCameraModes(pub BTreeMap<String, crate::schema::camera::CameraM
 #[derive(Resource)]
 pub struct PendingProjectLoads {
     pub model_fixes: Option<Handle<ModelFixesAsset>>,
-    pub rules: Option<Handle<LogicRulesAsset>>,
     pub state_machine: Option<Handle<crate::schema::project::StateMachineAsset>>,
     pub asset_catalog: Option<Handle<AssetCatalog>>,
     pub prefab_catalog: Option<Handle<PrefabCatalog>>,
@@ -632,7 +628,6 @@ pub struct SceneStateParams<'w, 's> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
     pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
-    pub logic_state: ResMut<'w, LogicState>,
     pub game_vars: ResMut<'w, crate::GameVariables>,
     pub loaded_stats: ResMut<'w, crate::schema::stats::LoadedStats>,
     pub loaded_modifiers: Res<'w, crate::schema::stats::LoadedModifiers>,

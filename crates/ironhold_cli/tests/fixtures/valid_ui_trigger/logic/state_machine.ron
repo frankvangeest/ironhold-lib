@@ -13,6 +13,10 @@
         ( on: "ui.button_pressed:start_game", to: "playing" ),
     ],
     global_on: [
+        // Migrated from rules.ron (rules placed first to preserve queue order)
+        (event: "ui.button_pressed:toggle_mute", do_actions: []),
+        (event: "ui.button_pressed:join", do_actions: []),
+        // Original state_machine.ron global_on
         (event: "ui.button_pressed:menu_toggle", do_actions: []),
     ],
 )

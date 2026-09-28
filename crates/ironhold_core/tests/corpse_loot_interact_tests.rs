@@ -112,7 +112,7 @@ fn test_controller() -> CharacterController {
     }
 }
 
-/// Local mirror of `message_interpreter::rewrite_self` (that function is `pub(crate)`, not
+/// Local mirror of `action_substitution::rewrite_self` (that function is `pub(crate)`, not
 /// reachable from this external test crate) — covers just the `Action` variants used by
 /// `enemy_zombie.behavior.ron` and `lootable_corpse.behavior.ron`'s entry actions. Needed because
 /// `resolve_pending_behaviors_system` (the real production path) fires the initial state's

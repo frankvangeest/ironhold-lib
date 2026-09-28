@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
-use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::StateMachineAsset;
 
 use super::utils::{glob_dir, resolve_catalog_paths, silent_parse};
@@ -14,8 +13,9 @@ struct ProjectStats {
     scene_count: usize,
     prefab_count: usize,
     effect_count: usize,
-    rule_count: usize,
     state_count: usize,
+    transition_count: usize,
+    global_on_count: usize,
     behavior_count: usize,
     catalog_model_count: usize,
     catalog_texture_count: usize,
@@ -116,13 +116,14 @@ fn collect(project_dir: &Path) -> ProjectStats {
     let catalog_audio_count = asset_catalog.as_ref().map(|c| c.audio.len()).unwrap_or(0);
     let catalog_decal_count = asset_catalog.as_ref().map(|c| c.decals.len()).unwrap_or(0);
 
-    let rule_count = silent_parse::<LogicRulesAsset>(project_dir, "logic/rules.ron")
-        .map(|r| r.rules.len())
-        .unwrap_or(0);
-
-    let state_count = silent_parse::<StateMachineAsset>(project_dir, "logic/state_machine.ron")
-        .map(|s| s.states.len())
-        .unwrap_or(0);
+    // Parsed once and reused for all three counts below -- previously parsed the same file three
+    // times, and hardcoded the convention-path literal instead of resolving `state_machine_path`
+    // (system-architect finding, rules_to_state_machine_consolidation's post-implementation
+    // review, 2026-09-28).
+    let state_machine: Option<StateMachineAsset> = silent_parse(project_dir, &paths.state_machine_path);
+    let state_count = state_machine.as_ref().map(|s| s.states.len()).unwrap_or(0);
+    let transition_count = state_machine.as_ref().map(|s| s.transitions.len()).unwrap_or(0);
+    let global_on_count = state_machine.as_ref().map(|s| s.global_on.len()).unwrap_or(0);
 
     let behavior_count = glob_dir(project_dir, "behaviors", ".behavior.ron").len();
 
@@ -133,8 +134,9 @@ fn collect(project_dir: &Path) -> ProjectStats {
         scene_count,
         prefab_count,
         effect_count,
-        rule_count,
         state_count,
+        transition_count,
+        global_on_count,
         behavior_count,
         catalog_model_count,
         catalog_texture_count,
@@ -154,8 +156,9 @@ fn print_human(s: &ProjectStats) {
     println!("  Effects:   {}", s.effect_count);
 
     let logic_parts: Vec<String> = [
-        (s.rule_count, "rule"),
         (s.state_count, "state"),
+        (s.transition_count, "transition"),
+        (s.global_on_count, "global_on"),
         (s.behavior_count, "behavior"),
     ]
     .iter()
@@ -189,8 +192,9 @@ fn print_json(s: &ProjectStats) {
         "prefabs": s.prefab_count,
         "effects": s.effect_count,
         "logic": {
-            "rules": s.rule_count,
             "states": s.state_count,
+            "transitions": s.transition_count,
+            "global_on": s.global_on_count,
             "behaviors": s.behavior_count,
         },
         "catalog": {

@@ -7,7 +7,7 @@
 
     asset_catalog: "assets.ron",
     prefab_catalog: "prefabs/prefabs.ron",
-    rules_path: "logic/rules.ron",
+    state_machine_path: "logic/state_machine.ron",
 
     // Night sky — almost pitch black so particles read against the dark.
     global_environment: (

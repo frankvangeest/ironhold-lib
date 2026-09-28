@@ -1,5 +1,0 @@
-(
-    schema_version: 3,
-    initial_scene: "scenes/main.scene.ron",
-    state_machine_path: "logic/state_machine.ron",
-)

@@ -131,7 +131,7 @@
     ),
 
     // Return trip reuses the "portal_to_room2" prefab (see prefabs.ron comment) — same event
-    // name as room1's forward portal, same rules.ron entry, no new prefab needed.
+    // name as room1's forward portal, same state_machine.ron entry, no new prefab needed.
     (
       id: "portal_to_room2",
       prefab: "portal_to_room2",

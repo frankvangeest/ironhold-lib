@@ -175,7 +175,7 @@
 
     // ── Score trigger zone ─────────────────────────────────────────────────────
     // Invisible sphere sensor. Walking through it fires entity.entered:score_zone_01
-    // which the project rules.ron handles (IncrementVariable("score", 10) + PlaySound).
+    // which the project state_machine.ron handles (IncrementVariable("score", 10) + PlaySound).
     "score_zone": (
       kind: Primitive,
       model: "",

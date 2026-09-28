@@ -1,5 +1,4 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset};
-use ironhold_core::schema::project::LogicRulesAsset;
 use ironhold_core::schema::scene_v2::GameSceneV2;
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
 use ironhold_core::schema::player::AnimationPolicy;
@@ -100,21 +99,13 @@ fn regression_schema_version_in_assets() {
         }
     }
 
-    // 3) Logic files: assets/projects/*/logic/rules.ron and logic/state_machine.ron
+    // 3) Logic files: assets/projects/*/logic/state_machine.ron
     let project_dirs = fs::read_dir(&projects_dir)
         .unwrap_or_else(|e| panic!("Failed to read projects dir {}: {}", projects_dir.display(), e));
 
     for entry in project_dirs.flatten() {
         let logic_dir = entry.path().join("logic");
         if !logic_dir.is_dir() { continue; }
-
-        let rules_file = logic_dir.join("rules.ron");
-        if rules_file.is_file() {
-            let contents = fs::read_to_string(&rules_file)
-                .unwrap_or_else(|e| panic!("Failed to read {}: {}", rules_file.display(), e));
-            let _: LogicRulesAsset = from_str(&contents)
-                .unwrap_or_else(|e| panic!("LogicRulesAsset failed to parse {}: {}", rules_file.display(), e));
-        }
 
         let sm_file = logic_dir.join("state_machine.ron");
         if sm_file.is_file() {
@@ -180,4 +171,38 @@ fn regression_schema_version_in_assets() {
                 .unwrap_or_else(|e| panic!("AnimationPolicy failed to parse {}: {}", path.display(), e));
         }
     }
+}
+
+/// Tripwire: no `rules.ron` file should exist anywhere in this repo's example projects or CLI
+/// test fixtures -- the rules.ron authoring format was fully removed in
+/// `rules_to_state_machine_consolidation` (2026-09). A stray leftover file isn't loaded or
+/// validated by anything (dead weight, and a trap for anyone who copies an old project as a
+/// starting point and expects it to still work).
+#[test]
+fn regression_no_rules_ron_files_remain() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = crate_root
+        .parent()
+        .and_then(|p| p.parent())
+        .unwrap_or_else(|| panic!("Expected repo root at two levels above {}", crate_root.display()));
+
+    let mut hits: Vec<PathBuf> = Vec::new();
+    for dir in [
+        repo_root.join("assets").join("projects"),
+        repo_root.join("crates").join("ironhold_cli").join("tests").join("fixtures"),
+    ] {
+        let mut ron_files = Vec::new();
+        collect_ron_files_recursive(&dir, &mut ron_files);
+        hits.extend(
+            ron_files.into_iter()
+                .filter(|p| p.file_name().and_then(|n| n.to_str()) == Some("rules.ron")),
+        );
+    }
+
+    assert!(
+        hits.is_empty(),
+        "found leftover rules.ron file(s), which nothing loads or validates any more -- delete \
+         them or migrate their content into state_machine.ron's global_on:\n{:#?}",
+        hits
+    );
 }

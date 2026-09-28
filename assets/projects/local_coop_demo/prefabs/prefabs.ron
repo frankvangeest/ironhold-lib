@@ -125,7 +125,7 @@
     // Ascii world_stat_bar, placed on room3's centerline so both split viewports can see the
     // same instance simultaneously (mirrors the portal-label bug's original repro condition).
     // One copy is scene-placed (room3.scene.ron); another is fired dynamically via
-    // Action::Spawn on scene.ready:room3 (rules.ron) to exercise drain_dynamic_stat_ui_system's
+    // Action::Spawn on scene.ready:room3 (state_machine.ron) to exercise drain_dynamic_stat_ui_system's
     // duplication path too. A fixed base health value is used (no damage source in this demo) —
     // the point of this aid is duplication across viewports, not stat gameplay.
     "stat_widget_test": (
@@ -199,7 +199,7 @@
     ),
 
     // ── Portals ────────────────────────────────────────────────────────────────
-    // Stage 2: TriggerZone (radius 1.5) fires entity.entered:{id} -> rules.ron -> LoadScene.
+    // Stage 2: TriggerZone (radius 1.5) fires entity.entered:{id} -> state_machine.ron -> LoadScene.
     // trigger_zone_system fires for ANY CharacterController entity that enters, so either
     // player triggers it; LoadScene then reloads the whole world (both players included) from
     // the destination scene's entities: list — "both players teleport" needs no extra code.
@@ -233,7 +233,7 @@
 
     // room2 -> room3 (Stage 3, vertical split). The return trip reuses the existing
     // "portal_to_room2" prefab placed a second time in room3.scene.ron — same event name
-    // ("entity.entered:portal_to_room2"), same rules.ron entry, no new prefab needed for that
+    // ("entity.entered:portal_to_room2"), same state_machine.ron entry, no new prefab needed for that
     // direction.
     "portal_to_room3": (
       kind: Primitive,
@@ -250,7 +250,7 @@
 
     // room3 -> room4 (Stage 4, horizontal split). The return trip reuses the existing
     // "portal_to_room3" prefab placed a second time in room4.scene.ron — same event name
-    // ("entity.entered:portal_to_room3"), same rules.ron entry, no new prefab needed for that
+    // ("entity.entered:portal_to_room3"), same state_machine.ron entry, no new prefab needed for that
     // direction (same trick Stage 3 used reusing "portal_to_room2").
     "portal_to_room4": (
       kind: Primitive,
@@ -267,7 +267,7 @@
 
     // room4 -> room5 (Stage 5, dynamic split). The return trip reuses the existing
     // "portal_to_room4" prefab placed a second time in room5.scene.ron — same event name
-    // ("entity.entered:portal_to_room4"), same rules.ron entry, no new prefab needed for that
+    // ("entity.entered:portal_to_room4"), same state_machine.ron entry, no new prefab needed for that
     // direction (same trick every prior stage used).
     "portal_to_room5": (
       kind: Primitive,
@@ -284,7 +284,7 @@
 
     // room5 -> room6 (Stage 6, 4-way grid split). The return trip reuses the existing
     // "portal_to_room5" prefab placed a second time in room6.scene.ron — same event name
-    // ("entity.entered:portal_to_room5"), same rules.ron entry, no new prefab needed for that
+    // ("entity.entered:portal_to_room5"), same state_machine.ron entry, no new prefab needed for that
     // direction (same trick every prior stage used).
     "portal_to_room6": (
       kind: Primitive,
@@ -991,7 +991,7 @@
     // room6 -> room7 (player_model_source_unification.md v1 playtest aid: minimal 2-primitive-
     // player vertical split, falsifying that the single-primitive-player structural cap is gone).
     // The return trip reuses the existing "portal_to_room6" prefab placed a second time in
-    // room7.scene.ron — same event name ("entity.entered:portal_to_room6"), same rules.ron entry,
+    // room7.scene.ron — same event name ("entity.entered:portal_to_room6"), same state_machine.ron entry,
     // no new prefab needed for that direction (same trick every prior stage used).
     "portal_to_room7": (
       kind: Primitive,
@@ -1173,7 +1173,7 @@
     // room7 -> room8 (local_coop_hot_join_leave.md v1 playtest aid: starts at 2 players, join
     // key grows the Grid split live up to 4). The return trip reuses the existing
     // "portal_to_room7" prefab placed a second time in room8.scene.ron — same event name
-    // ("entity.entered:portal_to_room7"), same rules.ron entry, no new prefab needed (same
+    // ("entity.entered:portal_to_room7"), same state_machine.ron entry, no new prefab needed (same
     // trick every prior stage used).
     "portal_to_room8": (
       kind: Primitive,
@@ -1206,7 +1206,7 @@
     // room8 -> room9 (per_viewport_target_ring_visibility.md playtest aid: vertical split, one
     // player's ring visible only in their own viewport). The return trip reuses the existing
     // "portal_to_room8" prefab placed a second time in room9.scene.ron — same event name
-    // ("entity.entered:portal_to_room8"), same rules.ron entry, no new prefab needed (same trick
+    // ("entity.entered:portal_to_room8"), same state_machine.ron entry, no new prefab needed (same trick
     // every prior stage used).
     "portal_to_room9": (
       kind: Primitive,
@@ -1375,7 +1375,7 @@
 
     // room9 -> room10 (player_model_source_unification.md v2 playtest aid: mixed GLB + primitive
     // player pairing). The return trip reuses the existing "portal_to_room9" prefab (see its
-    // comment above) — same event name ("entity.entered:portal_to_room9"), same rules.ron entry,
+    // comment above) — same event name ("entity.entered:portal_to_room9"), same state_machine.ron entry,
     // no new prefab needed, same trick every prior stage used.
     "portal_to_room10": (
       kind: Primitive,
@@ -1557,7 +1557,7 @@
     // camera_mode:/split: syntax (this is a brand-new room, no legacy-compat baggage to
     // preserve, so it follows room4's precedent rather than the 9 legacy-syntax rooms). P1's
     // camera_mode is the one Action::SetCameraMode retargets — see room11.scene.ron's
-    // scene_key_bindings/camera_modes registry and logic/rules.ron's cam_p1_fixed/cam_p1_default
+    // scene_key_bindings/camera_modes registry and logic/state_machine.ron's cam_p1_fixed/cam_p1_default
     // rules. P2 keeps its own Orbit camera untouched throughout, proving SetCameraMode's
     // owner_player targeting retargets only the named player's viewport.
     "player_p1_camera_switch": (

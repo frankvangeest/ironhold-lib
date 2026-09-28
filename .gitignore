@@ -49,3 +49,7 @@ assets/shared/models/**/*.png
 tools/bin/
 
 *.env
+
+# Temp folder for throwaway scripts/debugging — folder tracked, contents ignored
+temp/
+!temp/.gitkeep

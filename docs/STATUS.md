@@ -15,7 +15,7 @@ _Last updated: 2026‑05‑18_
 |----------:|-----------------------------------|:------:|-------|
 | 0.1       | Baseline Runtime                  |   ✅   | Native+web parity; RON project/scene load; UI button → scene load; player/camera/animation; schema v1; validation tests. |
 | 0.2       | Event/Action Bus refactor         |   ✅   | Message→Interpreter→Action→Executor fully wired with project-level logic rules. |
-| 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states, state-gated rules, `EnterState`, and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` uses **both** `rules.ron` (menu/UI transitions) and `state_machine.ron` (gameplay state machine) complementarily. |
+| 0.3       | Global Logic (FSM v1)             |   ✅   | Named logic states and full `StateMachineAsset` (states, transitions, entry/exit, in-state `on`, `global_on`, any-state transitions). `3rd_person_game_demo` migrated to FSM. |
 | 0.4       | Entity Logic (FSM v1)             |   ✅   | Per-entity `StateMachineAsset` behaviors (`.behavior.ron`), `{self}` substitution, `entity_fsm_interpreter_system`, `TriggerZone` and `Interactable` capabilities, `PlayAnimationOn`/`EmitEvent` actions. `entity_logic_demo` example project. |
 | 0.5       | Deterministic Tick + Replay       |   ⛔   | Not implemented. |
 | 0.6       | Networking Prototype              |   ⛔   | Not implemented. |
@@ -30,8 +30,8 @@ _Last updated: 2026‑05‑18_
 | UI → logic trigger            |   ✅   | Button press → `UiEvent` → Project Rule matched → Action(s) queued. |
 | Logic → Action execution      |   ✅   | `ActionQueue` processed by `action_executor_system`. |
 | Action infrastructure         |   ✅   | interpreter & executor wired. |
-| State-gated rules             |   ✅   | `LogicRule.when` field gates rules to a named logic state; `EnterState` action transitions between states. |
-| FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`; use for gameplay state machines (playing, paused, character selection). Use `logic/rules.ron` for project-level rules (menus, options, scene transitions) with optional `when:` state gating. Both formats can be used together — the 3rd person game demo uses `rules.ron` for menu/UI transitions and `state_machine.ron` for the gameplay state machine. |
+| State-gated bindings           |   ✅   | A state's own `on:` list only fires while `LogicState` matches that state's name; a `transitions` entry is what actually changes state. |
+| FSM asset (`StateMachineAsset`) |   ✅   | `logic/state_machine.ron` — states with entry/exit/on, transitions (any-state or from-specific), `global_on`. Every project uses this format (see `docs/20_data_formats.md`'s "Removed: rules.ron" callout). |
 | Live event domains            |   ✅   | `UiEvent`, `GameEvent`, `SceneEvent`, `InputAction`/`InputActionMessage` are live. Entity events (`entity.entered/exited/interacted`) live. |
 | Planned event domains         |   ⛔   | (AI, dialogue, networking) are planned. Interaction events are now live. |
 | Entity FSM (per-entity behavior) |   ✅   | `behavior` field on `PrefabDef`; `.behavior.ron` uses `StateMachineAsset` format; `{self}` substitution; `entity_fsm_interpreter_system` runs alongside global interpreters. |
@@ -97,7 +97,6 @@ _Last updated: 2026‑05‑18_
 - `Action::StopMusic` — stops the current background music track
 - `Action::SetVolume(u8)` — sets global volume 0–100
 - `Action::PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed
-- `Action::EnterState(String)` — transitions the interpreter to a named logic state; empty string returns to stateless (always-fire) default
 - `Action::SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `Action::IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 - `Action::PlayAnimationOn { target: String, clip: String, start_at_fraction: Option<f32>, freeze: bool }` — plays `clip` on the entity with the given spawn ID; use `"{self}"` as target inside `.behavior.ron` files; `start_at_fraction` (0.0–1.0) seeks into the clip's duration before playback, `freeze` pauses it there (or at `0.0` if `start_at_fraction` is omitted) instead of continuing — see `dynamic_animation_control` example project
@@ -120,28 +119,25 @@ _Last updated: 2026‑05‑18_
 - `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`.
 - On WASM, `DebugState` is serialised as JSON into `<div id="debug-state">` by `sync_debug_state_to_dom`, making it readable by browser automation tools.
   ```json
-  {"frame": 42, "app_state": "InGame", "last_action": "EnterState(\"playing\")", "scene": "...", "logic_state": "playing", "score": 0}
+  {"frame": 42, "app_state": "InGame", "last_action": "SetVariable(\"score\", \"10\")", "scene": "...", "logic_state": "playing", "score": 10}
   ```
 
 ---
 
 ## Project Logic
 
-Two authoring workflows are supported. A project uses one or the other via its `.project.ron`.
+One authoring format, `state_machine.ron` (schema v1) ✅ — see `docs/20_data_formats.md`'s
+"Removed: rules.ron" callout for the older, now-removed two-dialect history and migration mapping.
 
-### rules.ron workflow (schema v2)
-- `rules_path: "logic/rules.ron"` in project config.
-- Rules with `when` omitted fire in any logic state.
-- Rules with `when: "state_name"` only fire while the interpreter is in that named state.
-- `Action::EnterState(name)` transitions to a named state; `EnterState("")` returns to stateless.
-
-### state_machine.ron workflow (schema v1) ✅
 - `state_machine_path: "logic/state_machine.ron"` in project config.
 - Declares named states with `entry_actions`, `exit_actions`, and in-state `on` event bindings.
 - `transitions` list drives state changes (`from` optional — omit for any-state transitions).
 - `global_on` list fires regardless of current state without changing state.
-- The engine fires exit/entry actions automatically; authors do not write `EnterState` manually.
-- `initial_state` sets the starting `LogicState` immediately when the asset loads.
+- The engine fires exit/entry actions automatically as part of a transition — there is no action an
+  author writes to force a state change directly.
+- `initial_state` sets the starting `LogicState` immediately when the asset loads — but note its
+  `entry_actions` do **not** fire at boot, only on an actual transition into that state.
+- A flat file (no `states`/`transitions`, just `global_on`) is fully valid for simple projects.
 - Example:
   ```ron
   // logic/state_machine.ron
@@ -153,7 +149,7 @@ Two authoring workflows are supported. A project uses one or the other via its `
       ( name: "menu", entry_actions: [], exit_actions: [],
         on: [ ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ) ] ),
       ( name: "playing",
-        entry_actions: [ PlayMusicLoop("bg_music") ],
+        entry_actions: [ PlayMusicLoop(key: "bg_music") ],
         exit_actions:  [ StopMusic ],
         on: [ ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ) ] ),
       ( name: "paused",

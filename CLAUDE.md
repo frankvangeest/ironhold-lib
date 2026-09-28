@@ -36,7 +36,7 @@ tools/bin/ironhold inspect audio   <path.wav|mp3>      # duration, sample rate, 
 tools/bin/ironhold query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
 tools/bin/ironhold query effects <project_dir>         # list particle effects (count, layers, flags)
 tools/bin/ironhold query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
-tools/bin/ironhold query rules    <project_dir>        # list rules.ron and/or state_machine.ron
+tools/bin/ironhold query rules    <project_dir>        # list logic/state_machine.ron content (global_on, states, transitions)
 tools/bin/ironhold query actions  <project_dir>        # list all action types used across logic files
 tools/bin/ironhold query events   <project_dir>        # list all event triggers used across logic files
 tools/bin/ironhold query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
@@ -158,7 +158,7 @@ Three-crate workspace:
 The engine uses a **Message → Interpreter → Action → Executor** pipeline:
 
 1. Capabilities emit `UiEvent`, `GameEvent`, `InputActionMessage`, or `SceneEvent` events.
-2. `message_interpreter_system` reads those events plus the data-defined `LogicRules` (from `logic/rules.ron`) to produce `Action` values placed on the `ActionQueue` resource.
+2. `fsm_interpreter_system` reads those events against the project's `logic/state_machine.ron` (global_on bindings, in-state bindings, transitions), and `entity_fsm_interpreter_system` does the same per-entity against a spawned entity's `.behavior.ron`, to produce `Action` values placed on the `ActionQueue` resource.
 3. `action_executor_system` dispatches each `Action` (e.g., `LoadScene`, `Spawn`, `PlayAnimation`) to the appropriate capability systems.
 
 This means game behavior can be authored entirely in RON without recompiling the engine.
@@ -169,15 +169,14 @@ This means game behavior can be authored entirely in RON without recompiling the
 assets/projects/{name}/
   {name}.project.ron          ← ProjectConfig (entry point, initial scene ref)
   scenes/*.scene.ron          ← GameSceneV2 files (models, UI, lighting, player); projects can have multiple scenes
-  logic/rules.ron             ← event → action rules (simple projects)
-  logic/state_machine.ron     ← FSM-based logic (used by projects with multiple states/scenes)
+  logic/state_machine.ron     ← FSM-based logic: flat (global_on only) for simple projects, or with states/transitions for multi-scene projects
   overrides/model_fixes.ron   ← per-model transform corrections
   prefabs/prefabs.ron         ← reusable component definitions
   prefabs/animation/*.ron     ← AnimationPolicy per character
   assets.ron                  ← AssetCatalog
 ```
 
-Note: projects may have `rules.ron`, `state_machine.ron`, or both. Simple projects use only `rules.ron`; projects with multiple scenes/states use `state_machine.ron` (sometimes alongside `rules.ron`). See the interpreter notes in `crates/ironhold_core/src/CLAUDE.md`.
+Note: every project uses `logic/state_machine.ron` — there is no separate `rules.ron` format (removed; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping). A project with only `global_on` bindings and no `states`/`transitions` is exactly as valid as one with a full FSM — start flat, add states when you need modes. See the interpreter notes in `crates/ironhold_core/src/CLAUDE.md`.
 
 Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`, `custom_materials`, `primitive_world`, `entity_logic_demo`, `particles_demo`. Test data lives in `assets/projects/integration_tests/`.
 
