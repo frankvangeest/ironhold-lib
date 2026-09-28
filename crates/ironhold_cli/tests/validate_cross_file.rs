@@ -1147,7 +1147,7 @@ fn valid_spawn_point_exits_0() {
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
 
-/// `spawn_point` is `{self}`/`{target}`-substituted at interpret time (message_interpreter.rs,
+/// `spawn_point` is `{self}`/`{target}`-substituted at interpret time (action_substitution.rs,
 /// dialogue.rs) — a templated value like `"{self}_spawn"`, used to share one behavior rule across
 /// several named spawn points, is not the literal runtime key and must not be checked as one.
 #[test]

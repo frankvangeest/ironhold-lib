@@ -186,7 +186,7 @@ fn load_configured_catalog<T: serde::de::DeserializeOwned>(
 
 /// Parses an explicitly-configured `.project.ron` path -- the shared "explicit path is
 /// authoritative" contract every configurable-path field in this file uses (`asset_catalog`,
-/// `prefab_catalog`, `stats_path`, `items_path`, `rules_path`, `state_machine_path`, ...):
+/// `prefab_catalog`, `stats_path`, `items_path`, `state_machine_path`, ...):
 /// - A configured-but-missing path is a hard error, unlike a merely-absent convention-path file --
 ///   the runtime unconditionally tries to load whatever's configured, so `try_parse`'s silent
 ///   `None`-on-missing (designed for "this convention path might not apply to this project") is
@@ -745,14 +745,15 @@ struct ResolvedLogicFiles {
 }
 
 /// Mirrors the runtime's actual resolution (`project_loader.rs::check_project_loaded`) instead of
-/// the two hardcoded convention-path literals this function used to always parse: once a
-/// `.project.ron` exists, `rules_path`/`state_machine_path` are the ONLY source for their half --
-/// an unset `rules_path` falls back to the inline V1 `ProjectConfig.rules` (the runtime never
-/// looks at `"logic/rules.ron"` on disk in that case, even if the file exists), and an unset
-/// `state_machine_path` means no state machine at all, full stop. Getting this wrong is exactly
-/// how a project that sets only `state_machine_path` (e.g. `3rd_person_game_demo`, `terrain_demo`)
-/// previously had its unrelated, dead-at-runtime `logic/rules.ron` silently counted as live by
-/// every cross-file check.
+/// a hardcoded convention-path literal this function used to always parse: once a `.project.ron`
+/// exists, `state_machine_path` is the ONLY source -- an unset `state_machine_path` means no state
+/// machine at all, full stop (no fallback to a convention-path guess). This function predates the
+/// rules.ron/state_machine.ron consolidation (2026-09) -- back when both fields coexisted, getting
+/// this wrong is exactly how a project that set only `state_machine_path` (e.g.
+/// `3rd_person_game_demo`, `terrain_demo`) had its unrelated, dead-at-runtime `logic/rules.ron`
+/// silently counted as live by every cross-file check; `rules_path`/`ProjectConfig.rules` no
+/// longer exist, but the fallback-free contract that fixed that bug still applies to the one
+/// remaining field.
 ///
 /// Two deliberate divergences from the runtime:
 /// - When there's no *parseable* `.project.ron` (either none exists, or the one that does failed
@@ -762,11 +763,11 @@ struct ResolvedLogicFiles {
 ///   look would silently stop checking logic entirely for every fixture/project that predates
 ///   configurable paths.
 /// - A configured path containing a `..` segment IS followed (unlike `discover_extra_scenes`,
-///   which refuses to discover one) -- this is intentional, not an oversight: `rules_path`/
-///   `state_machine_path` are exactly-one-hardcoded-field values the runtime resolves with the
-///   identical plain `format!("{root}/{path}")` (`resolve_project_path`), so following it here
-///   is runtime-faithful, whereas `discover_extra_scenes`'s candidates are arbitrary
-///   designer-authored strings from inside action bodies, a materially different trust boundary.
+///   which refuses to discover one) -- this is intentional, not an oversight: `state_machine_path`
+///   is an exactly-one-hardcoded-field value the runtime resolves with the identical plain
+///   `format!("{root}/{path}")` (`resolve_project_path`), so following it here is runtime-faithful,
+///   whereas `discover_extra_scenes`'s candidates are arbitrary designer-authored strings from
+///   inside action bodies, a materially different trust boundary.
 ///
 /// A configured-but-missing path is a hard error (see `parse_configured_path`), not `try_parse`'s
 /// silent `None` -- correct for a convention-path guess, but this is a `.project.ron`-authored
@@ -2271,7 +2272,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     for (source, action) in actions {
         let Action::Spawn { spawn_point: Some(spawn_point), .. } = action else { continue };
         // `spawn_point` is substituted at interpret time for `{self}`/`{target}` tokens
-        // (message_interpreter.rs, dialogue.rs) — see the supported-fields list in
+        // (action_substitution.rs, dialogue.rs) — see the supported-fields list in
         // `crates/ironhold_core/src/CLAUDE.md`. The authored string here is pre-substitution, so a
         // templated value (e.g. `"{self}_spawn"`, used to share one behavior rule across several
         // named spawn points) is not the literal key that will be looked up at runtime; skip it
@@ -2553,7 +2554,7 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 ///
 /// **Known latent gap, no shipped project hits it today:** an entity `.behavior.ron`'s event
 /// pattern can contain a `{self}` token, substituted against the owning entity's spawn id at
-/// match time (`message_interpreter.rs`) — `collect_handled_events` stores the raw,
+/// match time (`action_substitution.rs`) — `collect_handled_events` stores the raw,
 /// pre-substitution literal, so a behavior authored as `on: "ui.button_pressed:{self}_open"`
 /// would never string-match a button's already-concrete derived event and would be wrongly
 /// reported as unreachable. No shipped behavior file currently handles a `ui.button_pressed:*`
@@ -2901,7 +2902,7 @@ fn check_orphan_event(
     // Same false-positive class every other string-key check in this file already guards against
     // (e.g. stat_label's "{self}." skip): a behavior file's on:/event: pattern can contain a
     // `{self}` token, substituted against the owning entity's spawn id at match time
-    // (message_interpreter.rs) -- the raw, pre-substitution literal stored here would never
+    // (action_substitution.rs) -- the raw, pre-substitution literal stored here would never
     // string-match the button's already-concrete derived event.
     if event.contains('{') {
         return;

@@ -135,13 +135,19 @@ pub(crate) fn intent_slot_key(event_name: &str) -> Option<String> {
     event_name.strip_prefix("intent.slot.").and_then(|s| s.split(':').next().map(|s| s.to_string()))
 }
 
-/// Extracts the scene file stem from a scene event name like "scene.ready:main"
-pub(crate) fn scene_path_stem(event_name: &str) -> Option<String> {
-    event_name.strip_prefix("scene.ready:").or_else(|| {
-        event_name.strip_prefix("scene.loaded:")
-    }).or_else(|| {
-        event_name.strip_prefix("scene.unloading:")
-    }).or_else(|| {
-        event_name.strip_prefix("scene.requested:")
-    }).map(|s| s.to_string())
+/// Extracts the scene file stem from a real scene path (e.g. "scenes/main.scene.ron" -> "main"),
+/// for building a `SceneEvent`'s derived "scene.ready:{stem}"-shaped event name. This is NOT
+/// string-prefix stripping on an already-formed event name (see `intent_slot_key` above for that
+/// pattern) -- `SceneEvent::Ready`/`Loaded`/`Requested`/`Unloading` all carry a raw path, not a
+/// prefixed event string. Callers wrap this in `.unwrap_or_default()`, so always returns `Some`.
+pub(crate) fn scene_path_stem(path: &str) -> Option<String> {
+    Some(
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or(path)
+            .trim_end_matches(".scene.ron")
+            .trim_end_matches(".ron")
+            .to_string(),
+    )
 }
