@@ -7,11 +7,15 @@ metadata:
 
 There is no single substitution engine. Four hand-written match arms must be kept in sync by hand:
 
-- `rewrite_self` (`runtime/scene_manager/message_interpreter.rs`) — called **only** by
-  `entity_fsm_interpreter_system`. So `{self}` works in per-entity behavior files and *not* in a
-  global `rules.ron` / `state_machine.ron`, despite docs describing it generically. Handles
-  `Action::Spawn`'s `id`, `spawn_point`, and `at_entity`.
-- `rewrite_target` (same file) — called by all three interpreter systems. Same three `Spawn` fields.
+- `rewrite_self` (`runtime/scene_manager/action_substitution.rs` since the 2026-09
+  rules_to_state_machine_consolidation; was `message_interpreter.rs`) — called **only** by
+  `entity_fsm_interpreter_system` (+ entity_spawner initial entry). So `{self}` works in per-entity
+  behavior files and *not* in the global `state_machine.ron`. Handles `Action::Spawn`'s `id`,
+  `spawn_point`, and `at_entity`.
+- `rewrite_target` (same file) — called by both interpreter systems + action_bar. Same three `Spawn`
+  fields. During that consolidation the file was RE-TYPED, not moved: it lost `SetVariable` (fixed)
+  and `SetDespawnTimer` (found by review 2026-09-28), and gained key-side SetVariable substitution.
+  After any "split a file" refactor, diff each old match fn arm-by-arm against its new copy.
 - `substitute_self_in_action` (`capabilities/dialogue.rs`) — the only transform applied to dialogue
   `do_actions`. **It now HAS an `Action::Spawn` arm** covering `id`/`spawn_point`/`at_entity` (added
   during `monster_corpse_loot.md` v2 — the older note that it omitted `Spawn` entirely is stale).

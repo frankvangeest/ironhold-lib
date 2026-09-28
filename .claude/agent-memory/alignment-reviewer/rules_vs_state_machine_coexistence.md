@@ -1,30 +1,40 @@
 ---
 name: rules-vs-state-machine-coexistence
-description: rules_path and state_machine_path are both live when both are set. The project_loader.rs warn was fixed in feature/fix_stale_logic_path_warning (2026-09-22); docs/00 and docs/30 still say FSM "replaces" rules.ron
+description: rules.ron/LogicRulesAsset/message_interpreter_system/EnterState REMOVED by feature/rules_to_state_machine_consolidation (reviewed 2026-09-28); state_machine.ron is the only logic dialect. Lists the leftover traps.
 metadata:
   type: project
 ---
 
-`rules_path` and `state_machine_path` are **independently live**: if both are set, both run.
+**Superseded history:** before 2026-09-28, `rules_path` and `state_machine_path` were both live
+at the same time. `feature/rules_to_state_machine_consolidation` (reviewed 2026-09-28) deletes
+`rules_path`, `ProjectConfig.rules`, `LogicRulesAsset`, `LoadedRules`,
+`message_interpreter_system` and `Action::EnterState`. Once that branch is on `integration`, do not
+suggest rules.ron as a logic home. A stale `rules_path:` is a `deny_unknown_fields` parse error
+(the runtime hangs on the loading screen; that is logged as a backlog bug).
 
-**Why:** found by reading the code during the `feature/configurable_logic_paths` review
-(2026-09-06). `check_project_loaded` builds `rules_handle` (project_loader.rs:~49-53) without
-checking for a state machine, and inserts `LoadedRules` whether or not the FSM resolved.
-`message_interpreter_system` reads `LoadedRules` unconditionally and runs alongside
-`fsm_interpreter_system`. Neither one turns the other off.
+**Why:** Frank decided on one deliberate breaking change, with no bridge.
+Plan: `planning/features/rules_to_state_machine_consolidation.md`.
 
-**Status (2026-09-22):** `feature/fix_stale_logic_path_warning` changed the old false warn text
-("rules.ron is NOT loaded...") to say correctly that both files are live when both are set. It
-changed wording only. `docs/20_data_formats.md` was fixed earlier. Places that still suggest
-FSM replaces rules.ron, as of that review:
-- `docs/00_overview.md`:~121: "`state_machine_path` instead of `rules_path`"
-- `docs/30_runtime_events_and_logic.md`:~45: "Replaces `rules.ron` for FSM projects"
-- `planning/backlog.md`: the v2→v3 migration-guide item mentions "the warning to expect if both
-  files coexist"
-- The debug-detective and system-architect memory files still quote the old warn text
+**Post-consolidation facts to apply:**
+- `StateMachineAsset.initial_state`, `states` and `transitions` are all `#[serde(default)]`. A flat
+  file with only `global_on` is valid. `validate()` now runs on the project FSM, on behaviors at
+  runtime (`entity_spawner`) and in the CLI.
+- **The `on:` overload is real:** `FsmState.on` is `Vec<FsmEventBinding>`, `FsmTransition.on` is
+  `String`, and `FsmEventBinding` uses `event:`. Every mis-authoring is a loud parse error
+  (`deny_unknown_fields`).
+- **`FsmTransition` has NO `do_actions`.** Any doc that says to "put the action on the transition"
+  is wrong. The actions belong in the destination state's `entry_actions` or the source state's
+  in-state `on:` binding. docs/30 got this wrong in the 2026-09-28 review.
+- **Initial-state entry_actions asymmetry:** the project FSM never fires `initial_state`'s
+  `entry_actions` (project_loader only sets `LogicState`), but behavior FSMs do
+  (`entity_spawner.rs` `resolve_pending_behaviors_system`). Any "gotcha" doc must say which of
+  the two it means.
+- The state change recipe is `EmitEvent("x")` + `( from?, on: "x", to: "S" )`. The transition
+  fires on the next frame, because the executor emits the event after the interpreter has run.
+- Designer-facing message strings still say "rules.ron" as of the review:
+  `validate.rs` (unreachable_trigger message), `scene_loader.rs` ActionBar dup-key warn, and
+  `.claude/agents/ron-gameplay-scripter.md`, which still offers `logic/rules.ron` and fake
+  `on_enter`/`on_exit`/`when` fields.
 
-**How to apply:** don't copy the old exclusivity idea into a CLI check, and don't treat the two
-fields as mutually exclusive. `resolve_logic_files` already treats them as independently live, and
-the `valid_ui_trigger` fixture is the regression coverage for that. Making them truly exclusive
-would break any project that uses both, so that is Frank's decision, not something a review should
-decide. Related: [[validate-cross-file-blind-spots]].
+**How to apply:** when a feature adds logic hooks, check only the `state_machine.ron`/behavior
+paths. Related: [[validate-cross-file-blind-spots]], [[intent-event-layer-pattern]].

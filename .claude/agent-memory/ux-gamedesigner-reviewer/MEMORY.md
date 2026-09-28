@@ -1,6 +1,6 @@
 # Memory Index
 
-- [FSM designer traps](project_fsm_designer_traps.md) — `on` means 3 things; initial_state entry_actions skip boot; first-match transitions; EmitEvent missing from docs/20 table
+- [FSM designer traps](project_fsm_designer_traps.md) — `on` x3; initial_state entry skip; transitions carry no actions; struct-variant actions miswritten; stale old-syntax grep recipe
 
 - [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 6 places a new entity.* event/InteractableDef field must land; STATUS.md event list + docs/60 check list lag most
 - [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning

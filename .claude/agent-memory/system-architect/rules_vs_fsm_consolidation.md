@@ -49,6 +49,16 @@ all flat `global_on` lists.
   (README, EmitEvent recipe in designer docs, `on:` overload, initial_state entry_actions do not
   run at boot). Status is now Ready. The only open Frank question is the EnterState veto.
 
+**Implementation review (2026-09-28, branch at 29d9181):** re-anchoring and the chain are correct.
+The split into fsm_interpreter/entity_fsm_interpreter/action_substitution caused regressions
+because the code was hand-copied rather than moved. scene_path_stem and SetVariable were caught
+and fixed. **rewrite_target silently lost its `SetDespawnTimer` arm** (action_bar's
+action_needs_target still gates on it). The root cause is the `other => other` wildcard in both
+rewrite fns, so a missing arm compiles fine. The fix: an exhaustive match plus unit tests in
+action_substitution.rs. The plan's `query`/`stats` state_machine_path fold-in and the no-rules.ron
+tripwire test were NOT implemented. fsm_interpreter's doc comment inverts the early-return
+semantics: the un-drained reader means the load-frame scene.requested IS seen, one frame late.
+
 **How to apply:** when reviewing the implementation, check the re-anchoring, the tripwire test
 (no `rules.ron` anywhere), that `query`/`stats` now resolve `state_machine_path` AND warn on an
 unparseable `.project.ron`, and that `StateMachineAsset::validate()` is wired in. Do not accept a

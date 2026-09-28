@@ -1,7 +1,7 @@
 - [Player spawn unification](project_player_spawn_unification.md) — spawn-time-only; v2 universal zero-Friction (net win); `material:` overrides ALL children meshes; spawn_primitive_children never dedups; Rapier TimestepMode::Variable
 - [Targeting capability hot path](project_targeting_capability.md) — click_select/tab_targeting both input-gated; cheap on idle frames; allocations only on click/Tab
 - [Dynamic labels per-frame churn](project_dynamic_labels_system.md) — String/frame per `bind:`-labels only (DynamicLabel-gated, static scene labels are FREE); render-write guarded by text.0 != new_text
-- [rewrite_target string substitution](project_rewrite_target.md) — runs per action pushed; .replace allocations only when actions fire (not per-frame); canonical copy now in message_interpreter.rs
+- [rewrite_target / interpreter chain](project_rewrite_target.md) — substitution per action pushed (not per-frame); now in action_substitution.rs; message_interpreter removed; entity_fsm {self} replace is the real hotspot
 - [WASM binary size](project_wasm_size.md) — release **30.6 MB** measured 2026-09-01 (wasm-opt re-enabled halved it from 58); warn 95, block 100; huge headroom; always measure, never quote 90.7
 - [Dynamic split-screen system](project_dynamic_split_screen.md) — Stage 5: dynamic_split_screen_system per-frame render-chain; None-config early-return free; per-frame 2-elem Vec alloc when active (nit); 3 cams/scene, max 2 active
 - [NPC locomotion bridge](project_npc_locomotion_bridge.md) — npc_behavior_system (FixedUpdate) writes LocomotionState read by animation_resolver (Update); all 3 fields now change-detection-guarded incl. is_grounded (fixed)
