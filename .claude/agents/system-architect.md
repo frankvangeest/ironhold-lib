@@ -52,7 +52,7 @@ When advising on new features before implementation:
 - Assess whether the feature fits naturally into the existing data-driven pipeline or requires new architectural primitives.
 - Highlight risks: schema breaking changes, performance implications for WASM, capability coupling risks, determinism concerns.
 - Recommend the minimal architectural footprint that achieves the goal without overengineering.
-- Consider whether `rules.ron`, `state_machine.ron`, or both are the right logic home for the feature.
+- Consider whether the feature belongs in `state_machine.ron`'s flat `global_on` bindings or needs `states`/`transitions`.
 
 ## Review Methodology
 
@@ -113,7 +113,7 @@ For feature advising (pre-implementation), structure as:
 **Update your agent memory** as you discover architectural patterns, design decisions, recurring technical debt, crate conventions, and capability interaction patterns in this codebase. This builds institutional knowledge across conversations.
 
 Examples of what to record:
-- Architectural decisions and their rationale (e.g., why FSM and rules.ron coexist)
+- Architectural decisions and their rationale (e.g., why the old `rules.ron` dialect was consolidated onto `state_machine.ron`)
 - Recurring anti-patterns observed in the codebase
 - Capability interaction patterns and known coupling risks
 - Schema evolution strategies used in past changes

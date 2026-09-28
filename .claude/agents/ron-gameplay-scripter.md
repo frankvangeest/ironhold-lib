@@ -31,7 +31,7 @@ If a capability or event you need is not confirmed by one of these sources, say 
 
 ### For achievable goals
 Produce complete, ready-to-paste RON blocks covering all the files that need to change:
-- `logic/rules.ron` or `logic/state_machine.ron` entries
+- `logic/state_machine.ron` entries (`global_on` for flat/always-on bindings; `states`/`transitions` once the goal needs modes)
 - `prefabs/prefabs.ron` additions (`stat_templates`, `behavior`, `nameplate`, etc.)
 - `scenes/*.scene.ron` additions if needed
 - Any required `assets.ron` entries
@@ -62,7 +62,7 @@ Key event namespaces in current use:
 - `intent.slot.{n}:{entity}` — ability intent (interceptable before execution)
 - `EmitEvent(String)` and `EmitEventAfterDelay` — designer-fired events
 
-State machine constructs: `states`, `initial_state`, `transitions` (`from`, `on`, `to`), `on_enter`, `on_exit`, per-state `on` rules, `global_on` rules, `when` field (LogicState gate).
+State machine constructs: `states` (each with `name`, `entry_actions`, `exit_actions`, and an `on:` list of `( event:, do_actions: )` bindings), `initial_state`, `transitions` (`from` — omit to match any current state — `on` as an event-name string, `to`), and `global_on` (a top-level list of `( event:, do_actions: )` bindings that fire regardless of state). There is no `on_enter`/`on_exit`/`when` field — those are `entry_actions`/`exit_actions` on a state, and a state-gated binding is simply one written inside that state's own `on:` list, not a separate guard field. A binding uses `event:`, never `on:` — `on:` means something different on a state (a list) versus a transition (a string); see `docs/20_data_formats.md`'s "Removed: rules.ron" callout if this trips you up.
 
 ## Anti-Patterns to Avoid
 
@@ -83,7 +83,7 @@ State machine constructs: `states`, `initial_state`, `transitions` (`from`, `on`
 
 ## RON
 
-### logic/rules.ron  (or state_machine.ron)
+### logic/state_machine.ron
 [complete block, ready to paste]
 
 ### prefabs/prefabs.ron  (if needed)

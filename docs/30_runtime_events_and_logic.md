@@ -219,7 +219,7 @@ A **binding** is "when event X happens, run actions Y" — a `( event: "...", do
 )
 ```
 
-Once you need modes, the same pause-menu example above becomes states with transitions:
+Once you need modes, a menu → playing → paused flow could look like this:
 
 ```ron
 // logic/state_machine.ron — with states/transitions
@@ -230,12 +230,23 @@ Once you need modes, the same pause-menu example above becomes states with trans
         (
             name: "menu",
             on: [
-                ( event: "ui.button_pressed:start_game", do_actions: [ Log("Starting") ] ),
+                // Loading the scene lives here, on the state's own on: binding, not on the
+                // transition below (transitions carry no actions — see the note after this
+                // example) and not on "playing"'s entry_actions (which would re-run every time
+                // "playing" is re-entered, e.g. on unpause — see the initial_state gotcha below
+                // for the general version of this trap).
+                ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
                 ( event: "ui.button_pressed:quit", do_actions: [ Quit ] ),
             ],
         ),
-        ( name: "playing", entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ] ), // see gotcha below — entry_actions don't fire here the way you'd expect on the *initial* state
-        ( name: "paused" ),
+        ( name: "playing" ),
+        (
+            name: "paused",
+            // "paused" is only ever entered/exited via the two toggle_pause transitions below,
+            // so these fire exactly once per pause/unpause — no re-fire trap here.
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
+            exit_actions: [ UnloadOverlay ],
+        ),
     ],
     transitions: [
         ( from: "menu", on: "ui.button_pressed:start_game", to: "playing" ),
@@ -245,7 +256,12 @@ Once you need modes, the same pause-menu example above becomes states with trans
 )
 ```
 
-(The `LoadScene("scenes/main.scene.ron")` that used to sit in the old `start_game` rule's `do_actions`, and the `LoadSceneOverlay`/`UnloadOverlay` pair for pause, now belong on the **transition** that enters/leaves each state — see the per-event evaluation order below for exactly why.)
+**Transitions carry no actions of their own** — `FsmTransition` has only `from`/`on`/`to` fields
+(`deny_unknown_fields` rejects a `do_actions:` on one outright). Put a state change's side effects
+on the **destination state's `entry_actions`** and/or the **source state's `exit_actions`**
+instead, as `paused` does above — or on the state's own `on:` binding for the same event the
+transition matches, as `menu` does above, when the action should fire once regardless of which
+state the event happens to also advance you to.
 
 ### Per-event evaluation order
 For each event, in this order:
@@ -387,6 +403,10 @@ Applies actions to the world. Key design points:
     ],
 
     states: [
+        // Every name used as initial_state, or as a transition's from/to, must be declared here
+        // -- StateMachineAsset::validate() rejects initial_state: "menu" otherwise, even with no
+        // entry/exit actions of its own.
+        ( name: "menu" ),
         (
             name: "playing",
             entry_actions: [ PlayMusicLoop(key: "bg_music") ],   // queued when entering this state

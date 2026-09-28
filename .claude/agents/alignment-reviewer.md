@@ -22,7 +22,7 @@ Every review you produce answers one fundamental question: **Can a game designer
 
 Secondary questions:
 - Is the feature exposed through the schema (`schema/` types, RON-serializable structs)?
-- Can it be triggered through `logic/rules.ron` or `logic/state_machine.ron`?
+- Can it be triggered through `logic/state_machine.ron` (a `global_on` binding, or a state's `on:`/`transitions`)?
 - Are all configurable values data-driven (no magic numbers or hardcoded strings in the runtime)?
 - Does the asset catalog pattern apply (paths in `assets.ron`, not hardcoded)?
 - Is the feature usable from a scene file (`*.scene.ron`) or prefab (`prefabs/prefabs.ron`)?
@@ -41,7 +41,7 @@ Before reviewing, identify:
 For each new feature or capability, trace the full path a designer would take:
 1. **Schema layer** — Is there a RON-serializable struct/enum the designer can author? (in `schema/`)
 2. **Scene/Prefab layer** — Can it be placed in a `.scene.ron` or `prefabs.ron` without code?
-3. **Logic layer** — Can it be triggered or configured via `rules.ron` or `state_machine.ron` events/actions?
+3. **Logic layer** — Can it be triggered or configured via `state_machine.ron` events/actions?
 4. **Asset catalog layer** — If assets are involved, are paths defined in `assets.ron` and referenced by catalog key?
 5. **No-recompile test** — Could a designer add a new project using this feature from scratch with zero Rust changes?
 
@@ -53,7 +53,7 @@ Flag any of the following as **BLOCKING** issues:
 - New capabilities that can only be activated by modifying Rust source (not by adding a component in a scene RON)
 - Schema types that are not `#[derive(Deserialize)]` or not included in any RON-loadable parent type
 - Platform-specific code leaked into `ironhold_core`
-- **Capabilities pushing directly to `ActionQueue`** — only the three interpreter systems (`message_interpreter_system`, `fsm_interpreter_system`, `entity_fsm_interpreter_system`) should push to `ActionQueue`. A capability that validates user intent and then pushes actions directly bypasses all designer-authored rules, making it impossible to cancel, redirect, or gate the action from RON. The correct pattern: the capability emits a `GameEvent::Trigger("intent.{noun}.{verb}:{entity}")` string; a rule in `rules.ron` maps that intent to actions. If no rule exists, the capability's built-in default path runs (see `planning/features/intent_event_layer.md` for the suppression mechanism). Exception: internal side-effect-free operations (e.g., visibility toggles, cleanup on despawn) may push directly when there is no meaningful designer hook.
+- **Capabilities pushing directly to `ActionQueue`** — only the two interpreter systems (`fsm_interpreter_system`, `entity_fsm_interpreter_system`) should push to `ActionQueue`. A capability that validates user intent and then pushes actions directly bypasses all designer-authored bindings, making it impossible to cancel, redirect, or gate the action from RON. The correct pattern: the capability emits a `GameEvent::Trigger("intent.{noun}.{verb}:{entity}")` string; a binding in `state_machine.ron` maps that intent to actions. If no binding matches, the capability's built-in default path runs (see `planning/features/intent_event_layer.md` for the suppression mechanism). Exception: internal side-effect-free operations (e.g., visibility toggles, cleanup on despawn) may push directly when there is no meaningful designer hook.
 - New required parameters that have no default and no RON representation
 - Hardcoded `ShaderRef` path literals inside `Material` or `UiMaterial` impls that reference `"shared/shaders/..."` as a runtime asset path — these create a file-on-disk dependency that breaks projects without `assets/shared/`. Engine-owned shaders (where the designer authors parameters, not the GPU program) must be embedded via `include_str!()` and registered with a stable `Handle` at startup, following the `CUSTOM_MATERIAL_FALLBACK_HANDLE` / `TERRAIN_SHADER_HANDLE` pattern. The only exception is the `CustomMaterial` system, where the shader path is explicitly designer-authored in `assets.ron`.
 - Fabricated asset paths constructed in code (e.g., `format!("shared/textures/{}.png", key)`) used as fallbacks when a catalog lookup fails — all asset resolution must go through the `LoadedAssetCatalog`; missing keys should warn and use a 1×1 white fallback texture, never silently construct a path outside the catalog.
@@ -61,7 +61,7 @@ Flag any of the following as **BLOCKING** issues:
 Flag the following as **WARNINGS** (should fix, not blocking):
 - Schema types that are serializable but have no documentation comment explaining their RON usage
 - New capabilities with no corresponding example in an existing or new test project
-- New events that are emitted but have no example rule in any project's `rules.ron` or `state_machine.ron`
+- New events that are emitted but have no example binding in any project's `state_machine.ron`
 - Missing entries in `assets.ron` for new asset types
 - New project-level features not registered in `test_web.py` or `index.html`
 

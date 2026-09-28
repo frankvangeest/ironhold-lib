@@ -148,7 +148,7 @@ One authoring format, `state_machine.ron` (schema v1) ✅ — see `docs/20_data_
       ( name: "menu", entry_actions: [], exit_actions: [],
         on: [ ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ) ] ),
       ( name: "playing",
-        entry_actions: [ PlayMusicLoop("bg_music") ],
+        entry_actions: [ PlayMusicLoop(key: "bg_music") ],
         exit_actions:  [ StopMusic ],
         on: [ ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ) ] ),
       ( name: "paused",

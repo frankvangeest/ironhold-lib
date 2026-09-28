@@ -1155,20 +1155,33 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 **Intent event layer:** When a slot key is pressed and passes all checks (cooldown, cost, target), the action bar emits `intent.slot.{key}:{entity}` (e.g. `intent.slot.1:player_01`) before committing the slot's `do_actions`. If any binding in `state_machine.ron`, or a `.behavior.ron` file matches this event, its `do_actions` run **and the slot's built-in `do_actions` are suppressed — including the cooldown and `action_bar.activated` event**. If no rule matches, the slot's `do_actions` fire unchanged, the cooldown starts, and `activated` fires — so existing projects with no intent rules behave identically to before.
 
 ```ron
-// Suppress slot 1 and show a "Silenced!" popup when the player is in the "silenced" state
-( on: "intent.slot.1:player_01", when: "silenced", do_actions: [
-    ShowFloatingText(entity: "player_01", text: "Silenced!"),
-    // no damage action — intent is consumed with no effect
-] )
+// logic/state_machine.ron
+states: [
+    (
+        name: "silenced",
+        on: [
+            // Suppress slot 1 and show a "Silenced!" popup while in the "silenced" state
+            ( event: "intent.slot.1:player_01", do_actions: [
+                ShowFloatingText(entity: "player_01", text: "Silenced!"),
+                // no damage action — intent is consumed with no effect
+            ] ),
+        ],
+    ),
+    (
+        name: "berserk",
+        on: [
+            // Redirect slot 1 to a rage-strike while in the "berserk" state
+            ( event: "intent.slot.1:player_01", do_actions: [
+                PlayAnimation("rage_strike"),
+                ModifyStat(key: "{target}.health", delta: -25.0),
+                EmitEvent("combat.hit:player_01"),
+            ] ),
+        ],
+    ),
+],
 
-// Redirect slot 1 to a rage-strike when the player is in "berserk" state
-( on: "intent.slot.1:player_01", when: "berserk", do_actions: [
-    PlayAnimation("rage_strike"),
-    ModifyStat(key: "{target}.health", delta: -25.0),
-    EmitEvent("combat.hit:player_01"),
-] )
-
-// No rule on intent.slot.1 → slot's own do_actions run as normal
+// In any other state, with no matching on: binding for intent.slot.1 → slot's own do_actions
+// run as normal.
 ```
 
 > **In a split-screen scene with per-player `owner_player` bars, a rule that intercepts a
@@ -1809,10 +1822,10 @@ decals: {
 | `splat_01` | `splat_01.png` | Soft-edged disc (feathered) |
 | `shockwave` | `shockwave.png` | Two concentric thin rings |
 
-Example rule:
+Example `global_on` binding:
 
 ```ron
-( on: "entity.entered:explosion_pad_01", do_actions: [
+( event: "entity.entered:explosion_pad_01", do_actions: [
     SpawnEffect(key: "explosion_burst", entity: "explosion_pad_01"),
     ProjectDecal(key: "aoe_fire_circle", entity: "explosion_pad_01",
                  radius: 3.5, duration_secs: 3.0,
@@ -3139,9 +3152,9 @@ because nothing downstream can tell which of two same-frame join presses a bound
 so allowing both through could produce a second player with no pad bound at all, permanently (v1
 has no hot-leave to fix a bad join after the fact).
 
-**The join trigger must be produced synchronously, in the same frame's rule match** — i.e. a
-direct `( on: "ui.button_pressed:<trigger>", do_actions: [ JoinPlayer ] )` rule, not a chain that
-routes through `EmitEvent` into a second rule or a delayed event. The pad identity is only valid
+**The join trigger must be produced synchronously, in the same frame's binding match** — i.e. a
+direct `( event: "ui.button_pressed:<trigger>", do_actions: [ JoinPlayer ] )` binding, not a chain
+that routes through `EmitEvent` into a second binding or a delayed event. The pad identity is only valid
 for the one frame it was captured; a `JoinPlayer` that fires a frame later still joins, just with
 no gamepad bound (falls back to the join prefab's own authored default), which can look like a
 confusing "sometimes gamepad join doesn't work" bug if a project's rules aren't wired directly.

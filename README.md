@@ -101,11 +101,11 @@ destination state's `entry_actions` and the source state's `exit_actions` along 
 | `LoadSceneOverlay("scenes/pause.scene.ron")` | Open an overlay (pause menus) |
 | `UnloadOverlay` | Close the active overlay |
 | `PlayAnimation("dance")` | Play a named animation on the player |
-| `PlaySound("click")` | Fire-and-forget audio by catalog key |
-| `PlayMusicLoop("bg_music")` | Start a looping background track |
+| `PlaySound(key: "click")` | Fire-and-forget audio by catalog key |
+| `PlayMusicLoop(key: "bg_music")` | Start a looping background track |
 | `StopMusic` | Stop the background track |
 | `SetVolume(75)` | Set global volume (0–100) |
-| `Spawn { prefab: "barrel", id: "barrel_01" }` | Spawn a prefab at runtime |
+| `Spawn(prefab: "barrel", id: "barrel_01")` | Spawn a prefab at runtime |
 | `Despawn("barrel_01")` | Remove a spawned entity |
 | `PreloadScene("scenes/next.scene.ron")` | Warm the asset cache in advance |
 | `Quit` | Exit the application |

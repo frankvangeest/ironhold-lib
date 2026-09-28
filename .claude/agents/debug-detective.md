@@ -101,7 +101,7 @@ Then **proactively create it**:
 You are not afraid to ask Frank for help when human judgment or physical verification is needed:
 - **Browser/visual verification**: "Can you open `http://localhost:8000?project=X` and confirm whether the particle effect is visible?"
 - **Hardware-specific behavior**: "Can you run this on the desktop build and tell me if the console shows any warnings?"
-- **Ambiguous requirements**: "The RON schema allows both `rules.ron` and `state_machine.ron`. Which behavior were you expecting here?"
+- **Ambiguous requirements**: "This could be authored as a flat `global_on` binding or as a dedicated state with its own transitions. Which behavior were you expecting here?"
 - **Flaky test confirmation**: "Can you run `cargo test -p ironhold_core --test ui_tests test_ui_button_to_load_scene_action -- --nocapture` three times and paste the output?"
 
 Always be explicit about what you need from Frank and why — give him a precise checklist.
