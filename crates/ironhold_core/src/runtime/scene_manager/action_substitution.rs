@@ -83,6 +83,8 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
             Action::ModifyStat { key: sub(&key, target_id), delta },
         Action::SetStat { key, value } =>
             Action::SetStat { key: sub(&key, target_id), value },
+        Action::SetVariable(key, value) =>
+            Action::SetVariable(sub(&key, target_id), sub(&value, target_id)),
         Action::SpawnEffect { key, position, entity } =>
             Action::SpawnEffect { key, position, entity: entity.map(|e| sub(&e, target_id)) },
         Action::ShowDamagePopup { entity, amount } =>
@@ -130,7 +132,7 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
 
 /// Returns the intent slot key from an event name like "intent.slot.attack:player_01"
 pub(crate) fn intent_slot_key(event_name: &str) -> Option<String> {
-    event_name.strip_prefix("intent.slot.").map(|s| s.to_string())
+    event_name.strip_prefix("intent.slot.").and_then(|s| s.split(':').next().map(|s| s.to_string()))
 }
 
 /// Extracts the scene file stem from a scene event name like "scene.ready:main"

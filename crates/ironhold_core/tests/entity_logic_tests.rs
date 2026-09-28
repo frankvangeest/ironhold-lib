@@ -381,8 +381,7 @@ fn test_intent_slot_rule_match_suppresses_slot_do_actions() {
             },
         ],
     };
-    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
-    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     // Slot 1: would set "slot_fired" — this must be suppressed
     app.world_mut().spawn(ActionSlotUi {
@@ -433,8 +432,7 @@ fn test_intent_slot_rule_match_does_not_start_cooldown() {
             },
         ],
     };
-    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
-    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),
@@ -494,8 +492,7 @@ fn test_activated_fires_only_on_commit() {
             },
         ],
     };
-    let fsm_handle = app.world_mut().resource_mut::<Assets<StateMachineAsset>>().add(fsm.clone());
-    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm)));
+    app.world_mut().insert_resource(LoadedStateMachine(Some(fsm.clone())));
 
     app.world_mut().spawn(ActionSlotUi {
         slot_key: "1".to_string(),

@@ -3,9 +3,11 @@ use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::schema::Action;
 use crate::capabilities::action_bar::{CurrentTarget, HandledIntentSlots};
+use crate::capabilities::player::PlayerTarget;
+use crate::SpawnId;
 use super::{LoadedStateMachine, LogicState};
 
-use crate::runtime::scene_manager::action_substitution::{rewrite_target, scene_path_stem};
+use crate::runtime::scene_manager::action_substitution::{rewrite_target, scene_path_stem, intent_slot_key};
 
 /// Interprets events against a loaded `StateMachineAsset`, driving state transitions and
 /// queuing entry/exit actions.
@@ -62,6 +64,10 @@ pub fn fsm_interpreter_system(
                 }
                 intent_matched = true;
                 any_intent_matched = true;
+                // Mark intent slot as handled so action_bar doesn't also fire its built-in.
+                if let Some(slot_key) = intent_slot_key(event_name) {
+                    handled_intents.0.insert(slot_key);
+                }
             }
         }
 
@@ -75,6 +81,10 @@ pub fn fsm_interpreter_system(
                     }
                     intent_matched = true;
                     any_intent_matched = true;
+                    // Mark intent slot as handled so action_bar doesn't also fire its built-in.
+                    if let Some(slot_key) = intent_slot_key(event_name) {
+                        handled_intents.0.insert(slot_key);
+                    }
                 }
             }
         }
