@@ -1,6 +1,9 @@
 # Feature: Consolidate rules.ron onto state_machine.ron
 
-_Status: Ready (revised after plan-review: system-architect + ux-gamedesigner-reviewer, 2026-09-23)_
+_Status: Done (2026-09-28) — see `planning/backlog.md` ▸ Done (reference) ▸ September 2026 for the
+full summary of what shipped, including regressions found and fixed by the 5 post-implementation
+reviews (SetVariable/SetDespawnTimer substitution, scene_path_stem, CLI false-positive warning,
+query/stats path resolution, lost fsm_tests.rs coverage)._
 _Planned at: `59f10e9` (2026-09-23)_
 _Background: `planning/investigations/rules_vs_state_machine_architecture.md` (the pros/cons, the
 code-level equivalence proof, and the content survey). This plan builds on that investigation and
