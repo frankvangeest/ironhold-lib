@@ -1392,7 +1392,7 @@ fn bad_state_machine_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
         "expected the state_machine.ron parse error reported in output:\n{stdout}"
     );
     assert!(
-        !stdout.contains("wired_button") && !stdout.contains("but no rule/transition/binding"),
+        !stdout.contains("wired_button") && !stdout.contains("but no binding/transition"),
         "a state_machine.ron parse error must not also produce unreachable_trigger noise for its \
          (would-be-correctly-wired) button:\n{stdout}"
     );
@@ -1404,8 +1404,8 @@ fn bad_state_machine_parse_does_not_cascade_into_unreachable_trigger_exits_1() {
 
 /// Every trigger source (`Button`, `IconButton`, `global_key_bindings`, `scene_key_bindings`,
 /// `global_unclaimed_gamepad_bindings`, `scene_unclaimed_gamepad_bindings`) and every
-/// event-handling source (`rules.ron`, a `state_machine.ron` in-state `on:`, its `transitions`,
-/// its `global_on:`, and a `behaviors/*.behavior.ron` file) wired correctly — must not
+/// event-handling source (`state_machine.ron`'s `global_on:`, an in-state `on:`, its
+/// `transitions`, and a `behaviors/*.behavior.ron` file) wired correctly — must not
 /// false-positive.
 #[test]
 fn valid_ui_trigger_exits_0() {
@@ -1427,21 +1427,7 @@ fn valid_ui_trigger_strict_exits_0() {
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
 }
 
-// ── Configurable rules_path/state_machine_path (planning/backlog.md) ───────────
-
-#[test]
-fn state_machine_only_project_ignores_dead_rules_ron() {
-    // Real bug this closes (found live against 3rd_person_game_demo/terrain_demo): a project
-    // setting only state_machine_path must NOT have its unrelated, runtime-dead logic/rules.ron
-    // silently counted as live. A Spawn action in that dead file references a nonexistent prefab
-    // -- if it were wrongly discovered, this would be a hard missing_prefab error.
-    let (code, stdout) = validate("state_machine_only_ignores_dead_rules_ron");
-    assert_eq!(code, 0, "expected exit 0 (dead rules.ron must be ignored), got {code}:\n{stdout}");
-    assert!(
-        !stdout.contains("missing_prefab_in_a_dead_rules_file"),
-        "expected the dead rules.ron file to never be parsed or cross-checked:\n{stdout}"
-    );
-}
+// ── Configurable state_machine_path (planning/backlog.md) ──────────────────────
 
 #[test]
 fn state_machine_path_custom_filename_is_discovered_exits_1() {
