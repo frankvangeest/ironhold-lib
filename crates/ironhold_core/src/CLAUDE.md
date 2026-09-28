@@ -10,7 +10,7 @@ Capability emits Message  →  Interpreter matches rules  →  ActionQueue  → 
 
 **Stages:**
 1. **Message** — a capability detects something (collision, button press, scene event) and emits a typed message: `UiEvent::ButtonPressed`, `SceneEvent::Ready`, etc.
-2. **Interpreter** — `fsm_interpreter_system` (or `message_interpreter_system` for rule-file projects) reads messages and matches them against the loaded `state_machine.ron` / `rules.ron`. Matching rules push `Action` values onto `ActionQueue`.
+2. **Interpreter** — `fsm_interpreter_system` reads messages and matches them against the project's loaded `state_machine.ron` (global_on bindings, in-state bindings, transitions); `entity_fsm_interpreter_system` does the same per-entity against a spawned entity's `.behavior.ron`. Matching bindings push `Action` values onto `ActionQueue`.
 3. **ActionQueue** — a FIFO `VecDeque<Action>`. Push order equals execution order. Exit actions are pushed before entry actions.
 4. **Executor** — `action_executor_system` drains the queue and dispatches each `Action` (LoadScene, Despawn, PlaySound, SetVariable, IncrementVariable, etc.).
 
@@ -46,8 +46,8 @@ If you push actions directly from Rust, the behaviour is locked in code. You can
   RON authoring that field, not a silent default — bump `schema_version` and document the
   migration (see "Schema evolution" in `docs/20_data_formats.md`) rather than renaming in place.
 
-The same attribute is on every FSM/rules container `Action` lives inside (`LogicRulesAsset`,
-`LogicRule`, `StateMachineAsset`, `FsmState`, `FsmTransition`, `FsmEventBinding`) and on the
+The same attribute is on every FSM container `Action` lives inside (`StateMachineAsset`,
+`FsmState`, `FsmTransition`, `FsmEventBinding`) and on the
 dialogue schema (`DialogueDef`, `DialogueNodeDef`, `DialogueChoiceDef`, `DialogueCondition`) — a
 typo anywhere in that chain is a parse error, not a silently-empty action list.
 
@@ -69,9 +69,12 @@ Using named fields on a tuple variant (`SetVariable(key: "score", value: "0")`) 
 
 ### Conditions on rules
 
-The only runtime condition available to the rules engine is `LogicState` — a single named string (e.g. `"playing"`, `"hp_low"`). Rules with a `when:` field only fire while the FSM is in a matching named state. To add conditions:
-- Have a gameplay system call `Action::EnterState("hp_low")` when HP drops below threshold.
-- Gate the conditional rule with `when: "hp_low"` in `state_machine.ron`.
+The only runtime condition available to the FSM is `LogicState` — a single named string (e.g. `"playing"`, `"hp_low"`). A binding inside a state's `on:` list only fires while the FSM is in that named state. To add a condition, don't reach for a gameplay system directly setting the state (there is no `Action::EnterState` — removed, see below) — instead:
+- Have a gameplay system emit a `GameEvent` (e.g. `"hp.low"` when HP drops below threshold — `stat_threshold_system` already does this pattern for stat-threshold conditions).
+- Add a `transitions` entry: `( from: None, on: "hp.low", to: "hp_low" )` (`from: None` matches from any current state).
+- Put the conditional logic inside `hp_low`'s own `on:` list, or in its `entry_actions` if it should fire once on entering the state.
+
+This is deliberate: a transition is the only thing that actually changes `LogicState`, and only a transition's firing runs the destination state's `entry_actions` and the source state's `exit_actions`. A gameplay system directly forcing a state change (the old `Action::EnterState`) skipped both of those side effects — a silent-desync bug class closed by removing it (2026-09, `rules_to_state_machine_consolidation`). See `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the full `EmitEvent` + transition worked example.
 
 Do not add a general condition system to the interpreter unless the above pattern is genuinely insufficient.
 
@@ -113,9 +116,9 @@ Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. 
 **`{self}` substitution** — in behavior files, `{self}` in any event pattern or action target string is replaced at runtime with the entity's spawn ID. This makes behavior files reusable across multiple instances of the same prefab.
 
 **The interpreter chain** (all in `Update`, chained):
-1. `message_interpreter_system` — global rules.ron
-2. `fsm_interpreter_system` — global state_machine.ron
-3. `entity_fsm_interpreter_system` — per-entity .behavior.ron
+1. `fsm_interpreter_system` — project-level state_machine.ron
+2. `entity_fsm_interpreter_system` — per-entity .behavior.ron
+3. `flush_pending_intent_system` — flushes action-bar slot actions not suppressed by a matched intent
 4. `action_executor_system`
 
 **Never bypass the pipeline from entity behavior.** Entry/exit actions in `.behavior.ron` push to the global `ActionQueue` — they go through the same executor as all other actions. Do not add `Commands` access to the entity FSM interpreter.
@@ -158,7 +161,7 @@ authored somewhere that doesn't resolve them — see below).
 
 **The resolved id is not observable from other RON files.** Only the spawned entity's own
 behavior file can reference it afterward (via `{self}`), or whatever currently holds
-`CurrentTarget` (via `{target}`) — a literal `Despawn("thing_{new_id}")` typed into `rules.ron`
+`CurrentTarget` (via `{target}`) — a literal `Despawn("thing_{new_id}")` typed into `state_machine.ron`
 will never resolve, since `{new_id}` only exists as a token at `Action::Spawn` authoring time, not
 as a value anything else can look up. Use `{new_id}` only for entities that manage their own
 lifetime (despawn themselves, or are reached via `{target}`).
@@ -170,7 +173,7 @@ into `id`/`spawn_point` exactly like `rewrite_self`/`rewrite_target`/`action_nee
 elsewhere. `{new_id}` also resolves correctly there regardless, since it's resolved later, at the
 executor.
 
-Unlike `{self}`/`{target}` — resolved by the interpreter systems (`message_interpreter.rs`) before
+Unlike `{self}`/`{target}` — resolved by the interpreter systems (`action_substitution.rs`) before
 the action reaches `ActionQueue` — `{new_id}` is resolved by `action_executor.rs`'s `Action::Spawn`
 arm itself, at the moment `id` is actually consumed; this is deliberate, not an inconsistency —
 it's the only place with mutable access to the counter without threading a new resource through
@@ -181,7 +184,7 @@ same counter value (one id per spawn, not one per occurrence). Resets to 0 on `L
 like the auto-generated fallback it shares a counter with — safe, since no entity from a prior
 scene (however its id was derived) survives the `LevelEntity` teardown a `LoadScene` performs.
 
-**`{target}` substitution** — in global rules.ron, state_machine.ron, and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in all three interpreter systems before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
+**`{target}` substitution** — in state_machine.ron and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in every interpreter system (and action_bar's own built-in intent handling) before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).
 
 **Per-player targeting (Phase 1, `planning/features/per_player_split_screen_targeting.md`)** —
 each player entity carries its own `PlayerTarget(Option<String>)` component
@@ -191,11 +194,11 @@ GLB and primitive players spawned via the immediate scene-load path (see "Player
 sites" below). `CurrentTarget` (`capabilities/action_bar.rs`) was deliberately kept as a resource
 rather than deleted — it is now "the primary player's `PlayerTarget`, mirrored". The **primary
 player** is whichever player entity has `PlayerIndex(0)` or no `PlayerIndex` at all (see
-"Player-construction sites" for when the latter is still reachable). `{target}` substitution above, and any `rules.ron`-
+"Player-construction sites" for when the latter is still reachable). `{target}` substitution above, and any `state_machine.ron`-
 overridden slot intent's `do_actions` (see Phase 2 below), keep reading `CurrentTarget` exactly as
 before this feature — those two paths only ever resolve against the primary player. A non-primary
 player's `PlayerTarget` drives their own visual feedback (ring, per-viewport HUD readout) *and*,
-as of Phase 2, their own action bar's slots — but never `rules.ron`/`state_machine.ron`/behavior
+as of Phase 2, their own action bar's slots — but never `state_machine.ron`/behavior
 actions fired outside the action bar, nor a rule that overrides a slot's intent event. This is a
 documented scope boundary, not a bug.
 
@@ -228,7 +231,7 @@ case: an `owner_player`-scoped bar's `cost.stat` isn't among that player's *own*
 `stat_templates`, even though the player clearly opted into a per-player pool by declaring some.
 Declaring **no** `stat_templates` at all is never flagged — that's the ordinary, unchanged global
 fallback every single-player project (and any bar that doesn't opt in) still gets. **What remains
-out of scope**: a `rules.ron` rule that intercepts a non-primary player's slot intent still resolves
+out of scope**: a `state_machine.ron` binding that intercepts a non-primary player's slot intent still resolves
 its own replacement `do_actions`' `{target}` via the interpreter against `CurrentTarget` (the
 primary player), not the firing player's `PlayerTarget` — only the slot's *own* built-in
 `do_actions` (bypassed when a rule takes over) get the per-owning-player resolution. Two bars
@@ -429,7 +432,7 @@ update system, so there's no stale-frame risk across a `dynamic` split's merge/s
 `Interactable` — set `interactable: (radius: 2.5)` on a `PrefabDef`. No collider needed. Emits:
 - `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses the interact key (configured via `inputs.interact` in the player prefab, default `"KeyF"`)
 
-`interactable_system` runs in `Update` before the interpreter chain (`.before(message_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
+`interactable_system` runs in `Update` before the interpreter chain (`.before(fsm_interpreter_system)`). `trigger_zone_system` runs in `FixedUpdate`.
 
 **Lootable corpse (loot-on-death), `planning/features/monster_corpse_loot.md`** — on death, a
 monster despawns itself and is replaced by a separate, disposable corpse entity at the same
@@ -645,7 +648,7 @@ a live one.
 
 **`ActiveDialogue` resource** — tracks the current conversation: `npc_id`, `dialogue_path`, `current_node_index`, `auto_advance_timer`, `handle: Option<Handle<DialogueDef>>`, `last_rendered_node`. Cleared on `EndDialogue` and `LoadScene`.
 
-**System ordering**: `dialogue_tick_system` runs `.after(button_system).after(interactable_system).before(message_interpreter_system)`.
+**System ordering**: `dialogue_tick_system` runs `.after(button_system).after(interactable_system).before(fsm_interpreter_system)`.
 
 **Auto-advance guard**: `advance_delay_secs` only applies when `node.choices.is_empty()`. Nodes with choices never auto-advance.
 
@@ -1511,7 +1514,7 @@ surface alongside the per-player `InputMap.gamepad_*` fields above — `ProjectG
 `ProjectConfig.global_unclaimed_gamepad_bindings`/`GameSceneV2.scene_unclaimed_gamepad_bindings` at exactly the three
 sites `ProjectKeyBindings`/`LoadedKeyBindings` already use (two in `project_loader.rs`, one in
 `scene_loader.rs`), same per-key overlay semantics. `unclaimed_gamepad_trigger_system`
-(`runtime/input.rs`, `.before(message_interpreter_system)`) checks these bindings only against
+(`runtime/input.rs`, `.before(fsm_interpreter_system)`) checks these bindings only against
 gamepads **not** already claimed by a live player's `BoundGamepad`, by an undrained `is_hot_join`
 entry's own captured `PlayerConfig.bound_gamepad` in `PendingEntitySpawns`, or by a still-pending
 live player's own seed resolving to that pad this same frame (the last case exists because

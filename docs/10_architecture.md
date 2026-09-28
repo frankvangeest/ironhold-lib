@@ -2,7 +2,7 @@
 # Architecture
 
 ## Current state (today)
-- `ironhold_core`: RON-driven scene pipeline, player controller, orbit camera, fly camera, animation, animation resolver, NPC AI, collectible triggers, motion (rotate/bob), custom WGSL material, terrain mesh + material, physics (Rapier3D), FSM-based and rules-based logic interpreters, full Message → Interpreter → Action → Executor pipeline.
+- `ironhold_core`: RON-driven scene pipeline, player controller, orbit camera, fly camera, animation, animation resolver, NPC AI, collectible triggers, motion (rotate/bob), custom WGSL material, terrain mesh + material, physics (Rapier3D), FSM-based logic interpreters (project-level and per-entity behavior), full Message → Interpreter → Action → Executor pipeline.
 - `ironhold_native`: desktop runner calling `ironhold_core::start_app()`; selects project via `--project <name>` CLI arg.
 - `ironhold_web`: WASM runner exposing `start()` via wasm-bindgen; reads `?project=<name>` from the page URL and passes it to `start_app`.
 
@@ -26,7 +26,7 @@ The runtime expects an `assets/` directory relative to the executable's working 
 | `app_state` | Current `AppState` variant as a string (e.g. `"InGame"`) |
 | `last_action` | Debug repr of the last `Action` dispatched by `action_executor_system` |
 | `scene` | Asset path of the most recently fully-loaded scene (from `SceneEvent::Ready`) |
-| `logic_state` | Current named logic state set by `Action::EnterState`; empty string means stateless |
+| `logic_state` | Current named FSM state, advanced by `state_machine.ron` transitions; empty string means stateless (flat `global_on`-only projects) |
 | `score` | Running score total, derived from `GameVariables["score"]` each frame |
 
 On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).

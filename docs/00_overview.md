@@ -60,7 +60,7 @@ Ironhold-lib is a cross-platform (native + web/WASM) game runtime built on **Bev
 
 **Implementation snapshot (today):**
 - ✅ Standardized event/message types: `UiEvent`, `GameEvent`, `SceneEvent`, `InputActionMessage`.
-- ✅ Project-level logic rules map events to actions via `logic/rules.ron` or `logic/state_machine.ron`.
+- ✅ Project-level logic maps events to actions via `logic/state_machine.ron`.
 - ✅ An action executor handles `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `SetVariable`, `IncrementVariable`, and more.
 - ✅ UI buttons emit `UiEvent::ButtonPressed(String)`; gameplay sensors emit `GameEvent::Trigger(String)` — both flow into the rules pipeline.
 
@@ -107,18 +107,18 @@ Edit `my_game/my_game.project.ron` — change `project_id` and `display_name`:
 
 ```ron
 (
-    schema_version: 2,
+    schema_version: 3,
     project_id: "my_game",
     display_name: "My Game",
     initial_scene: "scenes/main.scene.ron",
     asset_catalog: "assets.ron",
     prefab_catalog: "prefabs/prefabs.ron",
-    rules_path: "logic/rules.ron",
+    state_machine_path: "logic/state_machine.ron",
     model_fixes_path: "overrides/model_fixes.ron",
 )
 ```
 
-Use `schema_version: 3` with `state_machine_path` instead of `rules_path` when you need multiple scenes with a pause/menu flow. See `docs/20_data_formats.md` for the v3 example.
+`state_machine_path` works the same whether the file is flat (`global_on` only) or has `states`/`transitions` for a pause/menu flow. See `docs/20_data_formats.md` for the full example.
 
 ### 3 — Run it
 
@@ -142,15 +142,15 @@ wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 
 ### 5 — Wire up logic
 
-`logic/rules.ron` maps events to actions. Button presses, collisions, and scene lifecycle events all flow through here:
+`logic/state_machine.ron` maps events to actions. Button presses, collisions, and scene lifecycle events all flow through here — no states needed for logic this simple, just a flat `global_on` list:
 
 ```ron
 (
-    schema_version: 2,
-    rules: [
-        ( on: "scene.ready:main",          do_actions: [ Log("Loaded!") ] ),
-        ( on: "ui.button_pressed:start",   do_actions: [ LoadScene("scenes/game.scene.ron") ] ),
-        ( on: "ui.button_pressed:quit",    do_actions: [ Quit ] ),
+    schema_version: 1,
+    global_on: [
+        ( event: "scene.ready:main",          do_actions: [ Log("Loaded!") ] ),
+        ( event: "ui.button_pressed:start",   do_actions: [ LoadScene("scenes/game.scene.ron") ] ),
+        ( event: "ui.button_pressed:quit",    do_actions: [ Quit ] ),
     ],
 )
 ```
@@ -162,7 +162,7 @@ wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg
 | Entities, lighting, UI in a scene | `scenes/{name}.scene.ron` |
 | Character stats, model, colliders | `prefabs/prefabs.ron` |
 | Which assets are available | `assets.ron` |
-| What happens when events fire | `logic/rules.ron` or `logic/state_machine.ron` |
+| What happens when events fire | `logic/state_machine.ron` |
 | Fix a model's pivot or rotation | `overrides/model_fixes.ron` |
 
 Full field reference: `docs/20_data_formats.md`.

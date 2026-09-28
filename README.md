@@ -50,14 +50,37 @@ Everything below is controlled by `.ron` files and assets. You write data, the r
 
 ### Game logic — no Rust required
 
-**FSM workflow** (`logic/state_machine.ron`) — recommended for any multi-scene game:
-- Declare named states: `menu`, `playing`, `paused`, etc.
-- Each state has `entry_actions`, `exit_actions`, and in-state event bindings
-- `transitions` list drives state changes (any-state or from a specific state)
+All game logic lives in one file, `logic/state_machine.ron`. Start flat — just react to events —
+and add states/transitions only when you actually need modes (menu vs. playing vs. paused):
 
-**Rules workflow** (`logic/rules.ron`) — simpler projects or a single scene:
-- Map events directly to action sequences
-- Optional `when:` guard restricts a rule to a named logic state
+```ron
+// logic/state_machine.ron — flat form: no states needed for a single-scene game
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "ui.button_pressed:play", do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+        ( event: "entity.collected:coin_01", do_actions: [ IncrementVariable("score", 1) ] ),
+    ],
+)
+```
+
+Once a game has real modes, add `states` and `transitions` — a state's own `on:` list only fires
+while that state is active, and a `transitions` entry is what actually changes state (running the
+destination state's `entry_actions` and the source state's `exit_actions` along the way):
+
+```ron
+(
+    schema_version: 1,
+    initial_state: "menu",
+    states: [
+        ( name: "menu", on: [ ( event: "ui.button_pressed:play", do_actions: [] ) ] ),
+        ( name: "playing", entry_actions: [ LoadScene("scenes/main.scene.ron") ] ),
+    ],
+    transitions: [
+        ( from: "menu", on: "ui.button_pressed:play", to: "playing" ),
+    ],
+)
+```
 
 **Events you can react to:**
 
@@ -87,6 +110,7 @@ Everything below is controlled by `.ron` files and assets. You write data, the r
 | `PreloadScene("scenes/next.scene.ron")` | Warm the asset cache in advance |
 | `Quit` | Exit the application |
 | `Log("message")` | Emit an info log line |
+| `EmitEvent("name")` | Fire a custom event other bindings/transitions can react to |
 
 ### Materials & shaders
 - **Standard PBR** — base color, texture maps, metallic, roughness; embedded in your GLB or overridden per-prefab
@@ -163,7 +187,7 @@ assets/projects/{name}/
   assets.ron                  ← model / texture / audio / material catalog
   prefabs/prefabs.ron         ← named entity templates
   scenes/{scene}.scene.ron    ← one file per scene
-  logic/state_machine.ron     ← FSM game logic  (or logic/rules.ron for simpler projects)
+  logic/state_machine.ron     ← game logic (flat global_on, or states/transitions for modes)
   overrides/model_fixes.ron   ← optional GLB transform corrections
 ```
 

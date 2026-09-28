@@ -29,7 +29,7 @@
 
     // One prefab reused for every posed instance in both scenes — each scene entity differs
     // only by `id`/`transform`/`label`; which pose it ends up in comes entirely from the
-    // PlayAnimationOn call logic/rules.ron fires at it by id on scene.ready.
+    // PlayAnimationOn call logic/state_machine.ron fires at it by id on scene.ready.
     "zombie_pose": (
       kind: Actor,
       model: "zombie",

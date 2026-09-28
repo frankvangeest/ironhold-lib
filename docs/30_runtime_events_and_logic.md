@@ -35,14 +35,12 @@ This separation helps:
 ## Implementation snapshot (today)
 This section is factual and reflects what exists right now.
 
-- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `PreloadScene`, `EnterState`, `SetVariable`, `IncrementVariable`, and more.
+- ✅ A robust action layer exists: `ActionQueue` plus actions such as `LoadScene(String)`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `PlayMusicLoop`, `StopMusic`, `SetVolume`, `PreloadScene`, `EmitEvent`, `SetVariable`, `IncrementVariable`, and more.
 - ✅ UI events exist (`UiEvent`) and are emitted by UI button interaction and key bindings; button `action` strings have the `"ui."` prefix stripped before firing (e.g. `action: "ui.dance"` → `UiEvent::ButtonPressed("dance")`).
-- ✅ Gameplay events exist (`GameEvent::Trigger(String)`) and are emitted by capabilities (physics sensors, etc.); the trigger name is used as-is in the rules pipeline.
+- ✅ Gameplay events exist (`GameEvent::Trigger(String)`) and are emitted by capabilities (physics sensors, etc.); the trigger name is used as-is in the logic pipeline.
 - ✅ Input messages (`InputActionMessage`) decouple raw input from gameplay logic (point-to-point, not through the pipeline).
 - ✅ Scene lifecycle events (`SceneEvent`) are emitted during loading transitions.
-- ✅ A message interpreter maps UI events, game events, and scene events to actions using data-defined rules loaded from `logic/rules.ron`.
-- ✅ Rules support an optional `when` guard: rules with `when: "state_name"` only fire while the interpreter is in that named state; rules with `when` omitted fire in any state.
-- ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. Replaces `rules.ron` for FSM projects. States declare `entry_actions`, `exit_actions`, and in-state `on` bindings; `transitions` drive state changes; `global_on` fires from any state.
+- ✅ A **FSM interpreter** maps events to actions and state transitions using a `StateMachineAsset` loaded from `logic/state_machine.ron`. `global_on` fires from any state without changing it; a state's `on:` list fires only while that state is active; `transitions` drive state changes and run the destination state's `entry_actions` plus the source state's `exit_actions`. A flat file (no `states`/`transitions`, just `global_on`) is a fully valid, minimal project logic file.
 - ✅ An **entity FSM interpreter** (`entity_fsm_interpreter_system`) runs the same `StateMachineAsset` format per entity. Entities with a `behavior` path on their `PrefabDef` load an independent FSM; `{self}` in event patterns and action targets is substituted with the entity's spawn ID at runtime, making behavior files reusable across instances. See [Entity FSM section](#entity-fsm-beta-04) below.
 - ✅ An action executor applies actions; notably:
   - `LoadScene(path)` loads a scene asset and transitions to `LoadingScene`.
@@ -56,9 +54,8 @@ This section is factual and reflects what exists right now.
   - `PlaySound(key: k)` / `PlayMusicLoop(key: k)` / `StopMusic` control audio; optional `volume: f32` multiplies the per-entry catalog volume.
   - `SetVolume(pct)` sets global volume (0–100).
   - `PreloadScene(path)` / `PreloadPrefab(key)` warm the asset cache for scenes and prefab GLBs respectively.
-  - `EnterState(name)` transitions the interpreter to a named logic state.
   - `Log(msg)` emits an `info!` log line.
-- ✅ `LogicState` resource tracks the current named state (default `""`). Rules with a matching `when` guard become active; others are suppressed. FSM transitions update it directly in the interpreter.
+- ✅ `LogicState` resource tracks the current named state (default `""`). A state's own `on:` bindings only fire while `LogicState` matches that state's name; `global_on` bindings fire regardless. FSM transitions update `LogicState` directly in the interpreter — there is no separate action to force a state change; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for why and what to use instead (`EmitEvent` + a transition).
 - ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, and `score` for observability and browser-based testing.
 
 ## Event model (planned)
@@ -116,7 +113,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"collision.hit:<id>"` — impact event 🧭
 - `"target.clicked:<id>"` — player left-clicked a `click_selectable: true` entity (screen-space proximity) ✅
 - `"target.changed:<id>"` — fires only when that specific entity becomes the target; use for per-entity reactions (e.g. `target.changed:boss_01` → start a boss healthbar) ✅
-- `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. `ShowFloatingText(entity: "{target}", text: "Selected!")` — see `3rd_person_game_demo/logic/rules.ron`) ✅
+- `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. a `global_on` binding: `( event: "target.changed", do_actions: [ ShowFloatingText(entity: "{target}", text: "Selected!") ] )`) ✅
 - `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, or `LoadScene`) ✅
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
@@ -176,7 +173,7 @@ Actions represent explicit operations the runtime can execute.
 - `ToggleMute` ✅ — toggles muted state; muting emits `audio.muted`, unmuting restores the previous volume and emits `audio.unmuted`
 
 #### State/variables actions
-- `EnterState(name)` ✅ — transitions the interpreter to a named logic state; rules with a matching `when` guard become active, others are suppressed; empty string returns to stateless (always-fire) default
+- `EmitEvent(name)` ✅ — fires a `GameEvent::Trigger(name)`; the idiomatic way to drive a state change is to emit an event here and add a `transitions` entry that matches it (see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the worked example) — there is no direct "set state" action
 - `SetVariable(key, value)` ✅ — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(key, delta)` ✅ — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 
@@ -205,36 +202,81 @@ See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_template
 - Actions should be **idempotent** where reasonable.
 - Action execution should be observable for debugging and replay.
 
-## Logic rules: mapping Events → Actions (planned)
-The heart of data-driven behavior is a rule system that maps incoming messages to actions.
+## Project logic: `state_machine.ron`
+The heart of data-driven behavior is `logic/state_machine.ron`, which maps incoming messages to actions.
 
-### Rule concepts
-- **Bindings**: “When event X happens, run actions Y.” 🧭
-- **Filters/conditions**: restrict rules (by entity tags, state variables, scene, etc.). 🧭
-- **Parameters**: allow payload data to flow into actions (e.g., button id → scene path). 🧭
+### Bindings, and the flat-first workflow
+A **binding** is "when event X happens, run actions Y" — a `( event: "...", do_actions: [...] )` pair. Start with a flat file: just `global_on`, no `states`/`transitions` at all. Add states only once you actually need modes (menu vs. playing vs. paused).
 
-### Example ✅
 ```ron
-// logic/rules.ron
+// logic/state_machine.ron — flat
 (
-    schema_version: 2,
-    rules: [
-        // No `when` guard — fires in any state
-        ( on: "scene.ready:main", do_actions: [ EnterState("playing"), PlayMusicLoop(key: "bg_music") ] ),
-
-        // `when` guard — only fires while in the named state
-        ( on: "ui.button_pressed:start_game", when: "menu", do_actions: [ Log("Starting"), LoadScene("scenes/main.scene.ron") ] ),
-        ( on: "ui.button_pressed:quit",       when: "menu", do_actions: [ Quit ] ),
-
-        ( on: "ui.button_pressed:toggle_pause", when: "playing", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), EnterState("paused") ] ),
-        ( on: "ui.button_pressed:toggle_pause", when: "paused",  do_actions: [ UnloadOverlay, EnterState("playing") ] ),
+    schema_version: 1,
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ PlayMusicLoop(key: "bg_music") ] ),
+        ( event: "entity.collected:coin_01", do_actions: [ IncrementVariable("score", 1) ] ),
     ],
 )
 ```
 
-Event name format: `"<domain>.<type>:<payload>"`. The interpreter matches the full string against each rule's `on` field. UI button events are always `"ui.button_pressed:<trigger>"` where the trigger is the button's `action` field with the `"ui."` prefix stripped.
+Once you need modes, the same pause-menu example above becomes states with transitions:
 
-The optional `when` field gates a rule to a named logic state. Omitting it fires in every state.
+```ron
+// logic/state_machine.ron — with states/transitions
+(
+    schema_version: 1,
+    initial_state: "menu",
+    states: [
+        (
+            name: "menu",
+            on: [
+                ( event: "ui.button_pressed:start_game", do_actions: [ Log("Starting") ] ),
+                ( event: "ui.button_pressed:quit", do_actions: [ Quit ] ),
+            ],
+        ),
+        ( name: "playing", entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ] ), // see gotcha below — entry_actions don't fire here the way you'd expect on the *initial* state
+        ( name: "paused" ),
+    ],
+    transitions: [
+        ( from: "menu", on: "ui.button_pressed:start_game", to: "playing" ),
+        ( from: "playing", on: "ui.button_pressed:toggle_pause", to: "paused" ),
+        ( from: "paused", on: "ui.button_pressed:toggle_pause", to: "playing" ),
+    ],
+)
+```
+
+(The `LoadScene("scenes/main.scene.ron")` that used to sit in the old `start_game` rule's `do_actions`, and the `LoadSceneOverlay`/`UnloadOverlay` pair for pause, now belong on the **transition** that enters/leaves each state — see the per-event evaluation order below for exactly why.)
+
+### Per-event evaluation order
+For each event, in this order:
+1. `global_on` — fires regardless of state, never changes state.
+2. The current state's own `on:` list — fires only while that state is active, never changes state.
+3. The first matching `transitions` entry — changes state, running the source state's `exit_actions` then the destination state's `entry_actions`.
+
+Only the first matching transition fires per event; all matching `global_on`/in-state bindings fire.
+
+### The `initial_state` entry-actions gotcha
+**`entry_actions` on the `initial_state` do *not* run at boot.** Entry actions only run when a **transition** enters a state — the state you start in was never "entered" by a transition, so its `entry_actions` are silently skipped. If you follow "start flat, add states later" and move boot-time work (like `PlayMusicLoop` on scene-ready) into your first state's `entry_actions`, expecting it to fire immediately, it won't. Keep boot-time work in a `global_on` `scene.ready:<scene>` binding instead, or restructure so the initial state is only reached via an explicit transition from a dedicated boot state.
+
+### Changing state from a condition, not a direct call
+There is no "set state" action (see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for why). To change state from a condition — a stat threshold, a dialogue choice, anything — emit a `GameEvent` and add a `transitions` entry that matches it:
+
+```ron
+do_actions: [ EmitEvent("quest.started") ],   // wherever the condition is detected
+```
+```ron
+transitions: [ ( from: "exploring", on: "quest.started", to: "on_quest" ) ],
+```
+
+See `docs/20_data_formats.md`'s callout for the full worked example, including why this avoids a silent-desync bug class the old direct-state-change action had.
+
+### The `on:` field means three different things
+Old `rules.ron` muscle memory (`( on: "x", do_actions: [...] )`) produces a plausible-looking `state_machine.ron` file that fails to parse. In the current format:
+- A **state's** `on:` is a *list of bindings* (each with its own `event:` field).
+- A **transition's** `on:` is an *event-name string*.
+- A **binding** itself uses `event:`, never `on:`.
+
+See `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the wrong-vs-right side-by-side.
 
 ## Execution model (planned)
 
@@ -259,7 +301,7 @@ Applies actions to the world. Key design points:
   - ✅ Full action set: `LoadScene`, `Quit`, `Log`, `Spawn`, `PlayAnimation`, `PlaySound`, `SetVariable`, `IncrementVariable`
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
   - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready, Unloading}`
-  - ✅ Data-defined `logic/rules.ron` and `logic/state_machine.ron` wired to interpreter + executor
+  - ✅ Data-defined project logic wired to interpreter + executor (originally two dialects, later consolidated onto `logic/state_machine.ron` alone — see `docs/20_data_formats.md`'s migration callout)
   - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`)
   - ✅ `GameEvent::Trigger(String)` for physics sensors and gameplay capabilities
 
@@ -306,7 +348,6 @@ Applies actions to the world. Key design points:
 - `SetVolume(u32)` — sets global audio volume 0–100
 - `PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed; use on `scene.ready` so a subsequent `LoadScene` resolves without a loading pause
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn
-- `EnterState(String)` — transitions the interpreter to a named logic state; `""` returns to stateless default
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 - `ModifyStat { key, delta }` — adds `delta` to a stat, clamped to `[min, max]`; negative delta resets regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` → entity `StatMap`; no dot → global `LoadedStats`. `{self}` in `key` is substituted in behavior contexts.
@@ -331,8 +372,7 @@ Applies actions to the world. Key design points:
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
 - `LogicState` resource — tracks the current named state (default `""`); checked by both interpreters
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
-- Data-defined rules loaded from `logic/rules.ron` via `LogicRulesAsset`; rules support an optional `when: "state_name"` guard
-- `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; used when `state_machine_path` is set in the project config
+- `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; every project uses this — `state_machine_path` in the project config points to it
 
 ### FSM asset schema (`logic/state_machine.ron`) ✅
 
@@ -376,7 +416,7 @@ Applies actions to the world. Key design points:
 ```
 
 **Execution order per transition:** exit actions → state change → entry actions.
-The engine handles this automatically; authors do not write `EnterState` in FSM data.
+The engine handles this automatically — there is no action an author writes to force a state change; a `transitions` entry matching the current event is the only thing that advances `LogicState`.
 
 > New Messages or Actions must update `docs/STATUS.md` (Engine ABI section), this appendix, and `docs/20_data_formats.md` with an authoring example.
 
@@ -438,8 +478,9 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `SetEntityVisible(entity: "{self}", visible: false)` → `entity: "box_01"`
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → `event: "entity.respawned:box_01"`
 
-Note: `{self}` does not currently resolve inside a dialogue choice's `do_actions` — only in behavior
-files, `rules.ron`, and `state_machine.ron`.
+Note: `{self}` does not currently resolve inside a dialogue choice's `do_actions` — only in
+per-entity behavior files (`entity_fsm_interpreter_system`). Project-level `state_machine.ron` has
+no `{self}` to resolve at all — there is no "self" at the project level, only `{target}`.
 
 ### `{new_id}` substitution
 
@@ -756,7 +797,7 @@ two timers are only independent if they belong to two different entities, hence 
 
 ### Multi-scene navigation via portal prefabs
 
-A walkthrough portal between two scenes is the standard pattern for multi-scene projects. The full setup uses a composite `TriggerZone` prefab and a `LoadScene` rule:
+A walkthrough portal between two scenes is the standard pattern for multi-scene projects. The full setup uses a composite `TriggerZone` prefab and a `LoadScene` binding:
 
 **1. Define the portal prefab** (`prefabs/prefabs.ron`):
 ```ron
@@ -781,28 +822,29 @@ A walkthrough portal between two scenes is the standard pattern for multi-scene 
   transform: ( translation: (0.0, 0.0, -20.0), ... ) ),
 ```
 
-**3. Wire the rule** (`logic/rules.ron`):
+**3. Wire the binding** (`logic/state_machine.ron`):
 ```ron
-( on: "entity.entered:portal_to_arena", do_actions: [ LoadScene("scenes/arena.scene.ron") ] ),
+( event: "entity.entered:portal_to_arena", do_actions: [ LoadScene("scenes/arena.scene.ron") ] ),
 ```
+(as a `global_on` entry, or inside a state's `on:` list if the portal should only work in one mode)
 
 The `TriggerZone` radius should cover the gate opening but not the frame — 1.0–1.5 m works for a standard doorway width. The trigger fires `entity.entered:{id}` on player overlap; `LoadScene` then transitions immediately.
 
-**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` rule alongside any warmup `SpawnEffect` calls — quality persists across `LoadScene` and must be reset explicitly per scene.
+**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls — quality persists across `LoadScene` and must be reset explicitly per scene.
 
 ### System ordering
 
 The interpreter chain in `Update` is:
 
 ```
-tick_delayed_events_system  →  interactable_system
-                            →  message_interpreter_system
+tick_delayed_events_system  →  interactable_system  →  action_bar_input_system
                             →  fsm_interpreter_system
                             →  entity_fsm_interpreter_system
+                            →  flush_pending_intent_system
                             →  action_executor_system
 ```
 
-`tick_delayed_events_system` runs before the interpreter chain so delayed events fired in a given frame are visible to all three interpreters in the same frame.
+`tick_delayed_events_system` runs before the interpreter chain so delayed events fired in a given frame are visible to both interpreters in the same frame.
 
-`trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to all three interpreter systems in the following `Update` tick.
+`trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to both interpreter systems in the following `Update` tick.
 

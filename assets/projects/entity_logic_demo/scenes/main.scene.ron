@@ -20,7 +20,7 @@
   },
 
   // camera_modes v2 demo: a single named preset the player can switch to and back from via
-  // rules.ron-driven key bindings below (Press C / V). "default" is reserved — it always
+  // state_machine.ron-driven key bindings below (Press C / V). "default" is reserved — it always
   // restores the player's own scene-authored starting camera (here: the tag-driven default
   // orbit camera this project has always used, since `player` has no `camera`/`camera_mode:`
   // block at all) and must not be defined as a registry entry.

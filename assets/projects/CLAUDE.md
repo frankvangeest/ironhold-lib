@@ -14,7 +14,6 @@ Every RON file must start with `schema_version`. Use these values:
 | `*.scene.ron` | 2 |
 | `assets.ron` | 1 |
 | `prefabs/prefabs.ron` | 2 |
-| `logic/rules.ron` | 2 |
 | `logic/state_machine.ron` | 1 |
 | `behaviors/*.behavior.ron` | 1 |
 | `dialogues/*.dialogue.ron` | 1 |
@@ -49,7 +48,6 @@ The engine calls `Color::srgba()` / `Color::srgb()` when it reads these values; 
 ```ron
 LoadScene("scenes/game.scene.ron")
 Despawn("enemy_01")
-EnterState("playing")
 EmitEvent("player.died")
 SetVariable("score", "0")       // TWO positional strings
 IncrementVariable("score", 1)   // string key, then i32 delta
@@ -318,7 +316,7 @@ On first load, WASM lazily compiles a GPU pipeline for each material+blend varia
 
 ## New project checklist
 
-1. Create `assets/projects/{name}/` with: `{name}.project.ron`, `scenes/main.scene.ron`, `assets.ron`, `prefabs/prefabs.ron`, `logic/rules.ron`
+1. Create `assets/projects/{name}/` with: `{name}.project.ron`, `scenes/main.scene.ron`, `assets.ron`, `prefabs/prefabs.ron`, `logic/state_machine.ron`
 2. Register in `test_web.py` — append name to `PROJECTS` list
 3. Add a card to `index.html` — copy an existing `<a class="project-card">` block
 4. Generate baseline screenshot: `python test_web.py --project {name} --update-baselines --skip-build`

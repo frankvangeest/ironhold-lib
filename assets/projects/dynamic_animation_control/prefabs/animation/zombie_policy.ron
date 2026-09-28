@@ -1,6 +1,6 @@
 // Demo policy for dynamic_animation_control. Same base/animation_sources as
 // 3rd_person_game_demo's player_policy_zombie.ron, plus a "walk" semantic alias — not present in
-// the original — so this demo's rules.ron can exercise all three PlayAnimationOn resolution
+// the original — so this demo's state_machine.ron can exercise all three PlayAnimationOn resolution
 // branches: override id ("death"), clips: alias ("walk"), and raw clip name
 // ("Zombie_Idle_Loop" directly, used by continue.scene.ron's pose_raw_clip).
 //
