@@ -83,13 +83,13 @@ struct LoadedProject<'a> {
     behaviors: &'a [(String, StateMachineAsset)],
     /// `true` iff `logic/state_machine.ron`/every `behaviors/*.behavior.ron`
     /// parsed without error. Gates `check_ui_trigger_reachability` and (combined with
-    /// `scenes_parsed_cleanly`) `strict_checks`'s `orphan_rule` check — both skip entirely rather
-    /// than fabricate a wave of secondary noise once a source file's rules/transitions/bindings
+    /// `scenes_parsed_cleanly`) `strict_checks`'s `orphan_binding` check — both skip entirely rather
+    /// than fabricate a wave of secondary noise once a source file's bindings/transitions
     /// are entirely absent from the data they compare against.
     logic_files_parsed_cleanly: bool,
     /// `true` iff every `scenes/*.scene.ron` parsed without error. Only `strict_checks`'s
-    /// `orphan_rule` check needs this half — a malformed scene silently drops its buttons from
-    /// the reachable-trigger set, which could make an otherwise-live rule look orphaned; the
+    /// `orphan_binding` check needs this half — a malformed scene silently drops its buttons from
+    /// the reachable-trigger set, which could make an otherwise-live binding look orphaned; the
     /// forward `unreachable_trigger` check has no equivalent exposure (a dropped scene just
     /// contributes no buttons to check, not a false positive), so it doesn't gate on this.
     scenes_parsed_cleanly: bool,
@@ -672,7 +672,7 @@ fn first_seen<K: std::hash::Hash + Eq, V: Clone>(
 ///   the `scenes/` glob already covered) -- otherwise a `LoadScene` typo'd onto an existing
 ///   non-scene file (e.g. `LoadScene("prefabs/prefabs.ron")`) would be re-parsed as a `GameSceneV2`,
 ///   fail, and report a perfectly valid file as broken; worse, that spurious `FileResult` would
-///   also cascade into `scenes_parsed_cleanly` going false and silently disabling the `orphan_rule`
+///   also cascade into `scenes_parsed_cleanly` going false and silently disabling the `orphan_binding`
 ///   `--strict` check. Comparing against `file_results` (not just `scenes`, which holds only
 ///   *successful* scene parses) also closes the same duplicate-report risk for a genuinely broken
 ///   `scenes/*.scene.ron` that's also referenced by an action -- without this it would be parsed
@@ -2590,7 +2590,7 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 /// Deliberately not extended to dialogue choice buttons (`dialogue_choice:{n}`) — those are
 /// spawned dynamically by `dialogue.rs` from `DialogueChoiceDef`, never appear as a `UiNodeDef`
 /// in scene RON, and are matched directly by `dialogue_tick_system`, not through
-/// `rules.ron`/`state_machine.ron`. Nothing here walks `scene.ui` for them, so there is no
+/// `state_machine.ron`. Nothing here walks `scene.ui` for them, so there is no
 /// false-positive risk from that surface.
 ///
 /// **Known latent gap, no shipped project hits it today:** an entity `.behavior.ron`'s event
@@ -2602,7 +2602,7 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 /// event, so this is theoretical; if one ever does, this check will need `{self}`-aware matching.
 ///
 /// This function's own site enumeration is mirrored by `collect_reachable_ui_triggers` below (the
-/// reverse-direction `orphan_rule` check's data source) — keep both in sync if a new UI trigger
+/// reverse-direction `orphan_binding` check's data source) — keep both in sync if a new UI trigger
 /// site type is ever added here. The `{self}`/`dialogue_choice:` false-positive exclusions above
 /// are also handled there, in `check_orphan_event`.
 fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> {
@@ -2795,7 +2795,7 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
 /// enumeration exactly (global/scene key bindings, global/scene unclaimed gamepad bindings,
 /// scene `Button`/`IconButton` nodes, and its `InventoryPanel`/`ShopPanel`/`ContainerPanel` match
 /// arms below); keep both in sync if a new UI trigger site type is ever added. Feeds
-/// `check_orphan_ui_rules` below — the same "same two data sets" backing both directions of the
+/// `check_orphan_ui_bindings` below — the same "same two data sets" backing both directions of the
 /// reachability question (forward: does a button/binding's fire resolve to a handled rule;
 /// reverse: does a rule's `on:` resolve to some button/binding that can fire it).
 ///
@@ -2804,7 +2804,7 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
 /// panel-spawn sites and `action_executor.rs`'s per-`MerchantDef.stock[]` entry) — a designer
 /// never authors these as a `Button.action` string, they're emitted internally whenever a
 /// panel's own built-in close/buy button is clicked, so they'd otherwise false-positive as
-/// orphaned every time `check_orphan_ui_rules` sees the (correct, live) state-machine rule that
+/// orphaned every time `check_orphan_ui_bindings` sees the (correct, live) state-machine rule that
 /// handles one — confirmed against `3rd_person_game_demo`'s real `ShopPanel`/`InventoryPanel`/
 /// `ContainerPanel` usage before this was added. The *forward* direction
 /// (`check_ui_trigger_reachability`'s own panel match arms, above) now also covers these five,
@@ -2876,7 +2876,7 @@ fn collect_reachable_ui_triggers(
 /// elsewhere in this file (a scene that fails to parse silently drops its buttons from the
 /// reachable set, which could make an otherwise-live rule look orphaned) — not fixed here, see
 /// `planning/claude_suggestions.md`.
-fn check_orphan_ui_rules(
+fn check_orphan_ui_bindings(
     reachable: &HashSet<String>,
     state_machine: Option<(&str, &StateMachineAsset)>,
     behaviors: &[(String, StateMachineAsset)],
@@ -2957,7 +2957,7 @@ fn check_orphan_event(
             "{describe} — no button/key/gamepad binding anywhere in the project can ever fire \
              {event:?}. Dead code, or a stale event name left over from a rename/removal."
         ),
-        kind: "orphan_rule",
+        kind: "orphan_binding",
     });
 }
 
@@ -2969,7 +2969,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         state_machine, behaviors, logic_files_parsed_cleanly, scenes_parsed_cleanly,
         ..
     } = project;
-    let orphan_rule_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
+    let orphan_binding_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
     let mut warnings: Vec<StrictWarning> = Vec::new();
 
     // `load_configured_catalog` falls back to checking a catalog's convention-path file whenever
@@ -3563,11 +3563,11 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     // unparseable SCENE is an equally real risk here: `do_validate` silently drops any scene that
     // fails to parse from the `scenes` list, shrinking `collect_reachable_ui_triggers`'s reachable
     // set -- so a live rule handling that scene's own (now-invisible) button could be wrongly
-    // flagged orphaned. `orphan_rule_prereqs_clean` is true only when BOTH logic files and every
+    // flagged orphaned. `orphan_binding_prereqs_clean` is true only when BOTH logic files and every
     // scene parsed cleanly.
-    if orphan_rule_prereqs_clean {
+    if orphan_binding_prereqs_clean {
         let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
-        warnings.extend(check_orphan_ui_rules(&reachable, state_machine, behaviors));
+        warnings.extend(check_orphan_ui_bindings(&reachable, state_machine, behaviors));
     }
 
     warnings

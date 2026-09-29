@@ -1430,7 +1430,7 @@ fn valid_ui_trigger_exits_0() {
 }
 
 /// The reverse direction of `valid_ui_trigger_exits_0`: this fixture's every rule/transition/
-/// binding is matched to exactly one button/binding, so `--strict`'s new `orphan_rule` check must
+/// binding is matched to exactly one button/binding, so `--strict`'s `orphan_binding` check must
 /// not false-positive on any of them either. Doubles as a drift guard for
 /// `collect_reachable_ui_triggers` (the orphan check's data source, deliberately a separate
 /// function from `check_ui_trigger_reachability` rather than a refactor of it) — the fixture
@@ -1541,7 +1541,7 @@ fn orphan_ui_rule_strict_exits_1() {
     assert!(
         strict_stdout.contains("ui.button_pressed:truly_orphaned")
             && strict_stdout.contains("no button/key/gamepad binding"),
-        "expected the orphan_rule warning for the unreachable rule in output:\n{strict_stdout}"
+        "expected the orphan_binding warning for the unreachable rule in output:\n{strict_stdout}"
     );
 }
 
@@ -1596,12 +1596,12 @@ fn bad_panel_trigger_unreachable_exits_1() {
     );
 }
 
-/// A malformed scene must not cascade into a bogus `orphan_rule` warning for the rule that would
+/// A malformed scene must not cascade into a bogus `orphan_binding` warning for the rule that would
 /// otherwise be reachable via that scene's own (now-unparseable) button -- the orphan check is
 /// skipped entirely whenever any scene failed to parse, mirroring `check_ui_trigger_reachability`'s
 /// existing logic-file parse-failure protection but for the opposite data set.
 #[test]
-fn bad_scene_parse_does_not_cascade_into_orphan_rule_strict_exits_1() {
+fn bad_scene_parse_does_not_cascade_into_orphan_binding_strict_exits_1() {
     let (code, stdout) = validate_strict("bad_scene_parse_no_orphan_cascade");
     assert_eq!(code, 1, "expected exit 1, got {code}");
     assert!(
@@ -1610,7 +1610,7 @@ fn bad_scene_parse_does_not_cascade_into_orphan_rule_strict_exits_1() {
     );
     assert!(
         !stdout.contains("Strict checks") && !stdout.contains("wired_trigger"),
-        "a scene parse error must not also produce a bogus orphan_rule report for the \
+        "a scene parse error must not also produce a bogus orphan_binding report for the \
          (would-be-correctly-wired) rule:\n{stdout}"
     );
 }

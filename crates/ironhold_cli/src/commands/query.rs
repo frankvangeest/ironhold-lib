@@ -50,10 +50,10 @@ pub enum QueryCommand {
         project_dir: PathBuf,
     },
     #[command(
-        about = "List logic rules and state machines in a project",
-        after_help = "Examples:\n  ironhold query rules assets/projects/3rd_person_game_demo/\n  ironhold query rules assets/projects/entity_logic_demo/\n  ironhold --json query rules assets/projects/quick_scene/"
+        about = "List the state machine (project logic) in a project",
+        after_help = "Examples:\n  ironhold query logic assets/projects/3rd_person_game_demo/\n  ironhold query logic assets/projects/entity_logic_demo/\n  ironhold --json query logic assets/projects/quick_scene/"
     )]
-    Rules {
+    Logic {
         /// Path to the project directory (e.g. assets/projects/particles_demo)
         project_dir: PathBuf,
     },
@@ -84,7 +84,7 @@ pub fn run(cmd: QueryCommand, mode: &OutputMode) -> Result<(), Box<dyn std::erro
             query_effects(&project_dir, keys_only, filter.as_deref(), mode)
         }
         QueryCommand::Scenes { project_dir } => query_scenes(&project_dir, mode),
-        QueryCommand::Rules { project_dir } => query_rules(&project_dir, mode),
+        QueryCommand::Logic { project_dir } => query_logic(&project_dir, mode),
         QueryCommand::Actions { project_dir } => query_actions(&project_dir, mode),
         QueryCommand::Events { project_dir } => query_events(&project_dir, mode),
     }
@@ -452,9 +452,9 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
     Ok(())
 }
 
-// ── query rules ───────────────────────────────────────────────────────────────
+// ── query logic ───────────────────────────────────────────────────────────────
 
-fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
+fn query_logic(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
     // Only state_machine.ron is supported; rules.ron has been removed.
     let state_machine_path = resolve_catalog_paths(project_dir).state_machine_path;
     let fsm: Option<StateMachineAsset> = silent_parse(project_dir, &state_machine_path);
@@ -494,7 +494,7 @@ fn query_rules(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std:
         return Ok(());
     }
 
-    println!("Rules: {}", project_dir.display());
+    println!("Logic: {}", project_dir.display());
     println!();
 
     let fsm = fsm.unwrap();

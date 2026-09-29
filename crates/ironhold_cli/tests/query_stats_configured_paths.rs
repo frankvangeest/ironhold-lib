@@ -109,11 +109,11 @@ fn stats_respects_relocated_state_machine_path() {
     );
 }
 
-/// Same gap, `query rules`' half -- before this fix, hardcoded the convention-path literal and
+/// Same gap, `query logic`'s half -- before this fix, hardcoded the convention-path literal and
 /// so reported "No logic files found" for a project with a relocated `state_machine_path`.
 #[test]
-fn query_rules_respects_relocated_state_machine_path() {
-    let (code, stdout) = run(&["query", "rules"], "relocated_state_machine_path");
+fn query_logic_respects_relocated_state_machine_path() {
+    let (code, stdout) = run(&["query", "logic"], "relocated_state_machine_path");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
     assert!(
         stdout.contains("logic/custom_state_machine.ron"),

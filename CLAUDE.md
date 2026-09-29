@@ -36,7 +36,7 @@ tools/bin/ironhold inspect audio   <path.wav|mp3>      # duration, sample rate, 
 tools/bin/ironhold query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
 tools/bin/ironhold query effects <project_dir>         # list particle effects (count, layers, flags)
 tools/bin/ironhold query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
-tools/bin/ironhold query rules    <project_dir>        # list logic/state_machine.ron content (global_on, states, transitions)
+tools/bin/ironhold query logic    <project_dir>        # list logic/state_machine.ron content (global_on, states, transitions)
 tools/bin/ironhold query actions  <project_dir>        # list all action types used across logic files
 tools/bin/ironhold query events   <project_dir>        # list all event triggers used across logic files
 tools/bin/ironhold query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)

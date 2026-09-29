@@ -42,8 +42,8 @@ enum Command {
         strict: bool,
     },
     #[command(
-        about = "List and filter data from a project (prefabs, effects, scenes, rules)",
-        after_help = "Examples:\n  ironhold query prefabs assets/projects/particles_demo/\n  ironhold query prefabs assets/projects/particles_demo/ --filter kind=actor\n  ironhold query effects assets/projects/particles_demo/ --filter additive=true\n  ironhold query scenes   assets/projects/3rd_person_game_demo/\n  ironhold query rules    assets/projects/3rd_person_game_demo/\n  ironhold query actions  assets/projects/3rd_person_game_demo/\n  ironhold query events   assets/projects/particles_demo/\n  ironhold --json query prefabs assets/projects/particles_demo/ --keys-only"
+        about = "List and filter data from a project (prefabs, effects, scenes, logic)",
+        after_help = "Examples:\n  ironhold query prefabs assets/projects/particles_demo/\n  ironhold query prefabs assets/projects/particles_demo/ --filter kind=actor\n  ironhold query effects assets/projects/particles_demo/ --filter additive=true\n  ironhold query scenes   assets/projects/3rd_person_game_demo/\n  ironhold query logic    assets/projects/3rd_person_game_demo/\n  ironhold query actions  assets/projects/3rd_person_game_demo/\n  ironhold query events   assets/projects/particles_demo/\n  ironhold --json query prefabs assets/projects/particles_demo/ --keys-only"
     )]
     Query {
         #[command(subcommand)]

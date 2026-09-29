@@ -4066,7 +4066,7 @@ callout below if you're migrating an older two-dialect project.
 
 Execution order on transition: `exit_actions` of old state → state change → `entry_actions` of new state.
 
-A `ui.button_pressed:{trigger}`-shaped `on:`/`event:` (an `FsmState.on[].event`, an `FsmTransition.on`, or `global_on[].event` — including inside a `behaviors/*.behavior.ron` file) that no button, key binding, or gamepad binding anywhere in the project can ever fire is reported by `ironhold_cli validate --strict` as `orphan_rule` — the reverse of `unreachable_trigger`.
+A `ui.button_pressed:{trigger}`-shaped `on:`/`event:` (an `FsmState.on[].event`, an `FsmTransition.on`, or `global_on[].event` — including inside a `behaviors/*.behavior.ron` file) that no button, key binding, or gamepad binding anywhere in the project can ever fire is reported by `ironhold_cli validate --strict` as `orphan_binding` — the reverse of `unreachable_trigger`.
 
 ### Removed: `rules.ron`
 
