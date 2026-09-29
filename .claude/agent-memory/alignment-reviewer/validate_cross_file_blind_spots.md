@@ -1,6 +1,6 @@
 ---
 name: validate-cross-file-blind-spots
-description: Structural blind spots in ironhold_cli validate.rs — the 6 configured paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, the RON-authored-disk-path and texture-key inventories, and the 8 schema/ validate() methods (2 wired, 3 dead)
+description: Structural blind spots in ironhold_cli validate.rs — the 6 configured paths + load_configured_catalog fallback divergence, source_file-literal rule, try_parse silent-None, convention-glob discovery, substitution-token false positives, the docs "Checks performed" list, the RON-authored-disk-path and texture-key inventories, and the 8 schema/ validate() methods (6 wired, 2 dead)
 metadata:
   type: project
 ---
@@ -303,20 +303,23 @@ the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and 
 `schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).~~
 
 **`schema/` `validate()` methods are a separate coverage axis from validate.rs's hand-written checks.**
-There are **7** of them (was 8 until `LogicRulesAsset::validate()` was deleted along with
-`LogicRulesAsset` itself, 2026-09-28, see [[rules_vs_state_machine_coexistence]]); **5 are now
-wired** into `cross_file_checks`: `AssetCatalog`/`PrefabCatalog`
-(`feature/cli_validate_gap_closures`, 2026-09-11), then `StatCatalog`/`ItemCatalog` — all four in one
-array loop whose `source_file` resolves the *configured* path (the fix for the hardcoded-literal lie)
-— and `ProjectConfig` (`error_type: "invalid_project_config"`, `source_file:
-find_project_ron(...).unwrap_or_default()`, added by `feature/fixed_timestep_max_delta`, 2026-09-16;
-covers `schema_version` range + `max_fixed_delta_secs` positive/finite). Still called **nowhere in
-either crate** (dead code): `GameSceneV2::validate()`, `ModelFixesAsset::validate()`. Still
-runtime-only: `StateMachineAsset` (`project_loader.rs:~270`). (`LogicRulesAsset::validate()` no
-longer exists — `LogicRulesAsset` itself was deleted 2026-09-28 along with the rest of `rules.ron`,
-see [[rules_vs_state_machine_coexistence]] — so the dead-method count here drops from 3 to 2.)
-Note the `ProjectConfig` wiring is the pattern to copy for the last one — and that feature *did*
-update `docs/60_contributing.md`'s "Checks performed" list (a rare counter-example to the
+There are **8** of them total (`LogicRulesAsset` was a ninth, deleted along with `LogicRulesAsset`
+itself, 2026-09-28, see [[rules_vs_state_machine_coexistence]]): `AssetCatalog`, `PrefabCatalog`,
+`StatCatalog`, `ItemCatalog`, `ProjectConfig`, `StateMachineAsset`, `GameSceneV2`,
+`ModelFixesAsset`. **Verified current (2026-09-29) — 6 are wired**, in both the runtime
+(`project_loader.rs`/`entity_spawner.rs`) and `ironhold_cli validate` (`validate.rs`): the four
+catalog types (`AssetCatalog`/`PrefabCatalog`, `feature/cli_validate_gap_closures`, 2026-09-11, then
+`StatCatalog`/`ItemCatalog` — all four in one array loop whose `source_file` resolves the
+*configured* path, the fix for the hardcoded-literal lie), `ProjectConfig`
+(`error_type: "invalid_project_config"`, `source_file: find_project_ron(...).unwrap_or_default()`,
+added by `feature/fixed_timestep_max_delta`, 2026-09-16; covers `schema_version` range +
+`max_fixed_delta_secs` positive/finite), and **`StateMachineAsset`** (`validate.rs:3642` for the
+project FSM, `:3655` for every `.behavior.ron`) — wired into the CLI during
+`rules_to_state_machine_consolidation`'s Commit 2 (2026-09-28), closing what this file previously
+called out as "runtime-only." Only **2 are genuinely dead code, called nowhere in either crate**:
+`GameSceneV2::validate()`, `ModelFixesAsset::validate()`.
+Note the `ProjectConfig` wiring is the pattern to copy for either remaining one — and that feature
+*did* update `docs/60_contributing.md`'s "Checks performed" list (a rare counter-example to the
 most-frequently-missed-step note above). Three things to check whenever another one gets wired:
 - **They are fail-fast over a `HashMap`** (`return Err` on first problem), so exactly one violation
   surfaces per catalog per run and *which* one is nondeterministic — the opposite posture from every
