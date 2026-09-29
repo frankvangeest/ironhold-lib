@@ -1,6 +1,6 @@
 ---
 name: schema-tightening-blast-radius
-description: deny_unknown_fields (and any stricter-parse change) converts a silent field drop into a whole-FILE parse failure; the five Action-bearing loader paths handle that failure very unevenly, and three of them fail silently forever
+description: deny_unknown_fields (and any stricter-parse change) converts a silent field drop into a whole-FILE parse failure; the four Action-bearing loader paths handle that failure very unevenly, and three of them fail silently forever
 metadata:
   type: project
 ---
@@ -32,21 +32,20 @@ Note the in-file inconsistency worth citing: `project_loader.rs`'s catalog arms 
 (lines 187/199/211/223 as of the original review) already do it right — `error!` + resolved path +
 the error `e`. The model_fixes/state_machine arms are the odd ones out.
 
-**Related structural gap found at the same time:** `Action`'s own leaf field types are all
-primitives plus the unit enum `QualityLevel`, so `Action` needs no recursive follow-up — but its
-*immediate parents in the very same files* still lack the attribute and still silently swallow
-typos: `StateMachineAsset` (project.rs:67), `FsmState` (:127), `FsmTransition` (:141),
-`FsmEventBinding` (:152), `DialogueDef` (dialogue.rs:9), `DialogueCondition`
-(dialogue.rs:60). (`LogicRule` was a sixth instance of this same gap at the time — moot now that
-the type itself no longer exists, removed alongside `rules.ron` in
-`rules_to_state_machine_consolidation`, 2026-09-28. All of `StateMachineAsset`/`FsmState`/
-`FsmTransition`/`FsmEventBinding` now carry `#[serde(deny_unknown_fields)]` themselves — verify
-before citing this paragraph as still describing a live gap for those four; it may only still
-apply to `DialogueDef`/`DialogueCondition`.) A typo'd `event:` on an `FsmEventBinding`
-(`schema/project.rs`:137-140) is a *worse* silent bug than the Action-field typo this feature
-closed — the binding simply never matches anything, with no parse error and no runtime
-diagnostic (state scoping is now structural — which list a binding sits in, `global_on` vs a
-state's own `on:` — not a separate condition field to typo the way `LogicRule.when` once was).
+**Related structural gap found at the same time, since closed:** `Action`'s own leaf field types
+are all primitives plus the unit enum `QualityLevel`, so `Action` needs no recursive follow-up —
+but at the time of this review its *immediate parents in the very same files* still lacked the
+attribute and still silently swallowed typos: `StateMachineAsset`, `FsmState`, `FsmTransition`,
+`FsmEventBinding`, `DialogueDef`, `DialogueCondition` (plus `LogicRule`, a since-removed type, as a
+seventh instance of the same gap). **Verified current (2026-09-29): all six of the still-existing
+types now carry `#[serde(deny_unknown_fields)]`** (`schema/project.rs`, `schema/dialogue.rs`) — the
+`action_deny_unknown_fields` feature that prompted this whole memory closed this gap on the same
+container types in the same pass, not just on `Action` itself. A typo'd `event:` on an
+`FsmEventBinding` is therefore a **parse error**, not a silent no-op — state scoping is structural
+(which list a binding sits in, `global_on` vs a state's own `on:`) rather than a separate condition
+field to typo the way `LogicRule.when` once was, so there's no remaining silent-typo surface at
+this level for the FSM/dialogue types. Kept as an illustration of the general principle below, not
+as a still-open finding.
 
 **How to apply:** when reviewing any schema-tightening change, (1) enumerate every file kind that
 can contain the type, (2) check each loader for a `LoadState::Failed` / `Assets::get() == None` arm,
