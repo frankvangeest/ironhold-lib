@@ -1,6 +1,6 @@
 # Memory Index — system-architect
 
-- [Update-side GlobalTransform staleness](update_side_globaltransform_staleness.md) — reading GlobalTransform in Update is now a bug class; `fresh_global_transform` helper; 3 unfixed sibling sites; stale CLAUDE.md framepace claim
+- [Update-side GlobalTransform staleness](update_side_globaltransform_staleness.md) — reading GlobalTransform in Update is now a bug class; `fresh_global_transform` helper; 2 unfixed sibling sites (particle billboard, targeting click-ray)
 - [Core architectural decisions](arch_decisions.md) — three-crate split, Message→Action pipeline, ActionQueue FIFO, asset catalog pattern, schema as designer API
 - [Fragile modules](fragile_modules.md) — composite prefab spawning, `children:`-on-a-player traps (material flattening, child physics joins player collider), EffectDef/LayerDef sync, WebGPU alignment, particle warmup, terrain async, spawn queue cap; conditional-feature sibling divergence now RESOLVED via shared `attach_prefab_features`
 - [Deferred despawn double-queue](deferred_despawn_double_queue.md) — snapshot-iterated-twice + deferred despawn = double despawn class; Bevy 0.18 despawn() warns not panics; try_despawn silences; all known sibling instances (incl. nameplate.rs) now converted to try_despawn()
@@ -63,4 +63,4 @@
 - [OpenCode toolchain facts](opencode_toolchain_facts.md) — AGENTS.md shadows root CLAUDE.md; `{file:}` single-sourcing; free-by-default plain names + `-deep` paid opt-in; Frank's provider/gate decisions
 - [Claude hooks contract](claude_hooks_contract_bug.md) — hooks were no-ops (exit 1 / plain stdout); fixed via `_hook_common.py` block()/emit_context(); new hooks must use it
 - [Asset fetch failure handling](asset_fetch_failure_handling.md) — no retry anywhere; failed .scene.ron = permanent LoadingScene hang; cheap Bevy retry primitives; serve.py HTTP/1.0+backlog-5 vs GH Pages HTTP/2
-- [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — DECIDED 2026-09-23: remove outright, no bridge; re-anchoring verified; FSM validate() is unwired for behaviors/CLI; query/stats silent on a bad project.ron
+- [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — SHIPPED 2026-09-28; batch review: doc commits made directly on integration can bring removed concepts back with no merge conflict, so grep docs

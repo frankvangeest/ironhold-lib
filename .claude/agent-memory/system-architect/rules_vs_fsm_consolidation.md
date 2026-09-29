@@ -59,6 +59,17 @@ action_substitution.rs. The plan's `query`/`stats` state_machine_path fold-in an
 tripwire test were NOT implemented. fsm_interpreter's doc comment inverts the early-return
 semantics: the un-drained reader means the load-frame scene.requested IS seen, one frame late.
 
+**Pre-promotion batch review (2026-09-29, integration `14fb8f6`):** code side is clean. Every
+interpreter ordering edge was re-anchored, the migrated files are pure `global_on` (so semantics
+are equivalent, including HandledIntentSlots), and `interact_blocked` fits the FSM pipeline.
+Residue was docs only. **The lesson:** `6c0dd55` was a doc commit made *directly on integration*
+(2026-09-17). It added a "use rules.ron for project-level rules" bullet to
+`docs/10_architecture.md`. Feature 5's doc pass did not see it, and git raised no conflict, so the
+bullet survived the merge. A textual merge conflict does NOT catch a removed concept coming back.
+At batch review, grep every doc for the removed names (`rules.ron`, `message_interpreter`,
+`EnterState`). Don't rely on the conflicts that were resolved. The same batch also left duplicate
+plan files in both `planning/features/` and `features/done/` (the modify/delete merge class).
+
 **How to apply:** when reviewing the implementation, check the re-anchoring, the tripwire test
 (no `rules.ron` anywhere), that `query`/`stats` now resolve `state_machine_path` AND warn on an
 unparseable `.project.ron`, and that `StateMachineAsset::validate()` is wired in. Do not accept a
