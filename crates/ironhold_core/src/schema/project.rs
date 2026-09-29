@@ -229,9 +229,11 @@ pub struct ProjectConfig {
     /// Caps `Time<Virtual>::max_delta` — the largest delta the *whole* virtual clock reports for
     /// a single frame, in seconds (default 0.25s / ~16 ticks at this engine's 64Hz
     /// `FIXED_TICK_RATE`). This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` as
-    /// seen by ordinary `Update`-schedule systems (camera smoothing, animation blending,
-    /// `capabilities::motion`), so a very small value visibly slows down more than physics catch-
-    /// up. Omit to use Bevy's default.
+    /// seen by ordinary `Update`-schedule systems (camera smoothing, animation blending), so a
+    /// very small value visibly slows down more than physics catch-up. `capabilities::motion`
+    /// itself now runs in `FixedUpdate` (`deterministic_fixed_timestep` v1), so it's bounded by
+    /// this cap via the tick budget rather than a direct `delta_secs()` read. Omit to use Bevy's
+    /// default.
     ///
     /// A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile
     /// hitch) does not make the recovery frame run more ticks than this allows — the game falls

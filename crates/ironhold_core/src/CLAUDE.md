@@ -298,12 +298,12 @@ proves the ordering is safe, since the failure mode is a scheduling race, not a 
 pass hundreds of times before flipping.
 
 **The targeting→interpreter ordering is transitive, not direct — it depends on `ActionBarPlugin`
-owning its own edge to `message_interpreter_system`.** `TargetingPlugin` only orders itself before
+owning its own edge to `fsm_interpreter_system`.** `TargetingPlugin` only orders itself before
 `action_bar_input_system`; it never references any interpreter system directly. It's
 `ActionBarPlugin`'s own `(cooldown_tick_system, action_bar_input_system,
-action_bar_visual_system).chain().before(message_interpreter_system)` (`capabilities/action_bar.rs`)
-that pulls the whole targeting chain ahead of `message_interpreter_system`/`fsm_interpreter_system`/
-`entity_fsm_interpreter_system` too — meaning `target.*` events are guaranteed visible to all three
+action_bar_visual_system).chain().before(fsm_interpreter_system)` (`capabilities/action_bar.rs`)
+that pulls the whole targeting chain ahead of `fsm_interpreter_system`/`entity_fsm_interpreter_system`
+too — meaning `target.*` events are guaranteed visible to both
 interpreters in the same frame they fire, not just to the action bar. If that `ActionBarPlugin` edge
 is ever removed or restructured, this second guarantee silently disappears along with it — there is
 no test asserting the schedule graph itself, only behavioral tests that would go back to being

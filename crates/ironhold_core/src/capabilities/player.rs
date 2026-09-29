@@ -151,7 +151,7 @@ pub struct PlayerIndex(pub u32);
 ///
 /// The player with no `PlayerIndex` or `PlayerIndex(0)` is "primary" — `capabilities/targeting.rs`
 /// mirrors the primary player's `PlayerTarget` into the global `CurrentTarget` resource, so
-/// `{target}` substitution (`rules.ron`/`state_machine.ron`/behaviors) and the action bar's
+/// `{target}` substitution (`state_machine.ron`/behaviors) and the action bar's
 /// `{target}`-gated cost check keep resolving against the primary player exactly as before this
 /// component existed — see `planning/features/per_player_split_screen_targeting.md`. A
 /// non-primary player's `PlayerTarget` only drives their own visual feedback (target indicator

@@ -668,7 +668,7 @@ fn first_seen<K: std::hash::Hash + Eq, V: Clone>(
 ///   `path_case_mismatch`'s own documented non-coverage of the same shapes -- silently missing a
 ///   mistake here is far safer than acting on an attacker-shaped path.
 /// - already present in `file_results` (i.e. *any* file this run already attempted to parse as
-///   something else, successfully or not -- a catalog, `logic/rules.ron`, a behavior, whatever
+///   something else, successfully or not -- a catalog, `logic/state_machine.ron`, a behavior, whatever
 ///   the `scenes/` glob already covered) -- otherwise a `LoadScene` typo'd onto an existing
 ///   non-scene file (e.g. `LoadScene("prefabs/prefabs.ron")`) would be re-parsed as a `GameSceneV2`,
 ///   fail, and report a perfectly valid file as broken; worse, that spurious `FileResult` would
@@ -730,13 +730,13 @@ fn discover_extra_scenes(
     attempted_this_pass.into_iter().collect()
 }
 
-/// Resolved `rules.ron`/`state_machine.ron` content plus the rel_path each half should be
-/// attributed to (for `source_file`/`error_type` messages and the `logic_files_parsed_cleanly`
-/// filter) -- see `resolve_logic_files`'s doc comment for why the source path isn't always a
-/// literal `"logic/rules.ron"`/`"logic/state_machine.ron"` anymore. The `*_source` strings are
-/// filter keys for `logic_files_parsed_cleanly`, not attributions of a real asset -- both are
-/// still populated (to the project.ron's own name) even when the matching `Option` is `None`
-/// (an unset field with no inline rules, or an unset `state_machine_path`), so do not "simplify"
+/// Resolved `state_machine.ron` content plus the rel_path it should be attributed to (for
+/// `source_file`/`error_type` messages and the `logic_files_parsed_cleanly` filter) -- see
+/// `resolve_logic_files`'s doc comment for why the source path isn't always a literal
+/// `"logic/state_machine.ron"`. The `state_machine_source` string is a filter key for
+/// `logic_files_parsed_cleanly`, not an attribution of a real asset -- it's still populated (to
+/// the project.ron's own name) even when `state_machine` is `None` (an unset `state_machine_path`),
+/// so do not "simplify"
 /// this into `Option<(String, Asset)>` pairs: the filter specifically needs to see a project.ron
 /// whose *configured* path failed to parse, which requires the source to outlive a failed parse.
 struct ResolvedLogicFiles {
@@ -1590,8 +1590,8 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         // are the first feature to author 2+ `ActionBar`s in one scene, and a cross-bar collision
         // is worse than "the wrong slot fires": `CooldownMap`/`PendingIntentActions`/
         // `HandledIntentSlots` are keyed by the literal slot_key string alone, scene-wide, so a
-        // `rules.ron` rule handling one bar's intent on a colliding key silently suppresses the
-        // other bar's pending slot too.
+        // a `state_machine.ron` rule handling one bar's intent on a colliding key silently
+        // suppresses the other bar's pending slot too.
         // `_` lets the compiler infer bevy's `KeyCode` from `InputMap::parse_key`'s return
         // type without this file needing its own `use`/import to name it (this crate already
         // links bevy transitively via ironhold_core — this only avoids one import line).
@@ -2277,7 +2277,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
 
     // `Action::SetCameraMode(mode:)` must be either the reserved "default" or a key present in
     // SOME scene's camera_modes registry. Weaker than the project-scoped catalog checks above
-    // (rules.ron/state_machine.ron are project-scoped, but camera_modes is scene-scoped, so
+    // (state_machine.ron is project-scoped, but camera_modes is scene-scoped, so
     // "defined in scene A, fired only while scene B is active" isn't caught) — still catches the
     // dominant failure, a typo'd key, which today only surfaces as a silent runtime warn!+no-op.
     for (source, action) in actions {
@@ -2300,7 +2300,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     }
 
     // `Action::Spawn`'s `spawn_point` must match a key in SOME scene's `spawn_points` map. Same
-    // weaker-than-project-scoped caveat as the `SetCameraMode` check above: rules.ron/
+    // weaker-than-project-scoped caveat as the `SetCameraMode` check above:
     // state_machine.ron actions are project-scoped but `spawn_points` is scene-scoped, so "defined
     // in scene A, fired only while scene B is active" isn't caught — still catches the dominant
     // failure, a typo'd spawn_point name, which today only warns and falls back to the world
@@ -2380,10 +2380,10 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
 
 // ── UI trigger reachability ───────────────────────────────────────────────────
 
-/// Every event string any rule/transition/binding in the project's logic matches against —
-/// `rules.ron`'s `on:`, `state_machine.ron`'s in-state `on:`/`transitions[].on`/`global_on:`,
-/// and the same three fields in every behavior file. Takes the same already-parsed
-/// `rules`/`state_machine`/`behaviors` `do_validate` builds for `collect_actions` above, rather
+/// Every event string any binding/transition in the project's logic matches against —
+/// `state_machine.ron`'s in-state `on:`/`transitions[].on`/`global_on:`, and the same three
+/// fields in every behavior file. Takes the same already-parsed
+/// `state_machine`/`behaviors` `do_validate` builds for `collect_actions` above, rather
 /// than re-reading the files from disk — a malformed logic file then degrades exactly like every
 /// other check in this module (an incomplete `handled` set alongside the file's own already-
 /// reported parse error), instead of `check_ui_trigger_reachability` silently swallowing that

@@ -42,7 +42,7 @@ pub fn setup_test_app() -> App {
        // resource registered, not just tests that construct clips themselves (which previously
        // called `app.init_asset::<AnimationClip>()` individually; centralized here instead so
        // no test file has to remember it).
-.init_asset::<bevy::animation::AnimationClip>()
+        .init_asset::<bevy::animation::AnimationClip>()
         .init_asset::<ironhold_core::schema::player::AnimationPolicy>()
         .init_asset::<ironhold_core::schema::project::StateMachineAsset>()
         .init_asset::<bevy::audio::AudioSource>()

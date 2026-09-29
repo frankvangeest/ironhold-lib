@@ -102,7 +102,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"entity.entered:<id>"` — trigger zone entry (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.exited:<id>"` — trigger zone exit (Rapier sensor; `FixedUpdate`) ✅
 - `"entity.interacted:<id>"` — player within radius + pressed the interact key (default: `"KeyF"`; override via `inputs.interact` on the player prefab) ✅
-- `"entity.interact_blocked:<id>"` — player within radius + pressed the interact key, but `interactable.requires_item` names an `items.ron` key not in `PlayerInventory`; fires instead of `entity.interacted:<id>` (never both). `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for every player. Event matching is exact-id-only (no wildcard) same as `entity.interacted:<id>` — for many gated doors sharing one prefab, a `.behavior.ron` with `event: "entity.interact_blocked:{self}"` scales better than one `global_on:`/`rules.ron` rule per door ✅
+- `"entity.interact_blocked:<id>"` — player within radius + pressed the interact key, but `interactable.requires_item` names an `items.ron` key not in `PlayerInventory`; fires instead of `entity.interacted:<id>` (never both). `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for every player. Event matching is exact-id-only (no wildcard) same as `entity.interacted:<id>` — for many gated doors sharing one prefab, a `.behavior.ron` with `event: "entity.interact_blocked:{self}"` scales better than one `global_on:` rule per door ✅
 - `"container.opened:<id>"` — emitted by `Action::OpenContainer(id)` after the `ContainerPanel` UI is shown for the given entity's `Inventory` ✅
 - `"container.closed"` — emitted by `Action::CloseContainer` (no entity id — only one container can be open at a time) ✅
 - `"container.looted:<id>"` — emitted by `Action::TakeAllFromContainer` once every item has been transferred out of the given entity's `Inventory`. **Does not fire if the container was already empty** — `TakeAllFromContainer` early-returns before emitting when there is nothing to transfer, so an empty container is indistinguishable from "never looted" to anything listening for this event ✅
@@ -388,7 +388,7 @@ Applies actions to the world. Key design points:
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
-- `LogicState` resource — tracks the current named state (default `""`); checked by both interpreters
+- `LogicState` resource — tracks the current named state (default `""`); checked by `fsm_interpreter_system` (the per-entity `entity_fsm_interpreter_system` tracks its own state independently, via `EntityFsmState`)
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
 - `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; every project uses this — `state_machine_path` in the project config points to it
 

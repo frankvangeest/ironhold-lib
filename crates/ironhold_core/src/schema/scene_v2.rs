@@ -1022,8 +1022,8 @@ pub struct ActionSlotDef {
     /// an unrecognised key name logs a `warn!` at scene load and the slot never fires from the
     /// keyboard. This string is also the slot's identity: `CooldownMap`/`PendingIntentActions`
     /// keys and every emitted `action_bar.*:{key}` event use it verbatim, so rebinding a slot
-    /// (changing `key`) also renames its event contract — update any `rules.ron`/`state_machine.
-    /// ron` wired to the old key string. Gamepad buttons are a separate opt-in field, `gamepad_
+    /// (changing `key`) also renames its event contract — update any `state_machine.ron` wired to
+    /// the old key string. Gamepad buttons are a separate opt-in field, `gamepad_
     /// key` below — this field stays required and keyboard-only even for a gamepad-routed slot,
     /// and must still be scene-globally unique (see the cross-bar duplicate-key check) even
     /// though a gamepad-driven player may never actually press it.

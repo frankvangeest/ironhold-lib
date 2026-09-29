@@ -342,7 +342,7 @@ pub enum Action {
     /// `npc_id` is the spawn ID of the NPC entity; `dialogue_path` is the project-relative path
     /// to the `.dialogue.ron` file. The dialogue_tick_system handles this via the
     /// auto-wire path (entity.interacted:{id} on entities with `PrefabDef.dialogue` set) but
-    /// designers can also fire it directly from rules.ron or state_machine.ron.
+    /// designers can also fire it directly from state_machine.ron.
     StartDialogue {
         npc_id: String,
         dialogue_path: String,

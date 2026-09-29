@@ -4623,7 +4623,7 @@ Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — 
 )
 ```
 
-This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` for ordinary `Update`-schedule systems (camera smoothing, animation blending, `capabilities::motion`), so a value picked purely for physics catch-up will also visibly slow those down.
+This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` for ordinary `Update`-schedule systems (camera smoothing, animation blending), so a value picked purely for physics catch-up will also visibly slow those down. `capabilities::motion` itself now runs in `FixedUpdate`, so it's bounded by this cap via the tick budget instead.
 
 A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile hitch) does **not** make the recovery frame run more ticks than this allows — the game falls further behind real time instead (graceful slow-motion), rather than paying one very expensive catch-up frame.
 

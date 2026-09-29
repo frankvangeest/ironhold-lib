@@ -163,7 +163,7 @@ pub fn action_executor_system(
                 };
                 // A leftover `{` means a substitution token was never resolved -- most likely
                 // `{new_id}` misspelled, or `{self}`/`{target}` authored somewhere that doesn't
-                // resolve them (e.g. a dialogue choice's do_actions, or a global rules.ron/
+                // resolve them (e.g. a dialogue choice's do_actions, or a global
                 // state_machine.ron rule for `{self}`). Baking literal braces into a live spawn
                 // id silently produces the exact collision-prone id this feature exists to avoid.
                 if spawn_id.contains('{') {

@@ -13,8 +13,8 @@ use crate::runtime::scene_manager::SpawnId;
 /// unless `requires_item` is set and the player's `PlayerInventory` lacks that item key, in which
 /// case it emits `GameEvent::Trigger("entity.interact_blocked:{spawn_id}")` instead.
 ///
-/// The response is configured in RON — either in `rules.ron`, `state_machine.ron`,
-/// or the entity's own `.behavior.ron` file.
+/// The response is configured in RON — either in `state_machine.ron` or the entity's own
+/// `.behavior.ron` file.
 #[derive(Component)]
 pub struct Interactable {
     /// Player must be closer than this (metres) to trigger interaction.

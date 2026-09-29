@@ -108,7 +108,7 @@ pub(crate) fn is_primary_player(player_index: Option<&PlayerIndex>) -> bool {
 }
 
 /// Commits `id` as `player_target`'s new selection, mirrors it into the global `CurrentTarget`
-/// resource when `is_primary` (so `{target}` substitution in `rules.ron`/`state_machine.ron`/
+/// resource when `is_primary` (so `{target}` substitution in `state_machine.ron`/
 /// behaviors and the action bar's `{target}`-gated cost check keep resolving against the primary
 /// player exactly as before per-player targets existed — this is Phase 1's documented scope
 /// boundary, not a bug: a non-primary player's selection never reaches the shared action

@@ -110,8 +110,7 @@ Use Bevy app States for lifecycle:
 Boot → LoadingProject → LoadingScene → InGame → Paused / Error
 
 ### Gameplay logic (data-driven)
-- **Project-level rules** (`logic/rules.ron`): menus, options, scene transitions, UI-driven events. Uses optional `when:` guards to gate rules to named logic states.
-- **Gameplay state machines** (`logic/state_machine.ron`): playing, paused, character selection, and other FSM-driven states. Supports entry/exit actions, explicit `from:`/`to:` transitions, and `global_on:` events.
+- **Project logic** (`logic/state_machine.ron`): menus, options, scene transitions, UI-driven events, playing/paused/character-selection and other FSM-driven states — one format for all of it. Supports flat `global_on:` events, entry/exit actions, and explicit `from:`/`to:` transitions; start flat and add states only when you need modes. See `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping from the old two-format system.
 - **Entity logic** (`behaviors/*.behavior.ron`): per-entity behavior machines attached to prefabs. Uses `{self}` substitution for entity-scoped logic.
 
 Global logic and entity logic both consume messages from the bus and emit actions via the capability systems.
