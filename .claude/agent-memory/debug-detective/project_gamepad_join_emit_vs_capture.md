@@ -8,8 +8,11 @@ metadata:
 `runtime/input.rs::unclaimed_gamepad_trigger_system` has **two independent per-frame budgets**
 that are easy to conflate: it `write`s a `UiEvent::ButtonPressed(trigger)` for *every*
 (unclaimed pad × bound button) match, but only captures the **first** pad into
-`PendingJoinGamepad` (guarded by a local `captured` bool). Since `message_interpreter_system`
-does no dedup (`match_rules` is called once per UiEvent message), N simultaneous pad presses on
+`PendingJoinGamepad` (guarded by a local `captured` bool). Since `fsm_interpreter_system`
+does no dedup (it collects one event string per UiEvent into a per-frame `Vec` and matches
+`global_on`/in-state `on:` bindings independently for each entry — renamed from
+`message_interpreter_system`/`match_rules` by `rules_to_state_machine_consolidation`, 2026-09),
+N simultaneous pad presses on
 a `"join"` binding produce N `Action::JoinPlayer` actions in one executor pass — only the first
 gets a `gamepad_index`; the rest fall back to whatever the join prefab authored. The executor's
 `.take()` correctly stops pad *reuse* but cannot stop the extra join.

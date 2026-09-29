@@ -21,9 +21,12 @@ The binary could not possibly know those fields; it dropped them and passed.
 Two follow-ons worth remembering:
 - Range/value checks added to `validate.rs`'s `cross_file_checks` only fire when the field name
   is spelled correctly. They give false confidence against the more likely authoring mistake.
-- `collect_actions` (validate.rs) walks `rules.ron`, `state_machine.ron` and
-  `behaviors/*.behavior.ron` only — **dialogue node actions are not collected**, so any
-  action-level validation misses dialogue files entirely.
+- `collect_actions` (validate.rs) walks `state_machine.ron`, `behaviors/*.behavior.ron`, and
+  `dialogues/*.dialogue.ron` (dialogue choice actions ARE collected today). `rules.ron` no longer
+  exists — it was removed entirely by `rules_to_state_machine_consolidation` (2026-09); this note
+  previously said dialogue actions were NOT collected and named `rules.ron` as a source, both now
+  stale. See [[project_collect_actions_skips_actionbar_slots]] for what's still missing
+  (action-bar slot actions).
 - `deny_unknown_fields` is a serde *container* attribute, not a variant attribute, so it can only
   be applied to the whole `Action` enum — cheap to try, but it would hard-fail any existing RON
   carrying a stray key, so it needs a full `cargo test --test ron_validation --test ron_lint`

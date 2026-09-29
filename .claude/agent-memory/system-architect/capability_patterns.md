@@ -22,18 +22,23 @@ Four required touchpoints:
 4. Document in `docs/20_data_formats.md` (actions table), `docs/30_runtime_events_and_logic.md` (appendix), and `docs/STATUS.md` (Engine ABI)
 
 Entity-targeted actions (those that reference a spawn ID) need two additional touchpoints:
-5. `rewrite_self()` AND `rewrite_target()` in `crates/ironhold_core/src/runtime/scene_manager/message_interpreter.rs` — must handle `{self}`/`{target}` substitution in any field that holds a spawn ID
+5. `rewrite_self()` AND `rewrite_target()` in `crates/ironhold_core/src/runtime/scene_manager/action_substitution.rs` — must handle `{self}`/`{target}` substitution in any field that holds a spawn ID
 6. `crates/ironhold_core/src/CLAUDE.md` — add to the `{self}` targets list
 
-**Recurring anti-pattern — substitution-enumeration trap:** `rewrite_self()` and `rewrite_target()` in `message_interpreter.rs` (`runtime/scene_manager/message_interpreter.rs`) are explicit `match` over Action variants ending in `other => other`. Any new entity-targeted action that is NOT added to both match arms silently passes through with literal `"{self}"`/`"{target}"` strings — so it works from global rules.ron but is unreachable from behavior files and dialogue choices, with no compile error and no warning. Previously observed concretely in the inventory system (AddItem/RemoveItem/TransferItem/OpenShop were all omitted) — this has since been fixed; all four are now handled in both match arms (confirmed in `crates/ironhold_core/src/CLAUDE.md`'s `{self}` targets list). ALWAYS check both functions when reviewing a new entity-targeted action — the trap itself (silent pass-through, no warning) is still real even though the specific inventory-action instance of it was fixed.
+**Recurring anti-pattern — substitution-enumeration trap:** `rewrite_self()` and `rewrite_target()` in `action_substitution.rs` (`runtime/scene_manager/action_substitution.rs`) are explicit `match` over Action variants ending in `other => other`. Any new entity-targeted action that is NOT added to both match arms silently passes through with literal `"{self}"`/`"{target}"` strings — so it works from a global `state_machine.ron` `global_on:` handler but is unreachable from behavior files and dialogue choices, with no compile error and no warning. Previously observed concretely in the inventory system (AddItem/RemoveItem/TransferItem/OpenShop were all omitted) — this has since been fixed; all four are now handled in both match arms (confirmed in `crates/ironhold_core/src/CLAUDE.md`'s `{self}` targets list). ALWAYS check both functions when reviewing a new entity-targeted action — the trap itself (silent pass-through, no warning) is still real even though the specific inventory-action instance of it was fixed.
 
 **Live third instance of the same trap (found 2026-09-16 triage):** there is a *third* hand-maintained enumeration that must stay in sync with `rewrite_target()` — `action_needs_target()` in `capabilities/action_bar.rs` (the gate that decides whether a slot press emits `action_bar.no_target:{key}` instead of firing). It covers strictly fewer variants than `rewrite_target` does. Variants `rewrite_target` substitutes but `action_needs_target` does **not** gate: `SetVariable`, `EmitEventAfterDelay`, `ResetToSpawn`, `AddItem`, `RemoveItem`, `TransferItem`, `OpenShop`, `OpenContainer`, and `Spawn.id`/`Spawn.spawn_point` (only `Spawn.at_entity` is gated). Consequence: a slot whose only `{target}` use is one of those fires with an **empty** spawn id and the designer gets no `no_target` event — a silent no-op instead of a diagnosable one. Not biting any shipped project (`local_coop_demo`, the only project using `owner_player` bars, only uses `ModifyStat`/`ShowDamagePopup`, both gated). When reviewing a new entity-targeted action, check **three** enumerations, not two.
 
-## Rules.ron vs state_machine.ron
+## state_machine.ron is the only logic format
 
-- `rules.ron` — simple event→action mapping; no state tracking. Use for projects where all events trigger the same response regardless of game state.
-- `state_machine.ron` — FSM with named states, entry/exit actions, and `when:` condition guards. Use when behavior depends on the current game state (e.g., playing vs paused, hp_low vs hp_ok).
-- Both are independently live if both paths are set (chain: `message_interpreter_system` then `fsm_interpreter_system`), but NO shipped project does this and coexistence has real hazards. See [[rules-vs-fsm-consolidation]] for the open keep-vs-consolidate question (my recommendation: consolidate on FSM, staged).
+`rules.ron` (a simpler event→action mapping with no state tracking) was removed outright in
+`rules_to_state_machine_consolidation` (shipped 2026-09-28) — see [[rules_vs_fsm_consolidation]]
+for the removal rationale and traps. Every project now authors logic exclusively in
+`state_machine.ron`: `global_on` for state-independent event→action bindings, per-state `on:`
+handlers for state-dependent behavior, and `transitions` for state changes. Interpreted by
+`fsm_interpreter_system` (scene-level) and `entity_fsm_interpreter_system` (per-entity/NPC).
+`ProjectConfig.rules`/`rules_path` and `Action::EnterState` no longer exist — a state change is a
+`transitions` entry driven by an emitted event, not a direct action.
 
 ## Feature spec splitting
 

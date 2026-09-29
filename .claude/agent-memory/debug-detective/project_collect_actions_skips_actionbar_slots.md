@@ -6,8 +6,10 @@ metadata:
 ---
 
 `collect_actions()` in `crates/ironhold_cli/src/commands/validate.rs` builds the `all_actions`
-list from exactly four sources: `rules.ron`, `state_machine.ron`, `behaviors/*.behavior.ron`, and
-`dialogues/*.dialogue.ron`. It does **not** walk scenes. But `ActionSlotDef.do_actions`
+list from exactly three sources: `state_machine.ron`, `behaviors/*.behavior.ron`, and
+`dialogues/*.dialogue.ron` (`rules.ron` was removed entirely by
+`rules_to_state_machine_consolidation`, 2026-09 — it was a fourth source before that). It does
+**not** walk scenes. But `ActionSlotDef.do_actions`
 (`schema/scene_v2.rs`, inside a scene's `ui: [ ActionBar((slots: [...])) ]`) is a real
 `Vec<Action>` that fires through the normal pipeline.
 

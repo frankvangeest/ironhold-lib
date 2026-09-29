@@ -10,8 +10,10 @@ is the canonical designer-facing demo for `Action::PlayAnimationOn`'s `start_at_
 (`Option<f32>`, 0.0–1.0 fraction of clip duration — deliberately NOT named `start_at`, to avoid a
 seconds/fraction ambiguity) and `freeze` (`bool`, default `false`). Two scenes:
 `main.scene.ron` (four frozen poses at 0/50/75/100%) and `continue.scene.ron` (freeze:false,
-including a looping-alias mid-stride seek). All poses are driven from `logic/rules.ron` on
-`scene.ready:{stem}` — no Rust, no player, flycam only.
+including a looping-alias mid-stride seek). All poses are driven from `logic/state_machine.ron` (`global_on` bindings) on
+`scene.ready:{stem}` — no Rust, no player, flycam only. (Originally authored against `rules.ron`;
+migrated to `state_machine.ron` along with every other shipped project by
+`rules_to_state_machine_consolidation`.)
 
 **Reusable traps this project surfaced:**
 

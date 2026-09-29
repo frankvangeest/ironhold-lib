@@ -13,7 +13,7 @@ metadata:
 
 ## Message → Interpreter → Action → Executor pipeline
 
-All game behavior flows: capability emits message → interpreter matches rules.ron/state_machine.ron → pushes Action to ActionQueue → executor dispatches Action. No capability system may push directly to ActionQueue — it must emit a typed message instead. The interpreter is the only code that writes to ActionQueue.
+All game behavior flows: capability emits message → interpreter (`fsm_interpreter_system`/`entity_fsm_interpreter_system`) matches state_machine.ron (`global_on`/`states[].on`/`transitions`) → pushes Action to ActionQueue → executor dispatches Action. No capability system may push directly to ActionQueue — it must emit a typed message instead. The interpreter is the only code that writes to ActionQueue. (Historical: `rules.ron`/`message_interpreter_system` were a separate, simpler event→action mapping; removed outright in `rules_to_state_machine_consolidation`, 2026-09-28 — state_machine.ron is now the only logic format.)
 
 **Why:** Makes all behavior configurable from RON without recompiling. If a capability hardwires an action, the designer loses the ability to change that behavior.
 

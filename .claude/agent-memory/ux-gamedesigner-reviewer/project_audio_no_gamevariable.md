@@ -9,7 +9,7 @@ metadata:
 
 **Why this matters for designers:** there is no `audio_muted` / `muted` / `volume` variable a `Label((bind: ...))` can read. Unlike the targeting capability (which auto-writes `target_display` etc., see [[auto-written-gamevariables-undocumented]]), audio exposes state ONLY as transient events.
 
-**The data-only workaround (no engine change needed):** in `state_machine.ron` / `rules.ron`, react to the audio events and mirror state into a variable:
+**The data-only workaround (no engine change needed):** in `state_machine.ron` (a `global_on`/state `on:` binding), react to the audio events and mirror state into a variable:
 ```ron
 ( event: "audio.muted",   do_actions: [ SetVariable("audio_state", "Muted") ] ),
 ( event: "audio.unmuted", do_actions: [ SetVariable("audio_state", "Sound On") ] ),

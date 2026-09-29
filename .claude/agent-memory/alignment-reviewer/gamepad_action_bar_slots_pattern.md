@@ -16,7 +16,7 @@ runtime field → one `scene_loader.rs` resolve site (ActionBar has exactly ONE 
 3-spawn-path footgun, unlike `PrefabDef` markers) → `action_bar_input_system` read →
 runtime-`warn!` + CLI-`validate` collision pair. **No new Action variant, no new event** — a
 gamepad press emits the identical `intent.slot.{key}:{entity}` / `action_bar.*` contract, so
-existing `rules.ron` hooks work unchanged and `query.rs`'s exhaustive match was untouched.
+existing `state_machine.ron` hooks work unchanged and `query.rs`'s exhaustive match was untouched.
 
 **Two collision checks have deliberately DIFFERENT scopes — don't "unify" them.** Keyboard
 (`warn_cross_bar_duplicate_keys`) is scene-wide because `CooldownMap`/`PendingIntentActions`/

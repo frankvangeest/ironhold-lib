@@ -1,6 +1,6 @@
 ---
 name: cli-validate-coverage-model
-description: ironhold_cli validate silently skips checks when a catalog is absent; query/stats now honor configured CATALOG paths (utils::resolve_catalog_path) but still hardcode the two LOGIC paths, so they report 3rd_person_game_demo's/terrain_demo's dead rules.ron as live; asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue referential checks now landed (query.rs's collector still hasn't); FOUR join_prefab_keys checks now ship without modelling the Grid-split-only/dead-low-slot reachability rules; schema types' own validate() is a second validation layer the CLI wires only 2 of 8 of, all fail-fast over a HashMap; wiring one surfaces mass fixture drift; docs/60_contributing.md's checks list is the de-facto contract and gets missed; camera_mode: payloads have legacy sibling fields (components.camera/.flycam) that dominate shipped authoring and are missed by any CameraModeDef-shaped check; is_player()/is_flycam() tag gates are not mutually exclusive; per-field flycam key defaults are not uniform; target_indicator.texture is a decals key
+description: ironhold_cli validate silently skips checks when a catalog is absent; query.rs/stats.rs now share utils::resolve_catalog_paths and both resolve the single state_machine_path (rules.ron/rules_path removed outright 2026-09-28, rules_to_state_machine_consolidation — the old "query/stats hardcode logic paths and report dead rules.ron as live" gap is fully moot, not just fixed); asset-root path checks landed but hinge on a fixed-depth-2 find_assets_root over a never-canonicalized CLI arg (silent skip on `validate .`), assets root is `assets/` not `assets/shared/`, and check.py's ported case helper lacks the backslash arm; only two severity tiers exist (CrossFileError=hard, StrictWarning=--strict-only); configurable catalog paths now honored in validate.rs but not query.rs/stats.rs, and the unset-field convention fallback masks a real authoring error; out-of-convention scenes are now parsed+cross-checked but the byte-exact/parsed-only covered-set duplicates diagnostics on case-variant or unparseable paths; there are SIX Action-bearing schema surfaces not five (ActionSlotDef.do_actions is fully-qualified and grep-invisible, and unwalked); dialogue referential checks now landed (query.rs's collector still hasn't); FOUR join_prefab_keys checks now ship without modelling the Grid-split-only/dead-low-slot reachability rules; schema types' own validate() is a second validation layer the CLI wires only 2 of 8 of, all fail-fast over a HashMap; wiring one surfaces mass fixture drift; docs/60_contributing.md's checks list is the de-facto contract and gets missed; camera_mode: payloads have legacy sibling fields (components.camera/.flycam) that dominate shipped authoring and are missed by any CameraModeDef-shaped check; is_player()/is_flycam() tag gates are not mutually exclusive; per-field flycam key defaults are not uniform; target_indicator.texture is a decals key
 metadata:
   type: project
 ---
@@ -24,8 +24,10 @@ of `cross_file_checks` / `check_ui_trigger_reachability` / `strict_checks` now t
 `validate.rs`, ~13 fields of `&`/`Option<&>`/`&[]`/`bool`, built once in `do_validate`), and each
 destructures with a trailing `..`. Practical consequence when scoping any *future* check: "which
 params does it already receive?" is no longer a design question — every one of them sees
-`project_dir`, all four catalogs, `scenes`, `actions`, `rules`/`state_machine` (as
-`Option<(source_path, &asset)>`), `behaviors`, and both parse-cleanliness bools for free, and
+`project_dir`, all four catalogs, `scenes`, `actions`, `state_machine` (as
+`Option<(source_path, &asset)>` — the sibling `rules` field was removed along with `rules.ron`
+itself in `rules_to_state_machine_consolidation`, 2026-09-28), `behaviors`, and both
+parse-cleanliness bools for free, and
 adding a new field costs one line at the struct + one at construction with **zero** consumer
 churn (the `..` absorbs it). So never propose "…but that would need plumbing" as a cost against a
 check in this file again; do still note that `..` means a newly added field silently reaches no
@@ -36,7 +38,8 @@ consumer by adding `dialogues` to `cross_file_checks`'s destructure and nothing 
 
 Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold_cli/src/commands/validate.rs`:
 
-1. **Hardcoded vs configured catalog paths — FIXED in `validate.rs`, still live in `query.rs`/`stats.rs`.**
+1. **Hardcoded vs configured catalog paths — FIXED in `validate.rs`, and (for the one remaining
+   logic path) now also in `query.rs`/`stats.rs`.**
    `feature/configurable_catalog_paths` (2026-09-04) added
    `load_configured_catalog<T>(project_dir, field, convention_path, field_name, results)` to
    `validate.rs`; all four configurable catalogs (`asset_catalog`, `prefab_catalog`, `stats_path`,
@@ -44,72 +47,34 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `resolve_project_path()` (scene_manager/mod.rs) is a plain `format!("{root}/{path}")`, so the
    CLI's `project_dir.join(path)` is a faithful mirror of runtime resolution — no shared-asset
    special-casing to worry about.
-   **`rules_path`/`state_machine_path` got the same treatment 2026-09-06 (`f82de0e`,
-   `feature/configurable_logic_paths`)**: new `resolve_logic_files(project_dir, project_config,
-   file_results) -> ResolvedLogicFiles` (4 fields: asset + source-path per half) replaces the two
-   hardcoded `try_parse` literals. Runtime-faithful (`project_loader.rs` 49-64/249-254): explicit
-   path wins (hard error if missing), unset `rules_path` → synthesize `LogicRulesAsset` from inline
-   `ProjectConfig.rules`, unset `state_machine_path` → `None`; convention-path fallback only when
-   there's no *parseable* `.project.ron`. **The 4-field (not `Option<(String, T)>`) shape is
-   load-bearing and undocumented**: the source path must survive a *failed* parse, or
-   `logic_files_parsed_cleanly` can't match the `FileResult` — "simplifying" it flips that bool
-   true on a malformed configured rules file and un-gates `check_ui_trigger_reachability` +
-   `orphan_rule`. Side effect worth knowing: inline `ProjectConfig.rules` now reaches
-   `collect_actions` *before* `discover_extra_scenes`, so a `LoadScene` inside an inline rule now
-   participates in out-of-convention scene discovery. `model_fixes_path` is the **last** unresolved
-   configured path (`validate.rs`~2536, still literal `"overrides/model_fixes.ron"` bound to
-   `_model_fixes` — parse-coverage only).
-   **Three things these fixes deliberately did *not* do, all worth re-raising if they bite:**
-   (a) the helpers were private to `validate.rs`, so `query.rs` (3 catalog + **6 logic** sites) and
-   `stats.rs` (2 + **2**) hardcoded `"prefabs/prefabs.ron"`/`"assets.ron"`/
-   `"logic/rules.ron"`/`"logic/state_machine.ron"`.
-   **CATALOG HALF FIXED 2026-09-11 (`feature/cli_query_stats_paths`); LOGIC HALF STILL OPEN.**
-   The fix moved `find_project_ron` to `commands/utils.rs` as `pub fn`, added
-   `pub fn resolve_catalog_path(configured: Option<&str>, convention: &str) -> &str` (a bare
-   `unwrap_or`), and gave `query.rs`/`stats.rs` one private `load_project_config` **each**. All 5
-   catalog sites now resolve. **The 8 logic sites do not** (`query.rs`:457-458, :666, :683;
-   `stats.rs`:111, :115) — so `query rules`/`query actions`/`query events`/`stats` still report
-   `3rd_person_game_demo`'s and `terrain_demo`'s dead `logic/rules.ron` (23 rules in the former) as
-   live, while `validate` correctly ignores it. Three commands, three answers, *today*, on shipped
-   content — this is the most concretely-reproducible instance of this whole class.
-   **Two traps if you fix the logic half:** (i) `resolve_catalog_path`'s semantic is WRONG for it —
-   unset `rules_path` means inline `ProjectConfig.rules`, unset `state_machine_path` means no FSM;
-   copy `resolve_logic_files`'s `match`, not the `unwrap_or`. (ii) `resolve_catalog_path` is a
-   zero-logic wrapper whose doc claims `validate.rs` shares it — `validate.rs` does **not** and
-   structurally **cannot** (it needs `load_configured_catalog`'s branch, where configured-but-missing
-   is a hard error). Don't trust that doc; don't cite it as precedent for validate parity. The
-   genuinely reusable unit is the *whole* resolution (parse `.project.ron` → pick field → fall back),
-   which would also delete both `load_project_config` copies and drop the `ProjectConfig` import from
-   both files. Also note `resolve_catalog_path`'s convention fallback is a **runtime divergence**
-   (`schema/project.rs`:191-200: "No convention-path fallback: if unset, no catalog loads at all") —
-   validate documents its identical divergence at length and adds
-   `unset_catalog_path_with_convention_file` to cover it; the new `pub` helper documents neither.
-   (c) `parse_configured` (nested inside `resolve_logic_files`) is `load_configured_catalog`'s
-   `Some(path)` arm **minus the `path_case_mismatch` call** — so `rules_path: "Logic/Rules.ron"`
-   still validates clean on Windows and 404s in the browser. This is precisely the "7th path field
-   picks up the existence half and forgets the case half" failure predicted in
-   `claude_suggestions.md`~414. Hoisting `parse_configured` to module level *with* the case block
-   lets `load_configured_catalog` become a 4-line `match` over it — closes the duplication its own
-   review deferred and the case gap in one move.
-   (b) when a *catalog* field is unset, validate falls back to the convention path rather than mirroring
-   the runtime's "load nothing at all". This was forced by ~46 of 63 CLI fixtures having a
-   convention catalog and no `.project.ron` at all. It is inert for shipped content today
-   (verified: every convention-path `assets.ron`/`prefabs.ron`/`stats.ron`/`items.ron` under
-   `assets/projects/` is declared by its project) but it structurally *masks the likeliest
-   authoring error in this area*: add `stats/stats.ron` (or `items/items.ron`), forget the
-   `stats_path`/`items_path` line, and the CLI happily cross-checks a catalog the runtime never
-   loads. `docs/20_data_formats.md` states the runtime semantics explicitly ("omitting it means no
-   stat system for that project"), so the divergence is documented-against. The cheap mitigation
-   is a `StrictWarning` when the field is unset *and* the convention file exists — fixture-safe
-   because `--strict` isn't the default gate. **Shipped as `unset_catalog_path_with_convention_file`
-   for the four catalogs only.** The logic half (`f82de0e`) shipped *no* such warning, and its
-   fallback is narrower (only when there's no `.project.ron`), so a declared project with an
-   undeclared `logic/rules.ron` on disk is now parsed by **nothing in the whole toolchain** —
-   validate skips it, `ron_lint` is a text scan not a parse, `ron_validation` tests hand-written
-   literals. Live on exactly two shipped projects: `3rd_person_game_demo`, `terrain_demo` (both set
-   only `state_machine_path` yet ship a dead `logic/rules.ron`); a RON syntax error in either is
-   now invisible. An `unset_logic_path_with_convention_file` strict warning is the symmetric fix
-   and would name those two.
+   **Everything this item used to say about `rules_path`/`LogicRulesAsset` is now historical only:
+   `rules.ron` and `rules_path` were removed outright in `rules_to_state_machine_consolidation`
+   (2026-09-28) — see [[rules_vs_fsm_consolidation]].** `state_machine_path` is the only logic path
+   left. `validate.rs`'s `resolve_logic_files`/`ResolvedLogicFiles` were cut down to a single
+   asset + source-path pair for `state_machine` (no more "4 fields, one per half" shape — there is
+   only one half now). **The old "CATALOG HALF FIXED, LOGIC HALF STILL OPEN" gap is now fully
+   closed, not just fixed**: `query.rs`/`stats.rs` no longer hardcode any logic path — both go
+   through the shared `utils::resolve_catalog_paths` → `ResolvedCatalogPaths.state_machine_path`
+   (query.rs~458-459/626-627, stats.rs~123), so the old "three commands, three answers" scenario
+   (query/stats reporting a dead `logic/rules.ron` as live while `validate` correctly ignored it)
+   cannot recur — there is no more inline-`ProjectConfig.rules` synthesis path and nothing left to
+   disagree about. `model_fixes_path` is the **last** unresolved configured path (`validate.rs`~2536,
+   still literal `"overrides/model_fixes.ron"` bound to `_model_fixes` — parse-coverage only).
+   **One thing worth re-raising if it bites:** when a *catalog* field is unset, validate falls back
+   to the convention path rather than mirroring the runtime's "load nothing at all". This was forced
+   by ~46 of 63 CLI fixtures having a convention catalog and no `.project.ron` at all. It is inert
+   for shipped content today (verified: every convention-path `assets.ron`/`prefabs.ron`/
+   `stats.ron`/`items.ron` under `assets/projects/` is declared by its project) but it structurally
+   *masks the likeliest authoring error in this area*: add `stats/stats.ron` (or `items/items.ron`),
+   forget the `stats_path`/`items_path` line, and the CLI happily cross-checks a catalog the runtime
+   never loads. `docs/20_data_formats.md` states the runtime semantics explicitly ("omitting it
+   means no stat system for that project"), so the divergence is documented-against. The cheap
+   mitigation is a `StrictWarning` when the field is unset *and* the convention file exists —
+   fixture-safe because `--strict` isn't the default gate. **Shipped as
+   `unset_catalog_path_with_convention_file` for the four catalogs only** — whether an equivalent
+   `unset_state_machine_path_with_convention_file` warning is worth adding for the single remaining
+   logic path is now the only open question here (there is no second "half" left to compare it
+   against).
 
 2. **Scene-path coverage: existence check complete; the *parse/cross-check* half landed
    2026-09-06 (`a29436d`, `feature/scene_path_validity`) with two duplication edges.** Four
@@ -147,7 +112,7 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    and no condition type references item keys), both `Deserialize` structs with an `item_key`
    (`ShopEntry`, `InitialItemEntry`), and both `currency_stat` fields (`MerchantDef`, `ItemDef`)
    are now checked. Hard-error severity is safe here because `item_key` is never a `{self}`/
-   `{target}` substitution target (`message_interpreter::rewrite_self` rewrites only entity fields).
+   `{target}` substitution target (`action_substitution::rewrite_self` rewrites only entity fields).
    Worth knowing when judging the value of these checks: an unknown item key is **not** rejected at
    runtime — `capabilities/inventory.rs::add_to_slots` creates the stack unconditionally
    (`max_stack` falls back to 99) and the panel renders it at `icon_index` 0 of the default sheet,
@@ -306,9 +271,10 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    query requires `&AnimationPolicyComponent` (never inserted on a failed load) and
    `awaiting_reveal_since` is never stamped. So the failsafe is **not** a universal safety net;
    don't cite it as one.
-   **Coverage genuinely still missing:** `rules_path`/`state_machine_path`/`model_fixes_path`
-   case-checking (see item 1c). `AssetCatalog::validate()`/`PrefabCatalog::validate()` are now
-   wired — see item 11 for what that did and didn't cover.
+   **Coverage genuinely still missing:** `state_machine_path`/`model_fixes_path`
+   case-checking (`rules_path` no longer exists — `rules.ron` was removed outright in
+   `rules_to_state_machine_consolidation`, 2026-09-28). `AssetCatalog::validate()`/
+   `PrefabCatalog::validate()` are now wired — see item 11 for what that did and didn't cover.
    **Cross-checked non-surfaces (don't re-flag these as missed):** `EffectDef.sprite`/`.sprites`,
    `FoliageMaterialDef.leaf_texture`, `ResolvedTargetIndicator.texture_path`, decal/particle
    `texture_path`, `IconButtonDef.icon_on/off`, action-bar `icon`/`icon_sheet`, panel `"ui/cross"`
@@ -373,7 +339,11 @@ Three concrete asymmetries that keep resurfacing when reviewing `crates/ironhold
    `ironhold_core` change (`validate_all() -> Vec<String>`, 6 runtime call sites), so it can't land
    on a CLI-only branch. (b) Still unwired: `StatCatalog::validate()`, `ItemCatalog::validate()`
    (both runtime-called, both catalogs already `LoadedProject` fields); and `GameSceneV2::validate()`
-   / `LogicRulesAsset::validate()` / `ModelFixesAsset::validate()` are **dead code in both crates**.
+   / `ModelFixesAsset::validate()` are **dead code in both crates**. (`LogicRulesAsset::validate()`
+   no longer exists — the type itself was removed along with `rules.ron` in
+   `rules_to_state_machine_consolidation`, 2026-09-28; `StateMachineAsset::validate()` is the
+   surviving logic-asset validator and runs in more places now — CLI, project load, and behavior
+   resolution.)
    `GameSceneV2::validate()` is the standout — it already detects duplicate scene-entity / UI /
    `world_labels` `id`s, the exact failure class that batch hand-wrote a dialogue-specific
    duplicate-`id` check for.

@@ -27,7 +27,7 @@ RPG interactions entirely in RON.
 `entity_fsm_interpreter_system` and `action_executor_system` in lib.rs) commits them ONLY if no
 interpreter set the slot key in `HandledIntentSlots`. All three interpreters insert into the
 HashSet on an `intent.slot.*` match (idempotent — multi-match is safe). Ordering is sound (single
-`.chain()`, action_bar `.before(message_interpreter_system)`). WASM-clean, no schema change.
+`.chain()`, action_bar `.before(fsm_interpreter_system)`). WASM-clean, no schema change.
 
 Two findings from that review — **BOTH FIXED as of 2026-07-15 re-read**: cooldown is now committed
 inside `flush_pending_intent_system` (action_bar.rs ~207) on the `!handled` path only, and

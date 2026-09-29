@@ -7,7 +7,7 @@ metadata:
 
 Dialogue system: `crates/ironhold_core/src/capabilities/dialogue.rs` + `schema/dialogue.rs`.
 
-`dialogue_tick_system` runs every Update, gated `.after(button_system).after(interactable_system).before(message_interpreter_system)`.
+`dialogue_tick_system` runs every Update, gated `.after(button_system).after(interactable_system).before(fsm_interpreter_system)` (renamed from `message_interpreter_system` by `rules_to_state_machine_consolidation`, 2026-09).
 
 **Why:** new conversation capability; UI-only (no mesh/material/GPU resources).
 

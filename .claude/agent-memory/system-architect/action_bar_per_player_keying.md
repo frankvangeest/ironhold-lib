@@ -15,9 +15,9 @@ intent-event player id.
 **Load-bearing invariant:** `CooldownMap`/`PendingIntentActions`/`HandledIntentSlots` are STILL
 keyed by the literal `slot_key` string alone, scene-wide (composite-keying deliberately deferred).
 This is only safe because slot keys are disjoint across bars. If two bars share a key: same-frame
-`pending.insert` drops one press, cooldown from one blocks the other, and (worst) a rules.ron rule
-handling one bar's intent suppresses the other's pending slot via `HandledIntentSlots` +
-`intent_slot_key()` in `message_interpreter.rs`.
+`pending.insert` drops one press, cooldown from one blocks the other, and (worst) a
+`state_machine.ron` `global_on`/`on:` handler for one bar's intent suppresses the other's pending
+slot via `HandledIntentSlots` + `intent_slot_key()` in `action_substitution.rs`.
 
 **Why:** Mitigation is a scene-load `warn!` (`scene_loader.rs::warn_cross_bar_duplicate_keys`,
 compares by resolved KeyCode) + a hard CLI error (`cross_bar_duplicate_key` in

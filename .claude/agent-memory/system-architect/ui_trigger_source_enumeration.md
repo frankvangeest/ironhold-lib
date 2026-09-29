@@ -26,8 +26,8 @@ iterated.
 
 **Engine-generated triggers never appear in scene RON**: `dialogue_choice:{n}`
 (`capabilities/dialogue.rs` ~280, spawned as a real `UiAction::Trigger` button so it *does* reach
-`message_interpreter` and *can* be matched by a designer rule — it is merely also consumed by
-`dialogue_tick_system`), `close_inventory`, `close_shop`, `close_container`,
+`fsm_interpreter_system` and *can* be matched by a designer `state_machine.ron` binding — it is
+merely also consumed by `dialogue_tick_system`), `close_inventory`, `close_shop`, `close_container`,
 `take_all_from_container` (`scene_loader.rs` ~2362/2538/2666/2764), `buy_item:{item_key}`
 (`action_executor.rs` ~1439). The five panel ones are enumerated by
 `collect_reachable_ui_triggers` (reverse check, gated on `InventoryPanel`/`ShopPanel`/
@@ -46,9 +46,10 @@ re-evaluated when copied into a reverse check: `dialogue_choice:{n}` and `{self}
 flip to false-positive sources. Cheap guard for the substitution class: skip any event containing
 `{` in the reverse check.
 
-**Event *handling* is exactly four schema fields, all in `schema/project.rs`:** `LogicRule.on`
-(:311), `StateDef.on[].event` via `FsmEventBinding.event` (:137/:153), `FsmTransition.on` (:146).
-Small and stable — the "two independent walks will drift" risk is real but low-velocity.
+**Event *handling* is now exactly two schema fields (down from four before `rules.ron`'s removal —
+`LogicRule.on` was one of them), both in `schema/project.rs`:** `FsmEventBinding.event`
+(`global_on`/state `on:` — same field type, two authoring sites, :137) and `FsmTransition.on`
+(:130). Small and stable — the "two independent walks will drift" risk is real but low-velocity.
 
 **`{self}` substitution is a latent false-positive source.** `entity_fsm_interpreter_system`
 does `binding.event.replace("{self}", spawn_id)` before comparing, so a behavior handling
@@ -57,13 +58,16 @@ behavior handles `ui.button_pressed` today, so this is theoretical — but it is
 substitution-enumeration trap noted in [[capability-patterns]].
 
 **Divergence class worth flagging on any new `validate.rs` check: re-parsing from disk instead of
-using `do_validate`'s already-parsed bindings.** `do_validate` already holds
-`rules: Option<LogicRulesAsset>`, `state_machine: Option<StateMachineAsset>`, and
+using `do_validate`'s already-parsed bindings.** `do_validate` holds
+`state_machine: Option<StateMachineAsset>` (the `rules: Option<LogicRulesAsset>` sibling field was
+removed along with `rules.ron` itself in `rules_to_state_machine_consolidation`, 2026-09-28) and
 `behaviors: Vec<(String, StateMachineAsset)>` (parse errors already reported via `try_parse` →
 `file_results`). A helper that instead takes `project_dir` and re-reads via `utils::silent_parse`
 swallows parse errors, so a malformed `logic/*.ron` yields *both* the real parse error *and* a
-flood of downstream false errors (3rd_person_game_demo: 16 handlers in rules.ron + 34 in
-state_machine.ron feeding 22 buttons). This inverts the convention documented in
+flood of downstream false errors (historical illustration, from when this was written:
+3rd_person_game_demo had 16 handlers in a since-removed `rules.ron` + 34 in `state_machine.ron`
+feeding 22 buttons — the general risk this paragraph describes is unaffected by the removal, only
+the example project's exact numbers are stale). This inverts the convention documented in
 [[cli-validate-coverage-model]] (missing/malformed input ⇒ check silently vanishes). The fix shape
 is always the same: mirror `collect_actions`' signature — take the parsed structs as parameters.
 

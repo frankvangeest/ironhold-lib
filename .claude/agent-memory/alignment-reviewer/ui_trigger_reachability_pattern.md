@@ -25,12 +25,13 @@ Reference map for any future work on UI triggers, `validate` coverage, or `UiEve
 ~2358/2534/2662/2760) and `buy_item:{item_key}` (action_executor.rs ~1439, one per
 `MerchantDef.stock[]`), plus `dialogue_choice:{n}` (dialogue.rs, consumed internally).
 
-**Only 4 systems read `UiEvent`**: the 3 interpreters (`message_interpreter_system`,
-`fsm_interpreter_system`, `entity_fsm_interpreter_system`) and `dialogue_tick_system` (which
-consumes only the `dialogue_choice:` prefix). Every interpreter match is **exact string equality**
-— no wildcards, no prefix matching — after `{self}` substitution *in the `on:` pattern itself*
-(entity FSMs only, message_interpreter.rs:152/166/181). So a `HashSet<String>` of raw `on:`
-strings is a faithful "handled" oracle; the `{self}`-in-pattern case can only cause false
+**Only 3 systems read `UiEvent`** (was 4 with `message_interpreter_system`, removed 2026-09-28 by
+`feature/rules_to_state_machine_consolidation` — see [[rules_vs_state_machine_coexistence]]): the 2
+interpreters (`fsm_interpreter_system`, `entity_fsm_interpreter_system`) and `dialogue_tick_system`
+(which consumes only the `dialogue_choice:` prefix). Every interpreter match is **exact string
+equality** — no wildcards, no prefix matching — after `{self}` substitution *in the `on:` pattern
+itself* (entity FSMs only, `entity_fsm_interpreter.rs:53/67/82`). So a `HashSet<String>` of raw
+`on:` strings is a faithful "handled" oracle; the `{self}`-in-pattern case can only cause false
 *negatives*, never false positives.
 
 **`check_ui_trigger_reachability` (validate.rs ~1005) covers sites 1-3 and correctly excludes
@@ -39,7 +40,8 @@ strings is a faithful "handled" oracle; the `{self}`-in-pattern case can only ca
 shipped project:
 - **Site 4, the unclaimed-gamepad maps, is not checked.** Identical shape to `global_key_bindings`
   (~8 lines to add). Live surface: `local_coop_demo/scenes/room8.scene.ron:54`
-  `scene_unclaimed_gamepad_bindings: {"South": "join"}` → `rules.ron:58`.
+  `scene_unclaimed_gamepad_bindings: {"South": "join"}` → `state_machine.ron:56` (was
+  `rules.ron:58` before rules.ron was removed 2026-09-28, see [[rules_vs_state_machine_coexistence]]).
 - **UPDATE 2026-09-05:** the unclaimed-gamepad gap is now CLOSED — the forward check covers all 4
   emit sites.
 - ~~**The 5 hardcoded panel triggers are not checked**~~ **CLOSED 2026-09-05** by
@@ -74,8 +76,8 @@ false-positive. **Key asymmetry: an exclusion that is harmless in the forward di
 false positive in the reverse one.** Two remain open there:
 - `dialogue_choice:{n}` (dialogue.rs:~280) is a real, rule-reachable event (`dialogue_tick_system`
   doesn't consume it — EventReaders are independent), but is not in the reachable set.
-- Behavior-file `on:`/`event:` patterns are `{self}`-substituted (message_interpreter.rs
-  152/166/181 — **only** those three; scene-level rules/FSM are not), so a
+- Behavior-file `on:`/`event:` patterns are `{self}`-substituted (`entity_fsm_interpreter.rs`
+  53/67/82 — **only** those three; the project-level `state_machine.ron` is not), so a
   `ui.button_pressed:{self}_open` binding would be flagged. `check_orphan_event` has no `{`-skip.
 
 **`scene.ui` is a flat `Vec<UiNodeDef>` with no nesting** and `ui_panel` is styling-only — so a
@@ -100,12 +102,13 @@ literals, plus a shared `fn merchant_buy_triggers(catalog) -> Vec<String>` for t
 *derivation* (the catalog walk) that both validate functions duplicate.
 
 **Structural note:** `collect_handled_events` (`cli/commands/utils.rs`) re-reads and re-parses
-rules/state_machine/behaviors from disk even though `do_validate` already has all three parsed in
+state_machine/behaviors from disk even though `do_validate` already has both parsed in
 locals (it hands them to `collect_actions` two lines earlier). Consequence: a parse error in
-`rules.ron` makes `collect_handled_events` silently see zero handlers, so the real one-line parse
-error is buried under one bogus `unreachable_trigger` per button. There are now **three** parallel
-logic-file walkers (`validate::collect_actions`, `utils::collect_handled_events`,
-`query::collect_logic`) — see [[validate-cross-file-blind-spots]].
+`state_machine.ron` makes `collect_handled_events` silently see zero handlers, so the real one-line
+parse error is buried under one bogus `unreachable_trigger` per button. (This used to also apply to
+`rules.ron` before it was removed 2026-09-28 — see [[rules_vs_state_machine_coexistence]].) There
+are now **three** parallel logic-file walkers (`validate::collect_actions`,
+`utils::collect_handled_events`, `query::collect_logic`) — see [[validate-cross-file-blind-spots]].
 
 **`crates/ironhold_cli/tests/validate_projects.rs` only smoke-validates 9 of the 17 shipped
 `*.project.ron`s** — missing `blank_project`, `camera_modes`, `dynamic_animation_control`,

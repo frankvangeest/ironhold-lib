@@ -64,8 +64,10 @@ swappable pair in the struct literal is `logic_files_parsed_cleanly`/`scenes_par
 5. **There are now THREE parallel logic-file walkers**, not two: `validate::collect_actions`,
    `utils::collect_handled_events` (added by `feature/ui_trigger_reachability_check`), and
    `query::collect_logic`. `collect_handled_events` additionally re-reads the files from disk even
-   though `do_validate` already has them parsed — so a `rules.ron` parse error yields zero handlers
-   and buries the real error under one bogus `unreachable_trigger` per button. See
+   though `do_validate` already has them parsed — so a `state_machine.ron` parse error yields zero
+   handlers and buries the real error under one bogus `unreachable_trigger` per button. (This used to
+   also apply to `rules.ron` before it was removed 2026-09-28 by
+   `feature/rules_to_state_machine_consolidation` — see [[rules_vs_state_machine_coexistence]].) See
    [[ui-trigger-reachability-pattern]].
 
 **THE false-positive class for any new string-key check: `{self}`/`{target}`/`{new_id}` substitution.**
@@ -203,11 +205,15 @@ review established and any repeat of the pattern must get right:
   The scenes version deduped against `scenes` (successes only), so a *broken* `scenes/x.scene.ron`
   that is also the `initial_scene` gets re-`try_parse`d and pushes a **second identical FileResult** —
   the designer sees the same parse error twice and `N files checked` double-counts. Same root cause
-  makes a typo'd `ToggleOverlay("logic/rules.ron")` push a GameSceneV2 parse error under
-  `rel_path == "logic/rules.ron"`, which flips `logic_files_parsed_cleanly` false and silently
-  disables `check_ui_trigger_reachability` + `orphan_rule` while blaming a valid file. One fix for
-  both. (Borrow note: the extra-path list must be re-owned into `Vec<String>` before pushing into
-  the vec it deduped against — that's why the `.map(String::from)` line exists.)
+  made a typo'd `ToggleOverlay("logic/rules.ron")` push a GameSceneV2 parse error under
+  `rel_path == "logic/rules.ron"`, which flipped `logic_files_parsed_cleanly` false and silently
+  disabled `check_ui_trigger_reachability` + `orphan_rule` while blaming a valid file — **this exact
+  collision is moot now that `logic/rules.ron` was removed 2026-09-28 (see
+  [[rules_vs_state_machine_coexistence]]) and is no longer recognized as a logic file at all**, but
+  the general dedup bug (any convention-glob path also referenced by an action) is the same one to
+  re-check against `logic/state_machine.ron`. One fix for both. (Borrow note: the extra-path list
+  must be re-owned into `Vec<String>` before pushing into the vec it deduped against — that's why the
+  `.map(String::from)` line exists.)
 - **Discovery is single-pass, not transitive**, and runs right after `all_actions` — a folded-in
   file's own actions are never collected, so an out-of-convention file reachable only from another
   out-of-convention file is missed.
@@ -216,14 +222,17 @@ review established and any repeat of the pattern must get right:
   (`scene.ready:{stem}`) from it. Folding into the shared `scenes` vec really does give all ~15
   scene-walking checks the new file for free.
 
-**`collect_actions` still misses TWO live Action sources** (so *every* action-driven check —
-scene-path existence, item/effect/prefab keys, `spawn_point`, `{new_id}` — is blind to them):
-`GameSceneV2`'s `ActionBarDef.slots[].do_actions` (scene_v2.rs:1054, scene-authored) and
-`ProjectConfig.rules[].do_actions` (the V1 inline-rules field, project.rs:170/329 — still honored
-at project_loader.rs:111 & 252 whenever `rules_path` is unset). Fixing `collect_actions` is the
-single highest-leverage change in this file. Confirmed complete, though: the only scene-path-bearing
-`Action` variants are `LoadScene`/`LoadSceneOverlay`/`PreloadScene`/`ToggleOverlay`, and
-`initial_scene` is the only scene path on `ProjectConfig` (`GameSceneV2` has none).
+**`collect_actions` used to miss TWO live Action sources; one is now moot.**
+`GameSceneV2`'s `ActionBarDef.slots[].do_actions` (scene_v2.rs:1054, scene-authored) is still a gap
+if unaddressed — re-verify. The second one, **`ProjectConfig.rules[].do_actions` (the V1
+inline-rules field, project.rs:170/329, honored at project_loader.rs:111 & 252 whenever
+`rules_path` was unset), no longer exists at all** — `ProjectConfig.rules`/`rules_path` and the
+whole inline-V1-rules mechanism were deleted 2026-09-28 by
+`feature/rules_to_state_machine_consolidation` (see [[rules_vs_state_machine_coexistence]]), so this
+half of the gap is closed by removal, not by a `collect_actions` fix. Confirmed complete, though: the
+only scene-path-bearing `Action` variants are `LoadScene`/`LoadSceneOverlay`/`PreloadScene`/
+`ToggleOverlay`, and `initial_scene` is the only scene path on `ProjectConfig` (`GameSceneV2` has
+none).
 
 **Scene paths are NOT `{self}`/`{target}`-substituted** — `rewrite_self`/`rewrite_target` have no
 `LoadScene`-family arm, so a templated scene path is broken end-to-end at runtime *and* already a
@@ -248,16 +257,26 @@ unset field, matching validate's deliberate CLI-only divergence from the runtime
 Residual behavior split worth knowing: a configured-but-missing catalog makes `query prefabs`
 hard-error naming the configured path, but `stats` silently print `0`.
 
-**Still hardcoded: the two logic convention paths** (`query.rs`:457-458 for `query rules`, :666/:683
+**SUPERSEDED as of 2026-09-28 (`feature/rules_to_state_machine_consolidation`) — the three
+paragraphs below described a `rules.ron`/`state_machine.ron` dual-path setup that no longer exists.
+Kept as history; do not apply any of it to current code.** `ProjectConfig.rules`/`rules_path`,
+`LogicRulesAsset`, and the V1 inline-rules mechanism were deleted outright. Current reality: `query
+rules` no longer exists as a command (`query.rs:458`'s own comment says "Only state_machine.ron is
+supported; rules.ron has been removed"), and `ResolvedLogicFiles` (validate.rs) now has only
+`state_machine`/`state_machine_source` fields — there is no `rules`/`rules_source` pair to keep in
+sync with anything anymore. See [[rules_vs_state_machine_coexistence]] for the authoritative
+post-removal facts and residual traps.
+
+~~**Still hardcoded: the two logic convention paths** (`query.rs`:457-458 for `query rules`, :666/:683
 in `collect_logic` feeding `query actions`/`query events`; `stats.rs`:111/115). So
 `ironhold query rules assets/projects/3rd_person_game_demo` (the exact command documented at
 60_contributing.md:302) still lists that project's runtime-dead `logic/rules.ron` as live while
 `validate` no longer sees it at all — `terrain_demo` same shape. Fixing this is NOT another
 `resolve_catalog_path` call: the correct semantic is `resolve_logic_files`' (unset `rules_path` ⇒
 inline V1 `ProjectConfig.rules`, unset `state_machine_path` ⇒ no FSM), so it needs a port of that
-function, not a fallback helper.
+function, not a fallback helper.~~
 
-**SIX configured paths now, not four.** `feature/configurable_logic_paths` (2026-09-06) added
+~~**SIX configured paths now, not four.** `feature/configurable_logic_paths` (2026-09-06) added
 `resolve_logic_files` + `ResolvedLogicFiles { rules, rules_source, state_machine,
 state_machine_source }` (validate.rs:~430-519), mirroring `project_loader.rs::check_project_loaded`
 exactly: `.project.ron` present ⇒ `rules_path`/`state_machine_path` are the ONLY source for their
@@ -274,24 +293,28 @@ already makes. Two things a repeat of this pattern must get right, both missed h
   `logic/rules.ron`; before the change they at least got (wrong) `orphan_rule` warnings pointing at
   them. Adding the two fields needs *different* message text than the catalog one (that message
   ends "...even though this validate run just checked it via the convention-path fallback" — for
-  logic paths validate did NOT check it).
+  logic paths validate did NOT check it).~~
 
-**Source-path attribution is display-only, verified safe.** No check in validate.rs branches on a
+~~**Source-path attribution is display-only, verified safe.** No check in validate.rs branches on a
 logic file's source string; the only structural uses are `r.rel_path == rules_source` in
 `logic_files_parsed_cleanly` and `source_file` message strings, and the only path-shaped predicates
 are `starts_with("behaviors/")`/`starts_with("scenes/")`. So attributing inline `config.rules` to
 the `*.project.ron` filename (not a `logic/*.ron` path) misbehaves nowhere, and the synthesized
-`schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).
+`schema_version: 2` is inert (validate never calls `LogicRulesAsset::validate()` anywhere).~~
 
 **`schema/` `validate()` methods are a separate coverage axis from validate.rs's hand-written checks.**
-There are **8** of them; **5 are now wired** into `cross_file_checks`: `AssetCatalog`/`PrefabCatalog`
+There are **7** of them (was 8 until `LogicRulesAsset::validate()` was deleted along with
+`LogicRulesAsset` itself, 2026-09-28, see [[rules_vs_state_machine_coexistence]]); **5 are now
+wired** into `cross_file_checks`: `AssetCatalog`/`PrefabCatalog`
 (`feature/cli_validate_gap_closures`, 2026-09-11), then `StatCatalog`/`ItemCatalog` — all four in one
 array loop whose `source_file` resolves the *configured* path (the fix for the hardcoded-literal lie)
 — and `ProjectConfig` (`error_type: "invalid_project_config"`, `source_file:
 find_project_ron(...).unwrap_or_default()`, added by `feature/fixed_timestep_max_delta`, 2026-09-16;
 covers `schema_version` range + `max_fixed_delta_secs` positive/finite). Still called **nowhere in
-either crate** (dead code): `GameSceneV2::validate()`, `LogicRulesAsset::validate()`,
-`ModelFixesAsset::validate()`. Still runtime-only: `StateMachineAsset` (`project_loader.rs:~270`).
+either crate** (dead code): `GameSceneV2::validate()`, `ModelFixesAsset::validate()`. Still
+runtime-only: `StateMachineAsset` (`project_loader.rs:~270`). (`LogicRulesAsset::validate()` no
+longer exists — `LogicRulesAsset` itself was deleted 2026-09-28 along with the rest of `rules.ron`,
+see [[rules_vs_state_machine_coexistence]] — so the dead-method count here drops from 3 to 2.)
 Note the `ProjectConfig` wiring is the pattern to copy for the last one — and that feature *did*
 update `docs/60_contributing.md`'s "Checks performed" list (a rare counter-example to the
 most-frequently-missed-step note above). Three things to check whenever another one gets wired:
@@ -378,8 +401,8 @@ runtime resolves the key. `MerchantDef.currency_stat` reads `scene_state.loaded_
 false-positive against `stat_templates`-only stats (cf. [[per-player-stat-pools-pattern]]).
 
 **"Union across all scenes" is now an established, twice-used scoping tier** (`SetCameraMode.mode`,
-and `Action::Spawn.spawn_point` as of `feature/spawn_point_reference_check`): rules.ron /
-state_machine.ron / behaviors are project-scoped but `camera_modes`/`spawn_points` are scene-scoped,
+and `Action::Spawn.spawn_point` as of `feature/spawn_point_reference_check`): state_machine.ron /
+behaviors are project-scoped but `camera_modes`/`spawn_points` are scene-scoped,
 so "defined in scene A, fired only while scene B is active" is a deliberate false negative. Accept
 it, but require the tradeoff be stated in a code comment at the loop, as both do. True per-scene
 reachability needs `LoadScene`-graph reasoning and stays deferred — same bucket as
@@ -434,7 +457,9 @@ check either):
   `path_case_mismatch`, not 6. (`PlayerConfig.animation_policy`, schema/player.rs:55, needs no
   check — runtime-assembled from the prefab, never RON-authored.)
 - ~~`ProjectConfig.rules_path` / `state_machine_path`~~ **CLOSED** by
-  `feature/configurable_logic_paths` (2026-09-06) — see the "SIX configured paths" section below.
+  `feature/configurable_logic_paths` (2026-09-06) — see the "SIX configured paths" section below
+  (now itself superseded — `rules_path` was deleted entirely 2026-09-28, see
+  [[rules_vs_state_machine_coexistence]]; only `state_machine_path` remains).
   **`model_fixes_path` is the one still hardcoded** (`try_parse(project_dir,
   "overrides/model_fixes.ron")`, validate.rs:~2536, assigned to `_model_fixes` and consumed by no
   check — only its parse `FileResult` matters). 8 shipped projects set it, all at the convention

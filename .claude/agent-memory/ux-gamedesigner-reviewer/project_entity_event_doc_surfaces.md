@@ -23,8 +23,9 @@ the two most plans list:
 6. The shipped example project — `3rd_person_game_demo` is the canonical home for
    interactable+inventory features (see [[inventory-item-system]]). Also cross-link *from* the
    docs to it: docs house style cites its canonical example inline (e.g. the `target.changed` row
-   cites `3rd_person_game_demo/logic/rules.ron`), but `requires_item` shipped with no such
-   pointer to `seal_door`.
+   cites a `3rd_person_game_demo`-style `global_on` binding, now in
+   `3rd_person_game_demo/logic/state_machine.ron` post-`rules.ron`-removal), but `requires_item`
+   shipped with no such pointer to `seal_door`.
 
 Long-standing precedent for skipped surfaces: `shop.insufficient_funds` and
 `player.attack_missed` are both emitted by the engine and appear in **no** docs event list

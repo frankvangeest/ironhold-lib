@@ -87,6 +87,12 @@ inaccurate runtime warning", `20_data_formats.md`~108) goes stale the moment the
 — grep docs for back-references to the message, not just for the old claim. Also, "remove one"
 remedy still invites breaking a project that legitimately uses both (valid_ui_trigger does).
 
+(Historical instance, now fully moot: `rules.ron`, `rules_path`, `LoadedRules`, and
+`message_interpreter_system` were removed outright in `rules_to_state_machine_consolidation`
+(2026-09-28) — `state_machine.ron` is the only logic format and there is no "both paths set"
+case left to warn about. The general lesson — verify a `warn!`'s claim against the actual code,
+not the message text — still applies to any future validate-check/`warn!` pair.)
+
 **Mirror-vs-import: the deciding question is whether the CLI's *inputs* differ in shape, not
 whether the core item is `pub`.** `validate.rs` has both precedents and they are not
 interchangeable. Mirroring is right for `discover_extra_scenes`/`resolve_logic_files` — the CLI

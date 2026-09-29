@@ -7,7 +7,7 @@ metadata:
 
 **Four** authoring surfaces all emit the *same* `UiEvent::ButtonPressed` → `"ui.button_pressed:{trigger}"`
 event, and a designer must hand-author a matching `on:`/`event:` string somewhere in
-`logic/rules.ron`, `logic/state_machine.ron`, or `behaviors/*.behavior.ron` or the click is silently
+`logic/state_machine.ron` or `behaviors/*.behavior.ron` or the click is silently
 dropped:
 
 | Surface | Trigger derivation |
@@ -36,7 +36,7 @@ Shipped 2026-09-04 (`check_ui_trigger_reachability` in `validate.rs`). Covers Bu
   dead in the state the player is actually in.
 - **`behaviors/` is scanned non-recursively.** `PrefabDef.behavior` accepts any project-relative
   path, so a behavior file in a subfolder makes its handled events invisible → false positives.
-- **A parse failure in `rules.ron`/`state_machine.ron` empties the handled set** (`silent_parse`
+- **A parse failure in `state_machine.ron` empties the handled set** (`silent_parse`
   swallows the error), producing one bogus "button will do nothing" error per button on top of the
   real parse error.
 

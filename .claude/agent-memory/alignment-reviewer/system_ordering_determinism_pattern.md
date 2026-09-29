@@ -14,16 +14,19 @@ fixed and invisible. Confirm it as ALIGNED and spend the review budget on the se
 below instead.
 
 **The `Update` ordering map to reason against** (`lib.rs`): everything ordered
-`.before(message_interpreter_system)` (global_input, interactable, dialogue_tick,
+`.before(fsm_interpreter_system)` (global_input, interactable, dialogue_tick,
 tick_delayed_events, stat pipeline, audio_state, action_bar chain, spawn_scene_v2,
 unclaimed_gamepad_trigger) is the "pre-interpreter input tier". The interpreter chain itself is
-`message_interpreter → fsm_interpreter → entity_fsm_interpreter → flush_pending_intent →
+`fsm_interpreter → entity_fsm_interpreter → flush_pending_intent →
 action_executor → stat_effective_value → stat_threshold → drain_spawn_queue →
 drain_dynamic_stat_ui → drain_particle_effects → simulate_pool → rebuild_pool_meshes →
-spawn_decal`, all `.chain()`ed. Adding `.before(X)` where X is already
-`.before(message_interpreter_system)` transitively pulls the new systems into the pre-interpreter
+spawn_decal`, all `.chain()`ed. (`message_interpreter_system` — the old first stage, driven by the
+now-removed `rules.ron` — was deleted 2026-09-28 by `feature/rules_to_state_machine_consolidation`;
+see [[rules_vs_state_machine_coexistence]]. Anything citing it as still in this chain is stale.)
+Adding `.before(X)` where X is already
+`.before(fsm_interpreter_system)` transitively pulls the new systems into the pre-interpreter
 tier — **check for and call out that transitive consequence**, because it means any `GameEvent`
-those systems emit becomes guaranteed same-frame-visible to all three interpreters instead of
+those systems emit becomes guaranteed same-frame-visible to both interpreters instead of
 sometimes slipping to the next frame. That is a real (if benign) designer-visible latency change
 and usually deserves a docs/30 line, since docs/30 already documents this guarantee explicitly for
 `tick_delayed_events_system`.

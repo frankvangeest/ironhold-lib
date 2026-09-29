@@ -49,9 +49,11 @@ a row of side-by-side captions is legible — none of them documented in `docs/2
   3/9/10). A new diorama demo that omits it is the outlier — flag it.
 
 **Adjacent authoring limits that shape any fix:**
-- `LogicRule` is only `on` + `when` (logic-state guard) + `do_actions` — **no value-based
-  conditions**. So any "page N of M" / indexed navigation must be one interpreter state per page
-  (or one scene per page); `IncrementVariable` alone cannot drive branching.
+- `FsmEventBinding` (the unit of a `global_on`/state `on:` list, since `rules.ron`/`LogicRule`'s
+  removal) is only `event` + `do_actions` — **no value-based conditions**, and no per-binding guard
+  beyond which state's `on:` list it sits in (the old `when:` guard's equivalent). So any "page N
+  of M" / indexed navigation must be one FSM state per page (or one scene per page);
+  `IncrementVariable` alone cannot drive branching.
 - `ButtonDef` has **no `bind`** — button text is static. Only `LabelDef` has `bind` + `format`.
 - UI nodes have `position` in absolute top-left pixels only — **no anchor, no percentages**. A
   bottom- or right-anchored panel is not authorable; only a top-left ladder is viewport-robust.

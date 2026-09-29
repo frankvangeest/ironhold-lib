@@ -16,16 +16,20 @@ bad field, and the valid field list. Do NOT flag "the error will be opaque"; ver
 **The engine's own per-file handling is inconsistent** (`runtime/scene_manager/project_loader.rs`,
 phase 2, ~lines 153-225):
 - `asset_catalog` / `prefab_catalog` / `stats` / `items` → `error!` **with path and `{e}`**. Good.
-- `model_fixes` / `rules` / `state_machine` → UPDATED (verified 2026-09-23): now `error!` with
-  path + `{e}` and an "every rule/state transition in this file is now inactive" suffix. The old
-  warn!-without-path tier is gone for these three.
+- `model_fixes` / `state_machine` → UPDATED (verified 2026-09-23; re-checked 2026-09-29 —
+  `rules` was a third member of this tier and no longer exists as a file type at all following
+  `rules_to_state_machine_consolidation`, see [[fsm-designer-traps]]): both now `error!` with
+  path + `{e}`; `state_machine`'s message additionally suffixes "no project logic (global_on
+  rules, states, transitions) will run" (`project_loader.rs`). The old warn!-without-path tier is
+  gone for both.
 - `.behavior.ron` → **no diagnostic at all**. `resolve_pending_behaviors_system`
   (`entity_spawner.rs` ~552) only acts on success; on parse failure the entity keeps
   `PendingBehavior` forever and is silently inert. Only Bevy's generic asset error appears.
 
-**Blast radius is always the entire file**, never the one bad line. One typo in `logic/rules.ron`
-= every rule in the project stops firing. Any doc note about strict parsing MUST say this — the
-designer's symptom is "all my logic died", not "one action misbehaved".
+**Blast radius is always the entire file**, never the one bad line. One typo in
+`logic/state_machine.ron` = every binding in the project stops firing. Any doc note about strict
+parsing MUST say this — the designer's symptom is "all my logic died", not "one action
+misbehaved".
 
 **Why:** designers working from `assets/` + a WASM build have the browser console as their only
 diagnostic channel (docs/20 already states this explicitly around line 2017 — that's the house
@@ -38,7 +42,7 @@ file type falls into, (3) require the doc note to state whole-file blast radius 
 verbatim console line so it is greppable. Related: [[docs-lag-the-action-schema]],
 [[ron-enum-double-paren-trap]].
 
-**Action authoring locations (for "where does this apply" lists):** `logic/rules.ron`,
+**Action authoring locations (for "where does this apply" lists):**
 `logic/state_machine.ron`, `behaviors/*.behavior.ron`, `dialogues/*.dialogue.ron` choice
 `do_actions`, **`scenes/*.scene.ron`** (UI button `do_actions`, action-bar slots — shipped in
 3rd_person_game_demo, stats_demo, primitive_world, local_coop_demo rooms 3/9/10) and

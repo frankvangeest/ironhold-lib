@@ -8,8 +8,9 @@ When new `Action` variants — **or new optional fields on an existing variant**
 `crates/ironhold_core/src/schema/actions.rs`, five doc surfaces need checking. Surface 1 usually
 gets updated; the other four consistently lag:
 
-1. `docs/20_data_formats.md` — the "Available actions" table (under `## logic/rules.ron —
-   LogicRulesAsset`). **This one usually DOES get updated.**
+1. `docs/20_data_formats.md` — the "Available actions" table (now under `## Actions reference`,
+   since `rules.ron`/`LogicRulesAsset` were removed in `rules_to_state_machine_consolidation` —
+   see [[fsm-designer-traps]]). **This one usually DOES get updated.**
 2. `docs/30_runtime_events_and_logic.md` — the "Implementation snapshot" action bullets, the
    `#### Animation/audio actions` / `## Action model` category lists, AND the `### Actions ✅`
    appendix.

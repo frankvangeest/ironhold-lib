@@ -9,8 +9,9 @@ metadata:
 conventions that are enforced only by copy-paste, never written down anywhere a designer reads.
 
 - **Linear portal chain, no deep-link.** `main -> room2 -> ... -> room10`; each room has exactly a
-  back portal and a forward portal, both wired through `logic/rules.ron`
-  (`entity.entered:portal_to_roomN -> LoadScene`). `play.html` accepts only `?project=`, **no
+  back portal and a forward portal, both wired through `logic/state_machine.ron`
+  (`entity.entered:portal_to_roomN -> LoadScene`, as a `global_on` binding). `play.html` accepts
+  only `?project=`, **no
   `?scene=`** — so verifying the newest room means walking 9 portals. Cost grows every stage.
   The **return** portal always reuses the previous room's forward-portal prefab verbatim (same
   event name, same rules entry, no new prefab) — established room8→room9, repeated room9→room10.

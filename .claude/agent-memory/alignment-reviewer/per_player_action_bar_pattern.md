@@ -25,7 +25,9 @@ action bar per-player. Builds on Phase 1's `PlayerTarget` component (see
 `action_bar_input_system` calls `rewrite_target` itself, LOCALLY, before anything reaches
 `ActionQueue`, so `{target}` is already a concrete entity ID by the time the interpreter sees it.
 The system still does NOT push to `ActionQueue` — it stores into `PendingIntentActions` and
-`flush_pending_intent_system` (the 4th interpreter-tier system) pushes. Intent pattern preserved.
+`flush_pending_intent_system` (the 3rd interpreter-tier system — only `fsm_interpreter_system` and
+`entity_fsm_interpreter_system` precede it now; `message_interpreter_system` was removed 2026-09-28,
+see [[rules_vs_state_machine_coexistence]]) pushes. Intent pattern preserved.
 Each fired slot resolves its owning player via `players.iter().find(owns_slot)` and reads THAT
 player's own `PlayerTarget` (not global `CurrentTarget`) for: `{target}` rewrite, the no-target
 gate, and the `intent.slot.{key}:{player_spawn_id}` event's player id.
@@ -41,7 +43,7 @@ src/CLAUDE.md):**
 1. `SlotCost`/`cost:` reads+deducts the single shared `LoadedStats` — no per-player economy. A P2
    bar's cost slot dims/blocks against the same pool as P1. Backlog item "Per-player stat/resource
    pools". docs/20 line 906-914.
-2. A `rules.ron` rule that *intercepts* a non-primary player's slot intent resolves ITS OWN
+2. A `state_machine.ron` rule that *intercepts* a non-primary player's slot intent resolves ITS OWN
    replacement `do_actions`' `{target}` via the interpreter against `CurrentTarget` (= primary
    player), NOT the firing player's `PlayerTarget`. Only the slot's OWN built-in do_actions (the
    suppressed-when-a-rule-takes-over path) get per-owning-player resolution. docs/20 line 946-955.

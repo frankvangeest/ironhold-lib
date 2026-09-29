@@ -22,4 +22,4 @@ correctly shows the real path, so the two halves of one report disagree.
 re-typing the literal. When reviewing a relocation-related test, note that a scene-entity prefab
 error is attributed to the *scene* path, so it will NOT catch this — you need an error whose
 source is the catalog itself (e.g. `prefab.behavior` pointing at a missing file, or a `--strict`
-unused-prefab warning). Related: [[logic-file-on-disk-is-not-loaded]].
+unused-prefab warning).

@@ -14,7 +14,7 @@ The 2026-06-10 mute/master-volume review established the reference shape for pro
 3. **`runtime/scene_manager/mod.rs`** — `#[derive(Resource)] AudioState { max_volume, active_fraction, muted }` with `effective_volume()` = `if muted {0} else {(active_fraction*max_volume).clamp(0,1)}`. `audio_state` is a field on the executor's `SceneStateMut` SystemParam bundle (ResMut).
 4. **`runtime/scene_manager/project_loader.rs`** — `AudioState` inserted from `config.audio` at BOTH project-load phases (there are two `insert_resource(AudioState{...})` sites — phase 1 ~line 118 and phase 2 ~line 280). Forgetting the second site would leave `mute_on_start`/`max_volume` unapplied on one load path.
 5. **`runtime/scene_manager/action_executor.rs`** — `SetVolume`/`ToggleMute` arms mutate `scene_state.audio_state`, then ALSO write `GlobalVolume` directly, then emit `GameEvent::Trigger("audio.volume_changed"|"audio.muted"|"audio.unmuted")`. **`SyncAudioState`** (unit Action) only READS `audio_state.muted` and re-emits `audio.muted`/`audio.unmuted` without mutating anything — used to seed bound labels on first state entry before any toggle has fired.
-6. **`lib.rs`** — `init_resource::<AudioState>()` (replaced at load by project_loader) + `audio_state_system.before(message_interpreter_system)`. Ordering matters: `mute_on_start` must apply before `PlayMusicLoop` fires in the same frame.
+6. **`lib.rs`** — `init_resource::<AudioState>()` (replaced at load by project_loader) + `audio_state_system.before(fsm_interpreter_system)` (pre-interpreter tier; `message_interpreter_system` was removed 2026-09-28 by `feature/rules_to_state_machine_consolidation` — see [[rules_vs_state_machine_coexistence]]). Ordering matters: `mute_on_start` must apply before `PlayMusicLoop` fires in the same frame.
 
 ## Label text lives in RON, NOT Rust (2026-06-10 fix)
 
@@ -23,7 +23,7 @@ The 2026-06-10 mute/master-volume review established the reference shape for pro
 ## Designer reachability — fully data-driven, confirmed
 
 - `max_volume` / `mute_on_start` set in `*.project.ron` `audio:` block.
-- `SetVolume(0..100)` and `ToggleMute` reachable from rules.ron, state_machine.ron, behavior files, UI buttons (`ui.button_pressed:toggle_mute`). 3rd_person_game_demo wires both via the options scene + state_machine.
+- `SetVolume(0..100)` and `ToggleMute` reachable from state_machine.ron, behavior files, UI buttons (`ui.button_pressed:toggle_mute`). 3rd_person_game_demo wires both via the options scene + state_machine.
 - `audio.muted` / `audio.unmuted` / `audio.volume_changed` events let designers chain follow-on actions (e.g. swap a mute-button label) with zero Rust.
 - All three layers documented in docs/20_data_formats.md and docs/30_runtime_events_and_logic.md.
 

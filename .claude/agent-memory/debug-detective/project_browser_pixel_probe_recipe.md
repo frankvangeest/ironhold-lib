@@ -8,7 +8,8 @@ metadata:
 For any "X doesn't render" investigation, the committed `pkg/` on `integration` plus `serve.py` is
 enough to get real pixels in minutes — **no `cargo`/`wasm-pack` build**, because the WASM binary
 fetches `assets/**` over HTTP at runtime. A throwaway project under `assets/projects/<name>/`
-(project + assets + prefabs + scenes + logic/rules.ron) is visible immediately at
+(project + assets + prefabs + scenes + logic/state_machine.ron — `rules.ron` was removed by
+`rules_to_state_machine_consolidation`, 2026-09) is visible immediately at
 `play.html?project=<name>&testing=1&scene=scenes/<file>.scene.ron`.
 
 **The one blocker:** headless Chromium on this machine has **no WebGPU adapter** — both

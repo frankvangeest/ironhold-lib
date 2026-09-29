@@ -26,12 +26,12 @@ does NOT rebuild (mirrors `LoadedKeyBindings`).
 and from `PendingEntitySpawns` (a queue). It is reset to `None` unconditionally at the top of
 `unclaimed_gamepad_trigger_system` (before the `AppState`/empty-map early returns) and `take()`n by
 the `Action::JoinPlayer` executor arm, so it needs no LoadScene clear. Ordering that makes it work:
-detection is `.before(message_interpreter_system)`, executor is chained after the interpreter.
+detection is `.before(fsm_interpreter_system)` (pre-interpreter tier; `message_interpreter_system` was removed 2026-09-28 — see [[rules_vs_state_machine_coexistence]]), executor is chained after the interpreter.
 This is the right shape for "detection system must hand an Entity identity to an executor that the
 Action variant itself can't carry" — reuse it rather than adding a payload to the Action.
 
 **No hardcoded `"join"` magic string — and this is structurally forced.** The engine cannot know
-which trigger means join (trigger→Action mapping lives in `rules.ron`), so detection captures the
+which trigger means join (trigger→Action mapping lives in `state_machine.ron`), so detection captures the
 pad for *any* `LoadedGamepadBindings` match. Positive alignment, but it creates a real hole:
 **within a single frame, the captured pad is the lowest-sorted-index pad that produced ANY bound
 press, not necessarily the pad that produced the join trigger.** So pad A pressing a

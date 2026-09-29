@@ -38,5 +38,5 @@ dialogue nodes).
 exhaustively (grep the constructor of the runtime component, not the schema), skip any authored
 string containing `{`, and gate the check on clean parses of *every* input the reachable set is
 built from — not just the one the forward check happened to need. Related:
-[[logic-file-on-disk-is-not-loaded]], [[validate-reference-checks-token-blind]],
+[[validate-reference-checks-token-blind]],
 [[validate-hardcoded-source-file-literals]].

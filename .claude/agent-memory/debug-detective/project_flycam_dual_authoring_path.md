@@ -15,7 +15,8 @@ modern one.
 **Why:** a CLI validate check gated on `components.camera_mode` being `Some` (as
 `camera_mode_vocab_problems`'s call sites were, batch3 2026-09-11) silently passes a project whose
 flycam authoring is entirely in `flycam:` — including the movement-key typo that has *no runtime
-warn at all*. Same class as [[project_logic_file_on_disk_is_not_loaded]]: the field a validator
+warn at all*. Same class as the old rules.ron/state_machine.ron convention-path mismatch (now
+fixed by `rules_to_state_machine_consolidation`, 2026-09): the field a validator
 reads is not the field the runtime reads.
 
 **How to apply:** any new flycam/camera check must cover both `def.components.camera_mode` and

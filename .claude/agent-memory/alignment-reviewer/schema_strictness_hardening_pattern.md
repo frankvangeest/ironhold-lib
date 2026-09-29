@@ -1,6 +1,6 @@
 ---
 name: schema-strictness-hardening-pattern
-description: Reviewing deny_unknown_fields / stricter-parse changes — the five Action-bearing RON surfaces and how each one's parse failure actually surfaces to a designer
+description: Reviewing deny_unknown_fields / stricter-parse changes — the four Action-bearing RON surfaces and how each one's parse failure actually surfaces to a designer
 metadata:
   type: project
 ---
@@ -15,22 +15,27 @@ failure (the whole file's asset is `None`). The blast radius always grows. Wheth
 win for the designer depends entirely on the diagnostic at the failure site, which in this repo is
 inconsistent per file type.
 
-**How to apply — the five `Action`-bearing authoring surfaces and their real failure behaviour:**
+**How to apply — the four `Action`-bearing authoring surfaces and their real failure behaviour:**
+(there used to be a fifth, `logic/rules.ron` — removed 2026-09-28 by
+`feature/rules_to_state_machine_consolidation`, see [[rules_vs_state_machine_coexistence]]; its
+`project_loader.rs` `LoadState::Failed(_)` arm and bare `warn!("rules failed to load — proceeding
+without it")` — no path, error discarded — no longer exist, so don't cite it as a live surface.)
 
 | Surface | Runtime failure path | Runtime message | `ironhold_cli validate` |
 |---|---|---|---|
-| `logic/rules.ron` | `project_loader.rs` `LoadState::Failed(_)` arm | `warn!("rules failed to load — proceeding without it")` — **no path, error discarded**; game runs with *zero* rules | covered (`try_parse` → `FileResult.errors`) |
-| `logic/state_machine.ron` | same arm, a few lines below | same weak shape | covered |
+| `logic/state_machine.ron` | `project_loader.rs` `LoadState::Failed(_)` arm | `error!("state machine failed to load: {} — {} — proceeding without it ...")` | covered (`try_parse` → `FileResult.errors`) |
 | `scenes/*.scene.ron` (`ActionSlotDef.do_actions`) | `spawn_scene_v2` `params.scenes.get(...)` never `Some` | none — stuck in `AppState::LoadingScene` forever | covered (`parse_file::<GameSceneV2>`) |
-| `behaviors/*.behavior.ron` | `message_interpreter.rs` `let Some(fsm) = state_machines.get(..) else { continue }` | none — entity is simply inert | covered (`parse_file::<StateMachineAsset>`) |
+| `behaviors/*.behavior.ron` | `entity_fsm_interpreter.rs` `let Some(fsm) = state_machines.get(..) else { continue }` | none — entity is simply inert | covered (`parse_file::<StateMachineAsset>`) |
 | `dialogues/*.dialogue.ron` (`DialogueChoiceDef.do_actions`) | `dialogue.rs` `dialogue_assets.get(&handle) { None => return }` | none — panel never opens | covered as of 2026-09-04 (`feature/cli-validate-dialogues`) |
 
 Two structural takeaways to reuse:
 
 1. **The catalog arms in `project_loader.rs` are the good pattern to copy** — `Failed(e)` +
    `asset_server.get_path(h)` + `error!("... {} — {} — proceeding with ...", path, e)`. The
-   rules / state_machine / model_fixes arms are the stale `Failed(_)` + bare `warn!` shape and
-   should be brought up to it whenever a change makes those files more likely to fail.
+   model_fixes arm is the stale `Failed(_)` + bare `warn!` shape and should be brought up to it
+   whenever a change makes that file more likely to fail (the `state_machine.ron` arm now already
+   includes the path/error in its message, per the table above — re-verify this note if that
+   message shape changes again).
 2. ~~**Dialogue files are the standing blind spot**~~ — closed 2026-09-04: `do_validate` globs
    `dialogues/*.dialogue.ron` and `collect_actions` walks `nodes[].choices[].do_actions`. Dialogue
    is still the surface with **no runtime message at all** on parse failure, so the CLI is now the

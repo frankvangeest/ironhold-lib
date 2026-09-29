@@ -30,7 +30,7 @@ already use). Builds on [[per-player-action-bar-pattern]] and [[stat-overrides-f
   `"player_01.mana"` routes to the player's own pool. No hardcoded stat name, no hardcoded player
   count — the dot-route format is a generic mechanism.
 - No ActionQueue anti-pattern: deduct is added to `PendingIntentActions`, flushed by
-  `flush_pending_intent_system`; so a `rules.ron` intercept suppresses the deduct too (documented).
+  `flush_pending_intent_system`; so a `state_machine.ron` intercept suppresses the deduct too (documented).
 
 **Warning/CLI validate correctly avoids single-player false positives:** both
 `warn_missing_player_stat_templates` (scene_loader.rs ~1467) and validate.rs'

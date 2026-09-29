@@ -35,7 +35,7 @@ reached by:
 - `{target}` if the prefab is targetable.
 
 A `Despawn("thing_{new_id}")` or `EmitEventAfterDelay(event: "corpse.decay:thing_{new_id}")` in
-`rules.ron`/`state_machine.ron` gets a **silent literal** — `{new_id}` is not substituted anywhere
+`state_machine.ron` gets a **silent literal** — `{new_id}` is not substituted anywhere
 outside `Spawn.id`, and nothing warns. `ironhold_cli`'s `validate.rs` matches
 `Action::Spawn { prefab, .. }` and never inspects `id`, so there is no CLI guard either. A
 "`{new_id}` used outside `Spawn.id`" validate error is the obvious cheap fix.

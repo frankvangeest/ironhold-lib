@@ -25,7 +25,7 @@ When a new `Action` variant exists primarily to flip a designer-facing tuning kn
 
 6. **`rewrite_self`** — pure global-state actions skip this. ONLY add a match arm here if the action carries an entity reference. `SetParticleQuality` is correctly absent.
 
-Designer-reachability test: a designer can put the action in `rules.ron` on `scene.ready:{name}` and have it apply before the player can interact. They can also put it on a UI button (`ui.button_pressed:graphics_low`) for an in-game settings menu. Both paths must work with zero Rust changes.
+Designer-reachability test: a designer can put the action in `state_machine.ron` (a `global_on`/state `on:` binding) on `scene.ready:{name}` and have it apply before the player can interact. They can also put it on a UI button (`ui.button_pressed:graphics_low`) for an in-game settings menu. Both paths must work with zero Rust changes.
 
 ## Pattern B: Adding optional fields to EffectDef / LayerDef without breaking projects
 
@@ -39,7 +39,7 @@ The 2026-05-27 review confirmed all three were satisfied for `quality`/`priority
 
 ## Cross-cutting: optional-Option<String> entity fields need rewrite_self too
 
-`Action::ProjectDecal` and `Action::SpawnEffect` both carry `entity: Option<String>`. `SpawnEffect` is in `rewrite_self`; `ProjectDecal` is not. Until ProjectDecal is added, designers can use it only with literal spawn IDs in `rules.ron` — not in reusable `.behavior.ron` files via `{self}`. This is the failure mode called out in `[[entity_targeted_action_pattern]]`. Flag this any time a review touches `ProjectDecal`.
+`Action::ProjectDecal` and `Action::SpawnEffect` both carry `entity: Option<String>`. `SpawnEffect` is in `rewrite_self`; `ProjectDecal` is not. Until ProjectDecal is added, designers can use it only with literal spawn IDs in `state_machine.ron` — not in reusable `.behavior.ron` files via `{self}`. This is the failure mode called out in `[[entity_targeted_action_pattern]]`. Flag this any time a review touches `ProjectDecal`.
 
 ## Scene-RON optional field pattern (GameSceneV2.particle_budget)
 

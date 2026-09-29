@@ -5,7 +5,7 @@ type: project
 ---
 
 The `decals:` map in `assets.ron` has two independent designer-facing consumers:
-1. `Action::ProjectDecal` (from rules.ron / behavior files) — documented in docs/20_data_formats.md AssetCatalog section (~line 985, "Ground decals").
+1. `Action::ProjectDecal` (from state_machine.ron / behavior files) — documented in docs/20_data_formats.md AssetCatalog section (~line 985, "Ground decals").
 2. `GameSceneV2.target_indicator` (TargetIndicatorDef) — documented in docs/20_data_formats.md GameSceneV2 section (~line 361, "Target indicator").
 
 **Why:** The two doc sections were written independently and (as of 2026-06) do not cross-reference each other. The AssetCatalog blurb frames `decals:` as exclusively for ProjectDecal, which can mislead a designer into thinking target_indicator needs a different map.

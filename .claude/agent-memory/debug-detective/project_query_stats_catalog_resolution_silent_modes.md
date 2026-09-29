@@ -49,11 +49,20 @@ repo runs `query`/`stats` against it anyway (`validate_projects.rs` omits it).
 **How to apply:** when asked whether `query`/`stats` "already handle" a catalog-path case, the
 answer is only ever "they resolve the path" — no `validate()`, no `is_file()`, no case check, no
 empty-string guard, no traversal guard. Any assertion that a `query`/`stats` exit 0 means a project
-is well-formed is wrong. Also: the logic half is still unfixed — `logic/rules.ron` and
-`logic/state_machine.ron` remain hardcoded at `query.rs:457/458/666/683` and `stats.rs:98/102`,
-which is live today (`3rd_person_game_demo` sets only `state_machine_path` yet `stats` reports its
-22 dead `logic/rules.ron` rules).
+is well-formed is wrong.
+
+**Update (`rules_to_state_machine_consolidation`, 2026-09):** the logic-half gap this note used to
+flag here is fixed, and `rules.ron` no longer exists as a concept at all (so the old "22 dead
+`logic/rules.ron` rules on `3rd_person_game_demo`" example can no longer happen — there is nothing
+left to be dead). `query.rs` and `stats.rs` now both resolve `state_machine_path` via
+`utils::resolve_catalog_paths` instead of a hardcoded `"logic/state_machine.ron"`/`"logic/rules.ron"`
+literal, and `resolve_logic_files`/`resolve_catalog_paths` explicitly document that
+`state_machine_path` has **no** convention-path fallback (an unset `state_machine_path` means no
+logic loads at all — see `validate.rs` around line 751 and `utils.rs`'s `resolve_catalog_paths`).
+The three silent modes above (wrong-type-target, `Some("")`, absolute/`..` paths) are about the
+*catalog* fields (`asset_catalog`/`prefab_catalog`) and are unaffected by this update — those are
+still real and still unfixed.
 
 Related: [[cli-validate-never-calls-schema-validate]], [[try-parse-exists-not-is-file]],
-[[logic-file-on-disk-is-not-loaded]], [[validate-hardcoded-source-file-literals]],
+[[validate-hardcoded-source-file-literals]],
 [[icon-sheet-empty-string-sentinel]]
