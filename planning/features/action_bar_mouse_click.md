@@ -1,6 +1,6 @@
 # Feature: Mouse-Click Activation for Action Bar Skill Slots
 
-_Status: Ready (open questions resolved 2026-09-30; plan-review still to run)_
+_Status: Ready (plan-review passed 2026-09-30; architect B1 and ux B1/B2 folded in)_
 _Planned at: `70cb631` (2026-09-30)_
 
 ## What
@@ -35,20 +35,23 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
   the same booleans — not a separate code path.
 
 ## Approach
-1. **New tiny system `action_slot_click_system`** in `capabilities/action_bar.rs`:
-   `Query<&ActionSlotUi, Changed<Interaction>>` filtered to `Interaction::Pressed`, writing the
-   clicked slots' keys into a new `ClickedSlots(HashSet<String>)` resource (cleared and refilled
-   each run; same shape as `HandledIntentSlots`). It fires on the **press edge**
-   (`Changed<Interaction>` == `Pressed`), not on release and not while held, matching
-   `just_pressed` keyboard semantics. It is added to `ActionBarPlugin`'s existing `.chain()`
-   immediately before `action_bar_input_system` (still `.before(fsm_interpreter_system)`), so the
-   `TargetingPlugin`-ordering guarantee documented in `crates/ironhold_core/src/CLAUDE.md` is
-   untouched.
-   - Not `Query<&Interaction>` polled directly inside `action_bar_input_system`: that would need a
-     `Local` to edge-detect and would widen a system whose query is already wide.
+1. **No new system or resource — detect the click per-entity inside `action_bar_input_system`.**
+   Widen its slot query to `Query<(&ActionSlotUi, Option<Ref<Interaction>>)>` and compute
+   `click_fired = interaction.is_some_and(|i| i.is_changed() && *i == Interaction::Pressed)`.
+   `Ref::is_changed()` compares against the system's own last run, so it is the press-edge detector
+   (fires once on the transition to `Pressed`; not while held; not on release) — no `Local`, no
+   extra resource. The `Option` is required: existing action-bar tests spawn a bare `ActionSlotUi`
+   with no `Button`/`Interaction` (`tests/entity_logic_tests.rs`, `local_coop_tests.rs`), and a
+   required `Ref<Interaction>` would silently drop them from the query. Everything stays inside
+   `ActionBarPlugin`'s existing `.chain().before(fsm_interpreter_system)`, so the documented
+   TargetingPlugin ordering guarantee in `crates/ironhold_core/src/CLAUDE.md` is untouched.
+   - *Rejected (plan-review, system-architect B1):* a separate `action_slot_click_system` writing a
+     `ClickedSlots(HashSet<String>)` resource. Its clear/refill lifecycle was ambiguous (a stale key
+     would re-fire every frame), it went stale across `LoadScene` (both systems are
+     `run_if(any_action_slots)`), and it was keyed by slot-key string, so two bars sharing a key
+     would both fire from one click. Per-entity `Ref` fires only the slot actually clicked.
 2. **`action_bar_input_system` change (small):**
-   - add `clicked: Res<ClickedSlots>`;
-   - `let click_fired = clicked.0.contains(slot.slot_key.as_str());`
+   - `click_fired` as above, gated off when `InspectorEnabled` is true (see step 8);
    - treat `click_fired` like `keyboard_fired` — both are "device-independent" fires. The
      fast-path skip becomes `!keyboard_fired && !click_fired && slot.resolved_gamepad_button.is_none()`;
      the pre-player-resolution cooldown gate fires for `keyboard_fired || click_fired`; the
@@ -70,24 +73,34 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
    `action_bar.activated` events already convey the result). A hover/pressed highlight is a small
    follow-up that fits with **"Drop shadow support for UI text"** / the slot-restyle backlog item
    and should be its own item.
-6. **WASM / perf:** negligible. `Changed<Interaction>` over a handful of slots; the new system can
-   `run_if(any_action_slots)` like its siblings. No allocations on the no-click path (the resource
-   is only written when a slot was actually pressed — guard `clear()`/`insert` so change detection
-   doesn't fire every frame, per the change-detection-discipline rule in `crates/ironhold_core/src/CLAUDE.md`).
-7. **Determinism / replay (Beta 0.5):** the click source is `Interaction` (set by Bevy's
-   `ui_focus_system` in `PreUpdate` from real mouse/touch input), so a future replay recorder must
-   capture it as an input like key presses. Note it in `deterministic_fixed_timestep.md`/the
-   replay plan when that lands; nothing to build now.
+6. **WASM / perf:** negligible — a per-slot change-tick compare; no extra system, resource or
+   allocation, and nothing written on the no-click path.
+7. **Determinism / replay (Beta 0.5):** do **not** record `Interaction` for replay/netcode — it is
+   derived from layout and cursor position, not a stable input. The natural capture point is the
+   existing device-agnostic intent layer (`intent.slot.{key}:{player}`). Nothing to build now.
+8. **Inspector gating:** with the `inspector` feature on and `InspectorEnabled` true, egui windows
+   over the HUD don't block `ui_focus_system`, so clicking an inspector pane over the bar would
+   fire a skill. Gate **clicks only** on `InspectorEnabled` (as `button_system` and the
+   camera/input systems already do); keyboard slot presses stay ungated as today.
+9. **Deliberate parity notes (record in docs):** like keyboard presses, clicks have no
+   `panels_open`/pause gate; they are naturally blocked under a `FocusPolicy::Block` panel root or
+   overlay backdrop. Clicks in split-screen route by the bar's `owner_player`, whereas a *world*
+   click (`click_select_system`) routes by the viewport under the cursor — document both rules
+   side by side so a designer doesn't assume clicking in P2's half always means P2.
+10. **Bar padding/gaps (playtest item):** the bar root is `FocusPolicy::Pass` with no `Interaction`,
+    so a click on padding between slots falls through to `click_select_system` and clears the
+    world target. Acceptable for v1; if playtest finds it annoying, give the bar root
+    `FocusPolicy::Block` + `Interaction::default()` (same pattern as panel roots/overlay backdrop).
 
 ## Tasks
-- [ ] Add `ClickedSlots` resource and `action_slot_click_system`; register both in `ActionBarPlugin`,
-      chained before `action_bar_input_system`
-- [ ] Extend `action_bar_input_system` per Approach step 2 (single collapsed "fired" decision)
+- [ ] Extend `action_bar_input_system` per Approach steps 1-2 (`Option<Ref<Interaction>>`, single
+      collapsed "fired" decision, inspector gate) — no new system/resource
 - [ ] Update `ActionSlotDef.key` doc comment in `schema/scene_v2.rs` (currently says mouse buttons
       "not supported" — still true for the `key` *string*; add that clicking the slot itself works)
-- [ ] Tests in `crates/ironhold_core/tests/action_tests.rs` (drive by inserting/mutating
-      `Interaction::Pressed` on the slot entity — see the existing key-press tests for harness setup;
-      consult `integration-test-author`):
+- [ ] Tests (harness patterns live mostly in `entity_logic_tests.rs`/`local_coop_tests.rs`, plus
+      `action_tests.rs`; consult `integration-test-author`). Drive by inserting/mutating
+      `Interaction::Pressed` on the slot entity (`ui_focus_system` isn't present under
+      `MinimalPlugins`); for the "held" test do **not** re-insert each frame — that counts as a change:
   - [ ] click fires slot: `do_actions` queued, `action_bar.pressed` + `action_bar.activated` emitted, cooldown started
   - [ ] click during cooldown → `action_bar.on_cooldown:{key}`, nothing queued
   - [ ] click with insufficient `cost` → `action_bar.insufficient_resource:{key}`
@@ -97,12 +110,26 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
   - [ ] click and key press on the same frame → exactly one activation
   - [ ] holding the button (Pressed persists across frames) → exactly one activation, not one per frame
   - [ ] clicking a slot does not change `CurrentTarget` / `PlayerTarget` (guards the `click_select_system` early-return assumption)
+  - [ ] two bars sharing a slot key: clicking one fires only that slot
+  - [ ] existing bare-`ActionSlotUi` (no `Interaction`) key-press tests still pass
 - [ ] `cargo test -p ironhold_core --test '*'` (one-file-at-a-time loop per root `CLAUDE.md` — disk!)
 - [ ] `cargo check -p ironhold_cli` (mandatory gate even though no schema change is expected)
-- [ ] Docs: `docs/20_data_formats.md` (replace the "No mouse-click binding" sentence in the ActionBar
-      section; add a short "Activating slots" note listing keyboard, `gamepad_key` and mouse
-      click as the three sources, with the shared-hardware ownership rule); `crates/ironhold_core/src/CLAUDE.md`
-      (add a paragraph next to "Gamepad-routed action-bar slots")
+- [ ] Docs (plan-review, ux B2 + non-blocking):
+  - `docs/20_data_formats.md` ~L996: replace "No mouse-click binding"; add an "Activating slots" note
+    listing keyboard, `gamepad_key` and left-click/tap as the three sources, the shared-mouse
+    ownership rule next to the world-click viewport rule, "no hover/pressed highlight in v1", "only
+    left button/touch activates (right/middle do nothing)", and "every ActionBar is clickable; a
+    decorative bar needs slots with empty `do_actions`"
+  - `docs/20_data_formats.md` ~L1027 "Accepted key names": clarify a mouse button can't be a `key`
+    string but clicking the slot itself always works
+  - event tables (`docs/20` ~L1151-1154, `docs/30_runtime_events_and_logic.md` ~L130-134): reword
+    "key pressed" to "slot activated (key, `gamepad_key` or click)"; event name always uses `key`
+  - `docs/20` "Per-player action bars (split-screen)" (~L1255): one-line pointer that a click acts
+    for the bar's `owner_player` whichever half the cursor is in
+  - `crates/ironhold_core/src/CLAUDE.md`: paragraph next to "Gamepad-routed action-bar slots"
+  - do not promise touch support unless tap-to-target is confirmed to work (see playtest)
+- [ ] `3rd_person_game_demo/scenes/main.scene.ron` ~L418-421: comments say "Press 2..." and claim a
+      missing target is a silent no-op — reword to "Press or click" and fix the stale no-op claim
 - [ ] Demo: no RON change needed — `3rd_person_game_demo`'s existing bar becomes clickable. If a
       dedicated split-screen check is wanted, use `local_coop_demo/scenes/room3.scene.ron`
       (two `owner_player`-scoped bars)
@@ -115,9 +142,22 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
 - Click empty world next to the bar → target still deselects as before (click-through only blocked over the slot).
 - Press the slot's key and click it in the same moment → one activation.
 - `local_coop_demo` room3: click each bar → the correct player acts; keyboard/gamepad still work.
-- **Required:** left-click (and hold, moving the mouse slightly) on a slot with the default orbit
-  binding → the camera must not orbit/rotate the character; record the result in the playtest notes.
-- Web build: repeat on Chrome; if touch hardware is available, tap a slot.
+- **Required — orbit/strafe check, in a project using the real defaults.** `3rd_person_game_demo` and
+  `local_coop_demo` override `orbit_button` to `"Right"`/`"None"`, so they can't reveal the bug. Use
+  `primitive_world` (`scenes/main.scene.ron` ~L658) or `stats_demo` (~L239): player has no `camera:`
+  block, so `orbit_button: "Either"` and `strafe_mouse_button: Some("Left")`.
+  - Hold LMB on a slot and move the mouse slightly: camera must not orbit / character must not rotate.
+  - Hold LMB on a slot and press A/D: character must not switch to strafing (`input_translator_system`
+    reads LMB directly with no UI guard; `strafe_mouse_button` defaults to `Left`).
+  - If either bites, prefer one shared fix (a `UiPointerCaptured` resource/run-condition derived from
+    `Interaction`, read by orbit, strafe and click-select) logged as its own backlog item, over
+    per-system guards. Record results in the playtest notes.
+- Click empty bar padding/gaps between slots: note whether the world target clears (Approach step 10).
+- Open the pause overlay / inventory / dialogue over the bar and click where a slot is: the slot must not fire.
+- With the inspector enabled (`--all-features`), click an egui pane over the bar: no skill fires.
+- `local_coop_demo` rooms 9 and 10 (two bars each) alongside room3.
+- Web build: repeat on Chrome; if touch hardware is available, tap an enemy then tap a `{target}` slot
+  (`click_select_system` reads the mouse button — confirm before documenting touch support).
 
 ## Decisions (Frank, 2026-09-30)
 - **Fire on press**, not release — parity with keyboard `just_pressed`, lower latency.
@@ -125,11 +165,12 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
   later only if a real need appears.
 - **One physical mouse may operate any player's bar** in split-screen (like the keyboard); no
   viewport→player resolution.
-- **Camera orbit while clicking is a playtest requirement, not an open question:** `camera_orbit_system`
-  has no UI-hover guard (no `Interaction` use in `capabilities/camera.rs`), so a left-click on a slot
-  with `orbit_button` including `Left` may start an orbit drag if the mouse moves while held. The
-  playtest must explicitly verify this; if it bites, fix it in this feature or log a separate
-  backlog item before merging (decide at playtest).
+- **Camera orbit/strafe while clicking is a playtest requirement, not an open question:**
+  `camera_orbit_system` and `input_translator_system` have no UI-hover guard. Verify in a
+  default-bindings project (see Playtest checklist); if it bites, fix in this feature or log a
+  separate backlog item before merging (decide at playtest).
+- **Inspector gating (proposed by plan-review, Frank to confirm):** clicks gated on
+  `InspectorEnabled`; keyboard presses ungated.
 
 ## Acceptance criteria
 - Given a slot bound to `key: "1"`, when the player left-clicks that slot, then its `do_actions`
