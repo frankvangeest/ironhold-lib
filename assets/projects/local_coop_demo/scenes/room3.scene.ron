@@ -238,7 +238,7 @@
     // 60-mana pool affords 3 — spending on one bar must never dim or drain the other's.
     // Playtest note (debug-detective finding): each slot's do_actions target "{target}", so the
     // cost is only actually deducted on a press where that player already has a target selected
-    // (Tab-cycle via T/M, or click) — pressing G/L with no target fires `action_bar.no_target` and
+    // (Tab-cycle via T/M, or click) — pressing (or clicking) G/L with no target fires `action_bar.no_target` and
     // never touches mana at all. Select a target first, THEN spend down to see the dim.
     ActionBar((
       id: "action_bar_p1",
