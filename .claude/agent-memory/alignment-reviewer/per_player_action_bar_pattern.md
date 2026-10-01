@@ -64,6 +64,13 @@ Designers avoid this by using disjoint keys across bars (demo room3 uses KeyG fo
 disjoint keys implying the player (which the cross-bar check enforces). Acceptable, but it's the
 one place player identity isn't surfaced.
 
+**Mouse-click slots (action_bar_mouse_click, reviewed 2026-09-30, ALIGNED):** 3rd fire source =
+`Option<Ref<Interaction>>` press-edge inside `action_bar_input_system`, OR'd into `keyboard_fired`
+(no new system/resource/RON field; every bar clickable, no opt-out by Frank's decision). Mouse =
+shared hardware -> acts for `owner_player`, not cursor viewport. Inspector-gated clicks only.
+Follow-up footgun: "unrecognised key ... it will never fire" warn/CLI text is stale once clicks
+exist, and a click-only slot is un-authorable (`key` required + invalid key = validate error).
+
 **Coverage:** entity_logic_tests.rs `test_owner_player_slot_resolves_against_its_own_players_target`,
 `test_slot_with_unmatched_owner_player_never_fires`, single-player-regression test. Demo:
 local_coop_demo room3.scene.ron (2 ActionBar blocks) + prefabs.ron click_target_test.stat_templates

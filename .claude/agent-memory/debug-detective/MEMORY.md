@@ -69,3 +69,4 @@
 - [ColliderDef.size doc says half-extents, code says full](project_colliderdef_size_doc_lies.md) — entity_spawner divides by 2 before Collider::cuboid, so trusting the schema comment doubles every collider; inspect glb won't give mesh bounds, parse the glTF accessor min/max
 - [query/stats catalog resolution has 3 silent modes](project_query_stats_catalog_resolution_silent_modes.md) — wrong-type target parses as an EMPTY catalog at exit 0, `Some("")` is not unset, absolute/`..` paths followed; multi-.project.ron is NOT a validate divergence
 - [Plain ron::from_str breaks on every project.ron](project_cli_plain_ron_from_str_implicit_some.md) — shipped configs need IMPLICIT_SOME; a non-ron_from_str parse fails 100% and fakes a diagnostic
+- [Interaction press-edge semantics](project_bevy_interaction_press_edge_semantics.md) — Bevy 0.18 focus.rs never rewrites Pressed->Pressed, never spawns Pressed; stuck-Pressed after missed release swallows one click
