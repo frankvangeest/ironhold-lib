@@ -144,7 +144,7 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// and the press edge (`Interaction` changed to `Pressed` since this system last ran — detected with
 /// `Ref::is_changed`, so it fires once per press, never while held and never on release) counts as
 /// a third fire source alongside keyboard and gamepad
-/// (`planning/features/action_bar_mouse_click.md`). The mouse is shared hardware like the keyboard,
+/// (`planning/features/done/action_bar_mouse_click.md`). The mouse is shared hardware like the keyboard,
 /// so a click acts for the slot's own `owner_player` regardless of which split-screen viewport the
 /// cursor is in. `Interaction` is `Option`al so a bare `ActionSlotUi` (no `Button`, as in tests)
 /// still matches the query. Clicks — not key presses — are ignored while the inspector is enabled,

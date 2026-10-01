@@ -1,6 +1,6 @@
 # Feature: Mouse-Click Activation for Action Bar Skill Slots
 
-_Status: Ready (plan-review passed 2026-09-30; architect B1 and ux B1/B2 folded in)_
+_Status: Done (shipped 2026-10-01, `534aed6`; touch input untested)_
 _Planned at: `70cb631` (2026-09-30)_
 
 ## What

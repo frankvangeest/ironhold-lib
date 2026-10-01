@@ -943,7 +943,7 @@ fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only
         "the slot's own built-in do_actions must be suppressed when a rule handles the intent");
 }
 
-// --- Mouse-click activation (planning/features/action_bar_mouse_click.md) -----------------------
+// --- Mouse-click activation (planning/features/done/action_bar_mouse_click.md) -----------------------
 //
 // `ui_focus_system` is not present under the test harness, so these drive the slot `Interaction`
 // by hand. A slot is spawned with `Interaction::None` and one warm-up update runs first (so the
