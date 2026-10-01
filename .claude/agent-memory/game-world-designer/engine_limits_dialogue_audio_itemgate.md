@@ -36,7 +36,15 @@ Three engine capabilities the `3rd_person_game_demo` world design depends on. Or
    needed. Needed for the village-safe vs. field-tense audio gradient. Check the backlog entry
    directly for current status rather than re-grepping the schema — it's the source of truth now.
 
-**How to apply:** item 1 can be designed around as shipped. For items 2 and 3, check
+**UPDATE 2026-10-01: item 2 SHIPPED** — `requires_item` on `InteractableDef` (backlog Done ▸
+September 2026; plan archived `planning/features/done/item_gated_interactable.md`). Greywatch's
+`seal_door` prefab already uses `requires_item: "old_key"` + `entity.interact_blocked:seal_door` in
+`3rd_person_game_demo/logic/state_machine.ron`. Sound zones (item 3) still Queued. Monster corpse
+loot (separate corpse entities, `Spawn.at_entity`) shipped Aug 2026, but Loot tables v1, Quest v1/v2,
+Day/night all still Queued; Save/load still Icebox. New Ocean Simulation Demo section (2026-09-30)
+plans `Set*` light/fog actions + Wind resource that overlap day/night.
+
+**How to apply:** items 1 and 2 can be designed around as shipped. For items 2 and 3, check
 `planning/backlog.md` L106/L108 for current status before designing around them as if they exist —
 they may have shipped since 2026-09-03. Related: [[project-greywatch-world]].
 

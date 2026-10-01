@@ -22,9 +22,11 @@ phase 2, ~lines 153-225):
   path + `{e}`; `state_machine`'s message additionally suffixes "no project logic (global_on
   rules, states, transitions) will run" (`project_loader.rs`). The old warn!-without-path tier is
   gone for both.
-- `.behavior.ron` → **no diagnostic at all**. `resolve_pending_behaviors_system`
-  (`entity_spawner.rs` ~552) only acts on success; on parse failure the entity keeps
-  `PendingBehavior` forever and is silently inert. Only Bevy's generic asset error appears.
+- `.behavior.ron` → FIXED (verified 2026-10-01): `resolve_pending_behaviors_system`
+  (`entity_spawner.rs` ~572) now `error!`s with spawn id + path + `{e}` ("this entity will never
+  run its behavior") and drops `PendingBehavior`. `.dialogue.ron` likewise (`dialogue.rs` ~139).
+- Still silent on-screen: a `.project.ron` parse failure (e.g. leftover `rules_path:`) hangs the
+  loading screen forever, console-only error (backlog Bugs, found 2026-09-28).
 
 **Blast radius is always the entire file**, never the one bad line. One typo in
 `logic/state_machine.ron` = every binding in the project stops firing. Any doc note about strict

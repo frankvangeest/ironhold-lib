@@ -1,25 +1,29 @@
 ---
 name: perf-priority-list
-description: My top-5 perf wishlist lives in planning/stakeholder_priority_list.md (snapshot db1ede0, 2026-09-03); status as of 2026-09-14 review — zero shipped
+description: My top-5 perf wishlist in planning/stakeholder_priority_list.md; refreshed 2026-10-01 — still zero of the original 5 shipped; message_interpreter part of item 2 obsoleted by its removal
 metadata:
   type: project
 ---
 
-My top-5 web-perf wishlist is recorded in `planning/stakeholder_priority_list.md` ▸ "WASM-Perf-Reviewer":
-terrain first-frame stall, per-frame collection allocs, scene-transition material cache, frozen-clip
-evaluation, `format!`-before-guard. Four of the five map to `planning/backlog.md` ▸ Performance.
+Original top-5 (snapshot db1ede0, 2026-09-03): terrain first-frame stall, per-frame collection
+allocs, scene-transition material cache, frozen-clip evaluation, `format!`-before-guard.
 
-**Item 4 (paused/frozen animation clips still fully evaluated) has never been logged in
-`backlog.md`** — it exists only in the priority list and in [[animation-hot-path]]. It is the
-cheapest of the five (drop `AnimationGraphHandle` when a clip freezes) and the one most likely to be
-forgotten because it has no backlog entry to be triaged.
+**Status at 2026-10-01 refresh (209 commits later): none shipped.** All five have backlog entries in
+`planning/backlog.md` ▸ Performance (frozen clips was promoted there 2026-09-14). Item 2 *changed*:
+`message_interpreter_system` no longer exists (removed by rules_to_state_machine_consolidation), so
+its Vec is gone; remaining offenders are `stat_modifier_system`'s per-entity key `Vec<String>`
+clone (stats.rs ~line 19, always allocates when a StatMap is non-empty) and `player_movement_system`'s
+input HashMap (FixedUpdate; `HashMap::new()` is alloc-free on idle ticks, allocates only on ticks
+with input). The backlog entry text still names the removed system — stale wording.
 
-**Why:** Frank asked for a stakeholder progress check on 2026-09-14; the two-week window since the
-snapshot went entirely to `ironhold_cli` validate hardening (build-time tooling), so nothing on the
-perf list moved. That is a deliberate authoring-correctness push, not neglect of a known regression.
+Refreshed 2026-10-01 ranking: 1 terrain stall, 2 pipeline warmup for 2D/UI/Sprite (backlog
+"Extend pipeline warmup to Text2d and UI" + claude_suggestions Sprite-warmup note — Textured
+`Sprite` bars now ship on 3rd_person_game_demo players), 3 frozen clips, 4 material cache,
+5 per-frame alloc trio (stat_modifier Vec + format!-before-guard).
 
-**How to apply:** When Frank asks "what should we do next" or a lull appears between feature
-batches, propose item 4 first (smallest diff, no new cfg branches, self-contained in the animation
-capability). Do not re-derive backlog status from this note — re-read `backlog.md`; check whether
-item 4 has since been promoted before claiming it is unlogged. Binary size remains a non-issue
-(see [[wasm-size]]).
+**Why:** the Sept window went to CLI hardening, rules→state_machine consolidation, fixed timestep,
+action-bar features — authoring/correctness work, not perf. Not neglect of a known regression.
+
+**How to apply:** when a lull appears, propose frozen clips first (smallest diff). Re-read
+backlog.md before claiming status; do not trust this snapshot. Binary size is a non-issue
+(see [[wasm-size]]; pkg release 32,090,055 bytes on 2026-09-29).

@@ -8,7 +8,7 @@
 - [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning
 - [Pause is cosmetic](project_pause_is_cosmetic.md) — pause menu is an overlay only; nothing in the sim stops; 4 doc surfaces claim otherwise; no UI focus/keyboard-nav concept exists anywhere
 
-- [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder_priority_list.md ownership; #1 shipped, #2 mostly closed, #3 demo projects still all unbuilt, #4/#5 half-done
+- [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder list ownership; 2026-10-01 refresh: pause, load-hang, demos, {target}->"", motion: docs
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Player-count-change assumptions](project_player_count_change_assumptions.md) — seat index vs viewport slot conflated at join; "2+ players" gating assumes count is fixed per scene; both break on leave
 - [CameraConfig party/split nesting](project_camera_config_party_split_nesting.md) — party:/split: now SIBLING fields of components.camera (nested location is legacy fallback only); flycam is TAG-driven not field-driven; doc surface + local_coop_demo migration constraints
@@ -54,7 +54,7 @@
 - [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot
 - [ui: Label/Button font & clip](project_ui_label_button_font_and_clip.md) — font_size house style is f32+default fn (13 precedents); 22/26px, ~11px/char; clip+wrap+center = half-cut lines; camera_modes hints overflow today
-- [RON parse-failure diagnostics](project_ron_parse_failure_diagnostics.md) — ron 0.11 error text is GOOD (names the Action variant); logic/catalog loaders now error! w/ path; .behavior.ron still silent; blast radius = whole file
+- [RON parse-failure diagnostics](project_ron_parse_failure_diagnostics.md) — ron 0.11 error text is GOOD (names the Action variant); logic/catalog/.behavior/.dialogue loaders now error! w/ path; .project.ron hangs loading; blast radius = whole file
 - [UI trigger wiring](project_ui_trigger_wiring.md) — 4 surfaces emit ui.button_pressed:{trigger}; exact-match only; `unreachable_trigger` check's blind spots (gamepad, state gating, nested behaviors, parse cascade)
 - [max_fixed_delta_secs](project_max_fixed_delta_secs.md) — any value <= the real frame interval = permanent slow-motion; validate only rejects <=0/non-finite; 6 doc surfaces, 3 missing
 - [Default mouse-binding test projects](project_mouse_default_binding_test_projects.md) — 3rd_person/local_coop override orbit_button; primitive_world/stats_demo use defaults + have ActionBars

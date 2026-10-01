@@ -1,16 +1,23 @@
 ---
 name: stakeholder-wishlist-tracking
-description: My top-5 architect items in planning/stakeholder_priority_list.md (db1ede0, 2026-09-03) and their status as of the 2026-09-14 check-in
+description: My top-5 architect items in planning/stakeholder_priority_list.md — db1ede0 (2026-09-03) list, its 2026-10-01 status, and the refreshed 2026-10-01 top-5
 metadata:
   type: project
 ---
 
-`planning/stakeholder_priority_list.md` holds a 5-stakeholder snapshot (commit `db1ede0`, 2026-09-03). My section is "System-Architect — stability, maintainability, future-proofing": (1) Rapier cross-platform float divergence gating Beta 0.5-0.9, (2) `Action` `deny_unknown_fields`, (3) scene-singleton config misplaced on `PrefabDef`, (4) test-suite trust (flakiness + no "warning was logged" infra), (5) `spawn_scene_v2` at the 16-param ceiling.
+`planning/stakeholder_priority_list.md` holds a 5-stakeholder snapshot (commit `db1ede0`, 2026-09-03). My section is "System-Architect — stability, maintainability, future-proofing".
 
-Status at the 2026-09-14 check-in: only #2 shipped (`4b8c865`/`b203f1f`/`3677859`). Everything after it in `db1ede0..HEAD` was CLI-validate hardening plus two small fixes. #1 has no investigation file and Beta 0.5 is untouched; #3 sits in Icebox; #5 unchanged at exactly 16 params (`spawn_scene_v2` in `scene_loader.rs`, re-counted 2026-09-14).
+**Old list (db1ede0) → status at 2026-10-01 refresh (HEAD ce77bdd):**
+1. Rapier float divergence — CHANGED: cause was wrong (enhanced-determinism always on); v1 fixed-timestep shipped `6f720de`; v2 cross-platform harness still Queued (Beta 0.5).
+2. `Action` deny_unknown_fields — SHIPPED (merge `33842ff`).
+3. Camera/input config on PrefabDef — STILL OPEN (Icebox); scene-level `camera_modes` map exists but per-player `camera_mode`/`split`/`party` still on PrefabDef.
+4. Test-suite trust — CHANGED: flake fixed/closed (`80f5ab1`), but warning-assert infra, ambiguity detection, schedule-graph assertions all still Queued; zero `SystemSet`s in src.
+5. `spawn_scene_v2` 16-param ceiling — STILL OPEN, still exactly 16 (moved to `runtime/scene_manager/scene_loader.rs:41`, file now ~3570 lines).
 
-**Update, later the same day (2026-09-14):** #4's *first* half is now addressed — `feature/targeting_race_fix` landed the `.chain()` + `.before(action_bar_input_system)` ordering fix I recommended pulling forward, eliminating the suite's only known flake. #4's second half (no "assert a warning was logged" infra) is still open, and the fix has its own caveats — see [[flaky-test-trust-gate]].
+**Refreshed top-5 (2026-10-01):** (1) determinism harness before the ocean/buoyancy/boat physics batch (requested 2026-09-30) lands; (2) schedule-ordering contract (first SystemSet + ambiguity detection + graph assertion); (3) input-ownership arbitration — `UiPointerCaptured` primitive (backlog Bugs, left-mouse-on-UI); (4) loader failure visibility — `.project.ron` parse failure hangs forever, no scene-fetch retry; (5) scene_manager monolith / 16-param ceiling.
 
-**Why:** Frank periodically asks each agent persona to grade progress against its own wishlist, so the snapshot is a recurring reference point, not a one-off doc.
+Also observed 2026-10-01: backlog `## Active` still holds the rules.ron consolidation bullet although its Done entry exists — the exact drift CLAUDE.md step 10 warns about.
 
-**How to apply:** Re-verify against `git log db1ede0..HEAD` and current `planning/backlog.md` before quoting any of these statuses — this note is a point-in-time reading. My standing recommendation coming out of 2026-09-14 is to pull #4's targeting-race fix forward next (cheap, unblocks trust in the merge gate), and to open a `planning/investigations/rapier_determinism.md` spike before more physics-adjacent features accrete. See [[determinism-networking]] and [[fragile-modules]].
+**Why:** Frank periodically asks each persona to grade progress against its own wishlist; the snapshot is a recurring reference point.
+
+**How to apply:** Re-verify against `git log <snapshot>..HEAD` and current backlog before quoting. See [[determinism-networking]], [[schedule-ordering-mechanism]], [[panel-input-blocking]], [[schema-tightening-blast-radius]], [[fragile-modules]].
