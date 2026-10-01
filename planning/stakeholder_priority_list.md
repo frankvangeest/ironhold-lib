@@ -1,27 +1,38 @@
 # Stakeholder Priority List
 
-**Snapshot as of `db1ede0` (2026-09-03).** This is a one-time snapshot, not a living/re-generated
-document — priorities will drift as the codebase changes, so treat this as a point-in-time read,
-not an ongoing source of truth. Re-run manually later if a fresh read is wanted.
+**Snapshot as of `ce77bdd` (2026-10-01).** Second edition. This is a point-in-time snapshot, not a
+living/re-generated document — priorities will drift as the codebase changes, so treat this as a
+read of that moment, not an ongoing source of truth. Re-run manually later if a fresh read is
+wanted. The first edition (`db1ede0`, 2026-09-03) is preserved in git history
+(`git show 8a8176c:planning/stakeholder_priority_list.md`).
 
 ## What this is
 
 Five of the project's specialized review-agent personas were each asked, independently and in
-parallel, for their genuine top-5 wishlist — the things *they* would most want prioritized from
-their own lens — ranked most→least important. Each was grounded in:
+parallel, for (A) the status of their previous top-5 and (B) a fresh, genuine top-5 wishlist from
+their own lens, ranked most→least important. Each was grounded in:
 
-- their own `.claude/agent-memory/{agent}/` directory (recently purged of stale claims, so these
-  reflect real current-state findings, not outdated ones)
+- their own `.claude/agent-memory/{agent}/` directory
 - `planning/backlog.md` and `planning/claude_suggestions.md`
+- spot-checks of the code and docs, so every status claim below was verified rather than assumed
 - their own judgment for anything real but not yet logged anywhere ("self-described")
 
-Debug-detective was intentionally excluded from this round — its memory is mostly a record of
-already-fixed bugs, not a forward-looking wishlist, so its "priorities" would have been thinner
-than the other five lenses.
+Debug-detective was intentionally excluded again — its memory is mostly a record of already-fixed
+bugs, not a forward-looking wishlist.
 
-Every item below points to its source (a `backlog.md` item, a `claude_suggestions.md` entry, or
-"self-described — not yet logged") so it can be chased down and, where warranted, promoted or
-acted on independently of this snapshot.
+Every item points to its source (a `backlog.md` item, a `claude_suggestions.md` entry, an
+agent-memory file, or "self-described — not yet logged") so it can be chased down and, where
+warranted, promoted or acted on independently of this snapshot.
+
+## What changed since the first edition
+
+The September 2026 batch shipped a large share of the first list: `Action`/FSM/dialogue
+`deny_unknown_fields`, the `rules.ron` → `state_machine.ron` consolidation, a fixed physics timestep,
+about ten `ironhold_cli validate` hardening items, item-gated interactables, per-player action bars,
+gamepad action-bar slots and (30 Sep) mouse-click action-bar slots. Two new areas opened up: the
+**Ocean Simulation Demo** section (eight queued items, 30 Sep) and the first **UI-pointer capture**
+bug (found by the mouse-click playtest). Several items below are the same ones as last time — those
+are the ones nobody has had room for yet.
 
 ---
 
@@ -29,62 +40,58 @@ acted on independently of this snapshot.
 
 *Lens: what would most hurt this codebase's trajectory if ignored for another 6 months.*
 
-### 1. Rapier cross-platform float divergence blocks the entire multiplayer roadmap, with no design work yet started
-**Source:** `.claude/agent-memory/system-architect/determinism_networking.md`; `planning/backlog.md` ▸ Beta 0.5 (Deterministic Tick + Replay), Beta 0.6 (LAN Co-op), Beta 0.8/0.9 (Internet/Dedicated Server)
+**Previous top-5, status:**
 
-Four full milestones of planned work are gated on determinism, and the actual hard blocker —
-Rapier3D's non-deterministic floating-point behavior across platforms — has no mitigation plan,
-only a memory note recommending a SimClock chokepoint + run-mode enum that hasn't been scoped as a
-feature. Every month of feature work built on top of the current physics/movement code adds more
-surface area a future determinism retrofit will have to re-audit. This isn't a bug — it's a
-foundation nobody has verified is buildable, sitting under a quarter of the roadmap.
+| # | Item | Status |
+|---|---|---|
+| 1 | Rapier cross-platform float divergence | **Changed.** Cause was already corrected (2026-09-15: `enhanced-determinism` was on all along); the real blocker, the variable timestep, shipped as `deterministic_fixed_timestep` v1 (`6f720de`, merge `c3ec4fe`). v2 (the cross-platform determinism harness) is still Queued — the remaining work is measurement |
+| 2 | `Action` `deny_unknown_fields` | **Shipped** (merge `33842ff`; `features/done/action_deny_unknown_fields.md`) |
+| 3 | Scene-singleton camera/input config on `PrefabDef` | **Still open** (Icebox; `camera_modes` map exists, but per-player `camera_mode`/`camera`/`flycam`/`split`/`party` are still `PrefabDef` fields) |
+| 4 | Test-suite trust | **Changed.** The flaky test is gone (targeting race fixed, merge `80f5ab1`; local-coop flake closed as non-reproducing). Structural half still open: "no warning was logged" infra, ambiguity detection, schedule-graph assertions, no `SystemSet`s |
+| 5 | `spawn_scene_v2` at the 16-param ceiling | **Still open** (still exactly 16 params; file now ~3,570 lines) |
 
-> **Correction (2026-09-15):** a full system-architect investigation found this item's stated
-> cause doesn't hold up — `bevy_rapier3d`'s `enhanced-determinism` feature has been enabled the
-> whole time (`crates/ironhold_core/Cargo.toml:16`), which per Rapier's own docs already gives
-> cross-platform float determinism under normal use. This is a dated snapshot and is being left
-> as-is rather than rewritten, but the *priority* was right even though the *cause* was wrong: the
-> real remaining blockers (a variable physics timestep, two un-`libm`'d transcendental call sites,
-> and the fact nobody had measured any of this) are now scoped as concrete backlog items — see
-> `planning/backlog.md` ▸ Beta 0.5 and `planning/features/deterministic_fixed_timestep.md`.
+**New top-5:**
 
-### 2. `Action` enum has no `#[serde(deny_unknown_fields)]`, so typo'd RON action fields silently vanish
-**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime; originally flagged by debug-detective during `dynamic_animation_control.md`'s review (2026-08-26)
+### 1. Build the determinism harness before the ocean/buoyancy physics batch lands
+**Source:** `planning/backlog.md` ▸ Beta 0.5 ▸ Cross-platform determinism harness; `planning/features/deterministic_fixed_timestep.md` (v2 Queued)
 
-The project's core architectural bet ("the schema is the designer's API surface") only holds if
-the schema layer actually rejects malformed input. Without `deny_unknown_fields`, a misspelled
-field parses cleanly and is silently dropped — by the engine, `ironhold_cli validate`, and
-`ron_lint` alike. `PrefabComponents` already got this treatment as precedent; `Action` — the
-highest-traffic authoring surface in the pipeline — still hasn't, and the surface only grows with
-every new variant.
+Fixed-timestep v1 removed the cause we knew about, but nobody has measured whether native and WASM
+actually agree tick by tick. Eight ocean-demo items were queued on 2026-09-30, including buoyancy
+forces, a wind field and a boat controller — the largest batch of physics-adjacent code since the
+last snapshot, and it would land before anything can detect a divergence. If the harness comes
+first it's a regression gate; if it comes after, it's an archaeology dig.
 
-### 3. Scene-singleton config (`orbit_camera`, `flycam`, `player`) is architecturally misplaced on `PrefabDef`
-**Source:** `planning/backlog.md` ▸ Icebox ▸ Engine/Runtime
+### 2. A declared schedule-ordering contract instead of bare `.before(fn)` edges
+**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime ("Schedule-graph assertions + first named `SystemSet`", "Bevy ambiguity-detection hardening"); `planning/claude_suggestions.md` ▸ Targeting
 
-Camera/input config is inherently scene-level (one active camera rig per scene), yet it lives on
-`PrefabDef`, which is meant to be reusable and instantiable — a scene/prefab boundary violation
-baked in early and never corrected. The cost compounds concretely: demonstrating one boolean flip
-already required cloning two ~60-line prefabs into duplicates. Every new per-instance camera/input
-feature pays this same prefab-forking tax, and it only grows the longer the layer stays wrong.
+The flaky test was fixed, but nothing would catch the next ordering race: there are no `SystemSet`s,
+no ambiguity detection, and the canary test for this was removed. WASM is single-threaded, so an
+ordering race can behave differently on web than natively. One `PipelineSet::PreInterpreter` plus
+ambiguity detection in debug/test builds would turn ordering from a convention into a guarantee.
 
-### 4. Test-suite trust is degrading: recurring unexplained flakiness plus no infrastructure to assert "a warning was/wasn't logged"
-**Source:** `planning/backlog.md` ▸ Bugs (local-coop action-bar test flakiness) and ▸ Queued ▸ Engine/Runtime ("Test infrastructure for asserting 'no warning was logged'"); `planning/claude_suggestions.md` ▸ Testing
+### 3. One input-ownership primitive: UI pointer capture vs. world input
+**Source:** `planning/backlog.md` ▸ Bugs ("Left mouse button on any UI node also orbits the camera / strafes the character")
 
-The entire code-change workflow treats "full test suite green" as the merge gate, but that signal
-is already unreliable (4 documented occurrences of the same unreproducible intermittent failure)
-and structurally incomplete — two real regression fixes couldn't get true regression tests because
-Bevy's internal `log`-crate warnings aren't bridged into `tracing` in the test harness. Left alone,
-either flakiness gets normalized until a real regression hides behind "that test is just flaky," or
-a whole class of Bevy-internal-warning bugs keeps shipping without coverage.
+Clickable action bars made a long-standing gap obvious: camera orbit and strafe read raw mouse state
+with no UI guard, and only `click_select_system` checks for a pressed UI node. Each new clickable
+widget currently gets an ad-hoc guard, or none. The coming work (draggable windows, AoE placement, a
+slider panel) will all compete for the pointer; a single `UiPointerCaptured` resource read by every
+world-input system should exist before that work starts.
 
-### 5. `spawn_scene_v2` is pinned at Bevy's 16-param `SystemParam` ceiling with no systemic fix, only a workaround convention
-**Source:** `.claude/agent-memory/system-architect/fragile_modules.md`
+### 4. Loader failures must be visible, not infinite loading screens
+**Source:** `planning/backlog.md` ▸ Bugs (stale `rules_path:` hangs loading forever) and ▸ Queued (no retry for a failed `.scene.ron` load); `.claude/agent-memory/system-architect/schema_tightening_blast_radius.md`
 
-This is a hard Bevy-imposed compile-time wall, not a style preference — the system already sits
-exactly at the boundary. The only mitigation on record is a workaround discipline ("bundle the next
-resource into an existing `SystemParam` struct"), not a structural guarantee. Because scene-load is
-the single most central system in the engine, this is the most likely place a future feature
-silently breaks the build in a way that looks like "just add one resource" until it doesn't.
+Tightening the schema was the right call, but each time it happens a field that used to be silently
+ignored now fails the whole file, and the runtime responds by hanging. Players see a blank loading
+screen, not the CLI's clear error. Every loader needs a `Failed` arm that latches and shows the
+error on screen.
+
+### 5. Break up the scene_manager monolith before the 16-param wall breaks the build
+**Source:** `.claude/agent-memory/system-architect/fragile_modules.md`; `planning/backlog.md` ▸ Queued ▸ UI ("Extract a shared panel-chrome helper")
+
+`spawn_scene_v2` is still at exactly 16 params and the scene_manager files add up to about 9,100
+lines. The three panel-spawning copies (inventory, shop, container) are a cheap first extraction;
+waiting until a feature needs a 17th param means doing it under deadline pressure.
 
 ---
 
@@ -92,51 +99,55 @@ silently breaks the build in a way that looks like "just add one resource" until
 
 *Lens: what a designer currently can't do through RON alone, or where behavior silently diverges by authoring path.*
 
-### 1. RON-authorable collider friction / physics materials
+**Previous top-5, status:**
+
+| # | Item | Status |
+|---|---|---|
+| 1 | RON-authorable collider friction / physics materials | **Still open** (hardcoded at `entity_spawner.rs:328`/`:1140`, `scene_loader.rs:466`/`:686`; the wall-friction fix added another engine rule rather than a schema field) |
+| 2 | `Action` `deny_unknown_fields` | **Shipped** (`3677859`, 2026-09-04) — went further than asked: all FSM and dialogue containers, plus `LoadState::Failed` arms now log errors |
+| 3 | Behavior `entry_actions` never get `{target}` | **Changed — closed, premise was wrong** (substitution was already applied since `4e692db`; `rewrite_self`/`rewrite_target` are now exhaustive matches, so a missing arm is a compile error) |
+| 4 | CLI `collect_actions` ignores dialogue `do_actions` | **Shipped** (`63b31e6`, 2026-09-04; `query`/`stats` still ignore dialogue actions) |
+| 5 | Magic `tags` strings drive spawn semantics | **Still open** (drops out of the new top-5 only because worse silent divergences surfaced) |
+
+**New top-5:**
+
+### 1. `action_needs_target`'s hand-maintained allowlist silently turns `{target}` into `""`
+**Source:** `planning/backlog.md` ▸ Bugs (split out 2026-09-14, flagged by all 3 reviewers on `targeting_race_fix`)
+
+`capabilities/action_bar.rs` still lists only 11 variants while `rewrite_target` substitutes many
+more. With no target set, `SetVariable`, `OpenContainer`, `AddItem`/`RemoveItem`/`TransferItem`,
+`ResetToSpawn`, `EmitEventAfterDelay` and `Spawn.id`/`spawn_point` all fire against an empty id,
+with no `no_target` event and no warning. Since `rewrite_target` became exhaustive this is the last
+hand-synced copy of that list. The fix: derive "needs a target" from `rewrite_target` itself.
+
+### 2. Real pause: designers cannot pause the world through RON
+**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime; `planning/features/real_pause.md`
+
+Every shipped "pause" is an overlay drawn over a game that keeps running — NPC AI, physics, timers,
+interacts. No action exists that a designer could author to stop it, and the docs currently teach
+the overlay pattern as the standard way to pause. A missing engine primitive, not an authoring
+mistake: no amount of RON can work around it.
+
+### 3. Player-tagged prefabs silently ignore `inventory:`/`interactable:`/`dialogue:`/`behavior:`/`trigger_zone:`
+**Source:** `planning/claude_suggestions.md` (debug-detective, `4df567f`, 2026-09-11)
+
+`spawn_player_entity_core` never calls `attach_prefab_features`, so the same capability block works
+on any NPC or prop and does nothing on a player prefab — with no warning and no CLI check. Behavior
+differs depending on which kind of prefab the designer wrote the block on.
+
+### 4. Dialogue `do_actions` get `{self}` but never `{target}`
+**Source:** `planning/claude_suggestions.md` (system-architect, 2026-09-28); agent-memory `dialogue_system_pattern.md`
+
+`dialogue.rs` has its own `substitute_self_in_action`, a third copy of the substitution logic that
+skips `action_substitution.rs`. The same `{target}` token resolves in `state_machine.ron` and
+behavior files but stays a literal string inside a dialogue choice — and it is the next place a new
+`Action` variant's substitution arm will be forgotten.
+
+### 5. RON-authorable collider friction / physics materials (carried over)
 **Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime
 
-Every dynamic body hardcodes its friction coefficient at one Rust insertion site; static geometry
-gets no `Friction` component at all. No schema field exposes any of this — a designer cannot author
-a slippery-ice room or sticky-mud zone, not "hard to do" but structurally impossible without a Rust
-change. It's also now driving engine-code churn: a v7 engine-internal constant was born directly
-out of chasing this exact hardcoded value through a real bug fix — RON authoring should be
-absorbing that need, not Rust constants.
-
-### 2. `Action` enum has no `#[serde(deny_unknown_fields)]`
-**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime; also `planning/claude_suggestions.md` ▸ Animation
-
-A typo'd field on any of the ~40 `Action` variants parses cleanly and is silently dropped — zero
-diagnostic anywhere, across every authoring surface (rules, state machine, behavior files,
-dialogue) at once. This is the single largest systemic threat to "build entirely through RON
-without recompiling": every other authoring mistake gets *some* signal; a mistyped `Action` field
-gets none. *(Independently ranked #2 by system-architect and #1 by ux-gamedesigner-reviewer — the
-clearest cross-stakeholder consensus item in this whole list.)*
-
-### 3. Behavior-file `entry_actions` never receive `{target}` substitution
-**Source:** `planning/backlog.md` ▸ Bugs (found `f9849ca`, system-architect plan review)
-
-`entry_actions` firing on FSM state entry go through `rewrite_self` only; `rewrite_target` is
-applied only to `on:` event-handler actions in the same file. The identical token `{target}` works
-in one RON block and is a silent no-op literal string in a structurally adjacent block of the
-*same* file, with no error either way — exactly the kind of authoring-path-dependent divergence
-that undermines trust in the schema.
-
-### 4. `ironhold_cli validate`'s `collect_actions` never walks dialogue `do_actions`
-**Source:** `planning/backlog.md` ▸ Queued ▸ Designer Experience; `planning/claude_suggestions.md` (flagged independently ≥3 times)
-
-`DialogueChoiceDef.do_actions`/`DialogueNodeDef.do_actions` are fully RON-authorable, identical in
-shape and power to a rule's `do_actions` — but every action-based validate check is blind to them.
-A designer authoring dialogue gets a strictly worse safety net than one authoring the same logic in
-a rule file, for no principled reason.
-
-### 5. Magic `tags` strings drive core spawn semantics instead of typed fields
-**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime
-
-`collectable`, `player`, and `flycam` behavior are gated on free-form `tags: [...]` string matching
-rather than typed, schema-validated fields. The single most foundational classification in the
-engine — "is this entity the player" — rests on an untyped string convention with no RON-side
-validation: a typo silently produces an entity invisible to every player-dependent system, with no
-diagnostic anywhere.
+Slippery ice or sticky mud still cannot be expressed without a Rust change. Every new physics bug in
+this area keeps adding engine constants instead of exposing a field.
 
 ---
 
@@ -144,52 +155,55 @@ diagnostic anywhere.
 
 *Lens: what kind of game world or moment-to-moment experience is currently impossible or fragile to build.*
 
+**Previous top-5, status:**
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Quest system (v1 + v2) | **Still open** (both bullets unchecked; the `Collect` objective still waits on Loot v1) |
+| 2 | Item-gated interactable | **Shipped** (`features/done/item_gated_interactable.md`; wired into Greywatch's seal door — `requires_item: "old_key"`, `entity.interact_blocked:seal_door`) |
+| 3 | Sound zones | **Still open** (Audio channels also still Queued) |
+| 4 | Day/night cycle | **Still open, context changed** — the new Ocean Demo item "Runtime environment control actions + light parameters" adds `SetSunDirection/Intensity/Color`, `SetAmbientLight`, `SetFog` and must coordinate with `TimeOfDay`; the ocean work may land lighting setters first |
+| 5 | Loot system v1 | **Still open, partly superseded** — monster corpse loot (v2 separate-corpse design, `Spawn.at_entity`, `ec3cb5e`) and the inventory `max_stack` fix shipped; there are still no rolled loot tables |
+
+**New top-5:**
+
 ### 1. Quest system — core loop (v1) + presentation layer (v2)
 **Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment
 
-There is no structural way to give a player a throughline today — no authored sequence of "go
-here, do this, come back, get that," no state that persists a promise made by an NPC across a
-scene. Every world designed so far has to fake progression entirely through raw `GameVariables` and
-dialogue conditions, which works for a single gate but can't scale to a real questline with
-branching states or a visible tracker. This is the biggest gap between "a scene with NPCs in it"
-and "a world that remembers what you've done" — the whole premise of a designed world vs. a
-diorama.
+Still the single largest gap between a diorama and a world that remembers what you did. The Seal
+Door now gates properly on possession, but nothing ties "Maren asked you for the key" to "you opened
+the door" to "come back for your reward" — each promise is still a loose bundle of `GameVariables`.
+Every designed world needs a visible throughline, and this is the only item that provides one.
 
-### 2. Item-gated interactable
-**Source:** `planning/backlog.md` (Queued ▸ Gameplay & Environment); `.claude/agent-memory/game-world-designer/engine_limits_dialogue_audio_itemgate.md`
+### 2. Loot system — roll + auto-loot (v1)
+**Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment
 
-A concrete blocker sitting in front of an already-designed world (Greywatch's Seal Door needs
-`old_key` to open) — today that can only be faked via a GameVariable set on *purchase* rather than
-*possession*, so losing/trading the key wouldn't re-lock the door. Locked doors and "you need the
-right item" gates are one of the oldest legible world-building tools there is: they communicate a
-barrier spatially instead of through a dialogue wall, and make items feel like they matter. Small
-schema surface, disproportionate narrative payoff.
+Corpses can now be looted, but every drop is hand-authored per prefab, so danger has no variance —
+a second zombie is never more interesting than the first. Rolled tables are what make scavenging
+off the critical path worth the risk, and Loot v1 is also still the dependency blocking Quest's
+`Collect` objective, so it unlocks item 1 as well.
 
-### 3. Sound zones (zone-based ambient audio)
-**Source:** `planning/backlog.md` (Queued ▸ Gameplay & Environment); `.claude/agent-memory/game-world-designer/engine_limits_dialogue_audio_itemgate.md`
+### 3. Sound zones
+**Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment
 
-Audio is doing none of the emotional-pacing work right now — no way to make a village feel safe and
-the wilds feel tense purely through ambience, core to any world with a stated temperature gradient
-across zones. Without a location-driven fade envelope, that gradient is visual-only, and a world
-that looks tense but sounds identical everywhere reads as flat. Cheap to build (reuses existing
-trigger zones + `PlayMusicLoop`/`StopMusic`) for how much atmospheric believability it buys back.
+Greywatch's design depends on a temperature gradient — the village feels safe, the wilds feel tense
+— but today that gradient exists only visually. Carried over unchanged: cheap, needs nothing beyond
+a fade envelope, and the Ocean demo now lists it as a soft dependency for wind and wave ambience.
 
 ### 4. Day/night cycle
-**Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment
+**Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment; overlaps the Ocean "Runtime environment control actions" item
 
-A world frozen at one lighting state forever can't sell the passage of time — one of the most
-powerful low-cost tools for making a place feel inhabited rather than staged (lanterns lit at dusk,
-NPCs behaving differently at night, danger scaling after dark). The event hooks (`time.dusk` etc.)
-are what make it a *design* tool and not just a shader trick — they let rules/quests react to time
-of day.
+A world fixed at one sun angle can't show that time passes or that danger rises after dark; the
+`time.dusk` hooks are what make this a design tool rather than a shader trick. Plan it together with
+the Ocean demo's light setters now, before two systems fight over the sun.
 
-### 5. Loot system — roll + auto-loot (v1)
-**Source:** `planning/backlog.md` ▸ Queued ▸ Gameplay & Environment
+### 5. Save / load game state
+**Source:** `planning/backlog.md` ▸ Icebox ▸ Engine / Runtime; `planning/features/save_load_game_state.md`
 
-Combat and exploration currently have no reward loop tied back to the world's own economy — kills
-and searches don't produce anything the player can carry forward, so danger doesn't pay off and
-scavenging isn't a reason to explore off the critical path. Also the direct unblock for Quest's
-`Collect` objective type (item 1 above), so building it now pays down two wishlist items at once.
+As soon as quests and loot exist, a world that forgets everything on a page reload breaks the
+promise those features make — most sharply on WASM, where a closed tab is the normal way a session
+ends. Sits in the Icebox today; recommended for promotion to Queued directly behind Quest v1 so the
+first real questline isn't throwaway.
 
 ---
 
@@ -197,49 +211,56 @@ scavenging isn't a reason to explore off the critical path. Also the direct unbl
 
 *Lens: what silently goes wrong, is hard to discover, or wastes a non-programmer designer's iteration time.*
 
-### 1. RON typos silently no-op with zero diagnostic anywhere
-**Source:** `planning/claude_suggestions.md` ▸ Animation; `planning/backlog.md` ▸ Queued ▸ Engine/Runtime (same `Action` `deny_unknown_fields` item architect/alignment ranked #2/#1)
+**Previous top-5, status:**
 
-For a non-programmer, "I wrote what I thought was right and nothing happened" with no error message
-is the single worst debugging position to be in — no stack trace, no red text, just silent RON that
-doesn't do what it says. The corpse-pose bug this was found chasing was exactly this. Systemic
-across every `Action` variant and every project, not confined to one feature.
+| # | Item | Status |
+|---|---|---|
+| 1 | RON typos silently no-op | **Shipped** (`3677859`; failed loads of logic, `.behavior.ron` and `.dialogue.ron` now log an `error!` with the file path). The `rules.ron` removal also shipped (CLI is now `query logic`) |
+| 2 | "validate passed" ≠ "will work" | **Changed — mostly closed** (~10 CLI-validate Done entries in September). Still open: leftover `logic/rules.ron` never flagged, no ContainerPanel-slots vs. `max_slots` check, no CLI guard for the `{target}` gate |
+| 3 | Missing demo projects | **Still open, zero movement** (`prefab_demo`, `ui_demo`, `audio_demo`, `scene_transitions_demo`, `parkour_demo` — none exists) |
+| 4 | RON parse footguns | **Still open** (only the camera_mode double-paren note exists; no general RON-syntax primer, no quoted-vs-bare rule) |
+| 5 | Tofu boxes for non-ASCII text | **Still open (lint only)** — the `--strict` `non_ascii_char_in_text` lint shipped, but all 20 shipped tofu strings are still there (16 in `particles_demo`, 4 in `effect_mayhem_demo`) and the font is still ASCII-only |
 
-### 2. CLI validate's reference-checking is broad but inconsistent, so "validate passed" doesn't mean "will work"
-**Source:** `planning/backlog.md` ▸ Queued ▸ Designer Experience (dialogue actions, `spawn_point`/`item_key`/`currency_stat` references, UI trigger reachability, `join_prefab_keys` gamepad-index coverage — several items)
+**New top-5:**
 
-The whole pitch of `ironhold_cli validate` is "catch mistakes before you playtest" — but it checks
-some reference classes and not close siblings, with no way for a designer to know which is which. A
-clean `validate` run reasonably implies correctness; when it silently fails at runtime anyway, the
-tool built to prevent exactly that becomes untrustworthy, and iteration reverts to trial-and-error
-in the browser.
+### 1. The pause menu doesn't pause anything, and the docs teach it as the way to do it
+**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime ("Real pause"); `planning/features/real_pause.md`; agent-memory `project_pause_is_cosmetic.md`
 
-### 3. Missing demo projects for core authoring patterns
-**Source:** `planning/backlog.md` ▸ Queued ▸ Designer Experience (`prefab_demo`, `ui_demo`, `audio_demo`, `scene_transitions_demo`, `parkour_demo`)
+Every designer copies the pause example in `docs/30` (~L224-256). Behind the menu, monsters keep
+attacking, loot still works and timers keep firing; `primitive_world`'s game-over screen can even
+be played behind. The engine gives no warning, and the bug shows up first for players, not for
+whoever built the pause menu.
 
-Every existing demo teaches a runtime *system* using prefabs/UI/audio incidentally — nothing
-teaches the prefab schema itself (the first thing touched starting any project), or UI/audio
-authoring as primary subjects. Without a canonical "one station per pattern" reference, a designer
-has to reverse-engineer the right shape from whichever existing project happens to use a similar
-feature — much slower and more error-prone than a dedicated teaching project.
+### 2. Loading failures hang the game forever with nothing on screen
+**Source:** `planning/backlog.md` ▸ Bugs (stale `rules_path` hang) + Queued (scene-load retry/timeout)
 
-### 4. Parse-breaking RON footguns that only `cli validate` catches, never predictable from the docs
-**Source:** self-described, grounded in `.claude/agent-memory/ux-gamedesigner-reviewer/project_ron_enum_double_paren.md` and `project_quoted_string_vs_enum_house_style.md`
+One leftover field in `.project.ron`, or a failed fetch of the scene file, leaves a loading screen
+that never finishes; the only error is in the browser console. For someone testing only through the
+web build that looks like a crash with no cause. An on-screen error message would turn "it's
+broken" into a fix that takes a minute.
 
-Enum variants wrapping a named struct need double parens (single-paren examples in docs fail to
-parse), and quoted-string vs. bare-enum conventions are inconsistent across similar-looking fields.
-A non-programmer has no intuition for this and can't pattern-match from other working examples,
-because the pattern itself isn't consistent. A wrong paren count produces an opaque parser error,
-not a designer-facing explanation.
+### 3. Demo projects for the core authoring patterns (carried over)
+**Source:** `planning/backlog.md` ▸ Queued ▸ Designer Experience
 
-### 5. Em-dash renders as a tofu box in any project's in-game text, with no lint or fix
-**Source:** `planning/backlog.md` ▸ Bugs; `.claude/agent-memory/ux-gamedesigner-reviewer/project_em_dash_font_glyph_gap.md`
+Two cycles have passed with no movement. Prefabs, UI and audio are still only taught by accident
+inside demos about other systems — still the cheapest way to cut a designer's time to their first
+working project.
 
-A small, recurring trap that's already bitten multiple unrelated projects — a designer typing a
-normal em-dash gets a silent visual glitch discoverable only by looking at the rendered screenshot,
-with nothing pointing at the character itself. Low effort to fix permanently (font glyph or a RON
-lint flag), worth prioritizing precisely because it's cheap to close for good instead of being
-rediscovered project after project.
+### 4. An action-bar `{target}` becomes an empty string with no warning
+**Source:** `planning/backlog.md` ▸ Bugs (`action_needs_target` allowlist drift)
+
+`SetVariable`, `OpenContainer`, `AddItem` and five other actions skip the "no target" check; with
+no target selected they quietly write to or open an empty id. The September targeting fix made this
+happen every time instead of occasionally. The designer sees nothing happen and gets no event to
+react to. *(Same defect as Alignment-Reviewer #1, seen from the designer's side.)*
+
+### 5. `motion:` is used in shipped projects but appears nowhere in the reference docs
+**Source:** `planning/backlog.md` ▸ Queued ▸ Engine/Runtime ("docs/20 has no entry for MotionDef")
+
+Five shipped projects use `motion:` (`particles_demo`, `entity_logic_demo`, `stats_demo`,
+`primitive_world`, `effect_mayhem_demo`), yet `docs/20_data_formats.md` has no entry for it — and
+its timing changed to the fixed 64Hz physics tick, which affects how motion looks on fast
+displays. Designers can only learn it by copying a demo.
 
 ---
 
@@ -247,64 +268,88 @@ rediscovered project after project.
 
 *Lens: frame-time impact, allocation/GC pressure, binary-size trajectory, first-load/first-frame stalls.*
 
-**Binary size check-in:** `pkg/ironhold_web_bg.wasm` = 31 MB, ~64 MB below the 95 MB warn line —
-size is a non-issue for ordinary feature work right now; no item below is size-motivated.
+**Binary size check-in:** `pkg/ironhold_web_bg.wasm` (release build, 2026-09-29) = 32,090,055 bytes
+(~30.6 MiB), ~64 MB below the 95 MB warn line and ~69 MB below GitHub's 100 MB hard limit, and
+already under the 50 MB "optimal" target. Size is not a factor in any item below.
+
+**Previous top-5, status:** none shipped; September went to CLI hardening, the logic consolidation,
+the fixed timestep and action-bar features.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | WASM terrain first-frame stall | **Still open** (`terrain.rs:73` `AsyncComputeTaskPool`, `:108` `block_on(poll_once)`; no `cfg(wasm32)` progressive path) |
+| 2 | Per-frame collection allocations | **Changed — partly gone.** `message_interpreter_system` was deleted by the rules consolidation (its Vec with it); `stats.rs:19` stat-key Vec and `player.rs:453` input HashMap remain. The backlog wording still names the deleted system |
+| 3 | Scene transition material cache | **Still open** (`scene_loader.rs:174-185` clears and rebuilds every catalog material on each `LoadScene`) |
+| 4 | Frozen animation clips evaluated forever | **Still open, now logged** (promoted to backlog 2026-09-14; `animation.rs:366-367` only pauses, never drops the `AnimationGraphHandle`) |
+| 5 | `format!` before the change-detection guard | **Still open** (`stat_display.rs:162/227/438`, `camera.rs:977`) |
+
+**New top-5:**
 
 ### 1. WASM terrain generation first-frame stall
 **Source:** `planning/backlog.md` ▸ Performance
 
-`AsyncComputeTaskPool` degrades to `block_on` on the WASM main thread, causing a 100–500 ms freeze
-on first frame for large heightmaps — no worker-thread offload in a browser build. This is the
-single biggest *first-impression* stall in the repo: it hits every session that loads a terrain
-project, on the main thread, with no progressive fallback. Fixing it protects the moment a player
-forms their opinion of the game's polish.
+On WASM the async compute pool falls back to running on the main thread, so a large heightmap
+freezes the first frame for 100–500 ms. Every session that opens a terrain project hits it; nothing
+else in the repo costs as much at the moment a player forms a first impression, and there is still
+no fallback that builds the terrain gradually.
 
-### 2. Per-frame collection allocations in always-on hot systems
+### 2. Extend pipeline warmup to Text2d / UI / Sprite
+**Source:** `planning/backlog.md` ▸ Performance ("Extend pipeline warmup to Text2d and UI pipelines"); `planning/claude_suggestions.md` (`pipeline_warmup_system` / `Sprite`)
+
+`pipeline_warmup_system` still only queries `With<Mesh3d>` (`lib.rs:449`). On WebGPU pipelines
+compile synchronously on first draw, so the first text, UI or sprite render can stall 100–300 ms.
+More likely in practice than last time: `3rd_person_game_demo` players now carry `Textured` `Sprite`
+bars, so the risk applies to a shipped project, not a hypothetical one.
+
+### 3. Paused/frozen animation clips are fully evaluated forever
+**Source:** `planning/backlog.md` ▸ Performance (promoted 2026-09-14)
+
+`freeze: true` only pauses the clip; bevy_animation 0.18 still samples curves and writes every bone
+`Transform` each frame — about 0.2–0.5 ms/frame for 6 corpses over their 300 s lifetime, and
+`par_iter_mut` is serial on WASM. The cheapest fix on this list (drop `AnimationGraphHandle` once
+the pose is frozen), and the cost grows with every new corpse or prop-freeze pattern.
+
+### 4. Scene transition material cache
 **Source:** `planning/backlog.md` ▸ Performance
 
-`message_interpreter_system` (event Vec rebuilt every frame, unconditionally — the core
-Message→Action pipeline) and `player_movement_system`'s input HashMap allocate fresh collections
-every tick regardless of whether anything happened. Unlike gated cases elsewhere on this list,
-these run on literally every frame for every project, and WASM's allocator/GC pressure is
-measurably worse than native for this pattern — steady-state tax paid by every scene.
+Every `LoadScene` throws away and rebuilds every material in the catalog — an estimated 50–200 ms
+hitch each time a player goes through a portal, growing with catalog size, which is the wrong
+direction for a data-driven engine meant to grow.
 
-### 3. Scene transition material cache
-**Source:** `planning/backlog.md` ▸ Performance
+### 5. Remaining always-on per-frame allocations (stat key Vec + `format!` before guard)
+**Source:** `planning/backlog.md` ▸ Performance (two entries: per-frame collections; `format!` before change-detection guard)
 
-`scene_loader` rebuilds *every* material in the asset catalog on each `LoadScene`, including ones
-already built for the scene just left — an estimated 50–200 ms hitch per transition on large
-projects, visible every time a player walks through a portal. The cost scales with catalog size, so
-it gets worse as designers add more asset variety — exactly the wrong performance curve for a
-data-driven engine meant to grow.
-
-### 4. Paused/frozen animation clips are fully evaluated forever
-**Source:** self-described — not yet logged (`.claude/agent-memory/wasm-perf-reviewer/project_animation_hot_path.md`)
-
-bevy_animation 0.18 keeps sampling curves and writing bone `Transform`s for a `paused` clip every
-frame — `freeze: true` stops event triggers, not per-frame work. Measured worst case ~0.2–0.5
-ms/frame for 6 coexisting frozen corpses over a 300s despawn timer, and `par_iter_mut` is
-effectively serial on WASM so there's no multi-core hiding this cost. The fix is already identified
-and cheap (drop `AnimationGraphHandle` once frozen) — it just hasn't been promoted or implemented,
-and it's a continuous drain that worsens as more corpse/prop-freeze patterns are authored.
-
-### 5. Per-frame `format!` allocation before the change-detection guard (stat displays + target HUD)
-**Source:** `planning/backlog.md` ▸ Performance (promoted 2026-09-03)
-
-`stat_display.rs`'s update systems and `camera.rs`'s `target_hud_update_system` all compute
-`format!(...)` unconditionally before the guard that gates the actual write — the allocation
-happens even for hidden/unchanged widgets, up to 4x'd in split-screen and potentially ~200
-allocations/frame with wave-spawned enemies. Smaller in magnitude than items 1–4, but a textbook
-case of trivially-avoidable WASM allocator pressure.
+`stat_modifier_system` clones every stat key into a new Vec for every entity every frame, and the
+stat-display and target-HUD update systems allocate a `format!` even when the guard then skips the
+write (×4 in split-screen). Each is small, together they are a constant allocator cost in every
+scene, and a `Local` buffer or computing the string after the guard removes them. While doing this,
+update the stale `message_interpreter_system` reference in the backlog entry.
 
 ---
 
 ## Cross-stakeholder signal
 
-One item was independently placed in the **top 2** by three of the five stakeholders — the
-strongest consensus signal in this snapshot:
+Three items were independently placed in the top 5 by **two** stakeholders each, and one more is
+the root of a new bug — the strongest consensus in this snapshot:
 
-- **`Action` enum needs `#[serde(deny_unknown_fields)]`** — ranked #2 by system-architect
-  (schema-as-API-surface integrity), #2 by alignment-reviewer (systemic silent authoring-path
-  divergence), and #1 by ux-gamedesigner-reviewer (worst-case designer debugging experience). It's
-  already a logged `planning/backlog.md` ▸ Queued ▸ Engine/Runtime item — this snapshot is a strong
-  signal to pull it forward rather than leave it queued behind newer work.
+- **Real pause** — Alignment-Reviewer #2 (a missing engine primitive no RON can work around) and
+  UX-Gamedesigner-Reviewer #1 (the docs teach the non-pausing overlay as the standard pattern). Already
+  a logged `planning/backlog.md` ▸ Queued ▸ Engine/Runtime item with `planning/features/real_pause.md`.
+- **Loader failures must be visible, not infinite loading screens** — System-Architect #4 and
+  UX-Gamedesigner-Reviewer #2. Logged as a Bug (stale `rules_path` hang) plus a Queued retry/timeout item.
+- **`{target}` silently becomes `""` for actions outside `action_needs_target`'s allowlist** —
+  Alignment-Reviewer #1 and UX-Gamedesigner-Reviewer #4, the same defect seen from the engine side and
+  from the designer side. Logged as a Bug; the suggested fix is deriving the check from `rewrite_target`.
+- **UI pointer capture** — System-Architect #3, rooted in the new Bug logged by the mouse-click
+  playtest; likely to be needed before draggable windows, AoE placement and the Ocean demo's slider panel.
+
+The first edition's consensus item (`Action` `deny_unknown_fields`) shipped on 2026-09-04.
+
+## Also worth flagging
+
+- **Planning hygiene:** `planning/backlog.md` `## Active` still lists the `rules.ron` consolidation
+  bullet even though its Done entry exists (System-Architect).
+- **Sequencing:** the Ocean Simulation Demo batch touches physics (buoyancy), lighting (Runtime
+  environment control actions, overlapping Day/night) and pointer input (slider panel) — the
+  determinism harness, the Day/night plan and a `UiPointerCaptured` primitive are all best settled
+  before it starts.
