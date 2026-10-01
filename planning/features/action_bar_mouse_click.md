@@ -172,6 +172,15 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
 - **Inspector gating (proposed by plan-review, Frank to confirm):** clicks gated on
   `InspectorEnabled`; keyboard presses ungated.
 
+## Playtest results (Frank, 2026-10-01, dev WASM build of `534aed6`)
+- `3rd_person_game_demo` basic checks (click fires, cooldown, repeat click, target kept, empty-world deselect, key+click once): **pass**.
+- Orbit/strafe check in a default-bindings project: **fails** (camera orbits / character strafes while holding LMB on a slot) — pre-existing, not introduced here; split into its own backlog bug (`## Bugs`, "Left mouse button on any UI node also orbits the camera / strafes the character") per the plan's Decisions.
+- Click on bar padding/gaps: acceptable (world target behavior as expected).
+- Overlay/window over the bar: not practical to test (windows are not movable by the player).
+- Inspector gate: **not yet verified** (web toggle is `` ` ``/Backquote, not F9 — F9 is the collider wireframes).
+- `local_coop_demo` rooms with per-player bars: **pass**.
+- Touch: **untested** (no device) — docs already say touch is unverified.
+
 ## Acceptance criteria
 - Given a slot bound to `key: "1"`, when the player left-clicks that slot, then its `do_actions`
   run exactly as if `1` had been pressed, including cooldown start and the `action_bar.*` events.
