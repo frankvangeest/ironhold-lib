@@ -78,10 +78,15 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
 7. **Determinism / replay (Beta 0.5):** do **not** record `Interaction` for replay/netcode — it is
    derived from layout and cursor position, not a stable input. The natural capture point is the
    existing device-agnostic intent layer (`intent.slot.{key}:{player}`). Nothing to build now.
-8. **Inspector gating:** with the `inspector` feature on and `InspectorEnabled` true, egui windows
-   over the HUD don't block `ui_focus_system`, so clicking an inspector pane over the bar would
-   fire a skill. Gate **clicks only** on `InspectorEnabled` (as `button_system` and the
-   camera/input systems already do); keyboard slot presses stay ungated as today.
+8. **Inspector gating:** with the `inspector` feature on and `InspectorEnabled` true, bevy_egui and
+   Bevy's `ui_focus_system` both read the same raw cursor input with no arbitration, so a click
+   reaches both stacks whichever is drawn on top (the playtest found the inspector window renders
+   *behind* the HUD, so a slot click also hits the inspector row behind it). Gate **clicks only**
+   on `InspectorEnabled`, exactly like `button_system`/`icon_button_click_system` and the
+   camera/input systems already do, so a debug-tool click never changes game state; keyboard
+   slot presses stay ungated as today (egui only takes keys when a text field has focus).
+   Architect-confirmed (2026-10-01): keep the gate; do not gate on egui `wants_pointer` (gains
+   nothing here and would differ from the five other gated systems).
 9. **Deliberate parity notes (record in docs):** like keyboard presses, clicks have no
    `panels_open`/pause gate; they are naturally blocked under a `FocusPolicy::Block` panel root or
    overlay backdrop. Clicks in split-screen route by the bar's `owner_player`, whereas a *world*
@@ -154,7 +159,8 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
     per-system guards. Record results in the playtest notes.
 - Click empty bar padding/gaps between slots: note whether the world target clears (Approach step 10).
 - Open the pause overlay / inventory / dialogue over the bar and click where a slot is: the slot must not fire.
-- With the inspector enabled (`--all-features`), click an egui pane over the bar: no skill fires.
+- With the inspector enabled (backtick on web), click a slot: no skill fires (the inspector row
+  behind it may react, as with any button).
 - `local_coop_demo` rooms 9 and 10 (two bars each) alongside room3.
 - Web build: repeat on Chrome; if touch hardware is available, tap an enemy then tap a `{target}` slot
   (`click_select_system` reads the mouse button — confirm before documenting touch support).
@@ -169,15 +175,17 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
   `camera_orbit_system` and `input_translator_system` have no UI-hover guard. Verify in a
   default-bindings project (see Playtest checklist); if it bites, fix in this feature or log a
   separate backlog item before merging (decide at playtest).
-- **Inspector gating (proposed by plan-review, Frank to confirm):** clicks gated on
-  `InspectorEnabled`; keyboard presses ungated.
+- **Inspector gating:** clicks gated on `InspectorEnabled`; keyboard presses ungated. Verified by
+  playtest 2026-10-01 and confirmed by the system-architect (see Approach step 8).
 
 ## Playtest results (Frank, 2026-10-01, dev WASM build of `534aed6`)
 - `3rd_person_game_demo` basic checks (click fires, cooldown, repeat click, target kept, empty-world deselect, key+click once): **pass**.
 - Orbit/strafe check in a default-bindings project: **fails** (camera orbits / character strafes while holding LMB on a slot) — pre-existing, not introduced here; split into its own backlog bug (`## Bugs`, "Left mouse button on any UI node also orbits the camera / strafes the character") per the plan's Decisions.
 - Click on bar padding/gaps: acceptable (world target behavior as expected).
 - Overlay/window over the bar: not practical to test (windows are not movable by the player).
-- Inspector gate: **not yet verified** (web toggle is `` ` ``/Backquote, not F9 — F9 is the collider wireframes).
+- Inspector gate: **verified** (web toggle is `` ` ``/Backquote). The inspector window renders behind the
+  HUD, so a slot click also reaches the inspector row behind it — pre-existing for every Bevy UI button,
+  not caused by this feature; logged as a separate follow-up in `claude_suggestions.md`.
 - `local_coop_demo` rooms with per-player bars: **pass**.
 - Touch: **untested** (no device) — docs already say touch is unverified.
 

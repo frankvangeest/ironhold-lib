@@ -148,7 +148,8 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// so a click acts for the slot's own `owner_player` regardless of which split-screen viewport the
 /// cursor is in. `Interaction` is `Option`al so a bare `ActionSlotUi` (no `Button`, as in tests)
 /// still matches the query. Clicks — not key presses — are ignored while the inspector is enabled,
-/// since egui windows over the HUD don't block Bevy's UI focus. Click, key and button collapse into
+/// since egui and Bevy UI both receive every click with no arbitration (same gate as
+/// `button_system`). Click, key and button collapse into
 /// one "fired" decision per slot, so simultaneous sources activate it exactly once.
 ///
 /// Each fired slot resolves its **owning player** — `owner_player: Some(n)` matches whichever
