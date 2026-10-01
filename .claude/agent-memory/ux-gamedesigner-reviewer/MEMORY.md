@@ -2,6 +2,7 @@
 
 - [Action bar click activation](project_action_bar_click_activation.md) — slots clickable, owner_player not viewport; 4 key-only wording hotspots to grep on slot-input changes
 
+- [Same-frame event order](project_same_frame_event_order.md) — real order: UI > last-frame carry-over > FixedUpdate > Emit chain > Scene; D3 fixes only the Emit slice
 - [FSM designer traps](project_fsm_designer_traps.md) — `on` x3; initial_state entry skip; transitions carry no actions; struct-variant actions miswritten; stale old-syntax grep recipe
 
 - [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 6 places a new entity.* event/InteractableDef field must land; STATUS.md event list + docs/60 check list lag most
