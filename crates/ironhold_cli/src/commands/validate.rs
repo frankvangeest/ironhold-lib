@@ -1608,7 +1608,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     None => errors.push(CrossFileError {
                         source_file: scene_path.clone(),
                         message: format!(
-                            "ActionBar {:?}: slot {:?} has an unrecognised key {:?} — it will never fire",
+                            "ActionBar {:?}: slot {:?} has an unrecognised key {:?} — it will never fire from the keyboard (clicking the slot still works)",
                             bar.id, slot.key, slot.key
                         ),
                         error_type: "invalid_key",
@@ -1620,7 +1620,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                                 errors.push(CrossFileError {
                                     source_file: scene_path.clone(),
                                     message: format!(
-                                        "ActionBar {:?}: slots {:?} and {:?} both resolve to {:?} — only {:?} will fire on press",
+                                        "ActionBar {:?}: slots {:?} and {:?} both resolve to {:?} — they share one cooldown and one set of event names (first-listed: {:?}); give each a unique key",
                                         bar.id, prev_key, slot.key, kc, prev_key
                                     ),
                                     error_type: "duplicate_key",

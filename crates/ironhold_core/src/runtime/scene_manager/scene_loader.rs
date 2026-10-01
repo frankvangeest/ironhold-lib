@@ -2201,13 +2201,13 @@ fn spawn_ui_element_node(
                         let resolved_key = InputMap::parse_key(&key);
                         match resolved_key {
                             None => warn!(
-                                "ActionBar '{}': slot '{}' has an unrecognised key {:?} — it will never fire",
+                                "ActionBar '{}': slot '{}' has an unrecognised key {:?} — it will never fire from the keyboard (clicking the slot still works)",
                                 bar.id, key, key
                             ),
                             Some(kc) => {
                                 if let Some(prev) = seen_resolved_keys.insert(kc, key.clone()) {
                                     warn!(
-                                        "ActionBar '{}': slots '{}' and '{}' both resolve to {:?} — only '{}' will fire on press",
+                                        "ActionBar '{}': slots '{}' and '{}' both resolve to {:?} — they share one cooldown and one set of event names (first-listed: '{}'); give each a unique key",
                                         bar.id, prev, key, kc, prev
                                     );
                                 }

@@ -414,11 +414,11 @@
     )),
 
     // ── Action bar ─────────────────────────────────────────────────────────────
-    // Press 1 to attack the current target (select with LMB or T).
-    // Press 2 for a heavy strike that deals double damage (costs mana, longer cooldown).
+    // Press (or click) 1 to attack the current target (select with LMB or T).
+    // Press (or click) 2 for a heavy strike that deals double damage (costs mana, longer cooldown).
     // {target} in do_actions is substituted with the current target's spawn ID at runtime.
-    // If no target is selected the substitution becomes the literal "{target}" which
-    // resolves to no matching entity — the stat modify no-ops silently.
+    // If no target is selected the slot does not fire: the action bar emits
+    // action_bar.no_target:{key} instead (no cooldown, no cost).
     ActionBar((
       id: "skill_bar",
       position: (416.0, 580.0),
