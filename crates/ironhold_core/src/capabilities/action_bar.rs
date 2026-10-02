@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::input::gamepad::{Gamepad, GamepadButton};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use crate::schema::actions::Action;
 use crate::schema::scene_v2::SlotCost;
@@ -17,8 +17,12 @@ use crate::capabilities::targeting::is_primary_player;
 
 /// Tracks remaining cooldown (secs) and total cooldown per slot key.
 /// Entries are removed when remaining reaches 0.
+/// A `BTreeMap` (sorted by slot key), not a `HashMap`: std hashers are randomly seeded, and this
+/// map is iterated (`cooldown_tick_system`'s `retain`), so a hash map would give a different
+/// iteration order on every run / platform (determinism: `planning/investigations/
+/// hashmap_iteration_order_audit.md`).
 #[derive(Resource, Default)]
-pub struct CooldownMap(pub HashMap<String, (f32, f32)>); // (remaining, total)
+pub struct CooldownMap(pub BTreeMap<String, (f32, f32)>); // (remaining, total)
 
 /// The entity (spawn ID) currently targeted by the player.
 /// Populated by the targeting system when it ships. Defaults to `None`.
@@ -32,8 +36,13 @@ pub struct CurrentTarget(pub Option<String>);
 /// Cooldown is committed by `flush_pending_intent_system` only on the commit path,
 /// so a suppressed intent never starts the cooldown timer.
 /// Cleared each frame by `flush_pending_intent_system`.
+///
+/// A `BTreeMap`, not a `HashMap`: `flush_pending_intent_system` drains it into `ActionQueue`, so
+/// the iteration order IS the push order of every simultaneously-fired slot's actions. Sorted by
+/// slot key it is identical on every run and platform (a hash map gave a random order: with a heal
+/// `+50` and a sacrifice `-60` fired in one frame the clamped result depended on the hasher seed).
 #[derive(Resource, Default)]
-pub struct PendingIntentActions(pub HashMap<String, (Vec<Action>, Option<f32>)>);
+pub struct PendingIntentActions(pub BTreeMap<String, (Vec<Action>, Option<f32>)>);
 
 /// Slot keys whose `intent.slot.*` event was matched by a rule this frame.
 /// Written by the interpreter systems; read by `flush_pending_intent_system` to suppress
@@ -178,6 +187,8 @@ pub fn action_bar_input_system(
     #[cfg(not(feature = "inspector"))]
     let clicks_enabled = true;
 
+    let mut events: Vec<(&str, GameEvent)> = Vec::new();
+
     for (slot, interaction) in slots.iter() {
         // Keyboard and mouse are shared hardware: both are "device-independent" fires, gated
         // before the owning player is resolved (the same ordering the keyboard-only path always
@@ -198,9 +209,9 @@ pub fn action_bar_input_system(
         // can't be checked yet: `gamepad_fired` needs the owning player's own `gamepad_index`,
         // resolved below.
         if direct_fired && cooldowns.0.contains_key(key_str) {
-            game_events.write(GameEvent::Trigger(
+            events.push((key_str, GameEvent::Trigger(
                 format!("action_bar.on_cooldown:{}", key_str),
-            ));
+            )));
             continue;
         }
 
@@ -220,9 +231,9 @@ pub fn action_bar_input_system(
         // with no keyboard press or click this frame. `direct_fired` presses were already handled (and
         // returned) above, so this can't double-emit.
         if !direct_fired && cooldowns.0.contains_key(key_str) {
-            game_events.write(GameEvent::Trigger(
+            events.push((key_str, GameEvent::Trigger(
                 format!("action_bar.on_cooldown:{}", key_str),
-            ));
+            )));
             continue;
         }
 
@@ -235,9 +246,9 @@ pub fn action_bar_input_system(
         });
         if let (Some(cost), Some((current, _))) = (&slot.cost, &cost_resolution) {
             if *current < cost.amount {
-                game_events.write(GameEvent::Trigger(
+                events.push((key_str, GameEvent::Trigger(
                     format!("action_bar.insufficient_resource:{}", key_str),
-                ));
+                )));
                 continue;
             }
         }
@@ -245,9 +256,9 @@ pub fn action_bar_input_system(
         // ── {target} check ────────────────────────────────────────────────────
         let needs_target = slot.do_actions.iter().any(action_needs_target);
         if needs_target && player_target.0.is_none() {
-            game_events.write(GameEvent::Trigger(
+            events.push((key_str, GameEvent::Trigger(
                 format!("action_bar.no_target:{}", key_str),
-            ));
+            )));
             continue;
         }
 
@@ -256,9 +267,9 @@ pub fn action_bar_input_system(
 
         // Emit the intent event. The interpreter checks for a matching rule this frame;
         // if one matches, flush_pending_intent_system suppresses the slot's built-in do_actions.
-        game_events.write(GameEvent::Trigger(
+        events.push((key_str, GameEvent::Trigger(
             format!("intent.slot.{}:{}", key_str, spawn_id.0),
-        ));
+        )));
 
         // Store pending actions (target-rewritten) + cooldown. Flushed to ActionQueue by
         // flush_pending_intent_system unless a rule handled the intent.
@@ -280,9 +291,19 @@ pub fn action_bar_input_system(
         // action_bar.pressed fires immediately (before interpreter) — notification that the key
         // was pressed and passed all gate checks. Use for telemetry or UI feedback that should
         // fire regardless of whether a rule later cancels the intent.
-        game_events.write(GameEvent::Trigger(
+        events.push((key_str, GameEvent::Trigger(
             format!("action_bar.pressed:{}", key_str),
-        ));
+        )));
+    }
+
+    // Emit in slot-key order, not query order: `slots.iter()` follows entity/archetype order, which
+    // is not stable across machines or runs, and the interpreters read these events in write order.
+    // Buffered (a `Vec` only allocates once an event is pushed, so an idle frame costs nothing) and
+    // stable-sorted so one slot's own events keep their relative order. Two bars sharing a slot
+    // key (already a validate error) tie and keep query order.
+    events.sort_by(|a, b| a.0.cmp(b.0));
+    for (_, event) in events {
+        game_events.write(event);
     }
 }
 
@@ -339,7 +360,8 @@ pub fn flush_pending_intent_system(
     mut cooldowns: ResMut<CooldownMap>,
     mut game_events: MessageWriter<GameEvent>,
 ) {
-    for (slot_key, (actions, cooldown)) in pending.0.drain() {
+    // `take` (not `drain`, which `BTreeMap` lacks): iterate in sorted slot-key order, leave empty.
+    for (slot_key, (actions, cooldown)) in std::mem::take(&mut pending.0) {
         if !handled.0.contains(&slot_key) {
             for action in actions {
                 action_queue.push(action);

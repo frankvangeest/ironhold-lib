@@ -56,7 +56,11 @@ pub struct ActiveModifier {
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct StatCatalog {
     pub schema_version: u32,
-    pub stats: HashMap<String, StatDef>,
+    /// Declaration order is meaningful: `LoadedStats` keeps it, and same-frame stat threshold /
+    /// modifier-expiry events fire in this order (an `IndexMap`, not a `HashMap`, whose iteration
+    /// order is randomly seeded). Reordering entries in `stats.ron` can change which same-frame
+    /// event the FSM sees first.
+    pub stats: IndexMap<String, StatDef>,
     #[serde(default)]
     pub modifiers: HashMap<String, ModifierDef>,
 }
@@ -270,8 +274,14 @@ pub struct LoadedModifiers(pub HashMap<String, ModifierDef>);
 
 /// Live stat state for the current project. Populated at project load time from `stats.ron`.
 /// Stats persist across scene transitions (the resource is not cleared on scene load).
+///
+/// An `IndexMap` (declaration order of `stats.ron`, like `StatMap`), not a `HashMap`:
+/// `stat_modifier_system`/`stat_threshold_system` iterate it and write `GameEvent`s in iteration
+/// order, and the FSM takes the first matching transition per event, so a randomly seeded hash
+/// order could change the final `LogicState`. Never `remove` from it with `swap_remove` (use
+/// `shift_remove`) — nothing removes entries today.
 #[derive(Resource, Default)]
-pub struct LoadedStats(pub HashMap<String, LiveStat>);
+pub struct LoadedStats(pub IndexMap<String, LiveStat>);
 
 /// Stat shape declared on a prefab. Every spawned instance gets an independent `LiveStat`
 /// in its `StatMap` component. `{self}` in `emit` strings is replaced with the entity's
@@ -411,7 +421,7 @@ mod tests {
     fn stat_catalog_validate_rejects_bad_bounds() {
         let mut catalog = StatCatalog {
             schema_version: 1,
-            stats: HashMap::new(),
+            stats: IndexMap::new(),
             modifiers: HashMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {
@@ -430,7 +440,7 @@ mod tests {
     fn stat_catalog_validate_rejects_base_out_of_range() {
         let mut catalog = StatCatalog {
             schema_version: 1,
-            stats: HashMap::new(),
+            stats: IndexMap::new(),
             modifiers: HashMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {

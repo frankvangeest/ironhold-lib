@@ -34,6 +34,11 @@ const GAMEPAD_STABLE_CONNECT_SECS: f32 = 0.5;
 /// Translates global key presses into UI messages using the project's `global_key_bindings`.
 /// Only fires in `InGame` state. Runs in `Update` (not `FixedUpdate`) so it
 /// responds every rendered frame regardless of physics tick rate.
+///
+/// `LoadedKeyBindings` is a `BTreeMap`, so when two bound keys are pressed in the same frame their
+/// `UiEvent`s are written in **key-name order** (e.g. `"Escape"` before `"KeyI"`) on every run and
+/// platform. The FSM reads UI events in write order and takes the first matching transition, so a
+/// randomly ordered map could change the outcome.
 pub fn global_input_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     state: Res<State<AppState>>,
@@ -82,8 +87,8 @@ pub fn global_input_system(
 /// own `Action::JoinPlayer` with no pad bound — a permanently half-controlled player, since v1 has
 /// no hot-leave to undo it). The loop stops (`break` out to the pad loop) the instant the first
 /// match is found this frame — deterministic: lowest `Entity::index()`-sorted pad first, and
-/// among that pad's own bindings, `HashMap` iteration order (irrelevant in practice: only matters
-/// if one pad has two different bound buttons pressed the same frame). A second pad's press, or a
+/// among that pad's own bindings, button-name order (`LoadedGamepadBindings` is a `BTreeMap`; only
+/// matters if one pad has two different bound buttons pressed the same frame). A second pad's press, or a
 /// second *different* trigger on any pad, this same frame is simply not serviced — not queued, not
 /// delayed, just dropped for this frame; the player presses again next frame.
 pub fn unclaimed_gamepad_trigger_system(

@@ -1019,6 +1019,10 @@ never-detaching slope, `jump_exit` never fires at all (no real edge ever happens
 `jump_enter` re-arms every pogo cycle, which can visibly pin the takeoff animation for as long as
 the player holds jump uphill.
 
+## Deterministic iteration order on gameplay paths
+
+Rust's std `HashMap`/`HashSet` use a **seeded hasher** (randomly on native, re-seeded per map instance and per run; on wasm32 the seed is derived from addresses, so it depends on allocation history rather than being random — fragile, and different from native), so iterating one gives a different order across runs and platforms. Any gameplay path whose outcome depends on that order is a lockstep/replay divergence source *and* a single-player nondeterminism bug (`planning/investigations/hashmap_iteration_order_audit.md`). D1 fixed the four sites where it decided an outcome: `PendingIntentActions` and `CooldownMap` are `BTreeMap`s (slot-key order; `flush_pending_intent_system` drains with `std::mem::take`), `LoadedStats` and `StatCatalog.stats` are `IndexMap`s (declaration order of `stats.ron`, like `StatMap` — never `swap_remove` from them), and `LoadedKeyBindings`/`ProjectKeyBindings`/`LoadedGamepadBindings`/`ProjectGamepadBindings` are `BTreeMap`s (key/button-name order). `action_bar_input_system` also buffers its `GameEvent`s and writes them stable-sorted by slot key, because `slots.iter()` follows entity/archetype order. Rules for new code: a map that is *iterated* on a gameplay path must be a `BTreeMap`, an `IndexMap` (insertion order is part of the contract) or a sorted `Vec`; a `HashMap` is only for keyed lookup; and never use `Entity` index/order as a tie-break inside simulation logic. A source-scan guard for this is the queued D2 item. See `tests/same_frame_order_tests.rs`.
+
 ## Terrain generation is async
 Terrain mesh generation is compute-heavy. Always use Bevy's `AsyncComputeTaskPool` and poll `Task` components — never block the main thread.
 

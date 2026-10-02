@@ -51,25 +51,25 @@ pub struct LogicState(pub String);
 /// Used by `spawn_scene_v2` to rebuild `LoadedKeyBindings` as the base layer each time
 /// a new scene loads, so per-scene overrides don't bleed across scene transitions.
 #[derive(Resource, Default, Clone)]
-pub struct ProjectKeyBindings(pub HashMap<String, String>);
+pub struct ProjectKeyBindings(pub std::collections::BTreeMap<String, String>);
 
 /// Active key bindings used by `global_input_system`.
 /// On each Replace-mode scene load this is rebuilt as: project bindings + scene overrides.
 /// Maps key name strings (e.g. "Escape") to event trigger names (e.g. "toggle_pause").
 #[derive(Resource, Default, Clone)]
-pub struct LoadedKeyBindings(pub HashMap<String, String>);
+pub struct LoadedKeyBindings(pub std::collections::BTreeMap<String, String>);
 
 /// Project-level gamepad bindings, set once at project load and never modified.
 /// Mirrors `ProjectKeyBindings` exactly — see that type's doc comment.
 #[derive(Resource, Default, Clone)]
-pub struct ProjectGamepadBindings(pub HashMap<String, String>);
+pub struct ProjectGamepadBindings(pub std::collections::BTreeMap<String, String>);
 
 /// Active gamepad bindings used by the unclaimed-gamepad join-detection system
 /// (`runtime::input::unclaimed_gamepad_trigger_system`). Mirrors `LoadedKeyBindings` exactly:
 /// rebuilt on each Replace-mode scene load as project bindings + scene overrides.
 /// Maps gamepad button name strings (e.g. "South") to event trigger names (e.g. "join").
 #[derive(Resource, Default, Clone)]
-pub struct LoadedGamepadBindings(pub HashMap<String, String>);
+pub struct LoadedGamepadBindings(pub std::collections::BTreeMap<String, String>);
 
 /// Carries which unclaimed gamepad (if any) triggered a `LoadedGamepadBindings` match this
 /// frame, so `Action::JoinPlayer`'s executor can bind that specific pad to the new player's
