@@ -45,7 +45,7 @@ pub struct LoadedInventoryUi {
     pub panel_icon_sheet: Option<String>,
     /// All icon atlases keyed by catalog texture key (panel default + per-item overrides).
     /// Pre-loaded at panel spawn time so no runtime loading is needed on item pickup.
-    pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>,
+    pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>, // det: lookup-only
     /// Count of currently open panels (inventory/shop/container). Incremented by each Open
     /// action, decremented by each Close — so closing one panel while another is still open
     /// does not re-enable world interactions. Read by interactable_system, collectible_system,
@@ -75,7 +75,7 @@ pub struct LoadedContainerUi {
     /// Catalog key of the panel's default icon sheet.
     pub panel_icon_sheet: Option<String>,
     /// Pre-loaded icon atlases for the container panel.
-    pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>,
+    pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>, // det: lookup-only
 }
 
 // ─── Components ───────────────────────────────────────────────────────────────

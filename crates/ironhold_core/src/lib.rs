@@ -69,7 +69,7 @@ pub struct DebugState {
 /// Keys are arbitrary strings; any action executor can write here.
 /// UI labels with `bind: Some("key")` read from this map every frame.
 #[derive(Resource, Default)]
-pub struct GameVariables(pub std::collections::HashMap<String, String>);
+pub struct GameVariables(pub std::collections::HashMap<String, String>); // det: lookup-only
 
 /// Placed on a UI `Text` entity by `scene_loader` when the label definition has a
 /// `bind` field. Every frame `update_dynamic_labels_system` writes the current value

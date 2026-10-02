@@ -27,7 +27,7 @@ use bevy::shader::{Shader, ShaderRef};
 use bevy::asset::{uuid_handle, RenderAssetUsages};
 use bevy_mesh::MeshVertexBufferLayoutRef;
 use bevy::camera::visibility::NoFrustumCulling;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use crate::runtime::scene_manager::LevelEntity;
 use crate::runtime::messages::SceneEvent;
 use crate::schema::catalog::VelocityCurve;
@@ -130,7 +130,7 @@ struct PoolGroup {
 }
 
 /// Identifies a render group — same key → same draw call.
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum GroupKey {
     Additive { texture_path: String },
     Blend    { texture_path: String },
@@ -142,9 +142,9 @@ pub enum GroupKey {
 /// Group entity IDs are cleared on SceneEvent::Unloading (entities are LevelEntity, auto-despawned).
 #[derive(Resource, Default)]
 pub struct ParticlePoolGroups {
-    groups: HashMap<GroupKey, PoolGroup>,
-    std_mats: HashMap<(bool, String), Handle<StandardMaterial>>, // (is_additive, texture_path)
-    flame_mats: HashMap<(u32, u32, String), Handle<PoolFlameMaterial>>,
+    groups: HashMap<GroupKey, PoolGroup>, // det: order-independent
+    std_mats: HashMap<(bool, String), Handle<StandardMaterial>>, // (is_additive, texture_path) // det: lookup-only
+    flame_mats: HashMap<(u32, u32, String), Handle<PoolFlameMaterial>>, // det: lookup-only
 }
 
 // ─── Custom flame material ────────────────────────────────────────────────────
@@ -316,7 +316,7 @@ pub fn rebuild_pool_meshes_system(
         .unwrap_or((Vec3::X, Vec3::Y));
 
     // Bucket alive particles by group key.
-    let mut buckets: HashMap<GroupKey, Vec<usize>> = HashMap::new();
+    let mut buckets: BTreeMap<GroupKey, Vec<usize>> = BTreeMap::new();
     for (idx, p) in pool.particles.iter().enumerate() {
         if p.is_alive() {
             buckets.entry(p.group_key()).or_default().push(idx);

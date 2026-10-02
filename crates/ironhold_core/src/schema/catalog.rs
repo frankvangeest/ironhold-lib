@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use super::material::MaterialDef;
 use super::player::{CameraConfig, InputMap};
 
@@ -137,22 +137,22 @@ pub const MAX_PARTICLES_PER_EFFECT: u32 = 256;
 pub struct AssetCatalog {
     pub schema_version: u32,
     #[serde(default)]
-    pub models: HashMap<String, ModelCatalogEntry>,
+    pub models: BTreeMap<String, ModelCatalogEntry>,
     #[serde(default)]
-    pub textures: HashMap<String, String>,
+    pub textures: BTreeMap<String, String>,
     #[serde(default)]
-    pub audio: HashMap<String, AudioEntry>,
+    pub audio: BTreeMap<String, AudioEntry>,
     #[serde(default)]
-    pub materials: HashMap<String, MaterialDef>,
+    pub materials: BTreeMap<String, MaterialDef>,
     /// Particle burst effect definitions. Keyed by a designer-chosen name (e.g. `"hit_spark"`).
     /// Referenced by `Action::SpawnEffect { key: "hit_spark", ... }` in rules and behavior files.
     #[serde(default)]
-    pub effects: HashMap<String, EffectDef>,
+    pub effects: BTreeMap<String, EffectDef>,
     /// Ground decal texture paths. Keyed by a designer-chosen name (e.g. `"aoe_fire_circle"`).
     /// Referenced by `Action::ProjectDecal { key: "aoe_fire_circle", ... }` in rules and behavior files.
     /// Values are asset-relative paths to the texture file (e.g. `"shared/textures/decals/ring_thick.png"`).
     #[serde(default)]
-    pub decals: HashMap<String, String>,
+    pub decals: BTreeMap<String, String>,
 }
 
 impl AssetCatalog {
@@ -216,12 +216,12 @@ impl Default for AssetCatalog {
     fn default() -> Self {
         Self {
             schema_version: ASSET_CATALOG_SCHEMA_VERSION,
-            models: HashMap::new(),
-            textures: HashMap::new(),
-            audio: HashMap::new(),
-            materials: HashMap::new(),
-            effects: HashMap::new(),
-            decals: HashMap::new(),
+            models: BTreeMap::new(),
+            textures: BTreeMap::new(),
+            audio: BTreeMap::new(),
+            materials: BTreeMap::new(),
+            effects: BTreeMap::new(),
+            decals: BTreeMap::new(),
         }
     }
 }
@@ -622,7 +622,7 @@ fn default_audio_volume() -> f32 { 1.0 }
 pub struct PrefabCatalog {
     pub schema_version: u32,
     #[serde(default)]
-    pub prefabs: HashMap<String, PrefabDef>,
+    pub prefabs: BTreeMap<String, PrefabDef>,
 }
 
 impl PrefabCatalog {
@@ -698,10 +698,10 @@ impl PrefabCatalog {
             }
         }
         // Cycle detection — DFS to find circular nested-prefab references.
-        let mut visited: HashSet<String> = HashSet::new();
+        let mut visited: HashSet<String> = HashSet::new(); // det: lookup-only
         for key in self.prefabs.keys() {
             if !visited.contains(key.as_str()) {
-                let mut visiting: HashSet<String> = HashSet::new();
+                let mut visiting: HashSet<String> = HashSet::new(); // det: lookup-only
                 if prefab_has_cycle(key, &self.prefabs, &mut visiting, &mut visited) {
                     return Err(format!(
                         "Circular nested-prefab reference detected (cycle includes \"{}\")",
@@ -718,9 +718,9 @@ impl PrefabCatalog {
 /// `visiting` = keys currently on the call stack (grey); `visited` = fully explored (black).
 fn prefab_has_cycle(
     key: &str,
-    prefabs: &HashMap<String, PrefabDef>,
-    visiting: &mut HashSet<String>,
-    visited: &mut HashSet<String>,
+    prefabs: &BTreeMap<String, PrefabDef>,
+    visiting: &mut HashSet<String>, // det: lookup-only
+    visited: &mut HashSet<String>, // det: lookup-only
 ) -> bool {
     if visiting.contains(key) { return true; }
     if visited.contains(key)  { return false; }
@@ -743,7 +743,7 @@ impl Default for PrefabCatalog {
     fn default() -> Self {
         Self {
             schema_version: PREFAB_CATALOG_SCHEMA_VERSION,
-            prefabs: HashMap::new(),
+            prefabs: BTreeMap::new(),
         }
     }
 }
@@ -1394,7 +1394,7 @@ pub struct PrefabComponents {
     /// Used by systems to look up what sound to play for a given event.
     /// Example: `{ "collect": "collect_coin", "jump": "jump" }`
     #[serde(default)]
-    pub sounds: HashMap<String, String>,
+    pub sounds: HashMap<String, String>, // det: lookup-only
     /// NPC behaviour definition. When set, the runtime attaches an `NpcAgent`
     /// component and a dynamic physics body to the spawned entity.
     #[serde(default)]

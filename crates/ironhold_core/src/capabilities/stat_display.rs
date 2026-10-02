@@ -29,7 +29,7 @@ pub fn stat_widget_cleanup_system(
     mut removed: RemovedComponents<SpawnId>,
     widgets: Query<(Entity, &WorldLabel)>,
 ) {
-    let removed_set: HashSet<Entity> = removed.read().collect();
+    let removed_set: HashSet<Entity> = removed.read().collect(); // det: lookup-only
     if removed_set.is_empty() { return; }
     for (widget_entity, world_label) in widgets.iter() {
         if let Some(tracked) = world_label.tracked_entity {

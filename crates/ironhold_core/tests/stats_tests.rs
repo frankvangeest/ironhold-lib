@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use ironhold_core::runtime::{ActionQueue, GameEvent, SpawnId, SpawnRegistry, SceneHandleV2};
 use ironhold_core::schema::{
@@ -223,7 +223,7 @@ fn test_stat_radar_scene_load_spawns_node_with_correct_stat_keys() {
 fn test_additive_modifier_raises_effective_value() {
     let def = make_stat_def(50.0, 100.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 20.0, StackRule::Add));
 
     stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
@@ -235,7 +235,7 @@ fn test_additive_modifier_raises_effective_value() {
 fn test_additive_modifiers_stack_with_add_rule() {
     let def = make_stat_def(50.0, 100.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("flat_boost".to_string(), make_additive_modifier("health", 10.0, StackRule::Add));
 
     stat.active_modifiers.push(ActiveModifier { key: "flat_boost".to_string(), remaining_secs: None });
@@ -248,7 +248,7 @@ fn test_additive_modifiers_stack_with_add_rule() {
 fn test_max_stack_rule_ignores_weaker_instance() {
     let def = make_stat_def(40.0, 100.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("poison".to_string(), ModifierDef {
         stat: "health".to_string(),
         kind: ModifierKind::Additive(-5.0),
@@ -266,7 +266,7 @@ fn test_max_stack_rule_ignores_weaker_instance() {
 fn test_multiplicative_modifier_scales_current() {
     let def = make_stat_def(10.0, 20.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
 
     stat.active_modifiers.push(ActiveModifier { key: "speed_boost".to_string(), remaining_secs: None });
@@ -279,7 +279,7 @@ fn test_soft_max_allows_overheal() {
     let mut def = make_stat_def(100.0, 100.0);
     def.soft_max = Some(125.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("overheal".to_string(), make_additive_modifier("health", 25.0, StackRule::Add));
 
     stat.active_modifiers.push(ActiveModifier { key: "overheal".to_string(), remaining_secs: None });
@@ -292,7 +292,7 @@ fn test_soft_max_caps_overheal() {
     let mut def = make_stat_def(100.0, 100.0);
     def.soft_max = Some(125.0);
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("big_overheal".to_string(), make_additive_modifier("health", 999.0, StackRule::Add));
 
     stat.active_modifiers.push(ActiveModifier { key: "big_overheal".to_string(), remaining_secs: None });
@@ -304,7 +304,7 @@ fn test_soft_max_caps_overheal() {
 fn test_no_modifiers_effective_equals_current() {
     let def = make_stat_def(75.0, 100.0);
     let stat = LiveStat::new(def);
-    let modifier_defs = HashMap::new();
+    let modifier_defs = BTreeMap::new();
     let eff = stat.compute_effective(&modifier_defs);
     assert_eq!(eff, 75.0, "with no active modifiers effective must equal current");
 }
@@ -320,7 +320,7 @@ fn test_apply_modifier_action_adds_to_loaded_stats() {
     loaded_stats.0.insert("speed".to_string(), LiveStat::new(make_stat_def(10.0, 20.0)));
     app.world_mut().insert_resource(loaded_stats);
 
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
     app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
 
@@ -345,7 +345,7 @@ fn test_remove_modifier_action_clears_active_modifier() {
     loaded_stats.0.insert("speed".to_string(), stat);
     app.world_mut().insert_resource(loaded_stats);
 
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("speed_boost".to_string(), make_multiplicative_modifier("speed", 1.5));
     app.world_mut().insert_resource(LoadedModifiers(modifier_defs));
 
@@ -366,7 +366,7 @@ fn test_threshold_uses_effective_value_not_current() {
         emit: "stat.health.low".to_string(),
     }];
     let mut stat = LiveStat::new(def);
-    let mut modifier_defs = HashMap::new();
+    let mut modifier_defs = BTreeMap::new();
     modifier_defs.insert("heavy_curse".to_string(), make_additive_modifier("health", -65.0, StackRule::Add));
 
     stat.active_modifiers.push(ActiveModifier { key: "heavy_curse".to_string(), remaining_secs: None });

@@ -49,7 +49,7 @@ pub struct PendingIntentActions(pub BTreeMap<String, (Vec<Action>, Option<f32>)>
 /// the slot's built-in do_actions when a designer rule took over.
 /// Cleared each frame by `flush_pending_intent_system`.
 #[derive(Resource, Default)]
-pub struct HandledIntentSlots(pub HashSet<String>);
+pub struct HandledIntentSlots(pub HashSet<String>); // det: lookup-only
 
 // ─── Components ───────────────────────────────────────────────────────────────
 

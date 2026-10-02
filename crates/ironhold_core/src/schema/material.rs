@@ -98,13 +98,13 @@ pub struct CustomMaterialDef {
     pub shader: Option<String>,
 
     #[serde(default)]
-    pub textures: HashMap<String, String>,
+    pub textures: HashMap<String, String>, // det: lookup-only
 
     #[serde(default)]
-    pub floats: HashMap<String, f32>,
+    pub floats: HashMap<String, f32>, // det: order-independent
 
     #[serde(default)]
-    pub colors: HashMap<String, ColorDef>,
+    pub colors: HashMap<String, ColorDef>, // det: order-independent
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

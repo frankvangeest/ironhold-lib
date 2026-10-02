@@ -305,7 +305,7 @@ pub fn nameplate_cleanup_system(
     mut removed: RemovedComponents<NameplateTag>,
     anchors: Query<(Entity, &WorldLabel), With<NameplateAnchorWidget>>,
 ) {
-    let removed_set: std::collections::HashSet<Entity> = removed.read().collect();
+    let removed_set: std::collections::HashSet<Entity> = removed.read().collect(); // det: lookup-only
     if removed_set.is_empty() { return; }
     for (anchor_entity, world_label) in anchors.iter() {
         if let Some(tracked) = world_label.tracked_entity {

@@ -56,7 +56,7 @@ fn test_spawn_effect_with_position_spawns_particle_entities() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sparks".to_string(), minimal_effect_def(8, 0.5))]),
+        effects: std::collections::BTreeMap::from([("sparks".to_string(), minimal_effect_def(8, 0.5))]),
         ..Default::default()
     }));
 
@@ -84,7 +84,7 @@ fn test_spawn_effect_with_entity_resolves_global_transform() {
     def.color_start = (0.0, 1.0, 0.0, 1.0);
     def.color_end = (0.0, 0.0, 0.0, 0.0);
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("heal".to_string(), def)]),
+        effects: std::collections::BTreeMap::from([("heal".to_string(), def)]),
         ..Default::default()
     }));
 
@@ -136,7 +136,7 @@ fn test_spawn_effect_entity_missing_does_not_push() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sparks".to_string(), minimal_effect_def(4, 0.3))]),
+        effects: std::collections::BTreeMap::from([("sparks".to_string(), minimal_effect_def(4, 0.3))]),
         ..Default::default()
     }));
 
@@ -189,7 +189,7 @@ fn test_spawn_effect_multi_layer_spawns_all_layer_particles() {
     let mut effect_def = minimal_effect_def(12, 1.0);
     effect_def.layers = vec![layer0, layer1];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("campfire_fire".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("campfire_fire".to_string(), effect_def)]),
         ..Default::default()
     }));
 
@@ -221,7 +221,7 @@ fn test_spawn_effect_with_light_spawns_point_light_entity() {
         duration_secs: None,
     });
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("campfire".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("campfire".to_string(), effect_def)]),
         ..Default::default()
     }));
 
@@ -245,7 +245,7 @@ fn test_spawn_effect_without_light_spawns_no_point_light() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("no_light".to_string(), minimal_effect_def(4, 0.5))]),
+        effects: std::collections::BTreeMap::from([("no_light".to_string(), minimal_effect_def(4, 0.5))]),
         ..Default::default()
     }));
 
@@ -323,7 +323,7 @@ fn test_rotation_speed_produces_nonzero_rotation_rad() {
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("spin".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("spin".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -372,7 +372,7 @@ fn test_non_uniform_scale_stored_in_particle() {
     let mut effect_def = minimal_effect_def(2, 1.0);
     effect_def.layers = vec![layer];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("shard".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("shard".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -414,7 +414,7 @@ fn test_ring_emitter_places_particles_on_circumference() {
     let mut effect_def = minimal_effect_def(4, 1.0);
     effect_def.layers = vec![layer];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("ring".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("ring".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -458,7 +458,7 @@ fn test_velocity_curve_stored_in_particle() {
     effect_def.speed = 1.0;
     effect_def.layers = vec![layer];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("ease_test".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("ease_test".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -483,7 +483,7 @@ fn test_project_decal_with_position_queues_pending_spawn() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        decals: std::collections::HashMap::from([
+        decals: std::collections::BTreeMap::from([
             ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
         ]),
         ..Default::default()
@@ -534,7 +534,7 @@ fn test_project_decal_no_position_no_entity_skips() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        decals: std::collections::HashMap::from([
+        decals: std::collections::BTreeMap::from([
             ("test_ring".to_string(), "shared/textures/decals/ring_thick.png".to_string()),
         ]),
         ..Default::default()
@@ -564,7 +564,7 @@ fn test_minimal_quality_scales_count_never_zero() {
 
     app.world_mut().insert_resource(ParticleQuality { level: QualityLevel::Minimal });
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("big".to_string(), minimal_effect_def(20, 1.0))]),
+        effects: std::collections::BTreeMap::from([("big".to_string(), minimal_effect_def(20, 1.0))]),
         ..Default::default()
     }));
 
@@ -592,7 +592,7 @@ fn test_quality_override_bypasses_multiplier() {
     effect.quality = Some(QualityOverride { minimal: 1, low: 7, medium: 14, high: None });
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("override_test".to_string(), effect)]),
+        effects: std::collections::BTreeMap::from([("override_test".to_string(), effect)]),
         ..Default::default()
     }));
 
@@ -615,7 +615,7 @@ fn test_high_quality_spawns_full_count() {
 
     app.world_mut().insert_resource(ParticleQuality { level: QualityLevel::High });
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("full".to_string(), minimal_effect_def(12, 1.0))]),
+        effects: std::collections::BTreeMap::from([("full".to_string(), minimal_effect_def(12, 1.0))]),
         ..Default::default()
     }));
 
@@ -669,7 +669,7 @@ fn test_ambient_effect_skipped_when_budget_full() {
     ambient.priority = EffectPriority::Ambient;
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([
+        effects: std::collections::BTreeMap::from([
             ("filler".to_string(), filler),
             ("ambient".to_string(), ambient),
         ]),
@@ -715,7 +715,7 @@ fn test_player_effect_fires_even_when_budget_full() {
     player_burst.priority = EffectPriority::Player;
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([
+        effects: std::collections::BTreeMap::from([
             ("filler".to_string(), filler),
             ("player_hit".to_string(), player_burst),
         ]),
@@ -788,7 +788,7 @@ fn test_multilayer_budget_accounts_for_all_layers() {
     multi.layers = vec![layer_a, layer_b];
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("multi".to_string(), multi)]),
+        effects: std::collections::BTreeMap::from([("multi".to_string(), multi)]),
         ..Default::default()
     }));
 
@@ -826,7 +826,7 @@ fn test_multilayer_budget_blocks_second_layer_for_ambient() {
     multi.layers = vec![layer_a, layer_b];
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("multi_ambient".to_string(), multi)]),
+        effects: std::collections::BTreeMap::from([("multi_ambient".to_string(), multi)]),
         ..Default::default()
     }));
 
@@ -874,7 +874,7 @@ fn test_flipbook_fields_stored_on_pooled_particle() {
     let mut effect_def = minimal_effect_def(4, 2.0);
     effect_def.layers = vec![flipbook_layer(4, 4, 12.0, false)];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sheet_burst".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("sheet_burst".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -903,7 +903,7 @@ fn test_flipbook_loop_flag_stored_on_pooled_particle() {
     let mut effect_def = minimal_effect_def(2, 2.0);
     effect_def.layers = vec![flipbook_layer(4, 4, 8.0, true)];
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("loop_burst".to_string(), effect_def)]),
+        effects: std::collections::BTreeMap::from([("loop_burst".to_string(), effect_def)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -926,7 +926,7 @@ fn test_non_flipbook_particle_has_zero_cols() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([("sparks".to_string(), minimal_effect_def(4, 1.0))]),
+        effects: std::collections::BTreeMap::from([("sparks".to_string(), minimal_effect_def(4, 1.0))]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {
@@ -956,7 +956,7 @@ fn spawn_square_particle(app: &mut App, key: &str) {
     effect.size_x = Some(2.0);
     effect.size_y = Some(2.0);
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        effects: std::collections::HashMap::from([(key.to_string(), effect)]),
+        effects: std::collections::BTreeMap::from([(key.to_string(), effect)]),
         ..Default::default()
     }));
     app.world_mut().resource_mut::<ActionQueue>().push(Action::SpawnEffect {

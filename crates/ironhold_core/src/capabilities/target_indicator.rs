@@ -105,7 +105,7 @@ pub fn target_indicator_system(
     // Cached mesh handle (radius-driven, colour-independent). None when no indicator is configured.
     mut cached_mesh: Local<Option<Handle<Mesh>>>,
     // Memoised material handles keyed by resolved RGBA colour bits. Cleared on scene change.
-    mut cached_mats: Local<HashMap<[u32; 4], Handle<StandardMaterial>>>,
+    mut cached_mats: Local<HashMap<[u32; 4], Handle<StandardMaterial>>>, // det: lookup-only
 ) {
     // Rebuild mesh cache whenever the scene config changes; clear the material memo too.
     if indicator_cfg.is_changed() {
@@ -123,7 +123,7 @@ pub fn target_indicator_system(
     // queued for despawn twice, which Bevy handles gracefully but logs as a warning
     // ("Entity despawned: ... is invalid"). Track what's already been queued so each ring is
     // despawned at most once per frame.
-    let mut despawn_queued: HashSet<Entity> = HashSet::new();
+    let mut despawn_queued: HashSet<Entity> = HashSet::new(); // det: lookup-only
 
     // Move any existing ring to follow its tracked entity.
     for (indicator_entity, tracking) in &existing {

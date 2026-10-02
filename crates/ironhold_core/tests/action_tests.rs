@@ -1067,7 +1067,7 @@ fn test_open_shop_twice_without_close_does_not_double_count_panels_open() {
     let mut app = setup_test_app();
 
     // Two merchant prefabs, each with their own (empty) stock — contents don't matter for this test.
-    let mut prefabs = HashMap::new();
+    let mut prefabs = std::collections::BTreeMap::new();
     for key in ["merchant_a", "merchant_b"] {
         prefabs.insert(key.to_string(), PrefabDef {
             kind: PrefabKind::Prop,

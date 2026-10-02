@@ -21,7 +21,7 @@ pub enum AppState {
 pub struct ModelFixesAsset {
     pub schema_version: u32,
     #[serde(default)]
-    pub model_fixes: HashMap<String, TransformFix>,
+    pub model_fixes: HashMap<String, TransformFix>, // det: order-independent
 }
 
 impl ModelFixesAsset {
@@ -70,7 +70,7 @@ impl StateMachineAsset {
         if self.initial_state.is_empty() && !self.states.is_empty() {
             return Err("StateMachineAsset initial_state must not be empty when states are declared".to_string());
         }
-        let mut state_names = std::collections::HashSet::new();
+        let mut state_names = std::collections::HashSet::new(); // det: lookup-only
         for state in &self.states {
             if state.name.is_empty() {
                 return Err("FSM state has empty name".to_string());
@@ -152,7 +152,7 @@ pub struct ProjectConfig {
 
     // V1: inline per-model transform corrections
     #[serde(default)]
-    pub model_fixes: HashMap<String, TransformFix>,
+    pub model_fixes: HashMap<String, TransformFix>, // det: order-independent
     // V1/V2: path to external overrides/model_fixes.ron
     #[serde(default)]
     pub model_fixes_path: Option<String>,
@@ -182,7 +182,7 @@ pub struct ProjectConfig {
     /// The value is the trigger name fired as `ui.button_pressed:<trigger>`.
     /// Example: `{ "Escape": "toggle_pause" }` fires `ui.button_pressed:toggle_pause` on Escape.
     #[serde(default)]
-    pub global_key_bindings: HashMap<String, String>,
+    pub global_key_bindings: HashMap<String, String>, // det: order-independent
 
     /// Global gamepad button → event trigger mappings, applied regardless of which scene is
     /// active. Button names use the same format as `InputMap`'s `gamepad_*` fields (e.g.
@@ -197,7 +197,7 @@ pub struct ProjectConfig {
     /// already-joined player's own in-game gamepad actions, use that player's own `InputMap`
     /// fields (`gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next`) instead.
     #[serde(default)]
-    pub global_unclaimed_gamepad_bindings: HashMap<String, String>,
+    pub global_unclaimed_gamepad_bindings: HashMap<String, String>, // det: order-independent
 
     /// Default base color applied to every `kind: "primitive"` prefab that does not
     /// specify its own `primitive.color`. Expressed as linear sRGB (r, g, b) in the

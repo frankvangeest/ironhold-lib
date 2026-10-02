@@ -34,7 +34,7 @@ pub use entity_fsm_interpreter::*;
 /// The final merged model-fix map, assembled from inline project fixes and (optionally) an
 /// external `model_fixes.ron` file. Always available after project loading completes.
 #[derive(Resource, Default)]
-pub struct MergedModelFixes(pub HashMap<String, TransformFix>);
+pub struct MergedModelFixes(pub HashMap<String, TransformFix>); // det: lookup-only
 
 /// The FSM loaded for the current project. `None` when the project has no `state_machine_path`
 /// set at all (a project with no logic file). Populated from `logic/state_machine.ron` (or
@@ -232,7 +232,7 @@ pub struct ResolvedTargetIndicator {
     pub color: (f32, f32, f32, f32),
     pub offset_y: f32,
     /// Named colour palette from `TargetIndicatorDef.named_colors`. Keyed by category string.
-    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>,
+    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>, // det: lookup-only
 }
 
 /// Holds pre-loaded GLTF scene handles for prefab models, populated by `Action::PreloadPrefab`.

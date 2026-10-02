@@ -16,7 +16,7 @@ impl ModelSpawner {
         &self,
         commands: &mut Commands,
         asset_server: &AssetServer,
-        fixes: &HashMap<String, TransformFix>,
+        fixes: &HashMap<String, TransformFix>, // det: lookup-only
         path: String,
         parent_tf: Transform,
     ) -> SpawnedModel {

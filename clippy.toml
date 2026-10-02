@@ -1,0 +1,14 @@
+# Editor feedback only (rust-analyzer / `cargo clippy` if you run it) -- NOT part of the workflow
+# gate. The real gate is the source-scan test `crates/ironhold_core/tests/determinism_lint.rs`,
+# which runs inside the normal `cargo test` loop and fails on any unannotated HashMap/HashSet in
+# `ironhold_core/src` (see `crates/ironhold_core/src/CLAUDE.md`, "Deterministic iteration order on
+# gameplay paths").
+#
+# Std hash containers use a seeded hasher, so iterating one gives a different order per instance,
+# per run and per platform. Use BTreeMap/BTreeSet, IndexMap, or a sorted Vec when a container is
+# iterated; keep a hash container only for keyed lookup and say so with a `// det: lookup-only`
+# (or `// det: order-independent`) comment on the line.
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "randomly seeded iteration order; use BTreeMap/IndexMap, or annotate lookup-only use with `// det: lookup-only` (see determinism_lint.rs)" },
+    { path = "std::collections::HashSet", reason = "randomly seeded iteration order; use BTreeSet/IndexSet, or annotate lookup-only use with `// det: lookup-only` (see determinism_lint.rs)" },
+]

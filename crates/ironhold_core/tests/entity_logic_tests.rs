@@ -243,13 +243,13 @@ fn test_entity_fsm_new_id_composes_with_self_substitution() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("zombie_corpse".to_string(), ModelCatalogEntry { path: "shared/models/creatures/zombie_corpse.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("zombie_corpse".to_string(), PrefabDef {
                 kind: PrefabKind::Prop,
                 model: "zombie_corpse".to_string(),
