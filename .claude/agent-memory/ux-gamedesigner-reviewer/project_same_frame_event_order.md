@@ -31,6 +31,14 @@ only, so death while paused never reaches game over (edge-triggered; pause is co
 [[pause-is-cosmetic]]); entity_logic_demo respawning_gem interacted vs gem.reappear; enemy_* behaviors are
 order-proof (transitions authored from both alive and attacking) — the pattern to recommend.
 
+**D1 review (2026-10-02) facts:** slot `key`/binding keys sort as the LITERAL authored string, case-sensitive
+byte order (digits < capitals < lowercase): `"0"` < `"1"`, `"F10"` < `"F2"`, `"KeyE"` < `"i"` (3rd_person
+inventory slot is bare `"i"`). `"10"` is not a valid key name; the real tenth-slot trap is `"0"`. Threshold order
+= stats.ron stat order, then each stat's `thresholds` list order (the common case: 30->0 crosses `low` and
+`depleted` together; shipped files list `depleted` first). All modifier-expiry events precede all threshold
+events; global stats precede `stat_templates` stats; cross-entity instance-stat order still unordered (D4).
+Unclaimed-gamepad: only ONE trigger per frame across ALL pads (break after first match).
+
 **How to apply:** for D1/D3/D4/fixed-tick reviews, check the designer doc states the whole model, not just
 the slice the feature touches; reliable manual repro = bind one key to two emitters (scene_key_binding +
 action-bar slot, or action-bar slot on the interact key). Related: [[fsm-designer-traps]].
