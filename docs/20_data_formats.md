@@ -106,8 +106,8 @@ Entry point for a project. References all other files.
 | `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` — every project's game logic. When absent, no logic file loads for this project at all (no convention-path fallback once a `.project.ron` exists). `ironhold_cli validate` reads this field the same way the runtime does — see "Checks performed" in `docs/60_contributing.md`. |
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron`. `ironhold_cli validate` reads this field, not the convention path — see `asset_catalog` above. |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
-| `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` |
-| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. Fires `ui.button_pressed:<trigger>` (value used as-is, same as `global_key_bindings`); covered by `ironhold_cli validate`'s `unreachable_trigger` check. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. |
+| `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger` If several bound keys are pressed in the same frame, their triggers fire in **key-name order** (alphabetical, e.g. `"Escape"` before `"KeyI"`) on every machine. |
+| `global_unclaimed_gamepad_bindings` | `Map<String, String>` | — | Gamepad button name → trigger name, project-wide. **Not a general gamepad analogue of `global_key_bindings`** — only ever fires on a gamepad not currently assigned to any live player (a player whose `gamepad_index` hasn't resolved to a real controller yet does not reserve one), intended for join-style triggers. Fires `ui.button_pressed:<trigger>` (value used as-is, same as `global_key_bindings`); covered by `ironhold_cli validate`'s `unreachable_trigger` check. See [Gamepad-triggered hot join](#gamepad-triggered-hot-join) below. If one pad presses several bound buttons in the same frame, only the first **by button name** is serviced (e.g. `"East"` before `"South"`). |
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. `ironhold_cli validate` reads this field, not the `stats/stats.ron` convention path (falls back to checking the convention path only when this field itself is unset). |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. `ironhold_cli validate` reads this field the same way — see `asset_catalog` above. |
@@ -1142,6 +1142,8 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 > ActionBar((id: "bar_a", owner_player: 0, slots: [(key: "KeyG", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
 > ActionBar((id: "bar_b", owner_player: 0, slots: [(key: "KeyH", gamepad_key: "RightTrigger", do_actions: [/*...*/])])),
 > ```
+
+**Same-frame order:** when several slots fire in the same frame (two players' bars, a click plus a key, a chord), they are processed in **slot-key order** (`"1"` before `"2"`, `"KeyQ"` before `"KeyW"`) — their events are emitted, and their `do_actions` queued, in that order, regardless of the order the slots were authored or spawned in. This matters when actions interact, e.g. a heal (`+50`) on slot `"1"` and a sacrifice (`-60`) on slot `"2"` against a clamped stat always resolve heal first.
 
 **Pipeline events emitted by the action bar:**
 
@@ -4180,6 +4182,8 @@ two different asset types. `state_machine.ron` has always been schema v1.
 Named stat definitions for a project. Referenced via `stats_path` in `{name}.project.ron`. Optional — omitting it means no stat system for that project.
 
 Stats persist across scene transitions (the `LoadedStats` resource is not cleared on scene load).
+
+**Declaration order matters.** Stats are kept in the order they are written in `stats.ron`. If several stats cross a threshold (or several modifiers expire) in the same frame, their events reach `state_machine.ron` in that order, and the first matching transition wins. Put the stat whose event should take precedence first (e.g. `health` above `mana`, so `stat.player_health.depleted` is read before `stat.mana.empty`). Reordering entries can therefore change which same-frame event the state machine sees first; nothing else changes.
 
 **Fields:**
 

@@ -632,7 +632,7 @@ fn test_unclaimed_gamepad_trigger_reserves_pad_for_a_still_pending_authored_play
     // a full scene load, since this test only needs the trigger system itself, not the spawn
     // pipeline.
     app.world_mut().insert_resource(State::new(AppState::InGame));
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 

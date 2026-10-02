@@ -605,12 +605,12 @@ fn test_key_bindings_do_not_bleed_across_scenes() {
     app.update();
 
     // Simulate a binding left over from a previous scene.
-    app.world_mut().insert_resource(LoadedKeyBindings(HashMap::from([
+    app.world_mut().insert_resource(LoadedKeyBindings(std::collections::BTreeMap::from([
         ("KeyX".to_string(), "previous_scene_action".to_string()),
     ])));
     // Project-level bindings do NOT include "KeyX".
     app.world_mut()
-        .insert_resource(ProjectKeyBindings(HashMap::new()));
+        .insert_resource(ProjectKeyBindings(std::collections::BTreeMap::new()));
 
     drive_replace_load(&mut app);
 
