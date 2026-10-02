@@ -1,7 +1,8 @@
 //! D1 (`planning/backlog.md` Beta 0.5): same-frame ordering of gameplay maps.
 //!
-//! Rust's std `HashMap`/`HashSet` use a randomly seeded hasher, so their iteration order differs
-//! per map instance, per run and per platform. These tests pin the four places where such an
+//! Rust's std `HashMap`/`HashSet` use a seeded hasher (random on native; address-derived and so
+//! allocation-history-dependent on wasm32), so their iteration order differs per map instance, per
+//! run and per platform. These tests pin the four places where such an
 //! order used to decide a simulation outcome (see
 //! `planning/investigations/hashmap_iteration_order_audit.md`):
 //!
