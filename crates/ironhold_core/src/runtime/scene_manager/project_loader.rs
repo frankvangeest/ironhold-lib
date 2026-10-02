@@ -109,7 +109,8 @@ pub fn check_project_loaded(
         commands.insert_resource(LoadedStats::default());
         commands.insert_resource(LoadedModifiers::default());
         {
-            let key_bindings = config.global_key_bindings.clone();
+            let key_bindings: std::collections::BTreeMap<String, String> =
+            config.global_key_bindings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for key_name in key_bindings.keys() {
                 if InputMap::parse_key(key_name).is_none() {
                     warn!(
@@ -122,7 +123,8 @@ pub fn check_project_loaded(
             commands.insert_resource(LoadedKeyBindings(key_bindings));
         }
         {
-            let gamepad_bindings = config.global_unclaimed_gamepad_bindings.clone();
+            let gamepad_bindings: std::collections::BTreeMap<String, String> =
+            config.global_unclaimed_gamepad_bindings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for button_name in gamepad_bindings.keys() {
                 if InputMap::parse_gamepad_button(button_name).is_none() {
                     warn!(
@@ -246,7 +248,8 @@ pub fn check_project_loaded(
         }
         commands.insert_resource(LoadedStateMachine(fsm));
 
-        let key_bindings = config.global_key_bindings.clone();
+        let key_bindings: std::collections::BTreeMap<String, String> =
+            config.global_key_bindings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for key_name in key_bindings.keys() {
             if InputMap::parse_key(key_name).is_none() {
                 warn!(
@@ -258,7 +261,8 @@ pub fn check_project_loaded(
         commands.insert_resource(ProjectKeyBindings(key_bindings.clone()));
         commands.insert_resource(LoadedKeyBindings(key_bindings));
 
-        let gamepad_bindings = config.global_unclaimed_gamepad_bindings.clone();
+        let gamepad_bindings: std::collections::BTreeMap<String, String> =
+            config.global_unclaimed_gamepad_bindings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for button_name in gamepad_bindings.keys() {
             if InputMap::parse_gamepad_button(button_name).is_none() {
                 warn!(

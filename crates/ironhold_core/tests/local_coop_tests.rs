@@ -1879,7 +1879,7 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_claimed_by_live_player() {
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 
@@ -1913,7 +1913,7 @@ fn test_unclaimed_gamepad_trigger_excludes_pad_mid_flight_via_pending_spawn() {
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 
@@ -1961,7 +1961,7 @@ fn test_unclaimed_gamepad_trigger_never_captures_a_pad_with_no_press() {
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 
@@ -1999,7 +1999,7 @@ fn test_pending_join_gamepad_is_frame_scoped_not_sticky() {
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("Start".to_string(), "toggle_pause".to_string()),
     ])));
 
@@ -2047,7 +2047,7 @@ fn test_two_gamepads_pressed_same_frame_captures_only_lowest_sorted_index() {
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 
@@ -2100,7 +2100,7 @@ fn test_two_gamepads_join_on_consecutive_frames_each_bind_via_bound_gamepad_dire
         Some(SplitScreenDef { orientation: SplitOrientation::Grid, dynamic: None, own_viewport_only: false }),
     );
     load_grid_scene_with_join_slots(&mut app, 2);
-    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::HashMap::from([
+    app.world_mut().insert_resource(LoadedGamepadBindings(std::collections::BTreeMap::from([
         ("South".to_string(), "join".to_string()),
     ])));
 

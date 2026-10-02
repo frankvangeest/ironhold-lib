@@ -1020,7 +1020,8 @@ pub struct ActionSlotDef {
     /// (`"F1"`-`"F12"`), `"Space"`, `"Escape"`, `"Tab"`, `"Enter"`, `"Backspace"`, `"Delete"`,
     /// arrow keys (`"ArrowUp"` etc). Not supported: mouse buttons, modifier chords (`"Shift+1"`) —
     /// an unrecognised key name logs a `warn!` at scene load and the slot never fires from the
-    /// keyboard. This string is also the slot's identity: `CooldownMap`/`PendingIntentActions`
+    /// keyboard. (Clicking or tapping the slot itself always activates it too - that needs no
+    /// binding and works on every slot.) This string is also the slot's identity: `CooldownMap`/`PendingIntentActions`
     /// keys and every emitted `action_bar.*:{key}` event use it verbatim, so rebinding a slot
     /// (changing `key`) also renames its event contract — update any `state_machine.ron` wired to
     /// the old key string. Gamepad buttons are a separate opt-in field, `gamepad_

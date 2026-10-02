@@ -4617,3 +4617,28 @@ fn test_prefab_catalog_partial_inputs_block_parses() {
     assert_eq!(inputs.forward, "KeyW");
     assert_eq!(inputs.jump, "Space");
 }
+
+/// D1: `StatCatalog.stats` is an `IndexMap`, so the order stats are written in `stats.ron` is the
+/// order they load in (`LoadedStats` keeps it) and therefore the order same-frame stat threshold /
+/// modifier-expiry events fire in. This is the contract designers rely on ("put `health` above
+/// `mana`") — a plain `HashMap` here would silently turn declaration order into hash order.
+#[test]
+fn test_stat_catalog_preserves_declaration_order() {
+    let ron_str = r#"
+        (
+            schema_version: 1,
+            stats: {
+                "zeta":  (base: 1.0, max: 1.0),
+                "alpha": (base: 1.0, max: 1.0),
+                "mid":   (base: 1.0, max: 1.0),
+            },
+        )
+    "#;
+    let catalog: StatCatalog = from_str(ron_str).expect("stats.ron with three stats should parse");
+    let keys: Vec<&str> = catalog.stats.keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        vec!["zeta", "alpha", "mid"],
+        "stats must load in the order they are declared in stats.ron, not hash or alphabetical order"
+    );
+}
