@@ -1,0 +1,13 @@
+# Editor feedback only (rust-analyzer when `rust-analyzer.check.command = "clippy"`, or a manual
+# `cargo clippy -p ironhold_core`) -- NOT part of the workflow gate. The real gate is the source-scan
+# test `tests/determinism_lint.rs`, which runs inside the normal `cargo test` loop and fails on any
+# unannotated HashMap/HashSet in `src` (see `src/CLAUDE.md`, "Deterministic iteration order on
+# gameplay paths").
+#
+# Clippy cannot see the `// det: lookup-only` / `// det: order-independent` comments, so EXPECT it to
+# warn at every annotated site and at imports; that is noise, not a finding. Only std paths are listed
+# (a path that does not resolve would make clippy itself complain).
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "seeded, non-deterministic iteration order; if the use is annotated `// det: ...` this warning is expected -- determinism_lint.rs is the gate" },
+    { path = "std::collections::HashSet", reason = "seeded, non-deterministic iteration order; if the use is annotated `// det: ...` this warning is expected -- determinism_lint.rs is the gate" },
+]

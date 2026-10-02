@@ -21,7 +21,7 @@ pub struct AnimationController {
     /// Extra animation-pack GLBs loaded from `AnimationPolicy.animation_sources`.
     /// Graph init waits until all of these are loaded before building the merged graph.
     pub source_handles: Vec<Handle<Gltf>>,
-    pub node_indices: HashMap<String, AnimationNodeIndex>, // det: lookup-only
+    pub node_indices: HashMap<String, AnimationNodeIndex>, // det: order-independent (log order only: missing-clip warning lists the keys)
     /// The `AnimationGraph` asset `node_indices` was built against. Stored here (synchronously
     /// updated alongside `node_indices`) rather than read from the entity's `AnimationGraphHandle`
     /// component, because that component is inserted via a *deferred* command — on the exact

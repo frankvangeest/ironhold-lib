@@ -119,7 +119,7 @@ pub(super) fn attach_prefab_features(
 /// `stat_templates`, see `planning/features/per_player_stat_pools.md`).
 pub(super) fn build_stat_map_from_templates(
     templates: &[StatTemplateDef],
-    stat_overrides: &HashMap<String, f32>, // det: lookup-only
+    stat_overrides: &HashMap<String, f32>, // det: order-independent (log order only: unknown-key warnings)
     entity_id: &str,
     prefab_key: &str,
 ) -> Option<StatMap> {
