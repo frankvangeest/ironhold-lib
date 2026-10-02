@@ -1,190 +1,251 @@
-# Feature: Named Pipeline `SystemSet`s + a Deterministic Chain of Same-Type Event Writers
+# Feature: Named Pipeline `SystemSet`s + a Deterministic Order for Every Pre-Interpreter Event Writer
 
-_Status: Draft_
+_Status: Ready (plan-review 2026-10-02: system-architect + ux-gamedesigner-reviewer both returned "needs more design work"; all blocking items folded in below on the system-architect's decisions — see "Plan-review outcome")_
 _Planned at: `87dab15` (2026-10-01)_
 
 Backlog item: **D3** (Beta 0.5 ▸ determinism work). Supersedes and merges the former Queued items
 "Bevy ambiguity-detection hardening (`ScheduleBuildSettings`) on `Update`" and "Schedule-graph
 assertions + first named `SystemSet`". Source: `planning/investigations/hashmap_iteration_order_audit.md`
-(finding A, as corrected by the system-architect triage) and the system-architect triage of 2026-10-01.
+(finding A, as corrected by the system-architect triage) and the plan-review of 2026-10-02.
 
 ## What
-Give the `Update` message → interpreter → executor pipeline a declared, named order. Today it is a
-pile of ad-hoc `.before(fsm_interpreter_system)` edges across `lib.rs` and two plugins; the many systems
-that *write* `UiEvent`/`GameEvent` are ordered against the interpreter but **not against each other**, so
-the order in which same-frame events reach the FSM is left to the executor. This feature introduces the
-repo's first named `SystemSet`s, puts every pre-interpreter event writer into a fixed chain inside them,
-and adds a schedule test that fails if a writer is missing from the chain or a new unordered conflict
-appears on the message/action resources. For a designer nothing changes except that same-frame event
-precedence becomes **documented, identical on every machine, and identical between native and web**.
+Give the `Update` message → interpreter → executor pipeline a declared, named order. Today it is a pile of
+ad-hoc `.before(fsm_interpreter_system)` edges across `lib.rs` and two plugins: the systems that *write*
+`UiEvent`/`GameEvent`/`SceneEvent`, or *push to `ActionQueue` directly*, are ordered against the
+interpreter but **not against each other**, so the order in which same-frame events and actions reach the
+FSM is left to the executor. This feature introduces the repo's first named `SystemSet`s, puts every such
+system into a fixed order inside them, and adds tests that fail if a writer/pusher is missing from the
+declared structure or a new unordered conflict appears on the message/action resources. For a designer
+nothing is authored differently; same-frame event precedence becomes **documented, identical on every
+machine, and identical between native and web**.
 
 ## Why
 - **Lockstep/replay need identical event order.** The FSM takes the *first matching transition* per event
-  and applies it immediately (`fsm_interpreter.rs:91-121`), so which of two same-frame events is read
-  first can change the final `LogicState`. With writer order left to the executor, native (multi-threaded)
-  and web (single-threaded) can disagree, and two native runs can disagree with each other. This is the
-  schedule-order half of the HashMap audit's findings; the data-structure half is D1/D2.
+  and applies it immediately (`fsm_interpreter.rs:91-121`), so which of two same-frame events is read first
+  can change the final `LogicState`. With writer order left to the executor, native (multi-threaded) and
+  web (single-threaded) can disagree, and two native runs can disagree with each other. This is the
+  schedule-order half of the HashMap audit; the data-structure half is D1/D2.
 - **The ordering we rely on is currently implicit and fragile.** `crates/ironhold_core/src/CLAUDE.md`
-  documents that "targeting → interpreter" ordering holds only *transitively* through `ActionBarPlugin`'s
-  own `.before(fsm_interpreter_system)` edge; remove that edge and the guarantee silently vanishes with no
-  failing test. The repo has **zero** named `SystemSet`s. A real race (the same-frame targeting/action-bar
-  `{target}` bug) went undetected for months and was found only by an incidental test flake.
+  documents that "targeting → interpreter" holds only *transitively* through `ActionBarPlugin`'s own
+  `.before(fsm_interpreter_system)` edge; remove it and the guarantee vanishes with no failing test. The
+  repo has **zero** named `SystemSet`s, and a real race (the same-frame targeting/action-bar `{target}`
+  bug) went undetected for months, found only by an incidental test flake.
 - **It unblocks the rest of the determinism work.** D4 (`SpawnId` tie-breaks), D5 (two-`App` smoke test)
-  and the "move gameplay timers onto the fixed tick" item all want a stable, named place to hang their
-  systems; the fixed-tick plan should re-home these sets into `FixedUpdate` rather than re-derive edges.
+  and the "gameplay timers onto the fixed tick" item all want a stable, named place to hang systems; the
+  fixed-tick plan should re-home these sets into `FixedUpdate` rather than re-derive edges.
 
-## Findings (verified against code at `87dab15`)
-- Interpreters read **all `UiEvent`s, then all `GameEvent`s, then all `SceneEvent`s** (`fsm_interpreter.rs:35-52`,
-  `entity_fsm_interpreter.rs:24-40`). Order *between* message types is therefore already fixed; only the
-  order of writers **of the same message type** matters. (This narrows the audit's finding A.)
-- `MessageWriter<T>` takes `ResMut<Messages<T>>`, so same-type writers can never run in parallel —
-  they serialise — but their *relative order* is whatever the executor picks. Imposing a chain therefore
-  costs **no parallelism** that exists today.
-- **`UiEvent` writers (all `Update`):** `button_system` (`lib.rs:504`), `icon_button_click_system`
-  (`lib.rs:545`), `global_input_system` (`input.rs:41`), `unclaimed_gamepad_trigger_system` (`input.rs:96`).
-  Registered at `lib.rs:233-241`; only `.before(fsm_interpreter_system)` on two of them.
-- **`GameEvent` writers in `Update`:** the stat chain `stat_modifier_system → stat_regen_system →
-  stat_effective_value_system` (`lib.rs:244-248`; `stats.rs:11` expiry events), `interactable_system`
-  (`interactable.rs:48`, `lib.rs:325`), `tick_delayed_events_system` (`lib.rs:751`, `:334`),
-  `ActionBarPlugin`'s `(cooldown_tick_system, action_bar_input_system, action_bar_visual_system).chain()`
-  (`action_bar.rs:167`), `TargetingPlugin`'s three chained systems (`targeting.rs:198/282/377`, ordered
-  `.before(action_bar_input_system)`), and — *after* the interpreters — `action_executor_system`
-  (`action_executor.rs:37`), `flush_pending_intent_system` (`action_bar.rs:340`) and `stat_threshold_system`
-  (`stats.rs:112`, events land next frame).
-- **`GameEvent` writers in `FixedUpdate`** (out of scope here, owned by the fixed-tick item):
-  `collectible_system`, `trigger_zone_system`, `npc_behavior_system`, `player.rs:451`.
-- `SceneEvent` writers (`action_executor.rs:27`, `project_loader.rs:39`, `scene_loader.rs:50`) are lifecycle
-  events, already sequenced by the loading state machine and `spawn_scene_v2.before(fsm_interpreter_system)`.
-- Known non-writer pre-interpreter systems with their own edge to the interpreter: `spawn_scene_v2`,
-  `audio_state_system`, `dialogue_tick_system` (`.after(button_system).after(interactable_system)`).
+## Findings (verified against code at `87dab15`/`28d80de`)
+- Interpreters read **all `UiEvent`s, then all `GameEvent`s, then all `SceneEvent`s**
+  (`fsm_interpreter.rs:35-52`, `entity_fsm_interpreter.rs:24-40`), so order *between* message types is
+  already fixed; only the order of writers **of the same message type** — and of direct `ActionQueue`
+  pushers — matters.
+- `MessageWriter<T>` takes `ResMut<Messages<T>>`; same-type writers serialise but in an executor-chosen
+  order. UI writers and Game writers share no message resource, so they **can** run in parallel today.
+- **`UiEvent` writers (`Update`):** `button_system` (`lib.rs:504`), `icon_button_click_system` (`:545`),
+  `global_input_system` (`input.rs:41`), `unclaimed_gamepad_trigger_system` (`input.rs:96`).
+- **`GameEvent` writers in `Update`:** the stat chain `stat_modifier → stat_regen → stat_effective_value`
+  (`lib.rs:244-248`; expiry events `stats.rs:11`), `interactable_system`, `tick_delayed_events_system`
+  (`lib.rs:751`), `ActionBarPlugin`'s `cooldown_tick → action_bar_input → action_bar_visual` chain,
+  `TargetingPlugin`'s three chained systems — and, *after* the interpreters, `flush_pending_intent_system`
+  (`action_bar.rs:340`), `action_executor_system` (`action_executor.rs:37`) and `stat_threshold_system`
+  (`stats.rs:112`), whose events are therefore read at the start of the **next** frame.
+- **`GameEvent` writers in `FixedUpdate`** (owned by the fixed-tick item): `collectible_system`,
+  `trigger_zone_system`, `npc_behavior_system`, `player.rs:451`.
+- **`SceneEvent` writers:** `action_executor.rs:27`, `scene_loader.rs:50` (`spawn_scene_v2`) and
+  `project_loader.rs:39` (`check_project_loaded`, `lib.rs:217` — unordered against the interpreter today;
+  `fsm_interpreter.rs:15-19` already admits the one-frame jitter).
+- **Direct `ActionQueue` pushers other than the interpreters/executor** (the "only interpreters push
+  `ActionQueue`" rule in `src/CLAUDE.md:30` is already broken by these): `dialogue_tick_system`
+  (`dialogue.rs:89`; also a **reader** of `UiEvent` and `GameEvent`, `:90-91`), `despawn_timer_system`
+  (`despawn_timer.rs:48`, unordered at `lib.rs:367`) and `resolve_pending_behaviors_system`
+  (`entity_spawner.rs:569`, in the unordered tuple at `lib.rs:231`).
+- `stat_effective_value_system` is registered **twice** (`lib.rs:247` pre-interpreter, `:262`
+  post-executor). Legal, with one rule: Bevy refuses to build if anything orders against that function *by
+  name* while two instances exist (`SystemTypeSetAmbiguity`).
+- The action-bar cost gate reads `.current`, not `effective` (`action_bar.rs:314-326`).
+- No cycles arise from the proposed edges (traced against every existing edge: dialogue_tick,
+  `spawn_scene_v2`, `audio_state_system`, `target_hud_update_system`, `damage_popup`/`world_label`/
+  `nameplate_visibility`, `inventory_ui`/`container_ui`, `fading_*`, `PhysicsSet::SyncBackend`).
 
 ## Approach
-**1. New module `runtime/schedule.rs`** (crate-internal naming, exported for tests) defining:
+**1. New module `runtime/schedule.rs`** defining (all `#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]`,
+`pub` because the tests need them, documented as unstable):
 
 ```rust
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameplaySet { Emit, Interpret, Execute, PostExecute }
-
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum EmitSet { UiInput, Targeting, ActionBar, Interact, DelayedEvents, Stats }
+pub enum EmitSet { Ui, Game, Scene, DirectActions, Dialogue }       // all inside GameplaySet::Emit
+pub enum GameStreamSet { Targeting, ActionBar, Interact, DelayedEvents, Stats }  // chained inside EmitSet::Game
 ```
 
-Configured once in a new `GameplaySchedulePlugin` (see step 4):
-`GameplaySet::Emit → Interpret → Execute → PostExecute` chained in `Update`, and `EmitSet` chained
-*inside* `Emit` in the order above.
+Configured once in a new `GameplaySchedulePlugin`: `Emit → Interpret → Execute → PostExecute` chained in
+`Update`; `EmitSet::Ui`, `EmitSet::Game`, `EmitSet::Scene` independent of each other (they share no
+message resource); `DirectActions` after the three, `Dialogue` after `Ui`, `Game` and `DirectActions`.
 
 **2. Membership**
 
-| Set | Systems |
+| Set (all inside `GameplaySet::Emit` unless noted) | Systems / order |
 |---|---|
-| `EmitSet::UiInput` (internal `.chain()`) | `global_input_system` → `unclaimed_gamepad_trigger_system` → `button_system` → `icon_button_click_system` |
-| `EmitSet::Targeting` | `TargetingPlugin`'s existing three-system chain (unchanged internally) |
-| `EmitSet::ActionBar` | `cooldown_tick_system → action_bar_input_system → action_bar_visual_system` (existing chain) |
-| `EmitSet::Interact` | `interactable_system` |
-| `EmitSet::DelayedEvents` | `tick_delayed_events_system` |
-| `EmitSet::Stats` | `stat_modifier_system → stat_regen_system → stat_effective_value_system` (existing chain) |
-| `GameplaySet::Interpret` | `fsm_interpreter_system`, `entity_fsm_interpreter_system` (kept in that order) |
-| `GameplaySet::Execute` | `flush_pending_intent_system`, `action_executor_system`, `stat_effective_value_system`, `stat_threshold_system` (existing chain segment) |
-| `GameplaySet::PostExecute` | `npc_hit_relay_system` (currently `.after(action_executor_system)`); the pool/decal/spawn-drain tail of the existing chain stays chained after `Execute` |
+| `EmitSet::Ui` (`.chain()`) | `global_input_system` → `unclaimed_gamepad_trigger_system` → `button_system` → `icon_button_click_system` |
+| `EmitSet::Game` = `Targeting → ActionBar → Interact → DelayedEvents → Stats` (`GameStreamSet`, chained) | `TargetingPlugin`'s existing chain → `cooldown_tick → action_bar_input → action_bar_visual` → `interactable_system` → `tick_delayed_events_system` → `stat_modifier → stat_regen → stat_effective_value` |
+| `EmitSet::Scene` (`.chain()`) | `check_project_loaded` (keeps its `run_if`) → `spawn_scene_v2` |
+| `EmitSet::DirectActions` (`.chain()`) | `resolve_pending_behaviors_system` → `despawn_timer_system` |
+| `EmitSet::Dialogue` | `dialogue_tick_system` (reads both streams and pushes actions, so it runs last in `Emit`) |
+| `GameplaySet::Interpret` | `fsm_interpreter_system` → `entity_fsm_interpreter_system` |
+| `GameplaySet::Execute` | `flush_pending_intent_system` → `action_executor_system` → `stat_effective_value_system` (2nd instance) → `stat_threshold_system` → the existing drain/pool/decal tail (chain segment kept as is) |
+| `GameplaySet::PostExecute` | `npc_hit_relay_system`, `inventory_ui_system`, `container_ui_system` |
 
-Non-writers that today say `.before(fsm_interpreter_system)` (`spawn_scene_v2`, `audio_state_system`,
-`dialogue_tick_system`) become `.before(GameplaySet::Interpret)`; `dialogue_tick_system` additionally
-`.after(EmitSet::UiInput).after(EmitSet::Interact)` (preserving its current `.after(button_system)
-.after(interactable_system)`).
+`audio_state_system` becomes `.before(GameplaySet::Interpret)`. **Never write `.before/.after(
+stat_effective_value_system)`** — order against `GameStreamSet::Stats` / `GameplaySet::Execute` instead
+(add to `schedule.rs` docs and `src/CLAUDE.md`).
 
-**3. Chosen same-frame order (decided in principle by Frank, 2026-10-01: input events first, then delayed
-events, then stat events).** `EmitSet` order `UiInput → Targeting → ActionBar → Interact → DelayedEvents →
-Stats` — player-input-derived events precede time-derived and state-derived ones, and the existing
-`Targeting → ActionBar` guarantee (the documented race fix) is preserved as an explicit edge instead of a
-transitive one. Within the interpreters the stream order UI → Game → Scene is unchanged. The *exact*
-position of `Interact` and `DelayedEvents` relative to each other is arbitrary-but-fixed; it only needs to
-be deterministic and documented (see Open questions).
+**3. Resulting order (what the docs must say).**
+- **ActionQueue push order within a frame:** `DirectActions` (behavior activation, despawn timers) →
+  `Dialogue` → FSM → entity FSM → action-bar flush. So an action-bar slot's built-in `do_actions` run
+  *after* every `state_machine.ron` reaction, and dialogue actions run *before* them.
+- **UI stream:** exactly the `EmitSet::Ui` chain (keys → unclaimed gamepad → buttons → icon buttons; two
+  bound keys pressed together are ordered by D1, not D3).
+- **Game stream the interpreters read in frame N:** (1) carry-over from frame N-1's `Execute` set —
+  `flush_pending_intent` (`action_bar.activated`), `action_executor` (`EmitEvent`, combat, panel events),
+  then `stat_threshold` (threshold crossings); (2) events from each `FixedUpdate` tick, in that chain's order
+  (`player_movement → collectible → trigger_zone → npc_behavior`; 0, 1 or 2 ticks per frame); (3) the
+  `EmitSet::Game` chain: `Targeting → ActionBar → Interact → DelayedEvents → Stats`.
+- **Scene stream:** `EmitSet::Scene`, then carry-over from the executor.
+- Frank's accepted principle — **input events first, then delayed events, then stat events** — holds
+  *within each frame's Emit work*. The one exception is the carry-over head, which is causally earlier
+  because it was produced by the previous frame's actions. Stat *thresholds* belong to that head, not to
+  `Stats` (see Decisions D-a).
+- **Accepted consequences** (state them in the docs and in code comments): the action-bar cost gate sees
+  the previous frame's regen (`.current`, one frame ≈ 16 ms, deterministic — today it is random);
+  regen/expiry threshold crossings are interpreted a frame later; a behavior that finishes loading reacts to
+  this frame's events (automatic `ApplyDeferred` before `Interpret`, merged with the sync point
+  `spawn_scene_v2` already creates).
 
-**4. Testability: extract `GameplaySchedulePlugin`.** `lib.rs` registers these systems inline in
-`start_app`'s builder chain (`lib.rs:216-378`), so a schedule test cannot reach them, and
-`tests/support::setup_test_app()` deliberately builds a minimal world. Move the *ordering-relevant*
-registrations (the `Emit`/`Interpret`/`Execute`/`PostExecute` members above) into a plugin that
-`start_app` adds and the schedule test can add to a `MinimalPlugins` app together with the capability
-plugins whose systems it orders. Visual/camera/animation systems stay where they are.
+**4. Plugin placement.** Add `GameplaySchedulePlugin` at the **exact spot** of the current inline block in
+`start_app` (`lib.rs:217-334`) and keep the block's internal order and **every ordering comment** — on
+WASM's single-threaded executor ties break by insertion order, so moving registrations would reorder
+unconstrained pairs that D3 does not touch. The plugin owns **every** `Update` system that touches
+`Messages<UiEvent>`, `Messages<GameEvent>`, `Messages<SceneEvent>` or `ActionQueue`. `ActionBarPlugin` and
+`TargetingPlugin` tag their systems with `in_set(...)` instead of `.before(fsm_interpreter_system)` (the
+transitive-ordering note in `src/CLAUDE.md` becomes an explicit edge). No signature changes; largest tuple
+stays 12 (limit 20); `spawn_scene_v2`'s 16-param ceiling is untouched.
 
-**5. The schedule test (`crates/ironhold_core/tests/schedule_order_tests.rs`, new)** — two parts:
-- *Structure:* assert every system that takes `MessageWriter<UiEvent>`/`MessageWriter<GameEvent>` and is
-  registered in `Update` before the interpreter belongs to a named `EmitSet`, and that
-  `Emit.before(Interpret).before(Execute).before(PostExecute)` plus the `EmitSet` chain exist
-  (graph query of the built `Update` schedule). This is the "schedule-graph assertion" the old backlog item
-  asked for; it also guards `PhysicsSet::SyncBackend` having systems in `FixedUpdate` (the old item's second
-  half) and wraps the `Update` camera `.chain()` in a `CameraChainSet` so
-  `world_label_screen_pos_system.after(CameraChainSet)` replaces `.after(camera_blend_system)`.
-- *Ambiguity:* build the `Update` schedule with ambiguity detection and fail only on conflicts whose
-  `ComponentId`s include `Messages<UiEvent>`, `Messages<GameEvent>` or `ActionQueue` — **not** a blanket
-  `LogLevel::Warn`, which with zero `SystemSet`s today would flood with unrelated pre-existing ambiguities
-  (that wider triage stays a separate follow-up). Exact Bevy 0.18 API (`ScheduleBuildSettings`,
-  `Schedule::graph().conflicting_systems()`, component-id lookup) to be verified against the vendored
-  `bevy_ecs` source during implementation, not assumed here.
+**5. Tests (`crates/ironhold_core/tests/schedule_order_tests.rs`, new).** App = `MinimalPlugins` +
+`GameplaySchedulePlugin` + `ActionBarPlugin` + `TargetingPlugin`, with `add_message`/`init_resource` for the
+message types and `ActionQueue` so their `ComponentId`s exist. Use `initialize`, not `app.update()`.
+- *Structure:* `schedule.graph_mut().initialize(world)`, then assert set membership and the
+  `Emit → Interpret → Execute → PostExecute` and per-stream chains exist; expect **two** instances of
+  `stat_effective_value_system`; assert `schedule.warnings()` is empty (catches redundant membership — put
+  systems only in the specific sets, never also directly in `GameplaySet::Emit`).
+- *Filtered conflicts:* `conflicting_systems()` is computed on every build regardless of
+  `ScheduleBuildSettings` (`schedule.rs:1201`; no ambiguity-detection setting needed). Hard-fail on any
+  conflict whose component ids include `world.resource_id::<Messages<UiEvent|GameEvent|SceneEvent>>()` or
+  `ActionQueue`. Do not widen to a blanket warn (zero `SystemSet`s today would flood).
+- *Source scan, `ron_lint`-style:* every fn in `crates/ironhold_core/src` whose signature contains
+  `MessageWriter<UiEvent|GameEvent>`, `MessageReader<UiEvent|GameEvent>`, `MessageWriter<SceneEvent>` or
+  `ResMut<ActionQueue>` must be registered through the plugin or a plugin the schedule test loads; a small
+  explicit allowlist covers the `FixedUpdate` writers (`collectible`, `trigger_zone`, `npc_behavior`,
+  `player`). This closes the gap that the schedule test is blind to anything registered inline in
+  `start_app`.
+- *Behavioral:* a few small tests that two same-frame events from two writers reach the interpreter in the
+  documented order (one per documented worked example). The graph test is the real gate; keep these few.
+- Note in the (future) `bevy_019_upgrade` plan that the `resource_id`-based filtering will need porting if
+  resources become entities in Bevy 0.19.
 
-**6. Non-goals.** No gameplay-timer changes (that is the fixed-tick item); no re-homing into `FixedUpdate`;
-no change to the Update-vs-`FixedUpdate` event hand-off; no sorting of query iteration (that is D4); no new
-RON surface.
+**6. Non-goals / deferred.** No gameplay-timer changes (fixed-tick item); no re-homing into `FixedUpdate`; no
+query sorting (D4); no `HashMap` changes (D1/D2); no new RON surface. **Deferred to a follow-up** (logged in
+the backlog): the `CameraChainSet` wrap of the camera chain and the `PhysicsSet::SyncBackend` registration
+guard (both unrelated to event order; the latter needs `FixedUpdate` in the test), and widening the
+ambiguity filter beyond message/queue resources.
 
-## Behavior change and risk
-- **Visible only on same-frame collisions.** Native's and web's current orders differ and are not defined, so
-  *any* fixed order changes behavior for someone. Concrete collision cases to name in the playtest checklist:
-  pause key + inventory key in one frame (state-scoped bindings; whichever is read first decides whether the
-  other still matches); interact press + a UI button press in one frame; a `delayed` event firing the same
-  frame a stat threshold event does; two bound keys pressed together. Rare in practice, but each should be
-  consciously checked, not discovered.
-- **Needs the release playtest and screenshot baselines re-checked** (`python test_web.py`); expect no
-  baseline diff, but ordering changes on web are exactly the kind of thing screenshots may not show.
-- **Plugin refactor risk:** moving registrations into `GameplaySchedulePlugin` must not change any
-  system's *relative* order versus the camera/animation chain; the existing ordering comments in `lib.rs`
-  must be carried over, not dropped.
-- **16-param ceiling:** none of this touches `spawn_scene_v2`'s signature.
-- **Not a determinism guarantee by itself:** query-iteration order inside a system (D4) and
-  `HashMap` order (D1/D2) are separate. This plan only fixes *which system runs first*.
+## Decisions (system-architect, delegated by Frank, 2026-10-02 — for Frank's morning review)
+- **D-a — stat thresholds stay after the executor; document the timing, do not move them.** Moving
+  detection into `Stats` would not change latency for `ModifyStat`/`SetStat` crossings (still frame N+1) and
+  could *lose* crossings: detection is edge-triggered on `effective` (`stats.rs:127-147`), so same-frame regen
+  or modifier expiry could undo a crossing before it is observed. The "exception" is general: everything the
+  executor/flush/threshold systems write arrives at the head of the next frame's Game stream. Fix the false
+  comment at `lib.rs:242-243` ("threshold crossings are visible in the same frame"). Same-frame regen
+  crossings deferred to the fixed-tick plan.
+- **D-b — two independent chains, not one.** The interpreters read UI before Game, so UI-vs-Game order cannot
+  change an FSM outcome; one chain would only serialise writers that parallelise today. Matches the backlog
+  entry.
+- **D-c — accept that the cost gate sees last frame's regen** (`.current`, ~16 ms, deterministic; modifier
+  expiry doesn't affect the gate). Today it is random, not fresh. Moving `Stats` earlier would put expiry
+  events ahead of input events and break the accepted principle. Add a comment in `action_bar_input_system`.
+- **D-d — accept `DirectActions` before `Interpret`** (always-same-frame, ahead of FSM actions; automatic
+  `ApplyDeferred`; a freshly loaded behavior reacts to this frame's events). Strictly more deterministic than
+  today's random frame. Name it as a behavior change in the docs.
+
+## Plan-review outcome (folded in)
+Both reviewers returned "needs more design work"; every blocking item is resolved above.
+**Architect:** B1 direct pushers → `DirectActions`; B2 dialogue is a reader → `Dialogue` last in `Emit`;
+B3 plugin ownership + source-scan test; B4 two chains + cost-gate staleness named; N1 verified test API;
+N2 never order by `stat_effective_value_system`; N5 plugin at the exact spot; N6 `SceneEvent` in scope;
+N4 deferred (above). **UX:** U1 threshold timing documented as the carry-over rule (D-a); U2 plan, backlog
+D3 entry and docs/30 reconciled to the single order in Approach §3; U3 mis-targeted playtest case replaced;
+U4 designer-facing docs section added to Tasks; U5 pre-existing `game_over` bug logged under `## Bugs` (not
+fixed here). Remaining reviewer notes (N3, N7-N10) are doc/test/naming fixes inside D3's files and are
+folded in where they apply (N3 cycle trace → Findings; N7 cross-frame read order → Approach §3 and docs; N8 →
+no per-frame cost, sets add build-time nodes only; N9 → Bevy 0.19 note in §5; N10 → behavioral tests kept
+small).
 
 ## Tasks
-- [ ] Verify the writer inventory with `grep` for `MessageWriter<UiEvent>`/`MessageWriter<GameEvent>` and
-      reconcile against the Findings above (add any writer found missing from the membership table)
-- [ ] `runtime/schedule.rs`: `GameplaySet`, `EmitSet`, `CameraChainSet`
-- [ ] `GameplaySchedulePlugin`: `configure_sets` + move the ordering-relevant registrations out of
-      `start_app`; keep every existing ordering comment
-- [ ] Tag `TargetingPlugin` and `ActionBarPlugin` systems into `EmitSet::Targeting`/`ActionBar`; replace their
-      `.before(fsm_interpreter_system)` with set membership; keep `Targeting.before(ActionBar)` explicit
-- [ ] Replace remaining `.before(fsm_interpreter_system)`/`.after(...)` edges on non-writers with set edges
-- [ ] `tests/schedule_order_tests.rs` (structure + filtered-ambiguity); register it in
-      `crates/ironhold_core/tests/CLAUDE.md` and in the root `CLAUDE.md` one-file-at-a-time test loop
-- [ ] Behavioral tests: for each stream (UI, Game) emit two same-frame events from two writers and assert the
-      interpreter sees them in the documented order, repeated across N `App` instances
-- [ ] Update `crates/ironhold_core/src/CLAUDE.md` ("The interpreter chain" and the "targeting→interpreter
-      ordering is transitive" paragraph — now explicit) and add the same-frame ordering rule to
-      `docs/30_runtime_events_and_logic.md`
-- [ ] `cargo check -p ironhold_cli`; full test suite one file at a time (disk rule)
-- [ ] Reviews: alignment, system-architect, debug-detective; ux-gamedesigner-reviewer (docs changed);
-      wasm-perf-reviewer (schedule shape on single-threaded WASM)
+- [ ] Re-verify the writer/reader/pusher inventory with `grep` for `MessageWriter<…>`, `MessageReader<…>`,
+      `ResMut<ActionQueue>` and reconcile against Findings (add anything found missing)
+- [ ] `runtime/schedule.rs`: `GameplaySet`, `EmitSet`, `GameStreamSet` + module docs (unstable; never order
+      against `stat_effective_value_system` by name)
+- [ ] `GameplaySchedulePlugin` placed at the exact spot of the current inline block; carry over all comments
+- [ ] Tag `TargetingPlugin`/`ActionBarPlugin` systems with sets; replace their `.before(fsm_interpreter_system)`
+      with set membership; keep `Targeting.before(ActionBar)` explicit
+- [ ] Move `check_project_loaded`/`spawn_scene_v2`, `resolve_pending_behaviors_system`, `despawn_timer_system`,
+      `dialogue_tick_system`, `npc_hit_relay_system`, `inventory_ui_system`, `container_ui_system` into sets;
+      `audio_state_system` → `.before(GameplaySet::Interpret)`
+- [ ] Fix the false comment at `lib.rs:242-243`; add the cost-gate staleness comment in
+      `action_bar_input_system`; update `src/CLAUDE.md:30` to list the sanctioned `ActionQueue` pushers
+- [ ] `tests/schedule_order_tests.rs` (structure + filtered conflicts + source scan + few behavioral tests);
+      add it to `crates/ironhold_core/tests/CLAUDE.md` and the root `CLAUDE.md` test loop
+- [ ] Docs: rewrite `docs/30_runtime_events_and_logic.md` "System ordering" (~L868-884) as **"Same-frame event
+      order"** in designer language (no system/set names): lead with *design so order doesn't matter*; the
+      stream order of Approach §3; push order (dialogue, then FSM, then action bar); two worked examples
+      (e.g. Resume click + Esc in one frame — key first, so Esc unpauses and the Resume transition no longer
+      matches; and Esc + a `playing`-scoped click is silently dropped → put must-not-lose reactions in
+      `global_on`); promote the "timers/thresholds/NPC/physics events keep arriving in any state — handle in
+      `global_on` or author the transition from every state" rule; cross-link `docs/30` ~L186 and update the
+      "Ordering & determinism notes" (~L309-313). Add one-line pointers from `docs/20`'s key-binding and
+      `stats.ron` sections (D1 owns its own docs line)
+- [ ] Update `src/CLAUDE.md` ("The interpreter chain", the "targeting→interpreter ordering is transitive"
+      paragraph — now explicit)
+- [ ] Reconcile the backlog D3 entry's order text with Approach §3
+- [ ] Log the pre-existing U5 bug under `## Bugs`: `primitive_world/logic/state_machine.ron:130`
+      (`from: "playing"` only) and `3rd_person_game_demo/logic/state_machine.ron:220` — dying while paused never
+      reaches game over / drops the death animation
+- [ ] `cargo check -p ironhold_cli`; full suite one file at a time (disk rule)
+- [ ] Reviews after implementation: alignment, system-architect, debug-detective; ux-gamedesigner-reviewer
+      (docs); wasm-perf-reviewer (single-threaded executor)
 - [ ] WASM dev build + playtest checklist below
 
-## Playtest checklist (draft)
-- `3rd_person_game_demo`: pause (Esc) and open inventory (I) pressed within one frame; interact with the
-  merchant while a skill key is pressed; confirm no regression in targeting + skill use + death/respawn flow.
+## Playtest checklist
+- Bind **one physical key** to both a `global_key_bindings` UI binding and an action-bar slot: the UI reaction
+  must always happen first, identically on native and web.
+- Interact with a dialogue NPC while pressing a skill key: dialogue actions run before the slot's actions.
+- A behavior-bearing `Action::Spawn` prefab: its entry actions fire with no visible one-frame gap.
+- Pause overlay: Resume click + Esc in one frame (Esc first → unpaused, no re-pause).
 - `local_coop_demo`: both players press skill keys in the same frame (per-player bars still fire both).
-- Compare native and web builds for the pause+inventory same-frame case — they must now agree.
-- `python test_web.py` baselines unchanged (or deliberately re-baselined with an explanation).
+- `3rd_person_game_demo`: targeting + skill use + death/respawn flow unchanged; `python test_web.py`
+  baselines unchanged or deliberately re-baselined with an explanation.
+- Compare native and web builds for the first case — they must now agree.
 
 ## Open questions
-- Exact order of `Interact` vs. `DelayedEvents` vs. `Stats` (arbitrary-but-fixed; Frank accepted
-  "input, then delayed, then stat" — confirm `Interact` belongs with input).
-- Should `dialogue_tick_system` and `npc_hit_relay_system` move into the sets, or stay with plain edges? (This
-  plan puts `npc_hit_relay_system` in `PostExecute`; `dialogue_tick_system` keeps plain edges.)
-- Module/crate naming (`runtime/schedule.rs` vs. `schedule/`), and whether `EmitSet` should be public API or
-  `pub(crate)`.
-- Whether the filtered-ambiguity test should hard-fail now or start as `warn` for one release.
+None blocking (resolved by Decisions). `EmitSet`/`GameplaySet` are `pub` (tests need them) and documented as
+unstable; module lives at `runtime/schedule.rs`; the schedule test hard-fails.
 
 ## Acceptance criteria
-- Given any frame in which two `UiEvent` writers (or two `GameEvent` writers) emit, then the interpreters
-  read them in the documented `EmitSet` order, identically on native and on web, across repeated runs.
-- Given a new system that writes `GameEvent`/`UiEvent` and is not in an `EmitSet`, then the schedule test fails.
-- Given the existing targeting/action-bar behavior (the same-frame `{target}` fix), then it is unchanged and
-  the `Targeting → ActionBar` order is an explicit edge, not a transitive one.
-- Given the full existing test suite, then it passes with no regression; `ironhold_cli` still checks.
-- Given the release playtest, then the named collision cases behave per the documented order and the
+- Given any frame in which two `UiEvent` writers (or two `GameEvent` writers) emit, the interpreters read
+  them in the documented order, identically on native and web, across repeated runs.
+- Every `Update` system that writes `UiEvent`/`GameEvent`/`SceneEvent` or pushes `ActionQueue` sits in a named
+  set; the source scan fails for one that isn't registered through the plugin.
+- Given a new unordered conflict on those resources, the filtered-conflict test fails.
+- The `Targeting → ActionBar` order is an explicit edge, and the existing same-frame targeting behavior is
+  unchanged.
+- The docs, this plan and the backlog state one identical order; the U5 bug is logged.
+- The existing test suite passes with no regression; `ironhold_cli` checks; the release playtest passes and
   screenshot baselines are unchanged or deliberately refreshed.
