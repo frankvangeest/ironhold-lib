@@ -69,6 +69,21 @@ alongside `GROUND_CAST_SKIN`/`JUMP_AIR_GRACE_SAFETY`; nobody should tune it.
 flip puts movement policy in the animation layer and would also suppress *real* landings. The `>=`
 priority rule is correct; the input was wrong.
 
+**2026-10-02 plan-review of `planning/features/airborne_ground_reacquisition.md`** (chose a
+different shape from the above: `GroundProbe::AscentContact`, 0.05 m reach + rescue off, gated
+`jumps_used>0 && vy>0 && risen>=reach`, no stored state). Verdict Needs-more-design, 4 blockers worth
+remembering as traps for ANY fix here:
+- `jump_liftoff_y` is overwritten on every jump (`player.rs:682`), so a liftoff-relative gate
+  re-opens the full window after a double jump → gate with `jumps_used > 1 || risen >= reach`
+  (any jump with jumps_used>=1 fired from `!raw_grounded`, no liftoff overlap to protect).
+- The room10 repro involves REAL edge contact (the +0.98 m/s recovery impulse) → a contact-gap
+  probe still accepts it (edge witness ≤0.12 above feet, normal ≤45°). Separation-velocity
+  `v·n̂ > ε` is the discriminator vs a climbed slope (solver pins v·n≈0).
+- Any descending full-reach rule re-arms jump at the apex over a platform (`can_jump` same tick
+  as reset); velocity is SET not added, so spam-jumpers get a higher free jump than today's bug.
+- Mid-ascent hand-off only reproduces for surface tops ≈0.5–0.71 m (still in reach at grace
+  expiry tick 17); a 0.3 m curb can't be red. Production+harness linear_damping 0.5 → apex ~1.53 m, not 1.8.
+
 **Verified external precedent** (re-checked against sources, don't re-derive):
 - **Godot** `scene/3d/physics/character_body_3d.cpp`:
   `void CharacterBody3D::_snap_on_floor(bool p_was_on_floor, bool p_vel_dir_facing_up) { if

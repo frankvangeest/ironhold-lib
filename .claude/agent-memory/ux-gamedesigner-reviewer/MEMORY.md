@@ -1,7 +1,17 @@
 # Memory Index
 
+- [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
+
+- [lock-on plan-review](project_lock_on_plan_review.md) — no per-player target-clear input (gamepad can't unlock); player-in-frame unguaranteed; camera_modes prefabs default Tab
+
+- [step_height plan-review](project_step_height_plan_review.md) — tread rule unmeasured (~2x radius); p1_split_ring shared room9/10; seed opt-ins in blank_project
+
+- [Substitution token surfaces](project_substitution_token_surfaces.md) — no single token table in docs; no validate check for unresolvable/typo tokens; tokens never capture in on: patterns
+- [Despawn fade design](project_despawn_fade_design.md) — fade_secs is ADDITIVE to delay_secs; Shrink fallback console-only; target-ring must clear at fade start
+
 - [Action bar click activation](project_action_bar_click_activation.md) — slots clickable, owner_player not viewport; 4 key-only wording hotspots to grep on slot-input changes
 
+- [Fixed-tick pipeline review](project_fixed_tick_pipeline_review.md) — 64 Hz timers; pause freezes menu-armed delays; list of "per frame" doc surfaces to flip
 - [Same-frame event order](project_same_frame_event_order.md) — real order: UI > last-frame carry-over > FixedUpdate > Emit chain > Scene; D3 fixes only the Emit slice
 - [FSM designer traps](project_fsm_designer_traps.md) — `on` x3; initial_state entry skip; transitions carry no actions; struct-variant actions miswritten; stale old-syntax grep recipe
 
@@ -27,7 +37,7 @@
 - [NPC collider canonical example](project_npc_collider_canonical_example.md) — collider_height/radius worked example lives in 3rd_person_game_demo snake/spider prefabs, not docs' own orc_guard/rat examples
 - [decals: map has two consumers](project_decals_map_two_consumers.md) — assets.ron decals: feeds BOTH Action::ProjectDecal and scene target_indicator; doc sections don't cross-link; texture: field resolves against decals not textures
 - [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — 4 old gaps CLOSED (incl. un-freezing); still no policy field table, clips-alias looping undocumented
-- [dynamic_animation_control demo](project_dynamic_animation_control_demo.md) — canonical seek/freeze demo; flycam default speed 100 is wrong for dioramas; test_web baselines EVERY scene, no skip hook
+- [dynamic_animation_control demo](project_dynamic_animation_control_demo.md) — canonical seek/freeze demo; flycam default speed 100 is wrong for dioramas; moving scenes must go in test_web NON_DETERMINISTIC_SCENES
 - [World label legibility](project_world_label_legibility.md) — captions are fixed screen-px & never wrap; px/m depends only on viewport HEIGHT; camera-back makes overlap WORSE; short-token+legend pattern; field table gap now closed (docs/20 ~380-403)
 - [Em-dash font glyph gap](project_em_dash_font_glyph_gap.md) — engine font has no `—` glyph, renders as tofu box in ANY project's in-game text; always flag it, recommend ASCII hyphen `-`
 - [Target indicator color tiers](project_target_indicator_color_tiers.md) — 3-tier ring color (indicator_color > category > scene color); silent fallthrough now documented (docs/20 ~506); shipped categories are hostile/neutral/friendly; indicator_color still has no shipped example
@@ -50,7 +60,7 @@
 - [local_coop_demo room conventions](project_local_coop_demo_room_conventions.md) — 10-room portal chain, no ?scene= deep-link, exits must be listed, 22px font wraps-into-neighbour past a verified 82-char ceiling
 - [screen_offset stacking pattern](project_screen_offset_stacking.md) — shared world `offset` + pixel `screen_offset`; defaults 2.4/2.5/2.8 mismatch; 72px/m is a migration artifact, not a rule
 - [RON comments cite dev-only paths](project_ron_comments_cite_dev_paths.md) — asset RON comments point at planning/*.md and Rust doc comments designers can't open; rewrite as docs/20 references
-- [Jump re-arm coupling](project_jump_rearm_coupling.md) — jumps re-arm only on a ground-cast landing edge; jump height + collider radius + ground_cast_length invariant now documented (docs/20 ~2293-2295)
+- [Jump re-arm coupling](project_jump_rearm_coupling.md) — jump/ground-cast invariant; playtest targets: 3rd_person is FLAT, quick_scene=slopes, primitive_world=only jump-sound canary
 - [Quoted-string vs enum house style](project_quoted_string_vs_enum_house_style.md) — orbit_button:"Right" (string) vs velocity_curve:EaseOut (unquoted enum) both ship; new easing must match velocity_curve; CLI must validate string keys
 - [Corpse loot v2 pattern](project_corpse_loot_v2_pattern.md) — docs/30 section now REWRITTEN to v2 (not stale); gap is the missing 7-artifact "add a 4th monster" checklist
 - [container.* events & loot gotchas](project_container_events_undocumented.md) — events now in docs/30; trigger_zone needs explicit entity.exited handler; initial_items never refill after loot

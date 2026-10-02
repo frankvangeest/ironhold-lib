@@ -36,6 +36,18 @@ Designer-visible side effects of any change to grounded state:
   regressions. `double_jump: true` ships in primitive_world, particles_demo, effect_mayhem_demo,
   stats_demo.
 
+**Playtest-target facts (verified 2026-10-02, airborne_ground_reacquisition plan-review):**
+- `3rd_person_game_demo` main scene is a FLAT 100x100 cuboid — no hills/ledges. Its only raised
+  geometry: `loot_display_01` (0.2 m platform + chest top ~1.0), `chest_01` (top 0.8, compound
+  collider), `anvil_01`. Plans that say "3rd_person hills" are wrong.
+- `quick_scene` (heightmap terrain + `player_warrior`) is the slope/uphill-cadence canary.
+- `primitive_world` is the ONLY project binding `player.jumped` (PlaySound "jump") — the only way
+  to observe jump count in-browser; also has double_jump: true.
+- room10 `cube_obstacle_room10` top = 1.2 m; with default 1.8 apex it is the only shipped surface
+  in the "apex-hover" band (top within 0.7 m below apex). room10 P2 has no rig → no landing clip.
+- Landing clip (`jump_exit`) fires when within reach on the way DOWN (~0.13 s early on flat,
+  up to ~0.35 s over a near-apex platform) — undocumented in the docs/20 jump_exit callout.
+
 **Why:** reviewed for `planning/features/uphill_jump_lock.md`; the proposed fix (forced-airborne
 grace window) is tuned against shipped defaults only, so every one of the coupled fields above can
 re-break or over-trigger it.

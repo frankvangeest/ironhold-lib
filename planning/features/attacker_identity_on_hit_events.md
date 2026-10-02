@@ -1,6 +1,6 @@
 # Feature: Attacker Identity on Hit Events (`{attacker}` token + `entity.hit:{victim}:{attacker}`)
 
-_Status: Draft_
+_Status: Draft — plan-review 2026-10-02: needs more design work (see "Plan-review" section at the end)_
 _Planned at: `09467a2` (2026-10-02)_
 
 Backlog item: **Attacker identity on hit events (replaces the nearest-player heuristic in `npc_hit_relay_system`)**
@@ -186,3 +186,330 @@ data is the event name, the relay resolves position through `SpawnRegistry`.** L
   `ActionQueue`, including when `state_machine.ron` overrides the slot's intent.
 - `cargo test -p ironhold_core --test '*'`, `cargo check -p ironhold_cli`, `ron_lint` and `ron_validation` pass;
   docs list `{attacker}` and `entity.hit:` and describe `entity.attacked:` as the attacker-unknown fallback.
+
+## Plan-review (2026-10-02)
+
+Run by `/plan-review` while Frank was away: system-architect and ux-gamedesigner-reviewer, in parallel, read-only, claims checked against the code. **Combined verdict: needs more design work** — the blocking items below must be folded into this plan (and Frank's answers to the open questions recorded) before it can be marked Ready. The reports are reproduced verbatim (headings demoted one level).
+
+### System-architect review
+
+## system-architect plan-review: attacker_identity_on_hit_events.md
+
+Reviewed on `integration` @ `34803b1` (plan's `Planned at: 09467a2` resolves; no relevant code drift since).
+
+#### Verdict
+**Needs more design work** (two scoped plan-text corrections; the core approach is sound).
+
+The overall shape is right and the footprint is minimal: a string token plus a new event name, decoded by the single
+consumer (`npc_hit_relay_system`). There is no new `Action` variant, no new `GameEvent` variant and no new message
+channel, so D3's ordering and the interpreter's `let GameEvent::Trigger(name) = event;` readers are untouched. Most
+findings check out against the code:
+- the relay and its `iter().next()` guess: `npc.rs:170-193` / `:177`
+- exact-match FSM: `fsm_interpreter.rs:60,75,106`
+- the slot-time `rewrite_target`: `action_bar.rs:267-269`
+- the intent event built with the owning player's id: `action_bar.rs:259-261`
+- `SpawnRegistry` is a `BTreeMap`: `scene_manager/mod.rs:360-363`
+- players are registered, because `tag_spawned_entity` always inserts into the registry: `mod.rs:443-461`
+- the `fresh_global_transform` signature: `utils.rs:44`
+- `rewrite_target` is exhaustive with no wildcard: `action_substitution.rs:149-258`
+
+Two design points are wrong as written.
+
+#### Blocking
+
+**B1. Moving the demo to `entity.hit:{victim}:{attacker}` removes the only "this entity was hit" hook a behavior file can bind, which is the same objection the plan uses to reject the alternatives.**
+- Evidence: `entity_fsm_interpreter.rs:53,67,82` builds `pattern = binding.event.replace("{self}", id)` and
+  exact-matches it. So `on: "entity.attacked:{self}"` in a `.behavior.ron` is a working pattern today (hurt
+  reaction, flee-on-hit, alert allies). No shipped file uses it, but designers can author it.
+- `entity.hit:{self}:{attacker}` can't be bound that way: the attacker id isn't known when the behavior is
+  written, and there is no wildcard matching (the plan's own finding).
+- Approach step 4 switches all five `3rd_person_game_demo` slots to the new event, and the docs task relabels
+  `entity.attacked:` as "attacker unknown". Together these teach designers to drop the bindable event. The plan
+  rejects the typed `GameEvent::Hit` partly because it is "invisible to RON bindings", and its own choice has the
+  same problem for victim-scoped bindings.
+- Correction to the plan text:
+  - Approach step 4 / demo: slots emit **both**, `EmitEvent("entity.attacked:{target}")` followed by
+    `EmitEvent("entity.hit:{target}:{attacker}")`.
+  - Docs: `entity.attacked:{victim}` = "victim was hit; bind this from behaviors". `entity.hit:{victim}:{attacker}`
+    = "attribution channel; consumed by the engine and by global bindings that know the attacker".
+  - Approach step 3: add a precedence rule so the order in which the two events arrive can't matter. Inside one
+    `reader.read()` pass, collect attributed hits and legacy hits into two local maps keyed by victim. Then insert
+    the legacy (heuristic) position only for victims with **no** attributed hit this frame. Without this, the
+    legacy event can overwrite the correct attributed position.
+  - Add test (g): a slot emits both events, legacy first, and `NpcHitQueue` holds the attacker's position.
+  - Rewrite the acceptance criteria to match.
+  - Answer Open question 2 with "keep, not deprecated; it is the victim-scoped event", not "fallback".
+
+**B2. Interpreter-side `{attacker}` resolution is under-specified, and the matching acceptance criterion pairs the wrong victim for P2.**
+- Evidence: an override binding exact-matches `intent.slot.K:{spawn_id}` (`fsm_interpreter.rs:60` against the name
+  built at `action_bar.rs:259-261`). So the designer has already written the literal player id in `on:`, and
+  `{attacker}` only saves retyping it.
+- `{target}` in the same binding resolves to `CurrentTarget`, which is the **primary** player's target
+  (`fsm_interpreter.rs:30`, then `rewrite_target` at `:62,78,109`). For a P2 override,
+  `EmitEvent("entity.hit:{target}:{attacker}")` therefore becomes `entity.hit:<P1's target>:<P2>`. That is a
+  correctly attributed hit on the wrong victim.
+- Acceptance criterion 3 and test (e) as written would certify that.
+- The plan also doesn't say which of the four push sites resolve the token (global_on, in-state `on`, transition
+  exit actions, transition entry actions).
+- It is silent on `entity_fsm_interpreter_system`, which imports `intent_slot_key` and can bind intents too
+  (`entity_fsm_interpreter.rs:7`).
+- Correction to the plan text (minimal footprint, recommended): drop interpreter resolution from v1. `{attacker}`
+  resolves **only** in action-bar slot `do_actions`. FSM overrides author the literal player id they already
+  bound, and the CLI flags `{attacker}` anywhere else (see N1). Remove test (e) and the "including when
+  `state_machine.ron` overrides" clause from acceptance criterion 3.
+- If Frank wants it kept: list all four push sites, state the primary-player `{target}` pairing caveat explicitly
+  in the docs, and make test (e) assert the P1-target pairing as a documented limitation rather than as success.
+
+#### Non-blocking
+
+- **N1. The executor-warn citation is wrong; put the guard in the CLI.**
+  - `action_executor.rs:165-172` is the `Action::Spawn` id leftover-`{` check, not general `{self}`/`{target}`
+    diagnostics for `EmitEvent`. That same check already catches a leftover `{attacker}` in a Spawn id.
+  - Better guard: a `misplaced_attacker_token` CLI error, a near-copy of `misplaced_new_id_token`
+    (`crates/ironhold_cli/src/commands/validate.rs:1062-1077`), allowed only in `ActionBarDef` slot `do_actions`,
+    plus a `cli` test.
+  - A runtime one-shot warn needs `Local` state in the executor. A cheaper option is a `warn!` in the relay when
+    the parsed attacker equals `"{attacker}"`.
+- **N2. The fresh-transform rationale is schedule-specific; reword it to be schedule-neutral.** The relay is
+  re-homed to `GameplaySet::PostExecute` by D3 (`gameplay_pipeline_system_sets.md:95`) and later to `FixedUpdate` by
+  `gameplay_fixed_tick_pipeline.md:89,99,256`. The rule "use `Transform` via `fresh_global_transform`, because
+  `GlobalTransform` propagation only runs in `PostUpdate`" holds in both schedules. Add no ad-hoc
+  `.before/.after` edges; the relay's existing placement after the executor is all it needs. No conflict with
+  D3/D4 otherwise.
+- **N3. Separator parsing.**
+  - Generated ids are `{prefab}_{counter}` (`action_executor.rs:~150-160`), so they contain no `:`. Hand-authored
+    scene/Spawn ids are free strings.
+  - Resolve the Tasks item by adding a CLI check that rejects `:` in authored ids, rather than switching the
+    separator.
+  - If a victim id could ever contain `:`, decide between `split_once` and `rsplit_once` explicitly in the plan.
+- **N4. Test (f) is weak.** "Repeated runs produce the identical queue" passes even if the code depends on query
+  order. Instead, run test (a) twice with the two players spawned in reversed order and assert the same result.
+- **N5. Despawned attacker.** `SpawnRegistry` can still hold an id whose entity has been despawned; there is
+  deferred-despawn history. Resolve as `registry.get(id)` followed by `query.get(entity).ok()`, and fall back on
+  `Err`. The plan says "unresolvable", so make the `query.get` failure path explicit.
+- **N6. Sequencing.** The interim nearest-player fix (`backlog.md:19`) has not landed. If both are picked up
+  together, implement the heuristic inside this feature's legacy branch so it isn't written twice.
+- **N7. Wording note.** Rejected alternative "typed `Message<HitEvent>`": the reason that holds is the extra D3
+  ordering surface. The "invisible to RON" reason now applies equally to the chosen design without B1's fix, so
+  drop it or qualify it.
+- WASM/perf: confirmed negligible. There is no new system and no dependency; it adds one string `replace` per slot
+  fire and one `BTreeMap` lookup per hit. Skipping wasm-perf-reviewer is justified.
+
+#### Open questions for Frank
+1. **Event name:** recommend `entity.hit:{victim}:{attacker}`. It is short, and it is distinct from
+   `entity.attacked` so the meanings don't drift.
+2. **Deprecate `entity.attacked:`?** Recommend **no**. Keep it permanently as the victim-scoped, bindable "was hit"
+   event, and keep emitting it alongside `entity.hit:` (B1).
+3. **Validation strictness:** recommend a hard CLI error that mirrors `misplaced_new_id_token`, allowing `{attacker}`
+   only in slot `do_actions` (B2). Skip a runtime warn, or keep it to a relay-side literal check.
+4. **NPC/environment attackers as aggro sources:** recommend accepting any registered attacker in v1, with no faction
+   filter, and documenting it. Faction-aware threat belongs to the later threat/aggro item.
+5. **Interim heuristic first?** Either order works. If both land in the same batch, fold the heuristic into this
+   feature's legacy branch (N6).
+
+### UX-gamedesigner review
+
+## UX plan review: attacker_identity_on_hit_events.md
+
+Reviewer: ux-gamedesigner-reviewer (pre-code plan review, 2026-10-02, `integration` @ `34803b1`)
+
+The core idea works for designers. A token named after a role, sitting next to `{target}` in the same
+slot `do_actions`, is the right shape. Keeping `entity.attacked:` working with no migration is
+the right call, and the plan correctly rejects the typed-event alternatives, which designers could not see.
+`action_needs_target` staying untouched is also good: a slot that uses only `{attacker}` (for example
+a self-buff) will not be blocked by the no-target gate.
+
+Three gaps need closing before coding. Each one causes a silent failure on the most natural
+designer path:
+- what happens when a designer emits both events,
+- how a designer reacts to "this entity was hit by anyone",
+- whether a misplaced `{attacker}` gets caught.
+
+#### Verdict
+**Needs more design work.** The changes are small and mostly decisions, not a redesign.
+
+#### Blocking
+
+**B1. Emitting both events silently brings the wrong-player bug back.**
+- Plan, Approach step 3: the relay writes `hit_queue.0[victim] = pos` and the last event wins.
+- The docs will keep describing `entity.attacked:{victim}` as supported. So the most natural
+  migration is to *add* `EmitEvent("entity.hit:{target}:{attacker}")` and *keep* the old line.
+  Designers will also do this on purpose, because they need the one-part event for RON reactions
+  (see B2).
+- `assets/projects/3rd_person_game_demo/scenes/main.scene.ron:443,458,472,487,520` put the old
+  `EmitEvent` last in each list. A designer who adds the new line above it gets this result: the
+  legacy branch runs second and overwrites the real attacker's position with the nearest-player
+  guess. There is no warning, and in single-player nothing looks different.
+- **Fix:** state a precedence rule in the plan. For the same victim in the same frame, an
+  `entity.hit:` entry always beats an `entity.attacked:` entry, in either order. Add test (g): both
+  events in either order, and P2's position wins. Document it in one sentence: "Emitting both is safe;
+  the attacker-aware event takes priority."
+
+**B2. After the migration, RON has no way to say "when this entity is hit by anyone".**
+- FSM matching is exact string equality (plan Findings). So `entity.hit:{self}:...` can only be bound
+  per attacker id, for example `entity.hit:{self}:player_01` plus `entity.hit:{self}:player_02`.
+- Today `docs/30_runtime_events_and_logic.md:109` presents `entity.attacked:<id>` as an ordinary
+  bindable event. That is the obvious hook for a hit-flinch, a hit sound or a "first hit starts the
+  boss music" rule.
+- Moving all five demo slots to `entity.hit:` removes the only shipped emitter of an attacker-free
+  hit event.
+- Worse, a designer will naturally write `on: "entity.hit:{self}:{attacker}"` in a victim's
+  `.behavior.ron`, expecting `{attacker}` to capture whoever hit. That pattern can never match, and
+  nothing reports it (see B3).
+- **Fix:** decide and document the two-event model explicitly:
+  - `entity.hit:{victim}:{attacker}` is for *attribution*: the engine uses it, and it can be bound per known attacker.
+  - `entity.attacked:{victim}` is the *"hit by anyone" reaction* event, not a "legacy fallback".
+  - Docs recommend emitting both when you want RON reactions (safe because of B1).
+  - At least one demo slot shows both lines, with a one-line comment explaining why.
+- Also add a sentence to the `{attacker}` docs: "`{attacker}` is filled in when the action *fires*.
+  It is not a wildcard and cannot capture a value from an incoming event name."
+
+**B3. A misplaced or misspelled `{attacker}` is mostly silent.**
+- The plan's only safety net is a one-shot runtime `warn!` when an *`EmitEvent`* still contains the
+  literal. The `validate` check is left as an open question. These cases get no signal at all:
+  - `{attacker}` in any `on:`/`event:`/transition pattern (the B2 capture mistake). It is never an
+    action, so the executor never sees it.
+  - `{attacker}` in non-`EmitEvent` fields, for example a lifesteal
+    `ModifyStat(key: "{attacker}.health", delta: 5.0)` or
+    `ShowFloatingText(entity: "{attacker}", ...)` in a `.behavior.ron`, a dialogue choice, or a
+    non-intent `state_machine.ron` binding. These fail as "entity not found" with no hint about
+    why.
+  - Typos such as `{atacker}` or `{Attacker}`. These pass through as a literal id.
+- No existing `validate` check covers "a token used where it can't resolve": I grepped
+  `crates/ironhold_cli/src/commands/validate.rs`, and the `{self}` hits are skip-logic, not checks.
+  So the plan's "add a cli test beside the other substitution checks" has nothing to sit beside.
+- **Fix (decide now, it changes the task list):**
+  - (a) `ironhold validate` gives a hard error for `{attacker}` anywhere it can never resolve. That is
+    statically decidable:
+    - allowed in ActionBar slot `do_actions`, and in `do_actions` of a `state_machine.ron` binding whose `event:` starts with `intent.slot.`
+    - an error anywhere else: `.behavior.ron`, `.dialogue.ron`, other `state_machine.ron` bindings, and every `on:`/`event:`/transition pattern
+  - (b) The runtime warning covers every string field `rewrite_attacker` touches, not only
+    `EmitEvent`. Use the same variant coverage the plan already mandates.
+  - (c) Cheap and high value: an `unknown_token` validate warning for any `{word}` in an
+    action/event string that is not one of the known tokens (`{self}`, `{target}`, `{new_id}`,
+    `{attacker}`). This catches typos for all four tokens at once.
+  - Add whatever ships to the "Checks performed" list in `docs/60_contributing.md` (~244-256).
+
+#### Non-blocking
+
+**N1. The docs task list points at a table that doesn't exist and misses several places.**
+- Plan step 4 says "`docs/20_data_formats.md` (substitution-token table)". There is no such table.
+  The token docs are spread out:
+  - `{target}`: `docs/20_data_formats.md:1202`
+  - `{self}`: `docs/30_runtime_events_and_logic.md:498-515`
+  - `{new_id}`: `docs/30_runtime_events_and_logic.md:517-536`
+- The full list of places to update:
+  1. `docs/30_runtime_events_and_logic.md` ~536: a new `### {attacker} substitution` section next to
+     `{new_id}`. Say where it resolves, where it doesn't, and that it is not a capture wildcard.
+  2. `docs/30_runtime_events_and_logic.md:109`: add the `entity.hit:<victim>:<attacker>` bullet and
+     reword the `entity.attacked` bullet per B2. Line 113 (`npc.investigating`) says "last-known
+     attacker position"; add "(the real attacker when `entity.hit:` is used, otherwise the nearest
+     player)".
+  3. `docs/20_data_formats.md:1202`: add a sibling `{attacker}` paragraph right after the `{target}`
+     paragraph.
+  4. `docs/20_data_formats.md:1191-1200`, the co-op intent-override callout. **This one matters most.**
+     After this feature, an override rule resolves `{attacker}` per firing player, but `{target}`
+     still resolves to the *primary* player. A designer will assume both behave the same. Say the
+     difference explicitly, side by side.
+  5. `docs/20_data_formats.md:1181`: the rage-strike example uses `EmitEvent("combat.hit:player_01")`,
+     a third naming style. Change it to `entity.hit:{target}:{attacker}` so the docs show one
+     convention.
+  6. `docs/20_data_formats.md` NPC section (~3230-3262): there is no "how do I make an NPC react
+     when I hit it" recipe. Damage alone (`ModifyStat`) does **not** aggro an NPC; the designer must
+     emit the event. Today that fact lives in only one bullet in docs/30. Add a three-line recipe and
+     link it from the `investigate_timeout_secs` row (3262).
+  7. `docs/20_data_formats.md` action table rows for `EmitEvent` (3828) and `EmitEventAfterDelay`
+     (3836): they list only "`{self}` substituted in behavior files". Add `{target}`/`{attacker}`.
+  8. `docs/STATUS.md`: the entity messages list (~110-114) and any NPC/combat feature row. This is
+     the place that keeps getting missed.
+  9. `docs/60_contributing.md` checks list, per B3.
+- `planning/investigations/rpg_event_taxonomy.md:107` proposes `combat.hit:{attacker}:{target}`. That
+  is a different namespace *and* the reverse argument order. Update it in the same change so the
+  "convention" this plan sets is not contradicted by the taxonomy doc it cites.
+
+**N2. No shipped example demonstrates the part of this feature that actually changes behavior.**
+- `3rd_person_game_demo` is single-player, so switching its five slots changes nothing visible. It
+  is a good regression check, not an example.
+- `local_coop_demo` has no NPCs (no `on_player_near` anywhere in the project). The plan's co-op
+  playtest relies on "a scratch 2-player scene", which would be thrown away.
+- **Recommend:** add one Chase NPC to `local_coop_demo/scenes/room3.scene.ron`. That room already has
+  per-player bars (`action_bar_p1` G, `action_bar_p2` L, lines 243-289) and per-player targeting (T/M).
+  Add `EmitEvent("entity.hit:{target}:{attacker}")` to both slots. That becomes the canonical co-op
+  attribution example, and playtest step 3 becomes reproducible.
+- The room3 comments are already long. Keep any new hint `Label` under the ~82-character
+  one-line limit for that project's 22px font, and use ASCII `-` rather than an em dash in in-game
+  text (the engine font has no em-dash glyph).
+
+**N3. The demo's Taunt slot is the clearest showcase, but the token name works against it.**
+- `main.scene.ron:516` hardcodes `ShowFloatingText(entity: "player_01", text: "Taunt!")`. That is
+  exactly the per-player id `{attacker}` exists to replace, and it is broken today in any co-op
+  reuse of that bar.
+- Converting it is a good demo. But `ShowFloatingText(entity: "{attacker}", text: "Taunt!")`, or a
+  heal slot `ModifyStat(key: "{attacker}.health", delta: +20)`, reads oddly. The token really means
+  "the player who fired this slot", whatever the slot does. See open question 6.
+
+**N4. The plan's non-goal suggests a token that doesn't exist.**
+- Non-goals: "making `enemy_*.behavior.ron` emit `entity.hit:{player}:{self}`". There is no `{player}`
+  token. The shipped enemy behaviors damage the global `player_health` and don't know which player
+  they hit.
+- Fine as a planning note, but make sure that example never reaches `docs/`. A designer would copy
+  it and get a literal `{player}` (which B3(c) would at least catch).
+
+**N5. Playtest checklist gaps.**
+- Add a misuse step. Put `on: "entity.hit:{self}:{attacker}"` in a scratch behavior and run
+  `tools/bin/ironhold validate`. Expect the B3 error and a clear message.
+- Add a both-events step: one slot emits `entity.hit` *and* `entity.attacked`, in each order. The NPC
+  still walks to the firing player (B1).
+- Step 3 should use the room3 setup from N2. Activate P2's slot once by its key and once by its
+  gamepad `RightTrigger`, so the owner_player path is covered on both input sources.
+- Step 2 says "no `{attacker}` literal warnings". Also confirm `npc.investigating:{id}` fires
+  exactly once per hit when both events are emitted.
+
+**N6. Self-hit and unresolvable attackers fall back quietly. That is correct, but document it.**
+- One sentence in the `{attacker}` docs section: "If the attacker no longer exists, or is the victim
+  itself, the NPC falls back to the nearest player."
+- No warning is needed: this is a legitimate runtime situation, not contradictory authoring.
+
+#### Open questions for Frank (with recommendations)
+
+1. **Event name: `entity.hit:{victim}:{attacker}` or `entity.attacked_by:`?**
+   - **Recommend `entity.hit:{victim}:{attacker}`, victim first.**
+     - It keeps the `entity.<verb>:<the entity it happened to>` shape of the existing
+       `entity.interacted:`/`entity.entered:`/`entity.attacked:` family.
+     - A victim's behavior then reads `entity.hit:{self}:...`, the same as `entity.attacked:{self}`.
+   - Avoid `attacked_by`. It shares a prefix with `entity.attacked`, and a near-miss typo between
+     the two silently never matches.
+   - In the same change, reconcile `rpg_event_taxonomy.md:107` (`combat.hit:{attacker}:{target}`)
+     and the docs/20:1181 `combat.hit:player_01` example (see N1).
+
+2. **Deprecate `entity.attacked:{victim}`?**
+   - **Recommend no.** Keep it permanently, reframed as the "hit by anyone" reaction event (B2), not
+     a "legacy, attacker unknown" fallback.
+   - No `validate --strict` nudge. Warning about a legitimate, documented choice trains designers
+     to ignore warnings. The engine's existing rule is to warn only when authored intent
+     contradicts itself.
+
+3. **Validation strictness for `{attacker}`?**
+   - **Recommend a hard `validate` error in the statically unresolvable contexts**, plus the broader
+     runtime warning and the unknown-token warning (B3).
+   - The allowed contexts are exactly two and both are easy to detect in the files, so a hard error
+     will not produce false positives.
+
+4. **Should NPC-vs-NPC / environment attackers count as aggro sources?**
+   - **Recommend yes for v1, documented as "the NPC investigates whichever entity the event names."**
+   - No shipped content emits that today, so the risk is zero. Faction filtering would be hidden
+     engine behavior that a designer could not see or override from RON. If it is ever needed, it
+     should be an `NpcDef` field.
+
+5. **Ship the interim nearest-player fix first?**
+   - **Recommend yes.** Then the docs can describe the fallback once, accurately ("nearest player to
+     the victim"), instead of describing first-in-query-order behavior that is about to change.
+
+6. **(New) Token name: `{attacker}`, or something role-neutral like `{caster}`/`{actor}`?**
+   - The token resolves to the slot's owning player for *every* action in the slot, including heals,
+     buffs and taunt text (N3).
+   - **Recommend:** keep `{attacker}` only if its docs open with "the player who fired this slot,
+     whatever the slot does". Otherwise choose `{caster}`, which RPG designers already read as
+     "who used this ability".
+   - Decide before docs and demos lock in the name. Renaming a token later means a migration for
+     every project.

@@ -24,13 +24,11 @@ migrated to `state_machine.ron` along with every other shipped project by
    sets `8.0/20.0`; `terrain_demo`/`custom_materials` correctly rely on the defaults because their
    worlds are huge. Check this on EVERY new small-scale flycam demo.
 
-2. **`test_web.py` has no per-scene baseline exclusion mechanism.** `discover_scenes()` globs
-   `scenes/*.scene.ron` unconditionally and every hit gets a committed baseline diffed at
-   `BASELINE_DIFF_THRESHOLD = 0.04`. A RON comment claiming a scene is "excluded from screenshot
-   baselines" is therefore always false. `wait_for_scene_ready` settles on a frame count
-   (`SCREENSHOT_SETTLE_FRAMES = 120`) but animation advances on delta time, so any scene with
-   mid-clip / looping animation at screenshot time is genuinely flaky. Either make every scene in
-   a new project screenshot-deterministic, or add a real skip list.
+2. **Baseline exclusion now EXISTS (verified 2026-10-02):** `test_web.py` has
+   `NON_DETERMINISTIC_SCENES` (keyed "project/scenes/x.scene.ron", ~line 60) — excluded from the
+   baseline diff. Settling is still frame-count based (`SCREENSHOT_SETTLE_FRAMES = 120`) while
+   animation/sim advance on time/ticks, so any always-moving scene (animation, ocean, physics)
+   must be listed there or made frozen. Flag new projects that don't.
 
 3. **`clips:`-alias looping and un-freezing are asserted in scene labels but not in docs.** See
    [[animation-policy-doc-gaps]].

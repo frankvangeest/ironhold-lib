@@ -1,6 +1,6 @@
 # Feature: Ocean Simulation Demo (Gerstner ocean, wind, buoyancy, boat, live parameters)
 
-_Status: Draft_
+_Status: Draft — plan-review 2026-10-02: needs more design work (see "Plan-review" section at the end)_
 _Planned at: `0eea7ab` (2026-10-02)_
 
 Backlog: `### Ocean Simulation Demo` (8 items, requested 2026-09-30). Related, **referenced not absorbed**: `gameplay_fixed_tick_pipeline.md` (`SimTick`,
@@ -291,3 +291,265 @@ v7 drag a slider while holding the mouse over the 3D view: camera must not orbit
 - Given a boat with `boat`, when W/D are held (or `SetBoatInput` is dispatched), then it accelerates, turns only while moving, and the sail produces force consistent with apparent wind.
 - Given `SetParam` with a valid key, when dispatched or a slider is dragged, then the value changes live, is clamped, and an unknown key is a `validate` error and a runtime no-op warning; dragging a slider never orbits the camera.
 - Given `ocean_demo`, when `ironhold validate --strict` and `cargo check -p ironhold_cli` run, then both are clean, all presets and the scientific scene load, and the project is registered in `test_web.py`, baselines and `index.html`.
+
+## Plan-review (2026-10-02)
+
+Run by `/plan-review` while Frank was away: system-architect and ux-gamedesigner-reviewer, in parallel, read-only, claims checked against the code. **Combined verdict: needs more design work** — the blocking items below must be folded into this plan (and Frank's answers to the open questions recorded) before it can be marked Ready. The reports are reproduced verbatim (headings demoted one level).
+
+### System-architect review
+
+## system-architect plan-review: `planning/features/ocean_simulation_demo.md`
+
+Reviewed at `34803b1` (integration). Plan cites `0eea7ab`, which is the parent of the commit that adds the plan, so the `Planned at` convention is correct. Every claim below was checked against the code or the vendored crates (`bevy_pbr-0.18.0`, `bevy_camera-0.18.0`, `bevy_light-0.18.0`, `bevy_asset-0.18`, `bevy_rapier3d-0.33.0`, `rapier3d-0.31.0`). Nothing was compiled.
+
+Most of the plan's citations are accurate: the `Material` trait defaults (`bevy_pbr material.rs:141-206`), the foliage vertex-stage and sun-sync precedent (`foliage.rs:15-117,182-198`), the `uuid_handle!`/`include_str!` pattern (`terrain_material.rs:8`, `terrain.rs:219`), the FixedUpdate chain (`lib.rs:312-322`), the `ExternalForce` persistence (`bevy_rapier3d dynamics/rigid_body.rs:310-343`; sync on `Changed<ExternalForce>` in `plugin/systems/rigid_body.rs:312-323` = `reset_forces` + `add_force`), `Action` `deny_unknown_fields` (`actions.rs:5`), the wildcard-free `rewrite_self`/`rewrite_target` (`action_substitution.rs:13,149`), the dialogue wildcard (`dialogue.rs:320`, `other => other`), the CLI name match (`query.rs:540`), the `UiNodeDef` list (`scene_v2.rs:360-374`), the pointer-capture bug (`backlog.md:21`) and the `ron_lint` `Some(` rule. The design is well researched. The problems are in five specific claims, listed under Blocking.
+
+#### Verdict
+
+**Needs more design work.** Overall the plan is close. v1 and v2 each need one or two small spec corrections. v4 and v6 rest on wrong code assumptions. v5's central decision (D-7, boat-as-player) cannot work on the current code without a prerequisite change.
+
+Readiness per phase, once the listed fixes are folded in:
+
+| Phase | Readiness |
+|---|---|
+| v1 Ocean surface | **Ready after B1 + B5** (both are one-paragraph plan edits) |
+| v2 Sampler | **Ready after B5** (plus test-spec tweak N5) |
+| v3 Wind | **Ready** as is (non-blocking notes N8, N9) |
+| v4 Buoyancy | **Needs work**: B2 (collider/mass model of primitive prefabs) |
+| v5 Boat | **Needs design**: B3 (boat-as-player is infeasible as written; Frank decision) |
+| v6 Env control | **Needs work**: B4 (ambient light target), and the EnvOverrides single-writer contract (N3) |
+| v7 Slider | **Design Ready**, implementation gated on the `UiPointerCaptured` bug fix (as the plan says) |
+| v8 Demo | Follows from v1-v7. The boat construction in B2 has to change |
+
+#### Blocking
+
+**B1 (v1). The plan wants "permanent `NoFrustumCulling`", but `pipeline_warmup_system` strips it.**
+- **Evidence:** `lib.rs:460-464`. When the countdown reaches 0, the system iterates `nfc_entities: Query<Entity, With<NoFrustumCulling>>` and removes `NoFrustumCulling` from **every** entity that has it, not only the ones it added. The ocean spawns at scene load with `PipelineWarmup(4)` active, so its "permanent" NFC disappears after 4 frames. It then gets culled against the flat-grid AABB that `calculate_bounds` computes (y-extent ~0), so crests and grid edges pop out when the camera pitches.
+- **Fix:** don't use NFC for this. Insert an explicit `Aabb` inflated by `sea_level ± sum(A_i)` vertically and `± sum(Q_i A_i)` horizontally, plus `bevy::camera::visibility::NoAutoAabb` (`bevy_camera-0.18.0/src/visibility/mod.rs:445`; `calculate_bounds` skips `Without<NoAutoAabb>` at :459,:467). Recompute the AABB when wave params change. This also composes correctly with the warmup's temporary NFC.
+- **Plan edits:** Finding 3 and the v1 task "`LevelEntity`, `NoFrustumCulling`". Add a test that the ocean entity still has its `Aabb`/`NoAutoAabb` after warmup completes.
+
+**B2 (v4/v8). The plan's boat construction (composite primitive + "compound `colliders`") doesn't produce a collider, and "Dynamic replaces Fixed" names the wrong site.**
+- **Colliders:** `PrefabDef.colliders` is read only in `spawn_prefab_instance`, the GLB Actor/Prop path (`entity_spawner.rs:232-251`; the field doc at `catalog.rs:811-817` says "for `kind: actor` / `kind: prop`"). A `kind: Primitive` prefab ignores `colliders` silently. Primitives get collision only from `primitive.physics: true`, which inserts `RigidBody::Fixed` + collider on the entity (`scene_loader.rs:586-588`), or from `children[].primitive.physics: true`, which puts the collider on the child and `RigidBody::Fixed` on the parent (`scene_loader.rs:3376-3381`).
+- **Wrong citation:** Finding 7 cites `entity_spawner.rs:250` (the GLB path) as the primitive `physics: true` site.
+- **Fix:**
+  - (a) Specify the v8 boat's collision as `children[].primitive.physics: true` hull/keel children, or explicitly extend `colliders` to Primitive prefabs as a schema-semantics change (validate + docs). Either way, make "buoyant with no collider" a validate error that understands the primitive rules.
+  - (b) Insert `Buoyant` + `RigidBody::Dynamic` in **`attach_prefab_features`**. It runs after the Fixed inserts on all three paths (`scene_loader.rs:473`, `:693`, `entity_spawner.rs:334`), and the composite-NPC branch already relies on exactly this later-Dynamic-wins ordering (`scene_loader.rs:445-471`). Test both the single-mesh and composite paths.
+  - (c) Mass model: `AdditionalMassProperties::Mass(m)` scales collider-derived inertia but **cannot** carry the plan's `center_of_mass_offset` (`rapier3d rigid_body.rs:568-576`). Use `AdditionalMassProperties::MassProperties` with an explicit COM + box inertia derived from the buoyancy-point extents. Insert `ReadMassProperties` (`bevy_rapier3d dynamics/rigid_body.rs:184`) so `buoyancy_system` can pass the true world COM to `ExternalForce::at_point`. As written, the plan has no source for the `com` argument.
+  - (d) Validate-error on `buoyant` + `trigger_zone` together: the sensor's volume mass folds into the Dynamic body. This is the existing documented footgun in `src/CLAUDE.md`'s corpse-loot section.
+
+**B3 (v5). D-7 "boat carries `tags: ["player"]` so camera, targeting and `{player}` plumbing come for free" is false on current code.**
+- A Primitive `tags:["player"]` prefab goes through the unified player collector into `spawn_player_entity_core`. That function **unconditionally** inserts `CharacterController`, a capsule `Collider`, `LockedAxes::ROTATION_LOCKED` and `RigidBody::Dynamic` (`entity_spawner.rs:1092-1141`). It also **strips every `physics`/`sensor` child** from a primitive player (`:1047-1062`), which removes the hull colliders from B2.
+- `CharacterController` is the de-facto "is the player" marker. A vessel path without it falls out of collectible (`collectible.rs:28`), trigger_zone (`trigger_zone.rs:34`), interactable (`interactable.rs:45`), NPC detection (`npc.rs:172,215`), the action bar (hard-depends on `CharacterController`+`PlayerTarget`) and tab-targeting. Only the camera would "come for free".
+- The default Orbit camera then breaks the physics: `camera_orbit_system`'s `char_rotate` (default `character_rotate_rmb: true`) calls `rotate_y` directly on the target's `Transform` in `Update` (`camera.rs:278-283`). That teleports a Dynamic rigid body's rotation every frame RMB is held.
+- **Fix: a decision is needed before v5 is Ready.** Recommended: **reverse D-7 for v5**. The boat is an ordinary prefab entity, and the camera targets it by spawn id. `Fixed.look_at_entity` already works today (`schema/camera.rs:176-186`); add a small, generic `Follow.target_entity: Option<String>` (resolved via `SpawnRegistry`, read through `fresh_global_transform`) for the chase cam. This is reusable for cinematics and far smaller than player-path surgery. Boat keyboard input then needs no player. Gamepad needs a simple seed field on `boat.input` (no `BoundGamepad` hand-off).
+- The alternative, keeping D-7, requires the `Player`-marker migration (`With<Player>` instead of `With<CharacterController>` across ~10 query sites; `Player` already exists, `entity_spawner.rs:1156`), a third `PlayerModelSource`/body kind, and a `char_rotate` guard for non-character targets. That is a separate prerequisite feature, not a "spike".
+
+**B4 (v6). Ambient-light control targets the wrong Bevy 0.18 type, and the existing loader code it builds on is itself broken.**
+- In Bevy 0.18 `AmbientLight` is a **per-camera override component with `#[require(Camera)]`** (`bevy_light-0.18.0/src/ambient_light.rs:6-12`). The scene-wide ambient is the `GlobalAmbientLight` resource (`:59-61`).
+- `scene_loader.rs:2882-2891` spawns `AmbientLight` on a standalone entity. That most likely creates a stray bare `Camera` and never changes the real `Camera3d`'s ambient. `lighting.ambient` is therefore likely a no-op today; to be confirmed in a playtest.
+- The plan's "`SetParam ambient.*` inserts an `AmbientLight` entity when missing" (line 223) would extend that bug.
+- **Fix:** v6 writes `GlobalAmbientLight` (always present, so the "missing light" special case goes away). Log the existing loader bug in `## Bugs` (repro: any scene with `lighting.ambient`, e.g. compare ambient 0.0 vs 1.0 brightness, and inspect for an extra Camera entity), and fix it in or before v6. The same applies to `day_night_cycle.md:184`, which also says "update `AmbientLight` ... via ECS queries".
+
+**B5 (v1/v2 math spec). The "shared verbatim" Gerstner math evaluates `sin/cos(k(D·p) − phase)` on world-space `p`.**
+- The WGSL spec only bounds `sin`/`cos` error inside [-π, π]. Outside it the error is implementation-defined, and some WebGPU backends lose accuracy on large arguments. `libm` is exact. So GPU/CPU disagreement grows with distance from the origin. That breaks the v2 debug-probe parity check far from the origin, and can show as surface shimmer once a boat sails a few hundred metres out.
+- D-2 removed the time-precision problem but moved the same problem into space.
+- **Fix:** specify one range-reduced formulation for both sides. For example `u = dot(D,p)/λ − phase/(2π)` and `θ = 2π·(fract(u) − 0.5)` (CPU: `u - u.floor()`), with phase stored as cycles. Also add it to the WGSL-drift guard test (finding 3 of the parity strategy).
+
+#### Non-blocking
+
+- **N1 (v1, major). D-2(b) "changing a wavelength/speed live never teleports the waves" only covers the time term.**
+  - Changing `k` or direction shifts the spatial term `k(D·p)` by `Δk·(D·p)`, which grows linearly with distance from the origin. At 200 m, 28 → 29 m wavelength shifts ~1.5 rad: a visible pop and a buoyancy force spike under the boat.
+  - Fix: on a k/direction change, re-anchor `phase_i += Δ(k_i D_i)·p_ref`, with `p_ref` = the `follow` target or the camera focus. Then the sea is continuous where the viewer is. Note the limitation in docs.
+- **N2 (v1). The uniform is effectively re-uploaded every frame, not "only on change".**
+  - Phases change every tick, and `Assets::get_mut`/`iter_mut` queue `AssetEvent::Modified` (`bevy_asset assets.rs:446,645,654`), which re-prepares the bind group.
+  - That is acceptable for one material, but the claim should be corrected. Split the state into `OceanParams` (rare changes, `Changed<>`-guarded constant derivation) and `OceanClock` (phases, every tick). As written, `Changed<Ocean>` fires every tick and the guard is useless.
+  - Use `get_mut` on the single handle, not the foliage `iter_mut` pattern. `foliage_lighting_sync_system` iter_muts every foliage material every frame, which is a pre-existing small perf smell worth a `claude_suggestions.md` entry.
+- **N3 (v6). Make the env layer single-writer instead of "flags the day/night system must honour".**
+  - v6 should introduce an `EnvState` resource (sun dir/color/intensity, ambient, fog) as the sole source. One `env_apply_system` is the **only** writer of `DirectionalLight`/`GlobalAmbientLight`/`DistanceFog`. `SetParam` writes `EnvState` plus override flags. Day/night later becomes a *producer* into `EnvState` for non-overridden channels.
+  - This avoids the two-writer race (executor vs day/night both in unordered `Update`), and lets `ocean_material_sync` order itself `.after(env_apply_system)` instead of reading a light that may be written later in the same frame.
+  - **Amendment `day_night_cycle.md` needs:** (1) its Apply step writes `EnvState`, not the light components or `AmbientLight`; (2) it skips channels flagged in `EnvOverrides`; (3) `GlobalAmbientLight` instead of `AmbientLight` (B4); (4) define how `sun.yaw_deg`/`pitch_deg` map to/from `DirectionalLightDefV2.rotation_euler_deg` (XYZ euler, `scene_v2.rs`). Both plans need that mapping.
+- **N4 (v1/v3/v6). Resources outlive scenes.** `Ocean`/`OceanClock`, `Wind`, `SceneFog`, `EnvOverrides`/`EnvState` are resources, not `LevelEntity`s. A `LoadScene` into a scene without `ocean:`/`wind:` keeps the old ones: wind gusts keep emitting `wind.gust`, and the sampler answers for a sea that isn't drawn. Remove or reset them in the `LoadScene` arm and on scene spawn (same lifecycle as `ActiveViewBox`/`ActiveSplitScreen`), and add one lifecycle test per resource.
+- **N5 (v2). Fixed-point inversion convergence.**
+  - The contraction factor of `p0 <- p − D(p0)` is `≈ Σ Q k A cos θ ≤ steepness`, so at steepness → 1.0, 4 iterations do not converge near crests. The "self-consistency within 2e-3 across all steepness values" test will fail at 1.0.
+  - Either state the tolerance per steepness band (tight ≤ 0.8, loose above), or cap `steepness` for scenes with buoyant bodies (validate warning above 0.9).
+  - Also, cost is 4 inversion + 1 final forward = **5×N** sincos per point, not 4×N (8 pts × 5 × 8 = 320 per boat per tick). Still trivially within budget.
+- **N6 (v1). Fog: use Bevy's own fog in the ocean fragment.** Under `#ifdef DISTANCE_FOG`, call `bevy_pbr::pbr_functions::apply_fog(mesh_view_bindings::fog, color, world_pos, view.world_position)` (`pbr_functions.wgsl:762`, binding at `mesh_view_bindings.wgsl:42`). Drop the `fog` Vec4s from `OceanMaterial`. That gives one source of truth and fewer uniform bytes. Resolves the plan's own "verify" task.
+- **N7 (v1).** Colors (`deep_color`, `shallow_color`, foam, fog) are authored sRGB. Convert with `Color::srgb(..).to_linear()` before packing into Vec4 uniforms (`src/CLAUDE.md` color convention; the shader works in linear). Also: 256×256 cells = 66,049 verts, which needs `Indices::U32` (fine on WebGPU, just don't assume u16). 192² cells = 37,249 verts.
+- **N8 (v3).** Gust sines use `det_math::sin(2π t/P)` with `t` growing unbounded, which is the precision problem D-2 solved for the ocean. Accumulate gust phases in f64 and wrap, like the ocean clock. The coupling's first-order lag needs `exp(-dt/τ)`, so add `det_math::exp` (libm) next to `powf`, or precompute alpha once per param change.
+- **N9 (v3/v4).** Sorting `Buoyant` by `SpawnId` is harmless but not needed for determinism: each body writes only its own `ExternalForce`, with no cross-body accumulation or events. Keep it if it is cheap (it allocates per tick); don't present it as load-bearing. The wind `GameEvent` ordering claim is correct: the set is `.after(mark_dirty_trees)`, which follows collectible/trigger_zone/npc.
+- **N10 (v4).** The plan's own dinghy example triggers its own stability warning: k = 2·220·9.81/(5·0.5) ≈ 1727 N/m, m_pt = 44 kg, so critical damping is ≈ 551 and 0.3·crit ≈ 165 > `water_drag: 80`. Either retune the example or relax the heuristic. Stiffness itself is fine: `dt·sqrt(k/m_pt)` ≈ 0.098.
+- **N11 (v5). Two writers on `BoatInput`.** Keyboard `boat_input_system` (FixedUpdate, every tick) overwrites whatever `SetBoatInput` (executor, Update) set, so a scripted throttle on a boat with `input:` lasts < 1 tick. Define precedence: separate `scripted`/`manual` channels, or manual writes only while a bound key/axis is active, or validate-warn `SetBoatInput` on a boat with `input:`. Also specify whether W/S is held-level (±1) or ramps a throttle setting (trim keys clearly ramp). Gamepad axis names need a new `parse_gamepad_axis`; only `parse_gamepad_button` exists.
+- **N12 (v7).**
+  - The slider both writes a `UiEvent` and pushes `ActionQueue`. Under D3 that puts a UI-stream writer in `EmitSet::DirectActions`, so slider events are ordered after `EmitSet::Ui`'s buttons. Fine, but state it.
+  - Add the system to D3's direct-pusher source-scan allowlist, and add it as an explicit listed exception to `src/CLAUDE.md`'s "Never push to ActionQueue from a capability".
+  - The track node must be a `Button` to get `Interaction` (existing UI rule).
+  - Readout keys should be per-instance (`boat.<id>.speed_mps`), or a second boat collides.
+- **N13 (v6).**
+  - `ApplyParamPreset(name)` lives in project-wide `state_machine.ron`, but presets are per-scene. CLI validate can only check "defined in some scene" unless presets move to a project-level file. Decide which.
+  - `ParamKey::parse` with `boat:<id>.<field>` is ambiguous if a spawn id contains `.`. Validate ids or use `boat:<id>:<field>`.
+  - The CLI must scan all **six** Action surfaces for `SetParam` keys (see `cli_validate_coverage_model` memory).
+- **N14 (v1).** "`follow` id exists" as a validate **error** false-positives when the followed boat is spawned by `Action::Spawn`. Make it an error only when no scene entity or any project `Spawn` action produces the id, else `--strict` (same union pattern as the placed-prefab checks).
+- **N15 (sequencing).** D-6 says "D2 must land first; D1 only matters for...", but the backlog's D2 entry has `_Dep: D1._` (`backlog.md:145`). So the real prerequisite chain is D1 -> D2 -> {v3, v4}. v1/v2 don't need it: no maps there. Fix the D-6 wording.
+- **N16 (tests).** `tests/support/mod.rs` explicitly `init_asset`s some material types (`TerrainMaterial`). Add a v1 task to confirm `OceanMaterial` assets resolve headless, or add the line. Note that Rapier *does* run in integration tests (`GamePlugin` -> `PhysicsPlugin`, and the `#[cfg(not(test))]` gates only apply to unit tests), so the v4 settle/draft tests are feasible.
+- **N17 (docs/planning).** Log the `AmbientLight` bug (B4) and the warmup-strips-all-NFC behaviour (B1) as backlog bugs or suggestions in their own right, independent of this feature. Particle pool groups also rely on NFC and may be affected if they exist when warmup completes.
+
+#### Open questions for Frank (with recommendations)
+
+1. **Generic `SetParam` registry vs ~25 typed actions.** **Registry.** It is the right call: one exhaustive-arm cost, one validator, sliders and presets reuse it. Parse keys into a typed `ParamKey` enum at load/validate, so runtime typos are a validate error, not a silent no-op. Keep `SetWind` typed as planned.
+2. **Boat as `tags:["player"]` vs mount/dismount.** **Neither, for now (see B3).** Make the boat an ordinary entity, with the camera targeting it by id (`Fixed.look_at_entity` today, plus a small `Follow.target_entity`). Boat-as-player needs the `Player`-marker migration as its own prerequisite feature. Mount/dismount stays out of scope.
+3. **Land D2 first, and fixed-tick Phase 1 before v8's scientific scene?** **Yes to both, corrected to D1 -> D2** (D2 depends on D1), and only before v3/v4, not v1/v2. Fixed-tick Phase 1 is needed before the v8 scientific scene only.
+4. **Lift direction.** **World-up.** Expose `normal_lift: 0..1` later.
+5. **Horizon / `match_clear_color`.** **Yes, ship `match_clear_color`.** It is cheap and makes fog read as horizon. A sky feature is a separate backlog item.
+6. **Wind ramping.** **Instant `SetWind`**, plus the coupling's smoothing. Independently, apply N1's spatial re-anchoring to *wave* param changes, because ramping wind does not fix wave pops.
+7. **Compass convention (0 = −Z, 90 = +X, clockwise; wind = direction blown toward).** **Agree.** It matches -Z forward, and "toward" is consistent with wave travel direction. Document clearly that it is the opposite of meteorological "from". Define `sun.yaw_deg`/`pitch_deg` against `rotation_euler_deg` (N3) before v6, since that mapping is the expensive-to-change part.
+
+### UX-gamedesigner review
+
+## UX plan-review: `planning/features/ocean_simulation_demo.md` (8 phases)
+
+Reviewer: ux-gamedesigner-reviewer. Pre-code review. I checked it against `docs/20_data_formats.md` at `34803b1` (scene field table, Lighting, UI section, InputMap, instance-stat key addressing, colour conventions), `test_web.py` and `planning/backlog.md`. I read no Rust; any engine claim below is marked "needs verification".
+
+#### Verdict
+
+**Needs more design work**: four blocking items. The engineering is careful: determinism is scoped honestly, there is a single `ParamKey::parse`, `validate` errors on unknown keys, and the RON examples follow the `ron_lint` rule against `Some(`. The gaps are in the designer contract:
+
+- The direction and angle conventions conflict with existing fields.
+- The `SetParam` key list is unspecified (it ends in "...") and does not match the RON field names.
+- The boat's input block ignores the existing `components.inputs` / `gamepad_index` system.
+- Readouts have no number formatting.
+
+All four are cheap to fix in the plan now and expensive after v1/v5 ship. v1-v4 can start once item 1 is settled. Items 2-4 only need to be settled before v5/v6.
+
+---
+
+#### Blocking
+
+**B1. Angle and direction conventions conflict with existing fields. Settle this before v1, because it affects every phase.**
+- **Entity rotation turns the other way.** Waves, wind and `sun.yaw_deg` use compass degrees: 0 = -Z, 90 = +X, clockwise from above. The `rotation_euler_deg` that designers already use on every entity, `spawn_points` transform and `directional:` light is an XYZ Euler rotation. Its docs never state a handedness (docs/20 ~297, ~3384, ~3437). In a right-handed, Y-up, -Z-forward engine, a +90 Y rotation turns the forward axis toward **-X** (needs verification against the engine, but that is the standard). So a designer who sets a boat's `rotation_euler_deg: (0, 90, 0)` "to match `direction_deg: 90`" gets a bow pointing the opposite way. The plan's open question 7 says compass "matches the engine's -Z forward". It does match at 0 degrees, but it runs the opposite way from entity yaw. The plan never mentions this.
+- **Two ways to aim the sun.** `lighting.directional.rotation_euler_deg` is how a scene authors the sun today. v6 adds `sun.yaw_deg` / `sun.pitch_deg` as `SetParam` keys. These are a second convention for the same light, with no stated mapping between the two. A designer cannot predict what `SetParam("sun.yaw_deg", 0)` does to a scene authored with `rotation_euler_deg: (-45, 35, 0)`.
+- **"Direction" is ambiguous.** Wind is defined as the direction it blows *toward*, and the plan says to "document loudly". Every weather report, and every sailor, gives the direction wind blows *from*. Waves are presumably toward as well, but the plan does not say so.
+- **Fix.** Write one "Angles and directions" section for docs/20 and put it in the plan, then build to it:
+  - (a) Rename `direction_deg` to `toward_deg` on both waves and wind, so the field name carries the meaning and no reader has to find the doc note.
+  - (b) Replace sun `yaw_deg`/`pitch_deg` with `sun.azimuth_deg` (where the sun stands in the sky, on the same compass) and `sun.elevation_deg` (degrees above the horizon, 0-90). Every designer and every sky reference uses these terms. State the exact mapping to `rotation_euler_deg` and what the authored value reads back as.
+  - (c) Add a worked example: "to point a boat's bow along `toward_deg: 90`, set `rotation_euler_deg: (0, -90, 0)`", whatever the verified sign turns out to be. A comment should also go in the `ocean_demo` scene next to the boat.
+
+**B2. The `SetParam` key registry is the designer API, and the plan leaves it unspecified and inconsistent with the schema (v6, also used by v7 and v8).**
+- **The key list is incomplete.** It ends in `...` (`ocean.{sea_level,time_scale,gravity,foam.threshold,spec.strength,...}`, `boat:<id>.{thrust_max,rudder_authority,...}`). Sliders, presets and scripts are all typed against this list, and it is only discoverable through docs.
+- **Keys don't match the RON fields they control.** A designer who learned the RON file cannot guess the key:
+
+  | RON field | Plan's key |
+  |---|---|
+  | `specular: (strength:)` | `ocean.spec.strength` |
+  | `lighting.directional` | `sun.*` |
+  | `ambient_brightness` | `ambient.brightness` |
+  | `ambient: (r,g,b)` | `ambient.color.r` |
+  | `gust: (amplitude_mps:)` | `wind.gust_amplitude_mps` |
+  | `waves: [...]` | `ocean.wave.0` |
+
+- **New address syntax.** `boat:<id>.thrust_max` uses a `prefix:id.field` form. Instance stats already use `"spawn_id.stat"` (docs/20 ~4319-4344, `ModifyStat(key: "{self}.health")`), so a designer will write `"{self}.thrust_max"` or `"{self}.boat.thrust_max"`.
+- **Fix, to be written into the plan before v6.**
+  - (1) Rule: *a key is the RON path of the field it controls*: `ocean.waves.0.amplitude`, `ocean.specular.strength`, `lighting.ambient_brightness`, `wind.gust.amplitude_mps`. Choose one entity-addressing form and justify it against the stat precedent. My preference is `"{self}.boat.thrust_max"` / `"dinghy_01.buoyant.lift_ratio"`, which mirrors stats.
+  - (2) Put the full key table in the plan, with unit, valid range (the clamp `validate` uses), default and which phase adds it. That table becomes a docs/20 "Parameter keys" section.
+  - (3) Add `ironhold query params <project>` to list every valid key for that project's scenes, including the real spawn ids.
+  - (4) `validate` checks that a slider's `min`/`max` fall inside the key's clamp range; otherwise a slider can be dragged into silent clamping.
+  - (5) `validate` checks keys that contain `{self}` against the field suffix and the prefab's actual `boat`/`buoyant` block. A `{self}` key can't be resolved to an id statically, but its field part can be checked.
+  - (6) docs/30 or docs/20 gets a "Which Set* do I use?" table covering `SetVariable` (string GameVariable), `SetStat`/`ModifyStat` (stat), `SetParam` (engine parameter) and `SetWind` (shortcut for two `SetParam` keys). These are three "set a number by string key" actions, and designers will mix them up.
+
+**B3. Boat input does not fit the existing player input system (v5).**
+- **Two input systems on one prefab.** `boat: (input: (throttle_up: "W", ..., gamepad_throttle_axis: "RightStickY"))` is a second input-binding system next to `components.inputs` (InputMap, docs/20 ~2138-2163), which is where every player's keys and `gamepad_index` live today. The boat is `tags: ["player"]`, so it also has an InputMap. The designer then has two places for keys, both defaulting to WASD, and no statement of which one owns the gamepad.
+- **Axis names don't exist.** Gamepad *axis* names (`"RightStickY"`, `"LeftStickX"`) are not part of any documented vocabulary; the docs only list button names such as `South` and `RightTrigger`. They need a validated name list, or the plan should drop them.
+- **Throttle behaviour is undefined.** The names `throttle_up`/`throttle_down` suggest a ratchet that holds its setting, but a stick axis suggests "hold to apply". A designer needs to know whether releasing W returns the throttle to 0.
+- **Script and keyboard compete.** Both `boat_input_system` and `SetBoatInput` write the *level* `BoatInput` component, and the plan does not say which wins. A held-key writer that writes 0 every tick would erase every scripted `SetBoatInput` on a player boat.
+- **Unclear which player fields apply.** The vessel-player path has no equivalent of the "which `PrefabDef` fields take effect on a `tags: ["player"]` prefab" list (docs/20 ~2128-2132). The plan doesn't say what `components.movement`, `jump`, `run`, `interact`, `target_next` or `camera` do on a boat.
+- **Fix.** Put boat keys inside `components.inputs` as optional `throttle_up`/`throttle_down`/`rudder_left`/`rudder_right`/`trim_in`/`trim_out` fields, and reuse `gamepad_index` and `gamepad_deadzone`. Then:
+  - state ratchet versus hold (my recommendation: hold-to-rudder, and a throttle ratchet with a `throttle_step`);
+  - state precedence: a script write lasts until the next *non-zero* human input, or `SetBoatInput` takes control until `ReleaseBoatInput`. Pick one;
+  - write the vessel-player field-applicability list;
+  - make the combinations that are known not to work (a boat in `join_prefab_keys`, split-screen boats) validate errors in v5, not silent no-ops.
+
+**B4. Readouts can't be formatted, and the readout names don't say which boat they belong to (v5, v7, v8: the core of the "scientific" scene).**
+- **No number formatting.** GameVariables are strings, and `Label` has only `format: "...{}"` with no precision control (docs/20 ~886). Published `f32`s such as `boat.speed_mps` will render as `3.1415927` and change their last digits every tick: unreadable, and they overflow the fixed-width labels (22 px font is about 13 px per character, so a 240 px box holds roughly 18 characters).
+- **The slider example overflows its own box.** Its `label: "Wave 0 amplitude: {}"` with `decimals: 2` is 22 or more characters in a 240 px wide node.
+- **Readout names collide.** `boat.speed_mps` has no boat id, so two boats (for example the scientific scene's reference boat plus the player's boat) overwrite each other.
+- **Fix.**
+  - Publish readouts already rounded (a `decimals`-style precision per key, or a fixed documented precision per unit).
+  - Better still, add a generic `decimals: Option<u32>` to `Label`, so every bound number in every project benefits.
+  - Name readouts `<spawn_id>.boat.speed_mps` to match B2's addressing.
+  - Rename the slider's `label:` to `format:` to match `Label`.
+  - Give `Slider` a `font_size` like Button/Label.
+  - Add every auto-written key to the "GameVariables auto-written by capabilities" table (docs/20 ~891). Per my standing note, that table is the one that lags.
+
+---
+
+#### Non-blocking
+
+**v1 ocean**
+- **N1 Steepness depends on wave count.** `Q_i = steepness / (k A N)` divides by the wave count, so adding a third wave visibly *softens the first two*. That is a surprise for anyone tuning one wave at a time. Either normalise differently (only scale down when the sum would loop), or document it next to `steepness` with the sentence "adding waves rounds existing crests".
+- **N2 The wavelength limit error must give the number and the fix.** The "wavelength >= 4 x cell size" CLI error should print the minimum wavelength for the current grid and the remedy: "raise `resolution` or shrink `size`". At the defaults (400 m / 192 cells, about 2.1 m cells) the minimum is about 8.3 m. Designers trying to author small chop will hit this immediately. Also define what a live `SetParam`/slider does below the minimum: clamp to the limit, and say so in the key table.
+- **N3 Colours are 3-component.** `deep_color`, `shallow_color`, `foam.color` and `fog.color` are all 3-tuples. docs/20's colour conventions section (~34-39) says 3-component is for lights and primitive `color` only, and "everything else" is 4-component RGBA. Either use RGBA (alpha ignored or used for foam opacity) or amend the conventions section to add "ocean and fog colours". The plan should pick one.
+- **N4 `time_scale` sounds global.** On `ocean:` it reads like a global time scale but only freezes the waves; wind, gusts and boat physics keep running. Rename it to `wave_time_scale`, or add a row in the docs table: "does not pause wind or boats".
+- **N5 Help designers pick a wavelength.** Add a docs table: wavelength 4 / 11 / 28 / 60 m against period and speed (for example 28 m is about 4.2 s and 6.6 m/s). Designers think in "a swell every ~4 s". Optionally add `period_secs` as an alternative to `speed` (exactly one allowed, like `speed_mps`/`beaufort`).
+- **N6 Explain the two water options.** The docs task "`docs/25` why not CustomMaterial" is correct, but the designer-facing need is a "which water do I use?" note in docs/20. `custom_water_stylized` is a cheap flat pond (no floating). `ocean:` is moving water you can float things on, one per scene, with no reflections.
+- **N7 `debug_probe` needs a field definition.** `debug_probe: true` needs probe coordinates (the plan mentions `probe.x/z`), so the field must be a struct, not a bool. It is the only designer-visible output of v2 and should go in the field table with "dev aid, remove before shipping".
+
+**v3 wind**
+- **N8 Explain the coupling knobs.** The `coupling` block's `amplitude_exponent` and `wavelength_exponent` are physics jargon. Document each as "how strongly wind speed grows waves (2 = doubling the wind quadruples the height)". Keep `drives_waves: false` as the default; it follows the house style for on/off bools.
+- **N9 Two ways to change the wind.** `SetWind` and `SetParam("wind.speed_mps")` both exist. Keep both (`SetWind` ships before v6), and say in docs that `SetWind` is the shortcut.
+
+**v4 buoyancy**
+- **N10 `physics: true` sends the wrong signal.** The example requires `physics: true`, which for primitives means a static (`Fixed`) collider, before `buoyant` overrides it to dynamic. A designer reads `physics: true` as what makes the body physical, and assumes leaving it off is wrong. Either have `buoyant` imply a dynamic collider without needing `physics: true`, or make the missing combination a validate error that names the fix.
+- **N11 `mass_kg` may not be the body's real mass** (needs verification). The plan inserts `AdditionalMassProperties::Mass(mass_kg)`. If the collider keeps its density-derived mass, the real mass is greater than `mass_kg`, while the lift is computed from `mass_kg`. The boat would then sit deeper than the documented "`lift_ratio: 2.0` = half-sunk" promise. Make `mass_kg` the *total* mass (zero the collider density), or document the difference.
+- **N12 Default the float points.** `points:` is hand-authored. Default it to the 4 bottom corners plus the centre of the primitive/collider bounding box when omitted. Hand-placed points are a beginner pitfall: forget to make them symmetric and the boat lists to one side.
+- **N13 Units for the drag fields.** Give units and a "start here" value in the docs: `water_drag` in N per (m/s) per point, `angular_drag`, `air_drag`. Make the stability warning wording actionable: "raise `water_drag` to at least X, or lower `lift_ratio`".
+
+**v6 environment**
+- **N14 Fog modes versus fog keys.** `lighting.fog.mode: Linear(start:, end:)` / `Exponential(density:)` must be RON *struct variants* (`Linear(start: 40.0, end: 400.0)`), not newtype-wrapped structs, which would need double parentheses (`Linear((...))`, a known parse trap). The plan should also define what `SetParam("fog.density")` does on a Linear fog: a validate error when the key doesn't match the authored mode. Also note that a preset can't switch fog modes.
+- **N15 `param_presets` is per scene.** Presets are a per-scene map. The four preset *scenes* (calm/choppy/storm/sunset) plus `open_sea`'s presets mean every preset is authored twice and will drift. Either make the preset scenes the only source (scene buttons load scenes), or keep presets in one scene and drop the separate preset scene files. Alternatively, a project-level `param_presets` would let every scene share them.
+- **N16 `ReleaseParamOverride`, `ExportParams` and `EnvOverrides` are missing from the D-5 action summary and the docs tasks.** Each new Action variant has to land on the five doc surfaces in my standing checklist (docs/20 actions table, docs/30, STATUS.md, docs/60 validate list, example). The v4-v8 docs tasks just say "docs" and should name the sections.
+
+**v7 slider**
+- **N17 The slider can only drive `param` keys.** It can't drive `SetVolume`, a GameVariable or a stat, because `ui.slider_changed:<id>` carries no value into actions. The slider is the most broadly useful piece of this plan (settings menus, volume) and should not be ocean-only. Add an alternative `variable:` target that writes a GameVariable, documented as "use `param:` for engine values, `variable:` for your own".
+- **N18 State the slider's limits.** It is mouse-only: no keyboard or gamepad focus, consistent with the engine having no UI focus concept anywhere. Document that.
+- **N19 The demo can't hold a slider for every key.** 8 waves x 5 fields is 40 sliders for waves alone, plus wind, sun, ambient, fog and boat: about 70 hand-positioned 20 px rows. That doesn't fit a 700 px-tall browser viewport. Ship category panels (Waves 0-2, Wind, Light, Fog, Boat), each toggled by its own key or button. This is also a better teaching example than one huge column.
+- **N20 Nested UI** (only if Container nesting ships first). Slider validation (`param`/range checks) must walk nested `ui:` children, not just the flat list.
+
+**v8 demo and registration**
+- **N21 Name the entry scene `main.scene.ron`.** The gallery card convention is `screenshot_baselines/scenes/{name}_main.png`, and every shipped project has a `main` scene. The plan's scenes are `open_sea/calm/...`, so `open_sea` should become `main` or the `index.html` card image will 404.
+- **N22 Baselines for the moving scenes.** The ocean clock advances per *tick*, and the screenshot settles after 120 *frames*, so every ocean scene is pixel-unstable, not just "some". `NON_DETERMINISTIC_SCENES` (test_web.py:60) exists and works. Freezing with `wave_time_scale: 0` doesn't freeze wind or boats. Either list every ocean scene in `NON_DETERMINISTIC_SCENES`, or make all baseline scenes frozen-sea, boat-less vistas, and say which in the plan.
+- **N23 Missing registration steps.** The plan's step list omits two drifted lists: `crates/ironhold_cli/tests/validate_projects.rs` (docs/60 calls this a required step) and the repo-root `README.md` "Example projects" table. It also says `ocean_demo/CLAUDE.md`/README: designers never see a `CLAUDE.md`. The designer-facing artefact is a `README.md` in the project folder (only `primitive_world` has one today) plus scene header comments.
+- **N24 Make "same tick" observable.** "Identical readouts on two page loads at the same tick" can't be verified by a human. There is no tick readout and no sim pause (the pause menu does not stop the sim). Add a `sim.tick` (or `ocean.tick`) readout and either a `PauseSim` action or a scripted "freeze at tick N". Until fixed-tick Phase 1 lands, the scene header should say exactly: "same parameters give the same sea; parameter changes made by clicking land on a frame-rate-dependent tick". D-3's wording is good; it just needs to appear in the scene file and the docs, not only in the plan.
+- **N25 Boat camera.** The chase camera should be `Orbit` in v8 regardless. Using `Follow` with `offset_space: Target` should be conditional on the lock-on plan shipping first, and the demo should not wait for it.
+
+**Docs structure the plan implies (docs/20)**
+- New top-level scene fields go in the scene field table (~150-173): `ocean`, `wind`, `param_presets`.
+- New subsections, after `### Terrain`: `### Ocean (OceanDef)`, `### Wind (WindDef)`, `### Fog` (inside Lighting), and a new `## Parameter keys (SetParam)` reference.
+- Prefab sections next to `### Composite prefabs`: `### Floating bodies (buoyant)` and `### Boats (boat)`.
+- `#### Slider((...))` in the UI section.
+- Rows in the Actions reference.
+- An "Angles and directions" note near Colour conventions.
+- docs/30 gets `wind.gust` and `ui.slider_changed:<id>`. docs/60 gets the new validate checks.
+
+---
+
+#### Open questions for Frank (designer-centric recommendations)
+
+1. **`SetParam` registry versus ~25 typed actions.** Recommendation: **the registry**, on the conditions in B2: keys mirror RON paths, a full key table with ranges in docs, `query params`, and validate coverage of actions, presets, sliders and `{self}` keys. A designer learns one action plus a lookup table more easily than 25 action names. Keep `SetWind` as the one typed convenience action.
+2. **Boat as player versus mount/dismount.** Recommendation: **boat as player now**, provided B3 is resolved (inputs in `components.inputs`, a field-applicability list, validate errors for hot-join/split). Mount/dismount belongs to a later moving-platform feature.
+3. **D2 first; fixed-tick Phase 1 before v8's scientific scene.** Recommendation: **yes to both**. If v8 ships before fixed-tick, rename the scene `controlled` or `lab`, and limit its header claim to "same parameters give the same sea"; don't call it reproducible.
+4. **Lift direction.** Recommendation: **world-up** in v4. A floating crate that doesn't flip over is what designers expect. Add `normal_lift: 0..1` (default 0) later.
+5. **Horizon and clear colour.** Recommendation: **yes, ship it with fog**, without waiting for a sky feature. Fog against a mismatched background reads as broken. Fog is brand new and no existing scene uses it, so make matching the default: a bool `keep_background_color: false` (house style: opt-out bool defaulting false). Mention that `global_environment.fallback` colours affect lighting, not the visible background, if that is confirmed.
+6. **`SetWind` ramp.** Recommendation: **instant in v3**, plus a backlog item for `over_secs` on `ApplyParamPreset` (a blend between presets). "A storm rolls in" is the demo's signature moment, and it is a *preset* transition, not a single wind call. Coupling smoothing only eases the waves.
+7. **Compass convention.** Recommendation: **keep the compass (clockwise from -Z)**, because it is what designers and sailors think in. Confirm it only together with B1's fixes: `toward_deg` naming for waves and wind, `azimuth_deg`/`elevation_deg` for the sun, and a documented, worked conversion to `rotation_euler_deg` Y. Don't confirm the convention without them.
+
+#### Which phases are useful to a designer on their own
+
+| Phase | On its own? | Why |
+|---|---|---|
+| v1 ocean | **Yes, a strong one** | A living sea backdrop for any coastal or ship scene, purely in RON |
+| v2 sampler | **No** | No RON consumer. Only `debug_probe` is visible. "Fish spawn on surface" and "bobbers" need v4 or a new action. Treat it as engine groundwork. |
+| v3 wind | **Barely** | Only `wind.gust` events (for example a gust sound) and `SetWind` with nothing that reacts. Useful once foliage or particles read `Wind`. |
+| v4 buoyancy | **Yes** | Floating barrels, crates and debris in any ocean scene |
+| v5 boat | **Yes** | The headline feature |
+| v6 env control | **Yes, and it should be split** | Fog plus sun/ambient/`SetParam` for *any* project (dusk transitions, dungeon fog) needs neither the ocean nor wind. Splitting it into v6a (fog + light keys, no deps) and v6b (ocean/wind/boat keys) would ship the most broadly valuable piece much earlier. |
+| v7 slider | **Yes, if N17 is done** | It is a general settings/tuning widget only if it can also drive a GameVariable |
+| v8 demo | Teaching asset | Needs every other phase |

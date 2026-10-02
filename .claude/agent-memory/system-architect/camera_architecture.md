@@ -94,6 +94,10 @@ Two deliberate residual holes (documented in `docs/20_data_formats.md`, logged i
 
 ---
 
+**Lock-on / OTS plan-review facts (2026-10-02, `lock_on_camera_mode.md`):** `click_select_system` clears `PlayerTarget` on ANY `just_pressed(Left)` that hits nothing (targeting.rs ~202/255), and the engine default `orbit_button` is `"Either"` — so every LMB orbit-drag clears the target. Any feature keyed on `PlayerTarget` persistence (lock-on) breaks under default bindings unless click-vs-drag is disambiguated. `spawn_split_camera_for_player` hard-codes `AuthoredCameraMode(Orbit(cam))` — any new camera variant supported for split players must thread its def through there or `"default"` restore loses it. Orbit-formula pose anchored on a *shifted* focus + `max_radius` clamp can put the camera over/in front of the player — anchor position on the player, shift only the look-at.
+
+---
+
 **Flycam tag predicates + the `Action::Spawn` blind spot (feature/flycam-model-warning, 2026-08-19).**
 `impl PrefabDef` in `schema/catalog.rs` gained `is_flycam()`/`is_player()`/`flycam_ignored_fields()`
 (+ `pub const TAG_FLYCAM`/`TAG_PLAYER`) — **the first behavioral-predicate impl on any schema type**
