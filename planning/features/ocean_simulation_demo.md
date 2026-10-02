@@ -553,3 +553,7 @@ All four are cheap to fix in the plan now and expensive after v1/v5 ship. v1-v4 
 | v6 env control | **Yes, and it should be split** | Fog plus sun/ambient/`SetParam` for *any* project (dusk transitions, dungeon fog) needs neither the ocean nor wind. Splitting it into v6a (fog + light keys, no deps) and v6b (ocean/wind/boat keys) would ship the most broadly valuable piece much earlier. |
 | v7 slider | **Yes, if N17 is done** | It is a general settings/tuning widget only if it can also drive a GameVariable |
 | v8 demo | Teaching asset | Needs every other phase |
+
+## Decisions recorded by Frank (2026-10-02)
+
+- **The boat is a non-player body**, with the camera targeting it by id (not boat-as-player). The v5 section, the `PrefabDef.boat` input fields and the open-question list must be rewritten to match; the architect's B3 (player spawn path adds the capsule + `CharacterController` and drops physics children; orbit-camera right-mouse rotate writes the body's `Transform`) no longer applies once the boat is not a player.
