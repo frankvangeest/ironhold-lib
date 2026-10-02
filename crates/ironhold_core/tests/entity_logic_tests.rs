@@ -942,3 +942,296 @@ fn test_rule_overridden_intent_still_resolves_target_against_primary_player_only
     assert_eq!(vars.0.get("slot_target_seen"), None,
         "the slot's own built-in do_actions must be suppressed when a rule handles the intent");
 }
+
+// --- Mouse-click activation (planning/features/done/action_bar_mouse_click.md) -----------------------
+//
+// `ui_focus_system` is not present under the test harness, so these drive the slot `Interaction`
+// by hand. A slot is spawned with `Interaction::None` and one warm-up update runs first (so the
+// spawn's own "changed" tick is consumed), then a single write of `Pressed` is the press edge.
+// The "held" test deliberately does NOT rewrite `Interaction` on later frames -- that would count
+// as a fresh change.
+
+fn click_test_slot(key: &str, keycode: KeyCode, do_actions: Vec<Action>) -> (
+    ironhold_core::capabilities::action_bar::ActionSlotUi,
+    Interaction,
+) {
+    (
+        ironhold_core::capabilities::action_bar::ActionSlotUi {
+            slot_key: key.to_string(),
+            resolved_key: Some(keycode),
+            resolved_gamepad_button: None,
+            do_actions,
+            cooldown_secs: None,
+            cost: None,
+            owner_player: None,
+        },
+        Interaction::None,
+    )
+}
+
+fn press_slot(app: &mut App, slot: Entity) {
+    *app.world_mut().get_mut::<Interaction>(slot).unwrap() = Interaction::Pressed;
+}
+
+fn click_event_seen(app: &App, name: &str) -> bool {
+    app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .any(|e| matches!(e, GameEvent::Trigger(t) if t == name))
+}
+
+fn click_test_player(app: &mut App) {
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        intent_test_player_controller(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
+    ));
+}
+
+#[test]
+fn test_click_fires_slot_and_starts_cooldown() {
+    use ironhold_core::capabilities::action_bar::CooldownMap;
+
+    let mut app = setup_test_app();
+    app.update();
+    let mut bundle = click_test_slot("1", KeyCode::Digit1,
+        vec![Action::SetVariable("clicked".to_string(), "yes".to_string())]);
+    bundle.0.cooldown_secs = Some(5.0);
+    let slot = app.world_mut().spawn(bundle).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert_eq!(app.world().resource::<GameVariables>().0.get("clicked").map(String::as_str), Some("yes"));
+    assert!(click_event_seen(&app, "action_bar.pressed:1"));
+    assert!(click_event_seen(&app, "action_bar.activated:1"));
+    assert!(app.world().resource::<CooldownMap>().0.contains_key("1"), "a click must start the cooldown");
+}
+
+#[test]
+fn test_click_during_cooldown_emits_on_cooldown_and_does_not_fire() {
+    use ironhold_core::capabilities::action_bar::CooldownMap;
+
+    let mut app = setup_test_app();
+    app.update();
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::SetVariable("clicked".to_string(), "yes".to_string())])).id();
+    click_test_player(&mut app);
+    app.world_mut().resource_mut::<CooldownMap>().0.insert("1".to_string(), (3.0, 5.0));
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert!(click_event_seen(&app, "action_bar.on_cooldown:1"));
+    assert_eq!(app.world().resource::<GameVariables>().0.get("clicked"), None);
+}
+
+#[test]
+fn test_click_with_insufficient_cost_emits_event_and_does_not_fire() {
+    use ironhold_core::schema::scene_v2::SlotCost;
+
+    let mut app = setup_test_app();
+    app.update();
+    let mut bundle = click_test_slot("1", KeyCode::Digit1,
+        vec![Action::SetVariable("clicked".to_string(), "yes".to_string())]);
+    bundle.0.cost = Some(SlotCost { stat: "mana".to_string(), amount: 20.0 });
+    let slot = app.world_mut().spawn(bundle).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert!(click_event_seen(&app, "action_bar.insufficient_resource:1"));
+    assert_eq!(app.world().resource::<GameVariables>().0.get("clicked"), None);
+}
+
+#[test]
+fn test_click_on_target_slot_without_target_emits_no_target() {
+    let mut app = setup_test_app();
+    app.update();
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::ModifyStat { key: "{target}.health".to_string(), delta: -5.0 }])).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert!(click_event_seen(&app, "action_bar.no_target:1"));
+    assert!(!click_event_seen(&app, "action_bar.activated:1"));
+}
+
+/// A click acts for the slot's own `owner_player`, resolving `{target}` from that player's own
+/// `PlayerTarget` -- not the primary player's.
+#[test]
+fn test_click_acts_for_slots_owner_player() {
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+    use ironhold_core::schema::{StatDef, LiveStat};
+    use ironhold_core::schema::stats::StatMap;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let mut stat_map = StatMap::default();
+    stat_map.0.insert("health".to_string(), LiveStat::new(StatDef {
+        base: 100.0, min: 0.0, max: 100.0, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: vec![],
+    }));
+    let enemy = app.world_mut().spawn((SpawnId("enemy_p2".to_string()), stat_map)).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_p2".to_string(), enemy);
+
+    let mut bundle = click_test_slot("1", KeyCode::Digit1,
+        vec![Action::ModifyStat { key: "{target}.health".to_string(), delta: -10.0 }]);
+    bundle.0.owner_player = Some(1);
+    let slot = app.world_mut().spawn(bundle).id();
+    app.world_mut().spawn((SpawnId("player_01".to_string()), intent_test_player_controller(),
+        PlayerTarget::default(), PlayerIndex(0)));
+    app.world_mut().spawn((SpawnId("player_02".to_string()), intent_test_player_controller(),
+        PlayerTarget(Some("enemy_p2".to_string())), PlayerIndex(1)));
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert_eq!(app.world().get::<StatMap>(enemy).unwrap().0["health"].current, 90.0,
+        "a click on player 2's bar must act for player 2 (its own PlayerTarget), not the primary player");
+}
+
+#[test]
+fn test_click_on_intent_overridden_slot_is_suppressed_like_a_key_press() {
+    use ironhold_core::runtime::LoadedStateMachine;
+
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(LoadedStateMachine(Some(make_intent_test_fsm())));
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::SetVariable("slot_fired".to_string(), "yes".to_string())])).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert!(click_event_seen(&app, "intent.slot.1:player_01"),
+        "the click must have reached the intent layer (otherwise the suppression asserts below are vacuous)");
+    assert_eq!(app.world().resource::<GameVariables>().0.get("slot_fired"), None,
+        "a rule handling intent.slot.1:* must suppress the built-in do_actions on click too");
+    assert!(!click_event_seen(&app, "action_bar.activated:1"));
+}
+
+/// Click and key press on the same frame collapse into one activation (one `pressed` event).
+#[test]
+fn test_click_and_key_same_frame_activate_once() {
+    let mut app = setup_test_app();
+    app.update();
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::IncrementVariable("fires".to_string(), 1)])).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.update();
+
+    assert_eq!(app.world().resource::<GameVariables>().0.get("fires").map(String::as_str), Some("1"));
+    let pressed = app.world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .filter(|e| matches!(e, GameEvent::Trigger(t) if t == "action_bar.pressed:1"))
+        .count();
+    assert_eq!(pressed, 1);
+}
+
+/// Holding the button (Pressed persisting, never rewritten) is one press edge, not one per frame.
+#[test]
+fn test_held_click_activates_once() {
+    let mut app = setup_test_app();
+    app.update();
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::IncrementVariable("fires".to_string(), 1)])).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    for _ in 0..5 { app.update(); }
+
+    assert_eq!(app.world().resource::<GameVariables>().0.get("fires").map(String::as_str), Some("1"),
+        "a held click must activate exactly once");
+}
+
+/// Two bars sharing a slot key: only the slot actually clicked fires (per-entity detection, not
+/// key-string matching).
+#[test]
+fn test_click_fires_only_the_clicked_slot_when_two_bars_share_a_key() {
+    use ironhold_core::capabilities::player::{PlayerIndex, PlayerTarget};
+
+    let mut app = setup_test_app();
+    app.update();
+    let mut a = click_test_slot("1", KeyCode::Digit1,
+        vec![Action::IncrementVariable("p1_fires".to_string(), 1)]);
+    a.0.owner_player = Some(0);
+    let mut b = click_test_slot("1", KeyCode::Digit1,
+        vec![Action::IncrementVariable("p2_fires".to_string(), 1)]);
+    b.0.owner_player = Some(1);
+    let slot_a = app.world_mut().spawn(a).id();
+    app.world_mut().spawn(b);
+    app.world_mut().spawn((SpawnId("player_01".to_string()), intent_test_player_controller(),
+        PlayerTarget::default(), PlayerIndex(0)));
+    app.world_mut().spawn((SpawnId("player_02".to_string()), intent_test_player_controller(),
+        PlayerTarget::default(), PlayerIndex(1)));
+    app.update();
+
+    press_slot(&mut app, slot_a);
+    app.update();
+
+    let vars = app.world().resource::<GameVariables>();
+    assert_eq!(vars.0.get("p1_fires").map(String::as_str), Some("1"));
+    assert_eq!(vars.0.get("p2_fires"), None, "the un-clicked slot sharing the key must not fire");
+}
+
+/// The action-bar click path never writes `PlayerTarget`. (The world-click early-return in
+/// `click_select_system` is covered by `ui_panel_blocker.rs`; this pins only our side.)
+#[test]
+fn test_click_does_not_change_player_target() {
+    use ironhold_core::capabilities::player::PlayerTarget;
+
+    let mut app = setup_test_app();
+    app.update();
+    // Must be registered, or target_auto_clear_system treats it as despawned and clears it.
+    let enemy = app.world_mut().spawn(SpawnId("enemy_01".to_string())).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("enemy_01".to_string(), enemy);
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1, vec![])).id();
+    let player = app.world_mut().spawn((SpawnId("player_01".to_string()), intent_test_player_controller(),
+        PlayerTarget(Some("enemy_01".to_string())))).id();
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert!(click_event_seen(&app, "action_bar.pressed:1"), "the click must have registered");
+    assert_eq!(app.world().get::<PlayerTarget>(player).unwrap().0.as_deref(), Some("enemy_01"));
+}
+
+/// Press -> release -> press again is two clicks: the edge detector re-arms after release.
+#[test]
+fn test_second_click_after_release_activates_again() {
+    let mut app = setup_test_app();
+    app.update();
+    let slot = app.world_mut().spawn(click_test_slot("1", KeyCode::Digit1,
+        vec![Action::IncrementVariable("fires".to_string(), 1)])).id();
+    click_test_player(&mut app);
+    app.update();
+
+    press_slot(&mut app, slot);
+    app.update();
+    *app.world_mut().get_mut::<Interaction>(slot).unwrap() = Interaction::None;
+    app.update();
+    press_slot(&mut app, slot);
+    app.update();
+
+    assert_eq!(app.world().resource::<GameVariables>().0.get("fires").map(String::as_str), Some("2"),
+        "a release followed by a fresh press is a second click");
+}

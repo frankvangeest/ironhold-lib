@@ -50,7 +50,8 @@ pub struct ActionSlotUi {
     pub slot_key: String,
     /// `InputMap::parse_key(&slot_key)`, resolved once at scene load. `None` if `slot_key` isn't
     /// a recognised key name (the scene loader already `warn!`s about this at spawn time) — such
-    /// a slot never fires, since there's no `KeyCode` to check `just_pressed` against.
+    /// a slot never fires from the keyboard (there's no `KeyCode` to check `just_pressed` against);
+    /// clicking the slot still fires it.
     pub resolved_key: Option<KeyCode>,
     /// `InputMap::parse_gamepad_button(&gamepad_key)`, resolved once at scene load. `None` when
     /// `gamepad_key` was omitted (ordinary keyboard-only slot) or unparseable (the scene loader
@@ -139,6 +140,18 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// player every frame regardless of whether anything was actually pressed, same as any other
 /// per-frame per-slot player lookup in this system.
 ///
+/// A slot can also be **clicked**: each slot is a `Button`, so Bevy tracks an `Interaction` on it,
+/// and the press edge (`Interaction` changed to `Pressed` since this system last ran — detected with
+/// `Ref::is_changed`, so it fires once per press, never while held and never on release) counts as
+/// a third fire source alongside keyboard and gamepad
+/// (`planning/features/done/action_bar_mouse_click.md`). The mouse is shared hardware like the keyboard,
+/// so a click acts for the slot's own `owner_player` regardless of which split-screen viewport the
+/// cursor is in. `Interaction` is `Option`al so a bare `ActionSlotUi` (no `Button`, as in tests)
+/// still matches the query. Clicks — not key presses — are ignored while the inspector is enabled,
+/// since egui and Bevy UI both receive every click with no arbitration (same gate as
+/// `button_system`). Click, key and button collapse into
+/// one "fired" decision per slot, so simultaneous sources activate it exactly once.
+///
 /// Each fired slot resolves its **owning player** — `owner_player: Some(n)` matches whichever
 /// player entity carries `PlayerIndex(n)`; `None` (or `Some(0)`) matches the primary player
 /// (`PlayerIndex(0)` or no `PlayerIndex` at all, same definition `is_primary_player` uses
@@ -150,27 +163,41 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// acting player id against).
 pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
-    slots: Query<&ActionSlotUi>,
+    slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>)>,
     mut game_events: MessageWriter<GameEvent>,
     cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
     mut pending: ResMut<PendingIntentActions>,
     players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>, &CharacterController, Option<&BoundGamepad>)>,
     gamepad_query: Query<&Gamepad>,
+    #[cfg(feature = "inspector")]
+    inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
-    for slot in slots.iter() {
-        let keyboard_fired = slot.resolved_key.is_some_and(|kc| keys.just_pressed(kc));
+    #[cfg(feature = "inspector")]
+    let clicks_enabled = !inspector_enabled.is_some_and(|e| e.0);
+    #[cfg(not(feature = "inspector"))]
+    let clicks_enabled = true;
+
+    for (slot, interaction) in slots.iter() {
+        // Keyboard and mouse are shared hardware: both are "device-independent" fires, gated
+        // before the owning player is resolved (the same ordering the keyboard-only path always
+        // had, preserved byte-for-byte). Distinct from the gamepad, which needs its owning
+        // player's own controller and is therefore resolved after the player lookup.
+        let key_pressed = slot.resolved_key.is_some_and(|kc| keys.just_pressed(kc));
+        let click_fired = clicks_enabled
+            && interaction.is_some_and(|i| i.is_changed() && *i == Interaction::Pressed);
+        let direct_fired = key_pressed || click_fired;
         // Fast path: unchanged perf profile for the common case (no gamepad binding, not pressed).
-        if !keyboard_fired && slot.resolved_gamepad_button.is_none() { continue; }
+        if !direct_fired && slot.resolved_gamepad_button.is_none() { continue; }
 
         let key_str = slot.slot_key.as_str();
 
-        // ── Cooldown check (keyboard) ────────────────────────────────────────────
+        // ── Cooldown check (keyboard / click) ────────────────────────────────────────────
         // Gated before player resolution, exactly as before this feature — preserves the
         // keyboard-only on-unmatched-owner cooldown-event behavior byte-for-byte. A gamepad press
         // can't be checked yet: `gamepad_fired` needs the owning player's own `gamepad_index`,
         // resolved below.
-        if keyboard_fired && cooldowns.0.contains_key(key_str) {
+        if direct_fired && cooldowns.0.contains_key(key_str) {
             game_events.write(GameEvent::Trigger(
                 format!("action_bar.on_cooldown:{}", key_str),
             ));
@@ -186,13 +213,13 @@ pub fn action_bar_input_system(
             bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok())
                 .is_some_and(|gp| gp.just_pressed(btn))
         });
-        if !keyboard_fired && !gamepad_fired { continue; }
+        if !direct_fired && !gamepad_fired { continue; }
 
         // ── Cooldown check (gamepad-only fire) ───────────────────────────────────
         // Mirrors the keyboard check above for the one case it couldn't cover: a gamepad press
-        // with no keyboard press this frame. `keyboard_fired` presses were already handled (and
+        // with no keyboard press or click this frame. `direct_fired` presses were already handled (and
         // returned) above, so this can't double-emit.
-        if !keyboard_fired && cooldowns.0.contains_key(key_str) {
+        if !direct_fired && cooldowns.0.contains_key(key_str) {
             game_events.write(GameEvent::Trigger(
                 format!("action_bar.on_cooldown:{}", key_str),
             ));
