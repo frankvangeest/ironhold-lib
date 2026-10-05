@@ -1,7 +1,46 @@
 # Feature: Nestable flexbox `Group` UI node
 
-_Status: Draft (revised after 2 parallel plan reviews)_
+_Status: Ready (v1) — revised 2026-10-05 after a third plan-review pass (system-architect + ux-gamedesigner-reviewer); all findings folded in below, revised text not re-reviewed_
 _Planned at: `8baeac7` (2026-08-28)_
+_Drift refreshed at: `f34dd16` (2026-10-05)_
+
+> **Drift refresh (2026-10-05).** `git log 8baeac7..HEAD` on the touched files shows heavy `validate.rs`
+> growth. Corrections vs. the original text below, verified by grep at `f34dd16`:
+> - `scene_loader.rs` lives at `crates/ironhold_core/src/runtime/scene_manager/scene_loader.rs`
+>   (not `runtime/scene_loader.rs`). Its flat-scan sites are unchanged: the `radar_handles`
+>   pre-pass plus 4 `warn_*` fns (`warn_cross_bar_duplicate_keys`,
+>   `warn_same_player_gamepad_duplicate_slots`, `warn_missing_player_stat_templates`,
+>   `warn_gamepad_key_without_gamepad_index`).
+> - `ironhold_cli/src/commands/validate.rs` now has **9** `for ... in &scene.ui` scans (was 5 + the
+>   font-size check), plus `query.rs`'s `ui_count`. **Re-enumerate with `grep -n "scene\.ui"` in both
+>   crates when the walker task starts** instead of trusting any count in this file.
+> - `scene_loader.rs:98` (`scene.ui.len()` in an info log) counts top-level nodes only; decide
+>   whether it should count nested nodes via the walker.
+> - `scene_loader.rs` also carries `// det: lookup-only` annotations on `HashMap`s (D2 determinism
+>   guard, `determinism_lint`) — any new `HashMap`/`HashSet` this feature adds needs one.
+> - `rules.ron` was consolidated into `state_machine.ron` and `query rules` renamed `query logic`;
+>   no effect on this design.
+
+## Plan-review resolutions (2026-10-05)
+
+Decisions made by Frank (D) and findings folded in from the review (F). Where the body below
+still says something different, **this section wins** and the body has been edited to match.
+
+| # | Decision / fix | Source |
+|---|---|---|
+| R1 | `options.scene.ron` retrofit is an **intentional even rhythm** (e.g. item `gap` 8, section gap 24), not pixel-identical; a baseline diff for that one scene is expected. A spacer (`Group((height: Px(20.0), children: []))`) is documented as a known idiom. | D (UX #2) |
+| R2 | `Group.id` stays optional. `GameSceneV2::validate()` exempts `Group` from the non-empty-id check, skips `""` in duplicate detection, and walks nested nodes so ids are unique **per scene across all nodes that have one**. Leaf nodes still require ids. | D (architect blocking) |
+| R3 | `ironhold validate` calls `GameSceneV2::validate()` (precedent: `validate.rs` already calls the four catalogs' own `.validate()`). **Gate:** run it over every `assets/projects/*` first; if any shipped project fails, split this task into its own backlog item instead of fixing projects inside this feature. | D |
+| R4 | **v1 is landscape-only.** Portrait is v2 with different backlog dependencies — see `## Phases`. | D (UX mobile) |
+| R5 | The `Percent`/`SpaceBetween` showcase example lives in a new minimal **`ui_demo`** project created by this feature (Group stations only). The backlog's broader `ui_demo` item (buttons, data-bound labels, overlays, stat widgets) stays Queued and extends it. | D (UX #3) |
+| R6 | `query.rs` keeps `ui_count` = top-level count (JSON consumers unaffected) and adds `ui_node_count` = all nodes; the load log prints both. `walk_ui_nodes` applies the same depth cap (16) as the spawner so diagnostics cover exactly the nodes that spawn. | D (architect) |
+| R7 | A `Group` lets clicks pass through to the world (`FocusPolicy::Pass`), unlike `ui_panel:`/overlay backdrops which block deliberately. Test: a click on the empty area of a full-screen `Group` still reaches the world. | F (UX #1) |
+| R8 | Edge anchoring recipe is documented as the intended pattern: full-screen root `Group` (`width/height: Percent(100.0)`, `flex_direction: Column`, `justify_content: SpaceBetween`) holding a top row and a bottom row; `End` for right-aligned. No separate anchor system in v1. | F (UX #1, architect #10) |
+| R9 | Every new/converted diagnostic names the node by **path** (`ui[2].children[0] (Group)`, plus `id` when set), never a bare empty id or index. | F (UX #5) |
+| R10 | Extra `ironhold validate` warnings: `SpaceBetween/Around/Evenly` on a `Group` whose main-axis size is `Auto`; `Percent` on a nested `Group` whose parent is `Auto` on that axis; any of `ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel` nested in a `Group`; negative or non-finite `gap`/`padding`/`Px`/`Percent`. | F (UX) |
+| R11 | Docs: update the six leaf `position` rows, the `absolute` rows and the UI Panel intro in `docs/20_data_formats.md` ("ignored in panel mode" becomes "inside `ui_panel:` or a `Group`"). Document top-level `Group` behaviour, `width: Px(..)` vs `ui_panel:`'s bare number, and `width`/`height` vs leaf `size:`. | F (UX #4) |
+| R12 | `walk_ui_nodes` yields nodes (callers `.enumerate()` if they need a per-bar tag). The earlier requirement that core and CLI use an identical index was wrong: core's `warn_cross_bar_duplicate_keys` already keys by its own ActionBar counter and the CLI by `enumerate()`; both only need a unique-per-bar tag. | F (architect #3) |
+| R13 | `GameSceneV2::validate()` (`schema/scene_v2.rs`, flat `for elem in &self.ui`) is an additional flat-scan site to convert. | F (architect blocking) |
 
 ## What
 
@@ -74,32 +113,41 @@ verified against the actual current code and (for system-architect) vendored Bev
 0.9.2 source rather than assumption.** Both independently found the same two critical gaps below;
 this section is written against their fixes, not the original draft.
 
-### Critical fix #1 — nesting must not blind the 11 existing flat `scene.ui` scans
+### Critical fix #1 — nesting must not blind the existing flat `scene.ui` scans
 
-The current code scans `scene.ui: Vec<UiNodeDef>` **flat** in 11 places across 3 files, and one of
-them is a functional dependency, not a diagnostic:
+The current code scans `scene.ui: Vec<UiNodeDef>` **flat** in ~17 places across 4 files (re-grep
+`scene\.ui` in `ironhold_core` and `ironhold_cli` when the walker task starts; do not trust any
+count in this file), and one of them is a functional dependency, not a diagnostic. Add
+`schema/scene_v2.rs`'s own `GameSceneV2::validate()` to the list (R13):
 
-- `scene_loader.rs` — the `radar_handles` pre-pass (builds the `HashMap` a `StatRadar` arm looks
+- `scene_loader.rs` (under `runtime/scene_manager/`) — the `radar_handles` pre-pass (builds the `HashMap` a `StatRadar` arm looks
   its material up in; a `StatRadar` nested inside a `Group` would silently get no material and
   render nothing), plus four `warn_*` diagnostics (`warn_cross_bar_duplicate_keys`,
   `warn_same_player_gamepad_duplicate_slots`, `warn_missing_player_stat_templates`,
   `warn_gamepad_key_without_gamepad_index`).
-- `ironhold_cli/src/commands/validate.rs` — the five CLI mirrors of those checks, plus the
-  `invalid_font_size` check (`ui_label_font_size.md`).
+- `ironhold_cli/src/commands/validate.rs` — the CLI mirrors of those checks, plus the
+  `invalid_font_size` check (`ui_label_font_size.md`) and others added since (9 scans at
+  `f34dd16`; see the drift note at the top).
 - `ironhold_cli/src/commands/query.rs` — `ui_count: scene.ui.len()`.
 
 **Fix, mandatory for this feature, not deferred:** add one shared pre-order walker to
 `schema/scene_v2.rs`:
 
 ```rust
-pub fn walk_ui_nodes(nodes: &[UiNodeDef]) -> impl Iterator<Item = (usize, &UiNodeDef)> {
-    // pre-order: a node before its children, index is a stable pre-order position
-    // used identically by both scene_loader.rs's and validate.rs's same-bar-vs-
-    // cross-bar collision checks (they currently key by positional index).
-}
+pub const MAX_UI_DEPTH: usize = 16;
+
+/// Pre-order, depth-capped at MAX_UI_DEPTH: yields exactly the nodes the spawner will spawn.
+/// Implemented with an explicit Vec stack (deterministic order, no recursion).
+pub fn walk_ui_nodes(nodes: &[UiNodeDef]) -> impl Iterator<Item = &UiNodeDef> { /* ... */ }
+
+/// Same traversal, also yielding a human-readable path for diagnostics (R9),
+/// e.g. `ui[2].children[0]`.
+pub fn walk_ui_nodes_pathed(nodes: &[UiNodeDef]) -> impl Iterator<Item = (UiPath, &UiNodeDef)> { /* ... */ }
 ```
 
-Convert all 11 sites to it in this same change — a `StatRadar`/`ActionBar` nested in a `Group`
+Callers that need a unique-per-bar tag `.enumerate()` the iterator themselves (R12).
+
+Convert every site to it in this same change — a `StatRadar`/`ActionBar` nested in a `Group`
 must be exactly as diagnosed and functional as one at the top level.
 
 ### Critical fix #2 — sizing needs `Percent`, not just `Px`/auto
@@ -217,13 +265,13 @@ shared match stays exhaustive without a separate trait).
 
 ### Spawn logic — recursive, via a shared spawn-context struct (not positional params)
 
-`spawn_ui_element_node` already threads ~9 parameters through for the composite-widget arms
+`spawn_ui_element_node` already threads ~10 parameters through (7 of them shared state) for the composite-widget arms
 (`radar_handles`, `asset_server`, `atlas_layouts`, `asset_catalog`, `item_catalog`,
 `inventory_ui`, `container_ui`). Recursing into a `Group`'s children with all 9 threaded
 positionally would be error-prone and unreadable. This codebase already has the answer for this
 exact shape — `ChildSpawnCtx<'a>` (`spawn_primitive_children`, documented in
 `crates/ironhold_core/src/CLAUDE.md`) bundles equivalent per-recursion-frame state. Introduce a
-parallel `UiSpawnCtx<'a>` bundling the same 9 fields, threaded as `&mut UiSpawnCtx` everywhere
+parallel `UiSpawnCtx<'a>` bundling the 7 shared-state fields (`radar_handles` — keeping its `// det: lookup-only` marker, as `ChildSpawnCtx` does — `asset_server`, `atlas_layouts`, `asset_catalog`, `item_catalog`, `inventory_ui`, `container_ui`), threaded as `&mut UiSpawnCtx` everywhere
 `spawn_ui_element_node` is called (including its own recursive `Group` arm) — collapses each
 ~200-character call site to one short one and means the next resource a panel arm needs is a
 one-line struct field, not an edit to three call sites.
@@ -236,8 +284,10 @@ happen correctly instead of three.
 
 Both existing loops (`ui_panel:`'s children loop, and the flat absolute-mode loop) build a
 per-child `Node` from `el.size()`/`.position()`/`.absolute()`/`.align()`. Factor that into one
-shared `fn build_child_node(el: &UiNodeDef, container_align: UiTextAlign) -> Node` used by all
-three sites (the two existing loops, plus `Group`'s own new children loop).
+shared `fn build_child_node(el: &UiNodeDef, force_absolute: bool) -> Node` used by all
+three sites. (Alignment comes from `el.align()` itself; the real difference between the two
+existing loops is that panel mode honours `el.absolute()` while absolute mode always forces
+`PositionType::Absolute`. `Group`'s children loop behaves like panel mode: `force_absolute: false`.)
 
 `spawn_ui_element_node`'s new `UiNodeDef::Group(g)` arm mutates the incoming `node` before
 spawning — the exact pattern `Label`/`Button`'s `clip` field already established this session:
@@ -261,17 +311,16 @@ UiNodeDef::Group(g) => {
         ec.insert(BackgroundColor(Color::srgba(r, g_, b, a)));
     }
     ec.with_children(|parent| {
-        for (_, child) in walk_ui_nodes(&g.children).filter(|(_, n)| /* direct children only, depth-limited by caller */ true) {
-            let child_node = build_child_node(child, child.align());
+        for child in &g.children {
+            let child_node = build_child_node(child, false);
             spawn_ui_element_node(parent, child, child_node, ctx);
         }
     });
 }
 ```
 
-(The sketch above shows the shape; the actual per-child loop just iterates `&g.children` directly
-— `walk_ui_nodes` is for the 11 *flat-scan* sites elsewhere, not for spawning, which is naturally
-recursive already.)
+(`walk_ui_nodes` is for the flat-scan sites elsewhere, not for spawning, which is naturally
+recursive. Spawning also stops at `MAX_UI_DEPTH`, with one `warn!`.)
 
 ### Absolute children — verified correct, including nested
 
@@ -301,6 +350,23 @@ Also worth an explicit doc callout, not a code change: `Visibility::Hidden` does
 from layout (only `Display::None` does) — a hidden child inside an auto-sized `Group` still
 reserves its space.
 
+### Click pass-through (R7)
+
+A `Group` never blocks pointer input: its `Node` gets `FocusPolicy::Pass`, so clicks and
+camera-orbit drags on its empty area reach the world. This differs deliberately from `ui_panel:`
+and overlay backdrops, which block (`ui_panel_blocker.rs`). Interactive children (`Button` etc.)
+still capture their own clicks. Required test: a click on the empty area of a full-screen `Group`
+reaches the world.
+
+### Edge anchoring recipe (R8)
+
+A top-level node's `position:` is always a top-left pixel offset; v1 has no `right:`/`bottom:`
+anchors. The documented pattern for bottom/right-anchored UI is a full-screen root `Group`
+(`width: Percent(100.0), height: Percent(100.0), flex_direction: Column,
+justify_content: SpaceBetween`) containing a top row and a bottom row; a row's own
+`justify_content: End` right-aligns. Showcased in `ui_demo`. `mobile_ui_demo` must reuse this, not
+invent a parallel anchoring mechanism.
+
 ### `ui_panel:` — kept as-is, not touched
 
 `GameSceneV2.ui_panel: Option<UiPanelDef>` and its dedicated spawn path are left completely
@@ -327,67 +393,88 @@ with its own risk/reward, not a dependency of this feature — logged to
   resolves against `SpawnRegistry` (world entities), not UI node ids, and this plan doesn't add a
   UI-id-based equivalent. Likely the first real follow-up ask ("hide this whole group") — logged
   to `planning/claude_suggestions.md` as a known v2 gap rather than a surprise.
-- Recursion depth: capped at 16 (double the nested-prefab cap of 8, per
-  `crates/ironhold_core/src/CLAUDE.md` precedent), warn-and-truncate past that. Unlike nested
-  prefabs there's no *cycle* risk (`children:` is a plain inline tree, not a catalog reference),
-  but a cap is still worth ~5 lines: a pathologically deep authored tree would stack-overflow at
-  RON *parse* time (recursive `Vec<UiNodeDef>` deserialization, uncapped), before any engine code
-  runs — and the WASM main-thread stack is smaller than native's. Trusted local content, so this
-  is a cheap defensive cap, not a security boundary.
+- Recursion depth: capped at 16 (`MAX_UI_DEPTH`; double the nested-prefab cap of 8, per
+  `crates/ironhold_core/src/CLAUDE.md` precedent), warn-and-truncate past that, applied identically
+  by the spawner and by `walk_ui_nodes` (R6). Unlike nested prefabs there's no *cycle* risk
+  (`children:` is a plain inline tree). Note: RON parsing is already bounded (ron's default
+  `recursion_limit` is 128), so a pathologically deep tree fails to parse cleanly rather than
+  overflowing the stack; the 16 cap exists so spawn and diagnostics agree and layouts stay sane,
+  not as a stack-safety guard.
 - Panel singletons are unaffected by nesting: `InventoryPanel`/`ContainerPanel`'s arms still clear/
   store a single `Option<Entity>` regardless of what `Group` (if any) they're nested inside —
   `Group` does not enable two of the same singleton panel in one scene. Worth restating in docs.
 
+## Phases
+
+| Phase | Scope | Status | Backlog dependencies |
+|---|---|---|---|
+| **v1 - landscape** | Everything in this file: `Group`, `UiSizeDef` (`Auto`/`Px`/`Percent`), walker, diagnostics, `ui_demo` showcase, `options.scene.ron` retrofit | Ready | none (touch input is NOT required: a landscape layout demo can be keyboard/mouse) |
+| **v2 - portrait / touch-first** | `Percent` (or `max_width`) on leaf `size:`, runtime show/hide of a `Group` by UI id (touch-only controls), safe-area insets, optionally `flex_grow` + margin | Queued (backlog entries to be added when v1 ships) | v1; a UI-id-based visibility action (today `Action::SetEntityVisible` resolves `SpawnRegistry` entities only); confirmed touch input in the web build (`action_bar_mouse_click.md` declines to promise it) |
+
+`mobile_ui_demo` is split accordingly in `planning/backlog.md`: **v1 (landscape)** is blocked only
+on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
+
 ## Tasks
-- [ ] Add `walk_ui_nodes(nodes: &[UiNodeDef]) -> impl Iterator<Item = (usize, &UiNodeDef)>` to
-      `schema/scene_v2.rs` and convert all 11 existing flat `scene.ui` scans to it: `scene_loader.rs`'s
-      `radar_handles` pre-pass + 4 `warn_*` diagnostics, `validate.rs`'s 5 CLI mirrors +
-      `invalid_font_size`, `query.rs`'s `ui_count`. This is a standalone, testable-against-current-
-      behavior refactor with zero new schema — do this **first**, before `GroupDef` exists.
+- [ ] Add `walk_ui_nodes` + `walk_ui_nodes_pathed` + `MAX_UI_DEPTH` to `schema/scene_v2.rs` and convert
+      every existing flat `scene.ui` scan (re-grep both crates; `scene_loader.rs`'s `radar_handles`
+      pre-pass + 4 `warn_*`, `validate.rs`'s 9 scans, `query.rs`, and `GameSceneV2::validate()`).
+      Standalone, behaviour-preserving refactor with zero new schema -- do this **first**, before
+      `GroupDef` exists. Its unit test gets a nested fixture as soon as `GroupDef` lands.
+- [ ] `GameSceneV2::validate()`: exempt `Group` from the empty-id check, skip `""` in duplicate
+      detection, detect duplicates across all nested nodes (R2).
 - [ ] Schema: `UiSizeDef` (`Auto`/`Px`/`Percent`) + `GroupDef` + `FlexDirectionDef`/
       `JustifyContentDef`/`AlignItemsDef`/`FlexWrapDef` enums, explicit defaults on all four
-      (`schema/scene_v2.rs`)
 - [ ] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
-- [ ] `scene_loader.rs`: bundle the 9 recursive spawn params into `UiSpawnCtx<'a>` (mirrors
-      `ChildSpawnCtx<'a>`); factor `build_child_node` out of the two existing per-child-`Node`-
-      building call sites; add the recursive `Group` arm to `spawn_ui_element_node`; recursion
-      depth cap (16, warn-and-truncate)
-- [ ] Scene-load `warn!` (+ matching `ironhold_cli validate` checks): auto-sized `Group` whose
-      children are all `absolute: true` (collapses to zero, per `UiPanelDef.height`'s existing
-      precedent); `clip: true` paired with both axes `Auto` (inert)
-- [ ] Tests — nested `Group`s parse and spawn with correct `Node` flex properties (including that
-      `gap` sets both `row_gap`/`column_gap`); a `Group` child with `absolute: true` still escapes
-      the flex flow exactly like `ui_panel:` today; `width`/`height: Auto` produce `Val::Auto`,
-      `Percent(n)`/`Px(n)` produce the matching `Val`; a nested `StatRadar` still gets a material
-      handle and renders; a nested duplicate-keyed `ActionBar` is still flagged by both the
-      scene-load `warn!` and `ironhold_cli validate`
-- [ ] Docs (`docs/20_data_formats.md`) — new `Group((...))` section: full field table, a short
-      flexbox primer (link MDN rather than re-teach CSS), and five specific callouts the reviews
-      identified as real designer traps:
-      1. A decision table for "which UI mechanism do I reach for" (`ui_panel:` vs `Group` vs plain
-         `position:` vs a direct always-absolute HUD widget).
-      2. `SpaceBetween`/`SpaceAround`/`SpaceEvenly` need a definite (`Px`/`Percent`) main-axis size
-         to do anything — inert on an `Auto`-sized `Group`.
+- [ ] `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
+      `build_child_node(el, force_absolute)`; recursive `Group` arm with `FocusPolicy::Pass`; depth
+      cap (16, one `warn!`)
+- [ ] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
+- [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
+      `Group` whose children are all `absolute: true`; `clip: true` with both axes `Auto`; the
+      R10 list
+- [ ] `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
+      `assets/projects/*`; if any shipped project fails, split into its own backlog item
+- [ ] Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
+      both `row_gap`/`column_gap`); `absolute: true` child escapes the flow like `ui_panel:`;
+      `Auto`/`Px`/`Percent` map to the matching `Val`; nested `StatRadar` still gets a material;
+      nested duplicate-keyed `ActionBar` still flagged by `warn!` and by `validate`; empty-id
+      `Group` passes `validate()` while an empty-id leaf still fails; nested duplicate ids fail; a
+      click on the empty area of a full-screen `Group` reaches the world (R7); walker stops at depth 16
+- [ ] New minimal `ui_demo` project (R5) with labeled stations: nested rows/columns, a
+      `Percent(100.0)` + `SpaceBetween` HUD bar (title left, buttons right), the full-screen
+      bottom-anchored root recipe (R8), the spacer idiom. Register it: `test_web.py` `PROJECTS`,
+      baseline screenshot, `index.html` card (see root `CLAUDE.md` "Adding a new asset project").
+      Use plain ASCII hyphens in comments/on-screen text (the engine font has no em-dash glyph).
+- [ ] Retrofit `3rd_person_game_demo/scenes/options.scene.ron` to nested `Group`s with the even
+      rhythm from R1 (item gap 8, section gap 24; the 4-button volume row maps cleanly at gap 10).
+      Add a top-of-file comment pointing at the `docs/20_data_formats.md` Group section. Regenerate
+      only this scene's baseline: `python test_web.py --project 3rd_person_game_demo
+      --update-baseline 3rd_person_game_demo_options --skip-build` -- NOT a blanket
+      `--update-baselines` (other scenes in that project, e.g. `camera_modes`, have ~34
+      deliberately-overflowing `Label`/`Button` defs that must not shift). The options baseline diff
+      is expected (R1).
+- [ ] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
+      flexbox primer (link MDN), and these callouts:
+      1. "Which UI mechanism do I reach for" table (`ui_panel:` vs `Group` vs plain `position:` vs an
+         always-absolute HUD widget).
+      2. `SpaceBetween`/`SpaceAround`/`SpaceEvenly` need a definite (`Px`/`Percent`) main-axis size.
       3. A nested child's `position:` is relative to its `Group`'s box, not the screen; don't nest
-         `ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel` (they always
-         position absolutely against whatever they're placed in — nesting only changes what their
-         coordinates are measured from, which is rarely what a designer wants).
-      4. `ui_panel:` → `Group` default drift if a designer migrates a layout by hand: `ui_panel:`'s
-         own defaults (padding, gap, near-black background, always-on clip) do NOT carry over —
-         `Group`'s defaults are all off/zero/transparent.
-      5. `Visibility::Hidden` children still occupy layout space (only `Display::None` doesn't).
-- [ ] `crates/ironhold_core/src/CLAUDE.md` — add "`scene.ui` must be walked via `walk_ui_nodes`,
-      never iterated flat" next to the existing "`spawn_primitive_children` is the only child-
-      spawn path" rule — same class of invariant, same reason (a new consumer that iterates
-      `scene.ui` flat silently under-covers nested content).
-- [ ] Worked example — retrofit `3rd_person_game_demo/scenes/options.scene.ron` (a hand-computed
-      vertical stack of labels/toggles at y=30..445, plus a hand-computed horizontal row of 4
-      volume buttons at x=100/200/300/400 with an implied 10px gap) to use nested `Group`s. Concrete,
-      absolute-mode (no `ui_panel:` today), and small enough to diff before/after in review.
-      Regenerate only this project's baseline: `python test_web.py --project 3rd_person_game_demo
-      --update-baseline 3rd_person_game_demo_options --skip-build` — do NOT run a blanket
-      `--update-baselines` (this project's `camera_modes`/`local_coop_demo` scenes have ~34
-      deliberately-overflowing `Label`/`Button` defs unrelated to this change that must not shift).
+         `ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel`.
+      4. `ui_panel:` -> `Group` default drift (padding, gap, background, clip do not carry over);
+         `width: Px(380.0)` vs `ui_panel:`'s bare `380.0` and the parse error you get; `width`/`height`
+         not `size:`.
+      5. `Visibility::Hidden` children still occupy layout space.
+      6. Anchoring to screen edges (R8) and click pass-through (R7).
+      7. `Percent(n)` on a child of an `Auto`-sized parent behaves like auto; a `Percent` group inside
+         `ui_panel:` (auto box unless `width`/`height` set) will surprise designers.
+      8. Spacer idiom `Group((height: Px(20.0), children: []))`.
+      9. Top-level `Group` without `ui_panel:` is positioned at `position:` from the screen; inside
+         `ui_panel:` it flows like any child.
+      Also update the six leaf `position` rows, the `absolute` rows and the UI Panel intro (R11).
+- [ ] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
+      iterated flat" next to the `spawn_primitive_children` rule.
+- [ ] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); add v2 entries
+      when v1 ships.
 
 ## Open questions
 - Exact enum variant lists for `JustifyContentDef` beyond the 6 named above — expand later if a
@@ -395,10 +482,6 @@ with its own risk/reward, not a dependency of this feature — logged to
 - Should `Group`'s `background_color`/`clip`/fixed-size fields make it a de facto replacement for
   hand-rolled `Rect`-behind-a-column patterns designers use today? Probably yes, organically — not
   a compatibility concern since `Rect` remains untouched and still works standalone.
-- `walk_ui_nodes`'s pre-order index must stay **identical** between `scene_loader.rs`'s and
-  `validate.rs`'s same-bar-vs-cross-bar collision checks (both currently key by positional node
-  index) — implementation must keep both call sites using the exact same walk, not two similar but
-  independently-written ones.
 
 ## Acceptance criteria
 - Given a `Group` with `flex_direction: Row, justify_content: SpaceBetween, width: Percent(100.0)`,
@@ -416,3 +499,9 @@ with its own risk/reward, not a dependency of this feature — logged to
   `ironhold_cli validate` diagnostic — nesting must not silently disable existing coverage.
 - Given an existing scene using `ui_panel:` and no `Group`, when the scene loads, then nothing
   about its layout changes — this feature is purely additive.
+- Given a full-screen `Group` with no background, when the player clicks its empty area, then the
+  click reaches the world (clicks pass through a `Group`).
+- Given a `Group` with no `id`, when `ironhold validate` runs, then it passes; given a leaf node with
+  no `id`, or two nodes anywhere in the tree sharing an `id`, then it fails.
+- Given a diagnostic about a `Group`, when it is printed, then it names the node by path
+  (`ui[2].children[0]`), not by an empty id.
