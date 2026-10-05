@@ -5,7 +5,7 @@ use clap::Subcommand;
 
 use ironhold_core::schema::catalog::{AssetCatalog, EffectDef, EffectPriority, PrefabCatalog, PrefabDef};
 use ironhold_core::schema::project::StateMachineAsset;
-use ironhold_core::schema::scene_v2::GameSceneV2;
+use ironhold_core::schema::scene_v2::{walk_ui_nodes, GameSceneV2};
 use ironhold_core::schema::Action;
 
 use super::utils::{glob_dir, rel, resolve_catalog_paths, ron_from_str, silent_parse};
@@ -372,6 +372,8 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
         name: String,
         entity_count: usize,
         ui_count: usize,
+        /// All `ui:` nodes including nested ones; `ui_count` stays top-level only.
+        ui_node_count: usize,
         has_player: bool,
         overlay: bool,
     }
@@ -401,6 +403,7 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
             name: scene.name.clone(),
             entity_count: scene.entities.len(),
             ui_count: scene.ui.len(),
+            ui_node_count: walk_ui_nodes(&scene.ui).count(),
             has_player,
             overlay,
         });
@@ -415,6 +418,7 @@ fn query_scenes(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std
                     "name": s.name,
                     "entities": s.entity_count,
                     "ui_elements": s.ui_count,
+                    "ui_node_count": s.ui_node_count,
                     "has_player": s.has_player,
                     "overlay": s.overlay,
                 })

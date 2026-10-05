@@ -7,7 +7,7 @@ use bevy_rapier3d::prelude::{
 };
 use crate::schema::*;
 use crate::schema::catalog::{PrefabKind, PrimitiveShapeKind};
-use crate::schema::scene_v2::GameSceneV2;
+use crate::schema::scene_v2::{walk_ui_nodes, GameSceneV2};
 use crate::schema::player::PlayerConfig;
 use crate::runtime::messages::*;
 use crate::runtime::material_factory::MaterialFactory;
@@ -92,9 +92,10 @@ pub fn spawn_scene_v2(
     ));
 
     info!(
-        "Scene V2 Loaded! name={}, {} entities, {} ui",
+        "Scene V2 Loaded! name={}, {} entities, {} ui nodes ({} top-level)",
         scene.name,
         scene.entities.len(),
+        walk_ui_nodes(&scene.ui).count(),
         scene.ui.len()
     );
 
@@ -1173,7 +1174,7 @@ pub fn spawn_scene_v2(
     // Spawn UI — always runs for both Replace and Overlay mode.
     // Pre-create RadarMaterial handles for any StatRadar elements so we can pass owned
     // handles into the with_children closures without borrowing `mats` inside them.
-    let radar_handles: HashMap<String, Handle<RadarMaterial>> = scene.ui.iter() // det: lookup-only
+    let radar_handles: HashMap<String, Handle<RadarMaterial>> = walk_ui_nodes(&scene.ui) // det: lookup-only
         .filter_map(|el| {
             if let crate::schema::scene_v2::UiNodeDef::StatRadar(d) = el {
                 let (fr, fg, fb, fa) = d.fill_color;
@@ -1360,7 +1361,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
     // a real cross-bar collision if two bars happened to share an id (system-architect finding).
     let mut seen: HashMap<KeyCode, (usize, String, String)> = HashMap::new(); // resolved key -> (bar index, bar id, slot key) // det: lookup-only
     let mut bar_index = 0usize;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         for slot in &bar.slots {
             let Some(kc) = InputMap::parse_key(&slot.key) else { continue }; // unparseable keys are already warned per-bar
@@ -1397,7 +1398,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
 fn warn_same_player_gamepad_duplicate_slots(scene: &GameSceneV2) {
     use crate::schema::scene_v2::UiNodeDef;
     let mut seen: HashMap<(u32, GamepadButton), (String, String)> = HashMap::new(); // (player, button) -> (bar id, slot key) // det: lookup-only
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         for slot in &bar.slots {
@@ -1656,7 +1657,7 @@ fn warn_missing_interactable_item_key(
 /// diagnostic coverage at all. See `planning/features/per_player_stat_pools.md`.
 fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
     use crate::schema::scene_v2::UiNodeDef;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)
@@ -1688,7 +1689,7 @@ fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[Pla
 /// normalization. See `planning/features/gamepad_action_bar_slots.md`.
 fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
     use crate::schema::scene_v2::UiNodeDef;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)

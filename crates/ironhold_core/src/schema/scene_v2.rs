@@ -166,7 +166,7 @@ impl GameSceneV2 {
             }
         }
         let mut ui_ids = std::collections::HashSet::new(); // det: lookup-only
-        for elem in &self.ui {
+        for elem in walk_ui_nodes(&self.ui) {
             let id = elem.id();
             if id.is_empty() {
                 return Err("UI element has empty id".to_string());
@@ -374,7 +374,88 @@ pub enum UiNodeDef {
     ContainerPanel(ContainerPanelDef),
 }
 
+/// Maximum nesting depth of `ui:` nodes (a top-level node is depth 1). The spawner and every
+/// `scene.ui` walker share this one cap, so diagnostics cover exactly the nodes that spawn.
+pub const MAX_UI_DEPTH: usize = 16;
+
+/// Location of a UI node inside `scene.ui`, for diagnostics: `ui[2]`, `ui[2].children[0]`, ...
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiPath(pub Vec<usize>);
+
+impl std::fmt::Display for UiPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (depth, index) in self.0.iter().enumerate() {
+            if depth == 0 {
+                write!(f, "ui[{index}]")?;
+            } else {
+                write!(f, ".children[{index}]")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Pre-order, depth-capped (`MAX_UI_DEPTH`) walk over a `ui:` node list: a node is yielded before
+/// its children. Uses an explicit stack (no recursion, deterministic order). Every consumer of
+/// `scene.ui` must go through this instead of iterating the top-level `Vec` flat, or it silently
+/// under-covers nested nodes.
+pub struct UiNodeWalk<'a> {
+    /// One entry per open nesting level: the nodes at that level and the index of the next to yield.
+    stack: Vec<(&'a [UiNodeDef], usize)>,
+    /// Children of the node yielded last, pushed on the next call to `next` (after the caller has
+    /// had a chance to read `current_path`).
+    pending: Option<&'a [UiNodeDef]>,
+}
+
+impl<'a> UiNodeWalk<'a> {
+    /// Path of the node most recently yielded by `next`.
+    pub fn current_path(&self) -> UiPath {
+        UiPath(self.stack.iter().map(|(_, next)| next - 1).collect())
+    }
+}
+
+impl<'a> Iterator for UiNodeWalk<'a> {
+    type Item = &'a UiNodeDef;
+
+    fn next(&mut self) -> Option<&'a UiNodeDef> {
+        if let Some(children) = self.pending.take() {
+            self.stack.push((children, 0));
+        }
+        loop {
+            let (nodes, next) = self.stack.last_mut()?;
+            if let Some(node) = nodes.get(*next) {
+                *next += 1;
+                let children = node.children();
+                if !children.is_empty() && self.stack.len() < MAX_UI_DEPTH {
+                    self.pending = Some(children);
+                }
+                return Some(node);
+            }
+            self.stack.pop();
+        }
+    }
+}
+
+/// See [`UiNodeWalk`]. Callers that need a unique-per-node tag `.enumerate()` the iterator.
+pub fn walk_ui_nodes(nodes: &[UiNodeDef]) -> UiNodeWalk<'_> {
+    UiNodeWalk { stack: vec![(nodes, 0)], pending: None }
+}
+
+/// Same traversal as [`walk_ui_nodes`], also yielding each node's [`UiPath`] for diagnostics.
+pub fn walk_ui_nodes_pathed(nodes: &[UiNodeDef]) -> impl Iterator<Item = (UiPath, &UiNodeDef)> {
+    let mut walk = walk_ui_nodes(nodes);
+    std::iter::from_fn(move || {
+        let node = walk.next()?;
+        Some((walk.current_path(), node))
+    })
+}
+
 impl UiNodeDef {
+    /// Child nodes laid out inside this node. No variant nests yet; this is the single place the
+    /// walkers learn about nesting.
+    pub fn children(&self) -> &[UiNodeDef] {
+        &[]
+    }
     pub fn id(&self) -> &str {
         match self {
             UiNodeDef::Button(d) => &d.id,

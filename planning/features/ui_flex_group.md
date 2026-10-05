@@ -428,7 +428,7 @@ with its own risk/reward, not a dependency of this feature — logged to
 on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
 
 ## Tasks
-- [ ] Add `walk_ui_nodes` + `walk_ui_nodes_pathed` + `MAX_UI_DEPTH` to `schema/scene_v2.rs` and convert
+- [x] _(done on `feature/ui_flex_group`; the nested-fixture unit test lands with `GroupDef`)_ Add `walk_ui_nodes` + `walk_ui_nodes_pathed` + `MAX_UI_DEPTH` to `schema/scene_v2.rs` and convert
       every existing flat `scene.ui` scan (re-grep both crates; `scene_loader.rs`'s `radar_handles`
       pre-pass + 4 `warn_*`, `validate.rs`'s 9 scans, `query.rs`, and `GameSceneV2::validate()`).
       Standalone, behaviour-preserving refactor with zero new schema -- do this **first**, before
@@ -489,7 +489,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
           coloured Group lets clicks through, FlexStart/FlexEnd mapping).
       11. Link `ui_demo` and the retrofitted `options.scene.ron` as the examples to copy.
       Also update the six leaf `position` rows, the six `absolute` rows and the UI Panel intro (R11), `docs/60_contributing.md` "Checks performed" and README's example-project table (R21).
-- [ ] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
+- [x] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
       iterated flat" next to the `spawn_primitive_children` rule.
 - [ ] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); add v2 entries
       when v1 ships.

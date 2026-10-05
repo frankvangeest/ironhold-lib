@@ -7,7 +7,7 @@ use ironhold_core::schema::catalog::{
     AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
 };
 use ironhold_core::schema::items::ItemCatalog;
-use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef};
+use ironhold_core::schema::scene_v2::{walk_ui_nodes, GameSceneV2, UiNodeDef};
 use ironhold_core::schema::player::{CameraConfig, InputMap};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::dialogue::{DialogueCondition, DialogueDef};
@@ -1601,7 +1601,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         // misclassify (or silently miss) a real cross-bar collision if two bars happened to
         // share an id (system-architect finding, per_player_split_screen_targeting.md Phase 2).
         let mut seen: std::collections::HashMap<_, (usize, &str, &str)> = std::collections::HashMap::new();
-        for (node_index, node) in scene.ui.iter().enumerate() {
+        for (node_index, node) in walk_ui_nodes(&scene.ui).enumerate() {
             let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
             for slot in &bar.slots {
                 match ironhold_core::schema::player::InputMap::parse_key(&slot.key) {
@@ -1651,7 +1651,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         // mis-authored label anywhere, or the same one on a scene reload, produces no diagnostic
         // at all. That "looks fine but is subtly wrong" failure mode is exactly what this CLI
         // check exists to catch at design time instead.
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             let (kind, id, font_size) = match node {
                 ironhold_core::schema::scene_v2::UiNodeDef::Label(l) => ("Label", &l.id, l.font_size),
                 ironhold_core::schema::scene_v2::UiNodeDef::Button(b) => ("Button", &b.id, b.font_size),
@@ -1675,7 +1675,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         // with no runtime `warn!` anywhere. `Option<String>` fields are only checked when actually
         // set — omitting them is a normal, working authoring choice (e.g. an ActionBar whose every
         // slot sets its own `icon` override, or a panel not showing icons at all).
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             match node {
                 // `icon_on`/`icon_off` are required (non-`Option`) `String` fields resolved via
                 // `asset_catalog.textures.get(...).unwrap_or_default()` with zero runtime warning
@@ -1770,7 +1770,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         // their own physical pad) is correctly not flagged. See
         // `planning/features/gamepad_action_bar_slots.md`.
         let mut seen_gamepad: std::collections::HashMap<(u32, _), (&str, &str)> = std::collections::HashMap::new();
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
             let owner_player = bar.owner_player.unwrap_or(0);
             for slot in &bar.slots {
@@ -1815,7 +1815,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // (debug-detective finding). See `planning/features/per_player_stat_pools.md`.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
-            for node in &scene.ui {
+            for node in walk_ui_nodes(&scene.ui) {
                 let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
                 let owner_player = bar.owner_player.unwrap_or(0);
                 let player_prefab = scene.entities.iter()
@@ -1851,7 +1851,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // including the `unwrap_or(0)` normalization. See `planning/features/gamepad_action_bar_slots.md`.
     if let Some(catalog) = prefab_catalog {
         for (scene_path, scene) in scenes {
-            for node in &scene.ui {
+            for node in walk_ui_nodes(&scene.ui) {
                 let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
                 let owner_player = bar.owner_player.unwrap_or(0);
                 let player_prefab = scene.entities.iter()
@@ -2707,7 +2707,7 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
                 "when the gamepad button is pressed", "pressing it will do nothing",
             );
         }
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             match node {
                 UiNodeDef::Button(btn) => {
                     let trigger = btn.action.strip_prefix("ui.").unwrap_or(&btn.action);
@@ -2836,7 +2836,7 @@ fn collect_reachable_ui_triggers(
         for trigger in scene.scene_unclaimed_gamepad_bindings.values() {
             insert(trigger);
         }
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             match node {
                 UiNodeDef::Button(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
                 UiNodeDef::IconButton(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
@@ -3303,7 +3303,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                 kind: "non_ascii_char_in_text",
             });
         };
-        for node in &scene.ui {
+        for node in walk_ui_nodes(&scene.ui) {
             let (kind, id, text) = match node {
                 UiNodeDef::Label(l) => ("Label", l.id.as_str(), l.text.as_str()),
                 UiNodeDef::Button(b) => ("Button", b.id.as_str(), b.text.as_str()),

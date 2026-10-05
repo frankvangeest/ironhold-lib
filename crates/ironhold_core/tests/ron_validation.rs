@@ -1,5 +1,5 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
-use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, StatSpreadLayout};
+use ironhold_core::schema::scene_v2::{walk_ui_nodes, walk_ui_nodes_pathed, GameSceneV2, UiNodeDef, UiPath, BarOrientation, StatSpreadLayout, MAX_UI_DEPTH};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::player::InputMap;
@@ -4641,4 +4641,27 @@ fn test_stat_catalog_preserves_declaration_order() {
         vec!["zeta", "alpha", "mid"],
         "stats must load in the order they are declared in stats.ron, not hash or alphabetical order"
     );
+}
+
+/// `walk_ui_nodes` is the only sanctioned way to visit `scene.ui` (nested `Group`s must not blind
+/// a consumer). With no nesting variant yet it must behave exactly like a flat top-level scan.
+#[test]
+fn test_walk_ui_nodes_matches_flat_order_without_nesting() {
+    let ron_str = r#"[ Label((id: "a")), Rect((id: "b")), Label((id: "c")) ]"#;
+    let ui: Vec<UiNodeDef> = from_str(ron_str).expect("flat ui list should parse");
+    let ids: Vec<&str> = walk_ui_nodes(&ui).map(UiNodeDef::id).collect();
+    assert_eq!(ids, vec!["a", "b", "c"]);
+    assert_eq!(walk_ui_nodes(&ui).count(), ui.len());
+    assert_eq!(walk_ui_nodes(&[]).count(), 0);
+}
+
+/// Diagnostics name a node by path, never by an empty id or a bare index (plan R9/R18).
+#[test]
+fn test_walk_ui_nodes_pathed_reports_ui_paths() {
+    let ron_str = r#"[ Label((id: "a")), Label((id: "b")) ]"#;
+    let ui: Vec<UiNodeDef> = from_str(ron_str).expect("flat ui list should parse");
+    let paths: Vec<String> = walk_ui_nodes_pathed(&ui).map(|(p, _)| p.to_string()).collect();
+    assert_eq!(paths, vec!["ui[0]", "ui[1]"]);
+    assert_eq!(UiPath(vec![2, 0, 1]).to_string(), "ui[2].children[0].children[1]");
+    assert_eq!(MAX_UI_DEPTH, 16);
 }
