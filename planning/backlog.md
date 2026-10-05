@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **UI layout (flex `Group`)** — stack/flex layout or anchor-based positioning replacing raw pixel coords. A design already exists: `planning/features/ui_flex_group.md` (Ready for v1, planned `8baeac7` 2026-08-28, re-reviewed 2026-10-05). v1 also creates a minimal `ui_demo` project (Group stations); v2 (portrait/touch) follow-ups to be added when v1 ships. _Unblocks `mobile_ui_demo`._ _Branch `feature/ui_flex_group` (cut from `integration`, since `main` lags the batch this depends on), started 2026-10-05._
+
 ---
 
 ## Bugs
@@ -241,7 +243,6 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ### UI
 - [ ] **Remaining hardcoded font sizes in composite UI widgets** — `feature/ui-label-font-size` gave `Label`/`Button` an authorable `font_size`, but `scene_loader.rs` still hardcodes several others: action-bar slot value text (13.0), inventory/shop/container panel headers and slot counts (12.0/11.0/13.0), and `camera.rs`'s split-screen "P1"/"P2" corner label (22.0). Same class of problem, lower priority since these are chrome inside composite widgets whose main content font is already authorable elsewhere (`InventoryPanelDef.font_size`, etc.) rather than the primary text a designer authors. Surfaced during `ui_label_font_size.md`'s post-implementation review (system-architect, 2026-08-28).
 - [ ] UI element types beyond `Button`/`Label` (`Label` already shipped): `Image`, `ProgressBar`, `Panel`
-- [ ] UI layout — stack/flex layout or anchor-based positioning replacing raw pixel coords. A design already exists: `planning/features/ui_flex_group.md` (Ready for v1, planned `8baeac7` 2026-08-28, re-reviewed 2026-10-05). v1 also creates a minimal `ui_demo` project (Group stations); v2 (portrait/touch) follow-ups to be added when v1 ships. _Unblocks `mobile_ui_demo`._
 - [ ] Font + theme config per project
 - [ ] Drop shadow support for UI text
 - [ ] Drop shadow support for world entity text labels
