@@ -1,6 +1,6 @@
 # Feature: Nestable flexbox `Group` UI node
 
-_Status: Ready (v1) — revised 2026-10-05 after a third plan-review pass (system-architect + ux-gamedesigner-reviewer); all findings folded in below, revised text not re-reviewed_
+_Status: Ready (v1) — two plan-review passes (system-architect incl. a Bevy 0.18/taffy 0.9.2 source check, and ux-gamedesigner-reviewer) completed 2026-10-05; second-pass findings folded in as R14-R22, not re-reviewed a third time_
 _Planned at: `8baeac7` (2026-08-28)_
 _Drift refreshed at: `f34dd16` (2026-10-05)_
 
@@ -30,17 +30,26 @@ still says something different, **this section wins** and the body has been edit
 |---|---|---|
 | R1 | `options.scene.ron` retrofit is an **intentional even rhythm** (e.g. item `gap` 8, section gap 24), not pixel-identical; a baseline diff for that one scene is expected. A spacer (`Group((height: Px(20.0), children: []))`) is documented as a known idiom. | D (UX #2) |
 | R2 | `Group.id` stays optional. `GameSceneV2::validate()` exempts `Group` from the non-empty-id check, skips `""` in duplicate detection, and walks nested nodes so ids are unique **per scene across all nodes that have one**. Leaf nodes still require ids. | D (architect blocking) |
-| R3 | `ironhold validate` calls `GameSceneV2::validate()` (precedent: `validate.rs` already calls the four catalogs' own `.validate()`). **Gate:** run it over every `assets/projects/*` first; if any shipped project fails, split this task into its own backlog item instead of fixing projects inside this feature. | D |
+| R3 | `ironhold validate` calls `GameSceneV2::validate()` (precedent: `validate.rs` already calls the four catalogs' own `.validate()`). **Gate:** run it over every `assets/projects/*` first; if any shipped project fails, split this task into its own backlog item instead of fixing projects inside this feature (CI's `assets_schema_version_regression.rs` already runs it on every shipped scene, so failures are not expected). **Scope accepted (R19):** this also reports duplicate/empty entity and world_label ids and scene `schema_version`, not only UI ids; each error gets the R9 path since `validate()` is fail-fast (one error per scene). | D |
 | R4 | **v1 is landscape-only.** Portrait is v2 with different backlog dependencies — see `## Phases`. | D (UX mobile) |
 | R5 | The `Percent`/`SpaceBetween` showcase example lives in a new minimal **`ui_demo`** project created by this feature (Group stations only). The backlog's broader `ui_demo` item (buttons, data-bound labels, overlays, stat widgets) stays Queued and extends it. | D (UX #3) |
 | R6 | `query.rs` keeps `ui_count` = top-level count (JSON consumers unaffected) and adds `ui_node_count` = all nodes; the load log prints both. `walk_ui_nodes` applies the same depth cap (16) as the spawner so diagnostics cover exactly the nodes that spawn. | D (architect) |
-| R7 | A `Group` lets clicks pass through to the world (`FocusPolicy::Pass`), unlike `ui_panel:`/overlay backdrops which block deliberately. Test: a click on the empty area of a full-screen `Group` still reaches the world. | F (UX #1) |
+| R7 | **Corrected in pass 2.** A `Group` never carries `Interaction` or `FocusPolicy::Block`, so clicks on its empty area reach the world. This is the same as `ui_panel:` (which has neither); it differs from the inventory/shop/container panel roots and the overlay backdrop, which block deliberately (`ui_panel_blocker.rs`). Setting `FocusPolicy::Pass` explicitly is a no-op (it is `Node`'s default) and is NOT added. Mechanism: `click_select_system` only skips the world when some `Interaction == Pressed` (`targeting.rs`); camera orbit/strafe drags have no UI guard at all. Test: spawn a full-screen `Group`, assert it has no `Interaction`/`Block`, and that a click on it changes the target. | F (UX #1, architect pass 2) |
 | R8 | Edge anchoring recipe is documented as the intended pattern: full-screen root `Group` (`width/height: Percent(100.0)`, `flex_direction: Column`, `justify_content: SpaceBetween`) holding a top row and a bottom row; `End` for right-aligned. No separate anchor system in v1. | F (UX #1, architect #10) |
 | R9 | Every new/converted diagnostic names the node by **path** (`ui[2].children[0] (Group)`, plus `id` when set), never a bare empty id or index. | F (UX #5) |
 | R10 | Extra `ironhold validate` warnings: `SpaceBetween/Around/Evenly` on a `Group` whose main-axis size is `Auto`; `Percent` on a nested `Group` whose parent is `Auto` on that axis; any of `ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel` nested in a `Group`; negative or non-finite `gap`/`padding`/`Px`/`Percent`. | F (UX) |
 | R11 | Docs: update the six leaf `position` rows, the `absolute` rows and the UI Panel intro in `docs/20_data_formats.md` ("ignored in panel mode" becomes "inside `ui_panel:` or a `Group`"). Document top-level `Group` behaviour, `width: Px(..)` vs `ui_panel:`'s bare number, and `width`/`height` vs leaf `size:`. | F (UX #4) |
 | R12 | `walk_ui_nodes` yields nodes (callers `.enumerate()` if they need a per-bar tag). The earlier requirement that core and CLI use an identical index was wrong: core's `warn_cross_bar_duplicate_keys` already keys by its own ActionBar counter and the CLI by `enumerate()`; both only need a unique-per-bar tag. | F (architect #3) |
 | R13 | `GameSceneV2::validate()` (`schema/scene_v2.rs`, flat `for elem in &self.ui`) is an additional flat-scan site to convert. | F (architect blocking) |
+| R14 | `JustifyContentDef`/`AlignItemsDef` keep the names `Start`/`End` but map to Bevy's **`FlexStart`/`FlexEnd`** (CSS semantics: they follow `RowReverse`/`ColumnReverse`, and for `align_items` follow `WrapReverse`). Bevy's physical `Start`/`End` are not exposed. Default `justify_content` is therefore FlexStart: identical to the earlier `Start` on auto-sized boxes. Reverse directions stay in v1. Corrects the earlier claim that Start/FlexStart differ for `align_items` under Row/ColumnReverse (they differ only under `WrapReverse`). | D (architect pass 2) |
+| R15 | `Group` **children** get `flex_shrink: 0.0` (set in the Group children loop only, not the shared `ui_panel:` path) so `size:` means exactly that many px; Bevy's default of 1.0 would shrink leaves and silently disable `SpaceBetween` in a Group narrower than its content. | D (architect pass 2) |
+| R16 | A `Group` with `background_color` still lets clicks through (callout in docs); no `block_clicks` field in v1. Revisit if a dialog-box use case appears. | D (UX pass 2) |
+| R17 | `mobile_ui_demo` v1 = discrete on-screen buttons only (menu, pause, tapped ActionBar/ability slots). Movement controls (virtual stick/d-pad, held or analog input from UI) are a separate backlog item and part of v2. | D (UX pass 2) |
+| R18 | Walker depth: pin ONE convention - a top-level node is depth 1, nodes at depth 17+ are neither spawned nor walked - shared by spawner and walker; test 16 (kept) vs 17 (dropped) on both sides. `ironhold validate` reports a diagnostic naming the path of any truncated subtree (silent truncation is the same blindness this feature removes). Define `UiPath` (a `Vec<usize>` of child indices with a `Display` impl producing `ui[2].children[0]`). | F (architect pass 2) |
+| R19 | See R3 (CLI scope widened to entity/world_label ids and schema_version). | D |
+| R20 | Extra validate rule: a `Percent` `Group` placed directly in a `ui_panel:` with no `width`/`height` warns (same trap as Percent under an Auto parent). The nested-panel warning ends with "move it to top-level `ui:`". | F (UX + architect pass 2) |
+| R21 | Docs/registration additions: `docs/60_contributing.md` "Checks performed" lists every new/wired validate check; README "Example projects" table gains `ui_demo`; `crates/ironhold_cli/tests/validate_projects.rs` gains a `ui_demo` test (hand-maintained list); `ui_demo` is a single full-screen R8 root (top HUD bar with `SpaceBetween`, middle nested-row/column + spacer stations, bottom right-aligned row) so stations don't overlap at (0,0), with `ui.button_pressed:` bindings in `logic/state_machine.ron` (e.g. `SetVariable` shown in a bound Label) so `validate` does not report `unreachable_trigger`; minimum file set: project.ron, scene, assets.ron, prefabs, state_machine (use the `/new-project` skill / blank_project template). | F (UX + architect pass 2) |
+| R22 | Doc callouts added: "sizes to content" means the leaf `size:` boxes, not their text (long text still spills into a Row sibling - the Why section's claim to solve the font footgun is narrowed accordingly); `box_sizing` is BorderBox so `padding` eats into a `Px` width; absolute children's insets resolve against the Group's padding box (Group `padding` does not offset them); `Percent(n)` under an Auto parent is resolved cyclically against the parent's final content-derived size (not simply "like auto"); `Percent` on a top-level Group is measured against the window (R8 depends on this) - split-screen behaviour unverified, add to playtest checklist (`camera.rs:801`: RON UI roots rely on the default UI camera); spacer idiom needs `width: Px(n)` in a Row; link `ui_demo` and the retrofitted `options.scene.ron` as the examples to copy. | F (UX + architect pass 2) |
 
 ## What
 
@@ -88,7 +97,7 @@ This is the same root cause behind two problems already logged from recent featu
   needs to start.
 - The logged "`UiNodeDef` has no `anchor:`/percentage positioning" gap
   (`dynamic_animation_control.md`'s UI review) — a `Group` with `width: Percent(100.0)` +
-  `justify_content: FlexEnd`/`SpaceBetween` gives real edge/spread anchoring, without inventing a
+  `justify_content: End`/`SpaceBetween` gives real edge/spread anchoring, without inventing a
   parallel percentage-position system on every leaf node.
 - The logged "an `Auto`-sized box would be a better long-term answer than `font_size`/`clip`"
   suggestion (`ui_label_font_size.md`'s post-implementation review, system-architect) — this
@@ -239,11 +248,10 @@ mirror Bevy's own names 1:1 (verified against precedent: `AlphaModeDef` mirrors 
 vocabulary — there is no clean one-word alternative for `SpaceEvenly`, and mirroring lets a
 designer reuse any CSS/Bevy flexbox tutorial directly.
 
-- `JustifyContentDef`/`AlignItemsDef` expose **`Start`/`End`**, not Bevy's separate
-  `FlexStart`/`FlexEnd` — Bevy 0.18 has both, and they genuinely differ under
-  `RowReverse`/`ColumnReverse` (`Flex*` follow the reversal, plain `Start`/`End` are physical).
-  Document this explicitly rather than leaving it implicit, since `Group` exposes reverse
-  directions.
+- `JustifyContentDef`/`AlignItemsDef` expose **`Start`/`End`** but map them to Bevy's
+  **`FlexStart`/`FlexEnd`** (R14): these follow `RowReverse`/`ColumnReverse` (justify) and
+  `WrapReverse` (align) exactly like CSS `flex-start`/`flex-end`, so CSS tutorials apply. Bevy's
+  physical `Start`/`End` (which ignore the reversal) are not exposed. Document the mapping.
 - **`AlignItemsDef` has no `Stretch` in v1** — every leaf `UiNodeDef` always has a definite
   `Val::Px` cross-axis size (from its own `size:` field), and `Stretch` only affects children with
   an *indefinite* cross-axis size. It would be silently inert on every leaf child, and only do
@@ -251,7 +259,8 @@ designer reuse any CSS/Bevy flexbox tutorial directly.
   Revisit if `flex_grow`/auto-sizing children land later.
 - Explicit defaults (not left to `#[derive(Default)]`'s "first variant" default, which would
   silently be whatever's declared first): `FlexDirection::Row`, `JustifyContent::Start`,
-  `AlignItems::Start`, `FlexWrap::NoWrap`. `Start` for `justify_content` is deliberate, not
+  `AlignItems::Start`, `FlexWrap::NoWrap` (`Start` = Bevy `FlexStart`, per R14). `Start` for
+  `justify_content` is deliberate, not
   arbitrary — it's the only value that does something sensible on the common case of an
   auto-sized `Group` (see Critical fix #2).
 
@@ -267,7 +276,7 @@ shared match stays exhaustive without a separate trait).
 
 `spawn_ui_element_node` already threads ~10 parameters through (7 of them shared state) for the composite-widget arms
 (`radar_handles`, `asset_server`, `atlas_layouts`, `asset_catalog`, `item_catalog`,
-`inventory_ui`, `container_ui`). Recursing into a `Group`'s children with all 9 threaded
+`inventory_ui`, `container_ui`). Recursing into a `Group`'s children with all 7 shared-state fields threaded
 positionally would be error-prone and unreadable. This codebase already has the answer for this
 exact shape — `ChildSpawnCtx<'a>` (`spawn_primitive_children`, documented in
 `crates/ironhold_core/src/CLAUDE.md`) bundles equivalent per-recursion-frame state. Introduce a
@@ -306,13 +315,14 @@ UiNodeDef::Group(g) => {
     group_node.height = g.height.into();
     if g.clip { group_node.overflow = Overflow::clip(); }
 
-    let mut ec = parent.spawn((Name::new(format!("Group: {}", g.id)), group_node));
+    let mut ec = parent.spawn((Name::new(format!("Group: {}", ctx.path_or_id(&g.id))), group_node));
     if let Some((r, g_, b, a)) = g.background_color {
         ec.insert(BackgroundColor(Color::srgba(r, g_, b, a)));
     }
     ec.with_children(|parent| {
         for child in &g.children {
-            let child_node = build_child_node(child, false);
+            let mut child_node = build_child_node(child, false);
+            child_node.flex_shrink = 0.0; // R15: size: means exactly that many px
             spawn_ui_element_node(parent, child, child_node, ctx);
         }
     });
@@ -352,11 +362,14 @@ reserves its space.
 
 ### Click pass-through (R7)
 
-A `Group` never blocks pointer input: its `Node` gets `FocusPolicy::Pass`, so clicks and
-camera-orbit drags on its empty area reach the world. This differs deliberately from `ui_panel:`
-and overlay backdrops, which block (`ui_panel_blocker.rs`). Interactive children (`Button` etc.)
-still capture their own clicks. Required test: a click on the empty area of a full-screen `Group`
-reaches the world.
+A `Group` never blocks pointer input (corrected in pass 2, see R7): it carries no `Interaction`
+and no `FocusPolicy::Block`, exactly like `ui_panel:` today. Setting `FocusPolicy::Pass`
+explicitly would be a no-op (`Node`'s default) and is not done. It differs from the
+inventory/shop/container panel roots and the overlay backdrop, which block deliberately
+(`ui_panel_blocker.rs`). Interactive children (`Button` etc.) still capture their own clicks. This
+holds even with `background_color` set (R16): a coloured Group is decoration, not a dialog box.
+Required test: a full-screen `Group` has no `Interaction`/`Block`, and a click on it changes the
+target.
 
 ### Edge anchoring recipe (R8)
 
@@ -426,7 +439,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       `JustifyContentDef`/`AlignItemsDef`/`FlexWrapDef` enums, explicit defaults on all four
 - [ ] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
 - [ ] `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
-      `build_child_node(el, force_absolute)`; recursive `Group` arm with `FocusPolicy::Pass`; depth
+      `build_child_node(el, force_absolute)`; recursive `Group` arm (children get `flex_shrink: 0.0`, R15); depth
       cap (16, one `warn!`)
 - [ ] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
 - [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
@@ -450,8 +463,9 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       Add a top-of-file comment pointing at the `docs/20_data_formats.md` Group section. Regenerate
       only this scene's baseline: `python test_web.py --project 3rd_person_game_demo
       --update-baseline 3rd_person_game_demo_options --skip-build` -- NOT a blanket
-      `--update-baselines` (other scenes in that project, e.g. `camera_modes`, have ~34
-      deliberately-overflowing `Label`/`Button` defs that must not shift). The options baseline diff
+      `--update-baselines` (other projects' scenes, e.g. `camera_modes`, have ~34
+      deliberately-overflowing `Label`/`Button` defs that must not shift; within
+      `3rd_person_game_demo` the other scenes are main, start_menu, character_select and pause). The options baseline diff
       is expected (R1).
 - [ ] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
       flexbox primer (link MDN), and these callouts:
@@ -465,12 +479,16 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
          not `size:`.
       5. `Visibility::Hidden` children still occupy layout space.
       6. Anchoring to screen edges (R8) and click pass-through (R7).
-      7. `Percent(n)` on a child of an `Auto`-sized parent behaves like auto; a `Percent` group inside
-         `ui_panel:` (auto box unless `width`/`height` set) will surprise designers.
-      8. Spacer idiom `Group((height: Px(20.0), children: []))`.
-      9. Top-level `Group` without `ui_panel:` is positioned at `position:` from the screen; inside
-         `ui_panel:` it flows like any child.
-      Also update the six leaf `position` rows, the `absolute` rows and the UI Panel intro (R11).
+      7. `Percent(n)` under an `Auto`-sized parent resolves cyclically against the parent's final
+         content-derived size; a `Percent` group inside `ui_panel:` (auto box unless
+         `width`/`height` set) will surprise designers (R20).
+      8. Spacer idiom `Group((height: Px(20.0), children: []))` in a Column, `width: Px(n)` in a Row.
+      9. Top-level `Group` without `ui_panel:` is positioned at `position:` from the screen, and
+         `Percent` there is measured against the window; inside `ui_panel:` it flows like any child.
+      10. The R22 callouts (sizes-to-content vs text, BorderBox padding, absolute-child insets,
+          coloured Group lets clicks through, FlexStart/FlexEnd mapping).
+      11. Link `ui_demo` and the retrofitted `options.scene.ron` as the examples to copy.
+      Also update the six leaf `position` rows, the six `absolute` rows and the UI Panel intro (R11), `docs/60_contributing.md` "Checks performed" and README's example-project table (R21).
 - [ ] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
       iterated flat" next to the `spawn_primitive_children` rule.
 - [ ] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); add v2 entries
@@ -505,3 +523,8 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
   no `id`, or two nodes anywhere in the tree sharing an `id`, then it fails.
 - Given a diagnostic about a `Group`, when it is printed, then it names the node by path
   (`ui[2].children[0]`), not by an empty id.
+- Given a `Percent(100.0)` `Group` with `SpaceBetween` on a window narrower than its children's
+  combined `size:` widths, when the scene loads, then leaves keep their authored `size:` (no
+  shrink, `flex_shrink: 0`) rather than silently collapsing the spacing.
+- Given a `Group` subtree deeper than 16 levels, when `ironhold validate` runs, then it reports the
+  path of the truncated subtree.
