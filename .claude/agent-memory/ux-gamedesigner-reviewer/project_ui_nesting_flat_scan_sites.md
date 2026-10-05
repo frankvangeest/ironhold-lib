@@ -46,5 +46,17 @@ window — which needs a percentage/fill size, not `Option<(f32,f32)>` pixels.
 Panel node **always** `Overflow::clip()`s. A flexbox container following plain `#[serde(default)]`
 gets 0.0/0.0/None/no-clip. Docs need a side-by-side default table, not just a field table.
 
+## 2026-10-05 re-review of ui_flex_group.md (Group, UiSizeDef Auto/Px/Percent)
+
+- Bottom/right edge anchoring is only reachable via a **full-screen root Group** (width+height
+  Percent(100), Column, SpaceBetween) — the plan never names this recipe, and never says what
+  FocusPolicy a Group gets. ui_panel/overlay backdrops use FocusPolicy::Block
+  (`ui_panel_blocker.rs`); a full-screen Group must Pass or it eats world clicks/orbit.
+- options.scene.ron vertical rhythm is irregular (gaps 5,5,5,5,25,35,15,10,20) — no margin means
+  the retrofit can't be pixel-identical without spacer Groups (`Group((height: Px(n), children: []))`).
+- Leaves stay fixed-px `size:` — blocks portrait phones (~360 logical px; options labels are 400px).
+- `ui_demo` project cited by the mobile_ui_demo backlog entry does not exist.
+- Optional `id` on Group means diagnostics need a `ui[2].children[0]`-style path, not a pre-order index.
+
 Related: [[ui-label-button-font-and-clip]], [[container-events-undocumented]],
 [[warn-vs-silent-fallback-principle]], [[schema-bool-toggle-house-style]].

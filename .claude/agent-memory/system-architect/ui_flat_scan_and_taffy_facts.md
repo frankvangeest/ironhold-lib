@@ -22,6 +22,17 @@ under-cover nested nodes — no compile error, since each is a `let ... else { c
   index shared by both sides.
 - `query.rs` ~382 — `ui_count: scene.ui.len()` becomes a top-level-only count.
 
+**Refreshed at `f34dd16` (2026-10-05):** validate.rs now has 9 `for ... in &scene.ui` scans
+(incl. trigger-source enumeration 2710/2839, non-ASCII text 3306, texture-key 1678). The plan
+missed a **12th class of site: `GameSceneV2::validate()` in `schema/scene_v2.rs` (~169)** — flat
+duplicate-id check that also **rejects empty UI ids**; called only by tests, but
+`assets_schema_version_regression` runs it on every shipped scene, so an id-less (`#[serde(default)] id`)
+nestable node in shipped content fails CI. Also: core `warn_cross_bar_duplicate_keys` keys by an
+ActionBar *ordinal* counter while CLI keys by `enumerate()` node index — they were never identical,
+only need to be unique-per-bar. ron 0.11/0.12 `Options::default()` has `recursion_limit: Some(128)`
+(ImplicitRonPlugin uses it), so deep RON nesting fails parse cleanly rather than stack-overflowing.
+`determinism_lint` scans `ironhold_core/src` only — CLI HashMaps need no `// det:`.
+
 **Why:** "additive new enum variant, no CLI impact" is the wrong instinct for `UiNodeDef` — the
 compiler cannot catch under-coverage here, and the radar case is a silent render failure, not just
 a missing warning.
