@@ -1,5 +1,7 @@
 # Memory Index
 
+- [determinism_lint.rs blind spots](project_determinism_lint_blind_spots.md) — `as`/type aliases, external-API maps, honor-only markers on iterated maps, `mod x;` swallow, unwrap_or_default read
+
 - [Update-schedule GlobalTransform is one tick stale](project_update_globaltransform_one_tick_stale.md) — camera reads fresh Transform, world-space UI reads stale GT; errors cancel at 0/1 ticks, break on 2-tick frames; propagating after Writeback makes it WORSE
 - [Vsync defeats framepace/tick matching](project_vsync_defeats_framepace_tick_matching.md) — PresentMode::Fifo is the default and is never overridden, so a 64fps cap never engages; 60Hz display = exactly 4 double-tick frames/sec regardless
 - [Player prefabs skip attach_prefab_features](project_player_spawn_skips_attach_prefab_features.md) — inventory/interactable/dialogue/behavior/trigger_zone silently dropped for player-tagged prefabs; only stat_templates is shared

@@ -41,3 +41,4 @@
 - [fresh_global_transform cost](project_fresh_global_transform.md) — ~40 scalar flops/call (glam is SCALAR on wasm32); camera call hoisted to <=4/frame; translation-only callers do dead Mat3A work (nit); `Option<&Transform>` term costs native parallelism only, free on WASM
 - [D1 deterministic maps](project_d1_deterministic_maps.md) — BTreeMap/IndexMap swaps perf-neutral, ~0 size; idle frames alloc-free; parse_key lowercase-letter String alloc is pre-existing nit
 - [max_fixed_delta_secs config](project_max_fixed_delta_config.md) — opt-in RON cap, applied ONCE at project load (LoadingProject-gated system); zero per-frame cost; clamps Update delta too; sub-tick value = permanent slow-motion
+- [D2 catalog BTreeMaps](project_d2_catalog_btreemaps.md) — catalogs/LoadedModifiers/particle buckets→BTreeMap perf-neutral; real nit = per-particle group_key String clone (pre-existing)
