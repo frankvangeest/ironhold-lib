@@ -74,4 +74,31 @@ or similar) in `schema/scene_v2.rs` and convert all 11 sites to it, in the same 
   params into the closure for a recursive spawn helper is fine. `Option<&mut Assets<_>>` params must
   be reborrowed per loop iteration (`.as_deref_mut()`); they aren't `Copy`.
 
+## More verified facts (second ui_flex_group plan review, 2026-10-05, a487a56)
+
+- **Reverse + `Start`:** taffy places reversed items from the physical main-start
+  (flexbox.rs ~1975), so `RowReverse` + `JustifyContent::Start` = reversed order packed LEFT;
+  `FlexStart` (and Bevy's `Default` → taffy `None` → FlexStart, convert.rs:227) packs RIGHT like CSS.
+  On an auto-sized box (no free space) they are identical. For `AlignItems`, Start vs FlexStart
+  differ only under `WrapReverse` (flexbox.rs ~1775/2269), NOT under Row/ColumnReverse.
+- Distributed justify falls back when free space <= 0 or <= 1 item: SpaceBetween→FlexStart,
+  SpaceAround/Evenly→Center (common/alignment.rs:18-26).
+- `Node` defaults: `flex_shrink: 1.0` (Px-sized leaf children DO shrink in a too-small Px/Percent
+  parent), `box_sizing: BorderBox` (padding eats into a Px width), `align_items: Default` → Stretch
+  for flex (flexbox.rs:437). `Node` #[require]s `FocusPolicy` (default Pass) — inserting
+  `FocusPolicy::Pass` is a no-op.
+- Absolute children's insets resolve against the parent's padding box (container minus border,
+  flexbox.rs ~2068) — a parent's `padding` does NOT offset them.
+- Percent child of an auto parent: measured as auto, then resolved against the parent's final
+  (content-derived) size — "cyclic percentage", not simply "behaves like auto".
+- `ui_panel:`'s Panel node (scene_loader.rs ~1256) has NO FocusPolicy::Block/Interaction — it does
+  not block clicks. ui_panel_blocker.rs covers inventory/shop/container panel roots + overlay
+  backdrop only. World click gating = `click_select_system`'s "any Interaction == Pressed".
+- Engine doesn't use bevy_picking events today; if it ever does, UI nodes without `Pickable`
+  block lower hits by default (bevy_ui picking_backend.rs:272).
+- `GameSceneV2::validate()` already passes on every shipped scene (assets_schema_version_regression
+  calls it), so "make the CLI call it" is pre-gated. CLI has no scene entity/world_label/UI dup-id
+  or scene schema_version check of its own. `validate_projects.rs` is a hand-maintained per-project
+  `#[test]` list — a new project needs a line there too.
+
 See also [[ui-label-box-overflow-reliance]], [[ui-hover-and-tooltip]], [[panel-input-blocking]].

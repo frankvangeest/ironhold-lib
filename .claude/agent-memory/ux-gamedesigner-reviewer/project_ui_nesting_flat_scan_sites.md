@@ -58,5 +58,16 @@ gets 0.0/0.0/None/no-clip. Docs need a side-by-side default table, not just a fi
 - `ui_demo` project cited by the mobile_ui_demo backlog entry does not exist.
 - Optional `id` on Group means diagnostics need a `ui[2].children[0]`-style path, not a pre-order index.
 
+## 2026-10-05 second re-review (at a487a56) — verdict Ready with doc fixes
+All first-pass items resolved (R1-R13). Remaining traps worth re-checking at code review:
+- Group "sizes to content" = sizes to leaf `size:` boxes, NOT text; long text still spills into the
+  next sibling in a Row. Plan's "Why" oversells this vs the font footgun.
+- FocusPolicy::Pass on a Group WITH background_color looks like a panel but leaks clicks to world.
+- New validate checks need listing in docs/60 "Checks performed", not only docs/20.
+- mobile_ui_demo v1 "on-screen controls driving player" is unbuildable: Buttons are discrete taps;
+  no held/analog UI->movement input exists. Only menus/ActionBar taps are v1-feasible.
+- camera_modes is its own PROJECT, not a 3rd_person_game_demo scene (plan text mislabels it).
+- README "Example projects" table lists only 5 of 14 projects.
+
 Related: [[ui-label-button-font-and-clip]], [[container-events-undocumented]],
 [[warn-vs-silent-fallback-principle]], [[schema-bool-toggle-house-style]].
