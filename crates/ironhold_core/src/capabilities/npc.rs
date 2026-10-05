@@ -11,17 +11,17 @@ use std::collections::{HashMap, HashSet};
 /// `entity.attacked:*` event fires. Maps NPC id → attacker world position.
 /// Drained by `npc_behavior_system` (FixedUpdate) via `std::mem::take`.
 #[derive(Resource, Default)]
-pub struct NpcHitQueue(pub HashMap<String, Vec3>);
+pub struct NpcHitQueue(pub HashMap<String, Vec3>); // det: lookup-only
 
 /// Populated by `npc_hit_relay_system` when `stat.{id}.health.depleted` fires.
 /// Drained by `npc_behavior_system` to transition NPCs into `NpcState::Dead`.
 #[derive(Resource, Default)]
-pub struct NpcDeadQueue(pub HashSet<String>);
+pub struct NpcDeadQueue(pub HashSet<String>); // det: lookup-only
 
 /// Populated by `npc_hit_relay_system` when `npc.revive:{id}` fires (emitted by
 /// behavior "alive" entry_actions). Drained by `npc_behavior_system` to reset Dead NPCs.
 #[derive(Resource, Default)]
-pub struct NpcReviveQueue(pub HashSet<String>);
+pub struct NpcReviveQueue(pub HashSet<String>); // det: lookup-only
 
 // ── Runtime state enum ────────────────────────────────────────────────────────
 
@@ -223,9 +223,9 @@ pub fn npc_behavior_system(
     let dt = time.delta_secs();
 
     // Drain queues populated by npc_hit_relay_system (Update) in the previous frame.
-    let hit_map: HashMap<String, Vec3> = std::mem::take(&mut hit_queue.0);
-    let dead_set: HashSet<String> = std::mem::take(&mut dead_queue.0);
-    let revive_set: HashSet<String> = std::mem::take(&mut revive_queue.0);
+    let hit_map: HashMap<String, Vec3> = std::mem::take(&mut hit_queue.0); // det: lookup-only
+    let dead_set: HashSet<String> = std::mem::take(&mut dead_queue.0); // det: lookup-only
+    let revive_set: HashSet<String> = std::mem::take(&mut revive_queue.0); // det: lookup-only
 
     // Snapshot all player positions once per tick.
     let players: Vec<(Entity, Vec3)> = player_query

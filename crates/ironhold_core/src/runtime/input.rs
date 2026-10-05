@@ -116,7 +116,7 @@ pub fn unclaimed_gamepad_trigger_system(
     // any pad connected/disconnected mid-session (e.g. a hot-leave shifting every remaining pad's
     // sorted position), risking a spurious extra join on an already-claimed pad. See
     // `planning/features/gamepad_player_binding_hardening.md`.
-    let mut claimed: HashSet<Entity> = players.iter()
+    let mut claimed: HashSet<Entity> = players.iter() // det: lookup-only
         .filter_map(|(bound, _)| bound.0)
         .chain(
             pending_spawns.0.iter()
@@ -198,13 +198,13 @@ pub fn gamepad_bind_system(
     gamepad_query: Query<(Entity, &Gamepad)>,
     pending_spawns: Res<PendingEntitySpawns>,
     time: Res<Time>,
-    mut stuck_secs: Local<HashMap<Entity, f32>>,
-    mut warned: Local<HashSet<Entity>>,
-    mut stable_secs: Local<HashMap<Entity, f32>>,
+    mut stuck_secs: Local<HashMap<Entity, f32>>, // det: order-independent
+    mut warned: Local<HashSet<Entity>>, // det: order-independent
+    mut stable_secs: Local<HashMap<Entity, f32>>, // det: order-independent
 ) {
     let mut sorted_gamepads: Vec<Entity> = gamepad_query.iter().map(|(e, _)| e).collect();
     sorted_gamepads.sort_by_key(|e| e.index());
-    let connected: HashSet<Entity> = sorted_gamepads.iter().copied().collect();
+    let connected: HashSet<Entity> = sorted_gamepads.iter().copied().collect(); // det: lookup-only
 
     // How long each currently-connected gamepad has been continuously present, without
     // interruption — reset to zero (via the `retain` below dropping its entry) the instant it
@@ -215,7 +215,7 @@ pub fn gamepad_bind_system(
     }
     stable_secs.retain(|e, _| connected.contains(e));
 
-    let mut claimed: HashSet<Entity> = query.iter().filter_map(|(_, _, _, bound)| bound.0)
+    let mut claimed: HashSet<Entity> = query.iter().filter_map(|(_, _, _, bound)| bound.0) // det: lookup-only
         .chain(
             pending_spawns.0.iter()
                 .filter(|q| q.is_hot_join)

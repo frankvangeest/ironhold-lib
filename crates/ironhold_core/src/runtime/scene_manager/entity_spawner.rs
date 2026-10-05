@@ -46,7 +46,7 @@ pub(super) fn attach_prefab_features(
     project_root: &str,
     asset_server: &AssetServer,
     entity_id: &str,
-    stat_overrides: &HashMap<String, f32>,
+    stat_overrides: &HashMap<String, f32>, // det: lookup-only
     prefab_key: &str,
     item_catalog: Option<&crate::schema::items::ItemCatalog>,
 ) {
@@ -119,7 +119,7 @@ pub(super) fn attach_prefab_features(
 /// `stat_templates`, see `planning/features/per_player_stat_pools.md`).
 pub(super) fn build_stat_map_from_templates(
     templates: &[StatTemplateDef],
-    stat_overrides: &HashMap<String, f32>,
+    stat_overrides: &HashMap<String, f32>, // det: order-independent (log order only: unknown-key warnings)
     entity_id: &str,
     prefab_key: &str,
 ) -> Option<StatMap> {
@@ -170,13 +170,13 @@ pub fn spawn_prefab_instance(
     commands: &mut Commands,
     asset_server: &AssetServer,
     model_spawner: &ModelSpawner,
-    fixes: &HashMap<String, TransformFix>,
+    fixes: &HashMap<String, TransformFix>, // det: lookup-only
     project_root: &str,
     prefab: &crate::schema::catalog::PrefabDef,
     model_path: String,
     transform: Transform,
     name: &str,
-    stat_overrides: &HashMap<String, f32>,
+    stat_overrides: &HashMap<String, f32>, // det: lookup-only
     item_catalog: Option<&crate::schema::items::ItemCatalog>,
 ) -> Entity {
     let spawned =
@@ -209,7 +209,7 @@ pub fn spawn_prefab_instance(
                 gltf_path,
                 gltf_handle,
                 source_handles: Vec::new(),
-                node_indices: HashMap::new(),
+                node_indices: HashMap::new(), // det: lookup-only
                 graph_initialized: false,
                 transition_ms: 0,
                 should_loop: true,
@@ -666,7 +666,7 @@ pub fn spawn_player_when_terrain_ready(
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     asset_server: &AssetServer,
-    fixes: &HashMap<String, TransformFix>,
+    fixes: &HashMap<String, TransformFix>, // det: lookup-only
     model_spawner: &ModelSpawner,
     player_config: &PlayerConfig,
     project_root: &str,
@@ -702,7 +702,7 @@ pub(crate) fn spawn_player_entity(
 pub(crate) fn spawn_players_and_camera(
     commands: &mut Commands,
     asset_server: &AssetServer,
-    fixes: &HashMap<String, TransformFix>,
+    fixes: &HashMap<String, TransformFix>, // det: lookup-only
     model_spawner: &ModelSpawner,
     player_configs: &[PlayerConfig],
     project_root: &str,
@@ -790,7 +790,7 @@ pub(crate) fn spawn_players_and_camera(
         // `PLAYER_LABEL_COLORS`' own harmless modulo-collision precedent (a cosmetic duplicate
         // tint), this collision breaks a stated visibility guarantee with no cosmetic cue at all.
         if s.own_viewport_only {
-            let mut seen_layers: HashMap<usize, u32> = HashMap::new();
+            let mut seen_layers: HashMap<usize, u32> = HashMap::new(); // det: lookup-only
             for pc in player_configs {
                 let layer = crate::capabilities::camera::ring_layer_for_player(pc.player_index);
                 if let Some(&other_index) = seen_layers.get(&layer) {
@@ -975,7 +975,7 @@ pub(crate) struct PrimitivePlayerCtx<'a> {
 fn spawn_player_entity_core(
     commands: &mut Commands,
     asset_server: &AssetServer,
-    fixes: &HashMap<String, TransformFix>,
+    fixes: &HashMap<String, TransformFix>, // det: lookup-only
     model_spawner: &ModelSpawner,
     player_config: &PlayerConfig,
     project_root: &str,
@@ -1062,7 +1062,7 @@ fn spawn_player_entity_core(
                 .collect();
             spawn_primitive_children(
                 commands, player_entity, &safe_children, ctx.prefab_catalog, &mut ctx.child_ctx,
-                ctx.load_errors, &player_config.spawn_id, 0, &mut HashSet::new(),
+                ctx.load_errors, &player_config.spawn_id, 0, &mut HashSet::new(), // det: lookup-only
                 Transform::IDENTITY,
             );
 
@@ -1169,7 +1169,7 @@ fn spawn_player_entity_core(
     // See `planning/features/per_player_stat_pools.md`.
     if let Some(stat_map) = build_stat_map_from_templates(
         &player_config.stat_templates,
-        &HashMap::new(),
+        &HashMap::new(), // det: lookup-only
         &player_config.spawn_id,
         &player_config.prefab_key,
     ) {
@@ -1225,7 +1225,7 @@ fn spawn_player_entity_core(
                     gltf_path,
                     gltf_handle,
                     source_handles: Vec::new(),
-                    node_indices: HashMap::new(),
+                    node_indices: HashMap::new(), // det: lookup-only
                     graph_initialized: false,
                     transition_ms: 0,
                     should_loop: true,

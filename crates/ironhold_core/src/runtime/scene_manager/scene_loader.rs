@@ -386,7 +386,7 @@ pub fn spawn_scene_v2(
                         spawn_primitive_children(
                             &mut commands, parent, &prefab.children,
                             prefab_catalog, &mut ctx,
-                            &mut load_errors, &entity_def.id, 0, &mut HashSet::new(),
+                            &mut load_errors, &entity_def.id, 0, &mut HashSet::new(), // det: lookup-only
                             transform,
                         );
                     }
@@ -1173,7 +1173,7 @@ pub fn spawn_scene_v2(
     // Spawn UI — always runs for both Replace and Overlay mode.
     // Pre-create RadarMaterial handles for any StatRadar elements so we can pass owned
     // handles into the with_children closures without borrowing `mats` inside them.
-    let radar_handles: HashMap<String, Handle<RadarMaterial>> = scene.ui.iter()
+    let radar_handles: HashMap<String, Handle<RadarMaterial>> = scene.ui.iter() // det: lookup-only
         .filter_map(|el| {
             if let crate::schema::scene_v2::UiNodeDef::StatRadar(d) = el {
                 let (fr, fg, fb, fa) = d.fill_color;
@@ -1358,7 +1358,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
     // Keyed by positional bar index, not `bar.id` — `id` is documented "Unique identifier" but
     // nothing actually enforces that, and comparing by `id` would misclassify (or silently miss)
     // a real cross-bar collision if two bars happened to share an id (system-architect finding).
-    let mut seen: HashMap<KeyCode, (usize, String, String)> = HashMap::new(); // resolved key -> (bar index, bar id, slot key)
+    let mut seen: HashMap<KeyCode, (usize, String, String)> = HashMap::new(); // resolved key -> (bar index, bar id, slot key) // det: lookup-only
     let mut bar_index = 0usize;
     for el in &scene.ui {
         let UiNodeDef::ActionBar(bar) = el else { continue };
@@ -1396,7 +1396,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
 /// `planning/features/gamepad_action_bar_slots.md`.
 fn warn_same_player_gamepad_duplicate_slots(scene: &GameSceneV2) {
     use crate::schema::scene_v2::UiNodeDef;
-    let mut seen: HashMap<(u32, GamepadButton), (String, String)> = HashMap::new(); // (player, button) -> (bar id, slot key)
+    let mut seen: HashMap<(u32, GamepadButton), (String, String)> = HashMap::new(); // (player, button) -> (bar id, slot key) // det: lookup-only
     for el in &scene.ui {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
@@ -1722,7 +1722,7 @@ fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &
 /// happen) — that case is design-time-checkable-only until a runtime signal for it exists. See
 /// `planning/features/gamepad_player_binding_hardening.md`.
 fn warn_duplicate_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
-    let mut seen: HashMap<usize, &str> = HashMap::new();
+    let mut seen: HashMap<usize, &str> = HashMap::new(); // det: lookup-only
     for player_config in player_configs {
         let Some(seed) = player_config.inputs.gamepad_index else { continue };
         // Keep-first-on-collision (`entry()`, not `insert()`) -- so a 3rd+ colliding player cites
@@ -1752,7 +1752,7 @@ fn spawn_ui_element_node(
     parent: &mut ChildSpawnerCommands,
     el: &crate::schema::scene_v2::UiNodeDef,
     node: Node,
-    radar_handles: &HashMap<String, Handle<RadarMaterial>>,
+    radar_handles: &HashMap<String, Handle<RadarMaterial>>, // det: lookup-only
     asset_server: &AssetServer,
     mut atlas_layouts: Option<&mut Assets<TextureAtlasLayout>>,
     asset_catalog: &crate::schema::catalog::AssetCatalog,
@@ -2183,7 +2183,7 @@ fn spawn_ui_element_node(
                 }).collect();
 
             let slots = bar.slots.clone();
-            let mut seen_resolved_keys: HashMap<KeyCode, String> = HashMap::new();
+            let mut seen_resolved_keys: HashMap<KeyCode, String> = HashMap::new(); // det: lookup-only
             parent
                 .spawn((
                     Name::new(format!("ActionBar: {}", bar.id)),
@@ -3140,12 +3140,12 @@ pub(super) fn warn_negative_coyote_time_secs(spawn_id: &str, coyote_time_secs: f
 pub(crate) struct ChildSpawnCtx<'a> {
     pub(crate) meshes:    &'a mut Assets<Mesh>,
     pub(crate) standard:  &'a mut Assets<StandardMaterial>,
-    pub(crate) built_mats: &'a std::collections::HashMap<String, crate::runtime::material_factory::BuiltMaterialHandle>,
+    pub(crate) built_mats: &'a std::collections::HashMap<String, crate::runtime::material_factory::BuiltMaterialHandle>, // det: lookup-only
     pub(crate) custom_mats: &'a Assets<crate::capabilities::custom_material::CustomMaterial>,
     pub(crate) primitive_default_color: Option<(f32, f32, f32)>,
     pub(crate) asset_server:  &'a AssetServer,
     pub(crate) model_spawner: &'a crate::runtime::model_spawner::ModelSpawner,
-    pub(crate) fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>,
+    pub(crate) fixes: &'a std::collections::HashMap<String, crate::schema::project::TransformFix>, // det: lookup-only
     pub(crate) asset_catalog: &'a crate::schema::catalog::AssetCatalog,
     pub(crate) project_root:  &'a str,
     pub(crate) item_catalog: Option<&'a crate::schema::items::ItemCatalog>,
@@ -3163,7 +3163,7 @@ pub(crate) fn spawn_primitive_children(
     load_errors: &mut Vec<String>,
     entity_id: &str,
     depth: u8,
-    visiting: &mut HashSet<String>,
+    visiting: &mut HashSet<String>, // det: lookup-only
     parent_world_tf: Transform,
 ) {
     const MAX_DEPTH: u8 = 8;

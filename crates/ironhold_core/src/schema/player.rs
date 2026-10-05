@@ -599,7 +599,7 @@ pub struct AnimationPolicy {
 
     /// Optional semantic aliases (e.g. "dance" -> "Dance_Loop").
     #[serde(default)]
-    pub clips: HashMap<String, String>,
+    pub clips: HashMap<String, String>, // det: order-independent
 
     /// Data-defined overrides / abilities.
     #[serde(default)]

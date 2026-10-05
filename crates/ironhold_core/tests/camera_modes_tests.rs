@@ -66,13 +66,13 @@ fn base_camera_config() -> CameraConfig {
 /// (raw RON for the `{ "key": ... }` map body, or empty string for none).
 fn one_player_catalogs(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),
@@ -126,7 +126,7 @@ fn load_one_player_scene(app: &mut App, camera_modes_ron: &str) {
 
 fn two_player_split_catalogs(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
             ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
         ]),
@@ -135,7 +135,7 @@ fn two_player_split_catalogs(app: &mut App) {
     let mut p1_camera = base_camera_config();
     p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false });
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),
@@ -206,7 +206,7 @@ fn load_two_player_split_scene(app: &mut App, camera_modes_ron: &str) {
 /// finding #3).
 fn two_player_dynamic_split_catalogs(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
             ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
         ]),
@@ -224,7 +224,7 @@ fn two_player_dynamic_split_catalogs(app: &mut App) {
         own_viewport_only: false,
     });
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),
@@ -255,7 +255,7 @@ fn two_player_dynamic_split_catalogs(app: &mut App) {
 
 fn load_party_scene(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
             ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
         ]),
@@ -264,7 +264,7 @@ fn load_party_scene(app: &mut App) {
     let mut p1_camera = base_camera_config();
     p1_camera.party = Some(PartyZoomDef { zoom_margin: 4.0, allow_manual_zoom: false });
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),
@@ -328,7 +328,7 @@ fn load_party_scene(app: &mut App) {
 fn load_flycam_only_scene(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_flycam".to_string(), PrefabDef {
                 kind: PrefabKind::Primitive,
                 model: String::new(),
@@ -839,13 +839,13 @@ fn flycam_prefab() -> PrefabDef {
 
 fn player_and_flycam_catalogs(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),
@@ -912,7 +912,7 @@ fn test_duplicate_flycam_tags_only_last_one_used() {
     app.update();
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([("test_flycam".to_string(), flycam_prefab())]),
+        prefabs: std::collections::BTreeMap::from([("test_flycam".to_string(), flycam_prefab())]),
         ..Default::default()
     }));
     let config_handle = app
@@ -967,13 +967,13 @@ fn test_flycam_with_model_field_still_spawns_only_camera_no_mesh() {
     let mut app = setup_test_app();
     app.update();
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("anvil".to_string(), ModelCatalogEntry { path: "shared/models/props/anvil.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([("test_flycam_model".to_string(), flycam_with_model_prefab("anvil"))]),
+        prefabs: std::collections::BTreeMap::from([("test_flycam_model".to_string(), flycam_with_model_prefab("anvil"))]),
         ..Default::default()
     }));
     let config_handle = app
@@ -1028,7 +1028,7 @@ fn test_flycam_with_children_still_spawns_only_camera_no_mesh() {
         prefab: None,
     }];
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([("test_flycam_children".to_string(), flycam_with_children)]),
+        prefabs: std::collections::BTreeMap::from([("test_flycam_children".to_string(), flycam_with_children)]),
         ..Default::default()
     }));
     let config_handle = app
@@ -1069,7 +1069,7 @@ fn test_dual_player_flycam_tag_prefab_spawns_no_character_controller() {
     let mut app = setup_test_app();
     app.update();
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
@@ -1084,7 +1084,7 @@ fn test_dual_player_flycam_tag_prefab_spawns_no_character_controller() {
         ..Default::default()
     };
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([("test_confused".to_string(), confused_prefab)]),
+        prefabs: std::collections::BTreeMap::from([("test_confused".to_string(), confused_prefab)]),
         ..Default::default()
     }));
     let config_handle = app
@@ -1175,7 +1175,7 @@ fn test_flycam_and_split_screen_combo_suppresses_split_resources() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
             ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
         ]),
@@ -1184,7 +1184,7 @@ fn test_flycam_and_split_screen_combo_suppresses_split_resources() {
     let mut p1_camera = base_camera_config();
     p1_camera.split = Some(SplitScreenDef { orientation: SplitOrientation::Vertical, dynamic: None, own_viewport_only: false });
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),

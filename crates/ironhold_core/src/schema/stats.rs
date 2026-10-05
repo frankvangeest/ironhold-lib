@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use indexmap::IndexMap;
 
 // ─── Modifier schema types ─────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ pub struct StatCatalog {
     /// event the FSM sees first.
     pub stats: IndexMap<String, StatDef>,
     #[serde(default)]
-    pub modifiers: HashMap<String, ModifierDef>,
+    pub modifiers: BTreeMap<String, ModifierDef>,
 }
 
 impl StatCatalog {
@@ -216,7 +216,7 @@ impl LiveStat {
     /// 2. Additive modifiers add a flat delta
     /// 3. Override forces a fixed value (last Override wins, ignores other modifiers)
     /// 4. Result clamped to `[min, soft_max.unwrap_or(max)]`
-    pub fn compute_effective(&self, modifier_defs: &HashMap<String, ModifierDef>) -> f32 {
+    pub fn compute_effective(&self, modifier_defs: &BTreeMap<String, ModifierDef>) -> f32 {
         let ceiling = self.def.soft_max.unwrap_or(self.def.max);
 
         let mut additive_total = 0.0f32;
@@ -270,7 +270,7 @@ impl LiveStat {
 /// Loaded modifier templates for the current project. Populated at project load time.
 /// Persists across scene transitions (same lifecycle as `LoadedStats`).
 #[derive(Resource, Default, Clone)]
-pub struct LoadedModifiers(pub HashMap<String, ModifierDef>);
+pub struct LoadedModifiers(pub BTreeMap<String, ModifierDef>);
 
 /// Live stat state for the current project. Populated at project load time from `stats.ron`.
 /// Stats persist across scene transitions (the resource is not cleared on scene load).
@@ -422,7 +422,7 @@ mod tests {
         let mut catalog = StatCatalog {
             schema_version: 1,
             stats: IndexMap::new(),
-            modifiers: HashMap::new(),
+            modifiers: BTreeMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {
             base: 50.0,
@@ -441,7 +441,7 @@ mod tests {
         let mut catalog = StatCatalog {
             schema_version: 1,
             stats: IndexMap::new(),
-            modifiers: HashMap::new(),
+            modifiers: BTreeMap::new(),
         };
         catalog.stats.insert("hp".to_string(), StatDef {
             base: 200.0, // base > max — invalid

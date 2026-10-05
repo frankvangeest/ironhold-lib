@@ -24,7 +24,7 @@ pub enum BuiltMaterialHandle {
 // ---------------------------------------------------------------------------
 
 #[derive(Resource, Default)]
-pub struct BuiltMaterials(pub HashMap<String, BuiltMaterialHandle>);
+pub struct BuiltMaterials(pub HashMap<String, BuiltMaterialHandle>); // det: lookup-only
 
 // ---------------------------------------------------------------------------
 // Component: marks an entity whose material should be replaced once its

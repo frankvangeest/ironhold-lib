@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub const ITEM_CATALOG_SCHEMA_VERSION: u32 = 1;
 
@@ -8,7 +8,7 @@ pub const ITEM_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub struct ItemCatalog {
     pub schema_version: u32,
     #[serde(default)]
-    pub items: HashMap<String, ItemDef>,
+    pub items: BTreeMap<String, ItemDef>,
 }
 
 impl ItemCatalog {

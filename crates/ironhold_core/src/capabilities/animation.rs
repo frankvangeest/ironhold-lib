@@ -4,8 +4,8 @@ use bevy::gltf::Gltf;
 use std::time::Duration;
 use std::{
     collections::{
+        BTreeSet,
         HashMap,
-        HashSet,
     },
 };
 
@@ -21,7 +21,7 @@ pub struct AnimationController {
     /// Extra animation-pack GLBs loaded from `AnimationPolicy.animation_sources`.
     /// Graph init waits until all of these are loaded before building the merged graph.
     pub source_handles: Vec<Handle<Gltf>>,
-    pub node_indices: HashMap<String, AnimationNodeIndex>,
+    pub node_indices: HashMap<String, AnimationNodeIndex>, // det: order-independent (log order only: missing-clip warning lists the keys)
     /// The `AnimationGraph` asset `node_indices` was built against. Stored here (synchronously
     /// updated alongside `node_indices`) rather than read from the entity's `AnimationGraphHandle`
     /// component, because that component is inserted via a *deferred* command — on the exact
@@ -114,10 +114,10 @@ pub fn animation_playback_system(
 
                 let policy = &policy_comp.0;
                 let mut graph = AnimationGraph::new();
-                let mut indices = HashMap::new();
+                let mut indices = HashMap::new(); // det: lookup-only
 
                 // Collect unique clip names we may want to play.
-                let mut clip_names: HashSet<String> = HashSet::new();
+                let mut clip_names: BTreeSet<String> = BTreeSet::new();
                 clip_names.insert(policy.base.idle.clone());
                 clip_names.insert(policy.base.walk.clone());
                 clip_names.insert(policy.base.run.clone());

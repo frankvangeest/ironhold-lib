@@ -1,4 +1,5 @@
-﻿use bevy::prelude::*;
+﻿use std::collections::BTreeMap;
+use bevy::prelude::*;
 use std::collections::HashMap;
 use ironhold_core::runtime::{ActionQueue, LoadedAssetCatalog, LoadedPrefabCatalog, SpawnId, SpawnRegistry, PreloadedGlbHandles, PendingEntitySpawns, SceneHandleV2, LevelEntity, DynamicStatUiQueue, DynamicStatUiEntry, LoadedLabelDepthScale, WorldLabel, ActiveSplitScreen, DynamicSplitConfig};
 use ironhold_core::runtime::scene_manager::WorldLabelRank;
@@ -14,13 +15,13 @@ use support::setup_test_app;
 fn minimal_orc_catalogs(app: &mut App) {
     use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, PrefabDef, ModelCatalogEntry, PrefabKind};
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "orc".to_string(),
@@ -40,13 +41,13 @@ fn test_spawn_action_assigns_spawn_id_and_registers() {
 
     // Provide minimal catalog entries for the orc prefab
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "orc".to_string(),
@@ -88,13 +89,13 @@ fn test_spawn_action_attaches_prefab_key_and_level_entity() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "orc".to_string(),
@@ -129,13 +130,13 @@ fn test_spawn_auto_id_increments_counter() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "orc".to_string(),
@@ -237,13 +238,13 @@ fn test_despawn_removes_entity_by_spawn_id() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("orc".to_string(), ModelCatalogEntry { path: "shared/models/creatures/orc.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("enemy_orc_melee".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "orc".to_string(),
@@ -292,7 +293,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("box".to_string(), ModelCatalogEntry {
                 path: "shared/models/box.glb#Scene0".to_string(),
             }),
@@ -300,7 +301,7 @@ fn test_spawn_id_collision_orphans_old_entity() {
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("crate".to_string(), PrefabDef {
                 kind: PrefabKind::Prop,
                 model: "box".to_string(),
@@ -367,13 +368,13 @@ fn test_spawn_yaw_deg_sets_transform_rotation() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: HashMap::from([
+        models: BTreeMap::from([
             ("box".to_string(), ModelCatalogEntry { path: "shared/models/box.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: HashMap::from([
+        prefabs: BTreeMap::from([
             ("crate".to_string(), PrefabDef {
                 kind: PrefabKind::Prop,
                 model: "box".to_string(),
@@ -455,13 +456,13 @@ fn test_primitive_player_prefab_with_resolvable_model_key_rejected_not_panicked_
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("character_male".to_string(), ModelCatalogEntry { path: "shared/models/characters/male.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("primitive_player_wrong_model".to_string(), PrefabDef {
                 kind: PrefabKind::Primitive,
                 // Deliberately resolvable — this is the exact misconfiguration the finding
@@ -683,13 +684,13 @@ fn test_glb_actor_npc_attaches_npc_agent_and_locomotion_state() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: HashMap::from([
+        models: BTreeMap::from([
             ("snake".to_string(), ModelCatalogEntry { path: "shared/models/creatures/snake01.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: HashMap::from([
+        prefabs: BTreeMap::from([
             ("enemy_snake".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "snake".to_string(),
@@ -872,7 +873,7 @@ fn test_scene_load_populates_label_depth_scale_for_dynamically_spawned_prefab() 
         .from_str(prefab_ron)
         .expect("inline prefab catalog must parse");
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: HashMap::from([
+        models: BTreeMap::from([
             ("dummy".to_string(), ironhold_core::schema::catalog::ModelCatalogEntry {
                 path: "shared/models/dummy.glb#Scene0".to_string(),
             }),
@@ -1295,7 +1296,7 @@ fn test_spawn_action_initial_items_respect_real_item_catalog_max_stack() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("crate_model".to_string(), ModelCatalogEntry {
                 path: "shared/models/props/crate.glb#Scene0".to_string(),
             }),
@@ -1303,7 +1304,7 @@ fn test_spawn_action_initial_items_respect_real_item_catalog_max_stack() {
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("loot_crate".to_string(), PrefabDef {
                 kind: PrefabKind::Prop,
                 model: "crate_model".to_string(),
@@ -1320,7 +1321,7 @@ fn test_spawn_action_initial_items_respect_real_item_catalog_max_stack() {
     }));
     app.world_mut().insert_resource(LoadedItemCatalog(Some(ItemCatalog {
         schema_version: ITEM_CATALOG_SCHEMA_VERSION,
-        items: std::collections::HashMap::from([
+        items: std::collections::BTreeMap::from([
             ("gold_coin".to_string(), ItemDef {
                 display_name: "Gold Coin".to_string(),
                 icon_sheet: None,
@@ -1369,7 +1370,7 @@ fn test_spawn_action_non_stackable_initial_item_occupies_one_slot_per_unit() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("crate_model".to_string(), ModelCatalogEntry {
                 path: "shared/models/props/crate.glb#Scene0".to_string(),
             }),
@@ -1377,7 +1378,7 @@ fn test_spawn_action_non_stackable_initial_item_occupies_one_slot_per_unit() {
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("sword_crate".to_string(), PrefabDef {
                 kind: PrefabKind::Prop,
                 model: "crate_model".to_string(),
@@ -1394,7 +1395,7 @@ fn test_spawn_action_non_stackable_initial_item_occupies_one_slot_per_unit() {
     }));
     app.world_mut().insert_resource(LoadedItemCatalog(Some(ItemCatalog {
         schema_version: ITEM_CATALOG_SCHEMA_VERSION,
-        items: std::collections::HashMap::from([
+        items: std::collections::BTreeMap::from([
             ("iron_sword".to_string(), ItemDef {
                 display_name: "Iron Sword".to_string(),
                 icon_sheet: None,

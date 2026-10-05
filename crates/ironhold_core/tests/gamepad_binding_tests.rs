@@ -127,14 +127,14 @@ fn test_character_controller() -> CharacterController {
 /// loader falls back to a single shared camera, same as `two_player_catalogs(None)` elsewhere).
 fn two_player_catalogs_no_gamepad_index(app: &mut App) {
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        models: std::collections::HashMap::from([
+        models: std::collections::BTreeMap::from([
             ("char_a".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() }),
             ("char_b".to_string(), ModelCatalogEntry { path: "shared/models/characters/character-female-01.glb#Scene0".to_string() }),
         ]),
         ..Default::default()
     }));
     app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
-        prefabs: std::collections::HashMap::from([
+        prefabs: std::collections::BTreeMap::from([
             ("test_player_1".to_string(), PrefabDef {
                 kind: PrefabKind::Actor,
                 model: "char_a".to_string(),

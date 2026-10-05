@@ -97,6 +97,11 @@ Unordered collections can produce different iteration order.
 Mitigations:
 - Use stable ordering (Vec + sort, BTreeMap)
 - Avoid relying on iteration order for gameplay decisions
+- Enforced in code: `crates/ironhold_core/tests/determinism_lint.rs` fails on any std `HashMap`/`HashSet` in
+  `ironhold_core/src` that is not marked `// det: lookup-only` or `// det: order-independent` (rules and limits:
+  `crates/ironhold_core/src/CLAUDE.md`, "Deterministic iteration order on gameplay paths"). Shipped so far:
+  the gameplay maps (D1) and the guard plus ordered catalogs (D2); schedule/writer order (D3) and entity/query
+  order (D4) are separate, still-queued items
 
 ### Dynamic spawn ids are not reproducible across runs 🧭
 `SpawnRegistry.counter` (backing both `Action::Spawn`'s auto-generated id and the `{new_id}` RON

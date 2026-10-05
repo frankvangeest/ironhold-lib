@@ -450,7 +450,7 @@ pub fn player_movement_system(
     rapier_context: Option<ReadRapierContext>,
     mut game_events: MessageWriter<GameEvent>,
 ) {
-    let mut actions = HashMap::new();
+    let mut actions = HashMap::new(); // det: lookup-only
     for event in input_events.read() {
         actions.entry(event.entity).or_insert_with(Vec::new).push(event.action.clone());
     }

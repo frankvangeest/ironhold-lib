@@ -82,14 +82,14 @@ pub struct GameSceneV2 {
     /// a new scene loads, so a later scene cannot accidentally inherit bindings from an earlier one.
     /// Same key-name format as `global_key_bindings` (e.g. `"Escape"`, `"Space"`, `"KeyP"`).
     #[serde(default)]
-    pub scene_key_bindings: HashMap<String, String>,
+    pub scene_key_bindings: BTreeMap<String, String>,
     /// Per-scene gamepad button bindings. Entries here override
     /// `global_unclaimed_gamepad_bindings` from the project config for this scene (same per-key
     /// overlay rule as `scene_key_bindings`). Same button-name format as `InputMap`'s `gamepad_*`
     /// fields. **Unclaimed-pad-only, like the project-level field** — see
     /// `global_unclaimed_gamepad_bindings`'s doc comment and the "Local co-op hot join" docs.
     #[serde(default)]
-    pub scene_unclaimed_gamepad_bindings: HashMap<String, String>,
+    pub scene_unclaimed_gamepad_bindings: BTreeMap<String, String>,
     /// World-space billboard text labels. Each label is placed at a 3D position and
     /// automatically rotates to face the active camera. Use for row headers, area names,
     /// or any annotation that should exist in the 3D world rather than the screen overlay.
@@ -156,7 +156,7 @@ impl GameSceneV2 {
                 self.schema_version, GAME_SCENE_V2_SCHEMA_VERSION
             ));
         }
-        let mut entity_ids = std::collections::HashSet::new();
+        let mut entity_ids = std::collections::HashSet::new(); // det: lookup-only
         for entity in &self.entities {
             if entity.id.is_empty() {
                 return Err("Scene entity has empty id".to_string());
@@ -165,7 +165,7 @@ impl GameSceneV2 {
                 return Err(format!("Duplicate scene entity id: \"{}\"", entity.id));
             }
         }
-        let mut ui_ids = std::collections::HashSet::new();
+        let mut ui_ids = std::collections::HashSet::new(); // det: lookup-only
         for elem in &self.ui {
             let id = elem.id();
             if id.is_empty() {
@@ -175,7 +175,7 @@ impl GameSceneV2 {
                 return Err(format!("Duplicate UI element id: \"{}\"", id));
             }
         }
-        let mut wl_ids = std::collections::HashSet::new();
+        let mut wl_ids = std::collections::HashSet::new(); // det: lookup-only
         for label in &self.world_labels {
             if label.id.is_empty() {
                 return Err("World label has empty id".to_string());
@@ -314,7 +314,7 @@ pub struct SceneEntityDef {
     /// Keys are stat names (e.g. `"health"`); unknown keys emit a `warn!` at load time.
     /// `min`/`max`/`regen`/`thresholds` are unchanged — only the starting value differs.
     #[serde(default)]
-    pub stat_overrides: HashMap<String, f32>,
+    pub stat_overrides: HashMap<String, f32>, // det: order-independent (log order only: unknown-key warnings)
 }
 
 /// A text annotation attached to a scene entity.
@@ -731,7 +731,7 @@ pub struct TargetIndicatorDef {
     /// Key = category string (e.g. `"enemy"`, `"ally"`, `"loot"`); value = RGBA tint.
     /// A prefab whose category key is absent falls through to `color`.
     #[serde(default)]
-    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>,
+    pub named_colors: std::collections::HashMap<String, (f32, f32, f32, f32)>, // det: lookup-only
 }
 
 fn default_indicator_radius() -> f32 { 1.0 }

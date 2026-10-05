@@ -14,7 +14,7 @@ fn test_play_sound_action_spawns_audio_player() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("click".to_string(), AudioEntry { path: "shared/audio/menu-button-click.wav".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
@@ -36,7 +36,7 @@ fn test_play_sound_unsupported_format_does_not_panic() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("bad".to_string(), AudioEntry { path: "shared/audio/soundtrack.aac".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
@@ -74,7 +74,7 @@ fn test_play_sound_combined_volume_applied_to_playback_settings() {
 
     // catalog volume 0.5, action volume 0.5 → combined should be 0.25
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 0.5 }),
         ]),
         ..Default::default()
@@ -103,7 +103,7 @@ fn test_play_sound_default_volume_is_full() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("click".to_string(), AudioEntry { path: "shared/audio/click.wav".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
@@ -178,7 +178,7 @@ fn test_play_music_loop_spawns_background_music() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("bg_music".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
@@ -201,7 +201,7 @@ fn test_play_music_loop_stops_previous_track_and_spawns_new() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("track_a".to_string(), AudioEntry { path: "shared/audio/track_a.ogg".to_string(), volume: 1.0 }),
             ("track_b".to_string(), AudioEntry { path: "shared/audio/track_b.ogg".to_string(), volume: 1.0 }),
         ]),
@@ -232,7 +232,7 @@ fn test_play_music_loop_unsupported_format_does_not_panic() {
     app.update();
 
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("bad_music".to_string(), AudioEntry { path: "shared/audio/track.aac".to_string(), volume: 1.0 }),
         ]),
         ..Default::default()
@@ -272,7 +272,7 @@ fn test_play_music_loop_combined_volume_applied_to_playback_settings() {
 
     // catalog 0.6 × action 0.5 = 0.3
     app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
-        audio: std::collections::HashMap::from([
+        audio: std::collections::BTreeMap::from([
             ("bg".to_string(), AudioEntry { path: "shared/audio/theme.ogg".to_string(), volume: 0.6 }),
         ]),
         ..Default::default()
