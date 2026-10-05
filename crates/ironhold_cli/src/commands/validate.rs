@@ -1584,6 +1584,17 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     }
 
     for (scene_path, scene) in scenes {
+        // `GameSceneV2::validate()` was test-only before (CI's assets_schema_version_regression);
+        // wired in here so designers see empty/duplicate entity, world_label and UI ids (UI ids
+        // are checked across nested `Group`s) and a wrong schema_version at design time. It is
+        // fail-fast: one error per scene, with the offending UI node named by path.
+        if let Err(e) = scene.validate() {
+            errors.push(CrossFileError {
+                source_file: scene_path.clone(),
+                message: e,
+                error_type: "invalid_scene",
+            });
+        }
         // Scene-wide (not per-bar) so a slot key shared across two different `ActionBar`s is
         // also caught here, not just within one bar's own slots — per-player action bars
         // (`owner_player`, see `planning/features/per_player_split_screen_targeting.md` Phase 2)

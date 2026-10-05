@@ -445,7 +445,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
 - [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
       `Group` whose children are all `absolute: true`; `clip: true` with both axes `Auto`; the
       R10 list
-- [ ] `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
+- [x] _(gate passed: all 15 shipped projects validate clean)_ `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
       `assets/projects/*`; if any shipped project fails, split into its own backlog item
 - [ ] Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
       both `row_gap`/`column_gap`); `absolute: true` child escapes the flow like `ui_panel:`;

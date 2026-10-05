@@ -2293,3 +2293,19 @@ fn icon_button_icon_on_and_icon_off_unresolved_exits_1() {
         "expected the missing icon_off texture key in output:\n{stdout}"
     );
 }
+
+// ── GameSceneV2::validate() wiring + nested UI ids ────────────────────────────
+
+#[test]
+fn duplicate_ui_id_across_nested_group_exits_1() {
+    let (code, stdout) = validate("duplicate_nested_ui_id");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("Duplicate UI element id") && stdout.contains("ui[1].children[0]"),
+        "the duplicate must be reported with its UI path:\n{stdout}");
+}
+
+#[test]
+fn idless_groups_exit_0() {
+    let (code, stdout) = validate("idless_group_ok");
+    assert_eq!(code, 0, "id-less Groups are pure layout wrappers and must validate, got {code}:\n{stdout}");
+}
