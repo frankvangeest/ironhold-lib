@@ -433,15 +433,15 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       pre-pass + 4 `warn_*`, `validate.rs`'s 9 scans, `query.rs`, and `GameSceneV2::validate()`).
       Standalone, behaviour-preserving refactor with zero new schema -- do this **first**, before
       `GroupDef` exists. Its unit test gets a nested fixture as soon as `GroupDef` lands.
-- [ ] `GameSceneV2::validate()`: exempt `Group` from the empty-id check, skip `""` in duplicate
+- [x] `GameSceneV2::validate()`: exempt `Group` from the empty-id check, skip `""` in duplicate
       detection, detect duplicates across all nested nodes (R2).
-- [ ] Schema: `UiSizeDef` (`Auto`/`Px`/`Percent`) + `GroupDef` + `FlexDirectionDef`/
+- [x] Schema: `UiSizeDef` (`Auto`/`Px`/`Percent`) + `GroupDef` + `FlexDirectionDef`/
       `JustifyContentDef`/`AlignItemsDef`/`FlexWrapDef` enums, explicit defaults on all four
-- [ ] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
-- [ ] `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
+- [x] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
+- [x] _(done; a Group's `Name` is its id or plain "Group", not its path - paths are for diagnostics only)_ `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
       `build_child_node(el, force_absolute)`; recursive `Group` arm (children get `flex_shrink: 0.0`, R15); depth
       cap (16, one `warn!`)
-- [ ] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
+- [x] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
 - [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
       `Group` whose children are all `absolute: true`; `clip: true` with both axes `Auto`; the
       R10 list

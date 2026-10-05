@@ -4665,3 +4665,82 @@ fn test_walk_ui_nodes_pathed_reports_ui_paths() {
     assert_eq!(UiPath(vec![2, 0, 1]).to_string(), "ui[2].children[0].children[1]");
     assert_eq!(MAX_UI_DEPTH, 16);
 }
+
+// ── Group (nestable flexbox layout node) ───────────────────────────────────────────────────
+
+fn nested_ui() -> Vec<UiNodeDef> {
+    from_str(r#"[
+        Label((id: "a")),
+        Group((children: [
+            Label((id: "b")),
+            Group((children: [ Label((id: "c")) ])),
+            Label((id: "d")),
+        ])),
+        Label((id: "e")),
+    ]"#).expect("nested ui list should parse")
+}
+
+#[test]
+fn test_group_defaults_and_unknown_field_rejected() {
+    let ui: Vec<UiNodeDef> = from_str(r#"[ Group((children: [])) ]"#).expect("minimal Group should parse");
+    let UiNodeDef::Group(g) = &ui[0] else { panic!("expected Group") };
+    assert_eq!(g.id, "");
+    assert_eq!(g.gap, 0.0);
+    assert_eq!(g.padding, 0.0);
+    assert!(!g.clip && !g.absolute);
+    assert!(g.background_color.is_none());
+    assert!(from_str::<Vec<UiNodeDef>>(r#"[ Group((children: [], size: (10.0, 10.0))) ]"#).is_err(),
+        "Groups use width/height, not size: - deny_unknown_fields must reject `size`");
+}
+
+#[test]
+fn test_walk_ui_nodes_is_preorder_over_nested_groups() {
+    let ui = nested_ui();
+    let ids: Vec<&str> = walk_ui_nodes(&ui).map(UiNodeDef::id).collect();
+    assert_eq!(ids, vec!["a", "", "b", "", "c", "d", "e"]);
+    let paths: Vec<String> = walk_ui_nodes_pathed(&ui).map(|(p, _)| p.to_string()).collect();
+    assert_eq!(paths, vec![
+        "ui[0]", "ui[1]", "ui[1].children[0]", "ui[1].children[1]",
+        "ui[1].children[1].children[0]", "ui[1].children[2]", "ui[2]",
+    ]);
+}
+
+/// A top-level node is depth 1 and nodes at depth 17+ are neither walked nor spawned.
+#[test]
+fn test_walk_ui_nodes_stops_at_max_depth() {
+    fn chain(depth: usize) -> UiNodeDef {
+        let mut node: UiNodeDef = from_str(r#"Label((id: "leaf"))"#).unwrap();
+        for _ in 1..depth {
+            let ron_str = r#"Group((children: []))"#;
+            let UiNodeDef::Group(mut g) = from_str::<UiNodeDef>(ron_str).unwrap() else { unreachable!() };
+            g.children.push(node);
+            node = UiNodeDef::Group(g);
+        }
+        node
+    }
+    // A leaf nested inside 15 groups sits at depth 16: still walked.
+    assert_eq!(walk_ui_nodes(&[chain(16)]).count(), 16);
+    assert_eq!(walk_ui_nodes(&[chain(16)]).last().map(UiNodeDef::id), Some("leaf"));
+    // One level deeper (leaf at depth 17) is dropped; the 16 groups remain.
+    assert_eq!(walk_ui_nodes(&[chain(17)]).count(), 16);
+    assert!(walk_ui_nodes(&[chain(17)]).all(|n| n.id() != "leaf"));
+}
+
+fn scene_with_ui(ui_ron: &str) -> GameSceneV2 {
+    from_str(&format!("(schema_version: 2, entities: [], ui: [{ui_ron}])")).expect("scene should parse")
+}
+
+#[test]
+fn test_scene_validate_allows_idless_groups_but_not_idless_leaves() {
+    let ok = scene_with_ui(r#"Group((children: [ Label((id: "a")) ])), Group((children: [])),"#);
+    ok.validate().expect("id-less Groups are pure layout wrappers and must pass; multiple \"\" ids are not duplicates");
+
+    let err = scene_with_ui(r#"Group((children: [ Label((id: "")) ])),"#).validate().unwrap_err();
+    assert!(err.contains("ui[0].children[0]") && err.contains("empty id"), "got: {err}");
+}
+
+#[test]
+fn test_scene_validate_detects_duplicate_ids_across_nesting() {
+    let err = scene_with_ui(r#"Label((id: "x")), Group((children: [ Label((id: "x")) ])),"#).validate().unwrap_err();
+    assert!(err.contains("Duplicate UI element id") && err.contains("\"x\"") && err.contains("ui[1].children[0]"), "got: {err}");
+}

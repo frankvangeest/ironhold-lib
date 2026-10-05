@@ -166,13 +166,18 @@ impl GameSceneV2 {
             }
         }
         let mut ui_ids = std::collections::HashSet::new(); // det: lookup-only
-        for elem in walk_ui_nodes(&self.ui) {
+        // Walks nested nodes too: ids are unique per scene across every node that has one.
+        // A `Group` is a pure layout wrapper, so it may have no id; "" is never a duplicate.
+        for (path, elem) in walk_ui_nodes_pathed(&self.ui) {
             let id = elem.id();
             if id.is_empty() {
-                return Err("UI element has empty id".to_string());
+                if matches!(elem, UiNodeDef::Group(_)) {
+                    continue;
+                }
+                return Err(format!("UI element at {path} has empty id"));
             }
             if !ui_ids.insert(id) {
-                return Err(format!("Duplicate UI element id: \"{}\"", id));
+                return Err(format!("Duplicate UI element id: \"{id}\" (at {path})"));
             }
         }
         let mut wl_ids = std::collections::HashSet::new(); // det: lookup-only
@@ -372,6 +377,8 @@ pub enum UiNodeDef {
     InventoryPanel(InventoryPanelDef),
     ShopPanel(ShopPanelDef),
     ContainerPanel(ContainerPanelDef),
+    /// Nestable flexbox layout node; holds its own `children`.
+    Group(GroupDef),
 }
 
 /// Maximum nesting depth of `ui:` nodes (a top-level node is depth 1). The spawner and every
@@ -451,10 +458,13 @@ pub fn walk_ui_nodes_pathed(nodes: &[UiNodeDef]) -> impl Iterator<Item = (UiPath
 }
 
 impl UiNodeDef {
-    /// Child nodes laid out inside this node. No variant nests yet; this is the single place the
-    /// walkers learn about nesting.
+    /// Child nodes laid out inside this node. This is the single place the walkers learn about
+    /// nesting.
     pub fn children(&self) -> &[UiNodeDef] {
-        &[]
+        match self {
+            UiNodeDef::Group(d) => &d.children,
+            _ => &[],
+        }
     }
     pub fn id(&self) -> &str {
         match self {
@@ -470,6 +480,7 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(d) => &d.id,
             UiNodeDef::ShopPanel(d) => &d.id,
             UiNodeDef::ContainerPanel(d) => &d.id,
+            UiNodeDef::Group(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -503,6 +514,9 @@ impl UiNodeDef {
                 let h = d.rows as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 72.0;
                 (w, h)
             }
+            // Unused for groups: the spawner overwrites width/height from `GroupDef` (which may be
+            // `Auto`/`Percent`, not representable as a pixel tuple).
+            UiNodeDef::Group(_) => (0.0, 0.0),
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -519,6 +533,7 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(d) => d.position,
             UiNodeDef::ShopPanel(d) => d.position,
             UiNodeDef::ContainerPanel(d) => d.position,
+            UiNodeDef::Group(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -530,6 +545,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(d) => d.absolute,
             UiNodeDef::StatSpread(d) => d.absolute,
             UiNodeDef::StatRadar(d) => d.absolute,
+            UiNodeDef::Group(d) => d.absolute,
             UiNodeDef::ActionBar(_) => true,
             UiNodeDef::DialoguePanel(_) => true,
             UiNodeDef::InventoryPanel(_) => true,
@@ -551,6 +567,8 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(_) => UiTextAlign::Left,
             UiNodeDef::ShopPanel(_) => UiTextAlign::Left,
             UiNodeDef::ContainerPanel(_) => UiTextAlign::Left,
+            // Unused for groups; kept only so the shared match stays exhaustive.
+            UiNodeDef::Group(_) => UiTextAlign::Center,
         }
     }
 }
@@ -704,6 +722,101 @@ pub struct LabelDef {
 }
 
 fn default_label_font_size() -> f32 { 22.0 }
+
+/// Per-axis size of a [`GroupDef`]. `Auto` sizes to content.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub enum UiSizeDef {
+    #[default]
+    Auto,
+    /// Logical pixels.
+    Px(f32),
+    /// Percentage of the parent box (0.0-100.0).
+    Percent(f32),
+}
+
+/// Main-axis direction of a [`GroupDef`]'s children. Default: `Row`.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FlexDirectionDef {
+    #[default]
+    Row,
+    Column,
+    RowReverse,
+    ColumnReverse,
+}
+
+/// Main-axis distribution. `Start`/`End` map to CSS `flex-start`/`flex-end` (they follow the
+/// reversed directions). Distributing variants need a `Px`/`Percent` main-axis size to do anything.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum JustifyContentDef {
+    #[default]
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+/// Cross-axis alignment of a [`GroupDef`]'s children. `Start`/`End` map to CSS
+/// `flex-start`/`flex-end`.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AlignItemsDef {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FlexWrapDef {
+    #[default]
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
+/// Nestable flexbox layout node. Holds its own `children`; groups nest arbitrarily (depth is
+/// capped at [`MAX_UI_DEPTH`]). A pure layout wrapper: it never blocks pointer input.
+/// See `planning/features/ui_flex_group.md`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GroupDef {
+    /// Optional: a pure layout wrapper needs no meaningful id. Ids that are set must be unique
+    /// per scene across all nodes.
+    #[serde(default)]
+    pub id: String,
+    pub children: Vec<UiNodeDef>,
+    #[serde(default)]
+    pub flex_direction: FlexDirectionDef,
+    #[serde(default)]
+    pub justify_content: JustifyContentDef,
+    #[serde(default)]
+    pub align_items: AlignItemsDef,
+    #[serde(default)]
+    pub flex_wrap: FlexWrapDef,
+    /// Gap between children in pixels; sets both the row and column gap (like CSS `gap`).
+    #[serde(default)]
+    pub gap: f32,
+    /// Inner padding on all four sides, in pixels.
+    #[serde(default)]
+    pub padding: f32,
+    #[serde(default)]
+    pub width: UiSizeDef,
+    #[serde(default)]
+    pub height: UiSizeDef,
+    /// Background colour as sRGB RGBA (0.0-1.0). `None` = transparent (pure layout wrapper).
+    #[serde(default)]
+    pub background_color: Option<(f32, f32, f32, f32)>,
+    /// Clip children to this box. Only meaningful when `width`/`height` are not both `Auto`.
+    #[serde(default)]
+    pub clip: bool,
+    /// Top-left corner in pixels (screen for a top-level group, the parent's box otherwise).
+    /// Ignored in panel mode unless `absolute: true`.
+    #[serde(default)]
+    pub position: (f32, f32),
+    #[serde(default)]
+    pub absolute: bool,
+}
 
 /// Non-interactive coloured rectangle. Used for decorative backgrounds, dividers, and map tiles.
 #[derive(Deserialize, Debug, Clone)]
