@@ -126,6 +126,42 @@ pub fn audio_state_system(
     }
 }
 
+/// `GameVariables` key the engine keeps in sync with the chosen volume preset (R4 of
+/// `planning/features/audio_volume_readout.md`). Reserved: the engine overwrites it whenever
+/// `AudioState` changes, so designers bind a `Label` to it but never `SetVariable` it.
+pub const AUDIO_VOLUME_PERCENT_KEY: &str = "audio_volume_percent";
+
+/// The player-facing volume percent for an `AudioState.active_fraction`: the chosen preset
+/// (`SetVolume(75)` -> `"75"`), NOT the effective volume after the project's `max_volume` ceiling
+/// and mute. Rounds (not truncates): `29 / 100` in f32 is `0.28999999`, which truncates to 28.
+pub fn volume_percent_string(active_fraction: f32) -> String {
+    let percent = if active_fraction.is_finite() {
+        (active_fraction * 100.0).round().clamp(0.0, 100.0) as u32
+    } else {
+        0
+    };
+    percent.to_string()
+}
+
+/// Mirrors `AudioState.active_fraction` into `GameVariables[AUDIO_VOLUME_PERCENT_KEY]` so a `Label`
+/// bound to it shows the live volume with no `state_machine.ron` rules (same shape as the targeting
+/// capability's `target_display`). Runs whenever `AudioState` changes: it is `init_resource`d at
+/// startup (so the variable exists from frame 1), re-inserted at project load, and mutated by
+/// `Action::SetVolume`. Scheduled `.after(action_executor_system).before(update_dynamic_labels_system)`
+/// in `lib.rs` so a `SetVolume` is visible in the label the same frame. Mute is deliberately not
+/// reflected here (it has its own `audio.muted`/`audio.unmuted` RON bridge).
+pub fn audio_volume_var_system(
+    audio_state: Res<AudioState>,
+    mut vars: ResMut<crate::GameVariables>,
+) {
+    if !audio_state.is_changed() { return; }
+    let value = volume_percent_string(audio_state.active_fraction);
+    // Skip the write when unchanged (e.g. `ToggleMute` only flips `muted`).
+    if vars.0.get(AUDIO_VOLUME_PERCENT_KEY) != Some(&value) {
+        vars.0.insert(AUDIO_VOLUME_PERCENT_KEY.to_string(), value);
+    }
+}
+
 /// Holds pre-loaded audio asset handles so the asset server cache is warm before first play.
 /// Populated by `preload_audio_system` on each `SceneEvent::Ready`. Keeping these handles alive
 /// prevents the asset server from evicting audio between scene loads, eliminating first-play I/O

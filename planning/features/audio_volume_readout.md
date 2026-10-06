@@ -83,18 +83,18 @@ pub fn audio_volume_var_system(audio_state: Res<AudioState>, mut vars: ResMut<Ga
 unchanged). The preset buttons are unchanged. `state_machine.ron` is **unchanged**.
 
 ## Tasks
-- [ ] `AUDIO_VOLUME_PERCENT_KEY`, `volume_percent_string`, `audio_volume_var_system`
+- [x] `AUDIO_VOLUME_PERCENT_KEY`, `volume_percent_string`, `audio_volume_var_system`
       (`runtime/scene_manager/mod.rs`), re-exported and registered in `lib.rs` per R1
-- [ ] Tests in `tests/audio_tests.rs` (use `scene_lifecycle_tests.rs:16-28`'s mocked-`ProjectConfig`
+- [x] Tests in `tests/audio_tests.rs` (use `scene_lifecycle_tests.rs:16-28`'s mocked-`ProjectConfig`
       pattern for the project-load case): variable present after load with `"100"`; `mute_on_start: true`
       still `"100"` with `muted == true`; one `SetVolume(25)` + one `app.update()` -> `"25"` (R1 makes this
       deterministic); `SetVolume(200)` clamps to `"100"`; `ToggleMute` leaves it unchanged; survives a
       `LoadScene`; helper tests: round-trip `volume_percent_string(p as f32 / 100.0) == p.to_string()` for
       every `p in 0..=100` (pins round-vs-truncate), NaN/inf/negative/over-1 clamp
-- [ ] `3rd_person_game_demo/scenes/options.scene.ron`: bound heading + the R8 comment; refresh only
+- [x] `3rd_person_game_demo/scenes/options.scene.ron`: bound heading + the R8 comment; refresh only
       `3rd_person_game_demo_options.png` (`--real-gpu`, existing procedure)
-- [ ] Docs per R7/R8 (`docs/20`, `docs/30`, `docs/STATUS.md`)
-- [ ] `planning/claude_suggestions.md`: R5/R9 follow-ups; `planning/backlog.md`: replace the event-based
+- [x] Docs per R7/R8 (`docs/20`, `docs/30`, `docs/STATUS.md`)
+- [x] `planning/claude_suggestions.md`: R5/R9 follow-ups; `planning/backlog.md`: replace the event-based
       "Show the live volume percent" item with this feature's Active/Done entry
 - [ ] Code-change workflow steps 4-10 (reviews, full test loop, WASM dev build, playtest, merge)
 

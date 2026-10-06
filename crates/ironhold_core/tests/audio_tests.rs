@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use ironhold_core::runtime::{ActionQueue, SceneEvent, BackgroundMusic, LoadedAssetCatalog, LoadedAudioHandles};
+use ironhold_core::GameVariables;
+use ironhold_core::runtime::{ActionQueue, AudioState, SceneEvent, BackgroundMusic, LoadedAssetCatalog, LoadedAudioHandles, AUDIO_VOLUME_PERCENT_KEY, volume_percent_string};
 use ironhold_core::schema::Action;
 use ironhold_core::schema::catalog::{AssetCatalog, AudioEntry};
 
@@ -360,4 +361,92 @@ fn test_set_volume_no_resource_does_not_panic() {
     app.world_mut().resource_mut::<ActionQueue>()
         .push(Action::SetVolume(80));
     app.update();
+}
+
+// ── audio_volume_percent GameVariable (planning/features/audio_volume_readout.md) ──────────────
+
+fn volume_var(app: &App) -> Option<String> {
+    app.world().resource::<GameVariables>().0.get(AUDIO_VOLUME_PERCENT_KEY).cloned()
+}
+
+#[test]
+fn test_volume_percent_variable_exists_from_first_frame_at_100() {
+    let mut app = setup_test_app();
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"), "default AudioState (fraction 1.0) must publish \"100\" with no action run");
+}
+
+#[test]
+fn test_volume_percent_follows_set_volume_in_one_update() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(25));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("25"), "SetVolume must be reflected the same frame (mirror runs after action_executor_system)");
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(75));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("75"));
+}
+
+#[test]
+fn test_volume_percent_clamps_over_100() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(200));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"));
+}
+
+#[test]
+fn test_volume_percent_unchanged_by_toggle_mute() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(50));
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ToggleMute);
+    app.update();
+    assert!(app.world().resource::<AudioState>().muted, "precondition: ToggleMute muted the game");
+    assert_eq!(volume_var(&app).as_deref(), Some("50"), "muting must not change the chosen preset shown to the player");
+}
+
+#[test]
+fn test_volume_percent_with_mute_on_start_state_is_still_100() {
+    // Mirrors a project with `audio: (mute_on_start: true)`: project load inserts AudioState with
+    // `active_fraction: 1.0` and `muted: true`.
+    let mut app = setup_test_app();
+    app.update();
+    app.insert_resource(AudioState { max_volume: 0.6, active_fraction: 1.0, muted: true });
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"), "the preset, not the effective volume (max_volume 0.6, muted)");
+}
+
+#[test]
+fn test_volume_percent_survives_scene_load() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(50));
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("scenes/other.scene.ron".to_string()));
+    app.update();
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("50"), "LoadScene must not clear the variable (only the target_* vars are cleared)");
+}
+
+#[test]
+fn test_volume_percent_string_round_trips_every_preset() {
+    // Every value SetVolume can produce: percent -> fraction -> string must give the percent back.
+    // Pins round-vs-truncate (29/100 is 0.28999999 in f32; truncation would give 28).
+    for p in 0u32..=100 {
+        assert_eq!(volume_percent_string(p as f32 / 100.0), p.to_string(), "percent {p}");
+    }
+}
+
+#[test]
+fn test_volume_percent_string_clamps_and_handles_non_finite() {
+    assert_eq!(volume_percent_string(-0.5), "0");
+    assert_eq!(volume_percent_string(1.7), "100");
+    assert_eq!(volume_percent_string(f32::NAN), "0");
+    assert_eq!(volume_percent_string(f32::INFINITY), "0");
+    assert_eq!(volume_percent_string(f32::NEG_INFINITY), "0");
+    assert_eq!(volume_percent_string(0.555), "56");
 }
