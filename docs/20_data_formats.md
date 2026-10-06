@@ -819,11 +819,11 @@ Each element is a typed RON enum variant. Typos in field names fail at parse tim
 | `id` | `String` | required | Unique identifier within the scene |
 | `text` | `String` | required | Button label text |
 | `action` | `String` | `""` | Trigger string; `"ui."` prefix is stripped (e.g. `"ui.dance"` → `"dance"`). You must also author a rule/transition/binding matching `ui.button_pressed:<trigger>` in `state_machine.ron`/a behavior file — a button with no matching handler renders and is clickable but does nothing; `ironhold_cli validate` reports this as `unreachable_trigger` |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Background colour as sRGB RGBA |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 | `font_size` | `f32` | `26.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note below. |
 | `clip` | `bool` | `false` | When `true`, text that overflows `size` clips at the box edge (and is top-anchored, not vertically centered) instead of spilling past it. See the sizing note below for why this defaults off. |
 
@@ -840,9 +840,9 @@ An icon-only button that swaps between two catalog textures depending on a bound
 | `icon_on` | `String` | required | Asset catalog texture key shown when `bind` resolves to `"true"`. `ironhold_cli validate` checks the key exists in `assets.ron`'s textures. |
 | `icon_off` | `String` | required | Asset catalog texture key shown when `bind` resolves to anything else, including when the key is missing from `GameVariables`. Checked the same way as `icon_on`. |
 | `bind` | `String` | required | `GameVariables` key holding `"true"`/`"false"`. Re-checked every frame. |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(36.0, 36.0)` | Width and height in pixels |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 | `icon_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color for the icon's resting state while `bind` is `"false"` (same convention as `ActionSlotDef.icon_color` — a multiply tint, so it works cleanly on white/greyscale source art). Omit to render the icon as-is (unmodified white). |
 | `active_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color for the icon's resting state while `bind` is `"true"` (i.e. `icon_on` is showing). Falls back to `icon_color` (or as-is) when unset — active/inactive look identical by default. |
 | `hover_color` | `Option<(f32,f32,f32,f32)>` | `None` | RGBA replacement color while the cursor hovers the button (not pressed). Falls back to `icon_color` (or as-is) when unset — no hover feedback by default. |
@@ -879,12 +879,12 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
 | `text` | `String` | `""` | Static display text (overridden at runtime when `bind` is set) |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
 | `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value |
 | `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 | `font_size` | `f32` | `22.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note under `Button` above (same behavior, same 26px→22px default swap, same `clip` field). |
 | `clip` | `bool` | `false` | When `true`, text that overflows `size` clips at the box edge (top-anchored) instead of spilling past it. Off by default for the same reason as `Button` — see the sizing note above. Worth setting `true` on a `bind`-driven label whose runtime text length varies, since a growing value overflowing into whatever sits below is easy to miss until it happens live. |
 
@@ -911,10 +911,10 @@ The targeting variables update on every selection change (click, Tab, or `SetTar
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `String` | required | Unique identifier within the scene |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `color` | `(f32,f32,f32,f32)` | `(0.15,0.15,0.15,1)` | Fill colour as sRGB RGBA |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 
 Click coordinates for browser tests: **center = `(position.x + size.w/2, position.y + size.h/2)`**.
 
@@ -927,13 +927,13 @@ A bar that fills proportionally to `current / max` of a named stat from `LoadedS
 | `id` | `String` | required | Unique identifier within the scene |
 | `stat_key` | `String` | required | Key of the stat to display (must match a key in `stats.ron`) |
 | `orientation` | `BarOrientation` | `Horizontal` | `Horizontal` (left→right) or `Vertical` (bottom→top) |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(200.0, 20.0)` | Width and height in pixels |
 | `fill_color` | `(f32,f32,f32,f32)` | red | Colour of the filled portion as sRGB RGBA |
 | `background_color` | `(f32,f32,f32,f32)` | dark red | Colour of the unfilled portion |
 | `show_value` | `bool` | `false` | Overlay `"current / max"` text centred on the bar |
 | `color_bands` | `Vec<ColorBand>` | `[]` | Threshold-based colour overrides. Each band: `( above_percent: f32, color: (r,g,b,a) )`. The highest `above_percent` ≤ current fill ratio is selected. |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 
 ```ron
 StatBar((
@@ -964,7 +964,7 @@ A panel that lists multiple stats as labelled minibar rows. Each row shows the s
 | `id` | `String` | required | Unique identifier within the scene |
 | `stats` | `Vec<String>` | required | Ordered list of stat keys to display |
 | `layout` | `StatSpreadLayout` | `Rows` | `Rows` (one row per stat) |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored in panel mode unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `label_width` | `f32` | `80.0` | Width of the stat-name label column in pixels |
 | `bar_width` | `f32` | `120.0` | Width of the minibar column in pixels |
 | `row_height` | `f32` | `22.0` | Height of each row in pixels |
@@ -973,7 +973,7 @@ A panel that lists multiple stats as labelled minibar rows. Each row shows the s
 | `bar_fill_color` | `(f32,f32,f32,f32)` | blue | Minibar fill colour |
 | `bar_background_color` | `(f32,f32,f32,f32)` | dark blue | Minibar background colour |
 | `show_values` | `bool` | `true` | Show `"current / max"` text after each minibar |
-| `absolute` | `bool` | `false` | In panel mode: position absolutely relative to panel top-left |
+| `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 
 ```ron
 StatSpread((
@@ -1435,9 +1435,79 @@ ContainerPanel((
 )),
 ```
 
+#### `Group((...))` ✅ <a id="group"></a>
+
+A nestable flexbox container. A `Group` holds its own `children:` (any `ui:` node, including more `Group`s) and lays them out the way CSS flexbox would, so a row of buttons inside a column inside another row needs no hand-computed pixel positions. Examples to copy from: `assets/projects/ui_demo/` and `assets/projects/3rd_person_game_demo/scenes/options.scene.ron`. If you know CSS flexbox, the names below are the same; [MDN's flexbox guide](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_flexible_box_layout/Basic_concepts_of_flexbox) applies directly.
+
+```ron
+ui: [
+  Group((
+    flex_direction: Row,
+    justify_content: SpaceBetween,
+    width: Percent(100.0),      // SpaceBetween needs a definite width to spread across
+    padding: 16.0,
+    children: [
+      Label((id: "title", text: "Inventory")),
+      Group((
+        gap: 8.0,
+        children: [
+          Button((id: "sort_btn", text: "Sort",  action: "ui.sort")),
+          Button((id: "close_btn", text: "X",    action: "ui.close")),
+        ],
+      )),
+    ],
+  )),
+]
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `children` | `[UiNodeDef]` | required | Laid out inside this group. Groups nest up to 16 levels deep (a top-level node is level 1); deeper content is not spawned and `ironhold validate` reports it as `ui_depth_exceeded`. |
+| `id` | `String` | `""` | Optional. A pure layout wrapper needs no id. Ids that are set must be unique across the whole scene, including nested nodes. |
+| `flex_direction` | `Row` / `Column` / `RowReverse` / `ColumnReverse` | `Row` | Main axis. |
+| `justify_content` | `Start` / `Center` / `End` / `SpaceBetween` / `SpaceAround` / `SpaceEvenly` | `Start` | Distribution along the main axis. `Start`/`End` are CSS `flex-start`/`flex-end`, so they follow a reversed direction. |
+| `align_items` | `Start` / `Center` / `End` | `Start` | Alignment on the cross axis. (No `Stretch` in v1: every leaf has a fixed pixel size.) |
+| `flex_wrap` | `NoWrap` / `Wrap` / `WrapReverse` | `NoWrap` | Wrap children onto more lines when they overflow the main axis. |
+| `gap` | `f32` | `0.0` | Space between children in pixels, on both axes (like CSS `gap`). |
+| `padding` | `f32` | `0.0` | Inner padding on all four sides, in pixels. Sizes are border-box: padding eats into a `Px` width/height. |
+| `width`, `height` | `Auto` / `Px(f32)` / `Percent(f32)` | `Auto` | Size of the group. `Auto` sizes to content. Write `width: Px(380.0)`, not a bare `380.0` like `ui_panel:` uses, and `width`/`height`, not `size:` (a `size:` field is a parse error on a `Group`). |
+| `background_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA fill, `None` = transparent. |
+| `clip` | `bool` | `false` | Clip children to the group's box. Only meaningful when `width`/`height` are not both `Auto`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. For a top-level group this is measured from the screen; inside `ui_panel:` or another `Group` it is ignored unless `absolute: true`. |
+| `absolute` | `bool` | `false` | Leave the parent's flow and position with `position:` instead. |
+
+**Things that trip people up**
+
+1. **Pick the right mechanism.** `ui_panel:` = one centered column with a background (simple menus). `Group` = anything with rows, nesting, edge alignment or spacing. Plain `position:` = a single element at a fixed spot. HUD widgets (`ActionBar`, `StatBar`, ...) position themselves; leave them top-level.
+2. **Spreading needs space.** `SpaceBetween`, `SpaceAround` and `SpaceEvenly` distribute *free* space, and an `Auto`-sized group has none. Give the main axis a `Px` or `Percent` size (`width` for a `Row`, `height` for a `Column`). `ironhold validate --strict` warns (`inert_justify_content`).
+3. **Anchoring to a screen edge.** A top-level `position:` is always a top-left offset; there is no `right:`/`bottom:`. To pin something to the bottom or right, make a full-screen root group and put a top row and a bottom row in it (`ui_demo` shows this):
+   ```ron
+   Group((
+     width: Percent(100.0), height: Percent(100.0),
+     flex_direction: Column, justify_content: SpaceBetween,
+     children: [
+       Group((width: Percent(100.0), justify_content: SpaceBetween, children: [ /* top bar */ ])),
+       Group((width: Percent(100.0), justify_content: End,          children: [ /* bottom-right buttons */ ])),
+     ],
+   )),
+   ```
+   `Percent` on a top-level group is measured against the window.
+4. **A `Group` never blocks clicks.** Clicks on its empty area, even with a `background_color`, reach the world behind it and camera drags still work. Buttons inside it still capture their own clicks. A coloured group is decoration, not a dialog box.
+5. **Sizes fit the boxes, not the text.** `Auto` sizes a group to its children's `size:` boxes. Text longer than a `Label`'s `size:` still spills into the next sibling; see the sizing note under `Button`. Children never shrink below their `size:` (a group narrower than its content overflows instead).
+6. **`position:` changes meaning inside a group.** An `absolute: true` child is positioned from the group's box (its padding box, so `padding` does not offset it), not the screen. `ActionBar`, `DialoguePanel`, `InventoryPanel`, `ShopPanel` and `ContainerPanel` are always absolute and are single-instance panels: keep them top-level (`ironhold validate --strict` warns `panel_nested_in_group`). A group whose children are *all* absolute and whose size is `Auto` collapses to nothing (`collapsed_group`).
+7. **`Percent` needs a definite parent.** Under an `Auto`-sized parent, `Percent(50.0)` resolves against the parent's final content size, which is rarely what you meant. A `Percent` group directly inside `ui_panel:` has the same problem unless the panel sets `width`/`height` (`percent_under_auto`).
+8. **Spacers.** To add extra space between two children, put an empty group between them: `Group((height: Px(20.0), children: []))` in a column, `Group((width: Px(20.0), children: []))` in a row.
+9. **Migrating from `ui_panel:`.** The defaults do not carry over: a `Group` has no padding, no gap, no background and no clipping unless you set them.
+10. **Hidden is not gone.** A child hidden with `Visibility::Hidden` still takes up its space in an auto-sized group; only `Display::None` removes a node from layout.
+11. **Reversed directions.** `RowReverse`/`ColumnReverse` flip the children's order *and* what `Start`/`End` mean, exactly like CSS.
+
+Other things to know: a top-level `Group` in a scene with `ui_panel:` flows like any other child of the panel; without `ui_panel:` it sits at its `position:`.. Layout mistakes are reported both by `ironhold validate` and by a `UI layout [...]` warning in the console when the scene loads.
+
 ### UI Panel (`UiPanelDef`) ✅
 
 When a scene includes a `ui_panel` block, all `ui` elements are arranged in a vertically-flowing centered panel instead of using absolute positioning. Elements with `absolute: true` are still positioned relative to the panel's top-left corner.
+
+For anything beyond one centered column - rows, columns inside rows, right-aligned or spread-out bars - nest [`Group((...))`](#group) nodes instead; `ui_panel:` is unchanged and still the quickest way to get a simple centered menu.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
